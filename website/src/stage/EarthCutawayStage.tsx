@@ -966,6 +966,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const lightRange = new THREE.Vector2(0.02, 1.0);
     const uLightModis = { value: 0.0 };
     const uRevealed = new THREE.Vector2(0, 0);
+    // 1 when what is laid on the pass on show came from looks alone (a round in play), 0 at a
+    // reveal: a look's detections are drawn to be found from far, a reveal's as they always were
+    const uRevealByLook = { value: 0.0 };
     // Real runs: 1 on a night overpass (see NIGHT_GLSL). Shared by every surface that is not emitted light.
     const uNight = { value: 0.0 };
     // The landing's own tour of the night passes (prop landingTour)
@@ -1247,6 +1250,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uLightModis,
       uLightTexels: { value: LIGHT_TEX_SIZE },
       uRevealed: { value: uRevealed },
+      uRevealByLook,
       uNight,
       uMoonLift,
     };
@@ -3139,6 +3143,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           footprintList.length = 0;
           revealedList.length = 0;
           uRevealed.set(0, 0);
+          let laidOn = 0;
+          let laidOnByLooks = 0;
           for (const sp of rawPasses) {
             if (passIsHidden(sp, p.holdoutViirs)) continue;
             if (sp.revealed) {
@@ -3146,10 +3152,13 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
               for (const fp of sp.footprints) revealedList.push(fp);
               if (sp.family === 'modis') uRevealed.x = 1;
               else uRevealed.y = 1;
+              laidOn += 1;
+              if (sp.revealedByLook) laidOnByLooks += 1;
               continue;
             }
             for (const fp of sp.footprints) footprintList.push(fp);
           }
+          uRevealByLook.value = laidOn > 0 && laidOnByLooks === laidOn ? 1.0 : 0.0;
           // A pass that shows no detection of its own because its detections are hidden keeps a
           // trace of the fire: the last pass before it that the stage shows, as an afterglow that
           // fades with the hours since then, at the rate the run's own model lets a burning cell

@@ -155,6 +155,7 @@ uniform vec2 uFootMix;      // (MODIS, VIIRS): 1 on a real run, where footprints
 uniform float uLightModis;  // 1 when the lights on show are MODIS detections (the raw side shows them too), 0 for VIIRS
 uniform float uLightTexels; // side of the light texture, texels
 uniform vec2 uRevealed;     // (MODIS, VIIRS): 1 when that family's footprints on show were revealed after scoring
+uniform float uRevealByLook; // 1 when what is laid on the pass came from looks alone: those marks are drawn to be found from far
 uniform float uPixelOutline; // 1 draws the outline of each detection's pixel around its light, on the estimate's side too
 // The run's intensity scale, from its payload: (0 linear or 1 log10, top MW/km2, bottom MW/km2)
 uniform vec3 uFieldScale;
@@ -878,8 +879,11 @@ void main() {
       if (uRevealed.x + uRevealed.y > 0.5) {
         // (a pixel's half width on screen is one over its field's gradient: small pixels get a
         // larger centre and a firmer outline, or a look's detections cannot be found from far)
-        float smallM = 1.0 - smoothstep(3.0, 9.0, 1.0 / footGradM);
-        float smallV = 1.0 - smoothstep(3.0, 9.0, 1.0 / footGradV);
+        // Only for what a look found. At a reveal the same detections are also drawn as lights
+        // (the page un-marks their pass), and firmer cool marks over those lights turn the fire
+        // pale from far: a reveal's marks stay as they were.
+        float smallM = (1.0 - smoothstep(3.0, 9.0, 1.0 / footGradM)) * uRevealByLook;
+        float smallV = (1.0 - smoothstep(3.0, 9.0, 1.0 / footGradV)) * uRevealByLook;
         float coreM = revealCore(foot.r, smallM) * uRevealed.x;
         float coreV = revealCore(foot.b, smallV) * uRevealed.y;
         float hairM = scanHairline(abs(foot.r), footGradM, mix(1.0, 1.5, smallM)) * uRevealed.x;
@@ -888,12 +892,12 @@ void main() {
         float fewPx = max(smallM * uRevealed.x, smallV * uRevealed.y);
         // By day the ground under the centre and the outline is drawn darker first, so the cool
         // marks stand on sunlit ground (display choice; the pixel is not filled)
-        postRgb *= 1.0 - REVEAL_DAY_UNDER * clamp(max(coreM, coreV) + hairR, 0.0, 1.0) * (1.0 - uNight) * hazeTrans.g;
+        postRgb *= 1.0 - REVEAL_DAY_UNDER * uRevealByLook * clamp(max(coreM, coreV) + hairR, 0.0, 1.0) * (1.0 - uNight) * hazeTrans.g;
         // (small marks run together: they are drawn in a deeper blue there, so the patch they make
         // stays apart from the estimate's pale ink)
         postRgb += mix(vec3(0.22, 0.72, 1.0), vec3(0.05, 0.42, 1.0), fewPx)
                  * (coreM * mix(0.5, 1.5, heatOf(fieldNorm(foot.g))) + coreV * mix(0.5, 1.5, heatOf(fieldNorm(foot.a))))
-                 * (1.0 + REVEAL_FAR_LIFT * uFarView) * hazeTrans.g;
+                 * (1.0 + REVEAL_FAR_LIFT * uFarView * uRevealByLook) * hazeTrans.g;
         postRgb = mix(postRgb, mix(vec3(0.40, 0.82, 1.0), vec3(0.16, 0.62, 1.0), fewPx) * mix(1.0, 0.7, uNight), hairR * mix(0.5, 0.8, fewPx));
       }
     } else {
