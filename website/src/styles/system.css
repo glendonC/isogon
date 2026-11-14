@@ -382,3 +382,14 @@
     transition: none;
   }
 }
+
+/* A label that hangs below its anchor, for anchors near the top of the screen or crowded by a neighbour. */
+.sys-pin[data-hang='below'] .sys-pin__leader {
+  top: 0;
+  bottom: auto;
+}
+
+.sys-pin[data-hang='below'] .sys-pin__plate {
+  top: var(--lead, 40px);
+  bottom: auto;
+}
