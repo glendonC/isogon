@@ -1,19 +1,16 @@
 /**
- * Demo data for S3, the passes that looked (CONTRACT 12).
- *
- * Stands in for a pass list route terrain-assets will serve from its NASA CMR reader
- * (`backend/firms/cmr_passes.py::cmr_passes`, unit D6), for example
- *   GET /api/passes?region_id=plumas_ca&start=<UTC>&end=<UTC>
- *     -> PassList: { region_id, box, start, end, source, passes: CmrPass[] }
+ * Demo data for the passes that looked: a pass list as the NASA CMR reader gives it
+ * (`backend/firms/cmr_passes.py::cmr_passes`), in the shape
+ *   PassList: { region_id, box, start, end, source, passes: CmrPass[] }
+ * The page reads it while `SURFACE_SOURCE.passes` says demo; the backend's own pass list is `GET /api/passes`.
  * Shape of a pass: the reader's own keys (`platform`, `time_mid`, `day_night`, `cloud_cover_pct`, `box_share`), with
  * `time_start`, `time_end`, `granules` and `box_inside` left out here.
  *
- * Values: the reader at lane commit 325df44, run read-only on the lead's cache `data/cache/cmr` (fetched in D6 from
- * NASA CMR granule metadata, no login), for the Feather River pack box [-121.44, 39.86, -120.92, 40.24] over the
- * periods of the region's real run starts: 30 July to 31 August 2012, 22 September to 5 October 2020, and
- * 12 July to 17 August 2021 (809 passes). They are every pass whose swath met the box, with fire or without.
- * Cloud cover is the MODIS granule mean (the VIIRS fire granules carry none), over a granule of about 2,300 by
- * 2,000 km, so it is a weak sign for one box (D6, section 4).
+ * Values: the reader's output from NASA CMR granule metadata (no login needed) for the Feather River pack box
+ * [-121.44, 39.86, -120.92, 40.24] over the periods of the region's real run starts: 30 July to 31 August 2012,
+ * 22 September to 5 October 2020, and 12 July to 17 August 2021 (809 passes). They are every pass whose swath met
+ * the box, with fire or without. Cloud cover is the MODIS granule mean (the VIIRS fire granules carry none), over a
+ * granule of about 2,300 by 2,000 km, so it is a weak sign for one box.
  */
 
 export interface CmrPass {
@@ -33,7 +30,7 @@ export interface PassList {
   passes: CmrPass[];
 }
 
-const SOURCE = 'NASA CMR granule metadata of MOD14, MYD14, VNP14IMG and VJ114IMG (terrain-assets D6)';
+const SOURCE = 'NASA CMR granule metadata of MOD14, MYD14, VNP14IMG and VJ114IMG';
 
 /** One response per period; the strip uses the one that covers the run's window. */
 export const DEMO_PASSES: PassList[] = [

@@ -1,117 +1,53 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { type TheaterId } from '../stage/earthCutawayTypes';
+import {
+  EXAMPLE_PLACES,
+  THEATER_DISPLAY,
+  THEATER_ORDER,
+  formatLat,
+  formatLon,
+  parseLatLon,
+} from '../content/theaters';
 import type { DynamicRegionRun, PipelineStageRecord } from '../stage/types';
+import { Locator } from '../ui/Locator';
+import { plainText } from '../ui/plainText';
+import { useDialogFocus } from '../ui/useDialogFocus';
 
-export interface RegionPresetOption {
-  id: string;
-  shortLabel: string;
-  title: string;
-  subtitle: string;
-  coordsLabel: string;
-  centerLat: number;
-  centerLon: number;
-}
+const API_BASE: string = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8788';
 
-export const GLOBAL_THEATER_PRESETS: readonly RegionPresetOption[] = [
-  {
-    id: 'plumas_ca',
-    shortLabel: 'Feather River, CA',
-    title: 'Feather River & Plumas, CA',
-    subtitle: 'Sierra mixed conifer canyon · Terra/Aqua + NOAA-20',
-    coordsLabel: '40.05°N, 121.18°W',
-    centerLat: 40.05,
-    centerLon: -121.18,
-  },
-  {
-    id: 'lytton_bc',
-    shortLabel: 'Lytton Canyon, BC',
-    title: 'Lytton & Thompson Canyon, BC',
-    subtitle: 'Steep Fraser-Thompson gorge · high-zenith bow-tie regime',
-    coordsLabel: '50.23°N, 121.58°W',
-    centerLat: 50.23,
-    centerLon: -121.58,
-  },
-  {
-    id: 'novo_progresso_br',
-    shortLabel: 'Serra do Cachimbo, BR',
-    title: 'Serra do Cachimbo, Amazonia',
-    subtitle: 'Tropical frontier · sub-pixel 375 m VIIRS regime',
-    coordsLabel: '7.15°S, 55.35°W',
-    centerLat: -7.15,
-    centerLon: -55.35,
-  },
-  {
-    id: 'evia_greece',
-    shortLabel: 'Northern Evia, GR',
-    title: 'Northern Evia Island, Greece',
-    subtitle: 'Coastal Mediterranean relief · marine cloud masking',
-    coordsLabel: '38.88°N, 23.32°E',
-    centerLat: 38.88,
-    centerLon: 23.32,
-  },
-  {
-    id: 'blue_mountains_au',
-    shortLabel: 'Blue Mountains, AU',
-    title: 'Grose Valley & Blue Mountains, NSW',
-    subtitle: 'Sandstone escarpment · crown-fire slope advection',
-    coordsLabel: '33.62°S, 150.38°E',
-    centerLat: -33.62,
-    centerLon: 150.38,
-  },
+const PIPELINE_STEPS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'terrain_ingest', label: 'Elevation and satellite imagery' },
+  { id: 'sensor_operator', label: 'MODIS and VIIRS footprints for each pass' },
+  { id: 'hurdle_quantile', label: 'Simulated fire and passes' },
+  { id: 'kalman_smoother', label: 'Smoother across the passes' },
+  { id: 'conformal_gate', label: 'Uncertainty' },
 ];
 
-const DEFAULT_PIPELINE_STAGES: readonly PipelineStageRecord[] = [
-  {
-    stage_id: 'terrain_ingest',
-    label: 'AWS Terrarium DEM + Sentinel-2 imagery',
-    model_name: 'Mercator-WGS84 tile stitcher',
-    duration_ms: 0,
-    status: 'pending',
-    detail: '256x256 DEM + slope normals',
-  },
-  {
-    stage_id: 'sensor_operator',
-    label: 'Orbital scan PSF & slope foreshortening',
-    model_name: 'MODIS 1 km bow-tie + VIIRS 375 m',
-    duration_ms: 0,
-    status: 'pending',
-    detail: '24 sun-synchronous passes',
-  },
-  {
-    stage_id: 'hurdle_quantile',
-    label: 'Cross-sensor hurdle-quantile calibrator',
-    model_name: 'Paired 13:30 LST logistic + pinball IRLS',
-    duration_ms: 0,
-    status: 'pending',
-    detail: 'Omission prob + flux quantiles',
-  },
-  {
-    stage_id: 'kalman_smoother',
-    label: 'Terrain-coupled advection-diffusion smoother',
-    model_name: '2D+t forward-backward state solver',
-    duration_ms: 0,
-    status: 'pending',
-    detail: 'Posterior Z_hat(s,t) + sigma(s,t)',
-  },
-  {
-    stage_id: 'conformal_gate',
-    label: 'Split conformal 90% interval calibration',
-    model_name: 'Finite-sample conformal wrapper',
-    duration_ms: 0,
-    status: 'pending',
-    detail: 'Empirical 90% coverage check',
-  },
-];
+/** Searched places get real terrain and a simulated fire, and the page says so. */
+const SEARCH_FIRE = 'The fire there is simulated; real NASA FIRMS runs cover Feather River, Lytton and Evia.';
+const SEARCH_NOTE = `Isogon downloads 30 m elevation and imagery for this place. ${SEARCH_FIRE}`;
 
 export interface ReconstructRequestParams {
+  theaterId?: TheaterId;
   regionId?: string;
   queryText?: string;
   holdoutViirs: boolean;
   cloudOverride: number | null;
+  enterWorkspace?: boolean;
+  /** Real runs: a run on NASA FIRMS rows from this UTC start date. */
+  source?: 'firms';
+  start?: string;
+  /**
+   * A held-out run's first response holds nothing the scorer wrote; the same body with `reveal: true` returns the
+   * whole run, `blind_test` included, from the server's cache.
+   */
+  reveal?: boolean;
 }
 
 interface CommandAskPaletteProps {
   open: boolean;
   onClose: () => void;
+  activeTheaterId: TheaterId;
   activeRun: DynamicRegionRun | null;
   holdoutViirs: boolean;
   onToggleHoldoutViirs: () => void;
@@ -122,9 +58,32 @@ interface CommandAskPaletteProps {
   onExecute: (params: ReconstructRequestParams) => Promise<boolean>;
 }
 
+type Option =
+  | { kind: 'region'; id: TheaterId }
+  | { kind: 'place'; label: string; query: string; lat: number; lon: number }
+  | { kind: 'custom'; query: string };
+
+function optionKey(o: Option): string {
+  return o.kind === 'region' ? o.id : o.kind === 'place' ? `place-${o.label}` : `custom-${o.query}`;
+}
+
+function regionMatches(id: TheaterId, q: string): boolean {
+  const t = THEATER_DISPLAY[id];
+  return [t.name, t.title, t.setting, t.season, t.note, t.lat, t.lon, t.area, id].some((v) =>
+    v.toLowerCase().includes(q),
+  );
+}
+
+/**
+ * Search as a region select: a large field, the four calibrated regions and a few example places one
+ * per line with bracketed number keys, a preview of the place in focus on a Blue Marble locator, and a
+ * key legend. Smoked glass over the scene, square corners.
+ * Keys: up and down move, Enter opens, 1 to 9 pick from an empty field, Esc closes.
+ */
 export function CommandAskPalette({
   open,
   onClose,
+  activeTheaterId,
   activeRun,
   holdoutViirs,
   onToggleHoldoutViirs,
@@ -137,29 +96,33 @@ export function CommandAskPalette({
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const [runningStepIdx, setRunningStepIdx] = useState<number>(-1);
+  const [pending, setPending] = useState<Option | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(open, sheetRef, inputRef);
 
-  const filteredPresets = useMemo(() => {
+  const options = useMemo<Option[]>(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return GLOBAL_THEATER_PRESETS;
-    return GLOBAL_THEATER_PRESETS.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        p.subtitle.toLowerCase().includes(q) ||
-        p.coordsLabel.toLowerCase().includes(q) ||
-        p.id.toLowerCase().includes(q),
-    );
+    const regions: Option[] = THEATER_ORDER.filter((id) => !q || regionMatches(id, q)).map((id) => ({
+      kind: 'region',
+      id,
+    }));
+    const places: Option[] = EXAMPLE_PLACES.filter(
+      (p) => !q || p.label.toLowerCase().includes(q),
+    ).map((p) => ({ kind: 'place', ...p }));
+    const list = [...regions, ...places];
+    if (q && (list.length === 0 || parseLatLon(query))) {
+      list.unshift({ kind: 'custom', query: query.trim() });
+    }
+    return list;
   }, [query]);
 
   useEffect(() => {
     if (!open) return;
-    setActiveIndex(0);
-    const id = window.requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [open]);
+    const currentIdx = THEATER_ORDER.indexOf(activeTheaterId);
+    setActiveIndex(currentIdx >= 0 ? currentIdx : 0);
+    setPending(null);
+  }, [open, activeTheaterId]);
 
   useEffect(() => {
     if (!isExecuting) {
@@ -168,79 +131,124 @@ export function CommandAskPalette({
     }
     setRunningStepIdx(0);
     const timer = window.setInterval(() => {
-      setRunningStepIdx((prev) => (prev < 4 ? prev + 1 : 4));
-    }, 110);
+      setRunningStepIdx((prev) => (prev < PIPELINE_STEPS.length - 1 ? prev + 1 : prev));
+    }, 420);
     return () => window.clearInterval(timer);
   }, [isExecuting]);
 
   if (!open) return null;
 
-  const stagesToDisplay: readonly PipelineStageRecord[] = isExecuting
-    ? DEFAULT_PIPELINE_STAGES.map((st, idx) => ({
-        ...st,
-        status: idx < runningStepIdx ? 'completed' : idx === runningStepIdx ? 'running' : 'pending',
-      }))
-    : activeRun?.pipeline_stages?.length
-      ? activeRun.pipeline_stages
-      : DEFAULT_PIPELINE_STAGES.map((st) => ({ ...st, status: 'completed', duration_ms: 28.4 }));
+  const safeIndex = Math.min(activeIndex, Math.max(0, options.length - 1));
+  const focused: Option | undefined = pending ?? options[safeIndex];
 
-  const totalMs = stagesToDisplay.reduce((acc, s) => acc + (s.duration_ms || 0), 0);
-
-  const triggerRun = async (preset?: RegionPresetOption) => {
+  const run = async (o: Option) => {
     if (isExecuting) return;
-    const trimmed = query.trim();
-    const chosen =
-      preset ?? (filteredPresets.length > 0 && !trimmed ? filteredPresets[activeIndex] : undefined);
-    const ok = await onExecute({
-      regionId: chosen?.id,
-      queryText: chosen ? undefined : trimmed || GLOBAL_THEATER_PRESETS[activeIndex]?.title,
-      holdoutViirs,
-      cloudOverride,
-    });
+    setPending(o);
+    const ok =
+      o.kind === 'region'
+        ? await onExecute({
+            theaterId: o.id,
+            regionId: o.id,
+            holdoutViirs,
+            cloudOverride,
+            enterWorkspace: true,
+          })
+        : await onExecute({
+            queryText: o.query,
+            holdoutViirs,
+            cloudOverride,
+            enterWorkspace: true,
+          });
     if (ok) {
+      setQuery('');
+      setPending(null);
       onClose();
     }
+  };
+
+  const submit = () => {
+    if (focused) void run(focused);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation();
       onClose();
-      return;
-    }
-    if (e.key === 'ArrowDown') {
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
-      if (filteredPresets.length > 0) {
-        setActiveIndex((prev) => (prev + 1) % filteredPresets.length);
+      setPending(null);
+      if (options.length === 0) return;
+      setActiveIndex((prev) => {
+        const cur = Math.min(prev, options.length - 1);
+        return e.key === 'ArrowDown'
+          ? Math.min(options.length - 1, cur + 1)
+          : Math.max(0, cur - 1);
+      });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      submit();
+    } else if (query === '' && /^[1-9]$/.test(e.key) && e.target === inputRef.current) {
+      const o = options[Number(e.key) - 1];
+      if (o) {
+        e.preventDefault();
+        setActiveIndex(Number(e.key) - 1);
+        void run(o);
       }
-      return;
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (filteredPresets.length > 0) {
-        setActiveIndex((prev) => (prev - 1 + filteredPresets.length) % filteredPresets.length);
-      }
-      return;
-    }
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const targetPreset = filteredPresets[activeIndex];
-      const looksLikeCustomCoords = /-?\d+(\.\d+)?\s*[, ]\s*-?\d+/.test(query.trim());
-      void triggerRun(looksLikeCustomCoords ? undefined : targetPreset);
     }
   };
 
+  // Preview content for the option in focus.
+  let title = '';
+  let setting = '';
+  let note = '';
+  let lat: number | null = null;
+  let lon: number | null = null;
+  let approximate = false;
+  if (focused?.kind === 'region') {
+    const t = THEATER_DISPLAY[focused.id];
+    title = t.title;
+    setting = t.setting;
+    note = t.note;
+    lat = t.centerLat;
+    lon = t.centerLon;
+  } else if (focused?.kind === 'place') {
+    title = focused.label;
+    setting = 'Live terrain, fetched when you open it';
+    note = SEARCH_NOTE;
+    lat = focused.lat;
+    lon = focused.lon;
+    approximate = true;
+  } else if (focused?.kind === 'custom') {
+    const coords = parseLatLon(focused.query);
+    title = coords ? `${formatLat(coords.lat)}  ${formatLon(coords.lon)}` : focused.query;
+    setting = coords ? 'Coordinates' : 'Place name';
+    note = coords
+      ? `Isogon downloads 30 m elevation and imagery around this point. ${SEARCH_FIRE}`
+      : `The backend looks the name up and downloads 30 m elevation and imagery. ${SEARCH_FIRE}`;
+    lat = coords?.lat ?? null;
+    lon = coords?.lon ?? null;
+  }
+  const caption =
+    lat !== null && lon !== null
+      ? `${approximate ? 'about ' : ''}${formatLat(lat)}  ${formatLon(lon)}`
+      : 'located when you open it';
+
+  const unreachable = Boolean(errorMessage && /fetch|network|unreachable|refused/i.test(errorMessage));
+  const runStages: readonly PipelineStageRecord[] = activeRun?.pipeline_stages ?? [];
+
   return (
     <>
-      <div className="eq-ask-backdrop" onClick={onClose} role="presentation" />
+      <div className="iso-backdrop iso-backdrop--soft" onClick={onClose} role="presentation" />
       <div
-        className="eq-ask-bar"
+        ref={sheetRef}
+        className="iso-glass iso-finder"
         role="dialog"
         aria-modal="true"
-        aria-label="Search coordinates or select wildfire theater"
+        aria-label="Search a place or choose a calibrated region"
         onKeyDown={handleKeyDown}
       >
-        <div className="eq-ask-bar__field">
+        <div className="iso-finder__field">
           <input
             ref={inputRef}
             type="text"
@@ -248,148 +256,186 @@ export function CommandAskPalette({
             onChange={(e) => {
               setQuery(e.target.value);
               setActiveIndex(0);
+              setPending(null);
             }}
-            placeholder="Search coordinates (50.23, -121.58) or choose a wildfire theater..."
-            className="eq-ask-bar__input"
-            aria-label="Coordinates or wildfire theater"
+            placeholder="Search a place, or type latitude, longitude"
+            className="iso-finder__input"
+            aria-label="Place name, or latitude and longitude"
+            aria-controls="iso-finder-list"
+            aria-activedescendant={focused ? `iso-finder-${optionKey(focused)}` : undefined}
+            autoComplete="off"
+            spellCheck={false}
           />
         </div>
 
-        <div className="eq-ask-bar__options">
-          <span>Counterfactual setup</span>
-          <div className="eq-ask-bar__toggles">
-            <button
-              type="button"
-              className="eq-check-btn"
-              data-active={holdoutViirs ? 'true' : 'false'}
-              onClick={onToggleHoldoutViirs}
-            >
-              <span
-                className={`eq-request-card__check${holdoutViirs ? ' eq-request-card__check--done' : ''}`}
-                aria-hidden="true"
-              />
-              <span>Hold out VIIRS (pre-2012 test)</span>
-            </button>
-
-            <button
-              type="button"
-              className="eq-check-btn"
-              data-active={cloudOverride !== null ? 'true' : 'false'}
-              onClick={onToggleCloudOverride}
-            >
-              <span
-                className={`eq-request-card__check${cloudOverride !== null ? ' eq-request-card__check--done' : ''}`}
-                aria-hidden="true"
-              />
-              <span>55% cloud cover</span>
-            </button>
-          </div>
-        </div>
-
-        <ul className="eq-ask-bar__list" role="listbox" aria-label="Global wildfire theaters">
-          {filteredPresets.length > 0 ? (
-            filteredPresets.map((item, idx) => {
-              const isSelected = idx === activeIndex;
-              const isCurrentRegion = activeRun?.region.id === item.id;
+        <div className="iso-finder__body">
+          <ul className="iso-finder__list" id="iso-finder-list" role="listbox" aria-label="Places">
+            {options.map((o, idx) => {
+              const isActive = idx === safeIndex && !pending;
+              const isPending = pending !== null && optionKey(pending) === optionKey(o);
+              const isOpenNow =
+                o.kind === 'region' &&
+                (activeRun?.region.id === o.id || (!activeRun && activeTheaterId === o.id));
+              const firstPlace =
+                o.kind === 'place' && idx > 0 && options[idx - 1].kind !== 'place';
               return (
                 <li
-                  key={item.id}
+                  key={optionKey(o)}
+                  id={`iso-finder-${optionKey(o)}`}
                   role="option"
-                  aria-selected={isSelected}
-                  className={`eq-ask-bar__item${isSelected ? ' eq-ask-bar__item--active' : ''}`}
-                  onMouseEnter={() => setActiveIndex(idx)}
-                  onClick={() => void triggerRun(item)}
+                  aria-selected={isActive || isPending}
+                  className="iso-finder__item"
+                  data-active={isActive || isPending ? 'true' : 'false'}
+                  data-gap={firstPlace ? 'true' : 'false'}
+                  onMouseEnter={() => {
+                    if (!pending) setActiveIndex(idx);
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => void run(o)}
                 >
-                  <span className="eq-ask-bar__num">{String(idx + 1).padStart(2, '0')}</span>
-                  <div className="eq-ask-bar__item-main">
-                    <span className="eq-ask-bar__item-title">
-                      {item.title}
-                      {isCurrentRegion ? ' · Current' : ''}
+                  <span className="iso-finder__num" aria-hidden="true">
+                    {idx < 9 ? `[${idx + 1}]` : ''}
+                  </span>
+                  <span className="iso-finder__main">
+                    <span className="iso-finder__name">
+                      {o.kind === 'region'
+                        ? THEATER_DISPLAY[o.id].title
+                        : o.kind === 'place'
+                          ? o.label
+                          : `Open “${o.query}”`}
                     </span>
-                    <span className="eq-ask-bar__item-sub">{item.subtitle}</span>
-                  </div>
-                  <span className="eq-ask-bar__item-coords">{item.coordsLabel}</span>
+                    <span className="iso-finder__sub">
+                      {o.kind === 'region'
+                        ? THEATER_DISPLAY[o.id].season
+                        : o.kind === 'place'
+                          ? 'Live terrain'
+                          : 'Live terrain from your search'}
+                    </span>
+                  </span>
+                  {isOpenNow && <span className="iso-finder__tag">open now</span>}
                 </li>
               );
-            })
-          ) : (
-            <li
-              role="option"
-              aria-selected={true}
-              className="eq-ask-bar__item eq-ask-bar__item--active"
-              onClick={() => void triggerRun(undefined)}
-            >
-              <span className="eq-ask-bar__num">01</span>
-              <div className="eq-ask-bar__item-main">
-                <span className="eq-ask-bar__item-title">
-                  Reconstruct custom location: &ldquo;{query.trim()}&rdquo;
-                </span>
-                <span className="eq-ask-bar__item-sub">
-                  Fetch AWS Terrarium DEM + Sentinel-2 tiles and run 3-stage solver
-                </span>
-              </div>
-              <span className="eq-ask-bar__item-coords">Live API</span>
-            </li>
-          )}
-        </ul>
+            })}
+          </ul>
 
-        <div className="eq-ask-bar__stages">
-          <div className="eq-ask-bar__stage-head">
-            <span>
-              {isExecuting
-                ? 'Running 3-stage physical + ML solver...'
-                : errorMessage
-                  ? `Backend note: ${errorMessage}`
-                  : '3-stage world-model pipeline'}
-            </span>
-            <span>{isExecuting ? 'Running' : `${Math.round(totalMs)} ms`}</span>
-          </div>
-          {stagesToDisplay.map((st) => (
-            <div key={st.stage_id} className="eq-ask-bar__stage-row">
-              <span
-                className={`eq-request-card__check${st.status === 'completed' ? ' eq-request-card__check--done' : ''}`}
-                aria-hidden="true"
-              />
-              <span>{st.label}</span>
-              <span className="eq-ask-bar__stage-ms">
-                {st.status === 'running'
-                  ? '...'
-                  : st.duration_ms > 0
-                    ? `${st.duration_ms.toFixed(1)} ms`
-                    : 'ready'}
-              </span>
+          <aside className="iso-finder__preview" aria-live="polite">
+            <Locator lat={lat} lon={lon} caption={caption} />
+
+            {isExecuting ? (
+              <div className="iso-finder__progress">
+                <p className="iso-finder__title">Opening {title}</p>
+                <ol className="iso-finder__steps">
+                  {PIPELINE_STEPS.map((st, i) => (
+                    <li
+                      key={st.id}
+                      data-status={
+                        i < runningStepIdx ? 'done' : i === runningStepIdx ? 'running' : 'waiting'
+                      }
+                    >
+                      <span className="iso-check__box" aria-hidden="true" />
+                      <span>{st.label}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : errorMessage && pending ? (
+              <div className="iso-finder__error" role="alert">
+                <p className="iso-finder__title">
+                  {unreachable ? 'The backend is not answering' : 'That did not open'}
+                </p>
+                <p className="iso-finder__note">
+                  {unreachable
+                    ? `Isogon could not reach its backend at ${API_BASE}. Start the backend, then press Enter to try again.`
+                    : plainText(errorMessage)}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="iso-finder__title">{title}</p>
+                  <p className="iso-finder__setting">{setting}</p>
+                </div>
+                <p className="iso-finder__note">{note}</p>
+                {focused?.kind === 'region' && (
+                  <table className="iso-table iso-finder__facts">
+                    <tbody>
+                      <tr>
+                        <th scope="row">Record</th>
+                        <td>{THEATER_DISPLAY[focused.id].season}</td>
+                      </tr>
+                      <tr>
+                        <th scope="row">Elevation</th>
+                        <td>{THEATER_DISPLAY[focused.id].elevation}</td>
+                      </tr>
+                      {runStages.length > 0 && activeRun?.region.id === focused.id && (
+                        <tr>
+                          <th scope="row">Last solve</th>
+                          <td>
+                            {Math.round(
+                              runStages.reduce((acc, st) => acc + (st.duration_ms || 0), 0),
+                            ).toLocaleString()}{' '}
+                            ms
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            )}
+
+            <div className="iso-finder__options" role="group" aria-label="Validation">
+              <button
+                type="button"
+                className="iso-check"
+                data-active={holdoutViirs ? 'true' : 'false'}
+                aria-pressed={holdoutViirs}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={onToggleHoldoutViirs}
+              >
+                <span className="iso-check__box" aria-hidden="true" />
+                <span>Blind test, hide VIIRS</span>
+              </button>
+              <button
+                type="button"
+                className="iso-check"
+                data-active={cloudOverride !== null ? 'true' : 'false'}
+                aria-pressed={cloudOverride !== null}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={onToggleCloudOverride}
+              >
+                <span className="iso-check__box" aria-hidden="true" />
+                <span>55% cloud</span>
+              </button>
             </div>
-          ))}
+          </aside>
         </div>
 
-        <div className="eq-ask-bar__actions">
-          <span className="eq-ask-bar__action eq-ask-bar__action--lead">
-            <span className="eq-ask-bar__key">&uarr;&darr;</span>
-            <span>Choose theater or type lat, lon</span>
+        <div className="iso-finder__legend">
+          <span className="iso-finder__legend-lead">
+            Choose <kbd>&uarr;</kbd>
+            <kbd>&darr;</kbd>
           </span>
-
-          <span className="eq-ask-bar__action">
-            <button
-              type="button"
-              className="eq-ask-bar__button"
-              disabled={isExecuting}
-              onClick={() => {
-                const targetPreset = filteredPresets[activeIndex];
-                const looksLikeCustomCoords = /-?\d+(\.\d+)?\s*[, ]\s*-?\d+/.test(query.trim());
-                void triggerRun(looksLikeCustomCoords ? undefined : targetPreset);
-              }}
-            >
-              {isExecuting ? 'Reconstructing...' : 'Run model'}
-            </button>
-            <span className="eq-ask-bar__key">&crarr;</span>
+          <span className="iso-finder__legend-lead">
+            Pick <kbd>1</kbd> to <kbd>{Math.max(1, Math.min(9, options.length))}</kbd>
           </span>
-
-          <span className="eq-ask-bar__action">
-            <button type="button" className="eq-ask-bar__button" onClick={onClose}>
-              Close
-            </button>
-            <span className="eq-ask-bar__key">Esc</span>
-          </span>
+          <button
+            type="button"
+            className="iso-finder__action"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={submit}
+            disabled={isExecuting || !focused}
+          >
+            {isExecuting ? 'Opening' : 'Open'} <kbd>&crarr;</kbd>
+          </button>
+          <button
+            type="button"
+            className="iso-finder__action"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onClose}
+          >
+            Close <kbd>Esc</kbd>
+          </button>
         </div>
       </div>
     </>

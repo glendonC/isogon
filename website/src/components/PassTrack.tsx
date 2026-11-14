@@ -54,7 +54,7 @@ const STATE_WORDS: Record<TrackState, string> = {
 };
 
 /**
- * The pass track (W1): every pass at its real time, VIIRS above the axis and MODIS below, night shaded, the pass on
+ * The pass track: every pass at its real time, VIIRS above the axis and MODIS below, night shaded, the pass on
  * the stage under the playhead with its time, satellite and the gap since the look before it. A mark's detail opens
  * beside it on hover; a click shows that pass on the terrain.
  */
@@ -82,6 +82,12 @@ export function PassTrack({ run, passLists, state, revealed, timeProgress, onCha
   const height = (pixels: number | null) =>
     pixels === null || pixels <= 0 ? 0 : 0.18 + 0.82 * (Math.log10(1 + pixels) / Math.log10(1 + data.maxPixels));
   const bubbleLeft = Math.max(9, Math.min(91, x(tNow)));
+  // The pass on the stage, as its mark reads: hidden in the test, or the pixels the reveal gave it.
+  const curMark = data.marks.find((m) => m.isFrame && m.frame === current);
+  const curText =
+    curMark?.kind === 'hidden'
+      ? 'hidden in this test'
+      : `${(curMark?.pixels ?? frame.pixels).toLocaleString('en-US')} ${(curMark?.pixels ?? frame.pixels) === 1 ? 'pixel' : 'pixels'}`;
 
   const jumpAt = (clientX: number) => {
     const el = laneRef.current;
@@ -189,7 +195,7 @@ export function PassTrack({ run, passLists, state, revealed, timeProgress, onCha
               {localClock(frame.t, data.lon)} local, {frame.isDay === false ? 'night' : frame.isDay ? 'day' : ''}
             </span>
             <span>
-              {platformLabel(frame.platform)}, {frame.pixels.toLocaleString('en-US')} {frame.pixels === 1 ? 'pixel' : 'pixels'}
+              {platformLabel(frame.platform)}, {curText}
               {gapH !== null ? `, ${hoursWords(gapH)} after the pass before` : ''}
             </span>
           </div>

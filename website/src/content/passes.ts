@@ -2,9 +2,9 @@ import type { EpochSummary } from '../stage/types';
 import type { CmrPass, PassList } from './demo/passes';
 
 /**
- * S3: every pass that looked at the box during a run, from NASA CMR (terrain-assets D6), set against the run's own
- * frames. A frame is a pass with a detection in the box, so a pass in the window that matches no frame looked and
- * saw nothing (or saw only through cloud). FIRMS alone cannot tell this: it lists detections, not looks.
+ * Every pass that looked at the box during a run, from NASA CMR, set against the run's own frames. Where a frame is
+ * a pass with a detection in the box, a pass in the window that matches no frame looked and saw nothing (or saw only
+ * cloud). FIRMS alone cannot tell this: it lists detections, not looks.
  */
 
 export interface PassMark {

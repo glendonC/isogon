@@ -26,7 +26,7 @@ interface WorkspaceBarProps {
 }
 
 /**
- * W1: the top bar holds only where (the place, by name), the step of the story, and one entry to the reading. Every
+ * The top bar holds only where (the place, by name), the step of the story, and one entry to the reading. Every
  * label is one word of the same kind. View commands and readings live behind the quiet control at the right.
  */
 export function WorkspaceBar({ place, placeDetail, onPlace, step, onStep, stepBlocked, onReading, onLanding, menu }: WorkspaceBarProps) {

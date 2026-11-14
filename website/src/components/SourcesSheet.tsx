@@ -27,6 +27,8 @@ export interface SourcesSheetProps {
   regionName: string;
   /** Imagery credit from the active run (ui/attribution.ts). */
   imageryCredit: string;
+  /** The body only, inside the reading sheet; credits are its own section there. */
+  embedded?: boolean;
 }
 
 /** A request's state, tagged with what it was made for so a new region never shows the previous one's answer. */
@@ -303,11 +305,26 @@ function CalendarParts({ load, regionName }: { load: Load<CalendarSources>; regi
   );
 }
 
-function Credits({ imageryCredit }: { imageryCredit: string }) {
+/**
+ * The credits. Esri's attribution rules for an interactive map (developers.arcgis.com, "Esri and data
+ * attribution"): "Powered by Esri" may sit in a window opened from a button, as here; the data source names must stay
+ * visible on the map itself, so the stage keeps them as small corner text, which opens this section.
+ */
+export function Credits({ imageryCredit }: { imageryCredit: string }) {
   const imagery = imageryCredit.trim();
   return (
     <Section title="Credits">
       <Facts>
+        <tr>
+          <th scope="row">Basemap</th>
+          <td>
+            Powered by{' '}
+            <a className="iso-link" href="https://www.esri.com" target="_blank" rel="noreferrer">
+              Esri
+            </a>
+          </td>
+          <td>World Imagery</td>
+        </tr>
         <tr>
           <th scope="row">Fire detections</th>
           <td>{FIRMS_CREDIT.value}</td>
@@ -336,15 +353,15 @@ function Credits({ imageryCredit }: { imageryCredit: string }) {
 }
 
 /**
- * The data and sources sheet (S7): the products the record is built from, the rows downloaded and inside each
+ * The data and sources sheet: the products the record is built from, the rows downloaded and inside each
  * region box, what the region's real calendar leaves out and why, known outages, and credits. Every count is read
  * live from `/api/health` and the region's real calendar when the sheet opens.
  */
-export function SourcesSheet({ open, onClose, apiBase, regionId, regionName, imageryCredit }: SourcesSheetProps) {
+export function SourcesSheet({ open, onClose, apiBase, regionId, regionName, imageryCredit, embedded = false }: SourcesSheetProps) {
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
-  useDialogFocus(open, sheetRef, closeRef);
+  useDialogFocus(open && !embedded, sheetRef, closeRef);
 
   const healthKey = apiBase;
   const calendarKey = `${apiBase} ${regionId}`;
@@ -383,7 +400,7 @@ export function SourcesSheet({ open, onClose, apiBase, regionId, regionName, ima
   }, [open, apiBase, regionId, calendarKey]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -392,13 +409,24 @@ export function SourcesSheet({ open, onClose, apiBase, regionId, regionName, ima
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, embedded, onClose]);
 
   if (!open) return null;
 
   const healthNow: Load<HealthCounts> = health.key === healthKey ? health : { key: healthKey, state: 'loading' };
   const calendarNow: Load<CalendarSources> =
     calendar.key === calendarKey ? calendar : { key: calendarKey, state: 'loading' };
+
+  if (embedded) {
+    return (
+      <div className="iso-sources">
+        <p className="iso-sheet__lede">Every count here is read live from the NASA FIRMS rows the backend has downloaded.</p>
+        <Products />
+        <Rows load={healthNow} regionId={regionId} />
+        <CalendarParts load={calendarNow} regionName={regionName} />
+      </div>
+    );
+  }
 
   return (
     <div className="iso-backdrop iso-backdrop--center" onClick={onClose} role="presentation">

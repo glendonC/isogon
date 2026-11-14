@@ -1,14 +1,12 @@
 /**
- * Demo data for S5, any area's calendar (CONTRACT 12).
+ * Demo data for any area's calendar.
  *
- * Stands in for a calendar route terrain-assets will serve for any box, for example
- *   GET /api/calendar?bbox=<west>,<south>,<east>,<north>&source=firms
- *     -> the real calendar response (the same shape as `GET /api/calendar?region_id=&source=firms`, D2 and D5).
- * Until it ships, a box inside one of the three context boxes gets that region's real calendar (live), and a box
+ * The backend serves a real calendar per region (`GET /api/calendar?region_id=&source=firms`) and none for an
+ * arbitrary box. A box inside one of the three context boxes gets that region's real calendar (live), and a box
  * anywhere else gets a stand-in: the real Feather River calendar, named as such on screen, so the page shows what
- * a box's calendar will look like. No number is invented: the stand-in is another place's real record, said plainly.
+ * a box's calendar looks like. No number is invented: the stand-in is another place's real record, said plainly.
  *
- * The context boxes are the real calendar responses' own `bbox` (west, south, east, north), read on 2026-11-14.
+ * The context boxes are the real calendar responses' own `bbox` (west, south, east, north).
  */
 
 export interface ContextBox {
@@ -23,7 +21,7 @@ export const CONTEXT_BOXES: ContextBox[] = [
   { region_id: 'evia_greece', name: 'Northern Evia', bbox: [22.05, 37.96, 24.55, 39.76] },
 ];
 
-/** The region whose real calendar stands in for a box no route serves yet. */
+/** The region whose real calendar stands in for a box no route serves. */
 export const STAND_IN_REGION = 'plumas_ca';
 
 /** The context box holding a box's centre, if any: its calendar is live. */

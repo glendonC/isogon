@@ -27,9 +27,9 @@ const clampLat = (v: number) => Math.max(-90, Math.min(90, v));
 const wrapLon = (v: number) => ((((v + 180) % 360) + 360) % 360) - 180;
 
 /**
- * S5: choose any area, by drawing a box on a small map of NASA's Blue Marble or typing its corners, and get its
- * monthly fire record. Inside one of the three context boxes the calendar is NASA FIRMS, live; elsewhere it is demo
- * data until the route serves any box (content/demo/anyArea.ts).
+ * Choose any area, by drawing a box on a small map of NASA's Blue Marble or typing its corners, and get its monthly
+ * fire record. Inside one of the three context boxes the calendar is NASA FIRMS, live; elsewhere it is a stand-in,
+ * marked as demo data, because no route serves an arbitrary box (content/demo/anyArea.ts).
  */
 export function AreaSheet({ open, onClose, apiBase, centre, onOpenMonth }: AreaSheetProps) {
   const sheetRef = useRef<HTMLDivElement | null>(null);
@@ -210,7 +210,7 @@ export function AreaSheet({ open, onClose, apiBase, centre, onOpenMonth }: AreaS
             </button>
           </form>
           <p className="iso-area__hint">
-            Outlined: the three boxes with NASA FIRMS rows on this machine. A box inside one gets that record, live.
+            Outlined: the three boxes the backend holds NASA FIRMS rows for. A box inside one gets that record, live.
           </p>
           {error && <p className="iso-area__error">{error}</p>}
         </div>

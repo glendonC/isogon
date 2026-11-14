@@ -1,7 +1,9 @@
+import { defaultRunStart, parseRunStarts, type RealRunStart } from './realRuns';
+
 /**
- * The burning calendar: monthly fire activity for an area, 2000 to 2026, from `/api/calendar`
- * (CONTRACT 7). Three views of the same months: Isogon's calibrated record, and the raw MODIS and raw VIIRS
- * detection rates. A month shows only when a sensor was in orbit and the month has happened.
+ * The burning calendar: monthly fire activity for an area, 2000 to 2026, from `/api/calendar`. Four views of the
+ * same months: the harmonized record, and the raw combined, MODIS and VIIRS detection rates. A month shows only when
+ * a sensor was in orbit and the month has happened.
  */
 
 /**
@@ -21,14 +23,46 @@ export interface CalendarMonth {
   recordP90: number | null;
   coverage: number | null;
   regime: string;
+  /**
+   * Detections in the box that month, per platform, from `raw_counts` (real calendar only). A platform that
+   * delivered no data is left out; one that delivered and saw nothing is listed with 0.
+   */
+  counts: Array<{ platform: string; total: number }> | null;
+}
+
+export interface OverlapEvidence {
+  /** Suomi NPP rows over Terra plus Aqua rows across the overlap months of the region's box. */
+  ratio: number;
+  p10: number | null;
+  p90: number | null;
+  /** Median absolute error of a held-out year's total, harmonized and without harmonization. */
+  heldOutError: number | null;
+  withoutError: number | null;
+  /** Share of held-out years whose truth fell inside the interval. */
+  heldYears: number | null;
 }
 
 export interface Calendar {
   regionName: string;
+  regionId: string;
   /** [lonMin, latMin, lonMax, latMax] */
   bbox: [number, number, number, number] | null;
   /** True until the response says `source: "firms"`. */
   simulated: boolean;
+  /** Unit of each view, in plain words, from the response's `units`. */
+  units: Record<CalendarView, string>;
+  /** Real calendars put every view in the same unit, so one colour scale serves all four. */
+  sharedScale: boolean;
+  /** Harmonization the record uses, from `harmonization_method.id` (real: `overlap_ratio_v1`). */
+  method: string | null;
+  /** Start dates of real runs, when the calendar response lists them (`real_run_starts`). */
+  runStarts: RealRunStart[];
+  /** The run the region opens on: `default_start`, else the start with the most VIIRS pixels (realRuns.ts). */
+  defaultStart: string | null;
+  /** Share of held-out months whose true value fell inside the record's p10 to p90 (real: 15 to 41%). */
+  intervalHeldMonths: number | null;
+  /** The real calendar's overlap ratio and its held-out check (`summary_metrics`); null on a simulated one. */
+  overlap: OverlapEvidence | null;
   firstYear: number;
   lastYear: number;
   months: CalendarMonth[];
@@ -45,9 +79,67 @@ const num = (v: unknown): number | null => {
 
 const pad = (m: number) => String(m).padStart(2, '0');
 
+const PLATFORM_ORDER = ['Terra', 'Aqua', 'Suomi NPP', 'NOAA-20'];
+
+function readCounts(raw: unknown): CalendarMonth['counts'] {
+  if (!raw || typeof raw !== 'object') return null;
+  const rc = raw as Record<string, unknown>;
+  const names = [...PLATFORM_ORDER.filter((p) => p in rc), ...Object.keys(rc).filter((p) => !PLATFORM_ORDER.includes(p))];
+  const out: Array<{ platform: string; total: number }> = [];
+  for (const platform of names) {
+    const c = rc[platform];
+    const total = c && typeof c === 'object' ? num((c as Record<string, unknown>).total) : num(c);
+    if (total !== null) out.push({ platform, total });
+  }
+  return out;
+}
+
 function currentYearMonth(): string {
   const d = new Date();
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`;
+}
+
+/**
+ * Unit tokens from the backend in plain words. The platforms in brackets stay, because the real VIIRS rate is
+ * Suomi NPP alone: "hotspots_per_1000km2_day (Suomi NPP)" reads "detections per 1,000 km² per day, Suomi NPP".
+ */
+function unitWords(u: unknown): string | null {
+  if (typeof u !== 'string' || !u.trim()) return null;
+  const platform = u.match(/\(([^)]*)\)\s*$/)?.[1]?.replace(/\s*\+\s*/g, ' and ').trim() ?? '';
+  const t = u.replace(/\s*\(.*\)\s*$/, '').trim();
+  const words =
+    t === 'hotspots_per_1000km2_day'
+      ? 'detections per 1,000 km² per day'
+      : t === 'suomi_npp_equivalent_hotspots_per_1000km2_day'
+        ? 'Suomi NPP equivalent detections per 1,000 km² per day'
+        : t === 'reference_activity_mw_km2_index'
+          ? 'activity index'
+          : t.replace(/_/g, ' ');
+  return platform ? `${words}, ${platform}` : words;
+}
+
+/** The combined view adds the MODIS and VIIRS rates, so its unit names both platforms when both are named. */
+function combinedUnit(modis: string | null, viirs: string | null): string | null {
+  if (!modis) return null;
+  const [mw, mp] = modis.split(', ');
+  const vp = viirs?.split(', ')[1];
+  return mp && vp && viirs?.startsWith(mw) ? `${mw}, ${mp} plus ${vp}` : modis;
+}
+
+function readOverlap(raw: unknown): OverlapEvidence | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const m = raw as Record<string, unknown>;
+  const ratio = num(m.viirs_to_modis_overlap_ratio);
+  if (ratio === null) return null;
+  const band = Array.isArray(m.viirs_to_modis_ratio_p10_p90) ? m.viirs_to_modis_ratio_p10_p90 : [];
+  return {
+    ratio,
+    p10: num(band[0]),
+    p90: num(band[1]),
+    heldOutError: num(m.held_out_median_abs_relative_error),
+    withoutError: num(m.held_out_median_abs_relative_error_without_harmonization),
+    heldYears: num(m.held_out_annual_interval_coverage),
+  };
 }
 
 export function parseCalendar(raw: unknown): Calendar | null {
@@ -78,15 +170,38 @@ export function parseCalendar(raw: unknown): Calendar | null {
       recordP90: modisInOrbit ? num(r.harmonized_p90) : null,
       coverage: num(r.coverage_fraction),
       regime: typeof r.sensor_regime === 'string' ? r.sensor_regime : '',
+      counts: happened ? readCounts(r.raw_counts) : null,
     });
   }
   if (months.length === 0) return null;
   const years = months.map((m) => m.year);
   const bbox = Array.isArray(rec.bbox) && rec.bbox.length === 4 ? (rec.bbox.map(Number) as Calendar['bbox']) : null;
+  const units = (rec.units && typeof rec.units === 'object' ? rec.units : {}) as Record<string, unknown>;
+  const modisUnit = unitWords(units.modis_raw_rate);
+  const viirsUnit = unitWords(units.viirs_raw_rate);
+  const rawUnit = modisUnit ?? 'detections per 1,000 km² per day';
+  const real = rec.source === 'firms';
+  const hm = rec.harmonization_method;
+  const method = hm && typeof hm === 'object' && typeof (hm as Record<string, unknown>).id === 'string'
+    ? String((hm as Record<string, unknown>).id)
+    : null;
   return {
     regionName: typeof rec.region_name === 'string' ? rec.region_name : '',
+    regionId: typeof rec.region_id === 'string' ? rec.region_id : '',
     bbox,
-    simulated: rec.source !== 'firms',
+    simulated: !real,
+    units: {
+      record: unitWords(units.harmonized_mean) ?? 'activity index',
+      combined: combinedUnit(modisUnit, viirsUnit) ?? rawUnit,
+      modis: rawUnit,
+      viirs: viirsUnit ?? rawUnit,
+    },
+    sharedScale: real,
+    method,
+    runStarts: real ? parseRunStarts(rec.real_run_starts) : [],
+    defaultStart: real ? defaultRunStart(rec.real_run_starts, parseRunStarts(rec.real_run_starts)) : null,
+    intervalHeldMonths: num((rec.summary_metrics as Record<string, unknown> | undefined)?.held_out_monthly_interval_coverage),
+    overlap: real ? readOverlap(rec.summary_metrics) : null,
     firstYear: Math.min(...years),
     lastYear: Math.max(...years),
     months,
@@ -101,18 +216,49 @@ export function valueOf(m: CalendarMonth, view: CalendarView): number | null {
   return (m.modis ?? 0) + (m.viirs ?? 0);
 }
 
-/** Log colour domain for a view. The raw views share one domain, so their levels compare directly. */
-export function domainFor(cal: Calendar, view: CalendarView): [number, number] {
-  const views: CalendarView[] = view === 'record' ? ['record'] : ['combined', 'modis', 'viirs'];
-  const vals = cal.months.flatMap((m) => views.map((v) => valueOf(m, v))).filter((v): v is number => v !== null && v > 0);
-  if (vals.length === 0) return [0.01, 1];
-  return [Math.min(...vals), Math.max(...vals)];
+function quantile(sorted: readonly number[], p: number): number {
+  const k = (sorted.length - 1) * p;
+  const f = Math.floor(k);
+  const c = Math.min(sorted.length - 1, f + 1);
+  return sorted[f] + (sorted[c] - sorted[f]) * (k - f);
 }
 
-export function position(v: number, [lo, hi]: [number, number]): number {
-  if (v <= lo) return 0;
-  if (v >= hi) return 1;
-  return (Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
+export interface ColourClasses {
+  /** Eight upper bounds for nine classes, ascending. */
+  breaks: number[];
+  /** The months the classes were cut from. */
+  base: 'record' | 'combined';
+  p90: number;
+  p98: number;
+}
+
+/**
+ * Colour classes cut from the area's own record. Steps 1 to 7 split the months up to the 90th percentile into seven
+ * equal shares; step 8 is the 90th to 98th percentile; step 9 is the top 2%. Real FIRMS months span four orders of
+ * magnitude, so a log scale would put most of them on three steps and a quiet year would read as one colour. With
+ * these classes a quiet year (Plumas 2016) spans steps 1 to 6, and only six months reach step 9 (the 2021 season
+ * among them). Real calendars cut the classes from the harmonized record and use them for all four views (one
+ * unit), so raw MODIS reads darker and the 2012 step shows in Raw combined. Zero months are not classed; they are
+ * drawn hollow.
+ */
+export function classesFor(cal: Calendar, view: CalendarView): ColourClasses | null {
+  const base = cal.sharedScale || view === 'record' ? 'record' : 'combined';
+  const vals = cal.months
+    .map((m) => valueOf(m, base))
+    .filter((v): v is number => v !== null && v > 0)
+    .sort((a, b) => a - b);
+  if (vals.length < 9) return null;
+  const p90 = quantile(vals, 0.9);
+  const p98 = quantile(vals, 0.98);
+  const low = vals.filter((v) => v <= p90);
+  const breaks = [1, 2, 3, 4, 5, 6].map((i) => quantile(low, i / 7)).concat([p90, p98]);
+  return { breaks, base, p90, p98 };
+}
+
+/** Class 0 to 8 of a positive value. */
+export function classOf(v: number, c: ColourClasses | null): number {
+  if (!c) return 4;
+  return c.breaks.filter((b) => v > b).length;
 }
 
 export interface MonthStats {
@@ -150,12 +296,6 @@ export function statsFor(cal: Calendar, ym: string, view: CalendarView): MonthSt
   };
 }
 
-export const VIEW_UNITS: Record<CalendarView, string> = {
-  record: 'activity index',
-  combined: 'detections per 1,000 km² per day',
-  modis: 'detections per 1,000 km² per day',
-  viirs: 'detections per 1,000 km² per day',
-};
 
 export const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -164,9 +304,12 @@ export const MONTH_NAMES = [
 
 export function formatValue(v: number | null): string {
   if (v === null) return 'none';
+  if (v === 0) return '0';
   if (v >= 100) return v.toFixed(0);
   if (v >= 10) return v.toFixed(1);
-  return v.toFixed(2);
+  if (v >= 0.01) return v.toFixed(2);
+  // Below 0.01, two significant figures, so a small real rate never prints as zero.
+  return Number(v.toPrecision(2)).toString();
 }
 
 export function ordinal(n: number): string {
@@ -174,7 +317,16 @@ export function ordinal(n: number): string {
   return `${n}${s}`;
 }
 
-/** CSV of the selected months: every field the calendar gives, with the source stated on each row. */
+/** Real calendar: the server exports the FIRMS rows behind a selection. End is exclusive. */
+export function rowsCsvUrl(apiBase: string, regionId: string, yms: readonly string[]): string | null {
+  if (yms.length === 0) return null;
+  const sorted = [...yms].sort();
+  const [y1, m1] = sorted[sorted.length - 1].split('-').map(Number);
+  const end = m1 === 12 ? `${y1 + 1}-01-01` : `${y1}-${pad(m1 + 1)}-01`;
+  return `${apiBase}/api/calendar/rows.csv?region_id=${encodeURIComponent(regionId)}&start=${sorted[0]}-01&end=${end}`;
+}
+
+/** Simulated calendar: CSV of the selected months' calendar fields, marked simulated on every row. */
 export function toCsv(cal: Calendar, yms: readonly string[]): string {
   const head = [
     'year_month', 'modis_raw_rate', 'viirs_raw_rate', 'harmonized_mean', 'harmonized_p10', 'harmonized_p90',
@@ -188,4 +340,16 @@ export function toCsv(cal: Calendar, yms: readonly string[]): string {
         cal.simulated ? 'simulated' : 'firms'].map(cell).join(','),
     );
   return [head.join(','), ...rows].join('\n') + '\n';
+}
+
+/**
+ * The real calendar when the backend serves one for the region (`source=firms`), otherwise null. The simulated
+ * calendar is never shown: it is one invented place, so for any other region it would show simulated numbers for
+ * somewhere else.
+ */
+export async function fetchCalendar(apiBase: string, regionId: string, signal: AbortSignal): Promise<Calendar | null> {
+  const r = await fetch(`${apiBase}/api/calendar?region_id=${encodeURIComponent(regionId)}&source=firms`, { signal });
+  if (!r.ok) return null;
+  const cal = parseCalendar(await r.json());
+  return cal && !cal.simulated ? cal : null;
 }

@@ -1,10 +1,10 @@
 import type { EvidenceDoc } from './demo/evidence';
 
 /**
- * L1: the three parts under the landing's hero, each with one line of what it does (the lead's approved copy) and
- * one line of its real status, read from GET /api/evidence (the model lane's evidence function, served by the data
- * lane in the shape of content/demo/evidence.ts). No figure is typed here; a negative result stays negative. When the
- * route does not answer, or answers in a shape this cannot read, the parts show what they do and no status.
+ * The three parts under the landing's hero, each with one line of what it does and one line of its real status,
+ * read from GET /api/evidence (in the shape of content/demo/evidence.ts). No figure is typed here; a negative result
+ * stays negative. When the route does not answer, or answers in a shape this cannot read, the parts show what they
+ * do and no status.
  */
 export type PartId = 'model' | 'environment' | 'agent';
 

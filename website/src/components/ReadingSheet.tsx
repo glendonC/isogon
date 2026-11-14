@@ -31,8 +31,8 @@ interface ReadingSheetProps {
 }
 
 /**
- * W1: the one place to read about the product: method, sensor physics, data and sources, credits (the lead's chrome
- * verdict, item 4). Opened from the top bar's single reading entry, and from the imagery credit on the stage.
+ * The one place to read about the product: method, sensor physics, data and sources, credits. Opened from the top
+ * bar's single reading entry, and from the imagery credit on the stage.
  */
 export function ReadingSheet(props: ReadingSheetProps) {
   const { section, onSection, onClose } = props;

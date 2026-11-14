@@ -2,9 +2,9 @@ import type { DynamicRegionRun } from '../stage/types';
 import type { NextLookSlot } from './demo/nextLook';
 
 /**
- * S1, a round of "next look", on a real blind run (CONTRACT 10). The round's turns and scores come from the
- * environment's routes (demo stand-in: content/demo/nextLook.ts); what a look shows comes from the run itself: the
- * real hidden VIIRS detections of that look's slot inside the chosen tile, drawn on the terrain.
+ * A round of "next look" on a real blind run. The round's turns and scores come from the environment's routes
+ * (demo stand-in: content/demo/nextLook.ts); what a look shows is the real hidden VIIRS detections of that look's
+ * slot inside the chosen tile, drawn on the terrain.
  */
 
 type Obj = Record<string, unknown>;
@@ -23,8 +23,8 @@ export interface HiddenOverpass {
 const toS = (iso: string) => Date.parse(iso) / 1000;
 
 /**
- * The hidden VIIRS overpasses of a blind run. Runs from fire-model M8 on carry them under `blind_test.reveal`; earlier
- * runs kept them as frames marked `..._held_out`, with the footprints in the frame.
+ * The hidden VIIRS overpasses of a blind run: those under `blind_test.reveal` when the run carries a reveal,
+ * otherwise the frames marked `..._held_out` that hold footprints.
  */
 export function hiddenOverpassesOf(run: DynamicRegionRun | null): HiddenOverpass[] {
   const r = run as unknown as Obj | null;
@@ -47,7 +47,7 @@ export function hiddenOverpassesOf(run: DynamicRegionRun | null): HiddenOverpass
   return out;
 }
 
-/** The scheduled look a hidden overpass belongs to: same platform, nearest in time, within two hours (M8's margin). */
+/** The scheduled look a hidden overpass belongs to: same platform, nearest in time, within two hours. */
 export function slotOf(slots: readonly NextLookSlot[], platform: string, timeS: number): number | null {
   let best: { gap: number; index: number } | null = null;
   for (const s of slots) {
@@ -92,12 +92,19 @@ export function lookFootprints(
   return perTile;
 }
 
-/** Index of the run's frame nearest a time, skipping frames held out of the estimate (before M8). */
+/**
+ * Index of the run's frame for a pass at a time. A hidden pass is its own frame (held out, at the pass's real
+ * time): a held-out frame within two minutes is that pass. Otherwise the nearest visible frame; frames whose regime
+ * ends in `_held_out` are skipped.
+ */
 export function frameNearest(run: DynamicRegionRun | null, timeS: number): number {
   const frames = obj((run as unknown as Obj | null)?.observer_passes)?.frames;
   let best = { gap: Infinity, index: 0 };
   if (Array.isArray(frames)) {
-    frames.map(obj).forEach((f, i) => {
+    const list = frames.map(obj);
+    const own = list.findIndex((f) => f && typeof f.timestamp_utc === 'string' && f.held_out === true && Math.abs(toS(f.timestamp_utc) - timeS) <= 120);
+    if (own >= 0) return num(list[own]?.frame) ?? own;
+    list.forEach((f, i) => {
       if (!f || typeof f.timestamp_utc !== 'string') return;
       if (typeof f.epistemic_regime === 'string' && f.epistemic_regime.endsWith('_held_out')) return;
       const gap = Math.abs(toS(f.timestamp_utc) - timeS);
@@ -127,6 +134,11 @@ export function withLooks(run: DynamicRegionRun, layers: readonly LookLayer[], t
   for (const layer of layers) {
     const frame = obj(frames[layer.frame]);
     if (!frame || layer.footprints.length === 0) continue;
+    if (frame.held_out === true) {
+      // The look's own held-out pass, now looked at: it draws as that pass with what the look revealed.
+      frame.held_out = false;
+      if (typeof frame.epistemic_regime === 'string') frame.epistemic_regime = frame.epistemic_regime.replace(/_held_out$/, '');
+    }
     const code = Number(Object.entries(codes).find(([, v]) => v === layer.platform)?.[0] ?? layer.footprints[0]?.[7] ?? NaN);
     frame.passes = [
       ...(Array.isArray(frame.passes) ? frame.passes : []),

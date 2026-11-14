@@ -19,6 +19,8 @@ export interface EvidenceSheetProps {
   doc: EvidenceDoc;
   /** `demo` reads content/demo/evidence.ts; `live` is `GET /api/evidence`. The label beside the title says which. */
   source: 'demo' | 'live';
+  /** Open on a section (the agents' table, from the landing's third part). */
+  focus?: 'next_look' | null;
 }
 
 const METHODS: readonly EvidenceMethodId[] = ['reconstruction', 'painted_modis', 'overlap_ratio'];
@@ -385,15 +387,20 @@ function NextLook({ n }: { n: EvidenceNextLook }) {
 }
 
 /**
- * The evidence sheet (S2): the blind test on the three 2021 test fires under the corrected protocol beside the
- * first, what the outside audit found, the validation verdict per part, the next-look reference table and the
- * limits, all from one `EvidenceDoc` (GET /api/evidence, or its demo stand-in). Opened from the workspace; Escape
- * closes it.
+ * The evidence sheet: the blind test on the three 2021 test fires under two versions of the test protocol, what the
+ * first version let the hidden instrument decide, the validation verdict per part, the next-look reference table and
+ * the limits, all from one `EvidenceDoc` (GET /api/evidence, or its demo stand-in). Escape closes it.
  */
-export function EvidenceSheet({ open, onClose, doc, source }: EvidenceSheetProps) {
+export function EvidenceSheet({ open, onClose, doc, source, focus = null }: EvidenceSheetProps) {
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   useDialogFocus(open, sheetRef, closeRef);
+
+  useEffect(() => {
+    if (!open || focus !== 'next_look') return;
+    const t = window.setTimeout(() => document.getElementById('iso-evidence-next')?.scrollIntoView({ block: 'start' }), 60);
+    return () => window.clearTimeout(t);
+  }, [open, focus]);
 
   useEffect(() => {
     if (!open) return;
@@ -434,15 +441,15 @@ export function EvidenceSheet({ open, onClose, doc, source }: EvidenceSheetProps
 
         <p className="iso-sheet__lede">
           {source === 'demo'
-            ? `Real results from fire-model unit ${doc.unit} (commit ${doc.commit}), shown as a stand-in until the backend publishes this sheet.`
-            : `Results from fire-model unit ${doc.unit}, commit ${doc.commit}.`}
+            ? 'Real results under test protocol versions 2 and 1, from a recorded copy shown as a stand-in for the live sheet.'
+            : `Results as the backend reports them, commit ${doc.commit}.`}
         </p>
 
         <TestFires doc={doc} />
 
         <section className="iso-evidence__section" aria-labelledby="iso-evidence-audit">
           <h3 id="iso-evidence-audit" className="iso-evidence__heading">
-            What the outside audit found
+            What the first protocol let through
           </h3>
           <p className="iso-evidence__text">{doc.audit}</p>
         </section>

@@ -1,35 +1,24 @@
 /**
- * Demo data for S2, the evidence sheet (CONTRACT 12).
+ * Demo data for the evidence sheet.
  *
- * Stands in for `GET /api/evidence`, one JSON that fire-model will publish. Until it does, the sheet
- * (components/EvidenceSheet.tsx) reads `DEMO_EVIDENCE` and says "Demo data" on screen.
+ * A stand-in in the shape of `GET /api/evidence`. The sheet (components/EvidenceSheet.tsx) reads `DEMO_EVIDENCE`
+ * while `SURFACE_SOURCE.evidence` says demo, and says "Demo data" on screen.
  *
  * Shape: `EvidenceDoc` below, snake_case like the backend's other payloads.
  *   - `commit`, `unit`: where the numbers come from.
  *   - `test_fires`: the blind test on the three 2021 test fires. `scores` lists the seven judged scores in order,
- *     each with which way is better; each fire carries `new` (protocol version 2, corrected) and `old` (version 1),
- *     each with its window, scored overpasses, hidden pixels, every method's value per score, every method's
- *     90 percent FRP interval (null when the method states none), how many of the seven Isogon is ahead of both
- *     baselines on, and optional `remarks` per score.
- *   - `audit`: one plain paragraph on what the outside audit found.
+ *     each with which way is better; each fire carries `new` (protocol version 2) and `old` (version 1), each with
+ *     its window, scored overpasses, hidden pixels, every method's value per score, every method's 90 percent FRP
+ *     interval (null when the method states none), how many of the seven Isogon is ahead of both baselines on, and
+ *     optional `remarks` per score.
+ *   - `audit`: one plain paragraph on what protocol version 1 let the hidden instrument decide.
  *   - `validation`: the validation run that decides what is switched on: size, classes, the verdict per part with
  *     each score's class, and the FRP interval.
  *   - `next_look`: the next-look environment's reference table, `new` beside `old`.
  *   - `limits`: at most five plain sentences.
  *
- * Every value is a real result of fire-model unit M8, commit 6c3857d (files in the fire-model notes folder):
- *   - test_fires: `M8-evidence/test_fires_old_and_new.json` (windows, scored overpasses, scores, FRP intervals,
- *     `ahead_of_both_on`, the old hidden pixels as `viirs_pixels_in_box`); the new hidden pixels from
- *     `M8-evidence/test_fires_old_and_new.txt` ("hidden pixels old N new N"); the `note` and the Evia remark from
- *     `M8.md`, "The three test fires, a second look"; which way is better from `M8.md`, "Validation and the
- *     gates" ("off from 1" for the two ratios).
- *   - audit: `M8.md`, "For the owner, plainly".
- *   - validation: `M8.md`, "Validation and the gates" (the "now" column) and `M8-evidence/validate_log.txt`
- *     (decision, protocol note, per-part scores and classes, FRP interval 0.8026 over 152).
- *   - next_look: `new` from `M8-evidence/env_reference_table.txt` (21 test episodes); `old` from `M8.md`, "The
- *     environment's reference table, measured again" (the "before" columns, 22 test episodes); `holds_in_both`
- *     from the same section. What each agent does is from `M5.md`, sections 5 and 9.
- *   - limits: `M8.md`, "What is weak", and `M8-evidence/env_reference_table.json`, `known_limits`.
+ * Every value is a real result of the model: the test fires, the validation and the next-look table as measured
+ * under protocol version 2 (`new`), beside the figures of version 1 (`old`).
  */
 
 export type EvidenceMethodId = 'reconstruction' | 'painted_modis' | 'overlap_ratio';
@@ -67,16 +56,16 @@ export interface EvidenceFireTest {
   frp_interval: Record<EvidenceMethodId, EvidenceCount | null>;
   /** Of the scores in `test_fires.scores`, how many Isogon is ahead of both baselines on. */
   ahead_of_both_on: number;
-  /** Words fire-model adds to one score's verdict. */
+  /** Words the backend adds to one score's verdict. */
   remarks?: Partial<Record<EvidenceScoreId, string>>;
 }
 
 export interface EvidenceFire {
   region_id: string;
   name: string;
-  /** Protocol version 2, the corrected test. */
+  /** The test under the later protocol (version 2 in the demo data). */
   new: EvidenceFireTest;
-  /** Protocol version 1, the first test. */
+  /** The test under protocol version 1. */
   old: EvidenceFireTest;
 }
 
@@ -142,7 +131,7 @@ export interface EvidenceDoc {
 
 export const DEMO_EVIDENCE: EvidenceDoc = {
   commit: '6c3857d',
-  unit: 'M8',
+  unit: 'sealed protocol',
   test_fires: {
     hidden: 'VIIRS',
     interval_level: 0.9,
@@ -425,12 +414,12 @@ export const DEMO_EVIDENCE: EvidenceDoc = {
     ],
   },
   audit:
-    'An outside audit found that the hidden VIIRS rows reached more than the score. They decided where a test ' +
+    'Under the first protocol the hidden VIIRS rows reached more than the score. They decided where a test ' +
     'window ended, and so how much MODIS the model was given. Each prediction was made at the hidden pass\'s own ' +
     'minute and pixel size. A baseline\'s pixel ratio came from a calendar that still held the three test fires, ' +
     'and 49 rows from inside the 2021 test boxes stayed in its training rows. In the next-look game, the hidden ' +
     'passes set when an agent could look. None of this carried the hidden fire\'s position or power into the ' +
-    'estimate, but each path let the hidden instrument shape the test. Fire-model\'s own leak tests missed it: ' +
+    'estimate, but each path let the hidden instrument shape the test. The project\'s own leak tests missed it: ' +
     'they changed hidden values but never deleted a row. The corrected protocol seals the hidden rows away until ' +
     'scoring. Nothing was refitted.',
   validation: {
@@ -497,8 +486,8 @@ export const DEMO_EVIDENCE: EvidenceDoc = {
       },
       {
         id: 'learned',
-        label: 'Learned (M7)',
-        does: 'weights from unit M7, not refitted',
+        label: 'Learned',
+        does: 'weights fitted under protocol version 1, not refitted',
         new: { mean_final: 0.2535, mean_gain: 0.0157, share_of_oracle_gain: 0.586 },
         old: { mean_final: 0.2523, mean_gain: 0.0106, share_of_oracle_gain: 0.469 },
       },
@@ -518,8 +507,8 @@ export const DEMO_EVIDENCE: EvidenceDoc = {
     'Pass times come from a nominal schedule. A prediction can be up to 100 minutes from the pass it is scored ' +
       'against and assumes a typical pixel; on training fires this costs about 0.010 of strict CSI and one score ' +
       'of seven.',
-    'The fitted values were chosen under the first protocol and have not been refitted. A clean refit with its ' +
-      'own validation is the next step.',
+    'The fitted values behind these figures were chosen under the first protocol and were not refitted for the ' +
+      'corrected one.',
     'Validation rests on seven episodes from two regions; Evia has none in 2024 and 2025. The pixel count verdict ' +
       'is a narrow call that flips with one platform\'s rows.',
     'Evia is weak: ahead on 3 scores of 7, a strict CSI lead of 0.0002, and 2 of 7 on a blind run from its ' +

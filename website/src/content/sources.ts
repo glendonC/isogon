@@ -1,8 +1,8 @@
 /**
- * The data and sources sheet (S7). Every count comes live from two responses: `/api/health` (rows downloaded, rows
- * per region box and platform) and the region's real calendar, `/api/calendar?region_id=<id>&source=firms` (what is
- * left out and why, outage days, regime markers). The product names, routes and the two gaps shorter than a day are
- * fixed facts from the data lane's notes (terrain-assets D1, D2, D4, D6) and docs/03 and docs/09.
+ * The data and sources sheet. Every count comes live from two responses: `/api/health` (rows downloaded, rows per
+ * region box and platform) and the region's real calendar, `/api/calendar?region_id=<id>&source=firms` (what is left
+ * out and why, outage days, regime markers). The product names, routes and the two gaps shorter than a day are fixed
+ * facts, typed here; docs/data.md describes the data and docs/sources.md the sources and their credits.
  */
 
 /** Platforms in the order the record grew. Platforms the backend adds later sort after these. */
@@ -77,8 +77,8 @@ export interface SourceRow {
 }
 
 /**
- * The products the rows come from (D1, D4, D6; docs/03). MODIS is Collection 6.1 and VIIRS Collection 2 on NASA's
- * CMR (versions 061 and 002); the FIRMS rows themselves carry the `version` labels named here.
+ * The products the rows come from (docs/data.md). MODIS is Collection 6.1 and VIIRS Collection 2 on NASA's CMR
+ * (versions 061 and 002); the FIRMS rows themselves carry the `version` labels named here.
  */
 export const PRODUCT_ROWS: readonly SourceRow[] = [
   {
@@ -115,8 +115,8 @@ export const PRODUCT_ROWS: readonly SourceRow[] = [
 ];
 
 /**
- * Two gaps the whole-day outage rule cannot catch, each under a day, so their months stay in the fit (D1, D2). Both
- * are global, so they hold for every region.
+ * Two gaps the whole-day outage rule cannot catch, each under a day, so their months stay in the fit. Both are
+ * global, so they hold for every region.
  */
 export const SUB_DAY_GAPS: readonly DatedEvent[] = [
   {
@@ -139,7 +139,7 @@ export const FIRMS_CREDIT = {
   url: 'https://www.earthdata.nasa.gov/data/tools/firms',
 } as const;
 
-/** Elevation (docs/09): Terrain Tiles on AWS Open Data, Terrarium encoding. */
+/** Elevation (docs/sources.md): Terrain Tiles on AWS Open Data, Terrarium encoding. */
 export const ELEVATION_CREDIT = {
   value: 'AWS Terrarium',
   url: 'https://registry.opendata.aws/terrain-tiles/',

@@ -2,9 +2,9 @@ import type { DynamicRegionRun } from '../stage/types';
 import type { PassList } from './demo/passes';
 
 /**
- * W1: the pass track, the workspace's time control (reference-study.md). Every pass sits at its real time; VIIRS
- * above the axis, MODIS below; a pass that looked and flagged nothing is a hollow mark; in a blind test the hidden
- * VIIRS passes show only their times (from the CMR pass list, which holds no detection) until the reveal.
+ * The pass track, the workspace's time control. Every pass sits at its real time; VIIRS above the axis, MODIS
+ * below; a pass that looked and flagged nothing is a hollow mark; in a blind test the hidden VIIRS passes show only
+ * their times (from the CMR pass list, which holds no detection) until the reveal.
  */
 
 type Obj = Record<string, unknown>;
@@ -17,6 +17,8 @@ export type TrackRow = 'viirs' | 'modis';
 
 export interface TrackFrame {
   index: number;
+  /** A pass of the hidden instrument, at its real time, with the estimate only. */
+  heldOut: boolean;
   t: number;
   platform: string;
   row: TrackRow;
@@ -54,7 +56,7 @@ export interface TrackData {
   nights: Array<[number, number]>;
   /** Local solar midnights inside the window, for the day names. */
   midnights: number[];
-  /** Whether the CMR pass list covers the window (demo data until /api/passes ships). */
+  /** Whether a separate pass list covers the window and added marks (never for a run whose frames are the CMR list). */
   hasPassList: boolean;
   hiddenCount: number;
 }
@@ -95,17 +97,20 @@ function framesOf(run: DynamicRegionRun): TrackFrame[] {
     const platform = String(f?.sensor ?? ep?.primary_sensor ?? 'MODIS');
     const passes = Array.isArray(f?.passes) ? (f?.passes as unknown[]).map(obj) : [];
     const counted = passes.reduce((a, p) => a + (num(p?.footprint_count) ?? 0), 0);
-    const pixels = counted || (Array.isArray(f?.footprints) ? (f?.footprints as unknown[]).length : 0);
+    // The frame's own count in the box when it carries one; otherwise its passes' counts, or its footprints.
+    const pixels = num(f?.detections_in_box) ?? (counted || (Array.isArray(f?.footprints) ? (f?.footprints as unknown[]).length : 0));
+    const heldOut = f?.held_out === true;
     const cloud = num(f?.cloud_fraction) ?? num(ep?.cloud_fraction);
     out.push({
       index: i,
+      heldOut,
       t: toS(ts),
       platform,
       row: rowOf(platform),
       pixels,
       isDay: typeof f?.is_day === 'boolean' ? f.is_day : null,
       gapH: num(f?.information_age_h),
-      cloudPct: cloud === null ? null : Math.round(cloud * 100),
+      cloudPct: num(f?.granule_cloud_cover_pct) ?? (cloud === null ? null : Math.round(cloud * 100)),
     });
   }
   return out;
@@ -119,6 +124,8 @@ export interface RevealedPass {
   platform: string;
   t: number;
   pixels: number;
+  /** The held-out frame this pass is (null: no frame). */
+  frame: number | null;
 }
 
 export function revealedPassesOf(run: DynamicRegionRun | null): RevealedPass[] {
@@ -131,6 +138,7 @@ export function revealedPassesOf(run: DynamicRegionRun | null): RevealedPass[] {
       platform: String(o.platform),
       t: toS(String(o.time_utc)),
       pixels: num(o.pixels_in_box) ?? (Array.isArray(o.footprints) ? o.footprints.length : 0),
+      frame: num(o.frame),
     }));
 }
 
@@ -151,22 +159,47 @@ export function passTrack(
   const t0 = first - pad;
   const t1 = last + pad;
 
-  const marks: TrackMark[] = frames.map((f) => ({
-    key: `f${f.index}`,
-    row: f.row,
-    platform: f.platform,
-    t: f.t,
-    kind: 'seen',
-    pixels: f.pixels,
-    frame: f.index,
-    isFrame: true,
-    cloudPct: f.cloudPct,
-    dayNight: f.isDay === null ? null : f.isDay ? 'DAY' : 'NIGHT',
-  }));
-
-  const list = state === 'simulated' ? null : lists?.find((l) => l.region_id === run.region.id && toS(l.start) <= first && toS(l.end) >= last) ?? null;
-  const usedReveal = new Set<number>();
+  // Every pass that held the box is a frame, and a hidden pass is a held-out frame. It shows as hidden until the
+  // reveal, then with the pixels the reveal gives that very frame; a visible pass with nothing in the box is empty.
+  const revealedAt = new Map<number, number>();
+  for (const r of revealed) if (r.frame !== null) revealedAt.set(r.frame, (revealedAt.get(r.frame) ?? 0) + r.pixels);
   let hiddenCount = 0;
+  const marks: TrackMark[] = frames.map((f) => {
+    let kind: TrackMark['kind'] = f.pixels > 0 ? 'seen' : 'nothing';
+    let pixels: number | null = f.pixels;
+    if (f.heldOut) {
+      if (state === 'revealed') {
+        pixels = revealedAt.get(f.index) ?? 0;
+        kind = pixels > 0 ? 'seen' : 'nothing';
+      } else {
+        kind = 'hidden';
+        pixels = null;
+        hiddenCount += 1;
+      }
+    }
+    return {
+      key: `f${f.index}`,
+      row: f.row,
+      platform: f.platform,
+      t: f.t,
+      kind,
+      pixels,
+      frame: f.index,
+      isFrame: true,
+      cloudPct: f.cloudPct,
+      dayNight: f.isDay === null ? null : f.isDay ? 'DAY' : 'NIGHT',
+    };
+  });
+
+  // A run whose frames are the CMR pass list (`frames_from` "cmr") gets nothing added: a pass that held only part
+  // of the box is no look. Any other real run's frames are the passes with detections only, so a pass list that
+  // covers the window adds the rest.
+  const framesFrom = obj(obj(run as unknown as Obj)?.observer_passes)?.frames_from;
+  const list =
+    state === 'simulated' || framesFrom === 'cmr'
+      ? null
+      : lists?.find((l) => l.region_id === run.region.id && toS(l.start) <= first && toS(l.end) >= last) ?? null;
+  const usedReveal = new Set<number>();
   if (list) {
     for (const p of list.passes) {
       const t = toS(p.time_mid);
@@ -200,7 +233,7 @@ export function passTrack(
       });
     }
   }
-  if (state === 'revealed') {
+  if (state === 'revealed' && framesFrom !== 'cmr') {
     revealed.forEach((r, k) => {
       if (usedReveal.has(k) || r.t < t0 || r.t > t1) return;
       marks.push({

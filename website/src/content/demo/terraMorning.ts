@@ -1,18 +1,18 @@
 /**
- * Demo data for S6, after the satellites retire: Terra's morning pass estimated from VIIRS alone (CONTRACT 12).
+ * Demo data for the question after Terra retires: its morning pass estimated from VIIRS alone.
  *
- * Stands in for a route fire-model will publish from `backend/model/terra_morning.py` (unit M4), for example
- *   GET /api/terra_morning?region_id=<id>
- *     -> TerraMorning: the region's test fire scored the way a blind test is (`blind_test`-shaped block: methods
- *        `reconstruction`, `painted_viirs`, `viirs_ratio`, each with `strict_375m`, `tolerant_1_cell`, `frp_total`
- *        and `interval`; `verdict.scores`), the validation summary, and the protocol it was measured under.
+ * No route serves this result; it comes from `backend/model/terra_morning.py`.
+ *   TerraMorning: per region, its test fire scored the way a blind test is (`blind_test`-shaped block: methods
+ *     `reconstruction`, `painted_viirs`, `viirs_ratio`, each with `strict_375m`, `tolerant_1_cell`, `frp_total`
+ *     and `interval`; `verdict.scores`), the validation summary, and the protocol it was measured under.
  *
- * Values: fire-model M4 (commit 42b3ffb), `M4-evidence/terra_test_fires.json` (per fire, cut to the keys the page
- * reads) and `M4.md` (validation: 6 episodes, 40 Terra morning overpasses; ahead on 4 scores, tied on 2, behind on
- * 1; the 90 percent interval held for 31 of 40). Every MODIS detection is hidden; the estimate is scored against
- * Terra's real morning overpasses (about 10:30 local solar time).
- * Protocol: measured under version 1 and NOT measured again in M8 (`fitted_values/terra_morning.json` carries that
- * note): its predictions used the hidden Terra pass's own time and pixel size.
+ * Values: the estimate's results per fire, cut to the keys the page reads, and its validation (6 episodes, 40 Terra
+ * morning overpasses; ahead on 4 scores, tied on 2, behind on 1; the 90 percent interval held for 31 of 40). Every
+ * MODIS detection is hidden; the estimate is scored against Terra's real morning overpasses (about 10:30 local solar
+ * time).
+ * Protocol: measured under version 1 and not under a later version
+ * (`backend/model/fitted_values/terra_morning.json` carries that note): its predictions used the hidden Terra pass's
+ * own time and pixel size.
  */
 
 export interface TerraMorning {
@@ -363,9 +363,9 @@ export const DEMO_TERRA_MORNING: TerraMorning = {
   validation: { episodes: 6, overpasses: 40, ahead: 4, tied: 2, behind: 1, interval_held: 31, interval_n: 40 },
   protocol: {
     version: 1,
-    note: 'Measured under the first test protocol and not measured again since the audit: its predictions used the hidden Terra pass\'s own time and pixel size.',
+    note: 'Measured under the first test protocol and not under a later one: its predictions used the hidden Terra pass\'s own time and pixel size.',
   },
-  source: { unit: 'fire-model M4', commit: '42b3ffb' },
+  source: { unit: 'Terra morning estimate', commit: '42b3ffb' },
   fires: {
     plumas_ca: { fire: 'Dixie fire', blind_test: FIRES.plumas_ca },
     lytton_bc: { fire: 'Lytton Creek fire', blind_test: FIRES.lytton_bc },

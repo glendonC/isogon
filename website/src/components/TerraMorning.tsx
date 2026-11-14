@@ -3,8 +3,9 @@ import { parseBlindBlock, utcSpan } from '../content/realRuns';
 import type { TerraMorning } from '../content/demo/terraMorning';
 
 /**
- * S6, after the satellites retire: what Terra's morning pass would flag, estimated from VIIRS alone (fire-model M4),
- * for the region's 2021 test fire. Experimental, demo data until the route ships, and not drawn on the terrain yet.
+ * After Terra retires: what its morning pass would flag, estimated from VIIRS alone, for the region's 2021 test
+ * fire. Experimental. It reads demo data (content/demo/terraMorning.ts), since no route serves this result, and it is
+ * not drawn on the terrain.
  */
 export function TerraMorningPanel({ doc, regionId, onClose }: { doc: TerraMorning; regionId: string; onClose: () => void }) {
   const fire = doc.fires[regionId];
@@ -23,7 +24,7 @@ export function TerraMorningPanel({ doc, regionId, onClose }: { doc: TerraMornin
         </button>
       </div>
       <p className="iso-round__source">
-        Demo data: {doc.source.unit} (commit {doc.source.commit}), until the route ships. Experimental.
+        Demo data: a recorded result, with no route behind it. Experimental.
       </p>
       <p className="iso-round__line">
         {doc.terra_end}; after that no satellite looks in the morning. This is what Terra&apos;s morning pass would

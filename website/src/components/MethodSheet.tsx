@@ -1,130 +1,223 @@
-import React from 'react';
+import { useEffect, useRef } from 'react';
+import { useDialogFocus } from '../ui/useDialogFocus';
+import type { OverlapEvidence } from '../content/calendar';
+import type { ModelStatus } from '../content/realRuns';
 
-interface MethodSheetProps {
-  onClose: () => void;
+export type DocTabId = 'architecture' | 'sensors' | 'validation';
+
+/** What the sheet can state from real data. Simulated scores are never passed in. */
+export interface MethodEvidence {
+  /** Whether the run on screen is a real NASA FIRMS run. */
+  real: boolean;
+  /** The real run's model block: status, method, what it was fitted and validated on. */
+  model: ModelStatus | null;
+  /** The real calendar's overlap ratio and its held-out check, for the place named. */
+  overlap: OverlapEvidence | null;
+  overlapPlace: string | null;
+  /** The reconstruction's interval in this run's blind test, once one has run. */
+  interval: { covered: number; n: number; level: number | null } | null;
 }
 
-const BENCHMARK_LADDER = [
-  { tier: 'T1', name: 'Equal-Area Bowtie-Deduplicated & CMR Exposure-Normalized Transfer (2012-2021)', status: 'Guaranteed Core' },
-  { tier: 'T2', name: 'Clean-Room Scan-Angle Operator & Tapered-Pareto Tail Inversion (Sofiev & Kouznetsov 2026)', status: 'Physics Operator' },
-  { tier: 'B4', name: 'MYD14 / VNP14IMG VZA Correction & Fusion Baseline (Zheng et al. 2026)', status: '2012+ Overlap Check' },
-  { tier: 'B5', name: 'GFED5 / GFED5NRT Regional Monthly Coherence Check (Chen et al. 2026)', status: 'Macro Reference' },
-  { tier: 'T3', name: 'Sensor-Conditioned Spatiotemporal Hurdle Field + Conformal Calibration', status: 'Experimental Hypothesis' },
-] as const;
+interface MethodSheetProps {
+  open: boolean;
+  initialTab?: DocTabId;
+  onClose: () => void;
+  evidence: MethodEvidence;
+  /** Imagery credit from the active run (ui/attribution.ts). */
+  imageryCredit: string;
+  /** Vertical exaggeration factor of the terrain, once the stage reports one. */
+  verticalExaggeration?: number | null;
+  /** The body only, inside the reading sheet. */
+  embedded?: boolean;
+}
 
-export const MethodSheet: React.FC<MethodSheetProps> = ({ onClose }) => {
+/** Backend wording made readable: no source-file note, region ids as names, a capital first letter. */
+function clean(t: string): string {
+  const out = t
+    .replace(/\s*\(backend\/[^)]*\)\s*$/, '')
+    .replace(/plumas_ca/g, 'Feather River')
+    .replace(/lytton_bc/g, 'Lytton')
+    .replace(/evia_greece/g, 'Evia');
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+/** The steps, true for the real model; the run's own words replace the fallbacks when a real run is on screen. */
+function stepsFor(model: ModelStatus | null) {
+  return [
+    {
+      title: 'Each detection as the satellite saw it',
+      body:
+        'Every NASA FIRMS detection is drawn with its own scan and track footprint. A MODIS pixel grows from 1 km at nadir to about 4.8 by 2.0 km at the 55° scan edge; VIIRS stays near 375 m.',
+    },
+    {
+      title: 'Fitted on other fires',
+      body: model?.fittedOn
+        ? `Fitted on ${clean(model.fittedOn).replace(/^./, (c) => c.toLowerCase())}.${model.validatedOn ? ` Checked on ${clean(model.validatedOn).replace(/^./, (c) => c.toLowerCase())}.` : ''}`
+        : 'Fitted on real fires in the three regions with the 2021 test fires left out, and checked on later years.',
+    },
+    {
+      title: 'One estimate on a 375 m grid, then a blind test',
+      body: `${model?.method ? `${clean(model.method)}.` : 'A forward and backward filter on the 375 m grid.'} The blind test hides VIIRS, estimates from MODIS alone, and scores the estimate against the hidden detections beside two baselines.`,
+    },
+  ];
+}
+
+export function MethodSheet({
+  open,
+  onClose,
+  evidence,
+  imageryCredit,
+  verticalExaggeration,
+  embedded = false,
+}: MethodSheetProps) {
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(open && !embedded, sheetRef, closeRef);
+
+  useEffect(() => {
+    if (!open || embedded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, embedded, onClose]);
+
+  if (!open) return null;
+
+  const body = (
+    <>
+
+        <p className="iso-sheet__lede">
+          A raw fire detection mixes the fire itself with how the satellite looked at it: off-nadir pixel
+          growth, the smallest fire each sensor can detect, cloud, and gaps between passes. Isogon models
+          each sensor&apos;s view, separates it from the fire, and lays the calibrated 375 m record on
+          real terrain.
+        </p>
+
+        <p className="iso-sheet__lede iso-method__status">
+          Every number says where it comes from. The calendar and runs marked NASA FIRMS read real
+          detections. A simulated run is shown without scores: a simulation can only be scored against its
+          own answer.
+        </p>
+
+        <ol className="iso-method__steps">
+          {stepsFor(evidence.model).map((step, i) => (
+            <li key={step.title} className="iso-method__step">
+              <span className="iso-method__num">{i + 1}</span>
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
+            </li>
+          ))}
+        </ol>
+
+        <table className="iso-table iso-table--sheet">
+          <tbody>
+            <tr>
+              <th scope="row">2012 continuity</th>
+              <td>
+                {evidence.overlap
+                  ? `Suomi NPP flags ${evidence.overlap.ratio.toFixed(2)} times the pixels of Terra and Aqua`
+                  : 'measured on the real calendar'}
+              </td>
+              <td>
+                {evidence.overlap
+                  ? `${evidence.overlapPlace ?? 'this box'}, 2012 to 2025${
+                      evidence.overlap.heldOutError !== null && evidence.overlap.withoutError !== null
+                        ? `. Held-out year off by ${Math.round(evidence.overlap.heldOutError * 100)}%, ${Math.round(evidence.overlap.withoutError * 100)}% without the ratio`
+                        : ''
+                    }`
+                  : ''}
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Interval</th>
+              <td>
+                {evidence.interval
+                  ? `${evidence.interval.covered} of ${evidence.interval.n} overpasses inside`
+                  : 'counted by the blind test'}
+              </td>
+              <td>
+                {evidence.interval
+                  ? `the stated ${evidence.interval.level !== null ? `${Math.round(evidence.interval.level * 100)}% ` : ''}interval, on the run on screen`
+                  : 'press V on a real run'}
+              </td>
+            </tr>
+            {evidence.model && (
+              <tr data-status={evidence.model.status}>
+                <th scope="row">Model</th>
+                <td>{evidence.model.status}</td>
+                <td>as the run on screen states it</td>
+              </tr>
+            )}
+            <tr>
+              <th scope="row">Blind test</th>
+              <td>V hides 375 m VIIRS</td>
+              <td>scores the MODIS-only estimate against it, beside two baselines</td>
+            </tr>
+            <tr>
+              <th scope="row">Elevation</th>
+              <td>AWS Terrarium, about 30 m</td>
+              <td>meshed per region</td>
+            </tr>
+            <tr>
+              <th scope="row">Imagery</th>
+              <td>Esri World Imagery</td>
+              <td>{imageryCredit}</td>
+            </tr>
+            {verticalExaggeration ? (
+              <tr>
+                <th scope="row">Relief</th>
+                <td>{verticalExaggeration.toFixed(1)}x vertical exaggeration</td>
+                <td>same factor for every region</td>
+              </tr>
+            ) : null}
+            <tr>
+              <th scope="row">Fire texture</th>
+              <td>drawn from the run&apos;s field</td>
+              <td>a rendering treatment, not a retrieved product</td>
+            </tr>
+            <tr>
+              <th scope="row">Smoke</th>
+              <td>drawn from the run&apos;s detections</td>
+              <td>a rendering treatment, not a retrieved product</td>
+            </tr>
+            <tr>
+              <th scope="row">Exports</th>
+              <td>GeoJSON (RFC 7946) and CSV</td>
+              <td>with 90% intervals</td>
+            </tr>
+          </tbody>
+        </table>
+    </>
+  );
+
+  if (embedded) return <div className="iso-method">{body}</div>;
+
   return (
-    <div
-      className="iso-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Scientific Method and Pre-Event Gate"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <aside className="iso-drawer" style={{ gridTemplateRows: '48px minmax(0, 1fr) 36px' }}>
-        <div className="iso-drawer-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontWeight: 600, fontSize: 14.5, letterSpacing: '-0.015em' }}>
-              Method · Observation Operator & Benchmark Gate
-            </span>
-            <span className="iso-domain-pill" style={{ height: 22, fontSize: 10.5 }}>
-              Pre-Event Research Specification
-            </span>
-          </div>
-          <button
-            type="button"
-            className="iso-outline-cta"
-            style={{ height: 28, padding: '0 12px', fontSize: 12 }}
-            onClick={onClose}
-          >
-            Close Sheet
+    <div className="iso-backdrop iso-backdrop--center" onClick={onClose} role="presentation">
+      <div
+        ref={sheetRef}
+        className="iso-sheet iso-method"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="iso-method-title"
+      >
+        <div className="iso-sheet__head">
+          <h2 id="iso-method-title" className="iso-sheet__title">
+            Method
+          </h2>
+          <button ref={closeRef} type="button" className="iso-key" onClick={onClose}>
+            <kbd>Esc</kbd>
+            <span>Close</span>
           </button>
         </div>
-
-        <div className="iso-drawer-body" style={{ justifyContent: 'flex-start', gap: 12 }}>
-          <div
-            style={{
-              border: '1px solid var(--iso-border-subtle)',
-              background: 'var(--iso-bg-page)',
-              padding: '10px 14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
-            }}
-          >
-            <div style={{ fontFamily: 'var(--iso-font-mono)', fontSize: 10.5, color: 'var(--iso-ink-muted)' }}>
-              FORWARD OBSERVATION MODEL
-            </div>
-            <div style={{ fontFamily: 'var(--iso-font-mono)', fontSize: 13, fontWeight: 500 }}>
-              y_(s,i) ~ p_s( y | H_s(x_(r,t), a_(s,i)), sigma_(s,i) )
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--iso-ink-secondary)' }}>
-              At region r and time t, x_(r,t) is a reference-grid latent fire-activity field. H_s encodes sensor footprint growth, scan/track geometry, overpass timing, and cloud obstruction for instrument s (MODIS 1 km vs VIIRS 375 m).
-            </div>
-          </div>
-
-          <div style={{ border: '1px solid var(--iso-border-subtle)' }}>
-            <div
-              style={{
-                padding: '7px 12px',
-                borderBottom: '1px solid var(--iso-border-subtle)',
-                background: 'var(--iso-bg-subtle)',
-                fontFamily: 'var(--iso-font-mono)',
-                fontSize: 10.5,
-                color: 'var(--iso-ink-secondary)',
-              }}
-            >
-              ORDERED FALSIFICATION LADDER (EVALUATED ON BLOCKED HELD-OUT OVERPASSES)
-            </div>
-            {BENCHMARK_LADDER.map((row, idx) => (
-              <div
-                key={row.tier}
-                style={{
-                  padding: '6px 12px',
-                  borderBottom: idx < BENCHMARK_LADDER.length - 1 ? '1px solid var(--iso-border-subtle)' : 'none',
-                  display: 'grid',
-                  gridTemplateColumns: '36px 1fr auto',
-                  gap: 10,
-                  alignItems: 'center',
-                  fontSize: 12,
-                }}
-              >
-                <span style={{ fontFamily: 'var(--iso-font-mono)', fontWeight: 500 }}>{row.tier}</span>
-                <span>{row.name}</span>
-                <span
-                  style={{
-                    fontFamily: 'var(--iso-font-mono)',
-                    fontSize: 10.5,
-                    color: row.tier === 'T3' ? '#9A4E1C' : 'var(--iso-ink-muted)',
-                  }}
-                >
-                  {row.status}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div
-            style={{
-              border: '1px solid #161616',
-              background: '#FAF9F6',
-              padding: '10px 14px',
-              fontSize: 12,
-              color: 'var(--iso-ink-primary)',
-              lineHeight: 1.42,
-            }}
-          >
-            <strong>NASA Space Apps Pre-Event Compliance (Nov 12, 2026):</strong> Full interactive workspace implementation, NASA FIRMS / Earthdata ingestion, and burning-activity calendar computation begin strictly at official event start (November 14, 2026, 09:00 local time). Zero NASA observation payloads are bundled in this visual identity study.
-          </div>
-        </div>
-
-        <div className="iso-drawer-footer">
-          <span>Challenge: Harmonization of MODIS and VIIRS Hot Spots</span>
-          <span>Absence Of Hotspot != Proof Of Zero Fire</span>
-        </div>
-      </aside>
+        {body}
+      </div>
     </div>
   );
-};
+}

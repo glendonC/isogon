@@ -38,9 +38,22 @@ function rowWord(v: BlindVerdict, methods: string[]): string {
   return sentence(`${win.map((m) => NAMES[m] ?? m).join(' and ')} tie ahead`);
 }
 
+/**
+ * A note as a reader should see it: no file paths or module names on screen. "Recorded in backend/.../x.json
+ * (served by backend.model.evidence)" reads "recorded in the evidence".
+ */
+export function plainNote(note: string): string {
+  return note
+    .replace(/\s*\([^)]*(?:backend[./]|\.py\b|\.json\b)[^)]*\)/g, '')
+    .replace(/\b(in|from)\s+backend\/[\w./-]+/g, '$1 the evidence')
+    .replace(/\s+([:;,.])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 /** The first sentence of a note, and the rest. */
 function split(note: string): [string, string] {
-  const t = sentence(note.trim());
+  const t = sentence(plainNote(note));
   const i = t.search(/[.:;]\s/);
   return i < 0 ? [t, ''] : [t.slice(0, i + 1), t.slice(i + 2)];
 }
@@ -53,17 +66,16 @@ interface DebriefProps {
   /** The next step (your look), when this place has one. */
   onNext: (() => void) | null;
   onEvidence: () => void;
-  /** Terra's morning pass, the other test on this fire (S6), when there is one. */
+  /** Terra's morning pass, the other test on this fire, when there is one. */
   terra: ReactNode | null;
   terraOpen: boolean;
   onToggleTerra: () => void;
 }
 
 /**
- * W1, step 3's end: the blind test's score as its own screen (reference-study.md, Death Stranding's results). One
- * verdict, the seven scores the test judges with who is ahead on each, the interval, then the next step. It folds in
- * the lead's six small fixes: every judged score shown, the baselines' tie said, the protocol note in sentence case
- * and folded instead of clipped.
+ * The end of the test step: the blind test's score as its own screen. One verdict, every score the test judges with
+ * who is ahead on each, the interval, then the next step. A tie between the baselines is said in words, and the
+ * protocol note is in sentence case and folds instead of being clipped.
  */
 export function Debrief({ score, model, place, onBack, onNext, onEvidence, terra, terraOpen, onToggleTerra }: DebriefProps) {
   const [noteOpen, setNoteOpen] = useState(false);
@@ -103,6 +115,15 @@ export function Debrief({ score, model, place, onBack, onNext, onEvidence, terra
       <p className="iso-debrief__verdict">
         Ahead of both baselines on {ahead} of the {judged.length} scores the test judges.
       </p>
+      {score.testFire && (
+        <p className="iso-debrief__own">
+          This is this window&apos;s own score, computed blind. The recorded test of the three fires is on the{' '}
+          <button type="button" className="iso-debrief__more" onClick={onEvidence}>
+            evidence sheet
+          </button>
+          .
+        </p>
+      )}
       <p className="iso-debrief__what">
         {place}
         {span ? `, ${span}` : ''}. {hidden} {score.hiddenPlatforms.length > 1 ? 'were' : 'was'} hidden; the estimate saw MODIS alone
@@ -177,8 +198,8 @@ export function Debrief({ score, model, place, onBack, onNext, onEvidence, terra
         </p>
       ) : !corrected ? (
         <p className="iso-debrief__line iso-debrief__note">
-          Under correction: an audit found the hidden satellite influenced which passes were tested. A corrected run is
-          pending.
+          Scored under the first test protocol, in which the hidden satellite influenced which passes were tested. It
+          has not been scored under the current protocol.
         </p>
       ) : null}
 
