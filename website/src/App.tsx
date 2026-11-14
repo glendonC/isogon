@@ -8,13 +8,16 @@ import { EvidenceSheet } from './components/EvidenceSheet';
 import type { EvidenceDoc, EvidenceState } from './content/evidence';
 import { AreaSheet } from './components/AreaSheet';
 import { PassTrack } from './components/PassTrack';
-import { BurningCalendar } from './components/BurningCalendar';
 import { Debrief } from './components/Debrief';
 import { WorkspaceBar, MenuGroup, MenuItem, beatOfStep, type Step } from './components/WorkspaceBar';
-import { BEATS, type BeatId } from './app/names';
+import { BEATS, beatOf, type BeatId } from './app/names';
+import { WorkspaceProvider, type WorkspaceStore } from './app/store';
+import { CalendarBeat } from './beats/calendar/CalendarBeat';
+import { WorldModelBeat } from './beats/world-model/WorldModelBeat';
+import { TestWorldBeat } from './beats/test-world/TestWorldBeat';
 import { revealedPassesOf, type TrackState } from './content/passTrack';
 import { partsStatus, type PartId } from './content/partsStatus';
-import { NEW_ROUND, RoundReadout, TileOverlay, type RoundState, type ScreenRect } from './components/NextLookRound';
+import { NEW_ROUND, TileOverlay, type RoundState, type ScreenRect } from './components/NextLookRound';
 import { DEMO_NEXT_LOOK_START, type NextLookEnd } from './content/demo/nextLook';
 import { frameNearest, withLooks } from './content/nextLook';
 import { liveNextLookEnv, runWithEndReveal, type NextLookEnv } from './content/nextLookEnv';
@@ -1263,12 +1266,6 @@ export function App() {
     </>
   );
 
-  const action = (label: string, onClick: () => void, key = 'Enter', disabled = false) => (
-    <button type="button" className="iso-action" onClick={onClick} disabled={disabled}>
-      <kbd>{key}</kbd>
-      <span>{label}</span>
-    </button>
-  );
   // A simulated run's callouts only: a real run shows no scenario callouts.
   const finding = selectedFinding && !runIsReal && (
     <div className="iso-finding">
@@ -1282,147 +1279,55 @@ export function App() {
       <p className="iso-finding__val">{selectedFinding.valueText}</p>
     </div>
   );
-  const firePower = (caption: string) => (
-    <div className="iso-readout__power">
-      <span className={`iso-readout__mw${currentMw === null ? ' iso-readout__mw--pending' : ''}`}>
-        {currentMw === null ? 'Waiting for the run' : currentMw.toLocaleString()}
-      </span>
-      {currentMw !== null && <span className="iso-readout__unit">MW</span>}
-      <span className="iso-readout__caption">{caption}</span>
-    </div>
-  );
-  const legend = intensity ? (
-    <div className="iso-scale">
-      <div className="iso-scale__bar" aria-hidden="true" />
-      <div className="iso-scale__ticks iso-scale__ticks--placed">
-        {intensity.ticks
-          .filter((_, i, all) => all.length <= 4 || i % 2 === 0)
-          .map((t, i, shown) => (
-            <span key={t.mwKm2} style={{ left: `${t.at * 100}%` }} data-edge={i === 0 ? 'start' : i === shown.length - 1 ? 'end' : undefined}>
-              {t.mwKm2.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-              {i === shown.length - 1 ? ` ${intensity.unit}` : ''}
-            </span>
-          ))}
-      </div>
-      <p className="iso-scale__caption">Estimated fire power, {intensity.scale === 'log10' ? 'log scale' : 'linear scale'}</p>
-    </div>
-  ) : (
-    <div className="iso-scale">
-      <div className="iso-scale__bar" aria-hidden="true" />
-      <div className="iso-scale__ticks">
-        <span>0</span>
-        <span>40</span>
-        <span>80+ MW/km²</span>
-      </div>
-      <p className="iso-scale__caption">Simulated intensity, linear scale</p>
-    </div>
-  );
 
-  let stepPanel: React.ReactNode = null;
-  if (step === 'record') {
-    stepPanel = (
-      <>
-        <h2 className="iso-step__title">Pick a month to replay</h2>
-        <BurningCalendar
-          apiBase={API_BASE}
-          regionId={calendarRegionId}
-          area={calendarArea}
-          calendar={calendar}
-          run={{ realStart, pendingStart, failed: realFailed }}
-          stageMonth={stageMonth}
-          selectedMonth={selectedMonth}
-          onSelectMonth={handleSelectMonth}
-          onOpenArea={() => setAreaOpen(true)}
-        />
-        <div className="iso-step__foot">{action(span ? `Replay ${span}` : 'Replay this run', () => goStep('fire'), 'Enter', !activeRun)}</div>
-      </>
-    );
-  } else if (step === 'fire') {
-    stepPanel = (
-      <>
-        <h2 className="iso-step__title">{runIsReal ? `The fire, ${span ?? ''}` : 'A simulated fire'}</h2>
-        <p className="iso-step__line" data-source={sourceSlug}>
-          {runIsReal
-            ? 'Every NASA FIRMS detection, pass by pass, at its real time. Play the passes, or pick one on the track.'
-            : 'Simulated satellite passes, with no score: the simulation would score itself against its own answer.'}
-        </p>
-        {firePower(`Estimated fire power at pass ${activeEpoch + 1}`)}
-        {legend}
-        {runModel && (
-          <p className="iso-step__note" data-status={runModel.status}>
-            Model <strong>{runModel.status}</strong>
-            {runModel.reason && !noSharp ? `: ${runModel.reason.replace(/\s*\([a-z_]+(\.[a-z_]+)+\)/g, '')}.` : '.'}
-          </p>
-        )}
-        {noSharp && (
-          <p className="iso-step__note">
-            Before 2012 no sharp satellite flew: VIIRS began in January 2012. This is the estimate from MODIS alone, with
-            nothing hidden to reveal, so there is no blind test.
-          </p>
-        )}
-        {finding}
-        <div className="iso-step__foot">
-          {action('Hide VIIRS and test the estimate', () => goStep('test'), 'Enter', Boolean(stepBlocked.test))}
-        </div>
-      </>
-    );
-  } else if (step === 'test') {
-    stepPanel = blindLoading ? (
-      <>
-        <h2 className="iso-step__title">Hiding VIIRS</h2>
-        <p className="iso-step__line">Running the estimate from MODIS alone.</p>
-      </>
-    ) : holdoutViirs ? (
-      <>
-        <h2 className="iso-step__title">Blind test</h2>
-        <p className="iso-step__line">
-          VIIRS is hidden. The terrain shows the estimate made from MODIS alone{span ? `, ${span}` : ''}. The track
-          shows when VIIRS passed over, not what it saw.
-        </p>
-        {firePower(`Estimated fire power at pass ${activeEpoch + 1}, from MODIS alone`)}
-        {legend}
-        <div className="iso-step__foot">{action(revealing ? 'Opening the hidden detections' : 'Reveal VIIRS', testAction, 'V', revealing)}</div>
-      </>
-    ) : revealed ? (
-      <>
-        <h2 className="iso-step__title">Revealed</h2>
-        <p className="iso-step__line">
-          The terrain shows the blind run: the estimate made from MODIS alone, with the hidden VIIRS detections now laid
-          on it. Step through the passes to see where they fall.
-        </p>
-        {legend}
-        <div className="iso-step__foot">{action('See the score', () => setDebriefOpen(true), 'Enter', !blindTest)}</div>
-        {!blindTest && <p className="iso-step__note">The blind test run came back without a score.</p>}
-      </>
-    ) : (
-      <>
-        <h2 className="iso-step__title">Blind test</h2>
-        <p className="iso-step__line">
-          {stepBlocked.test ?? 'Hide VIIRS, the sharp satellite, and see what the estimate makes of MODIS alone.'}
-        </p>
-        {!stepBlocked.test && <div className="iso-step__foot">{action('Hide VIIRS', testAction, 'V')}</div>}
-      </>
-    );
-  } else if (step === 'look') {
-    stepPanel = round ? (
-      <RoundReadout
-        start={roundEpisode}
-        end={roundEnd}
-        round={round}
-        runError={realFailed && realFailed.start === roundEpisode.estimate.start ? realFailed.message : null}
-        onNext={nextLook}
-        onAgain={nextLook}
-        onLeave={() => goStep('fire')}
-      />
-    ) : (
-      <>
-        <h2 className="iso-step__title">Your look</h2>
-        <p className="iso-step__line">{stepBlocked.look ?? 'Starting a round.'}</p>
-      </>
-    );
-  }
+  // The workspace's shared state for the beats (app/store.tsx). The shell owns the state and the requests.
+  const store: WorkspaceStore = {
+    place: { regionId: calendarRegionId, title: regionTitle, area: calendarArea },
+    calendar: {
+      state: calendar,
+      selectedMonth,
+      stageMonth,
+      selectMonth: handleSelectMonth,
+      openArea: () => setAreaOpen(true),
+    },
+    run: {
+      active: activeRun,
+      isReal: runIsReal,
+      realStart,
+      pendingStart,
+      failed: realFailed,
+      span,
+      beforeSharp: noSharp,
+      model: runModel,
+      intensity,
+      source: sourceSlug,
+    },
+    test: {
+      hidden: holdoutViirs,
+      revealed,
+      revealing,
+      loading: blindLoading,
+      score: blindTest,
+      act: testAction,
+      openScore: () => setDebriefOpen(true),
+    },
+    time: { pass: activeEpoch, powerMw: currentMw },
+    round: {
+      state: round,
+      start: roundEpisode,
+      end: roundEnd,
+      runError: realFailed && realFailed.start === roundEpisode.estimate.start ? realFailed.message : null,
+      next: nextLook,
+    },
+    step,
+    goStep,
+    blocked: stepBlocked,
+  };
+  const beatPanel =
+    step === 'record' ? <CalendarBeat /> : step === 'look' ? <TestWorldBeat /> : <WorldModelBeat>{finding}</WorldModelBeat>;
 
   return (
+    <WorkspaceProvider value={store}>
     <div className="iso-app" data-workspace={inWorkspace ? 'true' : 'false'} data-sel={selStyle}>
       {!inWorkspace && (
         <LandingComposition
@@ -1479,8 +1384,8 @@ export function App() {
                   onToggleTerra={() => setTerraOpen((o) => !o)}
                 />
               ) : (
-                <aside className="iso-step" data-step={step} aria-label="Step">
-                  {stepPanel}
+                <aside className="iso-step" data-step={step} aria-label={beatOf(beatOfStep(step)).name}>
+                  {beatPanel}
                 </aside>
               )}
 
@@ -1608,5 +1513,6 @@ export function App() {
         }}
       />
     </div>
+    </WorkspaceProvider>
   );
 }
