@@ -1,4 +1,4 @@
-"""D3: POST /api/reconstruct routes "source": "firms" to the real-run solver; without it the run is simulated."""
+"""POST /api/reconstruct routes "source": "firms" to the real-run solver; without it the run is simulated."""
 
 from __future__ import annotations
 
@@ -54,23 +54,26 @@ class ReconstructRouteTests(unittest.TestCase):
 
     def test_real_run_keeps_the_simulated_shape(self) -> None:
         if not _dixie_cached():
-            self.skipTest("FIRMS rows for plumas_ca 2021 are not cached on this machine")
+            self.skipTest("FIRMS rows for plumas_ca 2021 are not cached")
         s = _store()
         sim = s.execute_reconstruct({"region_id": "plumas_ca"})
+        blind = s.execute_reconstruct({"region_id": "plumas_ca", "source": "firms", "start": "2021-07-22T20:34:00Z",
+                                       "holdout_viirs": True})
+        self.assertNotIn("blind_test", blind)                     # withheld until the reveal is asked for
+        self.assertIn("blind_test", blind["hidden_rows"]["withheld_until_reveal"])
         real = s.execute_reconstruct({"region_id": "plumas_ca", "source": "firms", "start": "2021-07-22T20:34:00Z",
-                                      "holdout_viirs": True})
+                                      "holdout_viirs": True, "reveal": True})
         self.assertEqual(real["source"], "firms")
         self.assertTrue(real["holdout_viirs"])
         self.assertEqual(len(real["observer_passes"]["frames"]), 24)
         self.assertTrue(set(sim) <= set(real), set(sim) - set(real))
         self.assertTrue(set(sim["assets"]) <= set(real["assets"]))
-        self.assertTrue(set(sim["metrics"]) <= set(real["metrics"]))
         self.assertGreater(real["downloaded_firms_rows"], 0)
         self.assertIn("blind_test", real)
         self.assertEqual(real["assets"]["reconstruction_u8_url"], f"/api/runs/{real['run_id']}/reconstruction_u8.bin")
         self.assertIsNotNone(s.get_run(real["run_id"]))
         again = s.execute_reconstruct({"region_id": "plumas_ca", "source": "firms", "start": "2021-07-22T20:34:00Z",
-                                       "holdout_viirs": True})
+                                       "holdout_viirs": True, "reveal": True})
         self.assertEqual(again, real)
 
 

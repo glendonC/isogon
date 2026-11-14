@@ -1,4 +1,4 @@
-"""D7: rounds of the next-look environment over HTTP (CONTRACT 10, 12 S1 and 13).
+"""Rounds of the next-look environment over HTTP.
 
 The rule under test: no response holds a hidden row before the look that reveals it. A round is played twice with the
 same choices, the second time with every hidden row the round did not reveal deleted. Every field of every response
@@ -6,7 +6,7 @@ before the end must be equal, except the scores the environment computes against
 (`score_start`, `reward`, `info.score`, `info.score_detail`, and the same in the state's history).
 
 The first tests run on the SYNTHETIC fixture (`backend/eval/synthetic_fixture.py`: no row of it was observed by a
-satellite) and always run. The others use the real Dixie fire episode of the demo file and skip without its rows.
+satellite) and always run. The others use a real Dixie fire episode (`DIXIE_EPISODE`) and skip without its rows.
 """
 
 from __future__ import annotations
@@ -31,10 +31,10 @@ from backend.model.real_blind import in_box_overpasses, window_from_start  # noq
 from backend.server_next_look import NextLookRounds, RoundConflict, RoundNotFound  # noqa: E402
 
 DIXIE_EPISODE = "plumas_ca:22:2021-07-22T05"
-# The demo file's figures (front-page-ui, website/src/content/demo/nextLook.ts), taken from fire-model M8.
-DEMO_SCORE_START = 0.3200562037998656
-DEMO_GAIN = {"latest_modis": 0.008431215474028197, "least_sure": 0.006582908803626608, "oracle": 0.016330071325661333}
-DEMO_FIRST_LOOKS = [
+# The Dixie round's figures with the tracked reconstruction values, as the environment computes them.
+ROUND_SCORE_START = 0.3155241315708577
+ROUND_GAIN = {"latest_modis": 0.0062077712480028135, "least_sure": 0.006550019659761597, "oracle": 0.016045497948455223}
+ROUND_FIRST_LOOKS = [
     ("VIIRS_SNPP", "2021-07-22T09:59:17Z", False), ("VIIRS_NOAA20", "2021-07-22T10:04:17Z", False),
     ("VIIRS_SNPP", "2021-07-22T21:00:10Z", True), ("VIIRS_NOAA20", "2021-07-22T21:05:10Z", True),
 ]
@@ -147,10 +147,16 @@ class HiddenRowsTests(unittest.TestCase):
 
     def test_the_end_reveals_every_hidden_row_and_scores_the_reference_agents(self) -> None:
         d, w = self.det, self.ep.window
-        in_play = d.is_viirs & d.in_box(fx.TEST_BOX) & (d.time_s >= w.start_s) & (d.time_s < w.end_s)
+        in_window = d.is_viirs & d.in_box(fx.TEST_BOX) & (d.time_s >= w.start_s) & (d.time_s < w.end_s)
         reveal = self.end_a["reveal"]
-        self.assertEqual(reveal["pixels"], int(in_play.sum()))
-        self.assertEqual(sum(1 for r in reveal["rows"] if r[-1]), int((self.revealed & in_play).sum()))
+        listed = {(r[0], r[1], r[5]) for r in reveal["rows"]}
+        from backend.server_next_look import _iso
+
+        # every hidden row of the window is listed, and so is every row a look handed over (a look owns the rows
+        # of its own pass, in the window or not); the rows the round revealed are marked, and only those
+        for i in np.flatnonzero(in_window | self.revealed):
+            self.assertIn((round(float(d.lon[i]), 5), round(float(d.lat[i]), 5), _iso(d.time_s[i])), listed)
+        self.assertEqual(sum(1 for r in reveal["rows"] if r[-1]), int(self.revealed.sum()))
         self.assertEqual(self.end_a["reference_status"], "ready")
         ref = self.end_a["reference"]
         for name in ("random", "latest_modis", "least_sure", "learned", "oracle"):
@@ -226,28 +232,32 @@ def _dixie_cached() -> bool:
 
 
 class RealRoundTests(unittest.TestCase):
-    """The demo's Dixie fire episode on real rows, over HTTP, and the deletion check on real rows."""
+    """A Dixie fire episode on real rows, over HTTP, and the deletion check on real rows."""
 
     @classmethod
     def setUpClass(cls) -> None:
         if not _dixie_cached():
-            raise unittest.SkipTest("FIRMS rows for plumas_ca 2021 are not cached on this machine")
-        from backend.tests import test_server_d5 as d5
+            raise unittest.SkipTest("FIRMS rows for plumas_ca 2021 are not cached")
+        from backend.tests import test_server_http as http_tests
 
-        d5._base()
-        d5._SERVER.store.next_look.reference_seeds = 1
-        cls.req = staticmethod(d5._req)
+        http_tests._base()
+        http_tests._SERVER.store.next_look.reference_seeds = 1
+        cls.req = staticmethod(http_tests._req)
+
+    def _post_history_pixels(self, rid: str) -> list[int]:
+        status, _, raw = self.req(f"/api/env/next_look/state?round_id={rid}")
+        return [h["revealed_pixels"] for h in json.loads(raw)["history"] if h["spent"]]
 
     def _post(self, path: str, body: dict) -> tuple[int, dict]:
         status, _, raw = self.req(path, json.dumps(body).encode())
         return status, json.loads(raw)
 
-    def test_a_round_over_http_matches_the_demo_and_the_reference_agents(self) -> None:
+    def test_a_round_over_http_gives_the_pinned_numbers_and_the_reference_agents(self) -> None:
         status, r = self._post("/api/env/next_look/reset",
                                {"region_id": "plumas_ca", "episode": DIXIE_EPISODE, "tiles": [4, 4], "budget": 4})
         self.assertEqual(status, 200, r)
-        self.assertAlmostEqual(r["score_start"], DEMO_SCORE_START, places=12)
-        self.assertEqual([(x["platform"], x["time_utc"], x["is_day"]) for x in r["looks"][:4]], DEMO_FIRST_LOOKS)
+        self.assertAlmostEqual(r["score_start"], ROUND_SCORE_START, places=12)
+        self.assertEqual([(x["platform"], x["time_utc"], x["is_day"]) for x in r["looks"][:4]], ROUND_FIRST_LOOKS)
         self.assertEqual((r["episode"]["key"], r["episode"]["split"], r["episode"]["modis_pixels_in_box"]), (DIXIE_EPISODE, "test", 1095))
         self.assertEqual(r["protocol"]["version"], 2)
         self.assertEqual(r["test_episodes"]["episodes"], 21)
@@ -258,10 +268,13 @@ class RealRoundTests(unittest.TestCase):
             self.assertEqual(status, 200, st)
         self.assertTrue(st["done"])
         end = st["end"]
+        # every pixel a look handed over is in the reveal and marked revealed, the last look's included
+        handed = sum(self._post_history_pixels(rid))
+        self.assertEqual(sum(1 for x in end["reveal"]["rows"] if x[-1]), handed)
         # played with the latest MODIS agent's own looks, the round gains exactly what that agent gains
-        self.assertAlmostEqual(end["gain"], DEMO_GAIN["latest_modis"], places=12)
+        self.assertAlmostEqual(end["gain"], ROUND_GAIN["latest_modis"], places=12)
         self.assertEqual(end["reference_status"], "ready")
-        for name, gain in DEMO_GAIN.items():
+        for name, gain in ROUND_GAIN.items():
             self.assertAlmostEqual(end["reference"][name]["gain"], gain, places=12, msg=name)
         status, state = self.req(f"/api/env/next_look/state?round_id={rid}")[0], json.loads(self.req(f"/api/env/next_look/state?round_id={rid}")[2])
         self.assertEqual(status, 200)

@@ -1,5 +1,5 @@
-"""Rounds of the next-look environment for the page (CONTRACT items 10, 12 S1 and 13), over the fire-model lane's
-`backend/env/next_look.py`. Wired into `backend/server.py`:
+"""Rounds of the next-look environment for the page, over `backend/env/next_look.py`. Wired into
+`backend/server.py`:
 
   POST /api/env/next_look/reset   {region_id, episode | start, tiles, budget, seed}
   POST /api/env/next_look/step    {round_id, decision, action}
@@ -15,8 +15,8 @@ Rounds live in server memory: at most `MAX_ROUNDS`, the least recently used drop
 `ROUND_IDLE_S` without a request.
 
 Hidden rows. No response holds a hidden row, or a count taken from hidden rows, before the look that reveals it.
-Three kinds of figure are computed against the hidden detections because the environment is built that way
-(CONTRACT 10): the starting score of the reconstruction (`score_start`), the score after each step (`info.score`,
+Three kinds of figure are computed against the hidden detections because the environment is built that way:
+the starting score of the reconstruction (`score_start`), the score after each step (`info.score`,
 `info.score_detail`) and the reward. They are scores, not rows. The reveal (every hidden detection of the episode)
 and the reference agents' results (computed with the hidden rows; the oracle reads them) are served only once the
 round is over. `backend/tests/test_server_next_look.py` plays a round twice, the second time with every hidden row
@@ -225,9 +225,10 @@ class NextLookRounds:
     def _catalogue(self, region_id: str, year: int) -> list[Any]:
         from backend.env.episodes import catalogue
         from backend.firms import read_firms, region_box
+        from backend.firms.archive import region_rows_digest
         from backend.terrain.live_region import PRESET_BY_ID
 
-        key = (region_id, year)
+        key = (region_id, year, region_rows_digest(region_id))   # rebuilt when any row of the region changes
         with self._lock:
             hit = self._catalogues.get(key)
         if hit is None:
@@ -444,8 +445,8 @@ class NextLookRounds:
             "round_id": rnd.round_id,
             "data": self.source_label,
             "source": {
-                "environment": "backend/env/next_look.py (fire-model lane)",
-                "routes": "backend/server_next_look.py (terrain-assets lane, unit D7)",
+                "environment": "backend/env/next_look.py",
+                "routes": "backend/server_next_look.py",
                 "reference_agents": "backend/env/agents.py and backend/env/policy.py, played on this episode",
             },
             "episode": rnd.episode_json,
@@ -545,19 +546,24 @@ class NextLookRounds:
 
     @staticmethod
     def _reveal(rnd: Round, taken: list[list[int]]) -> dict[str, Any]:
-        """Every hidden detection of the episode inside the box and the window, served only once the round is over."""
+        """Every hidden detection of the episode inside the box that lies in the window or belongs to one of its looks
+        (a look owns the rows of its own pass, in the window or not, so a look near
+        the window's edge can hand over rows just outside it). Served only once the round is over."""
         from backend.model.platforms import PLATFORMS
 
         ep, env = rnd.episode, rnd.env
         d = ep.det
-        hid = d.select(d.is_viirs & d.in_box(ep.box) & (d.time_s >= ep.window.start_s) & (d.time_s < ep.window.end_s))
+        cand = d.select(d.is_viirs & d.in_box(ep.box))
+        try:
+            look_all = env._slot_of_rows(cand)   # the scheduled look each row belongs to (-1 for none)
+        except Exception:  # noqa: BLE001
+            look_all = np.full(len(cand), -1)
+        in_window = (cand.time_s >= ep.window.start_s) & (cand.time_s < ep.window.end_s)
+        keep = in_window | (look_all >= 0)
+        hid, look = cand.select(keep), look_all[keep]
         g = env.grid
         r, c = g.row_col(hid.lon, hid.lat)
         tile = env.tile_of_cell[np.clip(r, 0, g.ny - 1), np.clip(c, 0, g.nx - 1)]
-        try:
-            look = env._slot_of_rows(hid)       # the scheduled look each row belongs to (-1 for none)
-        except Exception:  # noqa: BLE001
-            look = np.full(len(hid), -1)
         looked = {(int(k), int(t)) for k, t in taken}
         rows = [
             [round(float(hid.lon[i]), 5), round(float(hid.lat[i]), 5), round(float(hid.scan_km[i]), 3),
@@ -566,9 +572,9 @@ class NextLookRounds:
             for i in range(len(hid))
         ]
         return {
-            "what": ("every VIIRS detection of the episode inside the box from the first to the last MODIS overpass; "
-                     "look is the scheduled look the row belongs to (-1: none within six and a half hours), revealed "
-                     "whether the round looked at its tile on that look"),
+            "what": ("every VIIRS detection inside the box from the first to the last MODIS overpass, and every one a "
+                     "look owns (the rows of its own pass, in the window or not); look is the scheduled look the row "
+                     "belongs to (-1: none), revealed whether the round looked at its tile on that look"),
             "columns": list(ROW_COLUMNS) + ["tile", "look", "revealed"],
             "rows": rows,
             "pixels": len(rows),
@@ -607,7 +613,11 @@ def _known_limits() -> str:
 
 def _protocol() -> dict[str, Any]:
     from backend.env.policy import load_fitted
-    from backend.eval.blind_test import PROTOCOL
 
-    note = ((load_fitted() or {}).get("test_protocol_2") or {}).get("note")
+    try:  # the environment's own name for the protocol it plays under
+        from backend.env.next_look import PROTOCOL
+    except ImportError:  # pragma: no cover
+        from backend.eval.blind_test import PROTOCOL
+
+    note =((load_fitted() or {}).get("test_protocol_2") or {}).get("note")
     return {"version": PROTOCOL["version"], "name": PROTOCOL["name"], "note": note}

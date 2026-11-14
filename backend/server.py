@@ -5,24 +5,39 @@ Runs on `127.0.0.1:8788` using `http.server.ThreadingHTTPServer`.
 Endpoints:
   - GET  /api/health
   - GET  /api/regions
-  - POST /api/reconstruct
+  - POST /api/reconstruct                     (a held-out real run withholds what the scorer wrote until "reveal": true)
   - GET  /api/runs/<run_id>/<asset_name>
+  - GET  /api/runs/<run_id>/terrain/<name>   (terrain pack v1 files)
   - GET  /api/observer?frame=<0..23>&sensor=<all|modis|viirs>&min_frp=...&max_zenith=...&run_id=...
-  - GET  /api/calendar
+  - GET  /api/calendar                        (simulated; ?source=firms&region_id=<id> for the real calendar)
+  - GET  /api/calendar/rows.csv?region_id=<id>&start=<date>&end=<date>[&platforms=Terra,Aqua]
   - GET  /api/sensor-model
   - GET  /api/field-meta
+  - POST /api/env/next_look/reset             {region_id, episode | start, tiles, budget, seed}
+  - POST /api/env/next_look/step              {round_id, decision, action}
+  - GET  /api/env/next_look/state?round_id=<id>
+  - GET  /api/passes?region_id=<id>&start=<date>&end=<date>[&box=pack|context][&platforms=MODIS_TERRA,...]
+  - GET  /api/evidence                        (backend.model.evidence.evidence(), one JSON for the evidence sheet)
 """
 
 from __future__ import annotations
 
 import argparse
+import calendar as _calendar
+import hashlib
+import importlib
+import inspect
 from collections import OrderedDict
+import datetime as _dt
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
 from pathlib import Path
+import re
 import sys
 import threading
+import time
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -33,8 +48,14 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from backend.firms.archive import FIRMS_CACHE_DIR, REGION_COUNTRY, FirmsCacheMissing, region_rows_digest  # noqa: E402
+from backend.firms.archive import cache_summary as firms_cache_summary  # noqa: E402
+from backend.firms.cmr_passes import CmrCacheMissing, pass_files_digest  # noqa: E402
+from backend.firms.pass_timeline import pass_timeline  # noqa: E402
+from backend.firms.real_calendar import firms_calendar, rows_csv  # noqa: E402
 from backend.model import MODEL_VERSION, PROVENANCE_NOTE  # noqa: E402
 from backend.model.calibrator import get_pretrained_calibrator  # noqa: E402
+from backend.model.gates import build_benchmark_gates  # noqa: E402
 from backend.model.grid import (  # noqa: E402
     EAST,
     GRID_H,
@@ -49,8 +70,11 @@ from backend.model.reconstruct import (  # noqa: E402
     EXPECTED_TENSOR_BYTES,
     run_reconstruction,
 )
+from backend.model.platforms import PLATFORM_CODES  # noqa: E402
+from backend.model.platforms import family as platform_family  # noqa: E402
+from backend.model import real_run as real_run_module  # noqa: E402
+from backend.model.real_run import real_response, real_start_dates, solve_real_reconstruction  # noqa: E402
 from backend.model.sensor_physics import (  # noqa: E402
-    SENSOR_CODES,
     detection_probability,
     invert_view_zenith_from_footprint,
     observable_flux_fraction,
@@ -59,20 +83,42 @@ from backend.model.solver import (  # noqa: E402
     SolvedReconstructionRun,
     solve_region_reconstruction,
 )
+from backend.server_next_look import NextLookRounds, RoundConflict, RoundNotFound  # noqa: E402
+
+try:  # where the module is missing, GET /api/evidence answers 404 and says so
+    from backend.model.evidence import evidence as model_evidence  # noqa: E402
+except ImportError:  # pragma: no cover
+    model_evidence = None
 from backend.model.world_model import (  # noqa: E402
     NUM_FRAMES,
     SIGMA_MAX_MW_KM2,
     Z_MAX_MW_KM2,
 )
 from backend.terrain.live_region import (  # noqa: E402
+    PRESET_BY_ID,
     PRESET_REGIONS,
     load_region_terrain,
     resolve_region_request,
 )
+from backend.terrain.terrain_pack import (  # noqa: E402
+    DEFAULT_IMAGERY,
+    IMAGERY_SOURCES,
+    TerrainPackManager,
+    imagery_covers,
+    pack_descriptor,
+)
+
+TERRAIN_PACK_CONTENT_TYPES: dict[str, str] = {
+    ".bin": "application/octet-stream",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+}
 
 DEFAULT_HOST: str = "127.0.0.1"
 DEFAULT_PORT: int = 8788
 MAX_CACHED_RUNS: int = 24
+# Run whose metrics evaluate the run-based benchmark gates (G1, G5) when /api/sensor-model gets no run_id.
+DEFAULT_GATE_RUN_ID: str = "plumas_ca_holdout0_cnone"
 
 
 def _index_footprint_arrays(observer_data: dict[str, Any]) -> list[NDArray[np.float64]]:
@@ -86,6 +132,159 @@ def _index_footprint_arrays(observer_data: dict[str, Any]) -> list[NDArray[np.fl
     return arrays
 
 
+# Real run start dates for the calendar: `real_start_dates` over every month from 2012 (VIIRS) whose
+# box holds at least as many MODIS rows as a worth-showing window needs MODIS pixels.
+START_SEARCH_FIRST_YEAR: int = 2012
+START_SEARCH_MIN_MODIS_ROWS: int = 100
+
+
+def with_default_start(value: dict[str, Any], model_default: str | None, model_error: str | None = None) -> dict[str, Any]:
+    """``value`` (a start list) with ``default_start``, the start a page opens on, and ``default_rule``, which says
+    how it is chosen. The model's default for the region wins when it is in the list; otherwise the start
+    with the most MODIS pixels in the box (the earliest of equals), and ``default_rule`` says why. No count from a
+    hidden instrument chooses it: the VIIRS count is taken after the list is made."""
+    out = dict(value)
+    starts = out.get("starts") or []
+    if model_default and model_default in {s["start"] for s in starts}:
+        out["default_start"] = model_default
+        out["default_rule"] = "the model's default for this region (backend.model.real_run.real_run_starts)"
+        return out
+    if not starts:
+        out["default_start"] = None
+        out["default_rule"] = "no start is worth showing, so there is no default"
+        return out
+    if model_error:
+        why = f"the model's default could not be read ({model_error})"
+    elif model_default:
+        why = f"the model's default {model_default} is not among these starts"
+    else:
+        why = "the model gives no default for this region"
+    best = max(starts, key=lambda s: s.get("modis_pixels_in_box") or 0)
+    out["default_start"] = best["start"]
+    out["default_rule"] = f"the start with the most MODIS pixels in the box, because {why}"
+    return out
+
+
+# The modules whose code decides the start list. Their source keys the disk cache of the start search, so any change
+# to the rule rebuilds it without this file naming the rule's constants.
+START_RULE_MODULES: tuple[str, ...] = (
+    "backend.model.real_run", "backend.model.real_blind", "backend.eval.holdout", "backend.eval.blind_test",
+    "backend.eval.overpass", "backend.eval.rows",
+)
+
+
+def start_rule_digest() -> str:
+    h = hashlib.sha256()
+    for name in START_RULE_MODULES:
+        h.update(inspect.getsource(importlib.import_module(name)).encode("utf-8"))
+    return h.hexdigest()
+
+
+REVEAL_WITH: str = 'POST /api/reconstruct again with the same body and "reveal": true'
+FITTED_VALUES_DIR: Path = _REPO_ROOT / "backend" / "model" / "fitted_values"
+
+
+def withhold_scorer_keys(resp: dict[str, Any]) -> dict[str, Any]:
+    """A held-out run's response without what the scorer wrote from the hidden rows, until the page asks for the
+    reveal. The paths are the run's own declaration (`hidden_rows.payload_keys_from_the_scorer`), with
+    `blind_test` and every name in `metrics.from_hidden_rows` added in case the declaration misses one. Nested
+    objects are copied before a key is removed, so the stored run is never changed."""
+    hr = resp.get("hidden_rows") if isinstance(resp.get("hidden_rows"), dict) else {}
+    paths = list(hr.get("payload_keys_from_the_scorer") or [])
+    paths.append("blind_test")
+    paths += [f"metrics.{k}" for k in ((resp.get("metrics") or {}).get("from_hidden_rows") or [])]
+    out = dict(resp)
+    withheld: list[str] = []
+    for path in dict.fromkeys(paths):
+        parts = path.split(".")
+        parent = out
+        for name in parts[:-1]:
+            child = parent.get(name)
+            if not isinstance(child, dict):
+                parent = None
+                break
+            parent[name] = dict(child)
+            parent = parent[name]
+        if parent is not None and parts[-1] in parent:
+            del parent[parts[-1]]
+            withheld.append(path)
+    out["hidden_rows"] = {**hr, "withheld_until_reveal": withheld, "reveal_with": REVEAL_WITH}
+    return out
+
+
+def fitted_values_digest() -> str:
+    """sha256 of the model's fitted value files: a run built with other fitted values is another run."""
+    h = hashlib.sha256()
+    for f in sorted(FITTED_VALUES_DIR.glob("*.json")) if FITTED_VALUES_DIR.is_dir() else []:
+        h.update(f.name.encode("utf-8"))
+        h.update(f.read_bytes())
+    return h.hexdigest()
+
+
+LOCAL_ORIGIN = re.compile(r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]{1,5})?$")
+
+
+def origin_allowed(origin: str | None) -> bool:
+    """CORS is limited to pages served from localhost, 127.0.0.1 or [::1]."""
+    return bool(origin) and bool(LOCAL_ORIGIN.match(str(origin)))
+
+
+def _reject_constant(name: str) -> float:
+    raise ValueError(f"{name} is not allowed in a request body")
+
+
+def parse_request_json(raw: bytes) -> dict[str, Any]:
+    """A request body as a JSON object; NaN, Infinity and -Infinity are refused."""
+    payload = json.loads(raw.decode("utf-8") or "{}", parse_constant=_reject_constant)
+    if not isinstance(payload, dict):
+        raise ValueError("JSON body must be an object")
+    return payload
+
+
+def body_number(body: dict[str, Any], key: str, lo: float | None = None, hi: float | None = None) -> float | None:
+    """A finite JSON number (not a string, not a boolean), optionally within [lo, hi]; None when absent."""
+    v = body.get(key)
+    if v is None:
+        return None
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        raise ValueError(f"{key} must be a number")
+    f = float(v)
+    if not math.isfinite(f):
+        raise ValueError(f"{key} must be a finite number")
+    if (lo is not None and f < lo) or (hi is not None and f > hi):
+        raise ValueError(f"{key} must be between {lo} and {hi}")
+    return f
+
+
+def body_bool(body: dict[str, Any], key: str) -> bool:
+    v = body.get(key, False)
+    if v is None:
+        return False
+    if not isinstance(v, bool):
+        raise ValueError(f"{key} must be true or false")
+    return v
+
+
+def body_text(body: dict[str, Any], key: str) -> str | None:
+    v = body.get(key)
+    if v is None:
+        return None
+    if not isinstance(v, str):
+        raise ValueError(f"{key} must be a string")
+    return v
+
+
+def query_number(raw: str, name: str) -> float:
+    """A finite number from a query string parameter."""
+    try:
+        f = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a number") from exc
+    if not math.isfinite(f):
+        raise ValueError(f"{name} must be a finite number")
+    return f
+
+
 class IsogonDataStore:
     """In-memory scientific artifact store, dynamic world-model solver, and query engine."""
 
@@ -96,6 +295,7 @@ class IsogonDataStore:
         self.calibrator = get_pretrained_calibrator()
         self.calendar_bytes = (fields_dir / "calendar_2000_2026.json").read_bytes()
         self.sensor_model_bytes = (fields_dir / "sensor_model_diagnostics.json").read_bytes()
+        self.sensor_model: dict[str, Any] = json.loads(self.sensor_model_bytes.decode("utf-8"))
         self.field_meta_bytes = (fields_dir / "field_metadata.json").read_bytes()
         self.field_meta: dict[str, Any] = json.loads(self.field_meta_bytes.decode("utf-8"))
 
@@ -113,11 +313,14 @@ class IsogonDataStore:
 
         self._lock = threading.Lock()
         self._runs: OrderedDict[str, tuple[SolvedReconstructionRun, list[NDArray[np.float64]]]] = OrderedDict()
+        self.terrain_packs = TerrainPackManager()
+        self.next_look = NextLookRounds()
+        self._pass_timelines: OrderedDict[tuple[Any, ...], bytes] = OrderedDict()
 
-        # Pre-warm baseline Plumas CA run so landing hydration responds in <2 ms
+        # Pre-warm baseline Plumas CA run from hires_regions cache so landing hydration responds in <2 ms
         try:
             default_spec = resolve_region_request(region_id="plumas_ca")
-            default_terrain = load_region_terrain(default_spec, allow_network=False)
+            default_terrain = load_region_terrain(default_spec, allow_network=True)
             default_run = solve_region_reconstruction(
                 region_terrain=default_terrain,
                 holdout_viirs=False,
@@ -156,15 +359,172 @@ class IsogonDataStore:
                 self._runs.move_to_end(run_id)
             return entry
 
+    def pass_timeline_bytes(self, region_id: str, start: str, end: str, box: str, platforms: list[str] | None) -> bytes:
+        """`pass_timeline` as JSON bytes, kept for the 32 latest queries while the FIRMS row count is unchanged."""
+        if region_id not in REGION_COUNTRY:
+            raise KeyError(f"no pass schedule for region '{region_id}'")
+        key = (region_id, start, end, box, tuple(platforms) if platforms else None, self.region_rows_key(region_id),
+               pass_files_digest(region_id))
+        with self._lock:
+            hit = self._pass_timelines.get(key)
+            if hit is not None:
+                self._pass_timelines.move_to_end(key)
+                return hit
+        body = json.dumps(pass_timeline(region_id, start, end, box, platforms), ensure_ascii=False).encode("utf-8")
+        with self._lock:
+            self._pass_timelines[key] = body
+            while len(self._pass_timelines) > 32:
+                self._pass_timelines.popitem(last=False)
+        return body
+
+    def region_rows_key(self, region_id: str, max_age_s: float = 10.0) -> str:
+        """`region_rows_digest` of the region, re-read at most every ``max_age_s``."""
+        now = time.monotonic()
+        with self._lock:
+            memo = self.__dict__.setdefault("_region_rows_keys", {})
+            hit = memo.get(region_id)
+        if hit is not None and now - hit[0] < max_age_s:
+            return hit[1]
+        key = region_rows_digest(region_id)
+        with self._lock:
+            memo[region_id] = (now, key)
+        return key
+
+    def firms_counts(self, max_age_s: float = 10.0) -> dict[str, Any]:
+        """Row counts from the FIRMS cache manifests, re-read at most every ``max_age_s``."""
+        now = time.monotonic()
+        cached = getattr(self, "_firms_counts", None)
+        if cached is None or now - cached[0] > max_age_s:
+            cached = (now, firms_cache_summary())
+            self._firms_counts = cached
+        return cached[1]
+
+    def firms_calendar_payload(self, region_id: str) -> tuple[bytes, dict[str, Any]]:
+        """The real calendar of ``region_id`` as bytes, with its ``real_run_starts``;
+        rebuilt when any row of the region changes (its rows digest), not when another region's rows do."""
+        if region_id not in REGION_COUNTRY:
+            raise KeyError(region_id)
+        key = self.region_rows_key(region_id)
+        with self._lock:
+            calendars = self.__dict__.setdefault("_firms_calendars", {})
+            hit = calendars.get(region_id)
+        if hit is not None and hit[0] == key:
+            return hit[1], hit[2]
+        cal = firms_calendar(region_id)
+        try:
+            starts = self.real_run_starts(region_id, cal, key)
+        except Exception as exc:  # noqa: BLE001  (the calendar answers even when the start search cannot)
+            sys.stderr.write(f"[Isogon API] real_run_starts for {region_id} failed: {exc}\n")
+            starts = {"starts": [], "error": f"start dates unavailable: {exc}", "default_start": None,
+                      "default_rule": "no start list, so there is no default"}
+        cal["real_run_starts"] = starts
+        body = json.dumps(cal, ensure_ascii=False).encode("utf-8")
+        with self._lock:
+            calendars[region_id] = (key, body, starts)
+        return body, starts
+
+    def firms_calendar_bytes(self, region_id: str) -> bytes:
+        return self.firms_calendar_payload(region_id)[0]
+
+    def real_run_starts(self, region_id: str, cal: dict[str, Any], rows_key: int) -> dict[str, Any]:
+        """Every worth-showing start date of a real run in the region (``real_start_dates``), with
+        the ``default_start`` to open on (``with_default_start``). The default is asked of
+        ``backend.model.real_run.real_run_starts`` each time, so it follows that function when its rule changes."""
+        value = self._searched_run_starts(region_id, cal, rows_key)
+        model_default, model_error = None, None
+        try:
+            model_default = real_run_module.real_run_starts(PRESET_BY_ID[region_id]).get("default_start")
+        except Exception as exc:  # noqa: BLE001  (the list still answers, with the fallback default)
+            model_error = str(exc)
+        return with_default_start(value, model_default, model_error)
+
+    def _searched_run_starts(self, region_id: str, cal: dict[str, Any], rows_key: int) -> dict[str, Any]:
+        """The start search over the calendar months that can hold a start. Cached on disk under the FIRMS cache,
+        keyed by the row count, the months searched and the source of the model's rule."""
+        months = [
+            r["year_month"] for r in cal["records"]
+            if r["year"] >= START_SEARCH_FIRST_YEAR
+            and sum((r["raw_counts"].get(p) or {}).get("total", 0) for p in ("Terra", "Aqua")) >= START_SEARCH_MIN_MODIS_ROWS
+        ]
+        cache_key = {"rows_sha256": rows_key, "months": months, "rule": start_rule_digest()}
+        disk = FIRMS_CACHE_DIR / "derived" / f"real_run_starts_{region_id}.json"
+        try:
+            saved = json.loads(disk.read_text(encoding="utf-8"))
+            if saved.get("key") == cache_key:
+                return saved["value"]
+        except (OSError, ValueError, AttributeError):
+            pass
+        spec = PRESET_BY_ID[region_id]
+        starts: list[dict[str, Any]] = []
+        d: dict[str, Any] = {}
+        for ym in months:
+            y, mo = int(ym[:4]), int(ym[5:7])
+            last = _calendar.monthrange(y, mo)[1]
+            d = real_start_dates(spec, f"{ym}-01", f"{ym}-{last:02d}")
+            busiest = set(d.get("busiest") or [])
+            for e in d["starts"]:
+                if not e.get("worth_showing"):
+                    continue
+                # The label shows what chose the start (MODIS). A count from a hidden instrument is kept as a field
+                # only, named in `labels_from_hidden_rows`: it is taken after the list is made.
+                starts.append({
+                    "start": e["start"],
+                    "label": (f"{e['start']}: {e['modis_pixels_in_box']:,} MODIS pixels in "
+                              f"{e.get('modis_overpasses', 24)} MODIS overpasses over {e['span_hours']:.0f} h"),
+                    "first_overpass_utc": e["first_overpass_utc"],
+                    "last_overpass_utc": e["last_overpass_utc"],
+                    "span_hours": e["span_hours"],
+                    "modis_overpasses": e.get("modis_overpasses"),
+                    "modis_pixels_in_box": e["modis_pixels_in_box"],
+                    "viirs_pixels_in_box": e.get("viirs_pixels_in_box"),
+                    "busiest_in_month": e["start"] in busiest,
+                })
+        value = {
+            "region_id": region_id,
+            "source": "firms",
+            "starts": sorted(starts, key=lambda x: x["start"]),
+            "rule": d.get("rule"),
+            "chosen_from": d.get("chosen_from"),
+            "labels_from_hidden_rows": d.get("labels_from_hidden_rows", ["viirs_pixels_in_box"]),
+            "hidden_counts": ("counted after the list was made, for the reveal only; no start or default is chosen, "
+                              "dropped or ranked by them, and no label prints them"),
+            "search": (f"months from {START_SEARCH_FIRST_YEAR} whose region box holds at least "
+                       f"{START_SEARCH_MIN_MODIS_ROWS} MODIS rows; {len(months)} months searched"),
+            "from": "backend.model.real_run.real_start_dates",
+        }
+        disk.parent.mkdir(parents=True, exist_ok=True)
+        tmp = disk.with_name(f".{disk.name}.{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps({"key": cache_key, "value": value}, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(disk)
+        return value
+
+    def warm_firms(self) -> None:
+        """Build the real calendars and their start lists in the background, so the first page request is fast."""
+
+        def _run() -> None:
+            for rid in REGION_COUNTRY:
+                try:
+                    self.firms_calendar_payload(rid)
+                except Exception as exc:  # noqa: BLE001
+                    sys.stderr.write(f"[Isogon API] real calendar warm-up for {rid} skipped: {exc}\n")
+
+        threading.Thread(target=_run, name="firms-warm", daemon=True).start()
+
     def health_payload(self) -> dict[str, Any]:
         with self._lock:
             cached_ids = list(self._runs.keys())
+        firms = self.firms_counts()
         return {
             "status": "ok",
             "service": "isogon-scientific-backend",
             "model_version": MODEL_VERSION,
             "provenance_note": PROVENANCE_NOTE,
-            "downloaded_firms_rows": 0,
+            "downloaded_firms_rows": firms["downloaded_rows"],
+            "firms_cache": {
+                "downloaded_files": firms["downloaded_files"],
+                "rows_in_region_boxes": firms["rows_in_region_boxes"],
+                "note": "real NASA FIRMS rows in the local cache; simulated runs use none of them",
+            },
             "terrain_source": self.field_meta.get("terrain_source", "unknown"),
             "calibrator": self.calibrator.diagnostics.to_dict(),
             "cached_runs": len(cached_ids),
@@ -182,12 +542,39 @@ class IsogonDataStore:
                 "/api/regions",
                 "/api/reconstruct",
                 "/api/runs/<run_id>/<asset>",
+                "/api/runs/<run_id>/terrain/<name>",
                 "/api/observer?frame=12&sensor=viirs",
                 "/api/calendar",
+                "/api/calendar?source=firms&region_id=plumas_ca",
+                "/api/calendar/rows.csv?region_id=plumas_ca&start=2021-08-01&end=2021-09-01",
                 "/api/sensor-model",
                 "/api/field-meta",
             ],
         }
+
+    def sensor_model_payload(self, run_id: str | None) -> bytes:
+        """Sensor model diagnostics with the benchmark gates evaluated for one reconstruct run.
+
+        G1 and G5 read the metrics of that run; G3 reads the paired calibration in the same payload.
+        Without a stored run the static file is served as is (G1 and G5 NOT_EVALUATED)."""
+        entry = self.get_run(run_id) if run_id else None
+        if entry is None and run_id and "_firms_" in str(run_id):
+            # A real run that has left the run cache: never answer with the default simulated run's gates.
+            # `backend.model.gates` marks G1 and G5 not evaluated on any real run; pass that through.
+            metrics: dict[str, Any] | None = {"source": "firms"}
+            gate_run_id = str(run_id)
+        else:
+            if entry is None:
+                entry = self.get_run(DEFAULT_GATE_RUN_ID)
+            if entry is None:
+                return self.sensor_model_bytes
+            metrics, gate_run_id = entry[0].metrics, entry[0].run_id
+        payload = dict(self.sensor_model)
+        payload["benchmark_gates"] = build_benchmark_gates(
+            self.sensor_model["paired_1330_calibration"], metrics, gate_run_id
+        )
+        payload["benchmark_gates_run_id"] = gate_run_id
+        return json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
     def regions_payload(self) -> dict[str, Any]:
         return {
@@ -196,15 +583,31 @@ class IsogonDataStore:
         }
 
     def execute_reconstruct(self, body: dict[str, Any]) -> dict[str, Any]:
-        region_id = body.get("region_id")
-        query_text = body.get("query_text")
-        center_lat = float(body["center_lat"]) if body.get("center_lat") is not None else None
-        center_lon = float(body["center_lon"]) if body.get("center_lon") is not None else None
-        span_lon = float(body["span_lon_deg"]) if body.get("span_lon_deg") is not None else None
-        span_lat = float(body["span_lat_deg"]) if body.get("span_lat_deg") is not None else None
-        holdout_viirs = bool(body.get("holdout_viirs", False))
-        raw_cloud = body.get("cloud_override", None)
-        cloud_override = float(raw_cloud) if raw_cloud is not None else None
+        # Every field is type checked: a string "false" is not false, and NaN or Infinity never reach the solver.
+        region_id = body_text(body, "region_id")
+        query_text = body_text(body, "query_text")
+        center_lat = body_number(body, "center_lat", -90.0, 90.0)
+        center_lon = body_number(body, "center_lon", -180.0, 180.0)
+        span_lon = body_number(body, "span_lon_deg", 0.0, 360.0)
+        span_lat = body_number(body, "span_lat_deg", 0.0, 180.0)
+        holdout_viirs = body_bool(body, "holdout_viirs")
+        holdout = body_text(body, "holdout")  # a second spelling: "viirs" equals holdout_viirs true
+        if holdout not in (None, "viirs"):
+            raise ValueError("holdout must be 'viirs' or absent")
+        holdout_viirs = holdout_viirs or holdout == "viirs"
+        cloud_override = body_number(body, "cloud_override", 0.0, 1.0)
+        body_bool(body, "reveal")
+        body_text(body, "start")
+        body_text(body, "source")
+        # Optional terrain pack imagery: "esri_world_imagery" (default) or "usgs_naip" (public domain, conterminous
+        # United States). Outside a source's coverage the default imagery is served; ortho.source says which.
+        imagery = body_text(body, "imagery_source") or DEFAULT_IMAGERY
+        if imagery not in IMAGERY_SOURCES:
+            raise ValueError(f"Unknown imagery_source '{imagery}'. Expected one of: {', '.join(sorted(IMAGERY_SOURCES))}")
+        # "source": "firms" reconstructs real FIRMS overpasses; without it the run is simulated.
+        source = str(body.get("source") or "simulated")
+        if source not in ("simulated", "firms"):
+            raise ValueError("source must be 'firms', or omitted for a simulated run")
 
         spec = resolve_region_request(
             region_id=str(region_id) if region_id is not None else None,
@@ -214,6 +617,8 @@ class IsogonDataStore:
             span_lat_deg=span_lat,
             query_text=str(query_text) if query_text is not None else None,
         )
+        if source == "firms":
+            return self.execute_real_reconstruct(body, spec, holdout_viirs, cloud_override, imagery)
 
         c_tag = "cnone" if cloud_override is None else f"c{int(round(cloud_override * 100)):02d}"
         h_tag = "holdout1" if holdout_viirs else "holdout0"
@@ -233,24 +638,87 @@ class IsogonDataStore:
             self._store_run(solved)
 
         rid = solved.run_id
-        sat_ext = "png" if "png" in solved.region_terrain.satellite_content_type.lower() else "jpg"
         return {
             "run_id": rid,
             "provenance": solved.provenance,
             "downloaded_firms_rows": 0,
             "region": solved.region_terrain.to_region_metadata(),
-            "assets": {
-                "dem_f32_url": f"/api/runs/{rid}/dem_f32.bin",
-                "satellite_url": f"/api/runs/{rid}/satellite.{sat_ext}",
-                "reconstruction_u8_url": f"/api/runs/{rid}/reconstruction_u8.bin",
-                "export_geojson_url": f"/api/runs/{rid}/export.geojson",
-                "export_csv_url": f"/api/runs/{rid}/export.csv",
-            },
+            "assets": self.run_assets(solved, imagery),
             "pipeline_stages": solved.pipeline_stages,
             "metrics": solved.metrics,
             "epoch_summaries": solved.epoch_summaries,
             "observer_passes": solved.observer_passes,
         }
+
+    def execute_real_reconstruct(
+        self,
+        body: dict[str, Any],
+        spec: Any,
+        holdout_viirs: bool,
+        cloud_override: float | None,
+        imagery: str,
+    ) -> dict[str, Any]:
+        """A run on real FIRMS overpasses (`backend.model.real_run`), served in the simulated run's shape plus
+        its additive keys. ``start`` is a UTC date or date-time; ``holdout_viirs`` hides every VIIRS detection."""
+        if cloud_override is not None:
+            raise ValueError("cloud_override applies to simulated runs only; a real run uses the real rows")
+        start = body.get("start")
+        if not start:
+            raise ValueError("source 'firms' needs 'start', a UTC date or date-time such as 2021-07-22T20:34:00Z")
+        # Keyed on what decides the run: region, start, what is hidden, the region's rows and the fitted values.
+        key = (spec.id, str(start), bool(holdout_viirs), self.region_rows_key(spec.id), fitted_values_digest())
+        with self._lock:
+            real_ids = self.__dict__.setdefault("_real_run_ids", {})
+            rid = real_ids.get(key)
+        cached = self.get_run(rid) if rid else None
+        if cached is not None:
+            solved = cached[0]
+        else:
+            terrain = load_region_terrain(spec=spec, allow_network=True)
+            solved = solve_real_reconstruction(terrain, str(start), holdout_viirs=bool(holdout_viirs))
+            self._store_run(solved)
+            with self._lock:
+                real_ids[key] = solved.run_id
+        resp = real_response(solved, self.run_assets(solved, imagery))
+        if holdout_viirs and not body_bool(body, "reveal"):
+            return withhold_scorer_keys(resp)
+        return resp
+
+    def run_assets(self, solved: SolvedReconstructionRun, imagery: str) -> dict[str, Any]:
+        """The ``assets`` object of a run response, the same for simulated and real runs."""
+        rid = solved.run_id
+        sat_ext = "png" if "png" in solved.region_terrain.satellite_content_type.lower() else "jpg"
+        assets: dict[str, Any] = {
+            "dem_f32_url": f"/api/runs/{rid}/dem_f32.bin",
+            "dem_hires_f32_url": f"/api/runs/{rid}/dem_hires_f32.bin",
+            "satellite_url": f"/api/runs/{rid}/satellite.{sat_ext}",
+            "reconstruction_u8_url": f"/api/runs/{rid}/reconstruction_u8.bin",
+            "export_geojson_url": f"/api/runs/{rid}/export.geojson",
+            "export_csv_url": f"/api/runs/{rid}/export.csv",
+        }
+        if not imagery_covers(imagery, solved.region_terrain.spec.bbox):
+            imagery = DEFAULT_IMAGERY
+        pack_meta = self.terrain_pack_meta(solved, imagery)
+        if pack_meta is not None:
+            assets["terrain_pack"] = pack_descriptor(pack_meta, rid)
+            assets["terrain_pack_status"] = "ready"
+        elif solved.region_terrain.terrain_source.startswith("aws_terrarium"):
+            # "building": POST the same request again later to receive assets.terrain_pack.
+            assets["terrain_pack_status"] = self.terrain_packs.status(solved.region_terrain.spec, imagery)
+        else:
+            # Procedural fallback terrain: a pack cannot register to it, so none is built.
+            assets["terrain_pack_status"] = "absent"
+        return assets
+
+    def terrain_pack_meta(
+        self, solved: SolvedReconstructionRun, imagery: str = DEFAULT_IMAGERY
+    ) -> dict[str, Any] | None:
+        """Pack meta for a run, or None. Packs only pair with real (Terrarium) base terrain, since a
+        pack registers to dem_hires_f32.bin and a procedural fallback DEM would not match it. A
+        missing pack is queued for a background build and the run is served without it."""
+        if not solved.region_terrain.terrain_source.startswith("aws_terrarium"):
+            return None
+        return self.terrain_packs.get(solved.region_terrain.spec, build_if_missing=True, wait_s=0.0, imagery=imagery)
 
     def query_observer(
         self,
@@ -281,20 +749,23 @@ class IsogonDataStore:
         fp_mat = active_fp_arrays[frame_idx]
         is_day = bool(frame_meta["is_day"])
 
+        # Platform codes from the model's table: 0 to 3 as in the simulated engine, 4 Suomi NPP (real runs).
         s_norm = sensor_filter.strip().lower()
+        modis_codes = [c for n, c in PLATFORM_CODES.items() if platform_family(n) == "MODIS"]
+        viirs_codes = [c for n, c in PLATFORM_CODES.items() if platform_family(n) == "VIIRS"]
         if s_norm == "all":
-            allowed_codes = np.array([0, 1, 2, 3], dtype=np.int32)
+            allowed_codes = np.array(modis_codes + viirs_codes, dtype=np.int32)
             family_for_flux = "VIIRS"
         elif s_norm == "modis":
-            allowed_codes = np.array([0, 1], dtype=np.int32)
+            allowed_codes = np.array(modis_codes, dtype=np.int32)
             family_for_flux = "MODIS"
         elif s_norm == "viirs":
-            allowed_codes = np.array([2, 3], dtype=np.int32)
+            allowed_codes = np.array(viirs_codes, dtype=np.int32)
             family_for_flux = "VIIRS"
-        elif s_norm.upper() in SENSOR_CODES:
-            code = SENSOR_CODES[s_norm.upper()]
+        elif s_norm.upper() in PLATFORM_CODES:
+            code = PLATFORM_CODES[s_norm.upper()]
             allowed_codes = np.array([code], dtype=np.int32)
-            family_for_flux = "MODIS" if code < 2 else "VIIRS"
+            family_for_flux = platform_family(s_norm.upper())
         else:
             raise ValueError(
                 f"Unsupported sensor filter '{sensor_filter}'. Expected all, modis, or viirs."
@@ -359,7 +830,7 @@ class IsogonDataStore:
         else:
             active_pass = {
                 "sensor": frame_meta["sensor"],
-                "sensor_code": SENSOR_CODES[frame_meta["sensor"]],
+                "sensor_code": PLATFORM_CODES.get(frame_meta["sensor"], -1),
                 "subsat_lon": frame_meta["subsat_lon"],
                 "subsat_lat": frame_meta["subsat_lat"],
                 "altitude_km": frame_meta["altitude_km"],
@@ -444,12 +915,17 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
     """CORS-enabled JSON and binary tensor handler for Isogon world-model endpoints."""
 
     server: IsogonHTTPServer
+    timeout = 60  # seconds a client may hold a socket idle
 
-    def _send_cors_headers(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Accept")
-        self.send_header("Cache-Control", "no-store")
+    def _send_cors_headers(self, cache: str = "no-store") -> None:
+        origin = self.headers.get("Origin") if self.headers else None
+        if origin_allowed(origin):
+            self.send_header("Access-Control-Allow-Origin", str(origin))
+            self.send_header("Vary", "Origin")
+        self.send_header("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Accept, If-None-Match")
+        self.send_header("Access-Control-Expose-Headers", "ETag, X-Row-Count, Content-Disposition")
+        self.send_header("Cache-Control", cache)
 
     def _send_bytes(
         self,
@@ -457,16 +933,22 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
         body: bytes,
         content_type: str,
         extra_headers: dict[str, str] | None = None,
+        cache: str = "no-store",
     ) -> None:
         self.send_response(status)
-        self._send_cors_headers()
+        self._send_cors_headers(cache)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         if extra_headers:
             for k, v in extra_headers.items():
                 self.send_header(k, v)
         self.end_headers()
-        self.wfile.write(body)
+        if getattr(self, "_suppress_body", False):
+            return
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def _send_json_bytes(self, status: int, body: bytes) -> None:
         self._send_bytes(status, body, "application/json; charset=utf-8")
@@ -481,12 +963,34 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    def do_HEAD(self) -> None:  # noqa: N802
+        self._suppress_body = True
+        try:
+            self.do_GET()
+        finally:
+            self._suppress_body = False
+
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         route = parsed.path.rstrip("/") or "/"
         store = self.server.store
 
         try:
+            origin = self.headers.get("Origin")
+            if origin and not origin_allowed(origin):
+                self._send_json_obj(HTTPStatus.FORBIDDEN, {"error": "requests are accepted from local pages only"})
+                return
+            if route in ("/api/env/next_look/reset", "/api/env/next_look/step"):
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 65_536:
+                    self._send_json_obj(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "Request body too large"})
+                    return
+                body = parse_request_json(self.rfile.read(length) if length > 0 else b"{}")
+                rounds = store.next_look
+                result = rounds.reset(body) if route.endswith("/reset") else rounds.step(body)
+                self._send_json_obj(HTTPStatus.OK, result)
+                return
+
             if route == "/api/reconstruct":
                 length = int(self.headers.get("Content-Length", "0"))
                 if length > 262_144:
@@ -496,10 +1000,7 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                     )
                     return
                 raw_body = self.rfile.read(length) if length > 0 else b"{}"
-                payload = json.loads(raw_body.decode("utf-8") or "{}")
-                if not isinstance(payload, dict):
-                    raise ValueError("JSON body must be an object")
-                result = store.execute_reconstruct(payload)
+                result = store.execute_reconstruct(parse_request_json(raw_body))
                 self._send_json_obj(HTTPStatus.OK, result)
                 return
 
@@ -509,6 +1010,10 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
             )
         except (ValueError, json.JSONDecodeError) as exc:
             self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        except (FirmsCacheMissing, RoundNotFound) as exc:
+            self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc)})
+        except RoundConflict as exc:
+            self._send_json_obj(HTTPStatus.CONFLICT, {"error": str(exc)})
         except Exception as exc:  # pragma: no cover
             self._send_json_obj(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
 
@@ -528,19 +1033,149 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                 return
 
             if route == "/api/calendar":
-                self._send_json_bytes(HTTPStatus.OK, store.calendar_bytes)
+                source = qs.get("source", [""])[0]
+                if source in ("", "simulated"):
+                    self._send_json_bytes(HTTPStatus.OK, store.calendar_bytes)  # the simulated calendar
+                    return
+                if source != "firms":
+                    self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": "source must be 'firms', or omitted for the simulated calendar"})
+                    return
+                region_id = qs.get("region_id", [""])[0]
+                if not region_id:
+                    self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": "source=firms needs region_id"})
+                    return
+                try:
+                    body = store.firms_calendar_bytes(region_id)
+                except KeyError as exc:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc.args[0])})
+                    return
+                self._send_json_bytes(HTTPStatus.OK, body)
+                return
+
+            if route == "/api/calendar/rows.csv":
+                region_id = qs.get("region_id", [""])[0]
+                start, end = qs.get("start", [""])[0], qs.get("end", [""])[0]
+                plats = [p for p in qs.get("platforms", [""])[0].split(",") if p] or None
+                try:
+                    d0, d1 = _dt.date.fromisoformat(start[:10]), _dt.date.fromisoformat(end[:10])
+                    if start >= end:
+                        raise ValueError("end must be after start")
+                    body, n = rows_csv(region_id, start, end, plats)
+                except KeyError as exc:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc.args[0])})
+                    return
+                except FirmsCacheMissing as exc:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc)})
+                    return
+                except ValueError as exc:
+                    self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": f"start and end must be ISO dates; {exc}"})
+                    return
+                self._send_bytes(
+                    HTTPStatus.OK,
+                    body,
+                    "text/csv; charset=utf-8",
+                    {
+                        "Content-Disposition": f'attachment; filename="isogon_firms_{region_id}_{d0}_{d1}.csv"',
+                        "X-Row-Count": str(n),
+                    },
+                )
                 return
 
             if route == "/api/sensor-model":
-                self._send_json_bytes(HTTPStatus.OK, store.sensor_model_bytes)
+                run_id_raw = qs.get("run_id", [None])[0]
+                self._send_json_bytes(HTTPStatus.OK, store.sensor_model_payload(str(run_id_raw) if run_id_raw else None))
                 return
 
             if route == "/api/field-meta":
                 self._send_json_bytes(HTTPStatus.OK, store.field_meta_bytes)
                 return
 
+            if route == "/api/evidence":
+                if model_evidence is None:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {
+                        "error": "the evidence function (backend/model/evidence.py) is not in this build"})
+                    return
+                # Built on each request from the tracked files it reads (no FIRMS row, no solve), so it is never stale.
+                self._send_json_bytes(HTTPStatus.OK, json.dumps(model_evidence(), ensure_ascii=False).encode("utf-8"))
+                return
+
+            if route == "/api/passes":
+                region_id = qs.get("region_id", [""])[0]
+                start, end = qs.get("start", [""])[0], qs.get("end", [""])[0]
+                if not region_id or not start or not end:
+                    self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": "needs region_id, start and end"})
+                    return
+                plats = [p for p in qs.get("platforms", [""])[0].split(",") if p] or None
+                try:
+                    body = store.pass_timeline_bytes(region_id, start, end, qs.get("box", ["pack"])[0], plats)
+                except KeyError as exc:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc.args[0])})
+                    return
+                except (CmrCacheMissing, FirmsCacheMissing) as exc:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc)})
+                    return
+                self._send_json_bytes(HTTPStatus.OK, body)
+                return
+
+            if route == "/api/env/next_look/state":
+                try:
+                    self._send_json_obj(HTTPStatus.OK, store.next_look.state(qs.get("round_id", [""])[0]))
+                except RoundNotFound as exc:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc)})
+                return
+
+            if route == "/api/runs/starts":
+                region_id = qs.get("region_id", [""])[0]
+                source = qs.get("source", ["firms"])[0]
+                if source != "firms" or not region_id:
+                    self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": "needs region_id and source=firms"})
+                    return
+                try:
+                    _body, starts = store.firms_calendar_payload(region_id)
+                except KeyError as exc:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc.args[0])})
+                    return
+                self._send_json_obj(HTTPStatus.OK, starts)
+                return
+
             if route.startswith("/api/runs/"):
                 parts = [unquote(p) for p in route.split("/") if p]
+                # Terrain pack files: ['api', 'runs', '<run_id>', 'terrain', '<name>']
+                if len(parts) == 5 and parts[3] == "terrain":
+                    run_id, file_name = parts[2], parts[4]
+                    entry = store.get_run(run_id)
+                    if entry is None:
+                        self._send_json_obj(
+                            HTTPStatus.NOT_FOUND,
+                            {"error": f"Run '{run_id}' not found in active store"},
+                        )
+                        return
+                    pack_path = store.terrain_packs.resolve_file(entry[0].region_terrain.spec, file_name)
+                    if pack_path is None:
+                        self._send_json_obj(
+                            HTTPStatus.NOT_FOUND,
+                            {"error": f"Terrain pack file '{file_name}' not available for run '{run_id}'"},
+                        )
+                        return
+                    # Pack files are rebuilt only by hand, so the browser may keep them; the ETag (size and write
+                    # time) changes with any rebuild and a matching If-None-Match gets 304.
+                    st = pack_path.stat()
+                    etag = f'"{st.st_size:x}-{st.st_mtime_ns:x}"'
+                    cache = "public, max-age=86400"
+                    if self.headers.get("If-None-Match") == etag:
+                        self.send_response(HTTPStatus.NOT_MODIFIED)
+                        self._send_cors_headers(cache)
+                        self.send_header("ETag", etag)
+                        self.end_headers()
+                        return
+                    self._send_bytes(
+                        HTTPStatus.OK,
+                        pack_path.read_bytes(),
+                        TERRAIN_PACK_CONTENT_TYPES.get(pack_path.suffix, "application/octet-stream"),
+                        {"ETag": etag},
+                        cache=cache,
+                    )
+                    return
                 # Expected: ['api', 'runs', '<run_id>', '<asset>']
                 if len(parts) == 4:
                     run_id, asset_name = parts[2], parts[3]
@@ -556,6 +1191,13 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                         self._send_bytes(
                             HTTPStatus.OK,
                             run_obj.region_terrain.dem_f32_bytes,
+                            "application/octet-stream",
+                        )
+                        return
+                    if asset_name == "dem_hires_f32.bin":
+                        self._send_bytes(
+                            HTTPStatus.OK,
+                            run_obj.region_terrain.dem_hires_f32_bytes,
                             "application/octet-stream",
                         )
                         return
@@ -592,6 +1234,15 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                     if asset_name == "observer_passes.json":
                         self._send_json_obj(HTTPStatus.OK, run_obj.observer_passes)
                         return
+                    if asset_name == "belief_u8.bin":
+                        belief = getattr(run_obj, "belief_u8_bytes", b"")
+                        if not belief:
+                            self._send_json_obj(
+                                HTTPStatus.NOT_FOUND, {"error": f"Run '{run_id}' has no belief frames (real runs only)"}
+                            )
+                            return
+                        self._send_bytes(HTTPStatus.OK, belief, "application/octet-stream")
+                        return
 
             if route == "/api/observer":
                 frame_raw = qs.get("frame", ["0"])[0]
@@ -611,8 +1262,8 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                 result = store.query_observer(
                     frame_idx=frame_idx,
                     sensor_filter=sensor_raw,
-                    min_frp=float(min_frp_raw),
-                    max_zenith=float(max_zen_raw),
+                    min_frp=query_number(min_frp_raw, "min_frp"),
+                    max_zenith=query_number(max_zen_raw, "max_zenith"),
                     run_id=str(run_id_raw) if run_id_raw else None,
                 )
                 self._send_json_obj(HTTPStatus.OK, result)
@@ -627,10 +1278,16 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                         "/api/regions",
                         "/api/reconstruct",
                         "/api/runs/<run_id>/<asset>",
+                        "/api/runs/<run_id>/terrain/<name>",
                         "/api/observer",
                         "/api/calendar",
                         "/api/sensor-model",
                         "/api/field-meta",
+                        "/api/env/next_look/reset (POST)",
+                        "/api/env/next_look/step (POST)",
+                        "/api/env/next_look/state",
+                        "/api/passes",
+                        "/api/evidence",
                     ],
                 },
             )
@@ -646,6 +1303,7 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
 def run_server(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
     fields_dir = _REPO_ROOT / DEFAULT_FIELDS_REL_DIR
     store = IsogonDataStore(fields_dir=fields_dir)
+    store.warm_firms()
     httpd = IsogonHTTPServer((host, port), store=store)
     print(
         f"[Isogon API] Listening on http://{host}:{port} "
