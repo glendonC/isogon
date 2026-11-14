@@ -57,6 +57,7 @@ class StandIn:
         if u.path == "/api/reconstruct":
             rid = "run_" + body["start"]
             return js({"run_id": rid, "window": {"first_overpass_utc": "2012-08-10T05:00:00Z", "last_overpass_utc": "2012-08-14T20:00:00Z"},
+                       "observer_passes": {"frames": [{}, {}]},
                        "assets": {"satellite_url": f"/api/runs/{rid}/satellite.jpg",
                                   "terrain_pack": {"ortho": {"url": f"/api/runs/{rid}/terrain/ortho_8192.jpg", "source": "esri_world_imagery"},
                                                    "dem": {"url": f"/api/runs/{rid}/terrain/dem_1024_f32.bin"}}}})
@@ -115,7 +116,8 @@ class PublishableImageryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             rec = Recorder("http://stand-in", Path(tmp), opener=_PackStandIn(pack_source, context_source))
             rec.run_with_assets({"region_id": "x", "source": "firms", "start": "2012-08-10"})
-            return {k.split("/terrain/")[-1].split("/")[-1]: "file" in e for k, e in rec.entries.items() if k.startswith("GET ")}
+            return {k.split("/terrain/")[-1].split("/")[-1]: "file" in e for k, e in rec.entries.items()
+                    if k.startswith("GET /api/runs/")}
 
     def test_the_set_is_the_pack_modules(self) -> None:
         from backend.server_recorder import PUBLISHABLE_IMAGERY
@@ -166,6 +168,13 @@ class RecorderTests(unittest.TestCase):
             self.assertIn(held, entries)
             revealed = held.replace('"region_id":"plumas_ca",', '"region_id":"plumas_ca","reveal":true,')
             self.assertIn(revealed, entries)
+            # and its run with every satellite, which the landing and the Agent part ask for
+            self.assertIn('POST /api/reconstruct {"cloud_override":null,"holdout_viirs":false,"region_id":"plumas_ca","source":"firms","start":"2012-08-10"}', entries)
+            # the readings beside each run: the sensor model, and the observer at each frame with the page's default filter
+            self.assertIn("GET /api/sensor-model", entries)
+            self.assertIn("GET /api/sensor-model?run_id=run_2012-08-10", entries)
+            self.assertIn("GET /api/observer?frame=0&min_frp=8.4&run_id=run_2012-08-10&sensor=all", entries)
+            self.assertIn("GET /api/observer?frame=1&min_frp=8.4&run_id=run_2012-08-10&sensor=all", entries)
             # the blind test fire: its run with every satellite shown, and nothing held out, revealed or played
             closed = [(path, b) for _, path, b in backend.seen if (b or {}).get("start") == "2021-07-20"]
             self.assertEqual([path for path, _ in closed], ["/api/reconstruct"])

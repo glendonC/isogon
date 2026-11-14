@@ -11,7 +11,9 @@ the page looks answers up in:
 
 Without `--plan` it builds the demo path's plan from `GET /api/regions`: the regions, the evidence, each region's
 calendar and start list, each named fire's box calendar, and for every featured fire that is not a blind test fire
-its run held out and then revealed, the run's assets, its pass list as a held-out window shows it (`hidden=VIIRS`)
+its run held out and then revealed and its run with every satellite (the landing and the Agent part ask for it), the
+assets of each run and its readings (`GET /api/sensor-model` for the run, `GET /api/observer` at each of its frames
+with the page's default filter), its pass list as a held-out window shows it (`hidden=VIIRS`)
 and in full for the reveal, the play of each player the page shows, step by step (the one that reads the hidden rows
 with `ceiling`), and one round of next look played with the looks of the reference player `least_sure`, taken from
 its play. Rounds and plays are asked with the page's own bodies (`{region_id, start}`, the environment's own tiles
@@ -55,6 +57,8 @@ PUBLISHABLE_IMAGERY: tuple[str, ...] = ("usgs_naip", "eox_s2cloudless_2016")
 # and SEES_THE_ANSWER; a test holds them equal).
 PAGE_PLAYERS: tuple[str, ...] = ("random", "latest_modis", "least_sure", "learned", "oracle")
 SEES_THE_ANSWER: str = "oracle"
+# The observer reading the page asks for by default (website/src/App.tsx: every sensor, the sensitivity slider at rest).
+OBSERVER_DEFAULT: dict[str, str] = {"sensor": "all", "min_frp": "8.4"}
 ROUND_PLAYER: str = "least_sure"     # the reference player whose looks the recorded round takes
 RECORDED_WINDOWS_NOTE: str = ("the recorded test fires' runs with every satellite shown are not recorded: such a run "
                               "still runs the scorer on its closed window until the model makes it skip the score "
@@ -210,7 +214,17 @@ class Recorder:
                 self.withhold("GET", path, ESRI_WITHHELD if source == "esri_world_imagery" else OTHER_WITHHELD)
             else:
                 self.fetch("GET", path, query or None)
+        self.record_readings(ans)
         return ans
+
+    def record_readings(self, run: dict[str, Any]) -> None:
+        """What the page reads beside a run: the sensor model for the run, and the observer at each of its frames with
+        the page's default filter."""
+        rid = str(run["run_id"])
+        self.fetch("GET", "/api/sensor-model", {"run_id": rid})
+        frames = ((run.get("observer_passes") or {}).get("frames") or []) if isinstance(run.get("observer_passes"), dict) else []
+        for i in range(len(frames)):
+            self.fetch("GET", "/api/observer", {"frame": str(i), **OBSERVER_DEFAULT, "run_id": rid})
 
     def record_passes(self, region_id: str, run: Any, hidden: bool) -> None:
         """The pass list over a run's window: for a held-out run as it may be shown (`hidden=VIIRS`) and in full for
@@ -285,6 +299,7 @@ class Recorder:
         self.fetch("GET", "/api/health")
         regions = self.fetch("GET", "/api/regions")
         self.fetch("GET", "/api/evidence")
+        self.fetch("GET", "/api/sensor-model")          # the page's sensor curves before any run is on screen
         for place in (regions or {}).get("places", []):
             if place.get("rows") != "firms":
                 continue
@@ -309,6 +324,7 @@ class Recorder:
                     continue
                 held = self.run_with_assets(page_run_body(rid, start, holdout=True))
                 self.run_with_assets(page_run_body(rid, start, holdout=True, reveal=True))
+                self.run_with_assets(page_run_body(rid, start, holdout=False))
                 self.record_passes(rid, held, hidden=True)
                 episode = {"region_id": rid, "start": start}     # the page's reset body: the environment's tiles and budget
                 self.record_plays(episode)
