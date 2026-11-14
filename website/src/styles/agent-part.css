@@ -1,0 +1,27 @@
+/* The Agent part in the stage's place (beats/agent/AgentBeat.tsx): its name and line, then the players' picture. */
+
+.agent-part {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 96px var(--sys-gutter) var(--sys-s5);
+  background: var(--sys-night);
+  pointer-events: auto;
+}
+
+.agent-part__head {
+  display: grid;
+  gap: var(--sys-s1);
+  margin: 0 0 var(--sys-s4);
+}
+
+.agent-part__head h2,
+.agent-part__head p {
+  margin: 0;
+}
+
+.agent-part__picture {
+  position: relative;
+  min-height: 0;
+}

@@ -17,6 +17,7 @@ import { WorldModelBeat } from './beats/world-model/WorldModelBeat';
 import { WorldModelScene } from './beats/world-model/WorldModelScene';
 import { isClosedWindow } from './beats/world-model/fire';
 import { TestWorldBeat } from './beats/test-world/TestWorldBeat';
+import { AgentBeat } from './beats/agent/AgentBeat';
 import { revealedPassesOf, type TrackState } from './content/passTrack';
 import { partsStatus, type PartId } from './content/partsStatus';
 import { useRound, type RoundApi, type RoundFire } from './beats/test-world/useRound';
@@ -698,7 +699,7 @@ export function App() {
       setDebriefOpen(false);
       // A round or a test on a recorded test fire, or where nothing can be hidden: not played or run.
       const nothingToHide = !isRealRun(activeRun) || beforeSharpSatellite(activeRun) || hideRefused(activeRun?.region.id ?? '', realStart);
-      if (next === 'look' && step !== 'look' && nothingToHide) return;
+      if ((next === 'look' || next === 'agent') && step !== next && nothingToHide) return;
       if (next === 'test' && step !== 'test' && !holdoutViirs && !revealed && nothingToHide) return;
       if (next === step && next !== 'look') return;
       if (step === 'look' && next !== 'look' && round) leaveRound();
@@ -729,6 +730,7 @@ export function App() {
         const blind = isRealRun(activeRun) && !beforeSharpSatellite(activeRun) && !hideRefused(activeRun?.region.id ?? '', realStart);
         goStep(blind ? 'test' : 'fire');
       } else if (b === 'world') goStep('look');
+      else if (b === 'agent') goStep('agent');
     },
     [goStep, step, activeRun, realStart, hideRefused],
   );
@@ -770,12 +772,7 @@ export function App() {
   const landingParts = useMemo(() => partsStatus(evidenceLive), [evidenceLive]);
   const openPart = useCallback(
     (id: PartId) => {
-      if (id === 'agent') {
-        setEvidenceFocus('next_look');
-        setEvidenceOpen(true);
-        return;
-      }
-      pendingStepRef.current = id === 'model' ? 'test' : 'look';
+      pendingStepRef.current = id === 'model' ? 'test' : id === 'agent' ? 'agent' : 'look';
       enterWorkspace('cutaway');
       if (id === 'model') {
         setWorkspaceMode('reconstruction');
@@ -939,6 +936,8 @@ export function App() {
       if (!inWorkspace && e.key === 'Enter' && !onControl) {
         e.preventDefault();
         enterWorkspace('cutaway');
+        setStep('record');
+        setPlacesOpen(true);
         return;
       }
 
@@ -952,6 +951,8 @@ export function App() {
             setCinemaActive(false);
           } else if (cleanHud) {
             setCleanHud(false);
+          } else if (step === 'agent') {
+            goStep('fire');
           } else {
             exitToOverview();
           }
@@ -1132,7 +1133,14 @@ export function App() {
   const span = runSpan ? utcSpan(runSpan.first, runSpan.last) : null;
   const beatBlocked: Partial<Record<BeatId, string | null>> = {
     world: stepBlocked.look ?? null,
-    agent: 'Watching an agent play opens after a round in Test world',
+    // The players play the round on the open fire; closed where a round is.
+    agent: closedWindow
+      ? 'Closed on a recorded test fire: its looks are on record'
+      : noSharp
+        ? 'No VIIRS flew before 2012, so there is no round to play'
+        : !runIsReal
+          ? 'The players play on a real NASA FIRMS run'
+          : null,
   };
   const blindLoading = holdoutViirs && !revealing && (isExecuting || !activeRun?.metrics?.holdout_viirs);
 
@@ -1401,7 +1409,8 @@ export function App() {
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
             {step === 'record' && <CalendarBeat />}
             {modelScene && <WorldModelScene />}
-            <div className="iso-ws__dock" hidden={step === 'record'}>
+            {step === 'agent' && <AgentBeat />}
+            <div className="iso-ws__dock" hidden={step === 'record' || step === 'agent'}>
               {debriefOpen && blindTest ? (
                 <Debrief
                   score={blindTest}

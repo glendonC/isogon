@@ -1,16 +1,23 @@
 import { beatOf } from '../../app/names';
+import { AgentPicture } from './AgentPicture';
+import '../../styles/agent-part.css';
 
 /**
- * Agent: the players play the same round on the open fire. This is the part's panel: its name and its line. The
- * picture, one block per player with its looks in order and what they found, is `AgentPicture` beside this file;
- * the shell mounts it where the stage is.
+ * Agent: the players play the same round on the open fire. The part takes the stage's place: its name and line, then
+ * the picture, one block per player with its looks in order and what they found (`AgentPicture`, which reads the
+ * place and the run from the workspace and asks for the plays itself).
  */
 export function AgentBeat() {
   const b = beatOf('agent');
   return (
-    <>
-      <h2 className="iso-step__title">{b.name}</h2>
-      <p className="iso-step__line">{b.line}</p>
-    </>
+    <section className="agent-part" aria-label={b.name.replace(/^\d+\s*/, '')}>
+      <header className="agent-part__head">
+        <h2 className="sys-title">{b.name.replace(/^\d+\s*/, '')}</h2>
+        <p className="sys-label">{b.line}</p>
+      </header>
+      <div className="agent-part__picture">
+        <AgentPicture />
+      </div>
+    </section>
   );
 }

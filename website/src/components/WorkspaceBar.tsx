@@ -3,10 +3,11 @@ import { IsogonMark } from '../ui/IsogonMark';
 import { BEATS, READING, type BeatId } from '../app/names';
 
 /** The workspace's inner steps, until each beat holds its own: the Calendar, the fire and its test, a round. */
-export type Step = 'record' | 'fire' | 'test' | 'look';
+export type Step = 'record' | 'fire' | 'test' | 'look' | 'agent';
 
 /** The part of the product a step belongs to. */
-export const beatOfStep = (s: Step): BeatId => (s === 'record' ? 'calendar' : s === 'look' ? 'world' : 'model');
+export const beatOfStep = (s: Step): BeatId =>
+  s === 'record' ? 'calendar' : s === 'look' ? 'world' : s === 'agent' ? 'agent' : 'model';
 
 interface WorkspaceBarProps {
   place: string;
