@@ -30,9 +30,9 @@ Related work that the code does not use:
 | Common Metadata Repository granule search, for `MOD14`, `MYD14`, `VNP14IMG`, `VJ114IMG` and `VJ214IMG` | NASA EOSDIS (`https://cmr.earthdata.nasa.gov/search/granules.json`) | Public metadata, no login. Two recorded answers are kept for the tests in `backend/tests/fixtures/cmr_recorded/`. |
 | GIBS `BlueMarble_ShadedRelief_Bathymetry` | NASA EOSDIS Global Imagery Browse Services (`https://gibs.earthdata.nasa.gov/`) | United States Government work in the public domain. One image, `website/public/generated/terrain/earth_day.jpg`. |
 
-## Featured fires
+## Named fires
 
-The names, dates, burned areas and points of the featured fires in `backend/firms/places.json` come from the fire agencies and the Copernicus Emergency Management Service; each entry names its page. Only the facts are used; no text or image is copied.
+The names, dates, burned areas and points of the named fires in `backend/firms/places.json` (they name the featured fires) come from the fire agencies and the Copernicus Emergency Management Service; each entry names its page. Only the facts are used; no text or image is copied.
 
 | Region | Fires | Pages |
 | --- | --- | --- |

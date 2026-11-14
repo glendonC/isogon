@@ -320,6 +320,8 @@ class IsogonDataStore:
         self.next_look = NextLookRounds()
         self._pass_timelines: OrderedDict[tuple[Any, ...], bytes] = OrderedDict()
         self.box_index = BoxIndex()
+        # Open (and, the first time, build) the box index now, so the first drawn box does not wait for it.
+        threading.Thread(target=self._warm_box_index, name="box-index-warm", daemon=True).start()
         self._box_calendars: OrderedDict[tuple[Any, ...], tuple[dict[str, Any], bytes]] = OrderedDict()
         self.current_month = CurrentMonth()
         self._current_months: dict[tuple[Any, ...], dict[str, Any]] = {}
@@ -432,6 +434,12 @@ class IsogonDataStore:
 
     def firms_calendar_bytes(self, region_id: str) -> bytes:
         return self.firms_calendar_payload(region_id)[0]
+
+    def _warm_box_index(self) -> None:
+        try:
+            self.box_index.tables()
+        except Exception as exc:  # noqa: BLE001  (a box request builds or reports it again)
+            sys.stderr.write(f"[Isogon API] box index not ready: {exc}\n")
 
     def box_index_key(self, max_age_s: float = 10.0) -> str:
         """The digest of the country files the box index reads, re-read at most every ``max_age_s``."""

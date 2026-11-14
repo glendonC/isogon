@@ -108,6 +108,26 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
       "calendar": "/api/calendar?source=firms&region_id=plumas_ca",
       "featured_fires": [
         {
+          "id": "plumas_ca:2012-08",
+          "region_id": "plumas_ca",
+          "label": "August 2012",
+          "months": ["2012-08"],
+          "first_day": "2012-08-01",
+          "last_day": "2012-08-31",
+          "size": {"modis_pixels_in_box": 394, "at_start": "2012-08-10", "what": "MODIS pixels inside the region's box at the period's busiest start"},
+          "name": null,
+          "named_fire": null,
+          "name_source": null,
+          "blind_test_fire": false,
+          "to_the_model": null,
+          "default_start": "2012-08-10",
+          "default_start_rule": "the period's start with the most MODIS pixels in the box (the earliest on a tie)",
+          "calendar": "/api/calendar?source=firms&region_id=plumas_ca",
+          "run_starts": [{"start": "2012-08-01", "label": "...", "...": "..."}]
+        }
+      ],
+      "named_fires": [
+        {
           "id": "north_complex_2020",
           "name": "North Complex Fire",
           "first_day": "2020-08-17",
@@ -120,14 +140,15 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
           "area_source": "https://...",
           "box": [-121.5537, 39.3111, -120.5537, 40.3111],
           "calendar": "/api/calendar?source=firms&box=-121.5537,39.3111,-120.5537,40.3111",
-          "run_starts_until": "2020-12-03",
-          "run_starts_rule": "the region's real run starts from first_day to last_day",
-          "run_starts": [{"start": "2020-09-24", "label": "...", "...": "..."}]
+          "featured_fire": "plumas_ca:2020-09"
         }
       ]
     }
   ],
-  "featured_fires_from": "...",
+  "default": {"region_id": "plumas_ca", "featured_fire": "plumas_ca:2012-08", "start": "2012-08-10", "rule": "...", "chosen_by": "while the model's roles are not served"},
+  "featured_fires_rule": "...",
+  "to_the_model": "...",
+  "named_fires_from": "...",
   "box_calendar": {
     "route": "/api/calendar?source=firms&box=<west>,<south>,<east>,<north>",
     "countries": ["Canada", "Greece", "United States"],
@@ -139,10 +160,14 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
 }
 ```
 
-Shortened: `places` has five entries, one per preset; `featured_fires` and `country_extents` are cut.
+Shortened: `places` has five entries, one per preset; one featured fire and one named fire are shown, and `country_extents` is cut.
 
-- `rows` is `firms` for a region with cached FIRMS rows and `simulated` for one without; a simulated place has `country` and `calendar` `null` and no featured fires.
-- A featured fire's name, dates, burned area and point come from the page in its `source` (`backend/firms/places.json`; `point_source`, `area_source` or `last_day_source` when one of them comes from another page; [sources.md](sources.md)). `blind_test_fire` marks the three 2021 test fires. `box` is the fire's point 0.5 degrees each way, and `calendar` that box's calendar. `run_starts` are the region's real run starts (`GET /api/runs/starts`, inside the region's terrain box) from `first_day` to `last_day`, or to 90 days after `first_day` when no end date is published; a fire outside the terrain box has none.
+- `rows` is `firms` for a region with cached FIRMS rows and `simulated` for one without; a simulated place has `country` and `calendar` `null` and no fires.
+- Featured fires are chosen by rule from the region's real run starts (`GET /api/runs/starts`, which reads MODIS rows only): the starts the start search marks busiest, grouped into periods less than 31 days apart, largest first by the MODIS pixels in the box at the busiest start. Today they are July and August 2021 (1,749), August 2012 (394) and September 2020 (175) in `plumas_ca`, June and July 2021 (514) and August 2023 (301) in `lytton_bc`, and August 2021 (714) in `evia_greece`. `run_starts` are the region's starts inside the period's months; `default_start` is the period's start with the most MODIS pixels.
+- A featured fire takes its `name` from a named fire whose dates overlap it and whose point lies within 0.5 degrees of the region's box; one without a name is shown by place and month. `blind_test_fire` marks the three 2021 test fires.
+- `to_the_model` is `null` until the model's function is served (`backend.model.fire_roles.fire_roles`); it will say, per part, whether a fire was fitted on, validated on, a recorded test fire or never seen.
+- `default` is chosen by the rule in `rule`: the largest featured fire the model never saw; while `to_the_model` is null everywhere, the largest featured fire that is not a blind test fire. `chosen_by` says which reading chose it.
+- Named fires (`backend/firms/places.json`) carry the name, dates, burned area and point a fire agency gives, from the page in `source` (`point_source`, `area_source` or `last_day_source` when that fact comes from another page; [sources.md](sources.md)), a calendar `box` (the point 0.5 degrees each way) and its `calendar`, and the `featured_fire` they name, if any.
 - `country_extents` is where the rows of each cached country file lie; a box calendar counts only rows of those files.
 
 Shortened to one preset. `bbox` is `[west, south, east, north]` everywhere in this API.

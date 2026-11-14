@@ -146,16 +146,15 @@ class CurrentMonthTests(unittest.TestCase):
 
 
 class PlacesRegistryTests(unittest.TestCase):
-    def test_every_featured_fire_is_sourced_dated_and_inside_its_region(self) -> None:
+    def test_every_named_fire_is_sourced_dated_and_inside_its_region(self) -> None:
         import datetime as dt
 
-        from backend.firms.places import fire_entry, load_places
+        from backend.firms.places import load_places, named_fire_entry
 
-        doc = load_places()
         blind = []
-        for region, r in doc["regions"].items():
+        for region, r in load_places()["regions"].items():
             w, s, e, n = fa.region_box(region)
-            for f in r["featured_fires"]:
+            for f in r["named_fires"]:
                 with self.subTest(fire=f["id"]):
                     lon, lat = f["point"]
                     self.assertTrue(w <= lon <= e and s <= lat <= n)
@@ -168,12 +167,31 @@ class PlacesRegistryTests(unittest.TestCase):
                     self.assertIn(f["burned_area"]["unit"], ("acres", "hectares"))
                     if f["blind_test_fire"]:
                         blind.append((region, first.year))
-                    elif region in ("plumas_ca", "lytton_bc", "evia_greece"):
+                    else:
                         self.assertNotEqual(first.year, 2021)   # no other 2021 fire of a test region is offered
-                    entry = fire_entry(f, [{"start": f["first_day"]}, {"start": "1999-01-01"}])
-                    self.assertEqual([x["start"] for x in entry["run_starts"]], [f["first_day"]])
+                    entry = named_fire_entry(f)
                     self.assertEqual(list(parse_box(entry["calendar"].split("box=")[1])), entry["box"])
         self.assertEqual(sorted(blind), [("evia_greece", 2021), ("lytton_bc", 2021), ("plumas_ca", 2021)])
+
+    def test_featured_fires_and_the_default_follow_their_rules(self) -> None:
+        from backend.firms.places import featured_periods, places_payload
+
+        def st(day: str, px: int, busiest: bool = True) -> dict:
+            return {"start": day, "modis_pixels_in_box": px, "busiest_in_month": busiest}
+
+        starts = [st("2012-08-02", 300), st("2012-08-10", 394), st("2012-09-20", 10, False),
+                  st("2021-07-18", 1700), st("2021-08-03", 1749), st("2020-09-25", 175)]
+        named = [{"id": "dixie", "name": "Dixie Fire", "first_day": "2021-07-13", "last_day": "2021-10-25",
+                  "point": [-121.39, 39.87], "blind_test_fire": True, "source": "https://example.org/dixie"}]
+        got = featured_periods("plumas_ca", starts, named, [-121.44, 39.86, -120.92, 40.24])
+        self.assertEqual([p["label"] for p in got], ["July and August 2021", "August 2012", "September 2020"])
+        self.assertEqual((got[0]["name"], got[0]["blind_test_fire"], got[0]["default_start"]), ("Dixie Fire", True, "2021-08-03"))
+        self.assertEqual((got[1]["name"], got[1]["default_start"], got[1]["size"]["modis_pixels_in_box"]), (None, "2012-08-10", 394))
+        self.assertEqual([s["start"] for s in got[1]["run_starts"]], ["2012-08-02", "2012-08-10"])
+        self.assertIsNone(got[1]["to_the_model"])
+        out = places_payload(lambda region: starts if region == "plumas_ca" else [])
+        self.assertEqual((out["default"]["featured_fire"], out["default"]["start"]), ("plumas_ca:2012-08", "2012-08-10"))
+        self.assertEqual(out["default"]["chosen_by"], "while the model's roles are not served")
 
 
 def _real_cache() -> bool:

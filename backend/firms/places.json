@@ -1,8 +1,8 @@
 {
-  "what": "Featured fires of each region: the name, dates, burned area and point the page in source gives (point_source when the point comes from another page). They choose what the entry offers; the rows and every figure of a calendar or a run come from NASA FIRMS. last_day is null where no end date is published.",
+  "what": "Named fires of each region: the name, dates, burned area and point the page in source gives (point_source, area_source or last_day_source when that fact comes from another page). They name the featured fires, which are chosen by rule from the real run starts, and give a calendar box around each fire; the rows and every figure of a calendar or a run come from NASA FIRMS. last_day is null where no end date is published.",
   "regions": {
     "plumas_ca": {
-      "featured_fires": [
+      "named_fires": [
         {
           "id": "dixie_2021",
           "name": "Dixie Fire",
@@ -76,7 +76,7 @@
       ]
     },
     "lytton_bc": {
-      "featured_fires": [
+      "named_fires": [
         {
           "id": "lytton_creek_2021",
           "name": "Lytton Creek fire (K71086)",
@@ -114,7 +114,7 @@
       ]
     },
     "evia_greece": {
-      "featured_fires": [
+      "named_fires": [
         {
           "id": "northern_evia_2021",
           "name": "Northern Evia fire (EMSR527)",
