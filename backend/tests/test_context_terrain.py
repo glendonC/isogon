@@ -1,7 +1,7 @@
-"""T16: context terrain around the hero packs (CONTRACT amendment 1b), stdlib unittest.
+"""Context terrain around the hero packs, stdlib unittest.
 
 Synthetic tests always run. Hero tests read the built context from data/cache/hires_regions and skip with a
-reason when it has not been built on this machine.
+reason when it is not in the cache.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ CURRENT_ESRI_CREDIT = "Esri, Vantor, Earthstar Geographics, and the GIS User Com
 # border, in metres, over the border nodes on land (a border through sea is 0 against 0). The context
 # posts are 5 times coarser (188 to 217 m apart against 38 to 43 m), so on ridges and in canyons the
 # context cannot follow the pack; the bounds hold for the steepest hero region (Lytton, Fraser canyon)
-# with margin. They were set before the build; the build measured land medians of 6 to 11 m and a worst
+# with margin: the built contexts measure land medians of 6 to 11 m and a worst
 # node of 112 m.
 BORDER_LAND_MEDIAN_MAX_M = 15.0
 BORDER_WORST_MAX_M = 160.0
@@ -39,8 +39,8 @@ BORDER_WORST_MAX_M = 160.0
 # builder's own kernel, by phase correlation, in context cells (0.1 cell is about 20 m).
 REG_SHIFT_MAX_CELLS = 0.1
 # Same mosaic check for the context ortho over the pack rectangle: Esri zoom 11, another mosaic, moves a
-# channel mean by up to 50 and correlates with the pack at 0.41 to 0.78. The luminance bound was 0.97
-# before the build and is 0.95 now: Plumas measured 0.968, because at one context texel the box averaged
+# channel mean by up to 50 and correlates with the pack at 0.41 to 0.78. The luminance bound is 0.95
+# and not higher: Plumas measures 0.968, because at one context texel the box averaged
 # pack is sharper than the cubic downsampled zoom 12 over its forest texture.
 COLOUR_MEAN_DIFF_MAX = 4.0
 COLOUR_LUM_CORR_MIN = 0.95
@@ -273,7 +273,7 @@ class NonHeroContextTests(unittest.TestCase):
             self.assertNotIn("context", tp.pack_descriptor(loaded[0], "r"))
             self.assertFalse(any(n.startswith("context_") for n in loaded[1]))
         if not seen:
-            self.skipTest("no standard pack built on this machine")
+            self.skipTest("no standard pack is built in the cache")
 
     def test_naip_variant_carries_no_context(self) -> None:
         loaded = tp.load_pack(PRESET_BY_ID["plumas_ca"], HIRES_REGION_CACHE_DIR, "usgs_naip")

@@ -1,7 +1,7 @@
 """Terrain pack v1 tests (stdlib unittest, NumPy and Pillow only).
 
 Synthetic tests always run. Hero region tests read the built pack from data/cache/hires_regions and
-skip with a reason when a pack has not been built on this machine.
+skip with a reason when a pack is not in the cache.
 """
 
 from __future__ import annotations
@@ -37,8 +37,8 @@ from backend.terrain.resample import (  # noqa: E402
 
 HERO_IDS = ("plumas_ca", "lytton_bc", "evia_greece")
 
-# Registration tolerance for the 1024 DEM downsampled onto the 512 node grid against the existing
-# dem_512 (built from Terrarium zoom 12 with a narrow 3x3 kernel). The new grid comes from zoom 13
+# Registration tolerance for the 1024 DEM downsampled onto the 512 node grid against the base terrain's
+# dem_512 (built from Terrarium zoom 12 with a narrow 3x3 kernel). The pack's grid comes from zoom 13
 # with an antialiasing kernel, so canyon floors and ridge crests legitimately differ by meters; a
 # half cell shift (about 40 m) would push the RMSE past this bound on these slopes and the
 # phase correlation shift past 0.1 cell.
@@ -225,7 +225,7 @@ class HeroPackTests(unittest.TestCase):
                 self.assertEqual(d["dem"], {**d["dem"], "size": 1024, "format": "f32le"})
                 o = d["ortho"]
                 self.assertEqual((o["size"], o["zoom"], o["source"]), (8192, 14, "esri_world_imagery"))
-                self.assertEqual(o["attribution"], "Esri, Maxar, Earthstar Geographics")
+                self.assertEqual(o["attribution"], "Esri, Vantor, Earthstar Geographics, and the GIS User Community")
                 self.assertTrue(4.0 < o["gsd_m"] < 9.6)
                 self.assertEqual(d["ortho_fallback"]["size"], 4096)
                 self.assertEqual(d["aux"]["size"], 2048)
@@ -306,6 +306,159 @@ class HeroPackTests(unittest.TestCase):
                 self.assertGreater(float(np.percentile(ao, 95)), 0.9, "ridges and flats should see open sky")
                 canopy = aux[..., 3]
                 self.assertTrue(0.0 <= float(canopy.min()) and float(canopy.max()) <= 1.0)
+
+
+STANDARD_IDS = ("novo_progresso_br", "blue_mountains_au")
+
+
+class StandardTierTests(unittest.TestCase):
+    def test_ortho_zoom_is_capped_for_wide_live_search_spans(self) -> None:
+        plumas = PRESET_BY_ID["plumas_ca"]
+        self.assertEqual(tp.select_ortho_zoom(plumas.bbox, tp.HERO_TIER), 14)
+        self.assertEqual(tp.select_ortho_zoom(PRESET_BY_ID["blue_mountains_au"].bbox, tp.STANDARD_TIER), 13)
+        wide = BoundingBox(west=-120.0, south=37.0, east=-117.8, north=38.8)
+        z = tp.select_ortho_zoom(wide, tp.STANDARD_TIER)
+        self.assertLessEqual(z, 12)
+        from backend.terrain.resample import source_step
+        self.assertLessEqual(source_step(wide, z, 1), 1.5 * tp.STANDARD_TIER.ortho_size)
+
+    def test_standard_pack_schema_and_sizes(self) -> None:
+        for rid in STANDARD_IDS:
+            with self.subTest(region=rid):
+                spec = PRESET_BY_ID[rid]
+                loaded = tp.load_pack(spec, HIRES_REGION_CACHE_DIR)
+                if loaded is None:
+                    self.skipTest(f"standard pack for {rid} is not built")
+                meta, files = loaded
+                d = tp.pack_descriptor(meta, f"{rid}_holdout0_cnone")
+                self.assertEqual(d["tier"], "standard")
+                self.assertEqual((d["ortho"]["size"], d["ortho"]["zoom"]), (4096, 13))
+                self.assertEqual(d["ortho_fallback"]["size"], 2048)
+                self.assertEqual((d["dem"]["size"], d["aux"]["size"]), (1024, 2048))
+                self.assertNotIn("ortho_detail", d)
+                with Image.open(files["ortho_4096.jpg"]) as img:
+                    self.assertEqual(img.size, (4096, 4096))
+                with Image.open(files["ortho_2048.jpg"]) as img:
+                    self.assertEqual(img.size, (2048, 2048))
+                self.assertEqual(files["dem_1024_f32.bin"].stat().st_size, 1024 * 1024 * 4)
+
+
+class DetailInsetTests(unittest.TestCase):
+    def test_window_follows_the_fire_field(self) -> None:
+        fire = np.zeros((256, 256), dtype=np.float32)
+        r, c = np.mgrid[0:256, 0:256]
+        fire += np.exp(-(((r - 60) / 12.0) ** 2 + ((c - 190) / 12.0) ** 2))  # north east blob
+        fire += 0.4 * np.exp(-(((r - 200) / 10.0) ** 2 + ((c - 40) / 10.0) ** 2))  # weaker south west blob
+        x0, y0, x1, y1 = tp.choose_detail_window(fire, 0.3, 0.3)
+        self.assertAlmostEqual(x1 - x0, 0.3, places=6)
+        self.assertAlmostEqual(y1 - y0, 0.3, places=6)
+        self.assertTrue(x0 <= 190 / 255 <= x1 and y0 <= 60 / 255 <= y1, (x0, y0, x1, y1))
+        self.assertTrue(0.0 <= x0 and x1 <= 1.0 and 0.0 <= y0 and y1 <= 1.0)
+
+    def test_image_rect_to_plane_uv(self) -> None:
+        # Image space (y down from the north edge) to plane UV (v up from the south edge).
+        self.assertEqual(tp.image_rect_to_uv((0.25, 0.10, 0.50, 0.40)), [0.25, 0.6, 0.5, 0.9])
+
+    def test_hero_detail_insets_register_with_the_main_ortho(self) -> None:
+        for rid in HERO_IDS:
+            with self.subTest(region=rid):
+                loaded = tp.load_pack(PRESET_BY_ID[rid], HIRES_REGION_CACHE_DIR)
+                if loaded is None or not loaded[0].get("ortho_detail"):
+                    self.skipTest(f"no detail inset built for {rid}")
+                meta, files = loaded
+                d = tp.pack_descriptor(meta, "rid")
+                for det, info in zip(d["ortho_detail"], meta["ortho_detail"]):
+                    self.assertEqual((det["size"], det["zoom"]), (8192, 16))
+                    self.assertTrue(1.0 < det["gsd_m"] < 2.5)
+                    u0, v0, u1, v1 = det["uv_rect"]
+                    self.assertTrue(0.0 <= u0 < u1 <= 1.0 and 0.0 <= v0 < v1 <= 1.0)
+                    for x in det["uv_rect"]:
+                        self.assertAlmostEqual(x * 8192, round(x * 8192), places=3, msg="rect snaps to main texels")
+                    # Ground footprint is square, so the rect's aspect in UV follows the bbox extent.
+                    w_km, h_km = d["extent_km"]
+                    self.assertAlmostEqual((u1 - u0) * w_km, (v1 - v0) * h_km, delta=0.02 * (u1 - u0) * w_km)
+                    # The inset is square on the ground; main texels are not, so its footprint in main
+                    # texels is n_w x n_h.
+                    n_w, n_h = round((u1 - u0) * 8192), round((v1 - v0) * 8192)
+                    with Image.open(files[info["name"]]) as img:
+                        self.assertEqual(img.size, (8192, 8192))
+                        small = np.asarray(img.convert("L").resize((n_w, n_h), Image.BOX), dtype=np.float64)
+                    with Image.open(files["ortho_8192.jpg"]) as img:
+                        x0, y0 = round(u0 * 8192), round((1.0 - v1) * 8192)
+                        crop = np.asarray(img.convert("L").crop((x0, y0, x0 + n_w, y0 + n_h)), dtype=np.float64)
+                    a = (crop - crop.mean()) / crop.std()
+                    b = (small - small.mean()) / small.std()
+                    self.assertGreater(float(np.mean(a * b)), 0.8, "inset content matches the main ortho window")
+                    sr, sc = _phase_shift(crop, small)
+                    self.assertLess(abs(sr), 0.5)
+                    self.assertLess(abs(sc), 0.5)
+
+
+class AttributionTests(unittest.TestCase):
+    def test_descriptor_carries_the_source_current_credit_even_for_old_metas(self) -> None:
+        meta = {
+            "version": 1, "tier": "hero", "extent_km": [1.0, 1.0], "elev_range_m": [0.0, 1.0],
+            "dem": {"name": "dem_1024_f32.bin", "size": 1024},
+            "ortho": {"name": "ortho_8192.jpg", "size": 8192, "zoom": 14, "gsd_m": 7.3,
+                      "source": "esri_world_imagery", "attribution": "Esri, Maxar, Earthstar Geographics"},
+            "ortho_fallback": {"name": "ortho_4096.jpg", "size": 4096},
+            "aux": {"name": "aux_2048.png", "size": 2048},
+            "sun": {"azimuth_deg": 180.0, "elevation_deg": 40.0},
+        }
+        d = tp.pack_descriptor(meta, "r")
+        self.assertEqual(d["ortho"]["attribution"], "Esri, Vantor, Earthstar Geographics, and the GIS User Community")
+
+    def test_pack_status_values_follow_the_contract(self) -> None:
+        self.assertEqual(set(tp.PACK_STATUS_VALUES), {"ready", "building", "failed", "absent"})
+
+
+class UsgsNaipVariantTests(unittest.TestCase):
+    def test_source_and_credit(self) -> None:
+        from backend.terrain.tile_store import SOURCES_BY_KEY
+
+        src = SOURCES_BY_KEY["usgs_naip"]
+        self.assertIn("basemap.nationalmap.gov", src.url_template)
+        self.assertEqual(src.attribution, "USDA, USGS The National Map: Orthoimagery. Data refreshed June, 2024.v1.2")
+
+    def test_coverage_is_conterminous_united_states(self) -> None:
+        self.assertTrue(tp.imagery_covers("usgs_naip", PRESET_BY_ID["plumas_ca"].bbox))
+        for rid in ("lytton_bc", "evia_greece", "blue_mountains_au", "novo_progresso_br"):
+            self.assertFalse(tp.imagery_covers("usgs_naip", PRESET_BY_ID[rid].bbox), rid)
+        self.assertTrue(tp.imagery_covers("esri_world_imagery", PRESET_BY_ID["evia_greece"].bbox))
+
+    def test_variant_file_names_never_collide_with_the_default_pack(self) -> None:
+        default = set(tp.pack_file_names(tp.HERO_TIER))
+        naip = set(tp.pack_file_names(tp.HERO_TIER, "usgs_naip"))
+        self.assertFalse(default & naip)
+        self.assertTrue(all(n.startswith("usgs_naip_") for n in naip))
+
+    def test_plumas_naip_pack_registers_with_the_esri_pack(self) -> None:
+        spec = PRESET_BY_ID["plumas_ca"]
+        naip = tp.load_pack(spec, HIRES_REGION_CACHE_DIR, "usgs_naip")
+        esri = tp.load_pack(spec, HIRES_REGION_CACHE_DIR)
+        if naip is None or esri is None:
+            self.skipTest("plumas_ca usgs_naip pack not built")
+        meta, files = naip
+        d = tp.pack_descriptor(meta, "plumas_ca_holdout0_cnone")
+        self.assertEqual(d["ortho"]["source"], "usgs_naip")
+        self.assertEqual(d["ortho"]["attribution"], "USDA, USGS The National Map: Orthoimagery. Data refreshed June, 2024.v1.2")
+        self.assertEqual((d["tier"], d["ortho"]["size"], d["ortho"]["zoom"]), ("hero", 8192, 14))
+        self.assertTrue(d["ortho"]["url"].endswith("/terrain/usgs_naip_ortho_8192.jpg"))
+        for key in ("dem", "ortho_fallback", "aux"):
+            self.assertIn("/terrain/usgs_naip_", d[key]["url"])
+        for det in d.get("ortho_detail", []):
+            self.assertIn("/terrain/usgs_naip_", det["url"])
+        # Same ground: luminance structure of the two orthos lines up to well under a texel.
+        with Image.open(files[meta["ortho"]["name"]]) as img:
+            a = np.asarray(img.convert("L").resize((1024, 1024), Image.BOX), dtype=np.float64)
+        with Image.open(esri[1][esri[0]["ortho"]["name"]]) as img:
+            b = np.asarray(img.convert("L").resize((1024, 1024), Image.BOX), dtype=np.float64)
+        sr, sc = _phase_shift(b, a)
+        self.assertLess(abs(sr), 0.25)
+        self.assertLess(abs(sc), 0.25)
+        dem_a = np.fromfile(files[meta["dem"]["name"]], dtype="<f4")
+        dem_b = np.fromfile(esri[1][esri[0]["dem"]["name"]], dtype="<f4")
+        np.testing.assert_array_equal(dem_a, dem_b)
 
 
 class PackRoutingTests(unittest.TestCase):

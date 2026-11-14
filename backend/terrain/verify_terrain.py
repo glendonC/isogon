@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TERRAIN_OUT_DIR = REPO_ROOT / "website" / "public" / "generated" / "terrain"
 BACKEND_TERRAIN_DIR = REPO_ROOT / "backend" / "terrain"
 
-EM_DASH = "\u2014"
+EM_DASH = chr(0x2014)
 
 
 def sha256_file(path: Path) -> str:

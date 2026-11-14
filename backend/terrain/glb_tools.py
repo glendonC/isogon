@@ -2,7 +2,7 @@
 
 `strip_external_images` removes images stored as external file references (and the textures and material
 texture slots that use them), keeping the binary chunk byte for byte. Materials keep their base colour
-factors, so a model whose external textures are missing renders exactly as before, minus the loader's
+factors, so a model whose external textures are missing renders the same, without the loader's
 failed requests.
 
 Usage:

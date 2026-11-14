@@ -52,14 +52,30 @@ ESRI_WORLD_IMAGERY = TileSource(
     key="esri_world_imagery",
     url_template="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     ext="jpg",
-    attribution="Esri, Maxar, Earthstar Geographics",
+    # Credit exactly as Esri publishes it (item page and MapServer Copyright Text).
+    attribution="Esri, Vantor, Earthstar Geographics, and the GIS User Community",
 )
 EOX_S2_CLOUDLESS_2020 = TileSource(
     key="eox_s2cloudless_2020",
     url_template="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg",
     ext="jpg",
-    attribution="Sentinel-2 cloudless 2020 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2020)",
+    # Credit as EOX's license page asks for it (https://cloudless.eox.at/documentation/license).
+    attribution="EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2020)",
 )
+
+USGS_NAIP = TileSource(
+    key="usgs_naip",
+    # USGS The National Map, USGS Imagery Only: NAIP orthoimagery for the conterminous United States, public
+    # domain, standard 256 px Web Mercator tiles cached to level 16.
+    url_template="https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
+    ext="jpg",
+    # The service's Copyright Text, verbatim.
+    attribution="USDA, USGS The National Map: Orthoimagery. Data refreshed June, 2024.v1.2",
+)
+
+SOURCES_BY_KEY: dict[str, TileSource] = {
+    s.key: s for s in (TERRARIUM, ESRI_WORLD_IMAGERY, EOX_S2_CLOUDLESS_2020, USGS_NAIP)
+}
 
 
 class _RateLimiter:
@@ -94,7 +110,7 @@ class FetchStats:
 
 
 class TileStore:
-    """Disk backed tile cache with bounded concurrency and a polite request rate."""
+    """Disk backed tile cache with bounded concurrency and a polite request rate per tile host."""
 
     def __init__(
         self,
@@ -112,9 +128,18 @@ class TileStore:
         self.max_retries = max(1, int(max_retries))
         self.legacy_dir = legacy_dir
         self.allow_network = allow_network
-        self._limiter = _RateLimiter(rate_per_s)
+        self.rate_per_s = rate_per_s
+        self._limiters: dict[str, _RateLimiter] = {}
+        self._limiters_lock = threading.Lock()
         self._stats_lock = threading.Lock()
         self.stats = FetchStats()
+
+    def _limiter(self, source: TileSource) -> _RateLimiter:
+        with self._limiters_lock:
+            lim = self._limiters.get(source.key)
+            if lim is None:
+                lim = self._limiters[source.key] = _RateLimiter(self.rate_per_s)
+            return lim
 
     def _bump(self, field: str) -> None:
         with self._stats_lock:
@@ -144,15 +169,15 @@ class TileStore:
             self._bump("failed")
             raise RuntimeError(f"tile {source.key}/{z}/{x}/{y} not cached and network disabled")
 
-        payload = self._download(url)
+        payload = self._download(url, self._limiter(source))
         self._write(path, payload)
         self._bump("downloaded")
         return payload
 
-    def _download(self, url: str) -> bytes:
+    def _download(self, url: str, limiter: _RateLimiter) -> bytes:
         last_err: Exception | None = None
         for attempt in range(self.max_retries):
-            self._limiter.wait()
+            limiter.wait()
             try:
                 req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
                 with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
