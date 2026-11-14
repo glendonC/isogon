@@ -1,0 +1,384 @@
+/* The design system. Every new screen is built from these tokens and shapes and nothing else: no size, weight
+   or colour is chosen per element. Five text sizes, three weights; one sans for words, one monospace for values;
+   a 4 px space scale; colour roles whose text inks meet 4.5:1 and whose edges meet 3:1 on the night ground and on
+   a plate over the brightest terrain; five shapes (a label on the world, a readout, a card on demand, a control,
+   a table) and one set of states. Corners are square. A selected thing is marked with corner brackets. */
+
+:root {
+  /* Type. Geist for words, IBM Plex Mono for values (numbers with their units, times, keys). */
+  --sys-font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --sys-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* A count or a figure the beat turns on ("2/4", "5 of 7"), always Geist light, tabular figures. */
+  --sys-size-display: 40px;
+  --sys-lh-display: 44px;
+  /* The place, a part's name where it opens, a card's or a sheet's title. */
+  --sys-size-title: 22px;
+  --sys-lh-title: 28px;
+  /* A sentence. */
+  --sys-size-body: 15px;
+  --sys-lh-body: 22px;
+  /* Labels on the world, controls, rows of a table, values in the monospace. */
+  --sys-size-label: 13px;
+  --sys-lh-label: 18px;
+  /* Units, keys, a table's head, credits. Never a sentence. */
+  --sys-size-fine: 12px;
+  --sys-lh-fine: 16px;
+
+  --sys-weight-light: 300;
+  --sys-weight: 400;
+  --sys-weight-strong: 500;
+
+  /* Space, in 4 px steps. */
+  --sys-s1: 4px;
+  --sys-s2: 8px;
+  --sys-s3: 12px;
+  --sys-s4: 16px;
+  --sys-s5: 24px;
+  --sys-s6: 32px;
+  --sys-s7: 48px;
+  --sys-s8: 64px;
+  --sys-gutter: clamp(16px, 1.7vw, 32px);
+
+  /* Grounds. A plate is what text on the world sits on: square, translucent night, a light blur. */
+  --sys-night: #080b11;
+  --sys-plate: rgba(8, 11, 17, 0.82);
+  --sys-plate-blur: blur(12px);
+
+  /* Text inks: 4.5:1 or more on the night ground and on a plate over snow. --sys-ink-off marks a disabled
+     control only and never carries information. */
+  --sys-ink: #f3f4f6;
+  --sys-ink-2: #c3c8d1;
+  --sys-ink-3: #9aa1ad;
+  --sys-ink-off: #6b7280;
+
+  /* Lines. --sys-edge bounds a control or a mark that carries meaning (3:1 or more); --sys-rule only separates. */
+  --sys-edge: #7c8392;
+  --sys-rule: #2b303a;
+
+  /* Focus: the keyboard's place, never a selection. */
+  --sys-focus: #d6f1ff;
+
+  /* Data. The same colours on the page as on the stage. */
+  --sys-detection: #f08a45; /* a satellite detection, and the sharp instrument (VIIRS) */
+  --sys-modis: #b4c3d6; /* the coarse instrument (MODIS) */
+  --sys-estimate: #f3f4f6; /* the model's estimate: white marks inside a dotted line on the terrain */
+
+  /* What kind of surface this is. Only "Demo data" and "Simulated" take a colour; real data stays ink. */
+  --sys-caution: #e9c46a;
+  /* A failed check: plain and warm, not alarm red. */
+  --sys-fail: #ffb08a;
+
+  /* The selected mark. */
+  --sys-bracket: 8px;
+  --sys-bracket-w: 1.5px;
+  --sys-bracket-gap: 4px;
+
+  /* Motion. */
+  --sys-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --sys-fast: 160ms;
+  --sys-slow: 420ms;
+}
+
+/* Text roles ---------------------------------------------------------------- */
+
+.sys-display {
+  font: var(--sys-weight-light) var(--sys-size-display) / var(--sys-lh-display) var(--sys-font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--sys-ink);
+}
+
+.sys-title {
+  font: var(--sys-weight) var(--sys-size-title) / var(--sys-lh-title) var(--sys-font);
+  letter-spacing: -0.005em;
+  color: var(--sys-ink);
+}
+
+.sys-body {
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.sys-label {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.sys-fine {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.sys-value {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-ink);
+}
+
+.sys-unit {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  color: var(--sys-ink-3);
+}
+
+.sys-strong {
+  font-weight: var(--sys-weight-strong);
+  color: var(--sys-ink);
+}
+
+/* A plate: what text on the world sits on --------------------------------------- */
+
+.sys-plate {
+  background: var(--sys-plate);
+  -webkit-backdrop-filter: var(--sys-plate-blur);
+  backdrop-filter: var(--sys-plate-blur);
+  border-radius: 0;
+}
+
+/* 1. A label on the world. An anchor mark on the thing, a leader up to the plate, the plate with one or two lines.
+   Placed by the page at a screen point the stage reports (`--x`, `--y`); the leader length is `--lead`. */
+
+.sys-pin {
+  position: absolute;
+  left: var(--x, 0);
+  top: var(--y, 0);
+  pointer-events: none;
+}
+
+.sys-pin__anchor {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  background: var(--sys-ink);
+  border-radius: 0;
+}
+
+.sys-pin__leader {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: var(--lead, 40px);
+  background: var(--sys-ink-2);
+  box-shadow: 0 0 0 1px rgba(8, 11, 17, 0.35);
+}
+
+.sys-pin__plate {
+  position: absolute;
+  left: 0;
+  bottom: var(--lead, 40px);
+  display: grid;
+  gap: 2px;
+  padding: var(--sys-s2) var(--sys-s3);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+/* 2. A readout: a figure, its label, an optional delta set small above it, an optional bar. Over the world it sits
+   on a plate like every other text. */
+
+.sys-readout.sys-plate {
+  padding: var(--sys-s3) var(--sys-s4);
+}
+
+.sys-readout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--sys-s3);
+  align-items: end;
+}
+
+.sys-readout__delta {
+  grid-column: 1 / -1;
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  color: var(--sys-ink-2);
+}
+
+.sys-readout__label {
+  padding-bottom: 5px;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.sys-readout__bar {
+  grid-column: 1 / -1;
+  height: 2px;
+  margin-top: var(--sys-s2);
+  background: var(--sys-rule);
+}
+
+.sys-readout__bar > span {
+  display: block;
+  height: 100%;
+  width: var(--fill, 0%);
+  background: var(--sys-ink);
+}
+
+/* 3. A card that opens on demand beside its anchor: a title, rows of label and value, one action. */
+
+.sys-card {
+  display: grid;
+  gap: var(--sys-s3);
+  width: max-content;
+  max-width: 320px;
+  padding: var(--sys-s4);
+}
+
+.sys-card__rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--sys-s5);
+  row-gap: var(--sys-s1);
+}
+
+/* 4. A control: a word, its key, and nothing round. */
+
+.sys-ctl {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sys-s2);
+  padding: var(--sys-s2) var(--sys-s3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+  cursor: pointer;
+  transition: color var(--sys-fast) var(--sys-ease);
+}
+
+.sys-ctl:hover {
+  color: var(--sys-ink);
+}
+
+.sys-key {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--sys-edge);
+  border-radius: 0;
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  text-align: center;
+  color: var(--sys-ink-2);
+}
+
+/* 5. A table: words in the sans, values in the monospace aligned right, rules only between rows. */
+
+.sys-table {
+  border-collapse: collapse;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.sys-table th,
+.sys-table td {
+  padding: var(--sys-s2) var(--sys-s3);
+  border-bottom: 1px solid var(--sys-rule);
+  text-align: left;
+  font-weight: var(--sys-weight);
+}
+
+.sys-table thead th {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.sys-table td.sys-num {
+  font-family: var(--sys-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--sys-ink);
+}
+
+/* States ------------------------------------------------------------------------ */
+
+/* Selected: four corner brackets around the thing, in the brightest ink. The same mark on a tile, a month, a pass,
+   a player's row and the active part in the bar. */
+.sys-sel {
+  position: relative;
+}
+
+.sys-sel[data-selected='true']::after {
+  --c: var(--sys-ink);
+  --b: var(--sys-bracket);
+  --w: var(--sys-bracket-w);
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sys-bracket-gap));
+  pointer-events: none;
+  background:
+    linear-gradient(var(--c), var(--c)) top left / var(--b) var(--w) no-repeat,
+    linear-gradient(var(--c), var(--c)) top left / var(--w) var(--b) no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / var(--b) var(--w) no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / var(--w) var(--b) no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / var(--b) var(--w) no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / var(--w) var(--b) no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / var(--b) var(--w) no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / var(--w) var(--b) no-repeat;
+}
+
+.sys-sel[data-selected='true'] {
+  color: var(--sys-ink);
+}
+
+/* A row of a short table that can be selected (a player, a score) is a grid row, so it takes the brackets. A row of
+   a long sheet table takes the hairline box instead. */
+.sys-row {
+  display: grid;
+  grid-template-columns: var(--cols, minmax(0, 1fr) auto);
+  column-gap: var(--sys-s5);
+  align-items: baseline;
+  padding: var(--sys-s2) var(--sys-s3);
+  border-bottom: 1px solid var(--sys-rule);
+}
+
+.sys-table tr[data-selected='true'] {
+  outline: 1px solid var(--sys-ink);
+  outline-offset: -1px;
+}
+
+/* The fallback for an item too small for brackets: a square hairline box in the edge ink. */
+.sys-sel[data-selected='true'][data-small='true']::after {
+  background: none;
+  border: 1px solid var(--sys-ink);
+}
+
+/* Focus: the keyboard's place, apart from the selection. */
+.sys-ctl:focus-visible,
+.sys-sel:focus-visible {
+  outline: 1px solid var(--sys-focus);
+  outline-offset: 3px;
+}
+
+/* Disabled: dimmed and inert; the reason is said beside it, never only by the colour. */
+.sys-ctl:disabled,
+.sys-ctl[aria-disabled='true'] {
+  color: var(--sys-ink-off);
+  cursor: default;
+}
+
+/* Hidden data: the thing is there and its content is withheld. A dashed edge and the word, never a dim copy. */
+.sys-hidden {
+  border: 1px dashed var(--sys-edge);
+  color: var(--sys-ink-3);
+}
+
+/* What kind of surface this is, said once beside its title. */
+.sys-kind {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  color: var(--sys-ink-3);
+}
+
+.sys-kind[data-kind='demo'],
+.sys-kind[data-kind='simulated'] {
+  color: var(--sys-caution);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sys-ctl {
+    transition: none;
+  }
+}
