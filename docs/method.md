@@ -191,7 +191,11 @@ The record hides nothing else: `test_fires.also_scored` lists every other time r
 
 `backend/model/terra_morning.py` hides MODIS instead and estimates what Terra flags on its morning pass from VIIRS alone. It is experimental and not in use (`backend/model/fitted_values/terra_morning.json`, `adopted: false`).
 
-On 6 validation episodes, 40 Terra overpasses, it is ahead of both baselines on 4 of 7 scores, tied on 2 and behind on 1, judged with an interval: the one-cell CSI, 0.4458 against 0.4929. Its 90 percent interval held for 31 of 40 overpasses (0.775). These figures were measured under protocol version 1 and not again, so they are not clean, and the direction stays experimental.
+It is measured under the protocol in use, with the instruments exchanged. Episodes are runs of 12 VIIRS overpasses chosen from VIIRS rows alone. The looks scored are Terra's day passes in the pass list whose swath held the whole box, whether or not they flagged anything. Its two scales, its interval and the second baseline's ratios are fitted on 22 training episodes of 2018, 2019, 2020, 2022 and 2023; no window of 2021 is used.
+
+On 9 validation episodes of 2024 and 2025, 55 Terra day passes of which 19 flagged nothing in the box, it is ahead of both baselines on 2 of 7 scores, tied on 4 and behind on 1, judged with an interval. Ahead: strict CSI, 0.2878 against 0.2559, and the Brier score. Behind: the one-cell CSI, 0.4594 against 0.5389. An estimate with a score behind is not adopted, so the direction stays out of use. Its stated 90 percent interval for total power is one-sided, from zero to 2.06 times the estimate, because 41 of 132 training looks flagged nothing; it held for 49 of 55 validation looks (0.891).
+
+An earlier measurement under protocol version 1 said 4 of 7 ahead, 2 tied and 1 behind on 40 overpasses. It was not blind in two respects: each prediction was made at the hidden overpass's own time and pixel size, and the episodes were chosen counting both instruments. It is kept in the file as `measured_before`. The blind measurement is the weaker of the two, and it is the one that counts.
 
 ## The next-look environment
 

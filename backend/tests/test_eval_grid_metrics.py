@@ -151,5 +151,25 @@ class MetricTests(unittest.TestCase):
             self.assertGreater(len(M.DEFINITIONS[key]), 40)
 
 
+    def test_a_stated_interval_is_one_sided_when_its_lower_end_is_zero(self) -> None:
+        """Two-sided, the 5th to the 95th percentile hold 90 percent. With a lower end of zero nothing is cut off
+        below, so the 95th percentile would hold 95 percent: the upper end is then the 90th percentile."""
+        r = np.linspace(0.5, 1.5, 201)
+        two = M.stated_interval(r, 0.90)
+        self.assertEqual((two["one_sided"], round(two["lo"], 6), round(two["hi"], 6)), (False, 0.55, 1.45))
+        self.assertAlmostEqual(float(np.mean((r >= two["lo"]) & (r <= two["hi"]))), 0.90, delta=0.01)
+        z = np.concatenate([np.zeros(20), np.linspace(0.5, 1.5, 180)])          # one look in ten flagged nothing
+        one = M.stated_interval(z, 0.90)
+        self.assertTrue(one["one_sided"])
+        self.assertEqual(one["lo"], 0.0)
+        self.assertAlmostEqual(one["hi"], float(np.percentile(z, 90)), places=12)
+        self.assertAlmostEqual(float(np.mean(z <= one["hi"])), 0.90, delta=0.01)
+        self.assertGreater(float(np.mean(z <= float(np.percentile(z, 95)))), 0.94)   # what the two-sided rule would hold
+        self.assertEqual((one["looks"], one["looks_that_flagged_nothing"]), (200, 20))
+        self.assertEqual([round(v, 4) for v in one["given_a_detection"]], [round(float(np.percentile(z[z > 0], q)), 4) for q in (5, 95)])
+        self.assertIsNone(M.stated_interval(np.array([]), 0.90))
+        self.assertIn("one-sided", M.STATED_INTERVAL_RULE)
+
+
 if __name__ == "__main__":
     unittest.main()

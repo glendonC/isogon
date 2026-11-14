@@ -52,6 +52,11 @@ def tiles(context_box: tuple[float, float, float, float], n: int = 5) -> list[tu
     return [((i, j), (w + i * dx, s + j * dy, w + (i + 1) * dx, s + (j + 1) * dy)) for j in range(n) for i in range(n)]
 
 
+def _visible_pixels(win: Window, hidden: str) -> int:
+    """Pixels of the visible instrument in the box over a window."""
+    return win.modis_pixels_in_box if hidden == "VIIRS" else win.viirs_pixels_in_box
+
+
 def find_episodes(
     years: tuple[int, ...],
     read_firms: Callable[..., list[dict[str, str]]],
@@ -62,8 +67,18 @@ def find_episodes(
     max_per_region_year: int = 3,
     max_span_h: float = 120.0,
     overpasses: int = EPISODE_OVERPASSES,
+    hidden: str = "VIIRS",
+    min_visible_pixels: int | None = None,
 ) -> list[Episode]:
-    """Episodes in time order per region, at most `max_per_region_year` (the busiest tiles) for each region and year."""
+    """Episodes in time order per region, at most `max_per_region_year` (the busiest tiles) for each region and year.
+
+    `hidden` is the instrument a blind test of the episodes will hide. Its rows are dropped before a window is
+    chosen, so with `hidden="MODIS"` the episodes are runs of VIIRS overpasses chosen from VIIRS rows alone.
+    `min_visible_pixels` is the least number of pixels of the visible instrument a run must hold; it is
+    `min_modis_pixels` when not given."""
+    if hidden not in ("VIIRS", "MODIS"):
+        raise ValueError("hidden is VIIRS or MODIS")
+    need = min_modis_pixels if min_visible_pixels is None else int(min_visible_pixels)
     out: list[Episode] = []
     for region in regions:
         ctx = region_box(region)
@@ -79,18 +94,19 @@ def find_episodes(
             t1 = float(calendar.timegm((year + 1, 1, 1, 0, 0, 0, 0, 0, 0)))
             found: list[Episode] = []
             for tile, box in tiles(ctx):
-                if int((det.in_box(box) & det.is_modis).sum()) < min_modis_pixels:
+                visible = det.is_modis if hidden == "VIIRS" else det.is_viirs
+                if int((det.in_box(box) & visible).sum()) < need:
                     continue
                 try:
-                    win = pick_window(det, box, t0, t1, n=overpasses, hidden="VIIRS")
+                    win = pick_window(det, box, t0, t1, n=overpasses, hidden=hidden)
                 except ValueError:
                     continue
-                if win.modis_pixels_in_box < min_modis_pixels:
+                if _visible_pixels(win, hidden) < need:
                     continue
                 if (win.end_s - win.start_s) / 3600.0 > max_span_h:
                     continue   # overpasses spread over weeks are scattered hot spots, not one fire episode
                 keep = (det.time_s >= win.start_s - PAD_S) & (det.time_s < win.end_s + PAD_S)
                 found.append(Episode(region, year, tile, box, win, det.select(keep)))
-            found.sort(key=lambda ep: -ep.window.modis_pixels_in_box)
+            found.sort(key=lambda ep: -_visible_pixels(ep.window, hidden))
             out.extend(found[:max_per_region_year])
     return out

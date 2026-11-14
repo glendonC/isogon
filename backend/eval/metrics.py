@@ -165,6 +165,39 @@ def interval_coverage(lo: list[float | None], hi: list[float | None], truth: lis
     return {"stated_level": float(level), "n": n, "covered": covered, "coverage": cov, "standard_error": round(se, 4)}
 
 
+STATED_INTERVAL_RULE: str = (
+    "the interval a prediction states is the prediction times two multiples, taken from the ratios of hidden over "
+    "predicted on the training looks, every look with a positive prediction counted and a look that flagged nothing "
+    "counted with a ratio of zero. Two-sided, the multiples are the 5th and the 95th percentile and hold 90 percent "
+    "between them. When the 5th percentile is zero, which happens as soon as more than one training look in twenty "
+    "flagged nothing, nothing is cut off below, and the 95th percentile would hold 95 percent: the interval is then "
+    "one-sided, from zero to the 90th percentile. It starts at zero because cloud is not known, and an interval that "
+    "could not hold an empty pass would claim more than the record supports."
+)
+
+
+def stated_interval(ratios: Any, level: float = 0.90) -> dict[str, Any] | None:
+    """The multiples of a prediction that hold `level` of the ratios given (`STATED_INTERVAL_RULE`); None when no
+    ratio is given. `given_a_detection` is the 5th and 95th percentile of the looks that flagged something, for a
+    reader who wants the spread of the looks that were not empty."""
+    r = np.asarray(ratios, dtype=np.float64)
+    if r.size == 0:
+        return None
+    lo = float(np.percentile(r, 50.0 * (1.0 - level)))
+    one_sided = lo <= 0.0
+    hi = float(np.percentile(r, 100.0 * level if one_sided else 50.0 * (1.0 + level)))
+    seen = r[r > 0]
+    return {
+        "lo": 0.0 if one_sided else lo,
+        "hi": hi,
+        "one_sided": one_sided,
+        "level": float(level),
+        "looks": int(r.size),
+        "looks_that_flagged_nothing": int((r == 0).sum()),
+        "given_a_detection": [float(np.percentile(seen, 5)), float(np.percentile(seen, 95))] if seen.size else None,
+    }
+
+
 def summarise_counts(
     pred: list[float | None], truth: list[float], lo: list[float | None], hi: list[float | None], level: float | None
 ) -> dict[str, Any]:
