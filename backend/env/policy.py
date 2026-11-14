@@ -110,6 +110,13 @@ class LinearPolicyAgent:
     def choose(self, obs: Observation, env: NextLookEnv | None = None) -> int:
         return int(np.argmax(self.scores(obs)))
 
+    def explain(self, obs: Observation) -> dict[str, Any]:
+        """What made each tile's score: per tile, each feature's value times its weight. A tile's parts add up to
+        its score."""
+        parts = tile_features(obs) * self.weights
+        return {"names": list(FEATURE_NAMES), "weights": [round(float(w), 6) for w in self.weights],
+                "per_tile": [[round(float(v), 6) for v in row] for row in parts]}
+
 
 def fit_ridge(features: NDArray[np.float64], target: NDArray[np.float64], strength: float) -> NDArray[np.float64]:
     """Weights that minimise squared error plus `strength` times their squared size."""

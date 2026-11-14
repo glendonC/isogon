@@ -472,8 +472,6 @@ class NextLookEnv:
         seen_modis = self._modis.select(self._modis.time_s <= slot.time_s)
         r, c = self.grid.row_col(seen_modis.lon, seen_modis.lat)
         modis_tile = np.where(r >= 0, self.tile_of_cell[np.clip(r, 0, self.grid.ny - 1), np.clip(c, 0, self.grid.nx - 1)], -1)
-        rows = [self._revealed_rows(kk, [t]) for kk, t in self._revealed]
-        shown = self._viirs.select(np.concatenate(rows)) if rows else self._viirs.select(np.zeros(len(self._viirs), dtype=bool))
         return Observation(
             decision=self._k,
             time_s=slot.time_s,
@@ -488,7 +486,7 @@ class NextLookEnv:
             tile_covered=np.ones(self.n_tiles, dtype=bool),
             modis=_rows(seen_modis),
             modis_tile=np.asarray(modis_tile, dtype=np.int64).reshape(-1),
-            viirs_revealed=_rows(shown),
+            viirs_revealed=self.revealed_rows(),
             revealed_tiles=tuple(self._revealed),
             p_burning=est.a,
             p_detect=np.clip(expects["p_detect"], 0.0, 1.0),
@@ -496,6 +494,14 @@ class NextLookEnv:
             sigma_mw=_sigma_mw(est.a, est.F, est.rel_sd_log),
             terrain_m=self.terrain_m,
         )
+
+    def revealed_rows(self) -> NDArray[np.float64]:
+        """The hidden detections the looks taken so far have handed over, (m, 7), look by look in the order the
+        looks were taken: what an observation shows as `viirs_revealed`. It can be asked for after the last look
+        too, when there is no next observation to carry it."""
+        rows = [self._revealed_rows(kk, [t]) for kk, t in self._revealed]
+        shown = self._viirs.select(np.concatenate(rows)) if rows else self._viirs.select(np.zeros(len(self._viirs), dtype=bool))
+        return _rows(shown)
 
     def _apply(self, action: int) -> tuple[list[tuple[int, int]], bool]:
         if not isinstance(action, (int, np.integer)) or not (NO_LOOK <= int(action) < self.n_tiles):
