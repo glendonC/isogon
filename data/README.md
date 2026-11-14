@@ -19,6 +19,7 @@ Nothing under `data/cache/` is tracked. A fresh clone has no cache and still run
 | `cache/cmr/passes/<region>/<platform>_<year>.json.gz` | `backend/firms/cmr_passes.py` | The passes of a year, compact and deduplicated. This is what `cmr_passes` reads. |
 | `cache/tiles/<source>/<z>/<x>/<y>.<ext>` | `backend/terrain/tile_store.py` | Elevation and imagery tiles: `terrarium`, `esri_world_imagery`, `usgs_naip`, `eox_s2cloudless_2020` |
 | `cache/hires_regions/` | `backend/terrain/live_region.py`, `backend/terrain/terrain_pack.py` | Per region: the 256 and 512 elevation grids, a 2048 pixel image, and the terrain pack with its context terrain |
+| `cache/next_look_reference/<key>.json` | `backend/server_next_look.py` | The reference players' results on one next-look episode, tiles and budget, under a key of everything they follow from. Deleting the folder only means they are played again. |
 
 Every downloaded file and every extract has a manifest beside it, `<file>.manifest.json`, with the source URL, the query, the retrieval time, the byte count, the SHA-256, the row count, the columns and the lineage. A FIRMS key never appears in one: stored URLs carry `<MAP_KEY>` in its place.
 

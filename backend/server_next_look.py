@@ -14,6 +14,14 @@ at or after a UTC date, the window rule of a real run (`backend.model.real_blind
 Rounds live in server memory: at most `MAX_ROUNDS`, the least recently used dropped first, and none kept after
 `ROUND_IDLE_S` without a request.
 
+The reference players of an episode are computed once and kept, in memory and as one JSON file per key in
+`data/cache/next_look_reference/`. The key is a sha256 over everything their results follow from: the episode's
+rows, box and window, the terrain the environment is given, the tiles, the budget, the number of random seeds, the
+region's CMR pass files, and the content of every file of `backend/env`, `backend/eval` and `backend/model` (the
+environment, its reward and schedule, the reconstruction and its fitted values, the learned policy), of
+`backend/firms/cmr_passes.py` and of this file. A change to any of them gives a new key, so nothing is served from
+before it. Two rounds of one episode that start at the same time share one computation.
+
 Hidden rows. No response holds a hidden row, or a count taken from hidden rows, before the look that reveals it.
 Three kinds of figure are computed against the hidden detections because the environment is built that way:
 the starting score of the reconstruction (`score_start`), the score after each step (`info.score`,
@@ -26,9 +34,14 @@ the round did not reveal deleted, and requires every other field of every respon
 from __future__ import annotations
 
 import base64
+from collections import OrderedDict
 import concurrent.futures as cf
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
+import hashlib
+import json
 import math
+import os
+from pathlib import Path
 import re
 import secrets
 import threading
@@ -36,6 +49,20 @@ import time
 from typing import Any, Callable
 
 import numpy as np
+
+REPO_ROOT: Path = Path(__file__).resolve().parents[1]
+REFERENCE_CACHE_DIR: Path = REPO_ROOT / "data" / "cache" / "next_look_reference"
+REFERENCE_CACHE_VERSION: int = 1        # raised when the shape of a cached result changes
+REFERENCE_MEMORY: int = 64              # results kept in memory, the least recently used dropped first
+# Every file whose content can change the reference players' results (see the module docstring).
+REFERENCE_INPUTS: tuple[Path, ...] = (
+    REPO_ROOT / "backend" / "env",
+    REPO_ROOT / "backend" / "eval",
+    REPO_ROOT / "backend" / "model",
+    REPO_ROOT / "backend" / "firms" / "cmr_passes.py",
+    Path(__file__).resolve(),
+)
+_FROM_SOURCE = object()                 # default of `reference_cache_dir`: the disk cache for real rows only
 
 MAX_ROUNDS: int = 16
 ROUND_IDLE_S: float = 6 * 3600.0
@@ -167,6 +194,84 @@ def observation_json(obs: Any, env: Any) -> dict[str, Any]:
     }
 
 
+# ---- what the reference players' results follow from ----------------------------------------------------------------
+
+_inputs_memo: dict[tuple[str, ...], tuple[tuple[Any, ...], str]] = {}
+_inputs_lock = threading.Lock()
+
+
+def _input_files(roots: tuple[Path, ...]) -> list[tuple[str, Path]]:
+    """(stable name, path) of every file under `roots`, compiled files left out; the name does not hold the checkout's
+    own folder, so two checkouts of one commit give one digest."""
+    out: list[tuple[str, Path]] = []
+    for root in roots:
+        root = Path(root)
+        if root.is_file():
+            out.append((root.name, root))
+        elif root.is_dir():
+            for p in sorted(root.rglob("*")):
+                if p.is_file() and "__pycache__" not in p.parts and p.suffix not in (".pyc", ".pyo"):
+                    out.append((f"{root.name}/{p.relative_to(root).as_posix()}", p))
+    return out
+
+
+def inputs_digest(roots: tuple[Path, ...] = REFERENCE_INPUTS) -> str:
+    """sha256 over the name and content of every file under `roots`. Files are read again only when the name, size
+    or modification time of one of them changes."""
+    files = _input_files(tuple(roots))
+    sig: list[Any] = []
+    for name, p in files:
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        sig.append((name, st.st_size, st.st_mtime_ns))
+    memo_key = tuple(str(r) for r in roots)
+    with _inputs_lock:
+        hit = _inputs_memo.get(memo_key)
+        if hit is not None and hit[0] == tuple(sig):
+            return hit[1]
+    h = hashlib.sha256()
+    for name, p in files:
+        try:
+            body = p.read_bytes()
+        except OSError:
+            continue
+        h.update(name.encode("utf-8") + b"\0" + hashlib.sha256(body).digest())
+    digest = h.hexdigest()
+    with _inputs_lock:
+        _inputs_memo[memo_key] = (tuple(sig), digest)
+    return digest
+
+
+def episode_digest(ep: Any, terrain_m: np.ndarray | None) -> str:
+    """sha256 over an episode's region, split, tile, box and window, every column of its rows (the hidden ones
+    included: a changed hidden row changes the reference players' scores) and the terrain the environment gets."""
+    w = ep.window
+    head = {"region_id": ep.region_id, "year": int(ep.year), "tile": [int(v) for v in ep.tile], "split": ep.split,
+            "box": [float(v) for v in ep.box], "window": [float(w.start_s), float(w.end_s)]}
+    h = hashlib.sha256(json.dumps(head, sort_keys=True).encode("utf-8"))
+    for f in fields(ep.det):
+        v = getattr(ep.det, f.name)
+        if isinstance(v, np.ndarray):
+            a = np.ascontiguousarray(v)
+            h.update(f"{f.name}:{a.dtype.str}:{a.shape};".encode("utf-8") + a.tobytes())
+        else:
+            h.update(f"{f.name}={v!r};".encode("utf-8"))
+    if terrain_m is None:
+        h.update(b"terrain:none")
+    else:
+        a = np.ascontiguousarray(terrain_m, dtype=np.float64)
+        h.update(f"terrain:{a.shape};".encode("utf-8") + a.tobytes())
+    return h.hexdigest()
+
+
+def _done_future(value: Any) -> cf.Future:
+    fut: cf.Future = cf.Future()
+    fut.set_result(value)
+    return fut
+
+
 # ---- one round ---------------------------------------------------------------------------------------------------------
 
 
@@ -188,6 +293,8 @@ class Round:
     observation: dict[str, Any] | None = None
     end: dict[str, Any] | None = None
     reference: cf.Future | None = None
+    reference_key: str | None = None
+    reference_origin: str | None = None   # "computed for this round", "shared with a round started earlier", "cache"
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -205,6 +312,8 @@ class NextLookRounds:
         clock: Callable[[], float] = time.time,
         reference: bool = True,
         source_label: str | None = None,
+        reference_cache_dir: Any = _FROM_SOURCE,
+        reference_inputs: tuple[Path, ...] = REFERENCE_INPUTS,
     ) -> None:
         self.episode_source = episode_source
         self.reference = bool(reference)
@@ -215,10 +324,18 @@ class NextLookRounds:
         self.reference_seeds = int(reference_seeds)
         self.reference_wait_s = float(reference_wait_s)
         self.clock = clock
+        # The disk cache holds results on real rows; a test's episode source keeps them in memory unless given a folder.
+        if reference_cache_dir is _FROM_SOURCE:
+            reference_cache_dir = REFERENCE_CACHE_DIR if episode_source is None else None
+        self.reference_cache_dir: Path | None = Path(reference_cache_dir) if reference_cache_dir is not None else None
+        self.reference_inputs = tuple(reference_inputs)
+        self.reference_computations = 0      # how many times the reference players were played (for the tests)
         self._rounds: dict[str, Round] = {}
         self._lock = threading.Lock()
         self._catalogues: dict[tuple[str, int], list[Any]] = {}
         self._pool: cf.ThreadPoolExecutor | None = None
+        self._ref_done: OrderedDict[str, dict[str, Any]] = OrderedDict()
+        self._ref_running: dict[str, cf.Future] = {}
 
     # ---- episodes ------------------------------------------------------------------------------------------------
 
@@ -284,18 +401,22 @@ class NextLookRounds:
 
     # ---- the environment ---------------------------------------------------------------------------------------------
 
-    def _make_env(self, ep: Any, tiles: tuple[int, int], budget: int) -> Any:
+    def _terrain(self, ep: Any) -> np.ndarray | None:
+        if not self.terrain:
+            return None
+        from backend.env.terrain import context_elevation
+        from backend.eval.grid import EvalGrid
+        from backend.firms import region_box
+
+        return context_elevation(ep.region_id, region_box(ep.region_id), EvalGrid.from_bbox(ep.box))
+
+    def _make_env(self, ep: Any, tiles: tuple[int, int], budget: int, terrain: Any = _FROM_SOURCE) -> Any:
         from backend.env.next_look import NextLookEnv
         from backend.env.policy import env_settings
-        from backend.eval.grid import EvalGrid
         from backend.model.fitted import load_params
 
-        terrain = None
-        if self.terrain:
-            from backend.env.terrain import context_elevation
-            from backend.firms import region_box
-
-            terrain = context_elevation(ep.region_id, region_box(ep.region_id), EvalGrid.from_bbox(ep.box))
+        if terrain is _FROM_SOURCE:
+            terrain = self._terrain(ep)
         return NextLookEnv(ep.det, ep.box, (ep.window.start_s, ep.window.end_s), tiles=tiles, budget=budget,
                            params=load_params(), terrain_m=terrain, **env_settings())
 
@@ -340,11 +461,11 @@ class NextLookRounds:
 
     # ---- the reference agents, computed in the background, served at the end -----------------------------------------
 
-    def _reference(self, ep: Any, tiles: tuple[int, int], budget: int) -> dict[str, Any]:
+    def _reference(self, ep: Any, tiles: tuple[int, int], budget: int, terrain: Any = _FROM_SOURCE) -> dict[str, Any]:
         from backend.env.agents import LatestModisAgent, LeastSureAgent, OracleAgent, RandomAgent, run_episode
         from backend.env.policy import load_policy
 
-        env = self._make_env(ep, tiles, budget)
+        env = self._make_env(ep, tiles, budget, terrain)
 
         def play(agent: Any, seed: int) -> dict[str, Any]:
             r = run_episode(env, agent, seed=seed)
@@ -365,24 +486,126 @@ class NextLookRounds:
         out["oracle_note"] = "sees the hidden detections and takes the best tile at each look: a ceiling, not a player"
         return out
 
-    def _submit_reference(self, ep: Any, tiles: tuple[int, int], budget: int) -> cf.Future:
+    def reference_key(self, ep: Any, terrain: np.ndarray | None, tiles: tuple[int, int], budget: int) -> str:
+        """The cache key of the reference players' results on one episode (see the module docstring)."""
+        passes = "none"
+        if self.episode_source is None:
+            from backend.firms.cmr_passes import pass_files_digest
+
+            passes = pass_files_digest(ep.region_id)
+        parts = {
+            "version": REFERENCE_CACHE_VERSION,
+            "episode": episode_digest(ep, terrain),
+            "tiles": [int(tiles[0]), int(tiles[1])],
+            "budget": int(budget),
+            "random_seeds": self.reference_seeds,
+            "pass_files": passes,
+            "inputs": inputs_digest(self.reference_inputs),
+        }
+        return hashlib.sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()
+
+    def _cache_path(self, key: str) -> Path | None:
+        return self.reference_cache_dir / f"{key}.json" if self.reference_cache_dir is not None else None
+
+    def _read_cached(self, key: str) -> dict[str, Any] | None:
+        path = self._cache_path(key)
+        if path is None or not path.is_file():
+            return None
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(doc, dict) or doc.get("key") != key or not isinstance(doc.get("reference"), dict):
+            return None
+        return doc
+
+    def _write_cached(self, doc: dict[str, Any]) -> None:
+        path = self._cache_path(doc["key"])
+        if path is None:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+            tmp.write_text(json.dumps(doc, allow_nan=False), encoding="utf-8")
+            os.replace(tmp, path)
+        except (OSError, ValueError):
+            pass                                  # the result stays in memory; the next server computes it again
+
+    def _remember(self, doc: dict[str, Any]) -> None:
         with self._lock:
+            self._ref_done[doc["key"]] = doc
+            self._ref_done.move_to_end(doc["key"])
+            while len(self._ref_done) > REFERENCE_MEMORY:
+                self._ref_done.popitem(last=False)
+
+    def _compute_reference(self, key: str, ep: Any, tiles: tuple[int, int], budget: int, terrain: Any) -> dict[str, Any]:
+        t0 = time.perf_counter()
+        with self._lock:
+            self.reference_computations += 1
+        ref = self._reference(ep, tiles, budget, terrain)
+        doc = {"key": key, "version": REFERENCE_CACHE_VERSION, "episode": ep.key, "tiles": [int(tiles[0]), int(tiles[1])],
+               "budget": int(budget), "random_seeds": self.reference_seeds, "computed_utc": _iso(time.time()),
+               "compute_s": round(time.perf_counter() - t0, 2), "reference": ref}
+        self._remember(doc)
+        self._write_cached(doc)
+        return doc
+
+    def _submit_reference(self, ep: Any, terrain: np.ndarray | None, tiles: tuple[int, int], budget: int) -> tuple[cf.Future, str, str]:
+        """(future of the cached document, key, origin). A result in memory or on disk is served at once; a round
+        that starts while the same key is being computed waits on that computation."""
+        key = self.reference_key(ep, terrain, tiles, budget)
+        with self._lock:
+            if key in self._ref_done:
+                self._ref_done.move_to_end(key)
+                return _done_future(self._ref_done[key]), key, "cache"
+            if key in self._ref_running:
+                return self._ref_running[key], key, "shared with a round started earlier"
+        doc = self._read_cached(key)
+        if doc is not None:
+            self._remember(doc)
+            return _done_future(doc), key, "cache"
+        with self._lock:
+            if key in self._ref_done:
+                return _done_future(self._ref_done[key]), key, "cache"
+            if key in self._ref_running:
+                return self._ref_running[key], key, "shared with a round started earlier"
             if self._pool is None:
                 self._pool = cf.ThreadPoolExecutor(max_workers=REFERENCE_WORKERS, thread_name_prefix="next-look-reference")
-            pool = self._pool
-        return pool.submit(self._reference, ep, tiles, budget)
+            fut = self._pool.submit(self._compute_reference, key, ep, tiles, budget, terrain)
+            self._ref_running[key] = fut
+
+        def _finished(f: cf.Future, key: str = key) -> None:
+            with self._lock:
+                if self._ref_running.get(key) is f:
+                    del self._ref_running[key]
+
+        fut.add_done_callback(_finished)
+        return fut, key, "computed for this round"
 
     @staticmethod
-    def _reference_result(rnd: Round, wait_s: float) -> tuple[dict[str, Any] | None, str]:
+    def _reference_result(rnd: Round, wait_s: float) -> tuple[dict[str, Any] | None, str, dict[str, Any] | None]:
+        """(reference, status, cache) for the end of a round. `cache` says where the result came from."""
         fut = rnd.reference
         if fut is None:
-            return None, "not computed"
+            return None, "not computed", None
         try:
-            return fut.result(timeout=max(wait_s, 0.0)), "ready"
+            doc = fut.result(timeout=max(wait_s, 0.0))
         except cf.TimeoutError:
-            return None, "computing; read GET /api/env/next_look/state again"
+            return None, "computing; read GET /api/env/next_look/state again", None
+        except cf.CancelledError:
+            return None, "failed: the computation was cancelled", None
         except Exception as exc:  # noqa: BLE001  (the round's own result stands without it)
-            return None, f"failed: {exc}"
+            return None, f"failed: {exc}", None
+        cache = {
+            "from": rnd.reference_origin,
+            "key": rnd.reference_key,
+            "computed_utc": doc.get("computed_utc"),
+            "compute_s": doc.get("compute_s"),
+            "keyed_on": ("the episode's rows, box and window, its terrain, the tiles, the budget, the random seeds, the "
+                         "region's CMR pass files, and every file of backend/env, backend/eval and backend/model, "
+                         "backend/firms/cmr_passes.py and backend/server_next_look.py"),
+        }
+        return doc["reference"], "ready", cache
 
     # ---- the round store ---------------------------------------------------------------------------------------------
 
@@ -397,7 +620,10 @@ class NextLookRounds:
 
     def _drop(self, rid: str) -> None:
         old = self._rounds.pop(rid, None)
-        if old is not None and old.reference is not None:
+        if old is None or old.reference is None:
+            return
+        # a computation still queued is cancelled when no other round waits on it (a running one carries on and is kept)
+        if not any(r.reference is old.reference for r in self._rounds.values()):
             old.reference.cancel()
 
     def _get(self, round_id: str | None) -> Round:
@@ -429,7 +655,8 @@ class NextLookRounds:
         budget = _whole(body, "budget", DEFAULT_BUDGET, 0, MAX_BUDGET)
         seed = _whole(body, "seed", 0, 0, 2**31 - 1)
         ep, origin = self._episode(region_id, episode_key, start)
-        env = self._make_env(ep, tiles, int(budget))
+        terrain = self._terrain(ep)
+        env = self._make_env(ep, tiles, int(budget), terrain)
         if env.n_looks == 0:
             raise ValueError("this episode has no scheduled VIIRS look")
         obs = env.reset(seed)
@@ -439,7 +666,8 @@ class NextLookRounds:
             score_start=float(env.score_start), touched=self.clock(),
         )
         rnd.observation = observation_json(obs, env)
-        rnd.reference = self._submit_reference(ep, tiles, int(budget)) if self.reference else None
+        if self.reference:
+            rnd.reference, rnd.reference_key, rnd.reference_origin = self._submit_reference(ep, terrain, tiles, int(budget))
         self._insert(rnd)
         return {
             "round_id": rnd.round_id,
@@ -512,7 +740,7 @@ class NextLookRounds:
         rnd = self._get(round_id)
         with rnd.lock:
             if rnd.done and rnd.end is not None and rnd.end["reference"] is None:
-                rnd.end["reference"], rnd.end["reference_status"] = self._reference_result(rnd, 0.0)
+                rnd.end["reference"], rnd.end["reference_status"], rnd.end["reference_cache"] = self._reference_result(rnd, 0.0)
             out = {
                 "round_id": rnd.round_id,
                 "episode": rnd.episode_json,
@@ -532,7 +760,7 @@ class NextLookRounds:
 
     def _end(self, rnd: Round) -> dict[str, Any]:
         taken = [[h["decision"], h["action"]] for h in rnd.history if h["spent"]]
-        ref, status = self._reference_result(rnd, self.reference_wait_s)
+        ref, status, cache = self._reference_result(rnd, self.reference_wait_s)
         last = rnd.history[-1]["score"] if rnd.history else rnd.score_start
         return {
             "score_start": _num(rnd.score_start),
@@ -542,6 +770,7 @@ class NextLookRounds:
             "reveal": self._reveal(rnd, taken),
             "reference": ref,
             "reference_status": status,
+            "reference_cache": cache,
         }
 
     @staticmethod

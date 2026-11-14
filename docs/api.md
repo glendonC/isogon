@@ -891,7 +891,14 @@ Values rounded. The step that ends the round has `"done": true`, `"observation":
       "spending": "every reference agent spends its budget on the same looks, spread evenly over the round (backend.env.agents.spend_now); only the tile differs. A person may spend a look whenever they choose.",
       "oracle_note": "sees the hidden detections and takes the best tile at each look: a ceiling, not a player"
     },
-    "reference_status": "ready"
+    "reference_status": "ready",
+    "reference_cache": {
+      "from": "cache",
+      "key": "e9af404a...",
+      "computed_utc": "<when the result was computed>",
+      "compute_s": 38.1,
+      "keyed_on": "..."
+    }
   }
 }
 ```
@@ -900,6 +907,8 @@ Shortened: `reveal.rows` has 441 rows and `random` ten seeds; scores and gains a
 
 - `reveal` holds every VIIRS detection of the episode inside the box, each with its tile, the look it belongs to (`-1` for none) and whether the round revealed it.
 - `reference` is the result of the reference players on this same episode: random over ten seeds, latest MODIS, least sure, the learned policy and the oracle. The oracle reads the hidden rows and is a ceiling, not a player. The step that ends a round waits up to 90 seconds for it; if it is not ready, `reference` is `null`, `reference_status` says it is still computing, and `GET /api/env/next_look/state` returns it later.
+- The reference players are played once per episode, tiles, budget and number of random seeds, and the result is kept in server memory and on disk (`data/cache/next_look_reference/`, one JSON file per key). The key is a sha256 over the episode's rows (hidden ones included), box, window and terrain, the tiles, the budget, the number of random seeds, the region's CMR pass files, and the content of every file of `backend/env`, `backend/eval` and `backend/model`, of `backend/firms/cmr_passes.py` and of `backend/server_next_look.py`. A change to the environment, its reward, the reconstruction, its fitted values or the learned policy gives a new key, so nothing computed before it is served. Rounds of one episode started while it is being computed wait on the same computation.
+- `reference_cache.from` says where this round's result came from: `computed for this round`, `shared with a round started earlier` (the same key was being computed when the round started), or `cache`. `compute_s` is how long the computation took. On a September 2020 episode of the Feather River region (`plumas_ca:21:2020-09-09T09`, 4 by 4 tiles, budget 4, ten random seeds) it took 40 seconds on a laptop with other work running; a second round of it had its end, reference included, 1.4 seconds after its reset. `reference_cache` is `null` while `reference` is. It appears only in the `end` object.
 
 Errors: `400` for a missing `round_id`, `decision` or `action`, or an `action` that is not `-1` or a tile of the round; `404` for an unknown round; `409` when `decision` is not the round's current decision, or the round is over.
 
@@ -909,7 +918,7 @@ Errors: `400` for a missing `round_id`, `decision` or `action`, or an `action` t
 | --- | --- |
 | `round_id` | Required. |
 
-Answers with `round_id`, `episode`, `looks`, `score_start`, `decision` (the index of the next look to decide), `done`, `history`, `observation`, `known_limits` and, when the round is over, `end`. `history` has one entry per step:
+Answers with `round_id`, `episode`, `looks`, `score_start`, `decision` (the index of the next look to decide), `done`, `history`, `observation`, `known_limits` and, when the round is over, `end` (with `reference`, `reference_status` and `reference_cache` filled in once the reference players are ready). `history` has one entry per step:
 
 ```json
 {"decision": 0, "action": 13, "spent": true, "no_budget_left": false, "revealed_pixels": 16, "reward": 0.0193, "score": 0.2992}

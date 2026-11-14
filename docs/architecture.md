@@ -146,6 +146,7 @@ Nothing in the backend or the site imports the package, and `backend/tests/test_
 - A simulated run derives its seed from the region's id and box, so the same request gives the same run.
 - A real run is stored under what decides it: the region, the start, what is hidden, a digest of the region's rows and a digest of the fitted value files. A run built with other rows or other values is another run.
 - The start search is cached on disk under `data/cache/firms/derived/`, keyed by the rows, the months searched and a digest of the source of the modules that hold the rule.
+- The reference players of a next-look round are played once per episode, tiles, budget and number of random seeds, and kept under `data/cache/next_look_reference/`. The key holds the episode's rows, box, window and terrain, the region's pass files and a digest of every file of the environment, the scorer and the model, so a change to any of them is played again ([api.md](api.md), the next-look rounds).
 - Terrain pack files are served with an `ETag` and may be kept by the browser for a day. Everything else is `no-store`.
 
 ## Coordinates and registration
