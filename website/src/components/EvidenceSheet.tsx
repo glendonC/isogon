@@ -485,7 +485,7 @@ export function EvidenceSheet({ open, onClose, doc, state, focus = null }: Evide
             ? state === 'failed'
               ? 'The evidence route did not answer, so no figure is shown.'
               : 'Waiting for the evidence route.'
-            : `Results as the backend reports them${doc.commit ? `, commit ${doc.commit}` : ''}.`}
+            : 'Results as the backend reports them.'}
         </p>
 
         {doc && <EvidenceBody doc={doc} />}

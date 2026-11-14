@@ -6,8 +6,6 @@ import {
 import { ReadingSheet, type ReadingSection } from './components/ReadingSheet';
 import { EvidenceSheet } from './components/EvidenceSheet';
 import type { EvidenceDoc, EvidenceState } from './content/evidence';
-import { DEMO_TERRA_MORNING } from './content/demo/terraMorning';
-import { TerraMorningPanel } from './components/TerraMorning';
 import { AreaSheet } from './components/AreaSheet';
 import { PassTrack } from './components/PassTrack';
 import { BurningCalendar } from './components/BurningCalendar';
@@ -953,12 +951,6 @@ export function App() {
         return;
       }
 
-      if (e.key.toLowerCase() === 't' && inWorkspace && debriefOpen && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault();
-        setTerraOpen((o) => !o);
-        return;
-      }
-
       if (e.key.toLowerCase() === 'l' && inWorkspace && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         goStep('look');
@@ -1166,10 +1158,6 @@ export function App() {
   };
   const span = runSpan ? utcSpan(runSpan.first, runSpan.last) : null;
   const blindLoading = holdoutViirs && !revealing && (isExecuting || !activeRun?.metrics?.holdout_viirs);
-  const terraPanel =
-    runIsReal && activeRun && DEMO_TERRA_MORNING.fires[activeRun.region.id] ? (
-      <TerraMorningPanel doc={DEMO_TERRA_MORNING} regionId={activeRun.region.id} onClose={() => setTerraOpen(false)} />
-    ) : null;
 
   const quietMenu = (
     <>
@@ -1257,7 +1245,8 @@ export function App() {
       <span>{label}</span>
     </button>
   );
-  const finding = selectedFinding && (
+  // A simulated run's callouts only: a real run shows no scenario callouts.
+  const finding = selectedFinding && !runIsReal && (
     <div className="iso-finding">
       <div className="iso-finding__head">
         <span>{selectedFinding.title}</span>
@@ -1471,7 +1460,7 @@ export function App() {
                   onBack={() => setDebriefOpen(false)}
                   onNext={lookHere ? () => goStep('look') : null}
                   onEvidence={() => setEvidenceOpen(true)}
-                  terra={terraPanel}
+                  terra={null}
                   terraOpen={terraOpen}
                   onToggleTerra={() => setTerraOpen((o) => !o)}
                 />
@@ -1538,7 +1527,7 @@ export function App() {
           cleanHud={cleanHud}
           slewRequest={slewRequest}
           selectedFindingId={selectedFinding?.id ?? null}
-          onSelectFinding={setSelectedFinding}
+          onSelectFinding={runIsReal ? undefined : setSelectedFinding}
           onEnterWorkspace={() => enterWorkspace('cutaway')}
           onCinemaStepTheater={handleCinemaStepTheater}
           onTelemetry={handleTelemetry}
