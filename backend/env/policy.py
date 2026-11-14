@@ -47,8 +47,8 @@ def _unit(v: NDArray[np.float64]) -> NDArray[np.float64]:
     return v / m if m > 0 else np.zeros_like(v, dtype=np.float64)
 
 
-def tile_features(obs: Observation, env: NextLookEnv) -> NDArray[np.float64]:
-    """(tiles, features) for one observation. Uses the observation and the grid only."""
+def tile_features(obs: Observation, env: NextLookEnv | None = None) -> NDArray[np.float64]:
+    """(tiles, features) for one observation. Reads the observation and nothing else; `env` is not used."""
     rows, cols = obs.tiles_shape
     n = rows * cols
     unsure = _unit(_per_tile(obs, obs.p_burning * (1.0 - obs.p_burning)))
@@ -60,10 +60,9 @@ def tile_features(obs: Observation, env: NextLookEnv) -> NDArray[np.float64]:
     all_n = np.zeros(n)
     hours_since_modis = 12.0
     if obs.modis.shape[0] > 0:
-        r, c = env.grid.row_col(obs.modis[:, 0], obs.modis[:, 1])
-        ok = r >= 0
+        ok = obs.modis_tile >= 0
         if ok.any():
-            tile = obs.tile_of_cell[r[ok], c[ok]]
+            tile = obs.modis_tile[ok]
             age_h = (obs.time_s - obs.modis[ok, 5]) / 3600.0
             w = 0.5 ** (age_h / 6.0)
             recent_frp = np.bincount(tile, weights=obs.modis[ok, 4] * w, minlength=n)
@@ -72,7 +71,7 @@ def tile_features(obs: Observation, env: NextLookEnv) -> NDArray[np.float64]:
         hours_since_modis = float(min(12.0, (obs.time_s - float(obs.modis[:, 5].max())) / 3600.0))
     seen = np.zeros(n)
     for k, tile in obs.revealed_tiles:
-        age_h = (obs.time_s - env.look_time(k)) / 3600.0
+        age_h = (obs.time_s - float(obs.look_times_s[k])) / 3600.0
         seen[tile] += 0.5 ** (max(age_h, 0.0) / 12.0)
     grid_u = unsure.reshape(rows, cols)
     padded = np.pad(grid_u, 1)
@@ -105,11 +104,11 @@ class LinearPolicyAgent:
         if self.weights.shape != (len(FEATURE_NAMES),):
             raise ValueError("one weight per feature is needed")
 
-    def scores(self, obs: Observation, env: NextLookEnv) -> NDArray[np.float64]:
-        return tile_features(obs, env) @ self.weights
+    def scores(self, obs: Observation, env: NextLookEnv | None = None) -> NDArray[np.float64]:
+        return tile_features(obs) @ self.weights
 
-    def choose(self, obs: Observation, env: NextLookEnv) -> int:
-        return int(np.argmax(self.scores(obs, env)))
+    def choose(self, obs: Observation, env: NextLookEnv | None = None) -> int:
+        return int(np.argmax(self.scores(obs)))
 
 
 def fit_ridge(features: NDArray[np.float64], target: NDArray[np.float64], strength: float) -> NDArray[np.float64]:

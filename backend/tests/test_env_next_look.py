@@ -1,8 +1,8 @@
 """The next-look environment (backend/env), on SYNTHETIC episodes built from the test fixture.
 
-Nothing in the classes on synthetic rows is a real fire. One class at the end reads a real Dixie episode whose
-window opens just after a VIIRS pass and counts rows in it; it scores nothing and is skipped where the rows are not
-cached.
+Nothing in the classes on synthetic rows is a real fire. One class at the end reads a real episode of 2024 near
+Lytton whose window opens just after a VIIRS pass and counts rows in it; it is skipped where the rows are not
+cached. No test here builds an environment on a 2021 window of the three test fires.
 """
 
 from __future__ import annotations
@@ -137,33 +137,43 @@ class RewardTests(unittest.TestCase):
         report = run_blind_test(det, fx.TEST_BOX, [painted_modis_factory, reconstruction_factory(OccupancyParams())], window=window)
         self.assertAlmostEqual(env.score_start, report["methods"]["reconstruction"]["strict_375m"]["csi"], places=12)
 
-    def test_with_the_whole_record_as_target_rewards_add_up_to_the_gain_in_score(self) -> None:
-        env = _env(budget=3, reward_target="all")
+    def test_rewards_add_up_to_the_gain_in_score(self) -> None:
+        env = _env(budget=3)
         out = run_episode(env, LatestModisAgent(), seed=0)
         self.assertAlmostEqual(out["return"], out["score_end"] - out["score_start"], places=12)
         self.assertEqual(sum(1 for a in out["actions"] if a != NO_LOOK), 3)
         self.assertEqual(len(out["actions"]), 21)
 
-    def test_a_look_is_not_paid_for_the_answer_it_hands_over(self) -> None:
-        # Default target: only what is still hidden. The reward compares the model before and after the look on the
-        # same cells, with the revealed tile of that look left out of both.
+    def test_a_reward_is_the_change_of_the_score_on_the_whole_record(self) -> None:
+        # The scoring set is every hidden detection of the episode, the looked-at tile included, before and after.
         env = _env(budget=1)
         env.reset()
         tile = int(np.argmax(env.hidden_pixels_per_tile()))
-        target = [(0, tile)]
-        before = env.score_of([], exclude=target)["csi"]
-        after = env.score_of(target, exclude=target)["csi"]
+        looked = [(0, tile)]
+        before = env.score_of([])["csi"]
+        after = env.score_of(looked)["csi"]
         _, reward, _, info = env.step(tile)
         self.assertAlmostEqual(reward, after - before, places=12)
         self.assertAlmostEqual(info["score"], after, places=12)
-        self.assertEqual(info["reward_target"], "still_hidden")
-        # being told the answer in that tile is worth more when the tile itself is scored too
-        env_all = _env(budget=1, reward_target="all")
-        env_all.reset()
-        _, reward_all, _, _ = env_all.step(tile)
-        self.assertGreater(reward_all, reward)
+        self.assertEqual(info["reward_target"], "all")
+        # what the look taught about cells it did not show is reported apart and is the smaller part here: most of
+        # the reward is the answer the look handed over
+        apart = env.taught_elsewhere()
+        self.assertAlmostEqual(apart["score_before_any_look"], env.score_of([], exclude=looked)["csi"], places=12)
+        self.assertAlmostEqual(apart["score_now"], env.score_of(looked, exclude=looked)["csi"], places=12)
+        self.assertAlmostEqual(apart["gain"], apart["score_now"] - apart["score_before_any_look"], places=12)
+        self.assertGreater(reward, apart["gain"])
         with self.assertRaises(ValueError):
             _env(reward_target="everything")
+
+    def test_nothing_was_taught_elsewhere_before_a_look_is_taken(self) -> None:
+        env = _env(budget=2)
+        with self.assertRaises(RuntimeError):
+            env.taught_elsewhere()
+        env.reset()
+        apart = env.taught_elsewhere()
+        self.assertEqual(apart["gain"], 0.0)
+        self.assertEqual(apart["score_now"], env.score_start)
 
     def test_looking_where_the_fire_is_helps_and_the_oracle_is_the_ceiling_for_one_look(self) -> None:
         # one look, at the last look of the episode that has a pass behind it
@@ -321,7 +331,6 @@ class LookOwnsItsPassTests(unittest.TestCase):
         self.assertGreater(len(empty), 0)
         k = empty[0]
         self.assertEqual(len(env._look_rows[k]), 0)
-        self.assertFalse(env.empty_look_is_a_pass)
         self.assertEqual(env._revealed_passes([(k, 5)]), [])
         self.assertIn("unknown", env.describe()["looks"]["an_empty_look_means"])
         # played out: looking at a tile on that look moves neither the observation that follows nor the score
@@ -339,50 +348,57 @@ class LookOwnsItsPassTests(unittest.TestCase):
         c.reset(seed=0)
         self.assertEqual(c.look_factors([(k, 5)]), c.look_factors([]))
 
-    def test_an_empty_look_on_the_pass_list_is_a_pass_that_flagged_nothing(self) -> None:
+    def test_an_empty_look_on_the_pass_list_is_unknown_too_and_is_still_scored(self) -> None:
         env = _env(schedule="cmr", read_passes=fx.fixture_pass_reader())
         k = [i for i in range(env.n_looks) if env._looks[i].platform == "VIIRS_NOAA21"][0]
-        self.assertTrue(env.empty_look_is_a_pass)
-        passes = env._revealed_passes([(k, 5)])
-        self.assertEqual(len(passes), 1)
-        self.assertEqual((passes[0].cells, passes[0].platform), ((), "VIIRS_NOAA21"))
-        self.assertIn("covered the tile", env.describe()["looks"]["an_empty_look_means"])
+        # the pass covered the tile and flagged nothing; cloud is not known, so the model is told nothing
+        self.assertEqual(env._revealed_passes([(k, 5)]), [])
+        said = env.describe()["looks"]["an_empty_look_means"]
+        self.assertIn("covered the tile", said)
+        self.assertIn("cloud is not known", said)
+        # the pass is in the scoring set all the same: a look that flagged nothing, every declared cell a false alarm
+        self.assertEqual(len(env._truth[k]), 1)
+        self.assertEqual(int(env._truth[k][0].mask.sum()), 0)
+        c = _env(schedule="cmr", read_passes=fx.fixture_pass_reader(), learn_from_looks=True)
+        c.reset(seed=0)
+        self.assertEqual(c.look_factors([(k, 5)]), c.look_factors([]))
 
 
-class DixieMarginSlotTests(unittest.TestCase):
-    """A slot in the margin before the window, on real rows. Rows are counted; nothing is scored or printed."""
+class MarginSlotOnRealRowsTests(unittest.TestCase):
+    """A slot in the margin before the window, on real rows of a 2024 fire near Lytton (an episode of the
+    validation years; the 2021 test fires are not touched). The assertions count rows."""
+
+    BOX = (-121.85, 50.42, -121.31, 50.80)
 
     def setUp(self) -> None:
         try:
             from backend.firms import read_firms, region_box
-            from backend.terrain.live_region import PRESET_BY_ID
 
-            rows = read_firms(region_box("plumas_ca"), "2021-07-20T21:13:00", "2021-07-27T06:22:00")
+            rows = read_firms(region_box("lytton_bc"), "2024-07-15T11:36:00", "2024-07-21T22:30:00")
         except Exception as exc:                                   # no cache here
-            self.skipTest(f"FIRMS rows for plumas_ca 2021 are not cached here ({type(exc).__name__})")
+            self.skipTest(f"FIRMS rows for lytton_bc 2024 are not cached here ({type(exc).__name__})")
         if not rows:
-            self.skipTest("FIRMS rows for plumas_ca 2021 are not cached here")
+            self.skipTest("FIRMS rows for lytton_bc 2024 are not cached here")
         from backend.eval.rows import parse_acq_time_s
 
-        b = PRESET_BY_ID["plumas_ca"].bbox
-        self.box = (b.west, b.south, b.east, b.north)
-        self.window = (parse_acq_time_s("2021-07-22", "2113"), parse_acq_time_s("2021-07-25", "0622"))
+        self.window = (parse_acq_time_s("2024-07-17", "1136"), parse_acq_time_s("2024-07-19", "2229") + 1.0)
         self.det = detections_from_rows(rows, "NASA FIRMS standard processing archive, read through backend.firms")
 
-    def test_the_noaa20_look_before_the_window_owns_the_340_pixels_of_its_pass(self) -> None:
-        env = NextLookEnv(self.det, self.box, self.window, tiles=(4, 4), budget=4)
-        look = env._looks[1]
-        self.assertEqual(look.platform, "VIIRS_NOAA20")
-        self.assertLess(look.time_s, self.window[0])                         # the slot is in the margin, 8 minutes early
-        self.assertEqual(len(env._look_rows[1]), 340)                        # the 20:34 pass, 39 minutes before the window
-        self.assertEqual(int((env._pixel_tile[1] == 4).sum()), 103)
-        self.assertTrue(np.all(env._viirs.time_s[env._look_rows[1]] < self.window[0]))
+    def test_the_noaa21_look_before_the_window_owns_the_69_pixels_of_its_pass(self) -> None:
+        env = NextLookEnv(self.det, self.BOX, self.window, tiles=(4, 4), budget=4, schedule="nominal")
+        look = env._looks[2]
+        self.assertEqual(look.platform, "VIIRS_NOAA21")
+        self.assertLess(look.time_s, self.window[0])                         # the slot is in the margin, 77 minutes early
+        self.assertEqual(len(env._look_rows[2]), 69)                         # the 10:17 pass, 79 minutes before the window
+        self.assertEqual(int((env._pixel_tile[2] == 15).sum()), 69)
+        self.assertTrue(np.all(env._viirs.time_s[env._look_rows[2]] < self.window[0]))
         ob = env.reset(seed=0)
         ob, _, _, _ = env.step(NO_LOOK)
-        ob, _, _, info = env.step(4)
-        self.assertEqual(info["revealed_pixels"], 103)
-        self.assertEqual(ob.viirs_revealed.shape[0], 103)
-        self.assertEqual(len(env._revealed_passes([(1, 4)])[0].cells), 103)  # the model is given fire, not a clear look
+        ob, _, _, _ = env.step(NO_LOOK)
+        ob, _, _, info = env.step(15)
+        self.assertEqual(info["revealed_pixels"], 69)
+        self.assertEqual(ob.viirs_revealed.shape[0], 69)
+        self.assertEqual(len(env._revealed_passes([(2, 15)])[0].cells), 69)  # the model is given fire, not a clear look
 
 
 if __name__ == "__main__":

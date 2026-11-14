@@ -11,7 +11,9 @@ Nothing in the dict is typed by hand. Every number is read from a tracked file o
   fitted_values/test_fire_looks.json   every scoring of the three 2021 test fires, copied by `build_record` from the
                                        reports the runs wrote, with each report's sha256
   fitted_values/occupancy_params.json  the validation that decides what is switched on, and the decision before it
-  backend/env/fitted/next_look.json    the environment's reference table under both protocols
+  backend/env/fitted/next_look.json    the environment's reference tables: on the test episodes under both
+                                       protocols and the first reward (on record, not measured again), and on the
+                                       validation episodes under the reward in use
 
 The sentences are written here; where one states a figure, the figure is filled in from those files, and a test
 checks that it is.
@@ -395,8 +397,56 @@ def _beats(interval: dict[str, Any] | None) -> bool | None:
     return None if not interval else bool(interval["p05"] > 0)
 
 
+def _on_validation(env: dict[str, Any]) -> dict[str, Any] | None:
+    """The reference table under the reward in use, measured on the validation episodes, when the tracked file
+    holds one. The tables on the test episodes are not measured again: that test is closed."""
+    ref = env.get("validation_reference")
+    if not ref:
+        return None
+    labels = {
+        "random": ("Random", "a tile at random, the mean over the seeds; reads nothing"),
+        "constant_best_on_training": ("Constant tile", "always the tile that gains most on the training episodes; reads nothing"),
+        "constant_best_in_hindsight": ("Best constant tile in hindsight", "always the tile that gains most on these episodes: an upper bound on what the framing of an episode gives away"),
+        "centre": ("Centre tiles", "the tiles around the middle of the box in turn; reads nothing"),
+        "latest_modis": ("Latest MODIS", "the tile with the most recent MODIS fire power"),
+        "least_sure": ("Least sure", "the tile where the model is least sure"),
+        "expected_new": ("Most expected new detections", "the tile where the model expects the most hidden detections its map does not already hold"),
+        "learned": ("Learned", "a linear policy with the tracked weights"),
+        "oracle": ("Oracle", "sees the hidden data and takes the best tile at each look: a greedy ceiling"),
+    }
+    agents = []
+    for aid, (label, does) in labels.items():
+        row = ref["agents"].get(aid)
+        if row is None:
+            continue
+        agents.append({
+            "id": aid, "label": label, "does": does, "tile": row.get("tile"),
+            **{k: row[k] for k in ("mean_gain", "mean_final_score", "share_of_oracle_gain", "sd_across_episodes",
+                                   "least_and_most_over_episodes", "episodes_with_a_gain", "mean_gain_on_cells_never_shown")},
+        })
+    return {
+        "what": "the reference players under the reward in use, on the validation episodes",
+        "reward": ref["reward"],
+        "looks": ref["schedule"],
+        "episodes": ref["episodes"]["validation"],
+        "tiles": ref["tiles"],
+        "budget": ref["budget"],
+        "mean_start_score": ref["mean_start_score"],
+        "agents": agents,
+        "differences": ref["differences"],
+        "plainly": ref["plainly"],
+        "learned_weights": ref.get("learned"),
+        "reconstruction_values": ref.get("reconstruction_parameters"),
+        "not_a_test": (
+            "these are the validation episodes: fires of 2024 and 2025 that fitted nothing, but that chose settings "
+            "and are in the regions the model was trained in. They are not fires the project has never seen."
+        ),
+    }
+
+
 def _next_look(env: dict[str, Any]) -> dict[str, Any]:
     old, new = env["test"], env["test_protocol_2"]
+    rewards = env.get("rewards") or {}
     tiles = int(str(env["setting"]["tiles"]).split("x")[0])
     agents = [{"id": aid, "label": label, "does": does, "new": _agent_row(new, k_new), "old": _agent_row(old, k_old)}
               for aid, label, does, k_new, k_old in AGENTS]
@@ -414,6 +464,15 @@ def _next_look(env: dict[str, Any]) -> dict[str, Any]:
         "looks": int(env["setting"]["budget"]),
         "score": str(env["setting"]["score"]).upper(),
         "reward": "gain in the score on the detections still hidden after the look",
+        # the tables below (`agents`, `differences`, `holds_in_both`, `other_settings` and the earlier ones) were
+        # measured on the test episodes under the first reward; the reward in use is measured on other fires
+        "measured_under": None if not rewards else {
+            "reward": rewards["when_the_tables_on_record_were_measured"],
+            "empty_look": {"new": new.get("empty_look"), "old": old.get("empty_look")},
+            "not_measured_again": rewards["why_they_are_not_measured_again"],
+        },
+        "reward_in_use": rewards.get("in_use"),
+        "on_validation": _on_validation(env),
         "test_episodes": {"new": int(new["episodes"]), "old": int(old["episodes"])},
         "mean_start_score": {"new": new["mean_start_score"], "old": old["mean_start_score"]},
         "agents": agents,
@@ -588,6 +647,7 @@ def evidence() -> dict[str, Any]:
             "test_fires.values_in_use: whether the fitted values now in use are the ones the figures were made with",
             "validation: regions, decision, rule, before, history, trained_on, validated_on, empty_looks, intervals, and improvement_interval and interval_holds inside parts",
             "next_look: reward, differences, not_the_same_game_twice, other_settings, made_with, with_the_earlier_values, before_the_bug_fix",
+            "next_look: measured_under, reward_in_use, on_validation: which reward the tables on record were measured under, the reward in use, and the reference players under it on the validation episodes",
             "sources",
         ],
         "sources": {

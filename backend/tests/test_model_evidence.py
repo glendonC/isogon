@@ -222,6 +222,55 @@ class EvidenceShapeTests(unittest.TestCase):
         gains = all(by["least_sure"][s]["mean_gain"] > by["random"][s]["mean_gain"] for s in ("new", "old"))
         self.assertEqual("least sure gains more than random" in said, gains)
 
+    def test_the_tables_on_record_say_which_reward_they_were_measured_under(self) -> None:
+        from backend.env.next_look import REWARD
+
+        n, env = self.doc["next_look"], self.env
+        m = n["measured_under"]
+        self.assertIn("did not add up", m["reward"])
+        for key in env["rewards"]["tables_on_record"]:
+            self.assertEqual(env[key]["reward"], m["reward"], key)            # every table on record carries the label
+            self.assertIn("revealed nothing", env[key]["empty_look"])
+        self.assertEqual(m["empty_look"], {"new": env["test_protocol_2"]["empty_look"], "old": env["test"]["empty_look"]})
+        self.assertIn("closed", m["not_measured_again"])
+        # the reward in use is the environment's own sentence, not a copy that can drift
+        self.assertEqual(n["reward_in_use"], REWARD)
+        self.assertEqual(env["rewards"]["in_use"], REWARD)
+        self.assertIn("add up", REWARD)
+
+    def test_the_reward_in_use_is_shown_on_the_validation_episodes_and_its_sentences_follow_from_its_numbers(self) -> None:
+        from backend.env.next_look import REWARD
+
+        v, ref = self.doc["next_look"]["on_validation"], self.env["validation_reference"]
+        self.assertEqual(v["reward"], REWARD)
+        self.assertEqual((v["episodes"], v["tiles"], v["budget"]), (ref["episodes"]["validation"], ref["tiles"], ref["budget"]))
+        # the validation episodes are fires of 2024 and 2025: no test episode and no other 2021 window is among them
+        self.assertEqual(len(ref["episodes"]["validation_keys"]), ref["episodes"]["validation"])
+        for key in ref["episodes"]["validation_keys"]:
+            self.assertIn(key.split(":")[2][:4], ("2024", "2025"), key)
+        self.assertGreater(ref["episodes"]["closed_and_not_played"], 0)
+        ids = [a["id"] for a in v["agents"]]
+        self.assertEqual(ids, ["random", "constant_best_on_training", "constant_best_in_hindsight", "centre", "latest_modis",
+                               "least_sure", "expected_new", "learned", "oracle"])
+        for a in v["agents"]:
+            row = ref["agents"][a["id"]]
+            self.assertEqual(a["mean_gain"], row["mean_gain"], a["id"])
+            # the rewards add up: a mean gain is the mean final score minus the mean starting score
+            self.assertAlmostEqual(a["mean_final_score"] - v["mean_start_score"], a["mean_gain"], places=3, msg=a["id"])
+            self.assertIsNotNone(a["sd_across_episodes"])
+            self.assertEqual(a["tile"] is not None, a["id"].startswith("constant_"))
+        by = {a["id"]: a for a in v["agents"]}
+        self.assertEqual(by["oracle"]["share_of_oracle_gain"], 1.0)
+        # the tile named in hindsight gains at least as much as the one a player could have fielded
+        self.assertGreaterEqual(by["constant_best_in_hindsight"]["mean_gain"], by["constant_best_on_training"]["mean_gain"])
+        said = " ".join(v["plainly"])
+        for key, a, b in (("least_sure_minus_random", "least sure", "random"),
+                          ("learned_minus_least_sure", "the learned policy", "least sure")):
+            d = ref["differences"][key]
+            want = ("gains more than" if d["p05"] > 0 else "gains less than" if d["p95"] < 0 else "does not differ from")
+            self.assertIn(f"{a} {want} {b}", said)
+        self.assertIn("not fires the project has never seen", v["not_a_test"])
+
     def test_audit_lines_and_limits_take_their_figures_from_the_record(self) -> None:
         d = self.doc
         self.assertEqual([f["id"] for f in d["audit_findings"]], ["1", "2", "3", "4", "5"])

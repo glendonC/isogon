@@ -195,15 +195,69 @@ On 6 validation episodes, 40 Terra overpasses, it is ahead of both baselines on 
 
 ## The next-look environment
 
-`backend/env/next_look.py` turns a real fire into a decision problem. The region box is split into tiles, 4 by 4 unless asked otherwise. MODIS is visible and VIIRS is hidden. At each scheduled VIIRS look an agent may spend one of a budget of looks, 4 unless asked otherwise, on one tile; the hidden detections of that look inside that tile are revealed and the model takes them in. The reward of a look is the gain in the strict CSI of the estimate, measured on the detections still hidden.
+`backend/env/next_look.py` turns a real fire into a decision problem. The region box is split into tiles, 4 by 4 unless asked otherwise. MODIS is visible and VIIRS is hidden. At each scheduled VIIRS look an agent may spend one of a budget of looks, 4 unless asked otherwise, on one tile; the hidden detections of that look inside that tile are revealed and the model takes them in.
 
-- **Episodes** are runs of 12 MODIS overpasses with a detection in a tile, chosen from MODIS rows alone, with at least 60 MODIS pixels in at most 120 hours (`backend/env/episodes.py`). The catalogue has 157: 136 for fitting and 21 test episodes, which are windows of the three 2021 fires (`catalogue` under `test_protocol_2` in `backend/env/fitted/next_look.json`).
-- **Looks** are the nominal half-day slots of the hidden platforms, taken from the platform and the calendar. The environment plays under protocol version 2: hidden rows sealed, looks on the nominal schedule. It can also take its looks from the pass list, but no tracked result was made that way.
-- **Reference players.** `random` picks a tile at random; `latest_modis` the tile with the most recent MODIS power; `least_sure` the tile where the model is least sure, the sum of `p (1 - p)` over its cells; `learned` is a linear score of 15 features per tile; `oracle` reads the hidden rows and takes the best tile at each look, a ceiling and not a player. Every player spends its budget on the same looks, spread evenly; only the tile differs.
+- **Episodes** are runs of 12 MODIS overpasses with a detection in a tile, chosen from MODIS rows alone, with at least 60 MODIS pixels in at most 120 hours (`backend/env/episodes.py`). The catalogue has 157. The 21 test episodes are windows of the three 2021 fires. That test is closed, so they are not played again, and neither are the 28 other windows of 2021 in the same three regions, although those lie outside the fires' own boxes and dates (`may_be_played`). Of the 108 episodes that may be played, the 95 of 2012 to 2023 train and the 13 of 2024 and 2025 validate (`fit_split`).
+- **Looks** are the nominal half-day slots of the hidden platforms, taken from the platform and the calendar. The environment plays under protocol version 2: hidden rows sealed, looks on the nominal schedule. It can also take its looks from the pass list (`schedule="cmr"`): one look per pass of a hidden platform whose swath held the box, at its real time and pixel size.
+- **Score.** The strict CSI at 375 m of the estimate against every real hidden detection of the episode, on every cell of the box and at every scored look. It is one fixed set: the same before the first look and after the last, whatever was looked at.
+- **Reward.** The score after a look minus the score before it. So the rewards of a round add up to its final score minus its starting score, and a round cannot be paid while its score falls. A look is paid for two things at once: the detections it hands over, which the estimate then holds, and what they teach the estimate about the rest. `taught_elsewhere` reports the second part alone, as the change in score on the cells outside every tile looked at; it is a diagnostic, not the reward.
+- **An empty look.** A look that hands over no hidden pixel is unknown, on either schedule: it teaches the model nothing and earns exactly nothing. On the nominal schedule nothing says the platform flew or that its swath held the box. On the pass list the pass did cover the tile, but FIRMS has no cloud mask, so a tile with no detection may have been cloudy. The two properties of the reward meet here: rewards that add up pay every change of the estimate, so a look that is to earn nothing must not change the estimate. What is given up is a look spent to confirm that a tile is clear.
 
-### Reference table
+**Reference players.** Every player spends its budget on the same looks, spread evenly over the episode; only the tile differs. They are of three kinds (`backend/env/agents.py`).
 
-Mean over the 21 test episodes, 4 by 4 tiles, 4 looks (`test_protocol_2` in `backend/env/fitted/next_look.json`). The mean starting score is 0.2386.
+- Players that read nothing about the fire: `random`; a constant tile, always the same one; `centre`, the tiles around the middle of the box in turn. Episodes are framed around a fire, so a fixed tile holds fire more often than chance. What these players gain is the geometry of the framing, and a player shows skill only by what it gains beyond them. Two constant tiles are named in a table: the one that gains most on the training episodes, which anyone could have fielded, and the one that gains most on the table's own episodes, which is hindsight.
+- Players that read the observation and nothing else: `latest_modis`, the tile with the most recent MODIS power; `least_sure`, the tile where the model is least sure, the sum of `p (1 - p)` over its cells; `expected_new`, the tile where the model expects the most hidden detections that its own map does not already declare, which is the reward's own logic used as a rule; `learned`, a linear score of 15 features per tile.
+- `oracle` reads the hidden rows and takes the best tile at each look. It is a ceiling, not a player, and it is greedy: it can be beaten over a whole round.
+
+### The reward was corrected
+
+The first reward scored each look on the detections still hidden after it, so that a look was never paid for the answer it handed over. Three things were wrong with it. Each was checked on the 13 validation episodes before the correction and again after it (4 by 4 tiles, 4 looks unless said).
+
+| What | Before | After |
+| --- | --- | --- |
+| The rewards of a round against the change in its score, `least_sure`, nominal looks | Paid +0.0387, score moved +0.0318 | Both +0.0630 |
+| A player built to use that gap: the first two and the last two looks, on the tile the model expects to burn most | Paid +0.0137 while its score fell by 0.0027 | Both +0.0325 |
+| The largest gap in any round | 0.0911 | 0 |
+| Empty looks paid other than zero, `random` on the pass list | 422 of 427, up to 0.0080 each | 0 of 427 |
+| A player that looks only at night and only where MODIS has seen nothing, pass list | 49 of its 52 empty looks paid, +0.0004 a round | 0 paid, 0 a round |
+
+The scoring set of the first reward shrank with every look, which is why its rewards did not add up. On the pass list an empty look was taken as a pass that saw clear ground and moved the score. On these episodes the mean pay of an empty look was near zero and of either sign.
+
+The correction changes what is paid for. Under the reward in use a tile's reward follows the hidden detections it holds: over 380 decisions of the training episodes on the pass list, the rank correlation between the two inside a decision has a median of 0.997, and the tile with the most hidden detections pays 93 percent of what the best tile pays. The game is to find where the sharper instrument sees fire that the estimate does not yet hold.
+
+### Reference table under the reward in use
+
+Mean over the 13 validation episodes, 4 by 4 tiles, 4 nominal looks (`validation_reference` in `backend/env/fitted/next_look.json`; `python3 -m backend.env.report` measures it). The mean starting score is 0.2585; an episode has 12 to 27 looks.
+
+| Player | Reads | Mean gain | Mean final score | Share of the oracle's gain | Spread over episodes (sd) | Least and most | Episodes with a gain | Gain on cells never shown |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `random` (10 seeds) | nothing | +0.0072 | 0.2658 | 0.105 | 0.0037 | +0.0024 to +0.0154 | 13 of 13 | +0.0044 |
+| constant tile, best on the training episodes (tile 5) | nothing | +0.0000 | 0.2585 | 0.000 | 0.0000 | +0.0000 to +0.0000 | 0 of 13 | +0.0000 |
+| constant tile, best in hindsight (tile 14) | nothing | +0.0205 | 0.2791 | 0.298 | 0.0396 | +0.0000 to +0.1223 | 6 of 13 | +0.0118 |
+| `centre` | nothing | +0.0057 | 0.2642 | 0.083 | 0.0056 | -0.0003 to +0.0187 | 9 of 13 | +0.0037 |
+| `latest_modis` | the observation | +0.0581 | 0.3167 | 0.844 | 0.0293 | +0.0133 to +0.1223 | 13 of 13 | +0.0359 |
+| `least_sure` | the observation | +0.0630 | 0.3215 | 0.915 | 0.0325 | +0.0133 to +0.1223 | 13 of 13 | +0.0387 |
+| `expected_new` | the observation | +0.0599 | 0.3184 | 0.870 | 0.0283 | +0.0236 to +0.1223 | 13 of 13 | +0.0361 |
+| `learned` | the observation | +0.0622 | 0.3207 | 0.903 | 0.0316 | +0.0234 to +0.1223 | 13 of 13 | +0.0388 |
+| `oracle` | the hidden rows | +0.0688 | 0.3274 | 1.000 | 0.0313 | +0.0277 to +0.1293 | 13 of 13 | +0.0438 |
+
+A mean gain is the mean final score minus the mean starting score. Differences are paired by episode, with a 90 percent interval from resampling the episodes.
+
+- **A simple rule beats chance, and beats geometry.** `least_sure` gains 0.0557 more than `random` (interval 0.0424 to 0.0695; ahead on 13 of 13 episodes) and 0.0424 more than the best constant tile in hindsight (0.0293 to 0.0556; ahead on 12 of 13).
+- **Geometry does not carry from one set of fires to another.** The constant tile that gains most on the 95 training episodes is tile 5 (+0.0159 there). On the validation episodes it gains exactly nothing: no validation fire shows a hidden detection in that tile on the looks spent. The best constant tile on the validation episodes, found in hindsight, is tile 14: +0.0205, which is 2.8 times `random` and 30 percent of the oracle's gain.
+- **Nothing beats the simple rule.** `learned` minus `least_sure` is -0.0008 (interval -0.0048 to +0.0027; ahead on 4 episodes, behind on 3). Its weights are the earlier ones, fitted with the first reward as their target. `expected_new` minus `least_sure` is -0.0031 (-0.0073 to +0.0006; ahead on 2, behind on 4). `least_sure` gains 0.0048 more than `latest_modis` (0.0012 to 0.0093).
+- **Which tile to look at is close to settled by the simple rule.** The greedy oracle gains 0.0059 more than `least_sure` (0.0026 to 0.0091; ahead on 9 of 13): `least_sure` reaches 92 percent of it.
+- **Most of a gain is not the looked-at tile itself.** Of `least_sure`'s +0.0630, +0.0387 is on cells it was never shown: the same tile at other passes, and the other tiles.
+
+With other tile splits and budgets (`other_settings`) the order of the players is the same with two exceptions: with 8 looks `expected_new` gains most of the players that read the observation (+0.1035 against +0.0977 for `least_sure`), and with 3 by 3 tiles the earlier learned weights fall behind `latest_modis` (+0.0746 against +0.0795).
+
+These are validation episodes: fires of 2024 and 2025 in two of the three regions. They fitted nothing, but the reconstruction's values were validated on fires of the same years and the first policy's settings were chosen on them. They are not fires the project has never seen.
+
+### Tables on record, under the first reward
+
+The tables below were measured on the 21 test episodes under the first reward, before the correction. A mean gain in them is a sum of rewards that did not add up, not a final score minus a starting score; the final scores are scores on the detections still hidden at the end. They are kept as measured and are not measured again, because the test episodes are closed (`rewards` in `backend/env/fitted/next_look.json`).
+
+Mean over the 21 test episodes, 4 by 4 tiles, 4 looks (`test_protocol_2`). The mean starting score is 0.2386.
 
 | Player | Mean gain | Mean final score | Share of the oracle's gain |
 | --- | --- | --- | --- |
@@ -213,15 +267,15 @@ Mean over the 21 test episodes, 4 by 4 tiles, 4 looks (`test_protocol_2` in `bac
 | `learned` | +0.0182 | 0.2508 | 0.674 |
 | `oracle` | +0.0270 | 0.2626 | 1.000 |
 
-- **A simple rule beats chance.** `least_sure` gains 0.0160 more than `random` (90 percent interval of the difference, episodes resampled: 0.0111 to 0.0212; ahead on 20 of 21 episodes).
-- **The learned policy does not beat the simple rule.** `learned` minus `least_sure` is -0.0005 (interval -0.0025 to +0.0015; ahead on 4 episodes, behind on 7). It does not differ by more than the noise, and it is not better.
-- The oracle gains 0.0088 more than the learned policy (interval 0.0055 to 0.0127).
+- Under the first reward `least_sure` was paid 0.0160 more than `random` (90 percent interval of the difference, episodes resampled: 0.0111 to 0.0212; ahead on 20 of 21 episodes).
+- The learned policy did not beat the simple rule: `learned` minus `least_sure` is -0.0005 (interval -0.0025 to +0.0015; ahead on 4 episodes, behind on 7).
+- The oracle was paid 0.0088 more than the learned policy (interval 0.0055 to 0.0127).
 
-**Which values the table was measured with.** The table was measured with the reconstruction values in use, the ones refitted under protocol version 3, which are also the values a served round plays with, so a round and the table agree. The learned policy's weights were fitted earlier, under protocol version 1 and with the earlier reconstruction values, on 118 training episodes of 2012 to 2023 and 15 validation episodes of 2024 and 2025; they were not refitted. The same file keeps beside this table the two earlier measurements of it (with the earlier reconstruction values, and before a correction to which rows a look owns), and the first table under protocol version 1 (`test`: 22 episodes, `least_sure` +0.0113, `learned` +0.0106, `oracle` +0.0225). In every one of them `least_sure` gains more than `random`, and the learned policy does not beat `least_sure`.
+**Which values that table was measured with.** The reconstruction values in use, the ones refitted under protocol version 3. The learned policy's weights were fitted earlier, under protocol version 1, with the earlier reconstruction values and with the first reward as their target, on 118 training episodes of 2012 to 2023 and 15 validation episodes of 2024 and 2025; they have not been refitted. The same file keeps beside this table the two earlier measurements of it (with the earlier reconstruction values, and before a correction to which rows a look owns), and the first table under protocol version 1 (`test`: 22 episodes, `least_sure` +0.0113, `learned` +0.0106, `oracle` +0.0225). Before that correction a look that revealed nothing could also be paid; each table says so in `empty_look`.
 
-**Learning from looks is off.** A variant in which a look also rescales the probabilities of the tiles not looked at was tried and not adopted (`learn_from_looks.adopted: false`): on 15 validation episodes the oracle's gain changed by +0.0003 (interval -0.0056 to +0.0059) and `least_sure` lost 0.0157.
+**Learning from looks is off.** A variant in which a look also rescales the probabilities of the tiles not looked at was tried under the first reward and not adopted (`learn_from_looks.adopted: false`): on 15 validation episodes the oracle's gain changed by +0.0003 (interval -0.0056 to +0.0059) and `least_sure` lost 0.0157. It has not been tried again under the reward in use.
 
-**Other settings** of tiles and budget are in `other_settings` of the same block. `least_sure` stays ahead of `random` in each; with 3 by 3 tiles `latest_modis` is level with it (0.0229 against 0.0226).
+**Other settings** of tiles and budget are in `other_settings` of each block.
 
 ## Limits
 
@@ -230,7 +284,9 @@ Mean over the 21 test episodes, 4 by 4 tiles, 4 looks (`test_protocol_2` in `bac
 - **Small validation set.** Seven episodes from two regions decide what is switched on, and they switch nothing on.
 - **Three regions.** Real runs exist only where FIRMS rows are cached: three boxes in California, British Columbia and Greece. What holds there may not hold in other fuels or latitudes.
 - **Truth is another instrument.** The hidden VIIRS detections are what VIIRS reported, with its own detection limit and misses, not the fire itself.
-- **The environment's looks are nominal slots.** A real pass is up to about 90 minutes from its slot, sometimes comes twice, and its pixel size is not known in advance. On that schedule an empty look is unknown and teaches the model nothing.
+- **The environment's looks are nominal slots.** A real pass is up to about 90 minutes from its slot, sometimes comes twice, and its pixel size is not known in advance.
+- **An empty look teaches nothing.** With no cloud mask a tile that hands over no detection cannot be told from a cloudy one, so the environment takes it as unknown and pays nothing for it. A tile that hands over even one detection is taken as looked at in full.
+- **The environment's reward is measured on validation fires only.** Its tables under the reward in use are from 13 episodes of 2024 and 2025 in two regions. The tables on the three 2021 fires were measured under the first reward and are not measured again.
 - **The calendar rescales counts.** It does not correct for cloud, view angle or orbit drift, and its interval is the spread of yearly ratios, not a calibrated probability.
 - **The simulated engine tests itself.** Its metrics and gates compare the estimate with the simulation's own fire.
 
@@ -247,4 +303,9 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 uv run --no-project --python 3.12 --with numpy --with pillow python3 -m unittest discover -s backend/tests
 ```
 
-The fitting tools (`backend.model.fit_real`, `backend.model.terra_morning`, `backend.env.learn`) need the full local cache and rewrite the tracked files they produce. Run them only to make a new set of values, never to look at the three test fires again.
+```bash
+# The environment's reference table on the validation episodes (about half an hour; needs the full local cache)
+uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.env.report table.json
+```
+
+The fitting tools (`backend.model.fit_real`, `backend.model.terra_morning`) need the full local cache and rewrite the tracked files they produce; `backend.env.learn` and `backend.env.report` write to the path they are given and play only the episodes that may be played. Run the fitting tools only to make a new set of values, never to look at the three test fires again.

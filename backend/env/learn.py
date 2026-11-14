@@ -1,10 +1,14 @@
 """Let a look teach the model about the tiles it did not look at, then fit one small policy.
 
-  uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.env.learn
+  uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.env.learn <out.json>
 
-Everything is decided on fit episodes. Episodes of 2012 to 2023 train, episodes of 2024 and 2025 validate, and the
-22 test episodes (the three 2021 fires) are played once at the end with whatever validation chose. The result,
-with its evidence and the known limits, is written to backend/env/fitted/next_look.json.
+Everything is decided on the episodes that may be played (`backend.env.episodes.fit_split`): episodes up to 2023
+train, episodes of 2024 and 2025 validate. The test episodes are closed and are never played. The result, with its
+evidence and the known limits, is written to the path given.
+
+The weights tracked in backend/env/fitted/next_look.json were fitted by an earlier form of this procedure, whose
+targets were gains on the detections still hidden after a look. Here the targets are the environment's rewards:
+the change in the score on every hidden detection of the episode.
 
 Part A, the model. A revealed tile corrects the estimate inside that tile; by itself it tells the model nothing
 about its count of burning cells elsewhere at that overpass. With `learn_from_looks` the ratio between what the look
@@ -33,16 +37,15 @@ import numpy as np
 
 from backend.env import KNOWN_LIMITS
 from backend.env.agents import LatestModisAgent, LeastSureAgent, OracleAgent, RandomAgent, run_episode, spend_now
-from backend.env.episodes import EnvEpisode, catalogue
-from backend.env.next_look import NO_LOOK, NextLookEnv
-from backend.env.policy import FEATURE_NAMES, FEATURES, FITTED_FILE, LinearPolicyAgent, fit_ridge, tile_features
+from backend.env.episodes import TRAIN_LAST_YEAR, EnvEpisode, catalogue, fit_split
+from backend.env.next_look import NO_LOOK, REWARD, NextLookEnv
+from backend.env.policy import FEATURE_NAMES, FEATURES, LinearPolicyAgent, fit_ridge, tile_features
 from backend.env.terrain import context_elevation
 from backend.eval.grid import EvalGrid
 from backend.model.occupancy import OccupancyParams
 
 TILES: int = 4
 BUDGET: int = 4
-TRAIN_LAST_YEAR: int = 2023
 PRIOR_CELLS_GRID: tuple[float, ...] = (10.0, 40.0, 160.0)
 RIDGE_GRID: tuple[float, ...] = (0.01, 0.1, 1.0, 10.0)
 TEACH_SUBSET: int = 30
@@ -150,13 +153,16 @@ def main(argv: list[str]) -> int:
     def log(msg: str) -> None:
         print(msg, flush=True)
 
+    if len(argv) < 2:
+        log("give the path to write the result to")
+        return 2
+    out_path = argv[1]
     t0 = time.time()
     episodes = catalogue(read_firms, region_box, PRESET_BY_ID)
-    train = [e for e in episodes if e.split == "fit" and e.year <= TRAIN_LAST_YEAR]
-    val = [e for e in episodes if e.split == "fit" and e.year > TRAIN_LAST_YEAR]
-    test = [e for e in episodes if e.split == "test"]
+    train, val = fit_split(episodes)
     params = load_params().as_dict()
-    log(f"episodes: {len(train)} train (2012 to {TRAIN_LAST_YEAR}), {len(val)} validation, {len(test)} test; {TILES} by {TILES} tiles, {BUDGET} looks")
+    log(f"episodes: {len(train)} train (2012 to {TRAIN_LAST_YEAR}), {len(val)} validation, "
+        f"{len(episodes) - len(train) - len(val)} closed and not played; {TILES} by {TILES} tiles, {BUDGET} looks")
     pool = ProcessPoolExecutor(max_workers=max(1, min(8, (os.cpu_count() or 2) - 1)))
 
     def play(eps: list[EnvEpisode], env_kw: dict[str, Any], specs: list[tuple[Any, ...]]) -> dict[str, list[dict[str, Any]]]:
@@ -243,42 +249,25 @@ def main(argv: list[str]) -> int:
     log(f"chosen: round {best['round']} ridge {best['ridge']:g}; validation gain {best['validation_gain']:+.4f} against least sure "
         f"{_mean_gain(val_ref['least_sure']):+.4f} and oracle {_mean_gain(val_ref['oracle']):+.4f}")
 
-    # ---- the test episodes, once -------------------------------------------------------------------------------
-    specs_test = [("oracle",), ("least_sure",), ("latest_modis",), ("linear", best["weights"])] + [("random", s) for s in range(RANDOM_SEEDS)]
-    t = play(test, env_kw, specs_test)
+    # ---- no test episode is played: the choice above was made on the validation episodes, and they judge it -----
     pool.shutdown()
-    oracle_gain = _mean_gain(t["oracle"])
-    rand_by_seed = [float(np.mean([r["gain"] for r in t["random"][i * len(test):(i + 1) * len(test)]])) for i in range(RANDOM_SEEDS)]
-    table: dict[str, Any] = {}
-    for name, key in (("random", "random"), ("latest_modis", "latest_modis"), ("least_sure", "least_sure"), ("learned", "linear"), ("oracle", "oracle")):
-        rows = t[key]
-        gain = _mean_gain(rows)
-        table[name] = {
-            "mean_final_score": round(float(np.mean([r["final"] for r in rows])), 4),
-            "mean_gain": round(gain, 4),
-            "share_of_oracle_gain": round(gain / oracle_gain, 3) if oracle_gain > 0 else None,
-            "sd_of_mean_gain_across_seeds": round(float(np.std(rand_by_seed, ddof=1)), 4) if name == "random" else None,
-        }
-    learned_vs_least = paired_bootstrap(_by_episode(t["linear"], test), _by_episode(t["least_sure"], test))
-    learned_vs_oracle = paired_bootstrap(_by_episode(t["oracle"], test), _by_episode(t["linear"], test))
-    beats = learned_vs_least["p05"] > 0.0
-    behind = learned_vs_least["p95"] < 0.0
+    beats = val_boot["p05"] > 0.0
+    behind = val_boot["p95"] < 0.0
     sentence = (
         "the learned policy beats least sure by more than the noise" if beats else
         "the learned policy is behind least sure by more than the noise" if behind else
         "the learned policy does not differ from least sure by more than the noise"
     )
-    log("test episodes, once: " + "  ".join(f"{a} {table[a]['mean_gain']:+.4f} ({table[a]['share_of_oracle_gain']})" for a in table))
-    log(f"learned minus least sure: {learned_vs_least['mean_difference']:+.4f} [{learned_vs_least['p05']:+.4f}, {learned_vs_least['p95']:+.4f}]: {sentence}")
+    log(f"learned minus least sure on validation: {val_boot['mean_difference']:+.4f} [{val_boot['p05']:+.4f}, {val_boot['p95']:+.4f}]: {sentence}")
 
     doc = {
         "what": "next-look environment: the model change and the learned policy",
         "known_limits": KNOWN_LIMITS,
-        "setting": {"tiles": f"{TILES}x{TILES}", "budget": BUDGET, "score": "csi", "reward_target": "still_hidden",
+        "setting": {"tiles": f"{TILES}x{TILES}", "budget": BUDGET, "score": "csi", "reward": REWARD,
                     "spending": "every agent spends the budget on the same looks, spread evenly; only the tile differs"},
-        "episodes": {"train": len(train), "validation": len(val), "test": len(test),
+        "episodes": {"train": len(train), "validation": len(val),
                      "train_years": f"2012 to {TRAIN_LAST_YEAR}", "validation_years": "2024 and 2025",
-                     "test": "the three 2021 fires, played once"},
+                     "test": "closed and not played"},
         "reconstruction_parameters": params["fitted_on"],
         "learn_from_looks": teach_doc,
         "policy": {
@@ -300,26 +289,15 @@ def main(argv: list[str]) -> int:
                           "latest_modis": _mean_gain(val_ref["latest_modis"]), "random": _mean_gain(val_ref["random"]),
                           "oracle": _mean_gain(val_ref["oracle"])},
                 "learned_minus_least_sure": val_boot,
+                "plainly": sentence,
             },
-        },
-        "test": {
-            "episodes": len(test),
-            "mean_start_score": round(float(np.mean([r["start"] for r in t["oracle"]])), 4),
-            "agents": table,
-            "random_mean_gain_by_seed": [round(v, 4) for v in rand_by_seed],
-            "learned_minus_least_sure": learned_vs_least,
-            "oracle_minus_learned": learned_vs_oracle,
-            "plainly": sentence,
-            "per_episode": {name: [round(v, 5) for v in _by_episode(t[key], test)]
-                            for name, key in (("latest_modis", "latest_modis"), ("least_sure", "least_sure"), ("learned", "linear"), ("oracle", "oracle"))},
-            "episode_keys": [e.key for e in test],
         },
         "seconds": round(time.time() - t0, 1),
         "generated_utc": _stamp(),
     }
-    FITTED_FILE.parent.mkdir(parents=True, exist_ok=True)
-    FITTED_FILE.write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
-    log(f"written {FITTED_FILE.name} in {doc['seconds']} s")
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(doc, indent=1) + "\n")
+    log(f"written {out_path} in {doc['seconds']} s")
     return 0
 
 

@@ -8,8 +8,13 @@ An episode is chosen from MODIS rows alone: VIIRS, the instrument the environmen
 overpasses are counted, so no episode exists, starts or ends because of a hidden row.
 
 Split. `test`: the windows of the three 2021 test fires (the test box of each region inside its exclusion dates,
-`backend/model/training.py`). They are test only. `fit`: every other window, with the rows of the test fires
-removed first; these may be used for fitting anything.
+`backend/model/training.py`). `fit`: every other window, with the rows of the test fires removed first.
+
+What may be played. The test of the three 2021 fires is closed: its looks are on record and no window of a test
+fire's region in the year of its fire is scored again. That covers the test episodes, and it is read here to cover
+the fit windows of that year as well, although they lie outside each fire's own box and dates (`may_be_played`).
+The episodes that may be played are split by year: up to `TRAIN_LAST_YEAR` they train, after it they validate
+(`fit_split`). The reference tables and every choice are made on the validation episodes.
 """
 
 from __future__ import annotations
@@ -27,6 +32,7 @@ from backend.model.real_blind import EPISODE_OVERPASSES, Window, _chosen_from, _
 from backend.model.training import EXCLUSIONS, REGIONS, excluded_mask
 
 YEARS: tuple[int, ...] = tuple(range(2012, 2026))     # Suomi NPP's VIIRS record starts in January 2012
+TRAIN_LAST_YEAR: int = 2023                           # episodes up to this year train; later ones validate
 PAD_S: float = 2.0 * 86400.0
 # Thresholds for "enough detections to matter", both read from MODIS rows only.
 MIN_MODIS_PIXELS: int = 60        # MODIS pixels in the tile over the run
@@ -117,6 +123,23 @@ def catalogue(
                         keep = (full.time_s >= w.start_s - PAD_S) & (full.time_s < w.end_s + PAD_S)
                         out.append(EnvEpisode(region, year, (2, 2), test_box, w, full.select(keep), "test"))
     return out
+
+
+def closed_year(region_id: str) -> int | None:
+    """The year of a region's test fire, or None for a region that has none."""
+    ex = EXCLUSIONS.get(region_id)
+    return None if ex is None else int(ex[0][:4])
+
+
+def may_be_played(ep: EnvEpisode) -> bool:
+    """False for a test episode and for any window of a test fire's region in the year of its fire."""
+    return ep.split == "fit" and ep.year != closed_year(ep.region_id)
+
+
+def fit_split(episodes: list[EnvEpisode]) -> tuple[list[EnvEpisode], list[EnvEpisode]]:
+    """(train, validation): the episodes that may be played, up to `TRAIN_LAST_YEAR` and after it."""
+    open_ = [e for e in episodes if may_be_played(e)]
+    return [e for e in open_ if e.year <= TRAIN_LAST_YEAR], [e for e in open_ if e.year > TRAIN_LAST_YEAR]
 
 
 def _hidden_pixels(ep: EnvEpisode) -> int:
