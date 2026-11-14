@@ -16,6 +16,7 @@ labelled as such in the payload:
 
 from __future__ import annotations
 
+from functools import lru_cache
 import math
 from typing import Any
 
@@ -31,12 +32,12 @@ from backend.model.sensor_physics import (
     subsatellite_point_from_look,
 )
 
-# Nominal local solar time of the equator crossing on the day side, hours. Terra descends at 10:30; Aqua, Suomi NPP,
-# NOAA-20 and NOAA-21 ascend at 13:30 (sources in sensor_physics.ORBIT_NODE_SOURCES).
+# Nominal local solar time of the equator crossing on the day side, hours. Terra descends at 10:30; Aqua, NOAA-20
+# and NOAA-21 ascend at 13:30 and Suomi NPP at 13:25 (sources in sensor_physics.ORBIT_NODE_SOURCES).
 _DAY_CROSSING_HR: dict[str, float] = {
-    "MODIS_TERRA": 10.5, "MODIS_AQUA": 13.5, "VIIRS_SNPP": 13.5, "VIIRS_NOAA20": 13.5, "VIIRS_NOAA21": 13.5,
+    "MODIS_TERRA": 10.5, "MODIS_AQUA": 13.5, "VIIRS_SNPP": 13.0 + 25.0 / 60.0, "VIIRS_NOAA20": 13.5, "VIIRS_NOAA21": 13.5,
 }
-_ELEMENT_ALIAS: dict[str, str] = {"VIIRS_SNPP": "VIIRS_NOAA20"}
+_ELEMENT_ALIAS: dict[str, str] = {}
 
 
 def nominal_subsat_lst_hr(platform: str, is_day: bool, lat_deg: float) -> float:
@@ -69,6 +70,55 @@ def cross_track_km(platform: str, vza_deg: float) -> float:
     """Ground distance from the sub-satellite track to a pixel seen at this view zenith."""
     scan = scan_angle_from_view_zenith(vza_deg, P.altitude_km(platform))
     return EARTH_RADIUS_KM * math.radians(max(0.0, vza_deg - scan))
+
+
+# Half the swath on the ground, km (MODIS 2,330 km and VIIRS 3,060 km wide).
+_HALF_SWATH_KM: dict[str, float] = {"MODIS": 1165.0, "VIIRS": 1530.0}
+
+
+def _scan_angle_deg(ground_km: float, altitude_km: float) -> float:
+    """Scan angle at the satellite for a pixel `ground_km` from the sub-satellite track, on a spherical Earth."""
+    gamma = ground_km / EARTH_RADIUS_KM
+    return math.degrees(math.atan2(math.sin(gamma), (EARTH_RADIUS_KM + altitude_km) / EARTH_RADIUS_KM - math.cos(gamma)))
+
+
+def pixel_km_at_ground_distance(instrument_family: str, ground_km: float) -> tuple[float, float]:
+    """(scan, track) size in km of the instrument's pixel at this distance from the sub-satellite track."""
+    from backend.model.sensor_physics import (
+        MODIS_ALTITUDE_KM, MODIS_MAX_SCAN_DEG, VIIRS_ALTITUDE_KM, VIIRS_MAX_SCAN_DEG, modis_geometry_from_scan,
+        viirs_geometry_from_scan,
+    )
+
+    if instrument_family == "MODIS":
+        g = modis_geometry_from_scan(min(_scan_angle_deg(ground_km, MODIS_ALTITUDE_KM), MODIS_MAX_SCAN_DEG))
+    else:
+        g = viirs_geometry_from_scan(min(_scan_angle_deg(ground_km, VIIRS_ALTITUDE_KM), VIIRS_MAX_SCAN_DEG))
+    return float(g["scan_km"]), float(g["track_km"])
+
+
+@lru_cache(maxsize=None)
+def typical_pixel_km(instrument_family: str) -> tuple[float, float]:
+    """(scan, track) of the instrument's median pixel across its swath: the size to assume for a pass whose place
+    in the swath is not known. A ground point is equally likely to lie anywhere across the swath, so the median is
+    taken over ground distance from the track, from nadir to the swath edge."""
+    d = np.linspace(0.0, _HALF_SWATH_KM[instrument_family], 1001)
+    sizes = np.array([pixel_km_at_ground_distance(instrument_family, float(x)) for x in d])
+    return float(np.median(sizes[:, 0])), float(np.median(sizes[:, 1]))
+
+
+def pixel_km_from_pass_time(platform: str, time_s: float, lon_deg: float, lat_deg: float) -> tuple[float, float]:
+    """(scan, track) of the platform's pixel at a point, from the time it passed and its nominal crossing time.
+
+    The local solar time of the point at the pass, against the local time at which the nominal track crosses that
+    latitude, gives the distance from the track; the pixel size follows from the scan geometry. No detection is
+    read. The crossing time is the nominal one, so a drifted orbit (Terra and Aqua after 2021) is off.
+    """
+    lst = ((time_s % 86400.0) / 3600.0 + lon_deg / 15.0) % 24.0
+    is_day = 6.0 <= lst < 18.0
+    dev_hr = abs(_wrap_hr(lst - nominal_subsat_lst_hr(platform, is_day, lat_deg)))
+    fam = P.family(platform)
+    ground = min(dev_hr / _hours_per_km(platform, is_day, lat_deg), _HALF_SWATH_KM[fam])
+    return pixel_km_at_ground_distance(fam, ground)
 
 
 def _hours_per_km(platform: str, is_day: bool, lat_deg: float) -> float:
@@ -127,4 +177,34 @@ def pass_geometry(
         "view_zenith_deg": round(vza, 2),
         "satellite_side": side,
         "crossing_lst_hr": round(crossing, 3),
+    }
+
+
+def slot_geometry(slot: Any, center_lon: float, center_lat: float) -> dict[str, Any]:
+    """Geometry of one pass of the pass list (`backend.eval.schedule.Slot`) for the payload's `passes` entry.
+
+    Nothing here comes from a detection: the distance of the box from the ground track and the side the satellite
+    stood on are read from the granule's swath polygon, and the scan angle, the view zenith and the sub-satellite
+    point follow from them on a spherical Earth. The same keys as `pass_geometry`.
+    """
+    alt = P.altitude_km(slot.platform)
+    ground = float(slot.cross_track_km or 0.0)
+    scan = _scan_angle_deg(ground, alt)
+    vza = scan + math.degrees(ground / EARTH_RADIUS_KM)
+    side = slot.satellite_side or "west"
+    az = P.look_azimuth_deg(slot.platform, slot.is_day, center_lat, side)
+    sub_lon, sub_lat = subsatellite_point_from_look(center_lon, center_lat, alt, vza, az)
+    return {
+        "sensor": slot.platform,
+        "sensor_code": P.PLATFORM_CODES[slot.platform],
+        "orbit_node": P.node(slot.platform, slot.is_day),
+        "subsat_lon": sub_lon,
+        "subsat_lat": sub_lat,
+        "altitude_km": alt,
+        "scan_angle_deg": round(scan, 2),
+        "azimuth_deg": round(az, 1),
+        "view_zenith_deg": round(vza, 2),
+        "satellite_side": side,
+        "crossing_lst_hr": round(((slot.time_s % 86400.0) / 3600.0 + float(sub_lon) / 15.0) % 24.0, 3),
+        "cross_track_km": round(ground, 1),
     }

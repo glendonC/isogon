@@ -1,4 +1,4 @@
-"""Benchmark gates are computed from backend values or marked as design targets (CONTRACT, batch 2)."""
+"""Benchmark gates are computed from backend values or marked as design targets."""
 
 from __future__ import annotations
 
@@ -55,6 +55,9 @@ class GateBuilderTests(unittest.TestCase):
         self.assertEqual(ok["G1_2012_CONTINUITY"]["status"], "PASSED")
         self.assertEqual(ok["G5_CONFORMAL_COVERAGE"]["status"], "PASSED")
         self.assertIn("1.04", ok["G1_2012_CONTINUITY"]["metric"])
+        # The raw ratio weight 1.42 has no published source, so the metric text must call it a modelled proxy.
+        self.assertIn("modelled proxy", ok["G1_2012_CONTINUITY"]["metric"])
+        self.assertIn("1.42", ok["G1_2012_CONTINUITY"]["metric"])
         self.assertIn("89.9", ok["G5_CONFORMAL_COVERAGE"]["metric"])
         bad = by_id({"step_2012_harmonized_ratio": 0.62, "step_2012_raw_ratio": 4.2,
                      "empirical_90_coverage_pct": 70.0, "step_2012_coobs_frames": 5})

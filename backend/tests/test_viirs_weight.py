@@ -1,4 +1,4 @@
-"""T14: the Stage 3 VIIRS weight must not depend on the VIIRS value being assimilated (LEAD ANSWER 20:03).
+"""The Stage 3 VIIRS weight must not depend on the VIIRS value being assimilated.
 
 No test here pins the 2012 step ratio inside the G1 band: that gate must stay able to fail.
 """
@@ -17,9 +17,9 @@ if str(REPO_ROOT) not in sys.path:
 
 from backend.model.solver import viirs_observation_variance  # noqa: E402
 
-# Reconstruction RMSE against the simulated truth (MW/km2) of the five default runs before T14 (commit c8d01e1,
-# T13 report). T14 must not make any of them worse.
-RMSE_BEFORE_T14: dict[str, float] = {
+# Reconstruction RMSE against the simulated truth (MW/km2) of the five default runs when the VIIRS variance also
+# carries a term in the observed value. The area-only variance must not be worse on any of them.
+RMSE_WITH_A_VALUE_TERM: dict[str, float] = {
     "plumas_ca": 10.80,
     "lytton_bc": 12.56,
     "evia_greece": 10.39,
@@ -42,21 +42,21 @@ class ViirsWeightTests(unittest.TestCase):
 
 
 class ReconstructionRmseTests(unittest.TestCase):
-    def test_rmse_against_simulated_truth_is_no_worse_than_before(self) -> None:
+    def test_rmse_against_simulated_truth_is_no_worse_than_with_a_value_term(self) -> None:
         from backend.model.calibrator import get_pretrained_calibrator
         from backend.model.solver import solve_region_reconstruction
         from backend.terrain.live_region import PRESET_BY_ID, load_region_terrain
 
         cal = get_pretrained_calibrator()
-        for rid, before in RMSE_BEFORE_T14.items():
+        for rid, bound in RMSE_WITH_A_VALUE_TERM.items():
             with self.subTest(region=rid):
                 terrain = load_region_terrain(PRESET_BY_ID[rid], allow_network=False)
                 if not terrain.terrain_source.startswith("aws_terrarium"):
-                    self.skipTest(f"real terrain for {rid} is not cached on this machine")
+                    self.skipTest(f"real terrain for {rid} is not cached")
                 run = solve_region_reconstruction(
                     region_terrain=terrain, holdout_viirs=False, cloud_override=None, calibrator=cal
                 )
-                self.assertLessEqual(run.metrics["reconstructed_rmse_mw_km2"], before)
+                self.assertLessEqual(run.metrics["reconstructed_rmse_mw_km2"], bound)
 
 
 if __name__ == "__main__":

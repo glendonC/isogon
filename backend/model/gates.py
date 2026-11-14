@@ -4,7 +4,7 @@ Every gate carries a `kind`:
   computed       the metric text, inputs and status are derived here from computed values; the status
                  is PASSED or FAILED against the stated criterion, or NOT_EVALUATED when an input is
                  missing (for example the static field file has no run to read G1 and G5 from).
-  design_target  the backend does not compute this check yet; the gate states the target and is always
+  design_target  the backend does not compute this check; the gate states the target and is always
                  NOT_EVALUATED. It must never be shown as a measurement.
 """
 
@@ -49,6 +49,10 @@ def build_benchmark_gates(
     reconstruct run's `metrics` (G1 and G5 read them) and may be None."""
     run_label = f"run {run_id}" if run_id else "run"
     gates: list[dict[str, Any]] = []
+    # The gates are defined on simulated runs. A real run's metrics are other quantities (scores of its own blind
+    # test against hidden detections), so G1 and G5 are not evaluated on one; its test is the run's `blind_test`.
+    real_run = bool(run_metrics) and run_metrics.get("source") == "firms"
+    not_on_real = f"{run_label}: a real FIRMS run; this gate is defined on simulated runs and is not evaluated on it (see the run's blind_test)"
 
     # G1: from the run's computed 2012 step ratios.
     g1: dict[str, Any] = {
@@ -59,7 +63,9 @@ def build_benchmark_gates(
         "source": "reconstruct run metrics step_2012_harmonized_ratio and step_2012_raw_ratio",
     }
     coobs = (run_metrics or {}).get("step_2012_coobs_frames")
-    if run_metrics is None or "step_2012_harmonized_ratio" not in run_metrics:
+    if real_run:
+        g1.update(status="NOT_EVALUATED", metric=not_on_real, inputs={})
+    elif run_metrics is None or run_metrics.get("step_2012_harmonized_ratio") is None:
         g1.update(status="NOT_EVALUATED", metric="evaluated per reconstruct run (GET /api/sensor-model?run_id=...)", inputs={})
     elif coobs is not None and int(coobs) == 0:
         g1.update(status="NOT_EVALUATED", metric=f"{run_label}: no clear co-observed frames, harmonized ratio not computed",
@@ -69,7 +75,11 @@ def build_benchmark_gates(
         raw = float(run_metrics.get("step_2012_raw_ratio", float("nan")))
         g1.update(
             status=_status(G1_RATIO_BAND[0] <= h <= G1_RATIO_BAND[1]),
-            metric=f"{run_label}: harmonized step ratio {h:.2f} (raw {raw:.2f}x)",
+            metric=(
+                f"{run_label}: harmonized step ratio {h:.2f} (raw {raw:.2f}x; raw is a modelled proxy, "
+                "(MODIS footprints + 1.42 x VIIRS footprints) / MODIS footprints, and the 1.42 weight has no "
+                "published source)"
+            ),
             inputs={"step_2012_harmonized_ratio": h, "step_2012_raw_ratio": raw, "step_2012_coobs_frames": coobs},
         )
     gates.append(g1)
@@ -89,7 +99,7 @@ def build_benchmark_gates(
     raw_rmse = float(paired["raw_overall_rmse_dex"])
     harm_rmse = float(paired["harmonized_overall_rmse_dex"])
     n_pairs = int(paired.get("n_pairs", 0))
-    gates.append({
+    g3 = {
         "gate_id": "G3_PAIRED_RESIDUAL",
         "title": "Harmonized vs Raw Paired Residual (Modelled Self-Check)",
         "kind": "computed",
@@ -98,7 +108,17 @@ def build_benchmark_gates(
         "metric": f"paired RMSE {harm_rmse:.4f} dex harmonized vs {raw_rmse:.4f} dex raw on {n_pairs} simulated pairs",
         "source": "paired_1330_calibration (simulated Aqua MODIS and NOAA-20 VIIRS cluster pairs)",
         "inputs": {"raw_rmse_dex": raw_rmse, "harmonized_rmse_dex": harm_rmse, "n_pairs": n_pairs},
-    })
+    }
+    if real_run:
+        # a self-check of the simulated engine on simulated pairs: it says nothing about the real run on screen,
+        # so beside a real run it is not shown as passed or failed
+        g3.update(
+            status="NOT_EVALUATED",
+            metric=(f"not evaluated for this run: the check runs on {n_pairs} simulated pairs of the simulated engine and "
+                    "says nothing about a real FIRMS run. A real run's test is its blind test (blind_test in the run's payload)"),
+            inputs={},
+        )
+    gates.append(g3)
 
     gates.append({
         "gate_id": "G4_SPATIOTEMPORAL_ASSIMILATION",
@@ -119,7 +139,9 @@ def build_benchmark_gates(
         "criterion": f"empirical coverage within [{G5_COVERAGE_BAND_PCT[0]:.0f}%, {G5_COVERAGE_BAND_PCT[1]:.0f}%]",
         "source": "reconstruct run metrics empirical_90_coverage_pct (split conformal, spatial folds)",
     }
-    if run_metrics is None or "empirical_90_coverage_pct" not in run_metrics:
+    if real_run:
+        g5.update(status="NOT_EVALUATED", metric=not_on_real, inputs={})
+    elif run_metrics is None or run_metrics.get("empirical_90_coverage_pct") is None:
         g5.update(status="NOT_EVALUATED", metric="evaluated per reconstruct run (GET /api/sensor-model?run_id=...)", inputs={})
     else:
         cov = float(run_metrics["empirical_90_coverage_pct"])

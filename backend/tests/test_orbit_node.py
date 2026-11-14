@@ -1,4 +1,4 @@
-"""Observer passes carry orbit_node from the platform and the day or night side (CONTRACT, batch 2)."""
+"""Observer passes carry orbit_node from the platform and the day or night side."""
 
 from __future__ import annotations
 

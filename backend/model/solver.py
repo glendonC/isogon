@@ -38,6 +38,8 @@ from backend.model.sensor_physics import (
     detection_midpoint_mw,
     detection_probability,
     modis_geometry_from_scan,
+    orbit_node,
+    orbit_node_rule_payload,
     sensor_family,
     slant_path_transmittance,
     subsatellite_point_from_look,
@@ -817,6 +819,16 @@ def _build_export_artifacts(
     return geojson_bytes, csv_bytes
 
 
+def viirs_observation_variance(area_km2: float, viirs_surface: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Stage 3 observation variance of one VIIRS frame, per cell (MW/km2 squared).
+
+    It depends on the footprint area only. A term in the observed VIIRS value, such as (0.11 * value) ** 2, would
+    weight each cell by a variance computed from the very value being assimilated: bright fire cores would get the
+    least VIIRS weight and the update would lean on the advected prior, which biases the harmonized flux low.
+    """
+    return np.full(np.shape(viirs_surface), 1.6 + 2.8 * float(area_km2), dtype=np.float64)
+
+
 def solve_region_reconstruction(
     region_terrain: LoadedRegionTerrain,
     holdout_viirs: bool = False,
@@ -844,7 +856,7 @@ def solve_region_reconstruction(
     t_s1_start = time.perf_counter()
     grid = build_any_region_grid(region_terrain.dem_m, bbox_tuple, region_terrain.terrain_source)
     land_mask, fuel = _compute_land_and_fuel(grid, spec.biome)
-    base_schedule = _build_24_frame_schedule()
+    base_schedule = _build_24_frame_schedule(lat_deg=float(spec.center_lat))
 
     z_true_all = _simulate_regional_fire_front(grid, spec.biome, land_mask, fuel, base_schedule, rng)
 
@@ -1131,7 +1143,7 @@ def solve_region_reconstruction(
         # VIIRS 375 m precision (STRICTLY ZERO when holdout_viirs=True!)
         if (not holdout_viirs) and v_valid[t_idx]:
             kappa_v = viirs_swath_all[t_idx] * clear_w_all[t_idx] * (v_topo_vis[t_idx] ** 1.25)
-            var_v = 1.6 + 2.8 * float(v_areas[t_idx]) + (0.11 * np.maximum(viirs_surface_all[t_idx], 1.2)) ** 2
+            var_v = viirs_observation_variance(float(v_areas[t_idx]), viirs_surface_all[t_idx])
             prec_v = kappa_v / var_v
             obs_v_debiased = viirs_surface_all[t_idx]
         else:
@@ -1263,17 +1275,18 @@ def solve_region_reconstruction(
 
     total_modis_fps = sum(len(fps) for fps in modis_fps_by_frame)
     total_viirs_fps = sum(len(fps) for fps in viirs_fps_by_frame)
-    raw_step_ratio = round(
-        max(2.65, min(5.20, (total_modis_fps + total_viirs_fps * 1.42) / max(total_modis_fps, 1))),
-        2,
-    )
+    # The step ratios are not clamped: a clamp to the band the 2012 continuity gate passes would mean the gate
+    # could never fail.
+    # The raw ratio is a modelled proxy: footprint counts with VIIRS weighted 1.42. That weight has no published
+    # source; the G1 gate text says so.
+    raw_step_ratio = round((total_modis_fps + total_viirs_fps * 1.42) / max(total_modis_fps, 1), 2)
     coobs_frames = [t for t in range(NUM_FRAMES) if m_valid[t] and v_valid[t] and float(np.mean(cloud_all[t] > 0.35)) < 0.25]
     if coobs_frames:
         flux_recon_co = float(np.mean([np.sum(z_smooth[t] * grid.cell_area_km2) for t in coobs_frames]))
         flux_ref_co = float(np.mean([np.sum(viirs_ref_all[t] * grid.cell_area_km2) for t in coobs_frames]))
-        harm_ratio = round(float(np.clip(flux_recon_co / max(flux_ref_co, 1.0), 0.93, 1.09)), 2)
+        harm_ratio = round(float(flux_recon_co / max(flux_ref_co, 1.0)), 2)
     else:
-        harm_ratio = 1.03
+        harm_ratio = 1.03  # placeholder when no clear co-observed frame exists; step_2012_coobs_frames is then 0
 
     s4_ms = round((time.perf_counter() - t_s4_start) * 1000.0, 2)
 
@@ -1314,6 +1327,7 @@ def solve_region_reconstruction(
                 {
                     "sensor": ep.modis_sensor,
                     "sensor_code": SENSOR_CODES[ep.modis_sensor],
+                    "orbit_node": orbit_node(ep.modis_sensor, bool(ep.is_day)),
                     "subsat_lon": m_sub_lon,
                     "subsat_lat": m_sub_lat,
                     "altitude_km": m_alt,
@@ -1335,6 +1349,7 @@ def solve_region_reconstruction(
                 {
                     "sensor": ep.viirs_sensor,
                     "sensor_code": SENSOR_CODES[ep.viirs_sensor],
+                    "orbit_node": orbit_node(ep.viirs_sensor, bool(ep.is_day)),
                     "subsat_lon": v_sub_lon,
                     "subsat_lat": v_sub_lat,
                     "altitude_km": v_alt,
@@ -1390,7 +1405,11 @@ def solve_region_reconstruction(
             }
         )
 
-    if region_terrain.terrain_source == "aws_terrarium_eox_s2":
+    if region_terrain.terrain_source == "aws_terrarium_esri_world_imagery":
+        terrain_prov = "Real AWS Terrarium 512x512 DEM + Maxar/Esri 2048x2048 World Imagery"
+        terrain_stage_label = "AWS Terrarium 30m DEM + Maxar 2K Ortho"
+        terrain_model_name = "Mercator-WGS84 High-Res Tile Stitcher"
+    elif region_terrain.terrain_source == "aws_terrarium_eox_s2":
         terrain_prov = "Real AWS Terrarium DEM + EOX Sentinel-2 Cloudless Orthoimagery"
         terrain_stage_label = "AWS Terrarium DEM + Sentinel-2 Ortho"
         terrain_model_name = "Mercator-WGS84 Tile Stitcher"
@@ -1404,8 +1423,8 @@ def solve_region_reconstruction(
         terrain_model_name = "Multi-Octave Ridged Relief Synthesizer"
 
     provenance = (
-        f"{terrain_prov} · Modeled 3-Stage Hybrid Physics-ML Fire Reconstruction "
-        "(Zero Downloaded NASA FIRMS Rows)"
+        f"{terrain_prov}. Simulated run: a modelled fire seen by modelled satellite passes "
+        "(no NASA FIRMS row is used in this run)"
     )
 
     metrics: dict[str, Any] = {
@@ -1420,6 +1439,7 @@ def solve_region_reconstruction(
         "subpixel_viirs_fires_recovered_pct": round(sub_recovered_pct, 1),
         "step_2012_raw_ratio": raw_step_ratio,
         "step_2012_harmonized_ratio": harm_ratio,
+        "step_2012_coobs_frames": len(coobs_frames),
     }
 
     pipeline_stages: list[dict[str, Any]] = [
@@ -1438,9 +1458,9 @@ def solve_region_reconstruction(
             "duration_ms": round(s1_ms, 1),
             "status": "completed",
             "detail": (
-                "24 epochs · bow-tie + 3-zone"
+                "24 epochs, bow-tie + 3-zone"
                 if cloud_override is None
-                else f"24 epochs · cloud override {cloud_override:.2f}"
+                else f"24 epochs, cloud override {cloud_override:.2f}"
             ),
         },
         {
@@ -1488,6 +1508,7 @@ def solve_region_reconstruction(
         ],
         "aoi_center": [center_lon, center_lat],
         "sensor_codes": {str(k): v for k, v in CODE_TO_SENSOR.items()},
+        "orbit_node_rule": orbit_node_rule_payload(),
         "footprint_schema": [
             "lon",
             "lat",

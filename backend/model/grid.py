@@ -179,7 +179,11 @@ def build_terrain_grid(
             fallback = synthesize_norcal_dem(lon_2d, lat_2d)
             elevation_m = np.where(valid_mask, raw, fallback).astype(np.float32)
         terrain_source = "real_downloaded_dem_ca_dem_f32"
-        dem_path_used: str | None = str(resolved_dem)
+        # Repo-relative (POSIX) so tracked metadata never carries an absolute local path or user name.
+        try:
+            dem_path_used: str | None = resolved_dem.resolve().relative_to(Path(repo_root).resolve()).as_posix()
+        except ValueError:
+            dem_path_used = resolved_dem.name
     else:
         elevation_m = synthesize_norcal_dem(lon_2d, lat_2d)
         terrain_source = "analytical_feather_river_fallback"

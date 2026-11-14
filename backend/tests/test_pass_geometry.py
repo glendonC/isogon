@@ -1,4 +1,4 @@
-"""T15: simulated pass geometry follows the orbit node (ground track heading from inclination and latitude)."""
+"""Simulated pass geometry follows the orbit node (ground track heading from inclination and latitude)."""
 
 from __future__ import annotations
 

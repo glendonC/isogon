@@ -1,12 +1,13 @@
 """Platform facts for real FIRMS rows: names, instrument family, orbit, and the scan axis on the ground.
 
-The simulated engine knows four sensors (`sensor_physics.SENSOR_CODES`). Real rows from 2012 on also carry Suomi NPP,
-so real runs use the five names below. Nothing here changes a simulated run: the simulated tables are left as they are
-and Suomi NPP borrows NOAA-20's orbit elements (both fly the 824 km sun-synchronous orbit with a 13:30 ascending
-crossing, https://space.oscar.wmo.int/satellites/view/snpp).
+The simulated engine flies four sensors. Real rows from 2012 on also carry Suomi NPP, so real runs use the five
+names below. Suomi NPP is in `sensor_physics.SENSOR_CODES` and its orbit tables as code 4 (824 km sun-synchronous
+orbit, 13:25 ascending crossing, https://space.oscar.wmo.int/satellites/view/snpp); no simulated pass uses it.
 """
 
 from __future__ import annotations
+
+import math
 
 from backend.model.sensor_physics import (
     MODIS_ALTITUDE_KM,
@@ -15,12 +16,46 @@ from backend.model.sensor_physics import (
     orbit_node,
 )
 
-# Order is the platform code used in arrays. Codes 0 to 3 equal `sensor_physics.SENSOR_CODES`; 4 is new.
+# Order is the platform code used in arrays, equal to `sensor_physics.SENSOR_CODES`.
 PLATFORMS: tuple[str, ...] = ("MODIS_TERRA", "MODIS_AQUA", "VIIRS_NOAA20", "VIIRS_NOAA21", "VIIRS_SNPP")
 PLATFORM_CODES: dict[str, int] = {name: i for i, name in enumerate(PLATFORMS)}
 
-# Which simulated-engine sensor supplies the orbit elements and the day-side node.
-_ORBIT_ALIAS: dict[str, str] = {"VIIRS_SNPP": "VIIRS_NOAA20"}
+# First UTC day of each platform's rows in the FIRMS archive this project reads (backend/firms/archive.py: MODIS
+# Collection 6.1 from November 2000 for Terra and July 2002 for Aqua, VIIRS 375 m from 20 January 2012 for Suomi
+# NPP and 1 April 2018 for NOAA-20). This table is what says which platforms of a hidden instrument were flying in
+# a window; the hidden rows are never asked.
+# NOAA-21: 2023-03-01 is what FIRMS itself states. Its data_availability answer for the standard-processing product
+# VIIRS_NOAA21_SP gives 2023-03-01 as the first day (the answer `backend/firms/area_api.py` reads before it fetches
+# rows). It is not taken from the first cached row, which is a hidden row and happens to carry the same day
+# because the fetch began there. NASA's CMR lists granules of the same product (VJ214IMG, C2831626262-LPCLOUD)
+# from 2023-02-10; FIRMS serves no row for those first weeks, so a schedule must not start before this table's day
+# (backend/eval/schedule.py takes the later of the two).
+ARCHIVE_FIRST_DAY: dict[str, str] = {
+    "MODIS_TERRA": "2000-11-01",
+    "MODIS_AQUA": "2002-07-04",
+    "VIIRS_SNPP": "2012-01-20",
+    "VIIRS_NOAA20": "2018-04-01",
+    "VIIRS_NOAA21": "2023-03-01",
+}
+
+
+def _day_s(day: str) -> float:
+    import calendar
+
+    y, m, d = (int(v) for v in day.split("-"))
+    return float(calendar.timegm((y, m, d, 0, 0, 0, 0, 0, 0)))
+
+
+def archive_platforms(instrument_family: str, start_s: float, end_s: float) -> tuple[str, ...]:
+    """Platforms of one instrument family with rows in the archive at some time in [start_s, end_s), in code order."""
+    return tuple(
+        name for name in PLATFORMS
+        if name in ARCHIVE_FIRST_DAY and family(name) == instrument_family and _day_s(ARCHIVE_FIRST_DAY[name]) < end_s
+    )
+
+
+# Kept for callers that pass a name the orbit tables do not hold; every platform above is in them.
+_ORBIT_ALIAS: dict[str, str] = {}
 
 # FIRMS `satellite` column values, by instrument. Sources: FIRMS attribute tables for MODIS (Terra, Aqua; T and A in
 # near real time files) and VIIRS (N is Suomi NPP; N20 or 1 is NOAA-20; N21 is NOAA-21).
@@ -82,3 +117,14 @@ def scan_axis_deg(platform: str, is_day: bool, lat_deg: float) -> float:
     it is reported modulo 180.
     """
     return (track_heading_deg(platform, is_day, lat_deg) + 90.0) % 180.0
+
+
+def look_azimuth_deg(platform: str, is_day: bool, lat_deg: float, side: str) -> float:
+    """Azimuth from a target to the satellite for a cross-track view, the satellite standing east or west of it."""
+    if side not in ("east", "west"):
+        raise ValueError("side must be 'east' or 'west'")
+    h = track_heading_deg(platform, is_day, lat_deg)
+    for cand in ((h + 90.0) % 360.0, (h - 90.0) % 360.0):
+        if (math.sin(math.radians(cand)) > 0.0) == (side == "east"):
+            return cand
+    return (h + 90.0) % 360.0

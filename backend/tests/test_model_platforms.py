@@ -23,10 +23,18 @@ class PlatformTests(unittest.TestCase):
         for name, code in P.PLATFORM_CODES.items():
             self.assertEqual(code >= 2, P.family(name) == "VIIRS")
 
-    def test_the_simulated_engine_tables_are_untouched(self) -> None:
-        self.assertNotIn("VIIRS_SNPP", SENSOR_CODES)
-        self.assertNotIn("VIIRS_SNPP", ORBIT_ELEMENTS)
-        self.assertNotIn("VIIRS_SNPP", ORBIT_DAY_NODE)
+    def test_suomi_npp_is_in_the_shared_sensor_tables_a_route_looks_names_up_in(self) -> None:
+        self.assertEqual(SENSOR_CODES["VIIRS_SNPP"], 4)
+        self.assertEqual({k: v for k, v in SENSOR_CODES.items() if k != "VIIRS_SNPP"},
+                         {"MODIS_TERRA": 0, "MODIS_AQUA": 1, "VIIRS_NOAA20": 2, "VIIRS_NOAA21": 3})
+        self.assertEqual(ORBIT_DAY_NODE["VIIRS_SNPP"], "ascending")
+        self.assertEqual(ORBIT_ELEMENTS["VIIRS_SNPP"]["inclination_deg"], ORBIT_ELEMENTS["VIIRS_NOAA20"]["inclination_deg"])
+        from backend.model.sensor_physics import CODE_TO_SENSOR, ORBIT_NODE_SOURCES, orbit_node_rule_payload
+
+        self.assertEqual(CODE_TO_SENSOR[4], "VIIRS_SNPP")
+        self.assertIn("13:25 asc", ORBIT_NODE_SOURCES["VIIRS_SNPP"]["quote"])
+        self.assertIn("VIIRS_SNPP", orbit_node_rule_payload()["day_node"])
+        self.assertEqual(P.PLATFORM_CODES, SENSOR_CODES)
 
     def test_firms_satellite_values_map_to_platforms(self) -> None:
         self.assertEqual(P.platform_from_firms("Terra", "MODIS"), "MODIS_TERRA")

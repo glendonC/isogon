@@ -1,4 +1,4 @@
-"""Clean-room orbital sensor geometry and radiative forward operators.
+"""Orbital sensor geometry and radiative forward operators, independently implemented.
 
 Implements published physical equations from:
   - Nishihama et al. (1997) & Wolfe et al. (2013): spherical-Earth whiskbroom
@@ -6,20 +6,24 @@ Implements published physical equations from:
     onboard cross-track aggregation (3x1, 2x1, 1x1) and detector row deletion.
   - Sofiev & Kouznetsov (2026, GMD 19, 10123-10142, CC-BY 4.0, Tables 1-2):
     area-linear 50% detection limits D_p(A_p) = lambda_lst * A_p + mu_lst and
-    clipped logistic detection efficiency pi_det(P; A_p), with the clean-room
-    sum-before-threshold flux conservation fix and multiplicative cloud mask.
+    clipped logistic detection efficiency pi_det(P; A_p), with
+    sum-before-threshold footprint flux conservation and multiplicative cloud masking.
   - Freeborn et al. (2011, 2014): slant-path 4 um atmospheric attenuation and
     single-pixel radiometric FRP uncertainty (~26.6% MODIS, ~18.5% VIIRS).
 
-Zero GPL-3.0 code (`fmidev/FRP_OOp`) was inspected or translated.
+Written from the cited equations: the module holds no code taken or translated from `fmidev/FRP_OOp`
+(GPL-3.0).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any
 import numpy as np
 from numpy.typing import NDArray
+
+from backend.model.gates import build_benchmark_gates, split_conformal_coverage
 
 from backend.model.grid import (
     DEG_TO_KM_LAT,
@@ -35,8 +39,159 @@ SENSOR_CODES: dict[str, int] = {
     "MODIS_AQUA": 1,
     "VIIRS_NOAA20": 2,
     "VIIRS_NOAA21": 3,
+    # Suomi NPP carries no simulated pass; it is here because real FIRMS rows from 2012 on name it and every route
+    # that looks a sensor up by name reads this table.
+    "VIIRS_SNPP": 4,
 }
 CODE_TO_SENSOR: dict[int, str] = {v: k for k, v in SENSOR_CODES.items()}
+
+# Orbit node of each platform's day-side equator crossing. All four fly sun-synchronous polar orbits, so a
+# day-side pass takes this node and a night-side pass the opposite one.
+ORBIT_DAY_NODE: dict[str, str] = {
+    "MODIS_TERRA": "descending",
+    "MODIS_AQUA": "ascending",
+    "VIIRS_NOAA20": "ascending",
+    "VIIRS_NOAA21": "ascending",
+    "VIIRS_SNPP": "ascending",
+}
+ORBIT_NODE_SOURCES: dict[str, dict[str, str]] = {
+    "MODIS_TERRA": {"url": "https://terra.nasa.gov/about", "quote": "Equatorial crossing: 10:30 a.m., descending mode"},
+    "MODIS_AQUA": {
+        "url": "https://science.nasa.gov/mission/aqua/about-aqua-spacecraft-and-instruments",
+        "quote": "Equatorial crossing: 1:30 p.m. ascending node",
+    },
+    "VIIRS_NOAA20": {"url": "https://space.oscar.wmo.int/satellites/view/noaa_20", "quote": "ECT 13:30 asc"},
+    "VIIRS_NOAA21": {"url": "https://space.oscar.wmo.int/satellites/view/noaa_21", "quote": "ECT 13:30 asc"},
+    "VIIRS_SNPP": {"url": "https://space.oscar.wmo.int/satellites/view/snpp", "quote": "ECT 13:25 asc"},
+}
+ORBIT_NODE_RULE: str = (
+    "orbit_node is the platform's equator-crossing node on the day side of its sun-synchronous orbit for a day pass "
+    "(is_day true) and the opposite node for a night pass"
+)
+
+
+# Nominal local solar time of each platform's day side equator crossing, from the design orbits quoted in
+# ORBIT_NODE_SOURCES (Terra 10:30 descending, Aqua 1:30 p.m. ascending, NOAA-20 and NOAA-21 13:30 ascending). The
+# night side crossing of a sun-synchronous orbit is the opposite node, 12 hours of local time later. Terra and Aqua
+# have drifted from these times (Terra earlier since February 2020, Aqua later since December 2021); the simulation
+# keeps the nominal ones.
+NOMINAL_DAY_CROSSING_HR: dict[str, float] = {
+    "MODIS_TERRA": 10.5,
+    "MODIS_AQUA": 13.5,
+    "VIIRS_NOAA20": 13.5,
+    "VIIRS_NOAA21": 13.5,
+}
+
+
+def nominal_overpass_hr(sensor: str, is_day: bool) -> float | None:
+    """Nominal local solar time (hours) of ``sensor``'s day or night overpass, None if unknown."""
+    day = NOMINAL_DAY_CROSSING_HR.get(sensor)
+    if day is None:
+        return None
+    return day if is_day else (day + 12.0) % 24.0
+
+
+def orbit_node(sensor: str, is_day: bool) -> str | None:
+    """'ascending' or 'descending' for a pass of ``sensor`` on the day or night side, None if unknown."""
+    day = ORBIT_DAY_NODE.get(sensor)
+    if day is None:
+        return None
+    if is_day:
+        return day
+    return "ascending" if day == "descending" else "descending"
+
+
+def orbit_node_rule_payload() -> dict[str, object]:
+    """The rule and its sources, recorded alongside every observer pass list."""
+    return {
+        "rule": ORBIT_NODE_RULE,
+        "day_node": dict(ORBIT_DAY_NODE),
+        "sources": {k: dict(v) for k, v in ORBIT_NODE_SOURCES.items()},
+        "note": "Terra and Aqua have drifted from their design crossing times; the node direction is unchanged.",
+    }
+
+
+# Orbit elements for simulated pass geometry. Terra and Aqua come from their NASA mission pages; NOAA-20 and
+# NOAA-21 from the 824 km sun-synchronous orbit WMO OSCAR lists, through the J2 sun-synchronous condition and
+# Kepler's third law (OSCAR gives no inclination or period for them).
+EARTH_MU_KM3_S2: float = 398600.4418
+EARTH_J2: float = 1.08262668e-3
+EARTH_EQUATORIAL_RADIUS_KM: float = 6378.137
+EARTH_ROTATION_RAD_S: float = 7.2921150e-5
+SUN_SYNCHRONOUS_NODE_RATE_RAD_S: float = 2.0 * math.pi / (365.2422 * 86400.0)
+
+
+def sun_synchronous_inclination_deg(altitude_km: float) -> float:
+    """Inclination at which J2 precession keeps a circular orbit of this altitude sun-synchronous."""
+    a = EARTH_EQUATORIAL_RADIUS_KM + altitude_km
+    cos_i = -SUN_SYNCHRONOUS_NODE_RATE_RAD_S * 2.0 * a ** 3.5 / (
+        3.0 * EARTH_J2 * EARTH_EQUATORIAL_RADIUS_KM ** 2 * math.sqrt(EARTH_MU_KM3_S2)
+    )
+    return math.degrees(math.acos(max(-1.0, min(1.0, cos_i))))
+
+
+def kepler_period_min(altitude_km: float) -> float:
+    """Period of a circular orbit at this altitude (Kepler's third law)."""
+    a = EARTH_EQUATORIAL_RADIUS_KM + altitude_km
+    return 2.0 * math.pi * math.sqrt(a ** 3 / EARTH_MU_KM3_S2) / 60.0
+
+
+ORBIT_ELEMENTS: dict[str, dict[str, Any]] = {
+    "MODIS_TERRA": {
+        "inclination_deg": 98.5,
+        "period_min": 99.0,
+        "source": "https://terra.nasa.gov/about: Inclination: 98.5 degrees; Period: 99 minutes",
+    },
+    "MODIS_AQUA": {
+        "inclination_deg": 98.2,
+        "period_min": 98.8,
+        "source": "https://science.nasa.gov/mission/aqua/about-aqua-spacecraft-and-instruments: Inclination 98.2; Period 98.8 minutes",
+    },
+    "VIIRS_NOAA20": {
+        "inclination_deg": round(sun_synchronous_inclination_deg(824.0), 2),
+        "period_min": round(kepler_period_min(824.0), 2),
+        "source": "derived from the 824 km sun-synchronous orbit at https://space.oscar.wmo.int/satellites/view/noaa_20",
+    },
+    "VIIRS_NOAA21": {
+        "inclination_deg": round(sun_synchronous_inclination_deg(824.0), 2),
+        "period_min": round(kepler_period_min(824.0), 2),
+        "source": "derived from the 824 km sun-synchronous orbit at https://space.oscar.wmo.int/satellites/view/noaa_21",
+    },
+    "VIIRS_SNPP": {
+        "inclination_deg": round(sun_synchronous_inclination_deg(824.0), 2),
+        "period_min": round(kepler_period_min(824.0), 2),
+        "source": "derived from the 824 km sun-synchronous orbit at https://space.oscar.wmo.int/satellites/view/snpp",
+    },
+}
+
+
+def ground_track_heading_deg(sensor: str, node: str, lat_deg: float) -> float:
+    """Ground track heading over a rotating Earth, degrees clockwise from north.
+
+    The inertial heading of a circular orbit at latitude phi satisfies sin(beta) = cos(i) / cos(phi), north going on the
+    ascending node and south going on the descending node; Earth turning east under the track at omega cos(phi)
+    is then subtracted from the east component.
+    """
+    el = ORBIT_ELEMENTS[sensor]
+    i = math.radians(float(el["inclination_deg"]))
+    n = 2.0 * math.pi / (float(el["period_min"]) * 60.0)
+    phi = math.radians(lat_deg)
+    sin_b = max(-1.0, min(1.0, math.cos(i) / math.cos(phi)))
+    cos_b = math.sqrt(max(0.0, 1.0 - sin_b * sin_b))
+    if node == "descending":
+        cos_b = -cos_b
+    v_east = n * sin_b - EARTH_ROTATION_RAD_S * math.cos(phi)
+    v_north = n * cos_b
+    return math.degrees(math.atan2(v_east, v_north)) % 360.0
+
+
+def cross_track_look_azimuth(sensor: str, node: str, lat_deg: float, side: str) -> float:
+    """Azimuth from a target to the satellite for a cross-track scan, with the satellite to the east or west."""
+    h = ground_track_heading_deg(sensor, node, lat_deg)
+    for cand in ((h + 90.0) % 360.0, (h - 90.0) % 360.0):
+        if (math.sin(math.radians(cand)) > 0.0) == (side == "east"):
+            return cand
+    return (h + 90.0) % 360.0
 
 MODIS_ALTITUDE_KM: float = 705.0
 MODIS_MAX_SCAN_DEG: float = 55.0
@@ -376,7 +531,7 @@ def simulate_sensor_channel(
     topo_visibility: NDArray[np.float64],
     rng: np.random.Generator,
 ) -> tuple[NDArray[np.float64], dict[str, float]]:
-    """Apply clean-room forward operator H_s to produce gridded observed FRP density.
+    """Apply the sensor forward operator H_s to produce gridded observed FRP density.
 
     Crucially enforces sum-before-threshold radiative flux conservation:
     true surface radiance is attenuated by slant-path atmosphere and terrain
@@ -786,9 +941,22 @@ def build_sensor_model_diagnostics() -> dict[str, Any]:
             }
         )
 
+    paired_block: dict[str, Any] = {
+        "description": "Modeled paired 13:30 LST MODIS Aqua vs VIIRS NOAA-20 co-observed cluster calibration residuals",
+        "raw_overall_bias_dex": round(float(np.mean(raw_log10_res)), 4),
+        "raw_overall_rmse_dex": round(float(np.sqrt(np.mean(raw_log10_res ** 2))), 4),
+        "harmonized_overall_bias_dex": round(float(np.mean(harm_log10_res)), 4),
+        "harmonized_overall_rmse_dex": round(float(np.sqrt(np.mean(harm_log10_res ** 2))), 4),
+        "n_pairs": int(n_pairs),
+        # Split conformal 90% interval on the harmonized residuals: even pairs calibrate, odd pairs evaluate.
+        "conformal_90pct_empirical_coverage": round(split_conformal_coverage(harm_log10_res, level=0.9), 3),
+        "vza_bin_summary": binned_residuals,
+        "paired_samples": paired_samples,
+    }
+
     return {
         "schema_version": "1.0.0",
-        "provenance": "Analytical Clean-Room Sensor Forward Operator · Sofiev & Kouznetsov (2026 GMD) + Wolfe et al. (2013)",
+        "provenance": "Analytical sensor forward operator. Sofiev & Kouznetsov (2026 GMD) + Wolfe et al. (2013)",
         "downloaded_firms_rows": 0,
         "geometry_metadata": {
             "modis_altitude_km": MODIS_ALTITUDE_KM,
@@ -799,9 +967,9 @@ def build_sensor_model_diagnostics() -> dict[str, Any]:
             "viirs_max_scan_angle_deg": VIIRS_MAX_SCAN_DEG,
             "viirs_zone_boundaries_deg": [VIIRS_ZONE1_MAX_DEG, VIIRS_ZONE2_MAX_DEG],
             "viirs_zone_labels": [
-                "Zone 1 (0-31.72 deg · 3x1 agg · 0 rows deleted)",
-                "Zone 2 (31.72-44.86 deg · 2x1 agg · 4/32 rows deleted)",
-                "Zone 3 (44.86-56.28 deg · 1x1 native · 8/32 rows deleted)",
+                "Zone 1 (0-31.72 deg, 3x1 agg, 0 rows deleted)",
+                "Zone 2 (31.72-44.86 deg, 2x1 agg, 4/32 rows deleted)",
+                "Zone 3 (44.86-56.28 deg, 1x1 native, 8/32 rows deleted)",
             ],
         },
         "thresholds_50pct_mw": {
@@ -814,46 +982,8 @@ def build_sensor_model_diagnostics() -> dict[str, Any]:
         },
         "scan_geometry_curves": scan_curves,
         "detection_probability_curves": det_curves,
-        "paired_1330_calibration": {
-            "description": "Modeled paired 13:30 LST MODIS Aqua vs VIIRS NOAA-20 co-observed cluster calibration residuals",
-            "raw_overall_bias_dex": round(float(np.mean(raw_log10_res)), 4),
-            "raw_overall_rmse_dex": round(float(np.sqrt(np.mean(raw_log10_res ** 2))), 4),
-            "harmonized_overall_bias_dex": round(float(np.mean(harm_log10_res)), 4),
-            "harmonized_overall_rmse_dex": round(float(np.sqrt(np.mean(harm_log10_res ** 2))), 4),
-            "conformal_90pct_empirical_coverage": 0.906,
-            "vza_bin_summary": binned_residuals,
-            "paired_samples": paired_samples,
-        },
-        "benchmark_gates": [
-            {
-                "gate_id": "G1_2012_CONTINUITY",
-                "title": "2012 S-NPP Step-Jump Removal",
-                "status": "PASSED",
-                "metric": "step_ratio = 1.02 (raw unharmonized = 3.81x)",
-            },
-            {
-                "gate_id": "G2_BOWTIE_FLUX_CONSERVATION",
-                "title": "Sum-Before-Threshold Footprint Flux Conservation",
-                "status": "PASSED",
-                "metric": "cluster_flux_error = 1.4% (pixel-before-sum bug = -48.2%)",
-            },
-            {
-                "gate_id": "G3_PHYSICS_VS_NAIVE",
-                "title": "Clean-Room Operator vs Naive Spatial Binning",
-                "status": "PASSED",
-                "metric": "paired_rmse = 0.082 dex vs 0.274 dex",
-            },
-            {
-                "gate_id": "G4_SPATIOTEMPORAL_ASSIMILATION",
-                "title": "Terrain-Coupled State-Space vs Single-Epoch Inversion",
-                "status": "PASSED",
-                "metric": "cloud_holdout_mae_reduction = -31.8%",
-            },
-            {
-                "gate_id": "G5_CONFORMAL_COVERAGE",
-                "title": "90% Epistemic Interval Calibration [85%, 95%]",
-                "status": "PASSED",
-                "metric": "empirical_coverage = 90.6%",
-            },
-        ],
+        "paired_1330_calibration": paired_block,
+        # Gates are built from computed values only (backend/model/gates.py). Without a run, G1 and G5
+        # are NOT_EVALUATED here; GET /api/sensor-model evaluates them for a reconstruct run.
+        "benchmark_gates": build_benchmark_gates(paired_block),
     }

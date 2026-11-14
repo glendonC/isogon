@@ -1,4 +1,4 @@
-"""Belief frames: what the model believes between overpasses, at fixed time steps (CONTRACT amendment 8).
+"""Belief frames: what the model believes between overpasses, at fixed time steps.
 
 A belief frame is the forward filter's state at one time: for every 375 m cell the probability that it is burning
 and its expected fire radiative power, using only the overpasses assimilated up to that time. Between overpasses
@@ -8,9 +8,10 @@ the smoothed estimate that also uses later passes, and a viewer should be able t
 
 Packing: two bytes per cell and step, row 0 north, column 0 west.
   byte 0  probability of burning, 0 to 1 as 0 to 255
-  byte 1  expected FRP density in MW/km2, 0 to `z_hat_max_mw_km2` as 0 to 255 (clipped; totals are in the descriptor)
+  byte 1  expected FRP density in MW/km2 on the logarithmic scale of real runs (backend/model/encoding.py):
+          0 is none, 1 to 255 run from 0.01 to 10,000 MW/km2
 
-Also here: the prior placement measure of unit M3, the share of the forecast's FRP that falls on cells where the
+Also here: the prior placement measure, the share of the forecast's FRP that falls on cells where the
 next VIIRS pass flags nothing.
 """
 
@@ -24,6 +25,7 @@ from numpy.typing import NDArray
 from backend.eval.grid import EvalGrid, paint
 from backend.eval.overpass import group_overpasses
 from backend.eval.rows import Detections
+from backend.model import encoding as ENC
 from backend.model.occupancy import GridState, OccupancyParams, OccupancyReconstruction, predict
 
 STEP_S: float = 1800.0
@@ -45,7 +47,7 @@ def _iso(t: float) -> str:
 
 
 def belief_frames(
-    recon: OccupancyReconstruction, start_s: float, end_s: float, z_max_mw_km2: float, step_s: float = STEP_S
+    recon: OccupancyReconstruction, start_s: float, end_s: float, step_s: float = STEP_S
 ) -> tuple[bytes, dict[str, Any]]:
     """(packed bytes, descriptor) for fixed steps from `start_s` to `end_s` inclusive."""
     grid = recon.grid
@@ -57,7 +59,7 @@ def belief_frames(
     for k, t in enumerate(times):
         st, age = forward_state(recon, float(t))
         out[k, :, :, 0] = np.clip(np.rint(st.a * 255.0), 0, 255).astype(np.uint8)
-        out[k, :, :, 1] = np.clip(np.rint(np.clip(st.F / area, 0.0, z_max_mw_km2) / z_max_mw_km2 * 255.0), 0, 255).astype(np.uint8)
+        out[k, :, :, 1] = ENC.encode_u8(st.F / area)
         support = int((st.a >= SUPPORT_PROBABILITY).sum())
         expected = float(st.a.sum())
         stats.append({
@@ -87,7 +89,8 @@ def belief_frames(
         "channels": [
             {"name": "p_burning", "meaning": "probability the cell is burning", "decode": "value / 255"},
             {"name": "expected_frp_density", "meaning": "expected FRP density, MW/km2",
-             "decode": f"value / 255 * {z_max_mw_km2}", "clipped_at": z_max_mw_km2},
+             "decode": ENC.describe()["decode"], "scale": "log10", "min_mw_km2": ENC.LOG_MIN_MW_KM2,
+             "max_mw_km2": ENC.LOG_MAX_MW_KM2, "same_as": "the run's encoding block"},
         ],
         "view": (
             "forward filter only: each step uses the overpasses assimilated up to its time, so the belief spreads "

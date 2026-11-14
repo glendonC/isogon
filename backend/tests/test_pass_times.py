@@ -1,4 +1,4 @@
-"""T17: every simulated pass happens within an hour of its platform's nominal day or night overpass time."""
+"""Every simulated pass happens within an hour of its platform's nominal day or night overpass time."""
 
 from __future__ import annotations
 

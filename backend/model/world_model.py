@@ -3,7 +3,7 @@
 Simulates continuous physical radiative fire-activity density Z(s, t) [MW/km^2]
 across the 256 x 256 Northern California corridor (Feather River Canyon, Plumas
 National Forest, and Sacramento Valley foothill agricultural transition), then
-applies clean-room MODIS and VIIRS forward operators and a sequential Bayesian
+applies MODIS and VIIRS forward operators and a sequential Bayesian
 spatiotemporal harmonization filter to produce:
   - Channel 0 (R): Posterior mean reconstructed density Z_hat(s, t) [0..80 MW/km^2]
   - Channel 1 (G): Posterior epistemic uncertainty sigma(s, t) [0..24 MW/km^2]
@@ -15,6 +15,7 @@ and discrete 3D satellite pass geometry + scan-lattice footprints.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any
 import numpy as np
 from numpy.typing import NDArray
@@ -35,7 +36,10 @@ from backend.model.sensor_physics import (
     MODIS_ALTITUDE_KM,
     SENSOR_CODES,
     VIIRS_ALTITUDE_KM,
+    cross_track_look_azimuth,
     modis_geometry_from_scan,
+    orbit_node,
+    orbit_node_rule_payload,
     sample_discrete_footprints,
     simulate_sensor_channel,
     subsatellite_point_from_look,
@@ -86,12 +90,28 @@ def _fft_smooth(field: NDArray[np.float64], sigma_px: float) -> NDArray[np.float
     return res[pad : pad + field.shape[0], pad : pad + field.shape[1]]
 
 
-def _build_24_frame_schedule() -> list[EpochSchedule]:
+def _look_azimuth(sensor: str | None, is_day: bool, design_az: float, lat_deg: float) -> float:
+    """Cross-track look azimuth for this pass; ``design_az`` only picks the east or west side of the track."""
+    if sensor is None:
+        return float(design_az)
+    side = "east" if math.sin(math.radians(design_az)) > 0.0 else "west"
+    return round(cross_track_look_azimuth(sensor, orbit_node(sensor, is_day), lat_deg, side), 3)
+
+
+def _build_24_frame_schedule(lat_deg: float = AOI_CENTER_LAT) -> list[EpochSchedule]:
     """Construct realistic 12-day (24-epoch) multi-sensor orbital schedule.
 
     Alternates daytime passes (13:30 LST JPSS+Aqua co-observations and four
     10:30 LST Terra-only morning passes with inter-swath gaps) and nighttime
-    01:30 LST passes, interleaved with Sierra mountain-wave cloud episodes.
+    01:30 LST Aqua and JPSS passes plus one 22:30 LST Terra-only night pass,
+    interleaved with Sierra mountain-wave cloud episodes. Every pass sits within
+    an hour of its platform's nominal overpass (sensor_physics.nominal_overpass_hr).
+    A night frame keeps the UTC date of its frame pair, so it
+    precedes that pair's day frame in time.
+
+    The m_az and v_az columns below only say on which side of the ground track the satellite sits (azimuth in the
+    east half or the west half). The azimuth itself is the cross-track look direction for the pass's orbit
+    node at ``lat_deg``, from the ground track heading (inclination, period and Earth rotation).
     """
     # (day_offset, hour_utc, lst_hr, is_day, regime, primary, modis_s, m_scan, m_az, m_gap, viirs_s, v_scan, v_az, cld_int, cu, cv)
     specs: list[tuple[Any, ...]] = [
@@ -113,7 +133,8 @@ def _build_24_frame_schedule() -> list[EpochSchedule]:
         (11, "09:36", 1.5, False, "co_observed_clear", "VIIRS_NOAA21", "MODIS_AQUA", 26.5, 281.5, None, "VIIRS_NOAA21", 15.0, 281.0, 0.09, 0.22, 0.78),
         # Frame 12: Showcase 13:35 LST afternoon co-observed pass (tested via /api/observer?frame=12&sensor=viirs)
         (12, "21:35", 13.5, True, "co_observed_clear", "VIIRS_NOAA20", "MODIS_AQUA", 34.5, 102.0, None, "VIIRS_NOAA20", 16.2, 101.5, 0.08, 0.76, 0.80),
-        (13, "09:44", 1.7, False, "high_zenith_bowtie", "MODIS_TERRA", "MODIS_TERRA", 51.0, 282.0, "east", "VIIRS_NOAA20", 41.0, 281.5, 0.24, 0.38, 0.42),
+        # Frame 13: 22:30 LST Terra night pass, alone, since no other platform here passes at 22:30.
+        (13, "06:35", 22.5, False, "high_zenith_bowtie", "MODIS_TERRA", "MODIS_TERRA", 51.0, 282.0, "east", None, 0.0, 282.0, 0.24, 0.38, 0.42),
         (14, "21:50", 13.8, True, "cloud_obscured", "MODIS_AQUA", "MODIS_AQUA", 42.0, 101.0, None, "VIIRS_NOAA21", 35.0, 102.0, 0.72, 0.56, 0.62),
         # Frame 15: 10:20 LST Morning MODIS_TERRA-only pass with swath gap
         (15, "18:22", 10.3, True, "modis_only_swath_gap", "MODIS_TERRA", "MODIS_TERRA", 49.5, 103.5, "east", None, 0.0, 103.5, 0.30, 0.60, 0.66),
@@ -162,11 +183,11 @@ def _build_24_frame_schedule() -> list[EpochSchedule]:
                 primary_sensor=str(primary),
                 modis_sensor=modis_s,
                 modis_scan_deg=float(m_scan),
-                modis_az_deg=float(m_az),
+                modis_az_deg=_look_azimuth(modis_s, is_day, m_az, lat_deg),
                 modis_swath_gap_side=m_gap,
                 viirs_sensor=viirs_s,
                 viirs_scan_deg=float(v_scan),
-                viirs_az_deg=float(v_az),
+                viirs_az_deg=_look_azimuth(viirs_s, is_day, v_az, lat_deg) if viirs_s else _look_azimuth(modis_s, is_day, v_az, lat_deg),
                 cloud_intensity=float(cld_int),
                 cloud_center_u=float(cu),
                 cloud_center_v=float(cv),
@@ -601,6 +622,7 @@ def generate_spatiotemporal_reconstruction(
                 {
                     "sensor": ep.modis_sensor,
                     "sensor_code": SENSOR_CODES[ep.modis_sensor],
+                    "orbit_node": orbit_node(ep.modis_sensor, bool(ep.is_day)),
                     "subsat_lon": m_sub_lon,
                     "subsat_lat": m_sub_lat,
                     "altitude_km": m_alt,
@@ -621,6 +643,7 @@ def generate_spatiotemporal_reconstruction(
                 {
                     "sensor": ep.viirs_sensor,
                     "sensor_code": SENSOR_CODES[ep.viirs_sensor],
+                    "orbit_node": orbit_node(ep.viirs_sensor, bool(ep.is_day)),
                     "subsat_lon": v_sub_lon,
                     "subsat_lat": v_sub_lat,
                     "altitude_km": v_alt,
@@ -670,6 +693,7 @@ def generate_spatiotemporal_reconstruction(
         "bbox": [WEST, SOUTH, EAST, NORTH],
         "aoi_center": [AOI_CENTER_LON, AOI_CENTER_LAT],
         "sensor_codes": {str(k): v for k, v in CODE_TO_SENSOR.items()},
+        "orbit_node_rule": orbit_node_rule_payload(),
         "footprint_schema": [
             "lon",
             "lat",
