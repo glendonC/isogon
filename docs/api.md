@@ -420,6 +420,7 @@ The start dates from which a real run is worth showing in a region, and the one 
 
 Shortened: `starts` has 53 entries for this region.
 
+- Each start carries `closed`: true when its window is closed (a held-out run, round or play of it answers `409`); `closed_starts` gives the refusal's sentence, or says that none is closed.
 - A start is chosen from MODIS rows alone, and the list carries MODIS counts only: no start here, in the calendar's `real_run_starts` or in `GET /api/regions` holds a count from the hidden satellite. What VIIRS saw in a window comes with that run's reveal.
 - `default_start` is the model's default when it is in the list. Otherwise it is the start with the most MODIS pixels, and `default_rule` says why. It is `null` when the list is empty.
 - If the search fails, `starts` is empty and `error` says why.
@@ -657,7 +658,8 @@ A real run adds, at the top, `source`, `frames_from`, `geometry_note`, `held_out
 | --- | --- |
 | `400` | The body is not a JSON object, holds `NaN` or `Infinity`, or a key has the wrong type or is out of range. Unknown `region_id`; a `query_text` that cannot be resolved; a `source`, `holdout` or `imagery_source` that is not one of the listed values. |
 | `400` | Real runs: no `start`; `cloud_override` given; a `start` that cannot be read; fewer than 24 overpasses with detections in the box from that start. |
-| `409` | A held-out run (and so its reveal) whose window may fall in the year of a region's recorded test fire: the 30 days the window is searched in after `start` meet 2021 for `plumas_ca`, `lytton_bc` or `evia_greece`. The answer has a sentence and `"evidence": "/api/evidence"`. The run with every satellite shown still serves. |
+| `409` | A held-out run (and so its reveal) on a closed window (see the next-look rounds). The rule is asked with the run's box and its own window, found as the run finds it (the first MODIS overpass with a detection in the box at or after `start`, then the frames of the pass list, from MODIS rows only), before terrain is loaded or anything is solved; where no window can be found, with the whole span the run may reach (30 days to its first overpass and 15 after). A box of its own, asked by centre and span or by `query_text`, is asked the same way. The answer names the place and its fire and has `"evidence": "/api/evidence"`. The run with every satellite shown still serves. |
+| `404` | A real run on a box of its own that is not closed: a real run reads the cached rows of a region; the box has its calendar. Answered before terrain is loaded. |
 | `403` | The request's `Origin` is not a local page. |
 | `404` | Real runs: the region has no cached FIRMS rows, or the rows of the asked span are not cached. |
 | `413` | The body is over 262,144 bytes. |
@@ -909,7 +911,7 @@ A round is one episode of the next-look environment (`backend/env/next_look.py`)
 
 No answer holds a hidden row, or a count taken from hidden rows, before the look that reveals it. Three kinds of figure are computed against the hidden detections because that is what the environment is: the starting score, the score after each step and the reward. They are scores, not rows. The score is taken on every hidden detection of the episode, looked at or not, so a step's `reward` is the score after it minus the score before it, and a round's rewards add up to `end.score_end` minus `end.score_start`. A look that reveals no pixel has a reward of exactly 0 and leaves the estimate as it was. The full reveal and the reference players' results are served only when the round is over.
 
-No round or play is served on a 2021 window of a region with a recorded test fire (the year comes from the model's exclusions, `backend.env.episodes.closed_year`): reset and play answer `409` with a sentence and `"evidence": "/api/evidence"`, before anything is computed for a catalogue key, and once the window is found for a start. The same holds for a held-out run of `POST /api/reconstruct`. Those fires are on record and are not scored again.
+No round or play is served on a closed window: one whose box meets the context box of a region with a recorded test fire and whose window meets a year of that fire's set-aside dates (2021 for `plumas_ca`, `lytton_bc` and `evia_greece`; every year a period spans, so one across New Year closes both). The rule is the model's (`backend.env.episodes.closed_for` once it is in the build; until then `backend.server_next_look.closed_for` states the same rule from the model's exclusions). Reset and play answer `409` with a sentence that names the place and its fire, and `"evidence": "/api/evidence"`: for a catalogue key before the catalogue is read, for a start once the episode's own window is found from MODIS rows. The same holds for a held-out run of `POST /api/reconstruct`. Those fires are on record and are not scored again.
 
 ### `POST /api/env/next_look/reset`
 

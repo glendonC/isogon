@@ -88,7 +88,15 @@ from backend.model.solver import (  # noqa: E402
     SolvedReconstructionRun,
     solve_region_reconstruction,
 )
-from backend.server_next_look import ClosedWindow, NextLookRounds, RoundConflict, RoundNotFound, closed_window  # noqa: E402
+from backend.server_next_look import (  # noqa: E402
+    ClosedWindow,
+    NextLookRounds,
+    RoundConflict,
+    RoundNotFound,
+    closed_for,
+    closed_sentence,
+    refuse_if_closed,
+)
 
 try:  # where the module is missing, GET /api/evidence answers 404 and says so
     from backend.model.evidence import evidence as model_evidence  # noqa: E402
@@ -148,10 +156,25 @@ HIDDEN_COUNTS_NOTE: str = ("none: the list carries MODIS counts only; what the h
 
 
 def without_hidden_counts(value: dict[str, Any]) -> dict[str, Any]:
-    """A start list with no count taken from the hidden instrument (also for a list saved before they were left out)."""
+    """A start list with no count taken from the hidden instrument (also for a list saved before they were left out),
+    each start marked `closed` when its window lies where the closed rule refuses a held-out run, round or play."""
     out = {k: v for k, v in value.items() if k != "labels_from_hidden_rows"}
-    out["starts"] = [{k: v for k, v in e.items() if not k.startswith("viirs_")} for e in value.get("starts") or []]
+    spec = PRESET_BY_ID.get(str(value.get("region_id")))
+    starts, sentence = [], None
+    for e in value.get("starts") or []:
+        e = {k: v for k, v in e.items() if not k.startswith("viirs_")}
+        found = None
+        if spec is not None and e.get("first_overpass_utc") and e.get("last_overpass_utc"):
+            t0 = _dt.datetime.fromisoformat(e["first_overpass_utc"].replace("Z", "+00:00")).timestamp()
+            t1 = _dt.datetime.fromisoformat(e["last_overpass_utc"].replace("Z", "+00:00")).timestamp() + 1.0
+            found = closed_for(run_box(spec), t0, t1)
+        e["closed"] = bool(found)
+        if found and sentence is None:
+            sentence = closed_sentence(found)
+        starts.append(e)
+    out["starts"] = starts
     out["hidden_counts"] = HIDDEN_COUNTS_NOTE
+    out["closed_starts"] = sentence or "none of these starts is closed"
     return out
 
 
@@ -326,6 +349,18 @@ IMAGERY_NAMES: dict[str, str] = {
     "usgs_naip": "USGS NAIP (public domain)",
 }
 OVERVIEW_IMAGERY: dict[str, str] = {"aws_terrarium_esri_world_imagery": "esri_world_imagery"}
+
+
+RUN_TAIL_S: float = 15.0 * 86400.0    # the days a run's frames may take after its first overpass, when not known
+
+
+def run_box(spec: Any) -> tuple[float, float, float, float]:
+    b = spec.bbox
+    return (float(b.west), float(b.south), float(b.east), float(b.north))
+
+
+def iso_utc(t: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(int(t)))
 
 
 def name_imagery(resp: dict[str, Any]) -> dict[str, Any]:
@@ -827,17 +862,14 @@ class IsogonDataStore:
         if not start:
             raise ValueError("source 'firms' needs 'start', a UTC date or date-time such as 2021-07-22T20:34:00Z")
         if holdout_viirs:
-            # A held-out run is scored against the hidden satellite, so none is built on a closed window: the span the
-            # run's window is searched in (SEARCH_S after the start) must not meet the year of a recorded test fire.
-            from backend.model.real_run import SEARCH_S, parse_start_s
-
-            try:
-                t0 = parse_start_s(str(start))
-            except (TypeError, ValueError) as exc:
-                raise ValueError("start must be a UTC date (YYYY-MM-DD) or date-time") from exc
-            why = closed_window(spec.id, t0, t0 + SEARCH_S)
-            if why:
-                raise ClosedWindow(why)
+            # A held-out run is scored against the hidden satellite, so none is built on a closed window. The rule is
+            # asked with the run's box and its own window, found from MODIS rows and the pass list as the run finds
+            # it, before terrain is loaded or anything is solved.
+            refuse_if_closed(run_box(spec), *self.run_window(spec, str(start)))
+        if spec.id not in REGION_COUNTRY:
+            raise FirmsCacheMissing(
+                "a real run reads the cached FIRMS rows of a region; a box of its own has its calendar "
+                "(GET /api/calendar?source=firms&box=) and no run yet")
         # Keyed on what decides the run: region, start, what is hidden, the region's rows and the fitted values.
         key = (spec.id, str(start), bool(holdout_viirs), self.region_rows_key(spec.id), fitted_values_digest())
         with self._lock:
@@ -856,6 +888,42 @@ class IsogonDataStore:
         if holdout_viirs and not body_bool(body, "reveal"):
             return withhold_scorer_keys(resp)
         return resp
+
+    def run_window(self, spec: Any, start: str) -> tuple[float, float]:
+        """(start, end) in UTC seconds of the window a real run from ``start`` plays, found as the run finds it: the
+        first MODIS overpass with a detection in the box at or after the start, then the frames of the pass list,
+        from MODIS rows only (`backend.model.real_blind.run_frames`; the window does not depend on what is hidden).
+        Where it cannot be found (a box with no cached rows, too few passes), the whole span the run may reach: the
+        30 days it searches for its first overpass and the days its frames may take after it."""
+        from backend.eval.holdout import visible_rows
+        from backend.eval.rows import detections_from_rows
+        from backend.firms import read_firms, region_box
+        from backend.model.real_blind import FRAMES, run_frames
+        from backend.model.real_run import PAD_S, ROW_SOURCE, SEARCH_S, parse_start_s
+
+        try:
+            t0 = parse_start_s(start)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("start must be a UTC date (YYYY-MM-DD) or date-time") from exc
+        key = (spec.id, start, self.region_rows_key(spec.id) if spec.id in REGION_COUNTRY else None)
+        with self._lock:
+            memo = self.__dict__.setdefault("_run_windows", {})
+            if key in memo:
+                return memo[key]
+        window = (t0, t0 + SEARCH_S + RUN_TAIL_S)
+        if spec.id in REGION_COUNTRY:
+            try:
+                rows = read_firms(region_box(spec.id), iso_utc(t0 - PAD_S), iso_utc(t0 + SEARCH_S))
+                seen = visible_rows(detections_from_rows(rows, ROW_SOURCE), "VIIRS")
+                _frames, win = run_frames(seen, run_box(spec), t0, n=FRAMES, hidden="VIIRS")
+                window = (float(win.start_s), float(win.end_s))
+            except Exception:  # noqa: BLE001  (no window found: the whole span it may reach is asked instead)
+                pass
+        with self._lock:
+            if len(memo) > 256:
+                memo.clear()
+            memo[key] = window
+        return window
 
     def run_assets(self, solved: SolvedReconstructionRun, imagery: str) -> dict[str, Any]:
         """The ``assets`` object of a run response, the same for simulated and real runs."""

@@ -106,23 +106,75 @@ class ClosedWindow(RoundConflict):
     evidence = "/api/evidence"
 
 
-def closed_window(region_id: str, start_s: float, end_s: float) -> str | None:
-    """The refusal sentence when [start_s, end_s) meets the year of the region's recorded test fire, else None. The
-    year comes from the model's exclusions (`backend.env.episodes.closed_year`), so no region is named here."""
-    from backend.env.episodes import closed_year
-
-    year = closed_year(region_id)
-    if year is None:
-        return None
-    y0 = float(np.datetime64(f"{year}-01-01", "s").astype(np.int64))
-    y1 = float(np.datetime64(f"{year + 1}-01-01", "s").astype(np.int64))
-    return closed_sentence(region_id, year) if (start_s < y1 and end_s > y0) else None
+# The model lane's closed rule, asked with a box and a window, when it is in the build: (module, function), answering
+# None for an open window or {"region_id": ..., "years": [...]} for a closed one.
+MODEL_CLOSED_RULE: tuple[str, str] = ("backend.env.episodes", "closed_for")
+DAY_S: float = 86400.0
 
 
-def closed_sentence(region_id: str, year: int) -> str:
-    return (f"{year} windows of {region_id} hold a recorded test fire and are closed: no held-out run, reveal, round or "
-            f"play is served for them, so the fire is never scored again. The recorded looks are at GET /api/evidence; "
-            f"the run with every satellite shown still serves.")
+def _boxes_meet(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
+    return a[0] <= b[2] and b[0] <= a[2] and a[1] <= b[3] and b[1] <= a[3]
+
+
+def _closed_here(box: tuple[float, float, float, float], start_s: float, end_s: float) -> dict[str, Any] | None:
+    """The closed rule as the model states it, for builds without its function: a window is closed when the box meets
+    the context box of a region with a recorded test fire and the window meets a year of that fire's set-aside dates
+    (every year from the first to the last, so a period across New Year closes both)."""
+    from backend.firms.archive import region_box
+    from backend.model.training import EXCLUSIONS
+
+    for region, ex in EXCLUSIONS.items():
+        first = int(ex[0][:4])
+        last_day = float(np.datetime64(ex[1], "s").astype(np.int64)) - DAY_S
+        last = int(str(np.datetime64(int(last_day), "s"))[:4])
+        years = list(range(first, last + 1))
+        if not _boxes_meet(tuple(box), region_box(region)):
+            continue
+        y0 = float(np.datetime64(f"{years[0]}-01-01", "s").astype(np.int64))
+        y1 = float(np.datetime64(f"{years[-1] + 1}-01-01", "s").astype(np.int64))
+        if start_s < y1 and end_s > y0:
+            return {"region_id": region, "years": years}
+    return None
+
+
+def closed_for(box: tuple[float, float, float, float], start_s: float, end_s: float) -> dict[str, Any] | None:
+    """Whether a box and a window are closed: the model lane's function when it is in the build, else the same rule."""
+    import importlib
+
+    mod, fn = MODEL_CLOSED_RULE
+    try:
+        rule = getattr(importlib.import_module(mod), fn)
+    except (ImportError, AttributeError):
+        rule = _closed_here
+    return rule(tuple(float(v) for v in box), float(start_s), float(end_s))
+
+
+def closed_sentence(found: dict[str, Any]) -> str:
+    """The refusal, naming the place and its fire (from the presets and the places registry), not an id."""
+    from backend.terrain.live_region import PRESET_BY_ID
+
+    region = found["region_id"]
+    place = PRESET_BY_ID[region].name if region in PRESET_BY_ID else "this place"
+    fire = None
+    try:
+        from backend.firms.places import load_places
+
+        fire = next((f["name"] for f in load_places().get("regions", {}).get(region, {}).get("named_fires", [])
+                     if f.get("blind_test_fire")), None)
+    except (OSError, ValueError, KeyError):
+        fire = None
+    years = found.get("years") or []
+    when = " and ".join(str(y) for y in years) or "these dates"
+    return (f"{when} in {place} hold{'s' if len(years) == 1 else ''} a recorded test fire"
+            f"{f', the {fire},' if fire else ''} and {'is' if len(years) == 1 else 'are'} closed: no held-out run, "
+            f"reveal, round or play is served there, so the fire is never scored again. The recorded looks are at "
+            f"GET /api/evidence; the run with every satellite shown still serves.")
+
+
+def refuse_if_closed(box: tuple[float, float, float, float], start_s: float, end_s: float) -> None:
+    found = closed_for(box, start_s, end_s)
+    if found:
+        raise ClosedWindow(closed_sentence(found))
 
 
 # ---- small helpers ---------------------------------------------------------------------------------------------------
@@ -419,18 +471,17 @@ class NextLookRounds:
             if m["region"] != region_id:
                 raise ValueError(f"episode {episode_key} is not in region {region_id}")
             year = int(m["hour"][:4])
-            from backend.env.episodes import closed_year
+            from backend.firms import region_box
 
-            if closed_year(region_id) == year:
-                raise ClosedWindow(closed_sentence(region_id, year))
+            # every tile of the catalogue lies in the region's context box: asked before the catalogue is read
+            refuse_if_closed(region_box(region_id), float(np.datetime64(f"{year}-01-01", "s").astype(np.int64)),
+                             float(np.datetime64(f"{year + 1}-01-01", "s").astype(np.int64)))
             for ep in self._catalogue(region_id, year):
                 if ep.key == episode_key:
                     return ep, "catalogue"
             raise RoundNotFound(f"no episode {episode_key} in the environment's catalogue")
         ep = self._episode_from_start(region_id, str(start))
-        why = closed_window(region_id, ep.window.start_s, ep.window.end_s)
-        if why:
-            raise ClosedWindow(why)
+        refuse_if_closed(ep.box, ep.window.start_s, ep.window.end_s)      # the episode's own box and window
         return ep, "start"
 
     def _episode_from_start(self, region_id: str, start: str) -> Any:
