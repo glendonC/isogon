@@ -1,4 +1,4 @@
-"""D2: the real FIRMS calendar, its overlap-ratio baseline, the held-out check and the CSV export (synthetic fixture,
+"""The real FIRMS calendar, its overlap-ratio baseline, the held-out check and the CSV export (synthetic fixture,
 no network)."""
 
 from __future__ import annotations
@@ -97,8 +97,8 @@ class SyntheticCalendarTests(unittest.TestCase):
         self.assertEqual(sorted(recs), ["2021-08", "2021-09", "2021-10", "2021-11", "2021-12"])
         aug = recs["2021-08"]
         self.assertEqual(aug["sensor_regime"], "MODIS_SNPP_NOAA20")
-        self.assertEqual(aug["raw_counts"]["Terra"], {"day": 1, "night": 0, "total": 1, "static_excluded": 0, "outage_days": 0})
-        self.assertEqual(aug["raw_counts"]["Aqua"], {"day": 1, "night": 1, "total": 2, "static_excluded": 0, "outage_days": 0})
+        self.assertEqual(aug["raw_counts"]["Terra"], {"day": 1, "night": 0, "total": 1, "static_excluded": 0, "offshore_on_sea_excluded": 0, "outage_days": 0})
+        self.assertEqual(aug["raw_counts"]["Aqua"], {"day": 1, "night": 1, "total": 2, "static_excluded": 0, "offshore_on_sea_excluded": 0, "outage_days": 0})
         self.assertEqual(aug["raw_counts"]["Suomi NPP"]["total"], 2)
         self.assertEqual(aug["raw_counts"]["NOAA-20"]["total"], 1)
         self.assertIsNone(aug["coverage_fraction"])
@@ -112,7 +112,7 @@ class SyntheticCalendarTests(unittest.TestCase):
         self.assertTrue(all(v is None for v in sep["raw_counts"].values()))
         dec = recs["2021-12"]
         self.assertEqual((dec["sensor_regime"], dec["ratio_used"]), ("TERRA_ONLY", "terra_only"))
-        self.assertEqual(dec["raw_counts"]["Terra"], {"day": 0, "night": 0, "total": 0, "static_excluded": 1, "outage_days": 0})
+        self.assertEqual(dec["raw_counts"]["Terra"], {"day": 0, "night": 0, "total": 0, "static_excluded": 1, "offshore_on_sea_excluded": 0, "outage_days": 0})
         self.assertEqual(dec["harmonized_mean"], 0.0)
         self.assertEqual(self.cal["summary_metrics"]["static_rows_excluded"], {"Terra": 1})
 
@@ -128,6 +128,45 @@ class SyntheticCalendarTests(unittest.TestCase):
         self.assertEqual(n, 2)
         with self.assertRaises(ValueError):
             rc.rows_csv("evia_greece", "2021-08-01", "2021-09-01", cache_dir=self.cache, max_rows=2)
+
+    def test_unknown_products_in_the_cache_are_skipped_not_fatal(self) -> None:
+        # An area API extract can reach a cache before the code that knows its product or year. A product or
+        # year this code does not know must be skipped with a note, and the calendar must answer all the same.
+        base = self.cache / "extract" / "evia_greece"
+        (base / "viirs-noaa99_2021.csv").write_text("latitude,longitude\n38.9,23.3\n", encoding="utf-8")
+        (base / "modis_notayear.csv").write_text("latitude,longitude\n38.9,23.3\n", encoding="utf-8")
+        cal = rc.firms_calendar("evia_greece", self.cache)
+        self.assertEqual(sorted(cal["summary_metrics"]["ignored_extracts"]),
+                         ["evia_greece/modis_notayear.csv", "evia_greece/viirs-noaa99_2021.csv"])
+        self.assertEqual(len(cal["records"]), 5)
+        rows = fa.read_firms(fa.region_box("evia_greece"), "2021-08-01", "2021-09-01", cache_dir=self.cache)
+        self.assertEqual(len(rows), 6)  # the reader never opens files of products it does not know
+
+    def test_noaa21_is_counted_not_fitted_and_2026_stays_out(self) -> None:
+        m = self.cal["harmonization_method"]
+        self.assertEqual(m["platforms_in_fit"], ["Suomi NPP", "Terra", "Aqua"])
+        self.assertIn("NOAA-21", m["platforms_counted_not_fitted"])
+        self.assertIn("2026", m["not_in_calendar"])
+        self.assertIsNone(self.cal["records"][0]["raw_counts"]["NOAA-21"])  # no NOAA-21 extract in this fixture
+
+    def test_offshore_rows_count_inland_and_not_at_the_coast(self) -> None:
+        # Type 3 (offshore) rows on the coast of Evia are fixed industrial points, while in Plumas the same type is
+        # fire beside mountain lakes. Rule: leave type 3 out on sea or within 500 m of it in the context DEM.
+        sea = rc.sea_lookup("evia_greece")
+        if sea is None or rc.sea_lookup("plumas_ca") is None:
+            self.skipTest("context terrain is not in the cache")
+        self.assertTrue(sea(23.30, 38.57))       # coastal plant at Larymna, labelled offshore
+        self.assertTrue(sea(24.20, 39.30))       # open Aegean
+        self.assertFalse(sea(23.85, 38.62))      # inland Evia
+        self.assertFalse(rc.sea_lookup("plumas_ca")(-121.30, 40.53))  # fire beside a lake in Lassen, 1,800 m up
+        ext = self.cache / "extract" / "evia_greece" / "modis_2021.csv"
+        with ext.open("a", encoding="utf-8") as fh:
+            fh.write("38.5700,23.3000,330.0,1.0,1.0,2021-08-03,1000,Terra,MODIS,80,synthetic,295.0,9.0,D,3\n")
+            fh.write("38.6200,23.8500,330.0,1.0,1.0,2021-08-03,1001,Terra,MODIS,80,synthetic,295.0,9.0,D,3\n")
+        cal = rc.firms_calendar("evia_greece", self.cache)
+        aug = {r["year_month"]: r for r in cal["records"]}["2021-08"]["raw_counts"]["Terra"]
+        self.assertEqual((aug["total"], aug["offshore_on_sea_excluded"]), (2, 1))  # the inland one counts
+        self.assertEqual(cal["summary_metrics"]["offshore_rows_on_sea_excluded"], {"Terra": 1})
 
     def test_unknown_region(self) -> None:
         with self.assertRaises(KeyError):

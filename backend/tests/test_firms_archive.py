@@ -1,4 +1,4 @@
-"""D1: the FIRMS fetcher, cache, manifests and reader, on a synthetic fixture (no network)."""
+"""The FIRMS fetcher, cache, manifests and reader, on a synthetic fixture (no network)."""
 
 from __future__ import annotations
 
@@ -119,6 +119,8 @@ class FirmsArchiveTests(unittest.TestCase):
             fa.read_firms((10.0, 10.0, 11.0, 11.0), "2021-08-01", "2021-08-02", cache_dir=self.cache)
         with self.assertRaises(fa.FirmsCacheMissing):  # 2022 is published but not fetched
             fa.read_firms(fa.region_box("evia_greece"), "2022-08-01", "2022-08-02", cache_dir=self.cache)
+        with self.assertRaises(fa.FirmsCacheMissing):  # 2023 is not published at all: no data, not no fire
+            fa.read_firms(fa.region_box("evia_greece"), "2023-08-01", "2023-08-02", cache_dir=self.cache)
         # A product the source does not publish for a year is not an error: 2021 to 2021 only.
         self.assertEqual(len(fa.read_firms(fa.region_box("evia_greece"), "2021-12-31", "2022-01-01", cache_dir=self.cache)), 1)
 

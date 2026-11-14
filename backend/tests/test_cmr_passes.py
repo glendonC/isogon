@@ -1,4 +1,4 @@
-"""D6: the CMR pass schedule: fetch, cache, manifests, pass files and the reader, on recorded replies (no network)."""
+"""The CMR pass schedule: fetch, cache, manifests, pass files and the reader, on recorded replies (no network)."""
 
 from __future__ import annotations
 
@@ -104,6 +104,49 @@ class FetchAndCacheTests(unittest.TestCase):
                                        cache_dir=self.cache), [])
 
 
+class RetryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.base, cp.BACKOFF_BASE_S = cp.BACKOFF_BASE_S, 0.0
+        self.waits: list[float] = []
+        self.sleep, cp.time.sleep = cp.time.sleep, self.waits.append
+
+    def tearDown(self) -> None:
+        cp.BACKOFF_BASE_S, cp.time.sleep = self.base, self.sleep
+
+    def _throttling(self, failures: int, code: int = 429, retry_after: str | None = "7"):
+        import email.message
+        import urllib.error
+
+        calls = []
+
+        def opener(url: str, headers: dict[str, str]):
+            calls.append(url)
+            if len(calls) <= failures:
+                h = email.message.Message()
+                if retry_after is not None:
+                    h["Retry-After"] = retry_after
+                raise urllib.error.HTTPError(url, code, "Too Many Requests", h, None)
+            return 200, {"cmr-hits": "0"}, EMPTY
+        return opener, calls
+
+    def test_throttled_requests_wait_and_retry(self) -> None:
+        opener, calls = self._throttling(2)
+        _h, body, _n = cp._get("https://cmr.example/x", {}, opener)
+        self.assertEqual((len(calls), body), (3, EMPTY))
+        self.assertEqual(self.waits, [7.0, 7.0])  # the server's Retry-After, not the growing wait
+
+    def test_a_service_that_keeps_refusing_stops_the_fetch(self) -> None:
+        opener, calls = self._throttling(99, code=503, retry_after=None)
+        with self.assertRaises(RuntimeError):
+            cp._get("https://cmr.example/x", {}, opener)
+        self.assertEqual(len(calls), cp.RETRIES)
+        self.assertEqual(len(self.waits), cp.RETRIES - 1)
+        opener, calls = self._throttling(99, code=400)
+        with self.assertRaises(RuntimeError):
+            cp._get("https://cmr.example/x", {}, opener)
+        self.assertEqual(len(calls), 1)  # a bad request is never repeated
+
+
 class PagingTests(unittest.TestCase):
     def test_follows_cmr_search_after(self) -> None:
         entries = json.loads(RECORDED["C2734202914-LPCLOUD"])["feed"]["entry"]
@@ -121,7 +164,9 @@ class PagingTests(unittest.TestCase):
             self.assertEqual((res["pages"], res["entries"], res["hits"]), (2, 3, 3))
             self.assertEqual(calls[1].get("CMR-Search-After"), "[1,2]")
             cp.build_pass_file("plumas_ca", "VIIRS_SNPP", 2021, Path(tmp))
-            pf = json.loads(cp.pass_file("plumas_ca", "VIIRS_SNPP", 2021, Path(tmp)).read_text())
+            path = cp.pass_file("plumas_ca", "VIIRS_SNPP", 2021, Path(tmp))
+            self.assertEqual(path.read_bytes()[:2], b"\x1f\x8b")  # stored compressed, like the replies
+            pf = cp.read_pass_file(path)
             self.assertEqual(len(pf["granules"]), 3)
 
 

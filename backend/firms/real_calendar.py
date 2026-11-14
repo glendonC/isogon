@@ -1,10 +1,10 @@
-"""Real monthly fire calendar from cached FIRMS rows (CONTRACT amendment 7).
+"""Real monthly fire calendar from cached FIRMS rows.
 
 Counts per month and platform come from the region extracts (backend/firms/archive.py). Rows with FIRMS type 2
 (static land source: plants, refineries) are left out of the rates and counted on their own; every other row
 counts. Rates are hotspots per 1000 km2 of the region's context box per day.
 
-Harmonization, method ``overlap_ratio_v1`` (the simple baseline of docs/07): the harmonized value of a month is its
+Harmonization, method ``overlap_ratio_v1``: the harmonized value of a month is its
 MODIS rate times the ratio of VIIRS Suomi NPP rows to MODIS rows over the overlap years, so every month from 2000 on
 is estimated the same way and lands on the Suomi NPP scale. Months before Aqua delivers use a Terra-only ratio
 fitted the same way. The interval is the 10th to 90th percentile of the per-year ratios. The method is checked by
@@ -25,7 +25,8 @@ import io
 import json
 import math
 from pathlib import Path
-from typing import Any, Iterable
+import sys
+from typing import Any, Callable, Iterable
 
 import numpy as np
 
@@ -39,11 +40,61 @@ from backend.firms.archive import (
 )
 
 METHOD_ID: str = "overlap_ratio_v1"
-PLATFORMS: tuple[str, ...] = ("Terra", "Aqua", "Suomi NPP", "NOAA-20")
+PLATFORMS: tuple[str, ...] = ("Terra", "Aqua", "Suomi NPP", "NOAA-20", "NOAA-21")
+_NOTED: set[str] = set()
+
+
+def _note(msg: str) -> None:
+    """One stderr line per distinct note per process."""
+    if msg not in _NOTED:
+        _NOTED.add(msg)
+        sys.stderr.write(f"[firms calendar] {msg}\n")
 STATIC_TYPE: str = "2"
+OFFSHORE_TYPE: str = "3"
+COAST_M: float = 500.0  # a type 3 row this close to the sea (or on it) is left out; farther inland it counts
+_SEA: dict[str, Any] = {}
+
+
+def sea_lookup(region_id: str) -> Callable[[float, float], bool] | None:
+    """lon, lat -> True where the region's context DEM is sea (exactly 0 m) or within about
+    COAST_M of it, or None when the context terrain is not cached. Lakes keep their surface elevation, so
+    they read as land; a fire beside a mountain lake is never near the sea."""
+    if region_id in _SEA:
+        return _SEA[region_id]
+    fn = None
+    try:
+        from backend.terrain.live_region import PRESET_BY_ID
+        from backend.terrain.terrain_pack import load_pack
+
+        loaded = load_pack(PRESET_BY_ID[region_id])
+        if loaded is not None and "context" in loaded[0]:
+            meta, files = loaded
+            c = meta["context"]
+            n = int(c["dem"]["size"])
+            dem = np.fromfile(files[c["dem"]["name"]], dtype="<f4").reshape(n, n)
+            w, s_, e, nn = (float(v) for v in c["bbox"])
+            # Sea grown by COAST_M (4-neighbour steps of the smaller post spacing), so coastal pixels count too.
+            near = dem == 0.0
+            steps = int(math.ceil(COAST_M / float(min(c["dem"]["post_spacing_m"]))))
+            for _ in range(steps):
+                g = near.copy()
+                g[1:, :] |= near[:-1, :]
+                g[:-1, :] |= near[1:, :]
+                g[:, 1:] |= near[:, :-1]
+                g[:, :-1] |= near[:, 1:]
+                near = g
+
+            def fn(lon: float, lat: float) -> bool:
+                col = int(round((lon - w) / (e - w) * (n - 1)))
+                row = int(round((nn - lat) / (nn - s_) * (n - 1)))
+                return 0 <= row < n and 0 <= col < n and bool(near[row, col])
+    except (KeyError, OSError, ValueError):
+        fn = None
+    _SEA[region_id] = fn
+    return fn
 EARTH_RADIUS_KM: float = 6371.0088
 CSV_MAX_ROWS: int = 500_000
-# Sourced drift markers (the same pages docs/09 quotes for the nominal overpass times).
+# Drift markers, each with its source (the mission pages docs/sources.md cites for the overpass times).
 DRIFT_MARKERS: tuple[dict[str, str], ...] = (
     {"year_month": "2020-02", "label": "Terra begins drifting to earlier overpass times",
      "source": "https://terra.nasa.gov/about"},
@@ -106,20 +157,50 @@ def outage_days(days: dict[str, collections.Counter[str]], min_other: int = OUTA
     return out
 
 
-def monthly_counts(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> tuple[dict[str, dict[str, dict[str, int]]], dict[str, int], int]:
-    """({month: {platform: {"day", "night", "static"}}}, static rows per platform, rows read) from the extracts."""
+def noaa21_months(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> set[str]:
+    """Months the NOAA-21 area API extracts of a region cover (empty when none is cached)."""
+    out: set[str] = set()
+    base = cache_dir / "extract" / region_id
+    for m in sorted(base.glob("viirs-noaa21_*.csv.manifest.json")) if base.is_dir() else []:
+        try:
+            d = json.loads(m.read_text(encoding="utf-8"))
+            first, last = d["covered_days"]
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        out.update(_months(first[:7], last[:7]))
+    return out
+
+
+def monthly_counts(
+    region_id: str, cache_dir: Path = FIRMS_CACHE_DIR, ignored: list[str] | None = None
+) -> tuple[dict[str, dict[str, dict[str, int]]], dict[str, int], int]:
+    """({month: {platform: {"day", "night", "static", "offshore"}}}, left-out rows per platform and kind, rows read).
+
+    Left out: type 2 (static land source) and type 3 (offshore) rows on sea or within COAST_M of it in the region's
+    context DEM. Type 3 rows farther inland count as fire (in Plumas they are fire beside mountain lakes; in Evia
+    the coastal ones are fixed industrial points). Without a cached context DEM
+    type 3 rows count. An extract whose product or year this code does not know is skipped with a logged note (and
+    listed in ``ignored``) instead of failing, so a cache that runs ahead of the code still answers."""
     counts: dict[str, dict[str, dict[str, int]]] = collections.defaultdict(
-        lambda: collections.defaultdict(lambda: {"day": 0, "night": 0, "static": 0}))
+        lambda: collections.defaultdict(lambda: {"day": 0, "night": 0, "static": 0, "offshore": 0}))
     static = collections.Counter()
+    offshore = collections.Counter()
+    is_sea = sea_lookup(region_id)
     n = 0
     base = cache_dir / "extract" / region_id
     for path in sorted(base.glob("*.csv")) if base.is_dir() else []:
-        product = path.stem.rsplit("_", 1)[0]
+        product, _, year = path.stem.rpartition("_")
+        if product not in PRODUCTS or not year.isdigit():
+            _note(f"skipped {region_id}/{path.name}: product or year not known to this code")
+            if ignored is not None:
+                ignored.append(f"{region_id}/{path.name}")
+            continue
         with path.open(encoding="utf-8", newline="") as fh:
             r = csv.reader(fh)
             col = {c: i for i, c in enumerate(next(r))}
             i_d, i_s, i_dn = col["acq_date"], col["satellite"], col["daynight"]
             i_t = col.get("type")
+            i_lat, i_lon = col["latitude"], col["longitude"]
             for rec in r:
                 n += 1
                 plat = _platform(product, rec[i_s])
@@ -127,11 +208,15 @@ def monthly_counts(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> tuple[d
                 if i_t is not None and rec[i_t] == STATIC_TYPE:
                     cell["static"] += 1
                     static[plat] += 1
+                elif (i_t is not None and rec[i_t] == OFFSHORE_TYPE and is_sea is not None
+                      and is_sea(float(rec[i_lon]), float(rec[i_lat]))):
+                    cell["offshore"] += 1
+                    offshore[plat] += 1
                 elif rec[i_dn] == "D":
                     cell["day"] += 1
                 else:
                     cell["night"] += 1
-    return counts, dict(static), n
+    return counts, {"static": dict(static), "offshore_on_sea": dict(offshore), "sea_check": is_sea is not None}, n
 
 
 def _fire(counts: dict[str, dict[str, dict[str, int]]], month: str, plat: str) -> int:
@@ -223,7 +308,7 @@ def leave_one_year_out(pairs: list[tuple[int, float, float]]) -> dict[str, Any]:
 
 
 def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, Any]:
-    """The /api/calendar payload for ``source=firms`` (today's schema plus the amendment 7 additions)."""
+    """The /api/calendar payload for ``source=firms``."""
     from backend.terrain.live_region import PRESET_BY_ID
 
     if region_id not in REGION_COUNTRY:
@@ -238,8 +323,16 @@ def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[st
         raise KeyError(f"no FIRMS rows cached for '{region_id}'")
     gaps = outage_days(days)
     gap_months: dict[str, collections.Counter[str]] = {p: collections.Counter(d[:7] for d in s) for p, s in gaps.items()}
-    counts, static, rows_read = monthly_counts(region_id, cache_dir)
-    all_months = sorted(set().union(*deliver.values()))
+    # NOAA-21 is not in the country files: its delivery comes from the days its area API extracts cover. Its rows
+    # are box rows only, so no outage day can be found for it (outage_days is null).
+    noaa21 = noaa21_months(region_id, cache_dir)
+    if noaa21:
+        deliver["NOAA-21"] = noaa21
+    ignored: list[str] = []
+    counts, left_out, rows_read = monthly_counts(region_id, cache_dir, ignored)
+    static = left_out["static"]
+    # The calendar spans the country file months; NOAA-21 (area API rows) is counted inside that span only.
+    all_months = sorted(set().union(*(v for k, v in deliver.items() if k != "NOAA-21")))
     months = _months(all_months[0], all_months[-1])
 
     def on(plat: str, mo: str) -> bool:
@@ -266,10 +359,13 @@ def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[st
     for i, mo in enumerate(months):
         t_on, a_on, s_on, n_on = on("Terra", mo), on("Aqua", mo), on("Suomi NPP", mo), on("NOAA-20", mo)
         raw_counts = {}
-        for plat, ok in (("Terra", t_on), ("Aqua", a_on), ("Suomi NPP", s_on), ("NOAA-20", n_on)):
-            c = counts.get(mo, {}).get(plat, {"day": 0, "night": 0, "static": 0})
+        for plat, ok in (("Terra", t_on), ("Aqua", a_on), ("Suomi NPP", s_on), ("NOAA-20", n_on),
+                         ("NOAA-21", on("NOAA-21", mo))):
+            c = counts.get(mo, {}).get(plat, {"day": 0, "night": 0, "static": 0, "offshore": 0})
+            gap = None if plat == "NOAA-21" else gap_months.get(plat, {}).get(mo, 0)
             raw_counts[plat] = ({"day": c["day"], "night": c["night"], "total": c["day"] + c["night"],
-                                 "static_excluded": c["static"], "outage_days": gap_months.get(plat, {}).get(mo, 0)}
+                                 "static_excluded": c["static"], "offshore_on_sea_excluded": c["offshore"],
+                                 "outage_days": gap}
                                 if ok else None)
         modis_n = (_fire(counts, mo, "Terra") if t_on else 0) + (_fire(counts, mo, "Aqua") if a_on else 0)
         if t_on and a_on:
@@ -373,10 +469,27 @@ def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[st
                            "p10 and p90 from the 10th and 90th percentile of the per-year ratios; months before Aqua "
                            "use a Terra-only ratio fitted the same way; overlap months in which Suomi NPP, Terra or "
                            "Aqua has an outage day are left out of the fit and the validation",
-            "counted_rows": "every FIRMS row except type 2 (static land source), which is counted as static_excluded",
+            "counted_rows": ("every FIRMS row except type 2 (static land source, counted as static_excluded) and type 3 "
+                             "(offshore) rows on sea or within 500 m of it in the region's context DEM (counted as "
+                             "offshore_on_sea_excluded); type 3 rows farther inland, such as fire beside mountain "
+                             "lakes, count"
+                             if left_out["sea_check"] else
+                             "every FIRMS row except type 2 (static land source, counted as static_excluded); no context "
+                             "DEM in the cache, so type 3 (offshore) rows count"),
             "outage_rule": f"a day inside a platform's operating span on which it has no row in any cached country file "
                            f"while the other platforms together have at least {OUTAGE_MIN_OTHER_ROWS}",
             "overlap_months_excluded_for_outages": excluded,
+            "platforms_in_fit": ["Suomi NPP", "Terra", "Aqua"],
+            "platforms_counted_not_fitted": {
+                "NOAA-20": "counted from 2018-04 in raw_counts; the fit stays Suomi NPP over MODIS, one platform pair "
+                           "through the whole 2012 to 2025 overlap",
+                "NOAA-21": "counted from 2023-03 in raw_counts, from area API rows of the region box (no outage check "
+                           "possible); not in the fit, for the same reason",
+            },
+            "not_in_calendar": "2026: its rows come from the area API for the region box only (no country-wide count "
+                               "to tell an outage from a quiet day), and its near real time rows have no type column, "
+                               "so static sources cannot be left out; the calendar ends at the last country file "
+                               "month instead",
             "ratio_terra_aqua": {k: (round(v, 4) if isinstance(v, float) else v) for k, v in fit_both.items()},
             "ratio_terra_only": {k: (round(v, 4) if isinstance(v, float) else v) for k, v in fit_terra.items()},
             "validation": validation,
@@ -394,6 +507,8 @@ def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[st
             "held_out_annual_interval_coverage": validation["annual_interval_coverage"],
             "held_out_monthly_interval_coverage": validation["monthly_interval_coverage"],
             "static_rows_excluded": static,
+            "offshore_rows_on_sea_excluded": left_out["offshore_on_sea"],
+            "ignored_extracts": ignored,
             "outage_days": {p: len(s) for p, s in sorted(gaps.items())},
             "extreme_fire_years_highlighted": [a["year"] for a in top],
             "coverage_note": "coverage_fraction is null: FIRMS rows are positive-only and no coverage product is fetched yet",

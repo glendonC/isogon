@@ -1,11 +1,11 @@
-"""The pass timeline (CONTRACT item 12, surface S3, and item 13): every satellite pass over a hero region's box in a
+"""The pass timeline: every satellite pass over a hero region's box in a
 window, from NASA CMR granule metadata (`cmr_passes`), fire or no fire, each with what FIRMS detected in the box on
 that pass. Served by `GET /api/passes?region_id=<id>&start=<date>&end=<date>[&box=pack|context][&platforms=...]`.
 
-A pass is matched to a FIRMS overpass (FIRMS rows grouped as the fire-model lane groups them,
+A pass is matched to a FIRMS overpass (FIRMS rows grouped as the blind test groups them,
 `backend.eval.overpass.group_overpasses`) of the same platform whose time lies within `MATCH_TOL_S` of the pass's
-granule span. On June to September 2021 every FIRMS overpass with a detection in a hero box matched exactly one pass
-this way (D6). FIRMS overpasses with a detection in the box that no pass matches are listed apart: in 2012 to 2025
+granule span. On June to September 2021 every FIRMS overpass with a detection in a hero box matches exactly one pass
+this way. FIRMS overpasses with a detection in the box that no pass matches are listed apart: in 2012 to 2025
 that happens only where a CMR collection is short (`KNOWN_GAPS`).
 """
 
@@ -24,7 +24,7 @@ MAX_SPAN_DAYS: int = 366
 MATCH_TOL_S: float = 300.0
 BOXES: tuple[str, ...] = ("pack", "context")
 STATIC_TYPE: int = 2
-# Where a CMR collection holds fewer granules than flew (D6 cross-check against FIRMS, docs/03).
+# Where a CMR collection holds fewer granules than flew (docs/data.md; found by matching passes to FIRMS overpasses).
 KNOWN_GAPS: tuple[dict[str, str], ...] = (
     {"platform": "VIIRS_NOAA20", "from": "2018-01-01", "until": "2018-07-01",
      "what": "VJ114IMG 002 holds few granules (0 to 12 a month in April and May 2018); FIRMS has NOAA-20 rows from April"},
@@ -100,7 +100,7 @@ def pass_timeline(
 
     passes = cmr_passes(wsen, t0, t1, platforms=want, cache_dir=cache_dir)
 
-    # FIRMS overpasses with a detection in the box, grouped as the fire-model lane groups them
+    # FIRMS overpasses with a detection in the box, grouped as the blind test groups them
     pad = _dt.timedelta(seconds=MATCH_TOL_S + 3600.0)
     rows = read_firms(region_box(region_id), t0 - pad, t1 + pad)
     det = detections_from_rows(rows, ROW_SOURCE) if rows else None

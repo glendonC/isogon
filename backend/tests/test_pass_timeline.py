@@ -1,4 +1,4 @@
-"""D8: the pass timeline, GET /api/passes (CONTRACT 12 S3 and 13).
+"""The pass timeline, GET /api/passes.
 
 The first tests use the recorded CMR replies of `fixtures/cmr_recorded` and a few FIRMS rows written here (no
 network, no FIRMS cache). The last class reads the real caches over HTTP and skips without them.
@@ -111,10 +111,10 @@ class RealTimelineTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         if not _cached():
-            raise unittest.SkipTest("FIRMS rows or CMR passes for plumas_ca 2021 are not cached on this machine")
-        from backend.tests import test_server_d5 as d5
+            raise unittest.SkipTest("FIRMS rows or CMR passes for plumas_ca 2021 are not cached")
+        from backend.tests import test_server_http as http_tests
 
-        cls.req = staticmethod(d5._req)
+        cls.req = staticmethod(http_tests._req)
 
     def _get(self, q: str) -> tuple[int, dict]:
         status, _, raw = self.req("/api/passes?" + q)
@@ -124,7 +124,7 @@ class RealTimelineTests(unittest.TestCase):
         status, tl = self._get("region_id=plumas_ca&start=2021-07-22&end=2021-07-25")
         self.assertEqual(status, 200, tl)
         self.assertGreater(len(tl["passes"]), 30)
-        self.assertEqual(tl["firms_overpasses_without_a_pass"], [])   # every FIRMS overpass of 2021 has its pass (D6)
+        self.assertEqual(tl["firms_overpasses_without_a_pass"], [])   # every FIRMS overpass of 2021 has its pass
         self.assertTrue(all(p["firms_detection_in_box"] for p in tl["passes"]))    # the Dixie fire: every pass saw it
         self.assertEqual(set(tl["summary"]), {"MODIS_TERRA", "MODIS_AQUA", "VIIRS_SNPP", "VIIRS_NOAA20"})
         status, quiet = self._get("region_id=plumas_ca&start=2021-06-01&end=2021-06-04")
@@ -132,7 +132,7 @@ class RealTimelineTests(unittest.TestCase):
         self.assertFalse(any(p["firms_detection_in_box"] for p in quiet["passes"]))  # before it, none did
         self.assertGreater(sum(1 for p in quiet["passes"] if p["box_inside"]), 30)
 
-    def test_the_season_agrees_with_the_d6_cross_check(self) -> None:
+    def test_the_season_agrees_with_the_cross_check_against_firms(self) -> None:
         status, tl = self._get("region_id=plumas_ca&start=2021-06-01&end=2021-10-01")
         self.assertEqual(status, 200)
         self.assertEqual(len(tl["passes"]), 1319)

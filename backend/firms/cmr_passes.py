@@ -3,7 +3,7 @@
 A detection list only knows passes that saw fire. NASA's Common Metadata Repository lists every granule of the
 active fire products, fire or not, with its time span, day or night flag, swath polygon and (MODIS) cloud cover:
   https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=<id>&bounding_box=<w,s,e,n>&temporal=...
-Collections (LP DAAC cloud, checked against collections.json 2026-11-14):
+Collections (LP DAAC cloud, by CMR concept id):
   MODIS_TERRA  MOD14     061  C2271754179-LPCLOUD  from 2000-02-24   5 min granules, cloud_cover given
   MODIS_AQUA   MYD14     061  C2278858993-LPCLOUD  from 2002-07-04
   VIIRS_SNPP   VNP14IMG  002  C2734202914-LPCLOUD  from 2012-01-17   6 min granules
@@ -14,8 +14,9 @@ Querying by concept id avoids the version spelling trap of short name queries (L
 Cache under data/cache/cmr/ (not tracked):
   raw/<region>/<platform>/<YYYY-MM>_p<n>.json.gz   each CMR reply, gzip, with <file>.manifest.json beside it
                                                     (URL, query, retrieval time, hits, entries, bytes, sha256)
-  passes/<region>/<platform>_<year>.json            the granules of that year, compact and deduplicated, with the
-                                                    months fetched; this is what the reader reads
+  passes/<region>/<platform>_<year>.json.gz         the granules of that year, compact and deduplicated, with the
+                                                    months fetched, gzip; this is what the reader reads (rebuilt
+                                                    from raw/ by any fetch over that year, with no request)
 This is NASA metadata, not FIRMS rows: it is not counted in downloaded_firms_rows.
 
 Reader: cmr_passes(box, start, end, platforms=None, tiles=None). Consecutive granules of one platform form one pass;
@@ -55,6 +56,8 @@ CMR_CACHE_DIR: Path = _REPO_ROOT / "data" / "cache" / "cmr"
 PAGE_SIZE: int = 2000
 PAUSE_S: float = 0.5
 BACKOFF_BASE_S: float = 2.0
+RETRIES: int = 7           # waits of 2, 4, 8, 16, 32 and 60 s: a request is given up after about two minutes
+RETRY_AFTER_MAX_S: float = 120.0
 PASS_GAP_S: float = 120.0  # consecutive granules of one platform closer than this belong to one pass
 EDGE_STEPS: int = 24       # great circle points per polygon edge
 BOX_SAMPLES: int = 11      # sample points per side for the share of a box inside a swath
@@ -85,10 +88,23 @@ def _default_opener(url: str, headers: dict[str, str]) -> tuple[int, dict[str, s
         return resp.status, {k.lower(): v for k, v in resp.headers.items()}, resp.read()
 
 
-def _get(url: str, headers: dict[str, str], opener: Opener, retries: int = 4) -> tuple[dict[str, str], bytes, int]:
-    """(headers, JSON body bytes, bytes transferred). Asks for gzip and decodes it."""
+def _retry_after(exc: urllib.error.HTTPError) -> float | None:
+    try:
+        value = float((exc.headers or {}).get("Retry-After", ""))
+    except (TypeError, ValueError):
+        return None
+    return min(max(value, 0.0), RETRY_AFTER_MAX_S)
+
+
+def _get(url: str, headers: dict[str, str], opener: Opener,
+         retries: int | None = None) -> tuple[dict[str, str], bytes, int]:
+    """(headers, JSON body bytes, bytes transferred). Asks for gzip and decodes it. A 408, 429 or 5xx reply or a
+    network error is retried with a growing wait (or the server's Retry-After); after RETRIES attempts, about two
+    minutes, the request fails and the fetch stops, so a refusing or throttling service is never pressed."""
+    tries = RETRIES if retries is None else retries
     last: Exception | None = None
-    for attempt in range(retries):
+    for attempt in range(tries):
+        wait = min(60.0, BACKOFF_BASE_S * 2**attempt)
         try:
             status, h, body = opener(url, {"Accept-Encoding": "gzip", **headers})
             sent = len(body)
@@ -99,10 +115,14 @@ def _get(url: str, headers: dict[str, str], opener: Opener, retries: int = 4) ->
             last = exc
             if exc.code not in (408, 429, 500, 502, 503, 504):
                 break
+            after = _retry_after(exc)
+            if after is not None:
+                wait = after
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last = exc
-        time.sleep(min(30.0, BACKOFF_BASE_S * 2**attempt))
-    raise RuntimeError(f"CMR request failed: {last}")
+        if attempt + 1 < tries:
+            time.sleep(wait)
+    raise RuntimeError(f"CMR request failed after {attempt + 1} attempts: {last}")
 
 
 def _month_bounds(year: int, month: int) -> tuple[str, str]:
@@ -248,7 +268,22 @@ def _granule(e: dict[str, Any]) -> dict[str, Any]:
 
 
 def pass_file(region_id: str, platform: str, year: int, cache_dir: Path = CMR_CACHE_DIR) -> Path:
-    return cache_dir / "passes" / region_id / f"{platform}_{year:04d}.json"
+    return cache_dir / "passes" / region_id / f"{platform}_{year:04d}.json.gz"
+
+
+def pass_files_digest(region_id: str, cache_dir: Path = CMR_CACHE_DIR) -> str:
+    """sha256 over the name, size and modification time of every pass file of the region (they are rewritten only
+    by a fetch), for keying caches of what is built from them."""
+    h = hashlib.sha256(region_id.encode("utf-8"))
+    base = cache_dir / "passes" / region_id
+    for f in sorted(base.glob("*.json.gz")) if base.is_dir() else []:
+        st = f.stat()
+        h.update(f"{f.name}={st.st_size}:{st.st_mtime_ns};".encode("utf-8"))
+    return h.hexdigest()
+
+
+def read_pass_file(path: Path) -> dict[str, Any]:
+    return json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
 
 
 def build_pass_file(region_id: str, platform: str, year: int, cache_dir: Path = CMR_CACHE_DIR) -> Path | None:
@@ -281,7 +316,7 @@ def build_pass_file(region_id: str, platform: str, year: int, cache_dir: Path = 
         "written_utc": _now_utc(),
     }
     dest = pass_file(region_id, platform, year, cache_dir)
-    _write_atomic(dest, (json.dumps(out, separators=(",", ":")) + "\n").encode("utf-8"))
+    _write_atomic(dest, gzip.compress((json.dumps(out, separators=(",", ":")) + "\n").encode("utf-8"), mtime=0))
     return dest
 
 
@@ -389,11 +424,11 @@ def cmr_passes(
             if not need:
                 continue
             f = pass_file(region, p, y, cache_dir)
-            have = set(json.loads(f.read_text(encoding="utf-8"))["months_fetched"]) if f.is_file() else set()
-            missing = [mo for mo in need if mo not in have]
+            pf = read_pass_file(f) if f.is_file() else {"months_fetched": [], "granules": []}
+            missing = [mo for mo in need if mo not in set(pf["months_fetched"])]
             if missing:
                 raise CmrCacheMissing(f"CMR {p} months {missing} for {region} are not cached; fetch them first")
-            granules += json.loads(f.read_text(encoding="utf-8"))["granules"]
+            granules += pf["granules"]
         granules.sort(key=lambda g: g["time_start"])
         for grp in _group(granules):
             ts, te = _parse_t(grp[0]["time_start"]), _parse_t(grp[-1]["time_end"])

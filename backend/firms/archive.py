@@ -1,6 +1,6 @@
-"""NASA FIRMS archive for the hero regions (CONTRACT amendment 6).
+"""NASA FIRMS archive for the hero regions: fetch, cache, region extracts and the reader.
 
-Source today: the FIRMS Country Yearly Summary CSV files, which download without a key
+Source: the FIRMS Country Yearly Summary CSV files, which download without a key
 (https://firms.modaps.eosdis.nasa.gov/data/country/<product>/<year>/<product>_<year>_<Country>.csv, listed in
 yearly_summary_files.txt). They carry the standard processing archive: MODIS (Terra, Aqua) from November 2000,
 VIIRS 375 m Suomi NPP from 2012 and NOAA-20 from 2018. NOAA-21 is not in them; it needs the FIRMS area API and a
@@ -48,7 +48,7 @@ FIRMS_CACHE_DIR: Path = _REPO_ROOT / "data" / "cache" / "firms"
 COUNTRY_BASE_URL: str = "https://firms.modaps.eosdis.nasa.gov/data/country"
 LISTING_NAME: str = "yearly_summary_files.txt"
 README_NAME: str = "AttributesReadme.txt"
-DISK_CAP_BYTES: int = 5_000_000_000  # the lead asked to be asked before going past 5 GB in total
+DISK_CAP_BYTES: int = 5_000_000_000  # a fetch refuses to start when the cache would pass 5 GB in total
 USER_AGENT: str = "Isogon-Geospatial-Pipeline/1.0 (+https://github.com/isogon)"
 PAUSE_BETWEEN_FILES_S: float = 1.0
 TERMS: str = (
@@ -69,13 +69,15 @@ PRODUCTS: dict[str, Product] = {
     "modis": Product("modis", "MODIS", None, 2000),
     "viirs-snpp": Product("viirs-snpp", "VIIRS", "Suomi NPP", 2012),
     "viirs-jpss1": Product("viirs-jpss1", "VIIRS", "NOAA-20", 2018),
+    # Not in the country files; its rows come from the area API (backend/firms/area_api.py).
+    "viirs-noaa21": Product("viirs-noaa21", "VIIRS", "NOAA-21", 2023),
 }
 MODIS_PLATFORMS: dict[str, str] = {"Terra": "Terra", "Aqua": "Aqua", "T": "Terra", "A": "Aqua"}
 
 # The country file that holds each hero region's context box (each box lies inside one country).
 REGION_COUNTRY: dict[str, str] = {"plumas_ca": "United_States", "lytton_bc": "Canada", "evia_greece": "Greece"}
 
-# Columns every reader row must carry (CONTRACT amendment 6); the rest of the source's columns come along too.
+# Columns every reader row must carry; the rest of the source's columns come along too.
 REQUIRED_COLUMNS: tuple[str, ...] = (
     "latitude", "longitude", "acq_date", "acq_time", "satellite", "instrument", "confidence", "frp", "scan",
     "track", "daynight", "version",
@@ -178,6 +180,21 @@ def extract_path(region_id: str, product: str, year: int, cache_dir: Path = FIRM
     return cache_dir / "extract" / region_id / f"{product}_{year}.csv"
 
 
+def region_rows_digest(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> str:
+    """sha256 over the name and recorded sha256 of every extract of the region: it changes when any row of the
+    region changes (a count would not), and not when another region's rows do. Caches of what is built from a
+    region's rows are keyed on it."""
+    h = hashlib.sha256(region_id.encode("utf-8"))
+    base = cache_dir / "extract" / region_id
+    for m in sorted(base.glob("*.csv.manifest.json")) if base.is_dir() else []:
+        try:
+            sha = json.loads(m.read_text(encoding="utf-8")).get("sha256", "")
+        except (OSError, ValueError):
+            sha = "unreadable"
+        h.update(f"{m.name}={sha};".encode("utf-8"))
+    return h.hexdigest()
+
+
 def disk_usage(cache_dir: Path = FIRMS_CACHE_DIR) -> int:
     if not cache_dir.is_dir():
         return 0
@@ -225,7 +242,8 @@ def download(url: str, dest: Path, opener: Opener = _default_opener, expected_by
             time.sleep(min(30.0, 2.0 * 2**attempt))
     if tmp.exists():
         tmp.unlink()
-    raise RuntimeError(f"download failed: {last}")
+    # Country file URLs carry no key, but an error text never leaves with one.
+    raise RuntimeError(redact_key(f"download failed: {last}", _map_key()))
 
 
 def fetch_listing(cache_dir: Path = FIRMS_CACHE_DIR, opener: Opener = _default_opener) -> dict[str, dict[str, Any]]:
@@ -273,6 +291,8 @@ def ingest(product: str, year: int, country: str, url: str, n_bytes: int, sha: s
     dups: dict[str, int] = {r: 0 for r in regions}
     versions: collections.Counter[str] = collections.Counter()
     sats: collections.Counter[str] = collections.Counter()
+    sat_months: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
+    sat_days: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
     first = last = ""
     rows = 0
     bad = 0
@@ -294,6 +314,8 @@ def ingest(product: str, year: int, country: str, url: str, n_bytes: int, sha: s
             versions[rec[i_ver]] += 1
             sats[rec[i_sat]] += 1
             d = rec[i_date]
+            sat_months[rec[i_sat]][d[:7]] += 1
+            sat_days[rec[i_sat]][d] += 1
             if not first or d < first:
                 first = d
             if d > last:
@@ -323,6 +345,9 @@ def ingest(product: str, year: int, country: str, url: str, n_bytes: int, sha: s
         "columns": header,
         "versions": dict(versions),
         "satellites": dict(sats),
+        # Rows per satellite and month over the whole country file: which platforms were delivering data when.
+        "satellite_month_rows": {s: dict(sorted(c.items())) for s, c in sorted(sat_months.items())},
+        "satellite_day_rows": {s: dict(sorted(c.items())) for s, c in sorted(sat_days.items())},
         "acq_date_range": [first, last],
         "listing": listing_entry,
         "terms": TERMS,
@@ -393,7 +418,7 @@ def fetch(years: Iterable[int], regions: Iterable[str] = tuple(REGION_COUNTRY), 
         todo.append((p, y, c, size))
     projected = disk_usage(cache_dir) + sum(s for *_, s in todo)
     if projected > cap_bytes:
-        raise RuntimeError(f"the cache would reach {projected} bytes, over the cap of {cap_bytes}; ask before raising it")
+        raise RuntimeError(f"the cache would reach {projected} bytes, over the cap of {cap_bytes}")
     log(f"{len(todo)} files to fetch, {sum(s for *_, s in todo)} bytes; cache after: {projected} bytes")
     done = []
     for i, (p, y, c, size) in enumerate(todo):
@@ -407,6 +432,25 @@ def fetch(years: Iterable[int], regions: Iterable[str] = tuple(REGION_COUNTRY), 
         if pause_s and i + 1 < len(todo):
             time.sleep(pause_s)
     return done
+
+
+def reingest(cache_dir: Path = FIRMS_CACHE_DIR, log: Callable[[str], None] = print) -> int:
+    """Rebuild every raw manifest and extract from the cached raw files (no download). Each file's sha256 must
+    still match its manifest; the original retrieval time and URL are kept."""
+    n = 0
+    listing = load_listing(cache_dir)
+    for m in sorted((cache_dir / "raw").rglob("*.csv.manifest.json")):
+        old = json.loads(m.read_text(encoding="utf-8"))
+        q = old["query"]
+        src = raw_path(q["product"], int(q["year"]), q["country"], cache_dir)
+        sha = hashlib.sha256(src.read_bytes()).hexdigest()
+        if sha != old["sha256"]:
+            raise RuntimeError(f"{src.name}: sha256 differs from its manifest; refetch it")
+        ingest(q["product"], int(q["year"]), q["country"], old["source_url"], int(old["bytes"]), sha, old["retrieved_utc"],
+               listing.get(src.name), cache_dir)
+        n += 1
+        log(f"reingested {src.name}")
+    return n
 
 
 # The reader
@@ -445,15 +489,38 @@ def read_firms(
     regions = [r for r in REGION_COUNTRY if _box_within(box, region_box(r))]
     if not regions:
         raise FirmsCacheMissing(f"box {box} is not inside any cached region box {[region_box(r) for r in REGION_COUNTRY]}")
-    listing = load_listing(cache_dir)
-    if not listing:
-        raise FirmsCacheMissing("no FIRMS listing cached; run the fetch first")
+    listing = load_listing(cache_dir)  # may be empty when only area API rows are cached; the year check below decides
     out: list[dict[str, str]] = []
     seen: set[tuple[str, ...]] = set()
+    years = range(t0.year, (t1 - _dt.timedelta(microseconds=1)).year + 1)
+    last_day = (t1 - _dt.timedelta(microseconds=1)).date().isoformat()
     for r in regions:
+
+        def area_manifest(p: str, y: int) -> dict[str, Any] | None:
+            m = read_manifest(extract_path(r, p, y, cache_dir))
+            return m if m is not None and (m.get("lineage") or {}).get("source") == "area_api" else None
+
+        # A year no product is published for (before 2000, or after the latest country files and any area API
+        # fetch) has no data, which is not the same as no fire: refuse it instead of returning nothing.
+        unpublished = [y for y in years if not any(
+            country_file_name(p, y, REGION_COUNTRY[r]) in listing or area_manifest(p, y) is not None for p in PRODUCTS)]
+        if unpublished:
+            raise FirmsCacheMissing(
+                f"no FIRMS rows are cached for {r} in {unpublished}: the country files stop at their last year, and "
+                f"later rows (and NOAA-21) come from the area API fetch"
+            )
         for p in PRODUCTS:
-            for y in range(t0.year, (t1 - _dt.timedelta(microseconds=1)).year + 1):
-                if country_file_name(p, y, REGION_COUNTRY[r]) not in listing:
+            for y in years:
+                area = area_manifest(p, y)
+                if area is not None:
+                    covered_to = area["covered_days"][1]
+                    available_to = area.get("source_available_to") or ""
+                    # Past the covered days is a gap in this cache, unless the source itself had nothing later
+                    # (the platform stopped delivering), which is not an error.
+                    if last_day > covered_to and y == int(last_day[:4]) and covered_to < available_to:
+                        raise FirmsCacheMissing(
+                            f"{p} rows for {r} are fetched through {covered_to}; the source has them to {available_to}")
+                elif country_file_name(p, y, REGION_COUNTRY[r]) not in listing:
                     continue  # the source publishes no such file
                 path = extract_path(r, p, y, cache_dir)
                 if not path.is_file():
@@ -499,6 +566,14 @@ def cache_summary(cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, Any]:
             files += 1
         except (OSError, ValueError, KeyError):
             continue
+    area_rows = 0
+    for m in (cache_dir / "area").rglob("*.csv.manifest.json") if (cache_dir / "area").is_dir() else []:
+        try:
+            area_rows += int(json.loads(m.read_text(encoding="utf-8"))["rows"])
+            files += 1
+        except (OSError, ValueError, KeyError):
+            continue
+    downloaded += area_rows
     in_boxes: dict[str, dict[str, int]] = {}
     for m in (cache_dir / "extract").rglob("*.csv.manifest.json") if (cache_dir / "extract").is_dir() else []:
         try:
@@ -508,7 +583,8 @@ def cache_summary(cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, Any]:
         reg = in_boxes.setdefault(d["region_id"], {})
         for plat, k in (d.get("platform_rows") or {}).items():
             reg[plat] = reg.get(plat, 0) + int(k)
-    return {"downloaded_rows": downloaded, "downloaded_files": files, "rows_in_region_boxes": in_boxes}
+    return {"downloaded_rows": downloaded, "downloaded_files": files, "area_api_rows": area_rows,
+            "rows_in_region_boxes": in_boxes}
 
 
 def _main(argv: list[str] | None = None) -> int:
@@ -520,11 +596,14 @@ def _main(argv: list[str] | None = None) -> int:
     f.add_argument("--products", nargs="*", default=list(PRODUCTS))
     f.add_argument("--force", action="store_true")
     sub.add_parser("status", help="print cache counts")
+    sub.add_parser("reingest", help="rebuild manifests and extracts from the cached raw files, no download")
     args = ap.parse_args(argv)
     if args.cmd == "fetch":
         a, _, b = args.years.partition("-")
         years = range(int(a), int(b or a) + 1)
         fetch(years, args.regions, args.products, force=args.force)
+    if args.cmd == "reingest":
+        reingest()
     print(json.dumps({**cache_summary(), "disk_bytes": disk_usage()}, indent=2))
     return 0
 

@@ -46,6 +46,142 @@ class FakeApi:
         raise AssertionError(url)
 
 
+class KeyNeverLeaksTests(unittest.TestCase):
+    """The key reaches no log, manifest, error body or output on any path of the fetch."""
+
+    def setUp(self) -> None:
+        old = os.environ.get("FIRMS_MAP_KEY")
+        os.environ["FIRMS_MAP_KEY"] = FAKE_KEY
+        self.addCleanup(lambda: os.environ.__setitem__("FIRMS_MAP_KEY", old) if old is not None else os.environ.pop("FIRMS_MAP_KEY", None))
+        backoff = aa.BACKOFF_BASE_S
+        aa.BACKOFF_BASE_S = 0.0
+        self.addCleanup(lambda: setattr(aa, "BACKOFF_BASE_S", backoff))
+
+    def _assert_clean(self, exc: BaseException) -> None:
+        for text in (str(exc), repr(exc), str(exc.__cause__), str(exc.__context__)):
+            self.assertNotIn(FAKE_KEY, text)
+
+    def test_every_failure_path_is_redacted(self) -> None:
+        import urllib.error
+
+        def http_error(url: str) -> io.BytesIO:
+            raise urllib.error.HTTPError(url, 500, f"server error for {url}", None, None)
+
+        def url_error(url: str) -> io.BytesIO:
+            raise urllib.error.URLError(f"no route to {url}")
+
+        def timeout(url: str) -> io.BytesIO:
+            raise TimeoutError(f"timed out reading {url}")
+
+        def echo_key(url: str) -> io.BytesIO:
+            return io.BytesIO(f"Invalid MAP_KEY {FAKE_KEY}".encode())
+
+        for opener in (http_error, url_error, timeout):
+            with self.subTest(opener=opener.__name__):
+                for call in (
+                    lambda: aa.key_status(FAKE_KEY, opener),
+                    lambda: aa.availability(FAKE_KEY, opener),
+                    lambda: aa._get(f"https://x/api/area/csv/{FAKE_KEY}/S/1,2,3,4/5/2024-01-01", FAKE_KEY, opener, retries=1),
+                ):
+                    with self.assertRaises(RuntimeError) as ctx:
+                        call()
+                    self._assert_clean(ctx.exception)
+        with tempfile.TemporaryDirectory() as tmp:
+            log: list[str] = []
+            with self.assertRaises(RuntimeError) as ctx:
+                aa.fetch_area("VIIRS_NOAA21", dt.date(2024, 1, 17), ["evia_greece"], cache_dir=Path(tmp), opener=echo_key,
+                              log=log.append, pause_s=0, avail={"VIIRS_NOAA21_NRT": ("2024-01-17", "2024-01-19")})
+            self._assert_clean(ctx.exception)
+            self.assertNotIn(FAKE_KEY, "\n".join(log))
+            for p in Path(tmp).rglob("*"):
+                if p.is_file():
+                    self.assertNotIn(FAKE_KEY.encode(), p.read_bytes())
+
+    def test_country_file_download_errors_are_redacted(self) -> None:
+        import urllib.error
+
+        def url_error(url: str) -> io.BytesIO:
+            raise urllib.error.URLError(f"failed {url}?key={FAKE_KEY}")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(RuntimeError) as ctx:
+                fa.download("https://x/data/country/modis/2021/f.csv", Path(tmp) / "f.csv", url_error, retries=1)
+        self._assert_clean(ctx.exception)
+
+    def test_the_command_line_prints_no_key(self) -> None:
+        import contextlib
+        import urllib.request
+
+        api = FakeApi()
+        with tempfile.TemporaryDirectory() as tmp:
+            env = Path(tmp) / ".env"
+            env.write_text(f"FIRMS_MAP_KEY={FAKE_KEY}\n", encoding="utf-8")
+            os.environ.pop("FIRMS_MAP_KEY", None)  # the key comes from the file only
+            out, err = io.StringIO(), io.StringIO()
+            real_urlopen = urllib.request.urlopen
+            urllib.request.urlopen = lambda req, timeout=None: api(req.full_url)  # type: ignore[assignment]
+            try:
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    aa._main(["--env-file", str(env), "status"])
+            finally:
+                urllib.request.urlopen = real_urlopen  # type: ignore[assignment]
+        self.assertTrue(any(FAKE_KEY in u for u in api.urls))  # it was used
+        self.assertNotIn(FAKE_KEY, out.getvalue() + err.getvalue())
+        self.assertIn("transaction_limit", out.getvalue())
+
+
+class MixedApi(FakeApi):
+    """SP replies carry a type column, NRT replies do not and leave acq_time unpadded, as the real API does."""
+
+    def __call__(self, url: str) -> io.BytesIO:
+        if "/api/area/csv/" in url and "_SP/" in url:
+            parts = url.split("/")
+            days, first = int(parts[-2]), dt.date.fromisoformat(parts[-1])
+            rows = "".join(
+                f"38.9000,23.3000,330.0,0.4,0.4,{(first + dt.timedelta(days=i)).isoformat()},0911,N21,VIIRS,n,2,290.0,5.0,N,0\n"
+                for i in range(days)
+            )
+            self.urls.append(url)
+            return io.BytesIO((HEADER.strip() + ",type\n" + rows).encode())
+        if "/api/area/csv/" in url:
+            parts = url.split("/")
+            days, first = int(parts[-2]), dt.date.fromisoformat(parts[-1])
+            rows = "".join(
+                f"38.9000,23.3000,330.0,0.4,0.4,{(first + dt.timedelta(days=i)).isoformat()},911,N21,VIIRS,n,2.0NRT,290.0,5.0,N\n"
+                for i in range(days)
+            )
+            self.urls.append(url)
+            return io.BytesIO((HEADER + rows).encode())
+        return super().__call__(url)
+
+
+class MixedHeaderTests(unittest.TestCase):
+    def test_sp_and_nrt_replies_join_into_one_extract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            old = os.environ.get("FIRMS_MAP_KEY")
+            os.environ["FIRMS_MAP_KEY"] = FAKE_KEY
+            try:
+                avail = {"VIIRS_NOAA21_SP": ("2026-07-25", "2026-07-31"), "VIIRS_NOAA21_NRT": ("2026-08-01", "2026-08-04")}
+                aa.fetch_area("VIIRS_NOAA21", dt.date(2026, 7, 25), ["evia_greece"], cache_dir=cache, opener=MixedApi(),
+                              log=lambda _m: None, pause_s=0, avail=avail)
+            finally:
+                if old is None:
+                    os.environ.pop("FIRMS_MAP_KEY", None)
+                else:
+                    os.environ["FIRMS_MAP_KEY"] = old
+            m = fa.read_manifest(fa.extract_path("evia_greece", "viirs-noaa21", 2026, cache))
+            self.assertEqual(m["rows"], 11)
+            self.assertEqual(m["columns"][-1], "type")
+            self.assertEqual(m["versions"], {"2": 7, "2.0NRT": 4})
+            rows = fa.read_firms(fa.region_box("evia_greece"), "2026-07-25", "2026-08-05", cache_dir=cache)
+            self.assertEqual(len(rows), 11)
+            nrt = [r for r in rows if r["version"] == "2.0NRT"]
+            self.assertEqual({r["type"] for r in nrt}, {""})
+            self.assertEqual({r["acq_time"] for r in nrt}, {"911"})  # kept as written
+            self.assertEqual({r["_acq_utc"][11:16] for r in rows}, {"09:11"})
+
+
 class AreaApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -99,8 +235,16 @@ class AreaApiTests(unittest.TestCase):
         self.assertEqual(len(rows), 13)
         self.assertEqual({r["_platform"] for r in rows}, {"NOAA-21"})
         self.assertEqual(rows[0]["satellite"], "N21")
-        with self.assertRaises(fa.FirmsCacheMissing):
-            fa.read_firms(fa.region_box("evia_greece"), "2024-01-20", "2024-02-05", cache_dir=self.cache)
+        # The source has nothing after 2024-01-29 here, so reading past it is not an error: the rows simply end.
+        self.assertEqual(len(fa.read_firms(fa.region_box("evia_greece"), "2024-01-20", "2024-02-05", cache_dir=self.cache)), 10)
+        # Fetched only to 2024-01-21 while the source has rows to 01-29: reading past 01-21 is refused.
+        with tempfile.TemporaryDirectory() as tmp:
+            short = Path(tmp)
+            aa.fetch_area("VIIRS_NOAA21", dt.date(2024, 1, 1), ["evia_greece"], cache_dir=short, opener=FakeApi(),
+                          log=lambda _m: None, pause_s=0, end=dt.date(2024, 1, 21))
+            self.assertEqual(len(fa.read_firms(fa.region_box("evia_greece"), "2024-01-17", "2024-01-22", cache_dir=short)), 5)
+            with self.assertRaises(fa.FirmsCacheMissing):
+                fa.read_firms(fa.region_box("evia_greece"), "2024-01-20", "2024-01-25", cache_dir=short)
 
     def test_second_fetch_requests_nothing_new(self) -> None:
         before = [u for u in self.api.urls if "/api/area/" in u]

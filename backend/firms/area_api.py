@@ -1,6 +1,6 @@
 """FIRMS area API fetch for what the country files lack: NOAA-21, and rows after the last country file year.
 
-Follows docs/03-DATA-REGISTRY.md: at most five days per request, chunked, cached, one request at a time with a pause.
+Follows docs/data.md: at most five days per request, chunked, cached, one request at a time with a pause.
 The data availability endpoint is read first to choose standard processing (SP) where it covers a date and near real
 time (NRT) after it. The key (FIRMS_MAP_KEY) goes into request URLs only: every stored URL, manifest, log line and
 error message carries <MAP_KEY> instead.
@@ -56,8 +56,13 @@ from backend.firms.archive import (  # noqa: E402
 )
 
 API_BASE: str = "https://firms.modaps.eosdis.nasa.gov"
-MAX_DAYS: int = 5  # docs/03: NASA documents a maximum of five days per area request
+MAX_DAYS: int = 5  # docs/data.md: NASA documents a maximum of five days per area request
 PAUSE_S: float = 1.0
+BACKOFF_BASE_S: float = 2.0  # first retry waits this long, doubling after
+# A five-day request over a hero box costs 10 transactions and a mapkey_status read costs none (measured). The
+# fetch reads the count every THROTTLE_EVERY requests and waits while it is above THROTTLE_SHARE of the limit.
+THROTTLE_EVERY: int = 25
+THROTTLE_SHARE: float = 0.6
 # Area API sources by platform; SP is preferred where the availability endpoint says it covers a date.
 PLATFORM_SOURCES: dict[str, tuple[str, ...]] = {
     "MODIS": ("MODIS_SP", "MODIS_NRT"),
@@ -95,7 +100,7 @@ def _get(url: str, key: str, opener: Opener, retries: int = 3) -> bytes:
                 break
         except Exception as exc:  # noqa: BLE001
             last = redact_key(f"{type(exc).__name__}: {exc}", key)
-        time.sleep(min(30.0, 2.0 * 2**attempt))
+        time.sleep(min(30.0, BACKOFF_BASE_S * 2**attempt))
     raise RuntimeError(f"request failed: {last}")
 
 
@@ -188,6 +193,14 @@ def fetch_area(platform: str, start: _dt.date, regions: Iterable[str] = tuple(RE
             rows += n_rows
             if pause_s:
                 time.sleep(pause_s)
+            if done % THROTTLE_EVERY == 0:
+                while True:
+                    st = key_status(key, opener)
+                    cur, lim = int(st.get("current_transactions", 0)), int(st.get("transaction_limit", 5000))
+                    log(f"{r} {platform}: {done} requests so far; {cur} of {lim} transactions in the current window")
+                    if cur <= THROTTLE_SHARE * lim:
+                        break
+                    time.sleep(60.0)
         log(f"{r} {platform}: {len(reqs)} chunks planned")
     built = build_extracts(platform, regions, cache_dir)
     return {"platform": platform, "requests_made": done, "chunks_already_cached": skipped, "rows_fetched": rows,
@@ -196,7 +209,9 @@ def fetch_area(platform: str, start: _dt.date, regions: Iterable[str] = tuple(RE
 
 def build_extracts(platform: str, regions: Iterable[str], cache_dir: Path = FIRMS_CACHE_DIR) -> list[str]:
     """Rebuild extract/<region>/<product>_<year>.csv from the cached chunks of ``platform`` (years the country files
-    do not hold). Rows outside the box are dropped and exact duplicates removed, as for the country files."""
+    do not hold). Rows outside the box are dropped and exact duplicates removed, as for the country files. SP and NRT
+    replies differ in columns (NRT has no ``type``), so the extract carries the union of columns in first seen order
+    and leaves a value empty where a reply had no such column; every value is kept as the source wrote it."""
     product = PLATFORM_PRODUCT[platform]
     written = []
     for r in regions:
@@ -208,14 +223,17 @@ def build_extracts(platform: str, regions: Iterable[str], cache_dir: Path = FIRM
                 m = read_manifest(p)
                 if m is not None:
                     chunks.append((p, m))
-        by_year: dict[int, list[list[str]]] = collections.defaultdict(list)
+        by_year: dict[int, list[dict[str, str]]] = collections.defaultdict(list)
         header: list[str] | None = None
         covered: dict[int, list[str]] = {}
+        available_to = ""
         lineage: dict[int, list[dict[str, Any]]] = collections.defaultdict(list)
         seen: set[tuple[str, ...]] = set()
         dups = collections.Counter()
         for p, m in sorted(chunks, key=lambda x: x[1]["query"]["first_day"]):
             q = m["query"]
+            for _src, span in (m.get("availability") or {}).items():
+                available_to = max(available_to, str(span[1])[:10])
             first = _dt.date.fromisoformat(q["first_day"])
             last = first + _dt.timedelta(days=int(q["days"]) - 1)
             for y in range(first.year, last.year + 1):
@@ -228,17 +246,16 @@ def build_extracts(platform: str, regions: Iterable[str], cache_dir: Path = FIRM
                 h = next(rd, None)
                 if h is None:
                     continue
+                missing = [x for x in REQUIRED_COLUMNS if x not in h]
+                if missing:
+                    raise ValueError(f"{p.name}: columns missing {missing}")
                 if header is None:
-                    header = h
-                    missing = [x for x in REQUIRED_COLUMNS if x not in h]
-                    if missing:
-                        raise ValueError(f"{p.name}: columns missing {missing}")
-                if h != header:
-                    raise ValueError(f"{p.name}: header differs from the first chunk")
-                col = {x: i for i, x in enumerate(header)}
+                    header = list(h)
+                header += [x for x in h if x not in header]
+                col = {x: i for i, x in enumerate(h)}
                 dk = [col[f] for f in DEDUP_FIELDS]
                 for rec in rd:
-                    if len(rec) != len(header):
+                    if len(rec) != len(h):
                         continue
                     lat, lon = float(rec[col["latitude"]]), float(rec[col["longitude"]])
                     if not (box[0] <= lon <= box[2] and box[1] <= lat <= box[3]):
@@ -249,7 +266,7 @@ def build_extracts(platform: str, regions: Iterable[str], cache_dir: Path = FIRM
                         dups[y] += 1
                         continue
                     seen.add(k)
-                    by_year[y].append(rec)
+                    by_year[y].append(dict(zip(h, rec)))
         if header is None:
             continue
         for y, span in sorted(covered.items()):
@@ -259,12 +276,11 @@ def build_extracts(platform: str, regions: Iterable[str], cache_dir: Path = FIRM
             if existing is not None and existing.get("lineage", {}).get("source") != "area_api":
                 continue  # a country file extract already holds this year; never overwrite it
             buf = io.StringIO()
-            wr = csv.writer(buf, lineterminator="\n")
-            wr.writerow(header)
+            wr = csv.DictWriter(buf, fieldnames=header, lineterminator="\n", restval="")
+            wr.writeheader()
             wr.writerows(recs)
             payload = buf.getvalue().encode("utf-8")
             _write_atomic(dest, payload)
-            i_sat = header.index("satellite")
             _write_manifest(dest, {
                 "region_id": r,
                 "box_wsen": list(box),
@@ -274,10 +290,14 @@ def build_extracts(platform: str, regions: Iterable[str], cache_dir: Path = FIRM
                 "duplicates_dropped": dups[y],
                 "dedup_key": list(DEDUP_FIELDS),
                 "columns": header,
-                "acq_date_range": [min(x[header.index("acq_date")] for x in recs), max(x[header.index("acq_date")] for x in recs)] if recs else [None, None],
+                "acq_date_range": [min(x["acq_date"] for x in recs), max(x["acq_date"] for x in recs)] if recs else [None, None],
                 "covered_days": span,
-                "platform_rows": dict(collections.Counter(_platform(product, x[i_sat]) for x in recs)),
-                "versions": dict(collections.Counter(x[header.index("version")] for x in recs)),
+                # The last day the source itself had for this platform when fetched: past it the platform delivered
+                # nothing (Suomi NPP ends 2026-11-02), which is not a gap in this cache.
+                "source_available_to": available_to or None,
+                "platform_rows": dict(collections.Counter(_platform(product, x["satellite"]) for x in recs)),
+                "versions": dict(collections.Counter(x["version"] for x in recs)),
+                "columns_missing_in_some_rows": sorted({c for x in recs for c in header if c not in x}),
                 "lineage": {"source": "area_api", "chunks": lineage[y],
                             "filter": "longitude and latitude inside box_wsen; exact duplicates on dedup_key dropped"},
                 "sha256": hashlib.sha256(payload).hexdigest(),
@@ -298,6 +318,7 @@ def _main(argv: list[str] | None = None) -> int:
     f.add_argument("--start", required=True)
     f.add_argument("--end", default=None)
     f.add_argument("--regions", nargs="*", default=list(REGION_COUNTRY))
+    f.add_argument("--pause", type=float, default=PAUSE_S, help="seconds between requests")
     args = ap.parse_args(argv)
     key = _key(args.env_file)
     if args.cmd == "status":
@@ -305,7 +326,7 @@ def _main(argv: list[str] | None = None) -> int:
         return 0
     before = key_status(key)
     avail = availability(key)
-    out = [fetch_area(p, _dt.date.fromisoformat(args.start), args.regions, args.env_file,
+    out = [fetch_area(p, _dt.date.fromisoformat(args.start), args.regions, args.env_file, pause_s=args.pause,
                       end=_dt.date.fromisoformat(args.end) if args.end else None, avail=avail) for p in args.sources]
     after = key_status(key)
     print(json.dumps({"key_status_before": before, "key_status_after": after, "results": out}, indent=2))
