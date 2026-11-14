@@ -88,7 +88,7 @@ from backend.model.solver import (  # noqa: E402
     SolvedReconstructionRun,
     solve_region_reconstruction,
 )
-from backend.server_next_look import NextLookRounds, RoundConflict, RoundNotFound  # noqa: E402
+from backend.server_next_look import ClosedWindow, NextLookRounds, RoundConflict, RoundNotFound, closed_window  # noqa: E402
 
 try:  # where the module is missing, GET /api/evidence answers 404 and says so
     from backend.model.evidence import evidence as model_evidence  # noqa: E402
@@ -786,6 +786,18 @@ class IsogonDataStore:
         start = body.get("start")
         if not start:
             raise ValueError("source 'firms' needs 'start', a UTC date or date-time such as 2021-07-22T20:34:00Z")
+        if holdout_viirs:
+            # A held-out run is scored against the hidden satellite, so none is built on a closed window: the span the
+            # run's window is searched in (SEARCH_S after the start) must not meet the year of a recorded test fire.
+            from backend.model.real_run import SEARCH_S, parse_start_s
+
+            try:
+                t0 = parse_start_s(str(start))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("start must be a UTC date (YYYY-MM-DD) or date-time") from exc
+            why = closed_window(spec.id, t0, t0 + SEARCH_S)
+            if why:
+                raise ClosedWindow(why)
         # Keyed on what decides the run: region, start, what is hidden, the region's rows and the fitted values.
         key = (spec.id, str(start), bool(holdout_viirs), self.region_rows_key(spec.id), fitted_values_digest())
         with self._lock:
@@ -1131,6 +1143,8 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
             self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         except (FirmsCacheMissing, RoundNotFound) as exc:
             self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc)})
+        except ClosedWindow as exc:
+            self._send_json_obj(HTTPStatus.CONFLICT, {"error": str(exc), "evidence": ClosedWindow.evidence})
         except RoundConflict as exc:
             self._send_json_obj(HTTPStatus.CONFLICT, {"error": str(exc)})
         except Exception as exc:  # pragma: no cover

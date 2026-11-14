@@ -23,7 +23,9 @@ if str(REPO_ROOT) not in sys.path:
 from backend.firms import archive as fa  # noqa: E402
 
 _SERVER = None
-DIXIE = {"region_id": "plumas_ca", "source": "firms", "start": "2021-07-22T20:34:00Z"}
+# A run outside the closed windows: the default by rule of the places registry (no 2021 window of a region with a
+# recorded test fire is held out, revealed or played; the server refuses one with 409).
+OPEN_RUN = {"region_id": "plumas_ca", "source": "firms", "start": "2012-08-10"}
 
 
 def _base() -> str:
@@ -50,8 +52,8 @@ def _req(path: str, body: bytes | None = None, headers: dict[str, str] | None = 
         return e.code, dict(e.headers), e.read()
 
 
-def _dixie_cached() -> bool:
-    return fa.extract_path("plumas_ca", "viirs-snpp", 2021).is_file()
+def _open_run_cached() -> bool:
+    return fa.extract_path("plumas_ca", "viirs-snpp", 2012).is_file()
 
 
 class RequestHardeningTests(unittest.TestCase):
@@ -125,7 +127,7 @@ class RequestHardeningTests(unittest.TestCase):
                      "/api/calendar?source=firms&region_id=nowhere", "/api/runs/starts?region_id=nowhere&source=firms"]
             bodies = [_req(p)[2] for p in paths]
             bodies.append(_req("/api/reconstruct", b'{"region_id": "plumas_ca", "source": "firms"}')[2])
-            if _dixie_cached():
+            if _open_run_cached():
                 bodies.append(_req("/api/calendar?source=firms&region_id=plumas_ca")[2])
         finally:
             if old is None:
@@ -143,10 +145,10 @@ class RequestHardeningTests(unittest.TestCase):
 
 class RealRunServingTests(unittest.TestCase):
     def setUp(self) -> None:
-        if not _dixie_cached():
-            self.skipTest("FIRMS rows for plumas_ca 2021 are not cached")
+        if not _open_run_cached():
+            self.skipTest("FIRMS rows for plumas_ca 2012 are not cached")
 
-    def test_observer_answers_on_every_frame_of_the_dixie_run(self) -> None:
+    def test_observer_answers_on_every_frame_of_a_real_run(self) -> None:
         # A run with VIIRS held out plays the passes of the CMR pass list: MODIS passes,
         # and held-out passes of the hidden platforms at their real times (`held_out`, the estimate only, no footprint,
         # geometry from the swath polygon). No frame carries a hidden detection. With nothing hidden the frames carry
@@ -154,7 +156,7 @@ class RealRunServingTests(unittest.TestCase):
         from backend.firms.cmr_passes import cmr_passes
 
         for hold in (True, False):
-            status, _, body = _req("/api/reconstruct", json.dumps({**DIXIE, "holdout_viirs": hold}).encode())
+            status, _, body = _req("/api/reconstruct", json.dumps({**OPEN_RUN, "holdout_viirs": hold}).encode())
             self.assertEqual(status, 200)
             run = json.loads(body)
             rid = run["run_id"]
@@ -207,7 +209,7 @@ class RealRunServingTests(unittest.TestCase):
                         self.assertEqual(d["frame"], frame)
 
     def test_belief_frames_are_served_for_real_runs_only(self) -> None:
-        status, _, body = _req("/api/reconstruct", json.dumps({**DIXIE, "holdout_viirs": True}).encode())
+        status, _, body = _req("/api/reconstruct", json.dumps({**OPEN_RUN, "holdout_viirs": True}).encode())
         run = json.loads(body)
         desc = run["belief_frames"]
         self.assertEqual(desc["url"], f"/api/runs/{run['run_id']}/belief_u8.bin")
@@ -226,7 +228,7 @@ class RealRunServingTests(unittest.TestCase):
         self.assertEqual(status, 200)
         starts = json.loads(body)["real_run_starts"]
         dates = [s["start"] for s in starts["starts"]]
-        self.assertIn("2021-07-22", dates)
+        self.assertIn("2012-08-10", dates)
         self.assertTrue(all(isinstance(s["label"], str) and s["label"] for s in starts["starts"]))
         self.assertIn("rule", starts)
         status, _, body = _req("/api/runs/starts?region_id=plumas_ca&source=firms")

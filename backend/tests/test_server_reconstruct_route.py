@@ -25,8 +25,8 @@ def _store():
     return _STORE
 
 
-def _dixie_cached() -> bool:
-    return fa.extract_path("plumas_ca", "viirs-snpp", 2021).is_file()
+def _open_run_cached() -> bool:
+    return fa.extract_path("plumas_ca", "viirs-snpp", 2012).is_file()
 
 
 class ReconstructRouteTests(unittest.TestCase):
@@ -35,7 +35,7 @@ class ReconstructRouteTests(unittest.TestCase):
         for body in (
             {"region_id": "plumas_ca", "source": "bogus"},
             {"region_id": "plumas_ca", "source": "firms"},
-            {"region_id": "plumas_ca", "source": "firms", "start": "2021-07-22", "cloud_override": 0.3},
+            {"region_id": "plumas_ca", "source": "firms", "start": "2012-08-10", "cloud_override": 0.3},
         ):
             with self.subTest(body=body):
                 with self.assertRaises(ValueError):
@@ -53,15 +53,15 @@ class ReconstructRouteTests(unittest.TestCase):
         self.assertEqual(a["run_id"], "plumas_ca_holdout0_cnone")
 
     def test_real_run_keeps_the_simulated_shape(self) -> None:
-        if not _dixie_cached():
-            self.skipTest("FIRMS rows for plumas_ca 2021 are not cached")
+        if not _open_run_cached():
+            self.skipTest("FIRMS rows for plumas_ca 2012 are not cached")
         s = _store()
         sim = s.execute_reconstruct({"region_id": "plumas_ca"})
-        blind = s.execute_reconstruct({"region_id": "plumas_ca", "source": "firms", "start": "2021-07-22T20:34:00Z",
+        blind = s.execute_reconstruct({"region_id": "plumas_ca", "source": "firms", "start": "2012-08-10",
                                        "holdout_viirs": True})
         self.assertNotIn("blind_test", blind)                     # withheld until the reveal is asked for
         self.assertIn("blind_test", blind["hidden_rows"]["withheld_until_reveal"])
-        real = s.execute_reconstruct({"region_id": "plumas_ca", "source": "firms", "start": "2021-07-22T20:34:00Z",
+        real = s.execute_reconstruct({"region_id": "plumas_ca", "source": "firms", "start": "2012-08-10",
                                       "holdout_viirs": True, "reveal": True})
         self.assertEqual(real["source"], "firms")
         self.assertTrue(real["holdout_viirs"])
@@ -72,7 +72,7 @@ class ReconstructRouteTests(unittest.TestCase):
         self.assertIn("blind_test", real)
         self.assertEqual(real["assets"]["reconstruction_u8_url"], f"/api/runs/{real['run_id']}/reconstruction_u8.bin")
         self.assertIsNotNone(s.get_run(real["run_id"]))
-        again = s.execute_reconstruct({"region_id": "plumas_ca", "source": "firms", "start": "2021-07-22T20:34:00Z",
+        again = s.execute_reconstruct({"region_id": "plumas_ca", "source": "firms", "start": "2012-08-10",
                                        "holdout_viirs": True, "reveal": True})
         self.assertEqual(again, real)
 

@@ -2,7 +2,7 @@
 sensor-model route passes the gates of `backend.model.gates` through (not evaluated on real runs), never a simulated
 run's; caches are keyed on what decides their content.
 
-The first two classes need no cache. The others use the real Dixie rows and skip without them.
+The first two classes need no cache. The others use real rows of plumas_ca in August 2012 and skip without them.
 """
 
 from __future__ import annotations
@@ -21,7 +21,9 @@ if str(REPO_ROOT) not in sys.path:
 from backend.firms import archive as fa  # noqa: E402
 from backend.firms import cmr_passes as cp  # noqa: E402
 
-DIXIE = {"region_id": "plumas_ca", "source": "firms", "start": "2021-07-22T20:34:00Z"}
+# A run outside the closed windows: the default by rule of the places registry (no 2021 window of a region with a
+# recorded test fire is held out, revealed or played; the server refuses one with 409).
+OPEN_RUN = {"region_id": "plumas_ca", "source": "firms", "start": "2012-08-10"}
 
 
 class WithholdTests(unittest.TestCase):
@@ -84,22 +86,22 @@ class CacheKeyTests(unittest.TestCase):
         self.assertIn("self.region_rows_key(spec.id), fitted_values_digest()", src)
 
 
-def _dixie_cached() -> bool:
-    return fa.extract_path("plumas_ca", "viirs-snpp", 2021).is_file()
+def _open_run_cached() -> bool:
+    return fa.extract_path("plumas_ca", "viirs-snpp", 2012).is_file()
 
 
 class HeldOutRunTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        if not _dixie_cached():
-            raise unittest.SkipTest("FIRMS rows for plumas_ca 2021 are not cached")
+        if not _open_run_cached():
+            raise unittest.SkipTest("FIRMS rows for plumas_ca 2012 are not cached")
         from backend.tests import test_server_http as http_tests
 
         cls.http = http_tests
-        status, _, raw = http_tests._req("/api/reconstruct", json.dumps({**DIXIE, "holdout_viirs": True}).encode())
+        status, _, raw = http_tests._req("/api/reconstruct", json.dumps({**OPEN_RUN, "holdout_viirs": True}).encode())
         assert status == 200, raw[:300]
         cls.blind = json.loads(raw)
-        status, _, raw = http_tests._req("/api/reconstruct", json.dumps({**DIXIE, "holdout_viirs": True, "reveal": True}).encode())
+        status, _, raw = http_tests._req("/api/reconstruct", json.dumps({**OPEN_RUN, "holdout_viirs": True, "reveal": True}).encode())
         assert status == 200, raw[:300]
         cls.revealed = json.loads(raw)
 
@@ -128,7 +130,7 @@ class HeldOutRunTests(unittest.TestCase):
         self.assertEqual(withhold_scorer_keys(r), b)
 
     def test_a_run_with_nothing_hidden_is_unchanged(self) -> None:
-        status, _, raw = self.http._req("/api/reconstruct", json.dumps({**DIXIE, "holdout_viirs": False}).encode())
+        status, _, raw = self.http._req("/api/reconstruct", json.dumps({**OPEN_RUN, "holdout_viirs": False}).encode())
         self.assertEqual(status, 200)
         run = json.loads(raw)
         self.assertNotIn("withheld_until_reveal", run.get("hidden_rows") or {})
@@ -165,19 +167,19 @@ class HeldOutRunTests(unittest.TestCase):
                 stage.pop("duration_ms", None)                            # wall clock
             return out
 
-        full = withhold_scorer_keys(real_response(solve_real_reconstruction(terrain, DIXIE["start"], holdout_viirs=True), {}))
-        bare = withhold_scorer_keys(real_response(solve_real_reconstruction(terrain, DIXIE["start"], holdout_viirs=True, read_firms=modis_only), {}))
+        full = withhold_scorer_keys(real_response(solve_real_reconstruction(terrain, OPEN_RUN["start"], holdout_viirs=True), {}))
+        bare = withhold_scorer_keys(real_response(solve_real_reconstruction(terrain, OPEN_RUN["start"], holdout_viirs=True, read_firms=modis_only), {}))
         self.assertEqual(json.dumps(leaf_view(full), sort_keys=True), json.dumps(leaf_view(bare), sort_keys=True))
 
     def test_the_run_cache_is_rebuilt_when_the_region_rows_change(self) -> None:
         store = self.http._SERVER.store
         first = store.get_run(self.blind["run_id"])[0]
-        store.execute_reconstruct({**DIXIE, "holdout_viirs": True})
+        store.execute_reconstruct({**OPEN_RUN, "holdout_viirs": True})
         self.assertIs(store.get_run(self.blind["run_id"])[0], first)       # same rows: served from the cache
         real_key = store.region_rows_key
         store.region_rows_key = lambda region_id, max_age_s=10.0: "rows changed"
         try:
-            store.execute_reconstruct({**DIXIE, "holdout_viirs": True})
+            store.execute_reconstruct({**OPEN_RUN, "holdout_viirs": True})
         finally:
             store.region_rows_key = real_key
         self.assertIsNot(store.get_run(self.blind["run_id"])[0], first)    # other rows: solved again

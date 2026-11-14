@@ -100,6 +100,31 @@ class RoundConflict(RuntimeError):
     """A step that does not fit the round's state (HTTP 409)."""
 
 
+class ClosedWindow(RoundConflict):
+    """A held-out run, a reveal, a round or a play asked on a closed window (HTTP 409, with the evidence route)."""
+
+    evidence = "/api/evidence"
+
+
+def closed_window(region_id: str, start_s: float, end_s: float) -> str | None:
+    """The refusal sentence when [start_s, end_s) meets the year of the region's recorded test fire, else None. The
+    year comes from the model's exclusions (`backend.env.episodes.closed_year`), so no region is named here."""
+    from backend.env.episodes import closed_year
+
+    year = closed_year(region_id)
+    if year is None:
+        return None
+    y0 = float(np.datetime64(f"{year}-01-01", "s").astype(np.int64))
+    y1 = float(np.datetime64(f"{year + 1}-01-01", "s").astype(np.int64))
+    return closed_sentence(region_id, year) if (start_s < y1 and end_s > y0) else None
+
+
+def closed_sentence(region_id: str, year: int) -> str:
+    return (f"{year} windows of {region_id} hold a recorded test fire and are closed: no held-out run, reveal, round or "
+            f"play is served for them, so the fire is never scored again. The recorded looks are at GET /api/evidence; "
+            f"the run with every satellite shown still serves.")
+
+
 # ---- small helpers ---------------------------------------------------------------------------------------------------
 
 
@@ -277,6 +302,17 @@ def episode_digest(ep: Any, terrain_m: np.ndarray | None) -> str:
     return h.hexdigest()
 
 
+def _finite(v: Any) -> Any:
+    """Plain JSON numbers: a float that is not finite becomes None."""
+    if isinstance(v, float):
+        return v if math.isfinite(v) else None
+    if isinstance(v, dict):
+        return {k: _finite(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_finite(x) for x in v]
+    return v
+
+
 def _done_future(value: Any) -> cf.Future:
     fut: cf.Future = cf.Future()
     fut.set_result(value)
@@ -382,11 +418,20 @@ class NextLookRounds:
                 raise ValueError("episode must look like region:tile:YYYY-MM-DDTHH, for example plumas_ca:22:2021-07-22T05")
             if m["region"] != region_id:
                 raise ValueError(f"episode {episode_key} is not in region {region_id}")
-            for ep in self._catalogue(region_id, int(m["hour"][:4])):
+            year = int(m["hour"][:4])
+            from backend.env.episodes import closed_year
+
+            if closed_year(region_id) == year:
+                raise ClosedWindow(closed_sentence(region_id, year))
+            for ep in self._catalogue(region_id, year):
                 if ep.key == episode_key:
                     return ep, "catalogue"
             raise RoundNotFound(f"no episode {episode_key} in the environment's catalogue")
-        return self._episode_from_start(region_id, str(start)), "start"
+        ep = self._episode_from_start(region_id, str(start))
+        why = closed_window(region_id, ep.window.start_s, ep.window.end_s)
+        if why:
+            raise ClosedWindow(why)
+        return ep, "start"
 
     def _episode_from_start(self, region_id: str, start: str) -> Any:
         from backend.env.episodes import PAD_S, EnvEpisode
@@ -475,28 +520,18 @@ class NextLookRounds:
     # ---- the reference agents, computed in the background, served at the end -----------------------------------------
 
     def _reference(self, ep: Any, tiles: tuple[int, int], budget: int, terrain: Any = _FROM_SOURCE) -> dict[str, Any]:
-        from backend.env.agents import LatestModisAgent, LeastSureAgent, OracleAgent, RandomAgent, run_episode
+        """Every reference player on the episode (`backend.env.agents.play_reference`): random per seed, the constant
+        tile per tile, the centre tiles, latest MODIS, least sure, expected new, learned and the oracle."""
+        from backend.env.agents import play_reference
         from backend.env.policy import load_policy
 
         env = self._make_env(ep, tiles, budget, terrain)
-
-        def play(agent: Any, seed: int) -> dict[str, Any]:
-            r = run_episode(env, agent, seed=seed)
-            return {"gain": _num(r["return"]), "final": _num(r["score_end"]), "actions": [int(a) for a in r["actions"]]}
-
-        rand = [play(RandomAgent(seed=s), s) for s in range(self.reference_seeds)]
-        out: dict[str, Any] = {
-            "random": {"seeds": list(range(self.reference_seeds)), "gains": [r["gain"] for r in rand],
-                       "finals": [r["final"] for r in rand], "actions": [r["actions"] for r in rand]},
-            "latest_modis": play(LatestModisAgent(), 0),
-            "least_sure": play(LeastSureAgent(), 0),
-        }
-        policy = load_policy()
-        out["learned"] = play(policy, 0) if policy is not None else None
-        out["oracle"] = play(OracleAgent(), 0)
-        out["score_start"] = _num(env.score_start)
+        out = _finite(play_reference(env, random_seeds=self.reference_seeds, policy=load_policy()))
         out["spending"] = SPENDING
         out["oracle_note"] = "sees the hidden detections and takes the best tile at each look: a ceiling, not a player"
+        out["reads_nothing_note"] = ("random, the constant tile and the centre tiles read nothing about the fire: what "
+                                     "they gain is the framing of the episode, and a player shows skill by what it "
+                                     "gains beyond them")
         return out
 
     def reference_key(self, ep: Any, terrain: np.ndarray | None, tiles: tuple[int, int], budget: int) -> str:
@@ -707,6 +742,7 @@ class NextLookRounds:
             "reference": None,
             "reference_status": "computed in the background; served when the round ends",
             "test_episodes": test_episodes(),
+            "validation_reference": validation_reference(),
             "known_limits": _known_limits(),
             "protocol": _protocol(),
             "rounds": {"held": self.held(), "max": self.max_rounds},
@@ -785,11 +821,17 @@ class NextLookRounds:
         taken = [[h["decision"], h["action"]] for h in rnd.history if h["spent"]]
         ref, status, cache = self._reference_result(rnd, self.reference_wait_s)
         last = rnd.history[-1]["score"] if rnd.history else rnd.score_start
+        try:
+            taught = _finite(dict(rnd.env.taught_elsewhere()))
+            taught["on"] = "the cells outside every tile looked at, at the look it was looked at"
+        except (AttributeError, RuntimeError):
+            taught = None
         return {
             "score_start": _num(rnd.score_start),
             "score_end": last,
             "gain": _num(sum(h["reward"] or 0.0 for h in rnd.history)),
             "looks_taken": taken,
+            "taught_elsewhere": taught,
             "reveal": self._reveal(rnd, taken),
             "reference": ref,
             "reference_status": status,
@@ -936,6 +978,8 @@ def test_episodes() -> dict[str, Any] | None:
              "learned": "learned", "oracle": "oracle"}
     agents = t.get("agents", {})
     return {
+        "reward": t.get("reward"),
+        "empty_look": t.get("empty_look"),
         "episodes": t.get("episodes"),
         "mean_start_score": t.get("mean_start_score"),
         "mean_gain": {names[k]: v.get("mean_gain") for k, v in agents.items() if k in names},
@@ -943,6 +987,22 @@ def test_episodes() -> dict[str, Any] | None:
         "plainly": t.get("plainly"),
         "from": f"{FITTED_FILE.relative_to(FITTED_FILE.parents[3])}, test_protocol_2, generated {doc.get('generated_utc')}",
     }
+
+
+def validation_reference() -> dict[str, Any] | None:
+    """The reference players under the reward in use on the validation episodes, from the tracked file."""
+    from backend.env.policy import FITTED_FILE, load_fitted
+
+    doc = load_fitted() or {}
+    v = doc.get("validation_reference")
+    if not v:
+        return None
+    keep = ("what", "reward", "schedule", "spending", "score", "tiles", "budget", "random_seeds", "mean_start_score",
+            "looks_per_episode", "agents", "constant_tiles_mean_gain", "differences", "plainly")
+    out = {k: v.get(k) for k in keep if k in v}
+    out["episodes"] = {k: (v.get("episodes") or {}).get(k) for k in ("validation", "validation_keys")}
+    out["from"] = f"{FITTED_FILE.relative_to(FITTED_FILE.parents[3])}, validation_reference, generated {doc.get('generated_utc')}"
+    return out
 
 
 def _known_limits() -> str:

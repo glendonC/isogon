@@ -655,6 +655,7 @@ A real run adds, at the top, `source`, `frames_from`, `geometry_note`, `held_out
 | --- | --- |
 | `400` | The body is not a JSON object, holds `NaN` or `Infinity`, or a key has the wrong type or is out of range. Unknown `region_id`; a `query_text` that cannot be resolved; a `source`, `holdout` or `imagery_source` that is not one of the listed values. |
 | `400` | Real runs: no `start`; `cloud_override` given; a `start` that cannot be read; fewer than 24 overpasses with detections in the box from that start. |
+| `409` | A held-out run (and so its reveal) whose window may fall in the year of a region's recorded test fire: the 30 days the window is searched in after `start` meet 2021 for `plumas_ca`, `lytton_bc` or `evia_greece`. The answer has a sentence and `"evidence": "/api/evidence"`. The run with every satellite shown still serves. |
 | `403` | The request's `Origin` is not a local page. |
 | `404` | Real runs: the region has no cached FIRMS rows, or the rows of the asked span are not cached. |
 | `413` | The body is over 262,144 bytes. |
@@ -862,7 +863,7 @@ One document with everything the project has measured about the model on real fi
 | `test_fires.also_scored[]` | Every other time rows of the test fires were scored, so that the count of looks hides nothing. |
 | `audit`, `audit_findings` | The ways the first protocol let hidden rows shape the test, and for each the change that answers it and the test that guards it (`id`, `found`, `answer`, `guarded_by`). |
 | `validation` | `protocol_version`, `episodes`, `years`, `regions`, `scored_overpasses`, `classes` (`ahead`, `tied`, `behind`), `fitted_values`, `decision`, `rule`, `parts`, `frp_interval`, `before`, `history`, `trained_on`, `validated_on`, `empty_looks`, `intervals`. |
-| `next_look` | `tiles_per_side`, `looks`, `score`, `reward`, `test_episodes`, `mean_start_score`, `agents`, `differences`, `holds_in_both`, `other_settings`, `made_with`, and the same table under earlier settings. |
+| `next_look` | `tiles_per_side`, `looks`, `score`, `reward`, `test_episodes`, `mean_start_score`, `agents`, `differences`, `holds_in_both`, `other_settings`, `made_with`, and the same table under earlier settings; `measured_under` (the reward the tables on record were measured under, what an empty look did then, why they are not measured again), `reward_in_use`, and `on_validation` (the reference players under the reward in use on the validation episodes: `agents`, `differences`, `plainly`, `not_a_test`). |
 | `limits` | Sentences: what the figures do not show. |
 | `additions` | The keys this document adds to the shape the page first asked for. |
 | `sources` | `tracked_files`, `reports_sha256`, `record_built_utc`. |
@@ -902,7 +903,9 @@ Errors: `404` if the build has no evidence module.
 
 A round is one episode of the next-look environment (`backend/env/next_look.py`). MODIS is shown and VIIRS is hidden. At each scheduled VIIRS look the player may spend one look of a budget to reveal the VIIRS detections of that look inside one tile. Rounds live in server memory: at most 16, the least recently used dropped first, and none kept after six idle hours or a restart.
 
-No answer holds a hidden row, or a count taken from hidden rows, before the look that reveals it. Three kinds of figure are computed against the hidden detections because that is what the environment is: the starting score, the score after each step and the reward. They are scores, not rows. The full reveal and the reference players' results are served only when the round is over.
+No answer holds a hidden row, or a count taken from hidden rows, before the look that reveals it. Three kinds of figure are computed against the hidden detections because that is what the environment is: the starting score, the score after each step and the reward. They are scores, not rows. The score is taken on every hidden detection of the episode, looked at or not, so a step's `reward` is the score after it minus the score before it, and a round's rewards add up to `end.score_end` minus `end.score_start`. A look that reveals no pixel has a reward of exactly 0 and leaves the estimate as it was. The full reveal and the reference players' results are served only when the round is over.
+
+No round or play is served on a 2021 window of a region with a recorded test fire (the year comes from the model's exclusions, `backend.env.episodes.closed_year`): reset and play answer `409` with a sentence and `"evidence": "/api/evidence"`, before anything is computed for a catalogue key, and once the window is found for a start. The same holds for a held-out run of `POST /api/reconstruct`. Those fires are on record and are not scored again.
 
 ### `POST /api/env/next_look/reset`
 
@@ -942,8 +945,8 @@ No answer holds a hidden row, or a count taken from hidden rows, before the look
     "looks_note": "...",
     "learn_from_looks": false,
     "score": "csi",
-    "reward": "gain in the blind-test score of the reconstruction, measured before and after the look on the same target: the real hidden detections still hidden after the look",
-    "reward_target": "still_hidden"
+    "reward": "the score after the look minus the score before it, on one fixed set: every real hidden detection of the episode. The rewards of a round add up to the score at the end minus the score at the start. A look that hands over no hidden pixel earns nothing.",
+    "reward_target": "all"
   },
   "looks": [{"index": 0, "platform": "VIIRS_SNPP", "time_utc": "2020-09-27T21:00:10Z", "is_day": true, "scan_km": 0.46, "track_km": 0.508}],
   "score_start": 0.2813,
@@ -988,7 +991,7 @@ Shortened: `looks` has one entry per scheduled look (10 here), the per-tile list
 - `observation` is what the player may know before deciding, and nothing more. `p_burning_u8` is the model's probability that a cell burns, times 255; `tile_of_cell_u8` is the tile of every cell. Tile `t` is row `t // columns` and column `t % columns`, row 0 northern.
 - `looks` are the scheduled slots of the hidden platforms: platform, time and pixel size. They come from the platform and the calendar, not from a detection.
 - `episode.split` is `test` when the window meets one of the three 2021 test fires, otherwise `fit`.
-- `test_episodes` is the recorded reference table, read from `backend/env/fitted/next_look.json`.
+- `test_episodes` is the recorded reference table, read from `backend/env/fitted/next_look.json`, with the `reward` it was measured under and what an `empty_look` did then (the first reward). `validation_reference` is the table under the reward in use, on the 13 validation episodes of 2024 and 2025 (`agents`, `differences`, `plainly`, the episodes and where it is read from).
 - `source` names the files behind the environment, these routes and the reference players.
 
 Errors: `400` for a missing `region_id`, both or neither of `episode` and `start`, an `episode` that does not look like a key or names another region, a `start` that is not a date, `tiles`, `budget` or `seed` out of range, or an episode with no scheduled VIIRS look; `404` for a region with no cached FIRMS rows and for an `episode` that is not in the catalogue; `403` and `413` as for every `POST`.
@@ -1004,45 +1007,51 @@ Errors: `400` for a missing `region_id`, both or neither of `episode` and `start
 ```json
 {
   "round_id": "nl-89ef868194a4b0ed",
-  "decision": 0,
-  "action": 13,
+  "decision": 7,
+  "action": 6,
   "spent": true,
-  "reward": 0.0193,
+  "reward": 0.0061,
   "done": false,
   "info": {
-    "score": 0.2992,
+    "score": 0.2642,
     "score_name": "csi",
-    "score_detail": {"csi": 0.2992, "csi_one_cell": 0.6838, "brier_skill": 0.3196, "hit_rate": 0.5346, "false_alarm_ratio": 0.5953},
-    "revealed_pixels": 16,
+    "score_detail": {"csi": 0.2642, "csi_one_cell": 0.5076, "brier_skill": 0.221, "hit_rate": 0.6147, "false_alarm_ratio": 0.6834},
+    "revealed_pixels": 11,
     "no_budget_left": false,
-    "reward_target": "still_hidden"
+    "reward_target": "all"
   },
   "observation": {"...": "the next observation, in the shape of reset's; null when the round is over"}
 }
 ```
 
-Values rounded. The step that ends the round has `"done": true`, `"observation": null` and an `end` object:
+Values rounded. The step and end samples are a round of `plumas_ca:12:2024-07-27T17` (a validation episode of 2024, 15 looks) played with the latest MODIS agent's looks; its first look, at decision 3, revealed nothing and was paid exactly 0. The step that ends the round has `"done": true`, `"observation": null` and an `end` object:
 
 ```json
 {
   "end": {
-    "score_start": 0.2813,
-    "score_end": 0.2992,
-    "gain": 0.0193,
-    "looks_taken": [[0, 13], [3, 0], [6, 3], [9, 6]],
+    "score_start": 0.258,
+    "score_end": 0.2847,
+    "gain": 0.0267,
+    "looks_taken": [[3, 10], [7, 6], [11, 6], [14, 6]],
+    "taught_elsewhere": {"score_before_any_look": 0.258, "score_now": 0.2709, "gain": 0.0129, "score_name": "csi", "on": "the cells outside every tile looked at, at the look it was looked at"},
     "reveal": {
       "what": "...",
       "columns": ["lon", "lat", "scan_km", "track_km", "frp_mw", "time_utc", "platform", "tile", "look", "revealed"],
-      "rows": [[-121.27419, 39.86611, 0.58, 0.52, 19.28, "2020-09-27T20:20:00Z", "VIIRS_NOAA20", 13, 1, false]],
-      "pixels": 441
+      "rows": [["...", "...", "...", "...", "...", "...", "VIIRS_NOAA20", 6, 7, true]],
+      "pixels": 2085
     },
     "reference": {
-      "random": {"seeds": [0, 1], "gains": [0.0241, 0.086], "finals": [0.293, 0.3673], "actions": [[-1, -1, 13, -1, 10, -1, -1, 8, -1, 4]]},
-      "latest_modis": {"gain": 0.1227, "final": 0.3905, "actions": [-1, -1, 13, -1, 12, -1, -1, 12, -1, 13]},
-      "least_sure": {"gain": 0.1343, "final": 0.4122, "actions": [-1, -1, 13, -1, 13, -1, -1, 12, -1, 12]},
-      "learned": {"gain": 0.1343, "final": 0.4122, "actions": [-1, -1, 13, -1, 13, -1, -1, 12, -1, 12]},
-      "oracle": {"gain": 0.1337, "final": 0.4241, "actions": [-1, -1, 13, -1, 0, -1, -1, 12, -1, 12]},
-      "score_start": 0.2813,
+      "random": {"seeds": [0, 1], "gains": ["...", "..."], "finals": ["...", "..."], "actions": [["..."]]},
+      "constant": {"tiles": [0, 1], "gains": ["...", "..."], "finals": ["...", "..."]},
+      "centre": {"tiles": [5, 6, 9, 10], "gain": 0.0061, "final": 0.2642, "actions": ["..."], "revealed_pixels": ["..."], "taught_elsewhere": "..."},
+      "latest_modis": {"gain": 0.0267, "final": 0.2847, "actions": [-1, -1, -1, 10, -1, -1, -1, 6, -1, -1, -1, 6, -1, -1, 6], "revealed_pixels": [0, 11, 149, 30], "taught_elsewhere": 0.0129},
+      "least_sure": {"gain": 0.0267, "final": 0.2847, "...": "..."},
+      "expected_new": {"gain": 0.0267, "...": "..."},
+      "learned": {"gain": 0.0267, "...": "..."},
+      "oracle": {"gain": 0.0311, "final": 0.2891, "...": "..."},
+      "score_start": 0.258,
+      "reads_nothing": ["random", "constant", "centre"],
+      "reads_hidden_rows": ["oracle"],
       "spending": "every reference agent spends its budget on the same looks, spread evenly over the round (backend.env.agents.spend_now); only the tile differs. A person may spend a look whenever they choose.",
       "oracle_note": "sees the hidden detections and takes the best tile at each look: a ceiling, not a player"
     },
@@ -1058,10 +1067,11 @@ Values rounded. The step that ends the round has `"done": true`, `"observation":
 }
 ```
 
-Shortened: `reveal.rows` has 441 rows and `random` ten seeds; scores and gains are rounded. `looks_taken` has one `[decision, tile]` pair per look spent.
+Shortened: `reveal.rows` cut to one entry, `random` cut to two of ten seeds and `constant` to two of 16 tiles; scores and gains are rounded, and `"..."` marks a value cut. 190 of the 2,085 hidden rows were revealed by the round's four looks. `looks_taken` has one `[decision, tile]` pair per look spent. On this episode the mean random gain is 0.0024 and the best constant tile gains 0.0267.
 
 - `reveal` holds every VIIRS detection of the episode inside the box, each with its tile, the look it belongs to (`-1` for none) and whether the round revealed it.
-- `reference` is the result of the reference players on this same episode: random over ten seeds, latest MODIS, least sure, the learned policy and the oracle. The oracle reads the hidden rows and is a ceiling, not a player. The step that ends a round waits up to 90 seconds for it; if it is not ready, `reference` is `null`, `reference_status` says it is still computing, and `GET /api/env/next_look/state` returns it later.
+- `gain` is the sum of the rewards and equals `score_end` minus `score_start`. `taught_elsewhere` is what the looks taught on cells outside every tile looked at, at the look it was looked at: `score_before_any_look`, `score_now`, their difference `gain` and the score's name (`backend.env.next_look.NextLookEnv.taught_elsewhere`); a diagnostic, not the reward.
+- `reference` is the result of the reference players on this same episode (`backend.env.agents.play_reference`): random over ten seeds, the constant tile once per tile (`constant.gains` per tile), the centre tiles, latest MODIS, least sure, expected new, the learned policy and the oracle, each with its gain, final score, actions, the pixels each look revealed and what it taught elsewhere. Random, the constant tile and the centre tiles read nothing about the fire (`reads_nothing`): what they gain is the framing of the episode. The oracle reads the hidden rows and is a ceiling, not a player. The step that ends a round waits up to 90 seconds for it; if it is not ready, `reference` is `null`, `reference_status` says it is still computing, and `GET /api/env/next_look/state` returns it later.
 - The reference players are played once per episode, tiles, budget and number of random seeds, and the result is kept in server memory and on disk (`data/cache/next_look_reference/`, one JSON file per key). The key is a sha256 over the episode's rows (hidden ones included), box, window and terrain, the tiles, the budget, the number of random seeds, the region's CMR pass files, and the content of every file of `backend/env`, `backend/eval` and `backend/model`, of `backend/firms/cmr_passes.py` and of `backend/server_next_look.py`. A change to the environment, its reward, the reconstruction, its fitted values or the learned policy gives a new key, so nothing computed before it is served. Rounds of one episode started while it is being computed wait on the same computation.
 - `reference_cache.from` says where this round's result came from: `computed for this round`, `shared with a round started earlier` (the same key was being computed when the round started), or `cache`. `compute_s` is how long the computation took. On a September 2020 episode of the Feather River region (`plumas_ca:21:2020-09-09T09`, 4 by 4 tiles, budget 4, ten random seeds) it took 40 seconds on a laptop with other work running; a second round of it had its end, reference included, 1.4 seconds after its reset. `reference_cache` is `null` while `reference` is. It appears only in the `end` object.
 

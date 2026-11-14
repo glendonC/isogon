@@ -6,7 +6,9 @@ before the end must be equal, except the scores the environment computes against
 (`score_start`, `reward`, `info.score`, `info.score_detail`, and the same in the state's history).
 
 The first tests run on the SYNTHETIC fixture (`backend/eval/synthetic_fixture.py`: no row of it was observed by a
-satellite) and always run. The others use a real Dixie fire episode (`DIXIE_EPISODE`) and skip without its rows.
+satellite) and always run. The others use a real validation episode of 2024 (`PINNED_EPISODE`) and skip without its
+rows. No test here plays, holds out or scores a 2021 window of a region with a recorded test fire; the routes refuse
+one with 409, which a test checks.
 """
 
 from __future__ import annotations
@@ -30,15 +32,19 @@ from backend.eval.rows import Detections, detections_from_rows, read_csv_rows  #
 from backend.model.real_blind import in_box_overpasses, window_from_start  # noqa: E402
 from backend.server_next_look import NextLookRounds, RoundConflict, RoundNotFound  # noqa: E402
 
-DIXIE_EPISODE = "plumas_ca:22:2021-07-22T05"
-# The Dixie round's figures with the tracked reconstruction values, as the environment computes them.
-ROUND_SCORE_START = 0.3155241315708577
-ROUND_GAIN = {"latest_modis": 0.0062077712480028135, "least_sure": 0.006550019659761597, "oracle": 0.016045497948455223}
+PINNED_EPISODE = "plumas_ca:12:2024-07-27T17"     # a validation episode of 2024 (split fit), 15 nominal looks
+# Its figures under the reward in use and the tracked reconstruction values, as the environment computes them (the
+# environment's own measurement, isogon-notes/fire-model/M10.md section 7).
+ROUND_SCORE_START = 0.2580165065620349
+ROUND_GAIN = {"latest_modis": 0.02665910865049309, "least_sure": 0.02665910865049309, "oracle": 0.03108102707025212}
 ROUND_FIRST_LOOKS = [
-    ("VIIRS_SNPP", "2021-07-22T09:59:17Z", False), ("VIIRS_NOAA20", "2021-07-22T10:04:17Z", False),
-    ("VIIRS_SNPP", "2021-07-22T21:00:10Z", True), ("VIIRS_NOAA20", "2021-07-22T21:05:10Z", True),
+    ("VIIRS_SNPP", "2024-07-27T21:02:14Z", True), ("VIIRS_NOAA20", "2024-07-27T21:07:14Z", True),
+    ("VIIRS_NOAA21", "2024-07-27T21:07:14Z", True), ("VIIRS_SNPP", "2024-07-28T10:01:22Z", False),
 ]
-LATEST_MODIS_LOOKS = {2: 4, 4: 4, 7: 10, 9: 7}     # the latest MODIS agent's looks on that episode
+LATEST_MODIS_LOOKS = {3: 10, 7: 6, 11: 6, 14: 6}   # the latest MODIS agent's looks on that episode
+LAST_LOOK = max(LATEST_MODIS_LOOKS)
+START_EPISODE = ("2020-09-29T12:00:00Z", "plumas_ca:22:2020-09-29T18")   # a start and the catalogue episode it gives
+CLOSED_EPISODE = "plumas_ca:22:2021-07-22T05"     # a test episode: refused, never played
 
 
 def _synthetic_det() -> Detections:
@@ -225,19 +231,19 @@ class RoundRulesTests(unittest.TestCase):
             self.store.state("nl-unknown")
 
 
-def _dixie_cached() -> bool:
+def _rows_cached() -> bool:
     from backend.firms import archive as fa
 
-    return fa.extract_path("plumas_ca", "viirs-snpp", 2021).is_file()
+    return all(fa.extract_path("plumas_ca", "viirs-snpp", y).is_file() for y in (2020, 2024))
 
 
 class RealRoundTests(unittest.TestCase):
-    """A Dixie fire episode on real rows, over HTTP, and the deletion check on real rows."""
+    """A validation episode of 2024 on real rows, over HTTP, and the deletion check on real rows."""
 
     @classmethod
     def setUpClass(cls) -> None:
-        if not _dixie_cached():
-            raise unittest.SkipTest("FIRMS rows for plumas_ca 2021 are not cached")
+        if not _rows_cached():
+            raise unittest.SkipTest("FIRMS rows for plumas_ca 2020 and 2024 are not cached")
         from backend.tests import test_server_http as http_tests
 
         http_tests._base()
@@ -254,11 +260,11 @@ class RealRoundTests(unittest.TestCase):
 
     def test_a_round_over_http_gives_the_pinned_numbers_and_the_reference_agents(self) -> None:
         status, r = self._post("/api/env/next_look/reset",
-                               {"region_id": "plumas_ca", "episode": DIXIE_EPISODE, "tiles": [4, 4], "budget": 4})
+                               {"region_id": "plumas_ca", "episode": PINNED_EPISODE, "tiles": [4, 4], "budget": 4})
         self.assertEqual(status, 200, r)
         self.assertAlmostEqual(r["score_start"], ROUND_SCORE_START, places=12)
         self.assertEqual([(x["platform"], x["time_utc"], x["is_day"]) for x in r["looks"][:4]], ROUND_FIRST_LOOKS)
-        self.assertEqual((r["episode"]["key"], r["episode"]["split"], r["episode"]["modis_pixels_in_box"]), (DIXIE_EPISODE, "test", 1095))
+        self.assertEqual((r["episode"]["key"], r["episode"]["split"], r["episode"]["modis_pixels_in_box"]), (PINNED_EPISODE, "fit", 286))
         self.assertEqual(r["protocol"]["version"], 2)
         self.assertEqual(r["test_episodes"]["episodes"], 21)
         rid = r["round_id"]
@@ -279,30 +285,47 @@ class RealRoundTests(unittest.TestCase):
         status, state = self.req(f"/api/env/next_look/state?round_id={rid}")[0], json.loads(self.req(f"/api/env/next_look/state?round_id={rid}")[2])
         self.assertEqual(status, 200)
         self.assertTrue(state["done"])
+        # the rewards add up to the change in score, and the end says what the looks taught elsewhere
+        self.assertAlmostEqual(end["gain"], end["score_end"] - end["score_start"], places=12)
+        self.assertIsNotNone(end["taught_elsewhere"])
+        self.assertIn("constant", end["reference"])
         self.assertEqual(self._post("/api/env/next_look/step", {"round_id": rid, "decision": 10, "action": -1})[0], 409)
         self.assertEqual(self.req("/api/env/next_look/state?round_id=nl-gone")[0], 404)
-        self.assertEqual(self._post("/api/env/next_look/reset", {"region_id": "plumas_ca", "episode": DIXIE_EPISODE, "tiles": [9, 9]})[0], 400)
+        self.assertEqual(self._post("/api/env/next_look/reset", {"region_id": "plumas_ca", "episode": PINNED_EPISODE, "tiles": [9, 9]})[0], 400)
         self.assertEqual(self._post("/api/env/next_look/reset", {"region_id": "blue_mountains_au", "start": "2021-07-22"})[0], 404)
-        self.assertEqual(self._post("/api/env/next_look/reset", {"region_id": "plumas_ca", "episode": "plumas_ca:22:2021-01-01T00"})[0], 404)
+        self.assertEqual(self._post("/api/env/next_look/reset", {"region_id": "plumas_ca", "episode": "plumas_ca:22:2024-01-01T00"})[0], 404)
 
     def test_a_start_date_gives_the_same_window_rule_as_a_real_run(self) -> None:
-        status, r = self._post("/api/env/next_look/reset", {"region_id": "plumas_ca", "start": "2021-07-22", "budget": 0})
+        status, r = self._post("/api/env/next_look/reset", {"region_id": "plumas_ca", "start": START_EPISODE[0], "budget": 0})
         self.assertEqual(status, 200, r)
-        self.assertEqual((r["episode"]["from"], r["episode"]["key"]), ("start", DIXIE_EPISODE))
+        self.assertEqual((r["episode"]["from"], r["episode"]["key"]), ("start", START_EPISODE[1]))
         self.assertIn("MODIS rows only", r["episode"]["chosen_from"])
+
+    def test_a_closed_window_is_refused_with_the_evidence_route(self) -> None:
+        for body in ({"region_id": "plumas_ca", "episode": CLOSED_EPISODE}, {"region_id": "plumas_ca", "start": "2021-07-22"},
+                     {"region_id": "plumas_ca", "episode": CLOSED_EPISODE, "player": "least_sure"}):
+            path = "/api/env/next_look/play" if "player" in body else "/api/env/next_look/reset"
+            with self.subTest(body=body):
+                status, r = self._post(path, body)
+                self.assertEqual(status, 409, r)
+                self.assertEqual(r["evidence"], "/api/evidence")
+                self.assertIn("recorded test fire", r["error"])
+        status, r = self._post("/api/reconstruct", {"region_id": "plumas_ca", "source": "firms", "start": "2021-07-22T20:34:00Z",
+                                                     "holdout_viirs": True, "reveal": True})
+        self.assertEqual((status, r["evidence"]), (409, "/api/evidence"), r)
 
     def test_deleting_unrevealed_real_rows_changes_nothing_but_the_scores(self) -> None:
         store = NextLookRounds(reference=False)
-        body = {"region_id": "plumas_ca", "episode": DIXIE_EPISODE, "tiles": [4, 4], "budget": 4}
-        a, _ = play(store, body, lambda obs: LATEST_MODIS_LOOKS.get(obs["decision"], -1) if obs["decision"] < 9 else -1)
-        ep = store._episode("plumas_ca", DIXIE_EPISODE, None)[0]
+        body = {"region_id": "plumas_ca", "episode": PINNED_EPISODE, "tiles": [4, 4], "budget": 4}
+        a, _ = play(store, body, lambda obs: LATEST_MODIS_LOOKS.get(obs["decision"], -1) if obs["decision"] < LAST_LOOK else -1)
+        ep = store._episode("plumas_ca", PINNED_EPISODE, None)[0]
         revealed = _revealed_mask(ep.det, a)
         unrevealed = ep.det.is_viirs & ~revealed
         self.assertGreater(int(revealed.sum()), 100)
         self.assertGreater(int(unrevealed.sum()), 1000)
         bare = EnvEpisode(ep.region_id, ep.year, ep.tile, ep.box, ep.window, ep.det.select(~unrevealed), ep.split)
         b, _ = play(_store(bare, terrain=True, reference=False, source_label="firms"), body,
-                    lambda obs: LATEST_MODIS_LOOKS.get(obs["decision"], -1) if obs["decision"] < 9 else -1)
+                    lambda obs: LATEST_MODIS_LOOKS.get(obs["decision"], -1) if obs["decision"] < LAST_LOOK else -1)
         self.assertEqual(len(a), len(b))
         for i, (x, y) in enumerate(zip(a, b)):
             self.assertEqual(_without_scores(x), _without_scores(y), f"response {i} changed")

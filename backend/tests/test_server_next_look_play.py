@@ -102,9 +102,16 @@ class WithoutTheModuleTests(unittest.TestCase):
         det = _synthetic_det()
         ep = _synthetic_episode(det, det)
         store = NextLookRounds(episode_source=lambda region, key, start: ep, terrain=False, reference=False)
-        with mock.patch.dict(sys.modules, {"backend.env.play": None}):
-            with self.assertRaises(RoundNotFound):
-                store.play({**BODY, "player": "least_sure"})
+        import backend.env as env_pkg
+
+        saved = env_pkg.__dict__.pop("play", None)      # hide a module already imported in this process
+        try:
+            with mock.patch.dict(sys.modules, {"backend.env.play": None}):
+                with self.assertRaises(RoundNotFound):
+                    store.play({**BODY, "player": "least_sure"})
+        finally:
+            if saved is not None:
+                env_pkg.play = saved
 
 
 if __name__ == "__main__":
