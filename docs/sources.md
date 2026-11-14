@@ -2,7 +2,7 @@
 
 This document lists what Isogon is built on: the scientific papers, the NASA data, the elevation and imagery services, the spacecraft models, the colour scales, the typefaces and the software libraries, each with its terms and the credit it asks for. It is for anyone who uses, redistributes or maintains the project.
 
-The repository's own code has no licence file; the [README](../README.md) states this. Everything below belongs to others and stays under its own terms.
+The repository's own code is under the MIT License ([`LICENSE`](../LICENSE)). Everything below belongs to others and stays under its own terms.
 
 ## Scientific references
 
