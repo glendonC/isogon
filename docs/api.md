@@ -1130,7 +1130,7 @@ Errors: `400` for a bad field, a missing `player`, or the oracle without `ceilin
 
 ### `GET /api/env/next_look/players`
 
-The reference players a play can be asked for: `players` with `id`, `label`, `does` and `reads` (`nothing`, `the observation` or `the hidden rows`), read from `backend/env/play.py`. `404` while that module is not in the build.
+The reference players a play can be asked for: `players` with `id`, `label`, `does` and `reads` (`nothing`, `the observation` or `the hidden rows`), read from `backend/env/play.py`, keeping only those its `reference_player` builds, so every listed player plays; `not_playable` names any of its table it cannot build. `404` while that module is not in the build.
 
 ## Values described from the code only
 

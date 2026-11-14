@@ -878,9 +878,18 @@ class NextLookRounds:
     # ---- one player's play, step by step --------------------------------------------------------------------------
 
     def players(self) -> dict[str, Any]:
+        """The players a play can be asked for: those of the module's table that its `reference_player` builds, so the
+        list and the play route agree (one it cannot build is named in `not_playable`)."""
         play = _play_module()
-        out = [{"id": pid, "label": v[0], "does": v[1], "reads": v[2]} for pid, v in getattr(play, "PLAYERS", {}).items()]
-        return {"players": out,
+        out, missing = [], []
+        for pid, v in getattr(play, "PLAYERS", {}).items():
+            try:
+                play.reference_player("constant_0" if pid == "constant" else pid)
+            except Exception:  # noqa: BLE001  (a player the module cannot build is not offered)
+                missing.append(pid)
+                continue
+            out.append({"id": pid, "label": v[0], "does": v[1], "reads": v[2]})
+        return {"players": out, "not_playable": missing,
                 "ids": ("an id as listed; the constant tile is asked as constant_<tile>, a tile index; the oracle "
                         "only with ceiling: true"),
                 "route": "POST /api/env/next_look/play"}

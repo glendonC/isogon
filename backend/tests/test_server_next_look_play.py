@@ -24,7 +24,8 @@ BODY = {"region_id": "plumas_ca", "start": "2099-07-01", "tiles": [4, 4], "budge
 def _stand_in() -> types.ModuleType:
     m = types.ModuleType("backend.env.play")
     m.PLAYERS = {"least_sure": ("Least sure", "the tile where the model is least sure", "the observation"),
-                 "oracle": ("Oracle", "a ceiling", "the hidden rows")}
+                 "oracle": ("Oracle", "a ceiling", "the hidden rows"),
+                 "expected_new": ("Most expected new detections", "listed but not built", "the observation")}
 
     def reference_player(name, seed=0, policy=None):
         if name not in ("least_sure", "oracle"):
@@ -94,7 +95,9 @@ class PlayRouteTests(unittest.TestCase):
         for bad in ({**BODY}, {**BODY, "player": ""}, {**BODY, "player": "least_sure", "fields": 1}):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 self.store.play(bad)
-        self.assertEqual([p["id"] for p in self.store.players()["players"]], ["least_sure", "oracle"])
+        listing = self.store.players()
+        self.assertEqual([p["id"] for p in listing["players"]], ["least_sure", "oracle"])   # every one listed plays
+        self.assertEqual(listing["not_playable"], ["expected_new"])
 
 
 class WithoutTheModuleTests(unittest.TestCase):
