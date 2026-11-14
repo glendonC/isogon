@@ -32,6 +32,11 @@ environment, its reward and schedule, the reconstruction and its fitted values, 
 `backend/firms/cmr_passes.py` and of this file. A change to any of them gives a new key, so nothing is served from
 before it. Two rounds of one episode that start at the same time share one computation.
 
+The files are those of the code the process loaded: their digest is taken once, when the rounds are made, after the
+modules the reference players run are imported, and every key of the process uses it. Files that change on disk
+later do not change the key of a process that runs the old code, and such a process writes nothing more to the disk
+cache, so a process with old code never writes a result under the key of the new code.
+
 Hidden rows. No response holds a hidden row, or a count taken from hidden rows, before the look that reveals it.
 Three kinds of figure are computed against the hidden detections because the environment is built that way:
 the starting score of the reconstruction (`score_start`), the score after each step (`info.score`,
@@ -54,6 +59,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import sys
 import threading
 import time
 from typing import Any, Callable
@@ -62,7 +68,8 @@ import numpy as np
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
 REFERENCE_CACHE_DIR: Path = REPO_ROOT / "data" / "cache" / "next_look_reference"
-REFERENCE_CACHE_VERSION: int = 1        # raised when the shape of a cached result changes
+REFERENCE_CACHE_VERSION: int = 2        # raised when the shape or meaning of a cached result changes (2: the pass list
+                                        # default, the refit learned player and the expected_new player)
 PLAY_CACHE_VERSION: int = 1
 REFERENCE_MEMORY: int = 64              # results kept in memory, the least recently used dropped first
 # Every file whose content can change the reference players' results (see the module docstring).
@@ -286,6 +293,12 @@ def observation_json(obs: Any, env: Any) -> dict[str, Any]:
 
 _inputs_memo: dict[tuple[str, ...], tuple[tuple[Any, ...], str]] = {}
 _inputs_lock = threading.Lock()
+# The modules the reference players and the plays run, imported before the digest of the loaded code is taken.
+REFERENCE_MODULES: tuple[str, ...] = (
+    "backend.env.agents", "backend.env.episodes", "backend.env.next_look", "backend.env.policy", "backend.env.terrain",
+    "backend.eval.grid", "backend.eval.rows", "backend.model.fitted", "backend.model.real_blind",
+    "backend.model.real_run", "backend.model.training", "backend.firms.cmr_passes",
+)
 
 
 def _input_files(roots: tuple[Path, ...]) -> list[tuple[str, Path]]:
@@ -330,6 +343,16 @@ def inputs_digest(roots: tuple[Path, ...] = REFERENCE_INPUTS) -> str:
     with _inputs_lock:
         _inputs_memo[memo_key] = (tuple(sig), digest)
     return digest
+
+
+def loaded_inputs_digest(roots: tuple[Path, ...] = REFERENCE_INPUTS) -> str:
+    """The inputs digest of the code this process runs: the modules the reference players run are imported first, so
+    the files hashed are the ones in memory, then the digest of `roots` is taken. The caller keeps it."""
+    import importlib
+
+    for name in REFERENCE_MODULES:
+        importlib.import_module(name)
+    return inputs_digest(tuple(roots))
 
 
 def episode_digest(ep: Any, terrain_m: np.ndarray | None) -> str:
@@ -428,6 +451,10 @@ class NextLookRounds:
             reference_cache_dir = REFERENCE_CACHE_DIR if episode_source is None else None
         self.reference_cache_dir: Path | None = Path(reference_cache_dir) if reference_cache_dir is not None else None
         self.reference_inputs = tuple(reference_inputs)
+        # The digest of the code this process loaded, taken once: every key uses it, and nothing is written to the disk
+        # cache once the files on disk are no longer these (`_write_cached`).
+        self.loaded_inputs = loaded_inputs_digest(self.reference_inputs)
+        self.stale_writes = 0                # results kept in memory only because the code on disk changed (for the tests)
         self.reference_computations = 0      # how many times the reference players were played (for the tests)
         self.play_computations = 0
         self._plays: dict[str, dict[str, Any]] = {}
@@ -599,7 +626,7 @@ class NextLookRounds:
             "budget": int(budget),
             "random_seeds": self.reference_seeds,
             "pass_files": passes,
-            "inputs": inputs_digest(self.reference_inputs),
+            "inputs": self.loaded_inputs,
         }
         return hashlib.sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -631,6 +658,16 @@ class NextLookRounds:
     def _write_cached(self, doc: dict[str, Any], sub: str = "") -> None:
         path = self._cache_path(doc["key"], sub)
         if path is None:
+            return
+        if inputs_digest(self.reference_inputs) != self.loaded_inputs:
+            # The files on disk are no longer the code this process runs: its result stays in memory, under its own key,
+            # and the disk cache is left to a process started on the new code.
+            with self._lock:
+                self.stale_writes += 1
+                first = self.stale_writes == 1
+            if first:
+                print("[next look] the code on disk differs from the code this process loaded; results are kept in "
+                      "memory only until the server is started again", file=sys.stderr, flush=True)
             return
         try:
             path.parent.mkdir(parents=True, exist_ok=True)

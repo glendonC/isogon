@@ -6,7 +6,8 @@ satellite). The rules under test:
 - a second round of the same episode, tiles, budget and random seeds does not play the reference players again, in
   the same server or in a new one reading the disk cache;
 - anything that decides their results gives a new key: the tiles, the budget, a hidden row, a file of the
-  environment, the reconstruction or the fitted values;
+  environment, the reconstruction or the fitted values; a changed file gives the new key to a process started on it,
+  while a process still running the old code keeps its key and writes nothing more to disk;
 - rounds started together share one computation, and dropping one of them does not cancel it for the other;
 - with the cache warm, no response before the end of a round holds a hidden row, the reveal, the reference result or
   anything about the cache; deleting every hidden row the round did not reveal changes nothing but the scores.
@@ -129,17 +130,41 @@ class ReferenceCacheTests(unittest.TestCase):
             self.assertEqual(end3["reference"], end1["reference"])
             self.assertEqual(json.loads(files[0].read_text(encoding="utf-8"))["key"], doc["key"])
 
-    def test_a_changed_input_file_gives_a_new_key(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+    def test_a_changed_input_file_gives_a_new_key_to_a_process_started_on_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as cache:
             reward = Path(tmp) / "reward.py"
             reward.write_text("PAY_FOR_AN_EMPTY_LOOK = True\n", encoding="utf-8")
-            store = _store(self.ep, reference_inputs=(Path(tmp),))
-            _, end1 = play(store, BODY, lambda obs: -1)
+            old = _store(self.ep, reference_inputs=(Path(tmp),), reference_cache_dir=cache)
+            _, end1 = play(old, BODY, lambda obs: -1)
+            self.assertEqual(len(list(Path(cache).glob("*.json"))), 1)
             reward.write_text("PAY_FOR_AN_EMPTY_LOOK = False  # changed\n", encoding="utf-8")
-            _, end2 = play(store, BODY, lambda obs: -1)
-            self.assertEqual(store.reference_computations, 2)
-            self.assertNotEqual(end1["reference_cache"]["key"], end2["reference_cache"]["key"])
+            # the process that loaded the old code keeps the key of that code...
+            _, again = play(old, BODY, lambda obs: -1)
+            self.assertEqual(again["reference_cache"]["key"], end1["reference_cache"]["key"])
+            self.assertEqual((old.reference_computations, again["reference_cache"]["from"]), (1, "cache"))
+            # ...and what it computes now stays in memory: nothing is written to disk under any key
+            _, other = play(old, {**BODY, "budget": 2}, lambda obs: -1)
+            self.assertEqual((old.reference_computations, old.stale_writes), (2, 1))
+            self.assertEqual(len(list(Path(cache).glob("*.json"))), 1)
+            # a process started on the new code takes a new key, computes and writes it
+            new = _store(self.ep, reference_inputs=(Path(tmp),), reference_cache_dir=cache)
+            _, end2 = play(new, BODY, lambda obs: -1)
+            self.assertNotEqual(end2["reference_cache"]["key"], end1["reference_cache"]["key"])
+            self.assertEqual((new.reference_computations, new.stale_writes), (1, 0))
             self.assertEqual(end2["reference_cache"]["from"], "computed for this round")
+            self.assertEqual(len(list(Path(cache).glob("*.json"))), 2)
+
+    def test_the_key_holds_the_cache_version(self) -> None:
+        import backend.server_next_look as snl
+
+        store = _store(self.ep)
+        key = store.reference_key(self.ep, None, (4, 4), 3)
+        self.assertGreaterEqual(snl.REFERENCE_CACHE_VERSION, 2)
+        try:
+            snl.REFERENCE_CACHE_VERSION -= 1
+            self.assertNotEqual(store.reference_key(self.ep, None, (4, 4), 3), key)
+        finally:
+            snl.REFERENCE_CACHE_VERSION += 1
 
     def test_the_inputs_cover_the_environment_the_reconstruction_and_their_fitted_values(self) -> None:
         names = {n for n, _ in _input_files(REFERENCE_INPUTS)}
