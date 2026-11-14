@@ -53,6 +53,50 @@ class TrackedFitTests(unittest.TestCase):
             elif self.params["adopted"]:
                 self.assertFalse(every_ahead and holds)
 
+    def test_the_values_were_fitted_and_validated_under_the_protocol_the_blind_test_runs(self) -> None:
+        from backend.eval.blind_test import PROTOCOL_PASS_LIST as PROTOCOL
+
+        d = self.params
+        self.assertEqual(d["protocol"]["validated_under"], PROTOCOL["version"])
+        self.assertEqual(d["protocol"]["parameters_fitted_under"], PROTOCOL["version"])
+        # every decision before this one is kept, the latest first, each under an earlier protocol
+        earlier = [d["previous_decision"]] + d["earlier_decisions"]
+        self.assertEqual([e["protocol"][:9] for e in earlier], ["version 2", "version 1"])
+        for e in earlier:
+            self.assertIn("classes", e)
+            self.assertEqual(set(e["parts"].values()) - {"on", "experimental"}, set())
+        self.assertIn("parameters", d["previous_decision"])       # the values that were replaced
+        # the search starts from the priors and its record is of this fit
+        self.assertEqual(d["search"]["history"][0]["step"], "priors")
+        self.assertEqual(len(d["evidence"]["training_episodes"]), 22)
+        self.assertIn("22 real fire episodes", d["trained_on"])
+
+    def test_intervals_count_the_looks_that_flagged_nothing(self) -> None:
+        import numpy as np
+
+        from backend.model.fit_real import _interval, _ratios
+
+        d, prm = self.params, self.params["parameters"]
+        iv = d["intervals"]
+        self.assertEqual((prm["frp_interval_lo"], prm["frp_interval_hi"]), (iv["frp"]["lo"], iv["frp"]["hi"]))
+        self.assertEqual((prm["pixel_interval_lo"], prm["pixel_interval_hi"]), (iv["pixels"]["lo"], iv["pixels"]["hi"]))
+        empty = d["empty_looks"]["training"]
+        self.assertEqual(iv["frp"]["looks_that_flagged_nothing"], empty["no_hidden_pixel_in_the_box"])
+        self.assertEqual(iv["frp"]["training_looks"], empty["scored_looks"])
+        # more than one training look in twenty flagged nothing, so the stated interval starts at zero
+        self.assertGreater(empty["no_hidden_pixel_in_the_box"] / empty["scored_looks"], 0.05)
+        self.assertEqual(iv["frp"]["lo"], 0.0)
+        self.assertGreater(iv["frp"]["given_a_detection"][0], 0.0)
+        # the rule itself, on made-up ratios
+        few = _interval(np.array([0.0] + [0.5 + 0.01 * k for k in range(99)]))        # one look in a hundred is empty
+        self.assertGreater(few["lo"], 0.0)
+        many = _interval(np.array([0.0] * 10 + [0.5 + 0.01 * k for k in range(90)]))  # one in ten
+        self.assertEqual((many["lo"], many["looks_that_flagged_nothing"]), (0.0, 10))
+        self.assertGreater(many["given_a_detection"][0], 0.5)
+        reps = [{"methods": {"reconstruction": {"per_overpass": [{"predicted_frp_mw": 10.0}, {"predicted_frp_mw": 0.0}, {"predicted_frp_mw": 4.0}]}},
+                 "targets": [{"hidden_frp_mw": 0.0}, {"hidden_frp_mw": 3.0}, {"hidden_frp_mw": 8.0}]}]
+        self.assertEqual(_ratios(reps, "predicted_frp_mw", "hidden_frp_mw").tolist(), [0.0, 2.0])   # no prediction, no ratio
+
     def test_no_episode_is_a_test_fire(self) -> None:
         ev = self.params["evidence"]
         years_train = {e["year"] for e in ev["training_episodes"]}

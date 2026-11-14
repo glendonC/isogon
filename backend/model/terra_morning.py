@@ -1,4 +1,4 @@
-"""Unit M4: what would Terra report at its morning pass, estimated from the VIIRS passes around it?
+"""What would Terra report at its morning pass, estimated from the VIIRS passes around it? Experimental.
 
 Terra is the only morning overpass (about 10:30 local solar time) and its science data are projected to end in
 February 2027. After that the record has a night pass near 01:30 and an afternoon pass near 13:30 from VIIRS and
@@ -11,17 +11,17 @@ the real Terra detections with the harness of `backend/eval`, beside two baselin
   viirs_ratio     the same cells; pixel count and FRP each times one ratio (Terra over nearest VIIRS overpass),
                   fitted on training rows, with a 5th to 95th percentile interval
 
-The fire dynamics are the values fitted in unit M2. Three numbers belong to this direction and are fitted here on
-training episodes: the FRP scale, the scale on the probability that a Terra pixel is flagged, and the intervals.
+The fire dynamics are the fitted values of the reconstruction (`fitted.py`). Three numbers belong to this direction
+and are fitted here on training episodes: the FRP scale, the scale on the probability that a Terra pixel is flagged, and the intervals.
 Nothing from the three test fires is read in fitting.
 
-Protocol (unit M8). The tracked result of this direction, `fitted_values/terra_morning.json`, was fitted and
-validated under protocol version 1 and has NOT been measured again under version 2. Two things in it are not
-clean: each prediction was made at the hidden Terra overpass's own time and pixel size, and the episodes were
-chosen counting both instruments, which in this direction includes the hidden one. The harness now publishes on
-the nominal schedule for Terra as for VIIRS, so a new run is clean in the first respect; for the second, the
-episodes must be chosen with `hidden="MODIS"` before `fit_terra` is run again. Until then the file says so, the
-direction stays experimental, and nothing a page shows uses it.
+Protocol. The tracked result of this direction, `fitted_values/terra_morning.json`, is fitted and validated under
+protocol version 1 and is not measured under a later version. Two things in it are not blind: each prediction is
+made at the hidden Terra overpass's own time and pixel size, and the episodes are chosen counting both instruments,
+which in this direction includes the hidden one. The harness publishes on a schedule that reads no hidden row for
+Terra as for VIIRS, so a new run is blind in the first respect; for the second, the episodes must be chosen with
+`hidden="MODIS"` before `fit_terra` is run again. The file says so, the direction is experimental, and no route
+serves it.
 """
 
 from __future__ import annotations
@@ -154,7 +154,7 @@ class ViirsRatio:
 
 
 def base_params(fire: OccupancyParams | None = None) -> OccupancyParams:
-    """The fire dynamics of unit M2 with the sensor-side numbers of the other direction switched off.
+    """The reconstruction's fire dynamics with the sensor-side numbers of the other direction switched off.
 
     VIIRS is the visible instrument here: one of its pixels is about one cell, so the count scales are 1. Warm
     cells are a thing VIIRS sees and MODIS does not, so their shares are 0. The FRP scale, the pixel scale and
@@ -182,7 +182,7 @@ def run_terra_test(
 
     report = run_blind_test(
         det, box,
-        [painted, ratio, reconstruction_factory(params, label="occupancy filter on the 375 m grid from VIIRS only; fire dynamics from unit M2")],
+        [painted, ratio, reconstruction_factory(params, label="occupancy filter on the 375 m grid from VIIRS only; fire dynamics from the reconstruction's fitted values")],
         hidden="MODIS", window=window, reference_method="painted_viirs", target_filter=is_terra_morning,
     )
     report["hidden_platforms"] = ["MODIS_TERRA", "MODIS_AQUA"]
@@ -250,7 +250,7 @@ def fit_terra(train: list[Any], validation: list[Any], log: Any = print) -> dict
     cov = v["interval"]["observed_coverage"]
     adopted = bool(v["classes"]["behind"] == 0 and v["classes"]["ahead"] >= 1)
     doc = {
-        "what": "estimate of Terra's morning pass from VIIRS alone (unit M4)",
+        "what": "estimate of Terra's morning pass from VIIRS alone",
         "adopted": adopted,
         "decision": (
             f"on validation fires the estimate is ahead of both baselines on {v['classes']['ahead']} of "
@@ -259,7 +259,7 @@ def fit_terra(train: list[Any], validation: list[Any], log: Any = print) -> dict
             f"{None if cov is None else round(cov, 3)} of the validation overpasses"
         ),
         "status": "on" if adopted and all(row["class"] == "ahead" for row in v["scores"].values()) and (cov or 0) >= 0.8 else "experimental",
-        "rule": "the rule of unit M2: fires resampled whole 2,000 times; ahead, tie or behind per score at 90 percent",
+        "rule": "the validation rule: fires resampled whole 2,000 times; ahead, tie or behind per score at 90 percent",
         "parameters": params.as_dict(),
         "ratios": ratios.as_dict(),
         "trained_on": label,

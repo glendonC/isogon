@@ -1,16 +1,18 @@
 """The real calendar's overlap ratio, for use as the blind test's second baseline.
 
-The calendar (terrain-assets lane, `backend/firms/real_calendar.py`, method overlap_ratio_v1) harmonizes with one
+The monthly calendar (`backend/firms/real_calendar.py`, method `overlap_ratio_v1`) harmonizes counts with one
 number per region: Suomi NPP rows over Terra plus Aqua rows across the overlap months. The blind test must not let a
-baseline see the fire it is scored on, so the value used here is the calendar's own leave-one-year-out fit with the
-test year left out, and its interval is the 10th to 90th percentile of the other years' ratios (the calendar's
-nominal 80 percent interval).
+baseline see the fire it is scored on, nor any test fire, so the ratio is refitted here from the calendar's monthly
+counts with two things left out: the year of the run, and every year that holds a test fire's exclusion for the
+region (`backend/model/training.py`; 2021 for the three hero regions). A whole year is dropped, which is wider than
+the exclusion itself, because the calendar's counts are monthly sums and no row can be taken back out of them. The
+interval is the 10th to 90th percentile of the remaining years' ratios (the calendar's nominal 80 percent interval).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 import numpy as np
 
@@ -18,14 +20,18 @@ import numpy as np
 @dataclass(frozen=True)
 class CalendarRatio:
     region_id: str
-    ratio: float                 # Suomi NPP rows / (Terra + Aqua rows), fitted without `excluded_year`
-    p10: float                   # 10th percentile of the other years' ratios
+    ratio: float                 # Suomi NPP rows / (Terra + Aqua rows) over the years kept
+    p10: float                   # 10th percentile of the kept years' ratios
     p90: float
-    ratio_all_years: float       # what the calendar itself uses (fitted on every overlap year)
-    excluded_year: int | None
+    excluded_year: int | None    # the year of the run (the first, when a run touches two)
     years: tuple[int, ...]       # the years the ratio was fitted on
     method_id: str
     level: float = 0.80
+    dropped_years: tuple[int, ...] = ()     # every year left out: the run's years and the years of test fires
+    excluded_years: tuple[int, ...] = ()    # every year the run touches (a run over New Year touches two)
+    # An optional field that `calendar_ratio` never sets and `as_dict` never writes: the all-years ratio holds the
+    # test fires and has no place in a blind test's payload.
+    ratio_all_years: float | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -34,40 +40,78 @@ class CalendarRatio:
             "p10": round(self.p10, 4),
             "p90": round(self.p90, 4),
             "nominal_level": self.level,
-            "ratio_all_years": round(self.ratio_all_years, 4),
             "excluded_year": self.excluded_year,
+            "excluded_years": list(self.excluded_years),
+            "dropped_years": list(self.dropped_years),
             "years": list(self.years),
             "method_id": self.method_id,
             "definition": (
                 "Suomi NPP rows over Terra plus Aqua rows across the overlap months of the region's context box "
-                "(backend/firms/real_calendar.py), refitted without the excluded year; p10 and p90 are percentiles "
-                "of the remaining years' ratios"
+                "(the monthly counts of backend/firms/real_calendar.py, months with an outage day left out as the "
+                "calendar does), fitted without the run's year and without any year that holds a test fire; p10 "
+                "and p90 are percentiles of the kept years' ratios"
             ),
         }
 
 
+def years_of_test_fires(region_id: str) -> tuple[int, ...]:
+    """Years in which the region holds a test fire's exclusion."""
+    from backend.model.training import EXCLUSIONS, _day_s
+
+    if region_id not in EXCLUSIONS:
+        return ()
+    first, after, _ = EXCLUSIONS[region_id]
+    y0 = int(first[:4])
+    y1 = int(str(np.datetime64(int(_day_s(after) - 1.0), "s"))[:4])
+    return tuple(range(y0, y1 + 1))
+
+
+def yearly_counts(cal: dict[str, Any]) -> dict[int, tuple[float, float]]:
+    """(Suomi NPP rows, Terra plus Aqua rows) per year over the calendar's clean overlap months."""
+    outage = set(cal["harmonization_method"]["overlap_months_excluded_for_outages"])
+    out: dict[int, list[float]] = {}
+    for rec in cal["records"]:
+        rc = rec["raw_counts"]
+        if rc.get("Terra") is None or rc.get("Aqua") is None or rc.get("Suomi NPP") is None:
+            continue
+        if rec["year_month"] in outage:
+            continue
+        acc = out.setdefault(int(rec["year"]), [0.0, 0.0])
+        acc[0] += float(rc["Suomi NPP"]["total"])
+        acc[1] += float(rc["Terra"]["total"] + rc["Aqua"]["total"])
+    return {y: (a, b) for y, (a, b) in out.items()}
+
+
 def calendar_ratio(
-    region_id: str, exclude_year: int | None, firms_calendar: Callable[[str], dict[str, Any]] | None = None
+    region_id: str, exclude_year: int | Iterable[int] | None, firms_calendar: Callable[[str], dict[str, Any]] | None = None,
+    keep_years_of_test_fires: bool = False,
 ) -> CalendarRatio:
-    """The calendar's ratio for a region with one year left out (None keeps every year)."""
+    """The calendar's ratio for a region without `exclude_year` and without the region's test-fire years.
+
+    `exclude_year` is one year or several: a run that crosses New Year touches two, and both are left out, so
+    that no row of the run itself, hidden or not, is in the ratio its second baseline uses.
+
+    `keep_years_of_test_fires=True` exists only to reproduce the calendar's own leave-one-year-out figure in a check;
+    nothing that is scored or validated may use it.
+    """
     if firms_calendar is None:
         from backend.firms.real_calendar import firms_calendar as _fc
 
         firms_calendar = _fc
     cal = firms_calendar(region_id)
-    hm = cal["harmonization_method"]
-    fit = hm["ratio_terra_aqua"]
-    per_year = {int(y): float(r) for y, r in fit["per_year"].items()}
-    ratio_all = float(fit["ratio"])
-    if exclude_year is None or exclude_year not in per_year:
-        vals = np.array(list(per_year.values()))
-        return CalendarRatio(region_id, ratio_all, float(np.percentile(vals, 10)), float(np.percentile(vals, 90)),
-                             ratio_all, None, tuple(sorted(per_year)), str(hm["id"]))
-    row = next(r for r in hm["validation"]["per_year"] if int(r["year"]) == exclude_year)
-    rest = {y: r for y, r in per_year.items() if y != exclude_year}
-    vals = np.array(list(rest.values()))
+    counts = yearly_counts(cal)
+    own = () if exclude_year is None else ((int(exclude_year),) if isinstance(exclude_year, (int, np.integer)) else tuple(sorted({int(y) for y in exclude_year})))
+    dropped = set(own)
+    if not keep_years_of_test_fires:
+        dropped |= set(years_of_test_fires(region_id))
+    kept = {y: ab for y, ab in counts.items() if y not in dropped and ab[1] > 0}
+    if not kept:
+        raise ValueError(f"no overlap year is left for {region_id} after dropping {sorted(dropped)}")
+    vals = np.array([a / b for a, b in kept.values()])
     return CalendarRatio(
-        region_id=region_id, ratio=float(row["ratio_fitted_without_this_year"]),
-        p10=float(np.percentile(vals, 10)), p90=float(np.percentile(vals, 90)), ratio_all_years=ratio_all,
-        excluded_year=exclude_year, years=tuple(sorted(rest)), method_id=str(hm["id"]),
+        region_id=region_id,
+        ratio=float(sum(a for a, _ in kept.values()) / sum(b for _, b in kept.values())),
+        p10=float(np.percentile(vals, 10)), p90=float(np.percentile(vals, 90)),
+        excluded_year=own[0] if own else None, years=tuple(sorted(kept)), method_id=str(cal["harmonization_method"]["id"]),
+        dropped_years=tuple(sorted(dropped)), excluded_years=own,
     )

@@ -1,17 +1,30 @@
-"""A reconstruct run on real FIRMS rows, in the shape `/api/reconstruct` returns today (CONTRACT amendment 8).
+"""A reconstruct run on real FIRMS rows, in the shape `/api/reconstruct` returns.
 
-`solve_real_reconstruction(region_terrain, start, holdout)` returns a `SolvedRealRun`: every field the simulated
-`SolvedReconstructionRun` has (so the server stores and serves it the same way), plus `extras`, a dict of additive
-top-level keys for the response (`source`, `window`, `blind_test`, `model`, `encoding`).
+`solve_real_reconstruction(region_terrain, start, holdout_viirs)` returns a `SolvedRealRun`: every field the
+simulated `SolvedReconstructionRun` has (so the server stores and serves it the same way), plus `extras`, a dict
+of additive top-level keys for the response (`source`, `window`, `blind_test`, `model`, `encoding`).
 
-  frames      24, each one real overpass: the first 24 at or after `start` that flagged a pixel in the region box
+  frames      24, each one pass of a satellite over the region box, from NASA's CMR granule list: the
+              first 24 passes whose swath held the box, of every platform, counted from the first MODIS overpass
+              with a detection at or after `start`. A pass that flagged nothing is a frame all the same. With VIIRS
+              hidden the VIIRS passes are frames too (`epistemic_regime` viirs_overpass_held_out): they carry the
+              estimate and nothing observed, so both kinds of run play the same passes. Where no pass list is
+              cached the frames are the first 24 overpasses of the visible rows with a detection.
   channels    R reconstructed FRP density, G its standard deviation, B MODIS as observed, A VIIRS as observed, each
-              a 375 m field shown on the 256 by 256 tensor grid (nearest cell, nothing interpolated or invented)
-  footprints  one per real detection in the box, with its real `scan` and `track`
-  geometry    derived from the rows (backend/model/real_geometry.py) and labelled derived
+              a 375 m field shown on the 256 by 256 tensor grid (nearest cell, nothing interpolated or invented).
+              With VIIRS hidden, A is empty: the hidden pixels are under `blind_test.reveal`, from the scorer.
+  footprints  one per real detection of a frame in the box, with its real `scan` and `track`
+  geometry    from where the box lies in the pass's swath polygon (backend/eval/schedule.py); derived from the
+              visible rows (backend/model/real_geometry.py) where no pass list is cached. Labelled either way.
+
+Hidden rows. With `holdout_viirs` the rows part ways at `backend.eval.holdout.seal`, the first thing
+done with them. From there on this module holds the visible rows and a sealed box it cannot read; the box goes
+to `backend.eval.blind_test`, which opens it after every prediction is fixed. So the window, the tensor, the
+belief frames, both exports and every payload key outside `blind_test` and the metrics named in
+`metrics.from_hidden_rows` are byte for byte the same whatever the hidden rows hold.
 
 Nothing simulated enters a real run and nothing here is used by a simulated run. Rows are read only through
-`backend.firms.read_firms` (terrain-assets lane); tests pass their own reader.
+`backend.firms.read_firms`; tests pass their own reader.
 """
 
 from __future__ import annotations
@@ -28,18 +41,22 @@ import numpy as np
 from numpy.typing import NDArray
 
 from backend.eval.baselines import OverlapRatioFit, overlap_ratio_factory, painted_modis_factory
-from backend.eval.blind_test import run_blind_test, verdict
+from backend.eval.blind_test import blind_test_sealed, hidden_pixels_in_spans, reveal, run_blind_test, verdict
 from backend.eval.grid import CELL_KM, EvalGrid, paint
-from backend.eval.rows import Detections, detections_from_rows
+from backend.eval.holdout import seal
+from backend.eval.overpass import group_overpasses
+from backend.eval import schedule as S
+from backend.eval.rows import Detections, detections_from_rows, local_solar_time_hr
+from backend.eval.schedule import hidden_platforms_in
 from backend.model import platforms as P
 from backend.model.belief import belief_frames
+from backend.model import encoding as ENC
 from backend.model.grid import GRID_H, GRID_W
 from backend.model.occupancy import OccupancyParams, OccupancyReconstruction
-from backend.model.real_blind import FRAMES, Window, reconstruction_factory, window_from_start
-from backend.model.real_geometry import crossing_offsets, pass_geometry
+from backend.model.real_blind import FRAMES, Frame, Window, in_box_overpasses, reconstruction_factory, run_frames
+from backend.model.real_geometry import crossing_offsets, pass_geometry, slot_geometry
 from backend.model.sensor_physics import orbit_node_rule_payload
 from backend.model.solver import SolvedReconstructionRun, build_any_region_grid
-from backend.model.world_model import SIGMA_MAX_MW_KM2, Z_MAX_MW_KM2
 from backend.terrain.live_region import LoadedRegionTerrain
 
 REAL_MODEL_VERSION: str = "1.0.0-real-rows"
@@ -86,10 +103,6 @@ def _tensor_index(grid375: EvalGrid, bbox: tuple[float, float, float, float]) ->
     col = np.clip(np.floor(x / grid375.cell_km).astype(np.int64), 0, grid375.nx - 1)
     row = np.clip((grid375.ny - 1 - np.floor(y / grid375.cell_km)).astype(np.int64), 0, grid375.ny - 1)
     return row, col
-
-
-def _u8(field: NDArray[np.float64], vmax: float) -> NDArray[np.uint8]:
-    return np.clip(np.rint(np.clip(field, 0.0, vmax) / vmax * 255.0), 0, 255).astype(np.uint8)
 
 
 def _sigma_mw(est_a: NDArray[np.float64], est_F: NDArray[np.float64], rel_sd: float) -> NDArray[np.float64]:
@@ -146,6 +159,54 @@ def _exports(
     return (json.dumps(geo, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8"), buf.getvalue().encode("utf-8")
 
 
+# Metrics of a run that are scores against the hidden rows. With a holdout they come from the scorer and are the
+# only top-level metrics that may differ when the hidden rows differ; the payload names them in
+# `metrics.from_hidden_rows`.
+METRICS_FROM_HIDDEN_ROWS: tuple[str, ...] = (
+    "raw_modis_rmse_mw_km2", "reconstructed_rmse_mw_km2", "rmse_reduction_pct", "empirical_90_coverage_pct",
+    "cells_gained_over_painted_modis_pct",
+)
+# Names the simulated engine's metrics carry that mean nothing on a real run. They stay in a real run's `metrics`
+# as null, because a route test asks a real run for every key a simulated run has; why each is null, and the key
+# of the real run that holds the nearest quantity, is said in `metrics.definitions`.
+SIMULATED_METRIC_NAMES_NOT_USED: dict[str, str] = {
+    "cloud_override": "an input of simulated runs; a real run has no cloud setting",
+    "conformal_q90_radius_mw_km2": "no conformal step is applied to a real run; the mean half width of the stated cell interval is mean_cell_q90_halfwidth_mw_km2",
+    "subpixel_viirs_fires_recovered_pct": "a simulated-truth notion; the cells gained over painted MODIS against hidden detections are cells_gained_over_painted_modis_pct",
+    "step_2012_raw_ratio": "one run says nothing about the 2012 step in the record; the pixel counts are window.modis_pixels_in_box and blind_test.hidden_rows_in_test_box",
+    "step_2012_harmonized_ratio": "one run says nothing about the 2012 step in the record; predicted over hidden FRP is blind_test.methods.reconstruction.frp_total.ratio_of_sums",
+    "step_2012_coobs_frames": "one run says nothing about the 2012 step in the record; the count is blind_test.scored_overpasses_with_hidden_detections_in_test_box",
+}
+
+
+def years_touched(start_s: float, end_s: float, pad_s: float = PAD_S) -> tuple[int, ...]:
+    """Every calendar year a run touches: its frames and the days either side that are given to the estimate."""
+    first, last = int(_iso(start_s - pad_s)[:4]), int(_iso(end_s + pad_s)[:4])
+    return tuple(range(first, last + 1))
+
+
+def _test_fire_note(region_id: str, start_s: float, end_s: float) -> dict[str, Any] | None:
+    """Says so when a window lies on one of the three 2021 test fires (backend/model/training.py)."""
+    from backend.model.training import EXCLUSIONS, _day_s
+
+    if region_id not in EXCLUSIONS:
+        return None
+    first, after, _ = EXCLUSIONS[region_id]
+    if end_s <= _day_s(first) or start_s >= _day_s(after):
+        return None
+    return {
+        "test_fire": True,
+        "note": (
+            "this is one of the three 2021 test fires. The test of them is recorded in "
+            "backend/model/fitted_values/test_fire_looks.json (served by backend.model.evidence): one look under "
+            "protocol version 1, which let the hidden rows move the window and the pixel size of each prediction, "
+            "one under version 2, a protocol correction, and the final look under version 3, taken once with "
+            "everything frozen. The score of this run is that of its own window; it is not one of the recorded "
+            "looks and nothing is fitted or chosen with it."
+        ),
+    }
+
+
 def solve_real_reconstruction(
     region_terrain: LoadedRegionTerrain,
     start: str,
@@ -157,22 +218,25 @@ def solve_real_reconstruction(
     count_ratio: Any | None = None,
     learned_parts: list[dict[str, Any]] | None = None,
     row_source: str = ROW_SOURCE,
+    read_passes: Callable[..., list[dict[str, Any]]] | None = None,
 ) -> SolvedRealRun:
     """Reconstruct a region from real rows, starting at `start` (UTC date or date-time).
 
-    `holdout_viirs=True` hides every VIIRS detection (Suomi NPP, NOAA-20, NOAA-21) from the estimate and attaches
-    the blind-test score; False assimilates both instruments. Everything else has a default the server can rely
-    on: `read_firms(box, start, end)` and `context_box` are the terrain-assets lane's reader and the region's
-    context box; `params` and `learned_parts` come from backend/model/fitted.py; `ratio_fit` is the tracked FRP
-    overlap ratio and `count_ratio` the calendar's overlap ratio refitted without the run's year (both feed the
-    second baseline only).
+    `holdout_viirs=True` hides every VIIRS detection from everything but the scorer and attaches the blind-test
+    score; False assimilates both instruments. Everything else has a default the server can rely on:
+    `read_firms(box, start, end)` and `context_box` are `backend.firms.read_firms` and the region's context
+    box; `params` and `learned_parts` come from backend/model/fitted.py; `ratio_fit` is the tracked FRP overlap
+    ratio and `count_ratio` the calendar's overlap ratio refitted without the run's year and without the year of
+    a test fire (both feed the second baseline only). `read_passes` is the pass list's reader, by default
+    `backend.firms.cmr_passes.cmr_passes`; when it has no list for the days of the run the frames
+    fall back to overpasses of the visible rows and the payload says so (`window.frames_from`).
     """
-    holdout = "viirs" if holdout_viirs else None
+    holdout = bool(holdout_viirs)
     t_begin = time.perf_counter()
     spec = region_terrain.spec
     bbox = (spec.bbox.west, spec.bbox.south, spec.bbox.east, spec.bbox.north)
     if read_firms is None or context_box is None:
-        from backend.firms import read_firms as _read, region_box as _box  # lands with terrain-assets D1
+        from backend.firms import read_firms as _read, region_box as _box  # the defaults
 
         read_firms = read_firms or _read
         context_box = context_box or _box(spec.id)
@@ -184,59 +248,69 @@ def solve_real_reconstruction(
         learned_parts = _fitted.learned_parts()
     start_s = parse_start_s(start)
 
-    rows = read_firms(context_box, _iso(start_s - PAD_S)[:-1], _iso(start_s + SEARCH_S)[:-1])
-    det_all = detections_from_rows(rows, row_source)
-    win: Window = window_from_start(det_all, bbox, start_s)
-    keep = (det_all.time_s >= win.start_s - PAD_S) & (det_all.time_s < win.end_s + PAD_S)
-    det = det_all.select(keep)
+    # The rows part ways here and nowhere else. `rows_seen` holds visible rows only; `sealed` is opened by the
+    # scorer alone (backend/eval/blind_test.py). No name below this line can reach a hidden row.
+    rows_seen, sealed = seal(
+        detections_from_rows(read_firms(context_box, _iso(start_s - PAD_S)[:-1], _iso(start_s + SEARCH_S)[:-1]), row_source),
+        "VIIRS" if holdout else None,
+    )
+    # `rows_seen` already holds no hidden row; naming what is hidden again marks which passes are held-out frames
+    frames: list[Frame]
+    win: Window
+    frames, win = run_frames(rows_seen, bbox, start_s, n=FRAMES, hidden="VIIRS" if holdout else None, read_passes=read_passes)
+    from_list = frames[0].slot is not None
+    keep = (rows_seen.time_s >= win.start_s - PAD_S) & (rows_seen.time_s < win.end_s + PAD_S)
+    visible = rows_seen.select(keep)
     t_rows = time.perf_counter()
 
     grid375 = EvalGrid.from_bbox(bbox, CELL_KM)
     area = grid375.cell_area_km2
-    viirs_seen = sorted({P.PLATFORMS[int(c)] for c in det.platform_code[det.is_viirs]})
-    hidden_platforms = viirs_seen if holdout == "viirs" else []
-    visible = det.select(det.is_modis) if holdout == "viirs" else det
+    # which platforms are hidden follows from the archive's dates, not from the hidden rows
+    hidden_platforms = list(hidden_platforms_in("VIIRS", None, win.start_s, win.end_s)) if holdout else []
     recon = OccupancyReconstruction(grid375, visible, params)
     t_model = time.perf_counter()
 
     tensor_grid = build_any_region_grid(region_terrain.dem_m, bbox, region_terrain.terrain_source)
     idx = _tensor_index(grid375, bbox)
-    inb = det_all.in_box(bbox)
-    # geometry: the drift of each platform's crossing time is estimated from every overpass in the rows loaded
-    from backend.eval.overpass import group_overpasses
-
-    all_passes = group_overpasses(det_all)
-    offsets = crossing_offsets(all_passes, spec.center_lat)
+    # geometry: the drift of each platform's crossing time is estimated from the overpasses of the visible rows
+    offsets = crossing_offsets(group_overpasses(rows_seen), spec.center_lat)
 
     f_all = np.zeros((FRAMES, grid375.ny, grid375.nx))
     s_all = np.zeros_like(f_all)
     tensor = np.zeros((FRAMES, GRID_H, GRID_W, 4), dtype=np.uint8)
     frames_json: list[dict[str, Any]] = []
     epochs: list[dict[str, Any]] = []
-    saturated = {"reconstruction": 0, "modis": 0, "viirs": 0}
-    lit = {"reconstruction": 0, "modis": 0, "viirs": 0}
+    saturated = {"reconstruction": 0, "sigma": 0, "modis": 0, "viirs": 0}
+    lit = {"reconstruction": 0, "sigma": 0, "modis": 0, "viirs": 0}
+    floored = {"reconstruction": 0, "sigma": 0, "modis": 0, "viirs": 0}
     peak_total = 0.0
     rows_in_frames = 0
 
-    for k, op in enumerate(win.passes):
-        est = recon.estimate(op.time_s)
+    for k, fr in enumerate(frames):
+        est = recon.estimate(fr.time_s)
         sig = _sigma_mw(est.a, est.F, est.rel_sd_log)
         f_all[k], s_all[k] = est.F, sig
-        own = op.index[inb[op.index]]
-        painted = paint(grid375, det_all.select(own))
-        is_modis = op.family == "MODIS"
+        # a held-out frame holds no row: it is a pass of a hidden platform, and its rows are in the sealed box
+        d = rows_seen.select(fr.rows)
+        painted = paint(grid375, d)
+        is_modis = P.family(fr.platform) == "MODIS"
         z = est.F / area
         obs = painted.frp_mw / area
-        tensor[k, :, :, 0] = _u8(z, Z_MAX_MW_KM2)[idx]
-        tensor[k, :, :, 1] = _u8(sig / area, SIGMA_MAX_MW_KM2)[idx]
-        tensor[k, :, :, 2 if is_modis else 3] = _u8(obs, Z_MAX_MW_KM2)[idx]
-        for name, fld in (("reconstruction", z), ("modis" if is_modis else "viirs", obs)):
+        tensor[k, :, :, 0] = ENC.encode_u8(z)[idx]
+        tensor[k, :, :, 1] = ENC.encode_u8(sig / area)[idx]
+        seen_fields = [] if fr.hidden else [("modis" if is_modis else "viirs", obs)]
+        if not fr.hidden:
+            tensor[k, :, :, 2 if is_modis else 3] = ENC.encode_u8(obs)[idx]
+        for name, fld in [("reconstruction", z), ("sigma", sig / area)] + seen_fields:
             lit[name] += int((fld > 0).sum())
-            saturated[name] += int((fld > Z_MAX_MW_KM2).sum())
+            saturated[name] += int((fld > ENC.LOG_MAX_MW_KM2).sum())
+            floored[name] += int(((fld > 0) & (fld < ENC.LOG_MIN_MW_KM2)).sum())
 
-        held_out = holdout == "viirs" and not is_modis
-        geom = pass_geometry(op, spec.center_lon, spec.center_lat, offsets)
-        d = det_all.select(own)
+        if fr.slot is not None:
+            geom = slot_geometry(fr.slot, spec.center_lon, spec.center_lat)
+        else:
+            geom = pass_geometry(fr.overpass, spec.center_lon, spec.center_lat, offsets)
+        lst_hr = float(local_solar_time_hr(fr.time_s, spec.center_lon))
         fps: list[list[float | int]] = []
         classes = {"l": 0, "n": 0, "h": 0}
         for i in range(len(d)):
@@ -250,17 +324,21 @@ def solve_real_reconstruction(
                 geom["sensor_code"],
             ])
         rows_in_frames += len(d)
-        pass_entry = {**geom, "swath_fraction": 1.0, "footprint_count": len(fps)}
+        pass_entry = {**geom, "swath_fraction": 1.0, "footprint_count": len(fps), "held_out": fr.hidden,
+                      "geometry_from": "swath polygon of the pass (NASA CMR)" if fr.slot is not None else "the pass's own rows"}
         recon_mw = float(est.F.sum())
         peak_total = max(peak_total, recon_mw)
-        regime = "viirs_overpass_held_out" if held_out else ("modis_overpass" if is_modis else "viirs_overpass")
+        regime = ("modis_overpass" if is_modis else "viirs_overpass") + ("_held_out" if fr.hidden else "")
         frames_json.append({
             "frame": k,
-            "timestamp_utc": _iso(op.time_s),
-            "local_solar_time_hr": round(op.lst_hr, 2),
-            "is_day": bool(op.is_day),
+            "timestamp_utc": _iso(fr.time_s),
+            "local_solar_time_hr": round(lst_hr, 2),
+            "is_day": bool(fr.is_day),
             "epistemic_regime": regime,
-            "sensor": op.platform,
+            "held_out": fr.hidden,
+            "detections_in_box": None if fr.hidden else len(d),
+            "granule_cloud_cover_pct": None if fr.slot is None else fr.slot.cloud_cover_pct,
+            "sensor": fr.platform,
             "subsat_lon": geom["subsat_lon"],
             "subsat_lat": geom["subsat_lat"],
             "altitude_km": geom["altitude_km"],
@@ -273,16 +351,16 @@ def solve_real_reconstruction(
             "max_z_hat_mw_km2": round(float(z.max()), 2),
             "mean_sigma_mw_km2": round(float((sig / area).mean()), 3),
             "information_age_h": None if not math.isfinite(est.age_h) else round(est.age_h, 2),
-            "viirs_confidence_classes": classes if not is_modis else None,
+            "viirs_confidence_classes": classes if not (is_modis or fr.hidden) else None,
             "passes": [pass_entry],
             "footprints": fps,
         })
         epochs.append({
             "frame": k,
-            "timestamp_utc": _iso(op.time_s),
-            "lst_hr": round(op.lst_hr, 2),
+            "timestamp_utc": _iso(fr.time_s),
+            "lst_hr": round(lst_hr, 2),
             "regime": regime,
-            "primary_sensor": op.platform,
+            "primary_sensor": fr.platform,
             "cloud_fraction": 0.0,
             "reconstructed_total_mw": round(recon_mw, 1),
             "raw_modis_total_mw": round(painted.frp_total_mw, 1) if is_modis else 0.0,
@@ -290,59 +368,85 @@ def solve_real_reconstruction(
             "mean_sigma_mw_km2": round(float((sig / area).mean()), 2),
         })
     # what the model believes between the passes, at fixed steps (forward filter only)
-    belief_bytes, belief_desc = belief_frames(recon, win.start_s, win.end_s - 1.0, Z_MAX_MW_KM2)
+    belief_bytes, belief_desc = belief_frames(recon, win.start_s, win.end_s - 1.0)
     t_frames = time.perf_counter()
 
-    # Scores. With a holdout this is the blind test. Without one the same scoring runs with VIIRS assimilated, so
-    # the figures are fit residuals and are labelled so.
+    # Everything the estimate produced is fixed above. What follows scores it. With a holdout this is the blind
+    # test: the sealed rows go to the scorer. Without one the same scoring runs with VIIRS assimilated, so the
+    # figures are fit residuals and are labelled so.
     report: dict[str, Any] | None = None
+    count_ratio_missing: str | None = None
     if ratio_fit is not None and count_ratio is None:
-        try:
-            from backend.model.calendar_ratio import calendar_ratio
+        from backend.model.calendar_ratio import calendar_ratio
 
-            count_ratio = calendar_ratio(spec.id, exclude_year=int(_iso(win.start_s)[:4]))
-        except Exception:  # no calendar for this region: the baseline then states no pixel count
-            count_ratio = None
+        try:
+            # every year the run touches is left out, so a run over New Year keeps none of its own rows
+            count_ratio = calendar_ratio(spec.id, exclude_year=years_touched(win.start_s, win.end_s))
+        except (KeyError, ValueError, OSError) as exc:
+            # no calendar is cached for this region, or no year is left to fit on: the second baseline then
+            # states no pixel count, and the payload says why
+            count_ratio_missing = f"{type(exc).__name__}: {exc}"
+    span = (win.start_s, win.end_s)
     if ratio_fit is not None:
-        if holdout == "viirs":
-            recon_factory = reconstruction_factory(params)
+        baselines = [painted_modis_factory, overlap_ratio_factory(ratio_fit, count_ratio)]
+        if holdout:
+            methods = baselines + [reconstruction_factory(params)]
+            held = [(k, fr.slot) for k, fr in enumerate(frames) if fr.hidden and fr.slot is not None]
+            if from_list:
+                # the looks scored are the held-out frames and no other; the count of passes left out is read
+                # from the list again for the hidden platforms alone
+                _, left = S.pass_slots(tuple(hidden_platforms), win.start_s, win.end_s, bbox, read_passes)
+                given = ([s for _, s in held], S.SOURCE_CMR, {"platforms": hidden_platforms, **left})
+                report = blind_test_sealed(visible, sealed, bbox, methods, window=span, given=given)
+                for entry, (k, _) in zip(report["schedule"]["slots"], held):
+                    entry["frame"] = k
+                report["schedule"]["frames_note"] = "slots[i].frame is the held-out frame of the run that slot i is; every held-out frame is a slot"
+            else:
+                report = blind_test_sealed(visible, sealed, bbox, methods, window=span, read_passes=read_passes)
+            report["reveal"] = reveal(sealed, bbox, span, [fr.time_s for fr in frames], VIIRS_CLASS_NUMBER,
+                                      held_out_frames=held if from_list else None)
+            report["from_the_scorer"] = report["from_the_scorer"] + ["reveal", "verdict"]
         else:
-            def recon_factory(_visible: Detections, g: EvalGrid):  # sees every row: not a blind method
+            def in_sample(_visible: Detections, g: EvalGrid):  # sees every row: not a blind method
                 from backend.model.real_blind import ReconstructionMethod
 
-                return ReconstructionMethod(det, g, params, "reconstruction", "fit with VIIRS assimilated (in sample, not a test)")
-        report = run_blind_test(
-            det, bbox, [painted_modis_factory, overlap_ratio_factory(ratio_fit, count_ratio), recon_factory],
-            window=(win.start_s, win.end_s),
-        )
+                return ReconstructionMethod(visible, g, params, "reconstruction", "fit with VIIRS assimilated (in sample, not a test)")
+            report = run_blind_test(visible, bbox, baselines + [in_sample], window=span, read_passes=read_passes)
         report["window_choice"] = win.as_dict()
         report["overlap_ratio_fit"] = ratio_fit.as_dict()
         report["calendar_overlap_ratio"] = None if count_ratio is None else count_ratio.as_dict()
-        report["hidden_platforms"] = hidden_platforms
+        report["calendar_overlap_ratio_missing"] = count_ratio_missing
         report["verdict"] = verdict(report)
-        report["blind"] = holdout == "viirs"
-    elif holdout == "viirs":
+        report["blind"] = holdout
+        note = _test_fire_note(spec.id, win.start_s, win.end_s)
+        if note is not None:
+            report["protocol"] = {**report["protocol"], **note}
+        if holdout:
+            report["built_without_hidden_rows"] = report["built_without_hidden_rows"] + [
+                "window_choice", "overlap_ratio_fit", "calendar_overlap_ratio", "calendar_overlap_ratio_missing", "blind",
+            ]
+    elif holdout:
         raise ValueError("a holdout run needs the overlap-ratio baseline's fitted ratio (backend/model/fitted_values/overlap_ratio.json)")
     t_score = time.perf_counter()
 
-    n_mod_px = win.modis_pixels_in_box
-    n_vii_px = win.viirs_pixels_in_box
     metrics: dict[str, Any] = {
-        "holdout_viirs": holdout == "viirs",
-        "cloud_override": None,
+        "holdout_viirs": holdout,
         "total_reconstructed_frp_peak_mw": round(peak_total, 1),
+        "mean_cell_q90_halfwidth_mw_km2": round(float(1.64485 * (s_all / area)[f_all > 0].mean()) if (f_all > 0).any() else 0.0, 2),
         "raw_modis_rmse_mw_km2": 0.0,
         "reconstructed_rmse_mw_km2": 0.0,
         "rmse_reduction_pct": 0.0,
         "empirical_90_coverage_pct": 0.0,
-        "conformal_q90_radius_mw_km2": round(float(1.64485 * (s_all / area)[f_all > 0].mean()) if (f_all > 0).any() else 0.0, 2),
-        "subpixel_viirs_fires_recovered_pct": 0.0,
-        "step_2012_raw_ratio": round((n_mod_px + n_vii_px) / max(n_mod_px, 1), 2),
-        "step_2012_harmonized_ratio": 0.0,
-        "step_2012_coobs_frames": 0,
+        "cells_gained_over_painted_modis_pct": 0.0,
+        **{name: None for name in SIMULATED_METRIC_NAMES_NOT_USED},
         "source": "firms",
         "scored": report is not None,
+        "from_hidden_rows": list(METRICS_FROM_HIDDEN_ROWS) if holdout else [],
+        "simulated_names_not_used": sorted(SIMULATED_METRIC_NAMES_NOT_USED),
     }
+    model_side_metrics = {k: v for k, v in metrics.items()
+                          if k not in METRICS_FROM_HIDDEN_ROWS and k not in SIMULATED_METRIC_NAMES_NOT_USED
+                          and k not in ("from_hidden_rows", "simulated_names_not_used")}
     if report is not None:
         rec, raw = report["methods"]["reconstruction"], report["methods"]["painted_modis"]
         r_rmse, m_rmse = rec["cell_rmse_mw_km2"] or 0.0, raw["cell_rmse_mw_km2"] or 0.0
@@ -354,26 +458,25 @@ def solve_real_reconstruction(
             reconstructed_rmse_mw_km2=round(r_rmse, 2),
             rmse_reduction_pct=round((1.0 - r_rmse / m_rmse) * 100.0, 1) if m_rmse > 0 else 0.0,
             empirical_90_coverage_pct=round(100.0 * cov, 1) if cov is not None else 0.0,
-            subpixel_viirs_fires_recovered_pct=round(
+            cells_gained_over_painted_modis_pct=round(
                 100.0 * max(0, rec["strict_375m"]["tp"] - raw["strict_375m"]["tp"]) / missed_by_raw, 1
             ) if missed_by_raw > 0 else 0.0,
-            step_2012_harmonized_ratio=round(rec["frp_total"]["ratio_of_sums"] or 0.0, 2),
-            step_2012_coobs_frames=report["scored_overpasses_with_hidden_detections_in_test_box"],
         )
     metrics["definitions"] = {
         "reference": (
-            "hidden VIIRS detections (blind test)" if holdout == "viirs"
+            "hidden VIIRS detections (blind test)" if holdout
             else "VIIRS detections that were assimilated: fit residuals, not a test"
         ),
+        "from_hidden_rows": "the metrics computed by the scorer from the hidden rows; every other metric is fixed before they are opened",
+        "simulated_names_not_used": "names a simulated run's metrics carry that mean nothing on a real run; they are null here, and each entry below says why and where the figure it used to hold is now",
+        "total_reconstructed_frp_peak_mw": "the largest total FRP of the estimate over the frames",
+        "mean_cell_q90_halfwidth_mw_km2": "mean of 1.645 times the stated cell standard deviation over cells with fire",
         "raw_modis_rmse_mw_km2": "cell RMSE of MODIS painted as observed against the VIIRS detections (backend/eval/metrics.py, cell_rmse)",
         "reconstructed_rmse_mw_km2": "the same for the reconstruction's predicted VIIRS field",
         "rmse_reduction_pct": "(1 - reconstructed / raw) times 100, signed: a negative value means the reconstruction is worse",
         "empirical_90_coverage_pct": "share of scored VIIRS overpasses whose total FRP lies in the stated 90 percent interval",
-        "conformal_q90_radius_mw_km2": "mean of 1.645 times the stated cell standard deviation over cells with fire; no conformal step is applied to real runs",
-        "subpixel_viirs_fires_recovered_pct": "extra VIIRS cells the reconstruction hits beyond painted MODIS, as a share of the cells painted MODIS misses (0 when it hits fewer)",
-        "step_2012_raw_ratio": "(MODIS pixels + VIIRS pixels) / MODIS pixels in the box over the 24 frames: the jump in raw counts when VIIRS joins the record",
-        "step_2012_harmonized_ratio": "reconstructed total FRP / VIIRS total FRP summed over the scored VIIRS overpasses",
-        "step_2012_coobs_frames": "scored VIIRS overpasses with detections in the box",
+        "cells_gained_over_painted_modis_pct": "extra VIIRS cells the reconstruction hits beyond painted MODIS, as a share of the cells painted MODIS misses (0 when it hits fewer)",
+        **SIMULATED_METRIC_NAMES_NOT_USED,
     }
 
     terrain_label = {
@@ -381,14 +484,19 @@ def solve_real_reconstruction(
         "aws_terrarium_eox_s2": "AWS Terrarium DEM + Sentinel-2 Ortho",
         "cached_local_dem_s2": "Cached Local DEM + Sentinel-2 Ortho",
     }.get(region_terrain.terrain_source, "Procedural DEM (no real terrain cached for this region)")
+    n_used = len(visible)
     provenance = (
-        f"Real NASA FIRMS detections ({len(det)} rows read, {rows_in_frames} drawn in the 24 frames) on {terrain_label}. "
-        "The reconstruction is a model estimate from those detections; pass geometry is derived from the rows."
+        f"Real NASA FIRMS detections ({n_used} rows given to the estimate, {rows_in_frames} drawn in the 24 frames) on "
+        f"{terrain_label}. The reconstruction is a model estimate from those detections; "
+        + ("the frames are the passes NASA's CMR granule list gives over the region, with their geometry."
+           if from_list else "pass geometry is derived from them.")
+        + (" VIIRS detections were kept from the estimate and used only to score it." if holdout else "")
     )
-    c_tag = "holdoutviirs" if holdout == "viirs" else "allsensors"
+    c_tag = "holdoutviirs" if holdout else "allsensors"
     run_id = f"{spec.id}_firms_{_iso(win.start_s)[:16].replace('-', '').replace(':', '')}_{c_tag}"
 
     learned = learned_parts
+    hidden_text = ("MODIS only; hidden: " + ", ".join(hidden_platforms)) if holdout else "MODIS and VIIRS assimilated"
     pipeline_stages = [
         {"stage_id": "terrain_ingest", "label": terrain_label, "model_name": "terrain cache",
          "duration_ms": round(region_terrain.duration_ms, 1), "status": "completed",
@@ -396,45 +504,41 @@ def solve_real_reconstruction(
         {"stage_id": "sensor_operator", "label": "Real FIRMS Rows and Pixel Footprints",
          "model_name": "backend.firms reader, footprints from scan and track",
          "duration_ms": round((t_rows - t_begin) * 1000.0, 1), "status": "completed",
-         "detail": f"{len(det)} rows, {win.n_modis} MODIS and {win.n_viirs} VIIRS overpasses in 24 frames"},
+         "detail": f"{n_used} rows, {win.n_modis} MODIS and {win.n_viirs} VIIRS passes in 24 frames"
+                   + (f" ({win.hidden_passes} held out)" if holdout and from_list else "")},
         {"stage_id": "hurdle_quantile", "label": "Learned Cross-Sensor Parts",
          "model_name": "see model.learned_parts", "duration_ms": 0.0,
          "status": "completed" if any(p.get("status") == "on" for p in learned) else "experimental",
          "detail": "; ".join(f"{p['name']}: {p['status']}" for p in learned)},
         {"stage_id": "kalman_smoother", "label": "Forward and Backward Occupancy Filter (375 m)",
          "model_name": "backend/model/occupancy.py", "duration_ms": round((t_model - t_rows) * 1000.0, 1),
-         "status": "completed",
-         "detail": ("MODIS only; hidden: " + ", ".join(hidden_platforms)) if holdout == "viirs" else "MODIS and VIIRS assimilated"},
-        {"stage_id": "conformal_gate", "label": "Blind Test Against Hidden VIIRS" if holdout == "viirs" else "Fit Residuals (no holdout)",
+         "status": "completed", "detail": hidden_text},
+        {"stage_id": "conformal_gate", "label": "Blind Test Against Hidden VIIRS" if holdout else "Fit Residuals (no holdout)",
          "model_name": "backend/eval/blind_test.py", "duration_ms": round((t_score - t_frames) * 1000.0, 1),
          "status": "completed" if report is not None else "skipped",
-         "detail": "scored against hidden detections beside two baselines" if holdout == "viirs" else "VIIRS was assimilated: not a test"},
+         "detail": "scored against hidden detections beside two baselines" if holdout else "VIIRS was assimilated: not a test"},
     ]
 
-    # The reconstruction is shown as proven only when this run's blind test has it ahead of both baselines on every
-    # score with an interval that holds; in every other case it is labelled experimental and the scores say why.
-    if report is not None and holdout == "viirs":
-        v = report["verdict"]
-        cov = v["interval"]["observed_coverage"]
-        level = v["interval"]["stated_level"]
-        holds = cov is not None and level is not None and cov >= level - 0.1
-        if v["beats_every_baseline_on_every_score"] and holds:
-            model_status, model_reason = "on", "ahead of both baselines on every score of this run's blind test, interval holds"
-        else:
-            model_status = "experimental"
-            model_reason = (
-                f"ahead of both baselines on {v['beats_every_baseline_on']} of {v['scores_judged']} scores of this run's "
-                f"blind test; its {level} interval held for {cov if cov is None else round(cov, 3)} of the scored overpasses"
-            )
+    # The status of the model is what validation on other fires decided (backend/model/fitted_values), never this
+    # run's own score: a label that moved with the hidden rows of the run would be a score, not a status. This
+    # run's blind test is under `blind_test.verdict`.
+    gated = [p for p in learned if p.get("status") in ("on", "experimental")]      # the parts validation rules on
+    parts_on = [p for p in gated if p["status"] == "on"]
+    own = "this run's own blind test is in blind_test.verdict" if holdout else "nothing was hidden in this run, so it holds no test"
+    if gated and len(parts_on) == len(gated):
+        model_status, model_reason = "on", "every part of the estimate is ahead of both baselines on validation fires (model.learned_parts)"
+    elif gated:
+        model_status = "experimental"
+        model_reason = f"{len(parts_on)} of {len(gated)} parts of the estimate are on after validation on other fires (model.learned_parts); {own}"
     else:
-        model_status, model_reason = "experimental", "no blind test in this run (VIIRS was assimilated), so nothing here is a test"
+        model_status, model_reason = "experimental", f"no part of the estimate has been validated on other fires (model.learned_parts); {own}"
     sensor_codes = {str(code): name for name, code in P.PLATFORM_CODES.items()}
     observer_passes: dict[str, Any] = {
         "schema_version": "1.0.0",
         "model_version": REAL_MODEL_VERSION,
         "run_id": run_id,
         "provenance": provenance,
-        "downloaded_firms_rows": len(det),
+        "downloaded_firms_rows": n_used,
         "source": "firms",
         "terrain_source": region_terrain.terrain_source,
         "bbox": [round(v, 5) for v in bbox],
@@ -442,34 +546,60 @@ def solve_real_reconstruction(
         "sensor_codes": sensor_codes,
         "orbit_node_rule": orbit_node_rule_payload(),
         "footprint_schema": ["lon", "lat", "scan_km", "track_km", "angle_deg", "frp_mw", "confidence", "sensor_code"],
+        "frames_from": win.frames_from,
         "geometry_note": (
-            "scan_angle_deg, view_zenith_deg, azimuth_deg, subsat_lon and subsat_lat are derived from the rows' pixel "
-            "sizes and acquisition times (backend/model/real_geometry.py); FIRMS does not publish them. cloud_fraction "
-            "is not measured (FIRMS rows carry no cloud mask) and is written as 0."
+            "FIRMS does not publish a pass's geometry. scan_angle_deg, view_zenith_deg, azimuth_deg, subsat_lon and "
+            "subsat_lat are worked out from where the region box lies in the swath polygon of the pass, which NASA's "
+            "CMR granule list gives; no detection is read for them, so a held-out frame has them too. "
+            if from_list else
+            "FIRMS does not publish a pass's geometry and no pass list is cached for these days. scan_angle_deg, "
+            "view_zenith_deg, azimuth_deg, subsat_lon and subsat_lat are derived from the rows' pixel sizes and "
+            "acquisition times (backend/model/real_geometry.py). "
+        ) + (
+            "cloud_fraction is not measured (FIRMS rows carry no cloud mask) and is written as 0; "
+            "granule_cloud_cover_pct is the mean over a whole MODIS granule, about 2,000 km long, and is null for VIIRS."
+        ),
+        "held_out_frames_note": (
+            "a frame whose epistemic_regime ends in held_out is a real pass of a hidden platform. It shows the estimate "
+            "at the time of that pass and nothing observed: no footprint, channel A empty. What the satellite saw is "
+            "in blind_test.reveal.overpasses, each with the frame it belongs to." if holdout and from_list else None
         ),
         "confidence_note": (
             "MODIS confidence is the source's 0 to 100 value. VIIRS confidence is a class; the numeric slot holds 15, "
             "55 or 90 for low, nominal, high and the class counts are in each frame's viirs_confidence_classes."
         ),
         "crossing_time_offsets": {f"{k[0]}_{'day' if k[1] else 'night'}": v for k, v in offsets.items()},
+        "crossing_time_offsets_note": (
+            "estimated from the visible rows; not used for the geometry of a frame that comes from the pass list"
+            if from_list else "estimated from the visible rows and used for each frame's geometry"
+        ),
         "frames": frames_json,
     }
 
     region_meta = region_terrain.to_region_metadata()
-    geo, csv_bytes = _exports(run_id, provenance, region_meta, {k: v for k, v in metrics.items() if k != "definitions"},
-                              grid375, f_all, s_all, region_terrain.dem_m, len(det), idx)
+    geo, csv_bytes = _exports(run_id, provenance, region_meta, model_side_metrics, grid375, f_all, s_all,
+                              region_terrain.dem_m, n_used, idx)
 
     extras: dict[str, Any] = {
         "source": "firms",
         "start": _iso(start_s),
-        "holdout_viirs": holdout == "viirs",
+        "holdout_viirs": holdout,
         "hidden_platforms": hidden_platforms,
         "hidden_platforms_note": (
-            "every VIIRS detection of these platforms was kept from the estimate and used only to score it"
-            if holdout == "viirs" else "nothing was hidden: VIIRS detections were assimilated"
+            "every VIIRS detection of these platforms was kept from the estimate and used only to score it; the list "
+            "comes from the archive's start dates, not from the hidden rows"
+            if holdout else "nothing was hidden: VIIRS detections were assimilated"
         ),
         "window": win.as_dict(),
-        "firms_rows_used": len(det),
+        "firms_rows_used": n_used,
+        "hidden_rows": {
+            "rule": (
+                "the hidden rows are parted from the visible ones before anything is chosen or built "
+                "(backend/eval/holdout.py) and opened by the scorer alone"
+            ),
+            "payload_keys_from_the_scorer": (["blind_test"] + [f"metrics.{k}" for k in METRICS_FROM_HIDDEN_ROWS]) if holdout else [],
+            "everything_else": "byte for byte the same whatever the hidden rows hold (pipeline_stages durations are wall clock times)",
+        },
         "model": {
             "version": REAL_MODEL_VERSION,
             "method": "forward and backward occupancy filter on the 375 m grid (backend/model/occupancy.py)",
@@ -480,20 +610,23 @@ def solve_real_reconstruction(
             "detection_law": "Sofiev and Kouznetsov, Geosci. Model Dev. 19, 10123, 2026, Tables 1 and 2 (re-implemented)",
         },
         "encoding": {
-            "z_hat_max_mw_km2": Z_MAX_MW_KM2,
-            "sigma_max_mw_km2": SIGMA_MAX_MW_KM2,
+            **ENC.describe(),
             "grid": "375 m cells shown on the 256 by 256 tensor grid by nearest cell",
-            "cells_above_scale": saturated,
             "cells_with_fire": lit,
-            "note": "channel values are clipped at the scale maximum; epoch_summaries carry the unclipped totals in MW",
+            "cells_above_scale": saturated,
+            "cells_below_floor": floored,
+            "note": (
+                "counts are 375 m cells over the 24 frames; a cell above the scale is written as the maximum and one "
+                "below the floor as the floor; epoch_summaries and each frame's mean and max carry the exact values"
+            ),
         },
         "footprints_per_frame_max": max(len(f["footprints"]) for f in frames_json),
     }
     belief_desc["url"] = f"/api/runs/{run_id}/belief_u8.bin"
-    belief_desc["assimilated"] = ("MODIS only; hidden: " + ", ".join(hidden_platforms)) if holdout == "viirs" else "MODIS and VIIRS"
+    belief_desc["assimilated"] = hidden_text if holdout else "MODIS and VIIRS"
     extras["belief_frames"] = belief_desc
     if report is not None:
-        extras["blind_test" if holdout == "viirs" else "fit_residuals"] = report
+        extras["blind_test" if holdout else "fit_residuals"] = report
 
     return SolvedRealRun(
         run_id=run_id,
@@ -513,12 +646,20 @@ def solve_real_reconstruction(
     )
 
 
-# A start date is worth showing when its 24 overpasses make one continuous episode with enough for the blind test
-# to score: the window is at most three days long, both instruments pass at least eight times, and MODIS flags at
-# least 100 pixels in the box. The thresholds are stated in the answer so a caller can show them.
-START_MAX_SPAN_H: float = 72.0
-START_MIN_PASSES_EACH: int = 8
+# Start dates are chosen from MODIS alone, the instrument that is visible in every kind of run, so the list is the
+# same with VIIRS hidden, altered or absent. A start is worth showing when the 24 MODIS overpasses with a detection
+# after it make one continuous episode: they fit in eight days (at least three MODIS overpasses a day flag the
+# fire, of the four a day Terra and Aqua make), the first comes within a day of the start, and they flag at least
+# 100 pixels in the box. The thresholds are stated in the answer so a caller can show them. A run itself plays the
+# first 24 passes of the pass list from the first of those overpasses, about two days; the rule that says which
+# days are worth showing counts MODIS overpasses with a detection all the same.
+START_MAX_SPAN_H: float = 192.0
 START_MIN_MODIS_PIXELS: int = 100
+# No rule asks a start for a number of overpasses of each instrument: counting VIIRS overpasses would let the
+# hidden rows choose the start. The value says the rule asks nothing, and a test holds it at zero.
+START_MIN_PASSES_EACH: int = 0
+# What each start carries that was counted from VIIRS rows: a label for the page, added after the choice is made.
+START_LABELS_FROM_HIDDEN_ROWS: tuple[str, ...] = ("viirs_pixels_in_box",)
 
 
 def real_start_dates(
@@ -529,8 +670,14 @@ def real_start_dates(
     context_box: tuple[float, float, float, float] | None = None,
     row_source: str = ROW_SOURCE,
 ) -> dict[str, Any]:
-    """For every UTC day from `first` to `last` inclusive: the 24 overpass window a real run would get if it
-    started that day, and whether it is worth showing. `spec` is the region (`RegionSpec`); nothing is solved."""
+    """For every UTC day from `first` to `last` inclusive: the 24 MODIS overpasses with a detection in the box
+    from that day on, and whether the day is worth showing. `spec` is the region (`RegionSpec`); nothing is
+    solved. A run started that day begins at the first of those overpasses.
+
+    Every choice here is made from MODIS rows. The VIIRS rows are sealed first and handed to the scorer once the
+    list is complete, for one thing: `viirs_pixels_in_box`, the number of VIIRS pixels between the first and the
+    last of those MODIS overpasses, which the page prints beside a start. No start is added, dropped or ranked
+    by it."""
     bbox = (spec.bbox.west, spec.bbox.south, spec.bbox.east, spec.bbox.north)
     if read_firms is None or context_box is None:
         from backend.firms import read_firms as _read, region_box as _box
@@ -539,8 +686,7 @@ def real_start_dates(
         context_box = context_box or _box(spec.id)
     t0, t1 = parse_start_s(first), parse_start_s(last)
     rows = read_firms(context_box, _iso(t0)[:-1], _iso(t1 + SEARCH_S)[:-1])
-    det = detections_from_rows(rows, row_source)
-    from backend.model.real_blind import in_box_overpasses
+    det, sealed = seal(detections_from_rows(rows, row_source), "VIIRS")
 
     items = in_box_overpasses(det, bbox)
     times = np.array([o.time_s for o, _ in items])
@@ -550,56 +696,115 @@ def real_start_dates(
         i0 = int(np.searchsorted(times, day, side="left"))
         entry: dict[str, Any] = {"start": _iso(day)[:10]}
         if i0 + FRAMES > len(items):
-            entry.update(worth_showing=False, why_not="fewer than 24 overpasses with a detection in the box after this day")
+            entry.update(worth_showing=False, why_not="fewer than 24 MODIS overpasses with a detection in the box after this day")
         else:
             chunk = items[i0 : i0 + FRAMES]
-            mod = [(o, k) for o, k in chunk if o.family == "MODIS"]
-            vii = [(o, k) for o, k in chunk if o.family == "VIIRS"]
             span = (chunk[-1][0].time_s - chunk[0][0].time_s) / 3600.0
             wait = (chunk[0][0].time_s - day) / 3600.0
+            pixels = int(sum(k for _, k in chunk))
             reasons = []
             if span > START_MAX_SPAN_H:
-                reasons.append(f"the 24 overpasses spread over {span:.0f} h")
+                reasons.append(f"the 24 MODIS overpasses spread over {span:.0f} h")
             if wait > 24.0:
-                reasons.append(f"the first overpass with a detection comes {wait:.0f} h after the start")
-            if len(mod) < START_MIN_PASSES_EACH or len(vii) < START_MIN_PASSES_EACH:
-                reasons.append(f"only {len(mod)} MODIS and {len(vii)} VIIRS overpasses")
-            if sum(k for _, k in mod) < START_MIN_MODIS_PIXELS:
-                reasons.append(f"MODIS flags only {sum(k for _, k in mod)} pixels in the box")
+                reasons.append(f"the first MODIS overpass with a detection comes {wait:.0f} h after the start")
+            if pixels < START_MIN_MODIS_PIXELS:
+                reasons.append(f"MODIS flags only {pixels} pixels in the box")
             entry.update(
                 first_overpass_utc=_iso(chunk[0][0].time_s),
                 last_overpass_utc=_iso(chunk[-1][0].time_s),
                 span_hours=round(span, 1),
-                modis_overpasses=len(mod),
-                viirs_overpasses=len(vii),
-                modis_pixels_in_box=int(sum(k for _, k in mod)),
-                viirs_pixels_in_box=int(sum(k for _, k in vii)),
+                modis_overpasses=len(chunk),
+                modis_pixels_in_box=pixels,
                 worth_showing=not reasons,
                 why_not="; ".join(reasons) if reasons else None,
             )
         starts.append(entry)
         day += 86400.0
     good = [e for e in starts if e["worth_showing"]]
+    busiest = [e["start"] for e in sorted(good, key=lambda e: -e["modis_pixels_in_box"])[:5]]
+    # the list is complete; only now does the scorer count the VIIRS pixels of each window, for the page's label
+    windowed = [e for e in starts if "first_overpass_utc" in e]
+    spans = [(parse_start_s(e["first_overpass_utc"]), parse_start_s(e["last_overpass_utc"])) for e in windowed]
+    for e, n in zip(windowed, hidden_pixels_in_spans(sealed, bbox, spans)):
+        e["viirs_pixels_in_box"] = n
     return {
         "region_id": spec.id,
         "source": "firms",
         "first": _iso(t0)[:10],
         "last": _iso(t1)[:10],
         "rule": (
-            f"a start date is worth showing when its 24 overpasses span at most {START_MAX_SPAN_H:.0f} h, begin within "
-            f"24 h of the start, include at least {START_MIN_PASSES_EACH} MODIS and {START_MIN_PASSES_EACH} VIIRS "
-            f"overpasses, and MODIS flags at least {START_MIN_MODIS_PIXELS} pixels in the region box"
+            f"a start date is worth showing when the 24 MODIS overpasses after it span at most {START_MAX_SPAN_H:.0f} h, "
+            f"begin within 24 h of the start, and flag at least {START_MIN_MODIS_PIXELS} pixels in the region box"
+        ),
+        "chosen_from": "MODIS rows only; no VIIRS row is read to choose, drop or rank a start",
+        "labels_from_hidden_rows": list(START_LABELS_FROM_HIDDEN_ROWS),
+        "describes": (
+            "the 24 MODIS overpasses with a detection in the box from the start day on, which the rule judges. A run "
+            "begins at the first of them (first_overpass_utc) and plays 24 passes of every platform from the pass "
+            "list, about two days, so span_hours and last_overpass_utc describe the rule's overpasses and not the "
+            "length of a run"
         ),
         "starts": starts,
         "worth_showing": [e["start"] for e in good],
-        "busiest": [e["start"] for e in sorted(good, key=lambda e: -e["modis_pixels_in_box"])[:5]],
+        "busiest": busiest,
+    }
+
+
+# The period searched for start dates in each hero region (the 2021 fire the preset was chosen for) and the start a
+# page should open on. Plumas opens on its busiest worth-showing day; Lytton and Evia on the day their fire began.
+# "Busiest" is read from MODIS rows alone, over 24 MODIS overpasses: 2021-07-20.
+START_PERIODS: dict[str, tuple[str, str]] = {
+    "plumas_ca": ("2021-07-01", "2021-08-31"),
+    "lytton_bc": ("2021-06-25", "2021-08-31"),
+    "evia_greece": ("2021-08-01", "2021-08-31"),
+}
+DEFAULT_STARTS: dict[str, str] = {"plumas_ca": "2021-07-20", "lytton_bc": "2021-06-30", "evia_greece": "2021-08-03"}
+
+
+def real_run_starts(
+    spec: Any,
+    read_firms: Callable[..., list[dict[str, str]]] | None = None,
+    context_box: tuple[float, float, float, float] | None = None,
+) -> dict[str, Any]:
+    """What the calendar's `real_run_starts` and `GET /api/runs/starts` should carry for a region.
+
+    `starts` holds only the days worth showing, each `{start, label, ...}` with `start` a UTC date the reconstruct
+    route accepts as `start`. `default_start` is the one to open on. A region with no period defined answers with
+    an empty list and says why.
+    """
+    if spec.id not in START_PERIODS:
+        return {"region_id": spec.id, "source": "firms", "default_start": None, "starts": [],
+                "note": "no real FIRMS rows are cached for this region"}
+    first, last = START_PERIODS[spec.id]
+    full = real_start_dates(spec, first, last, read_firms=read_firms, context_box=context_box)
+    starts = [
+        {"start": e["start"], "label": e["start"], "first_overpass_utc": e["first_overpass_utc"],
+         "last_overpass_utc": e["last_overpass_utc"], "span_hours": e["span_hours"],
+         "modis_overpasses": e["modis_overpasses"], "modis_pixels_in_box": e["modis_pixels_in_box"],
+         "viirs_pixels_in_box": e["viirs_pixels_in_box"]}
+        for e in full["starts"] if e["worth_showing"]
+    ]
+    default = DEFAULT_STARTS.get(spec.id)
+    if default not in {s["start"] for s in starts}:
+        default = full["busiest"][0] if full["busiest"] else None
+    return {
+        "region_id": spec.id,
+        "source": "firms",
+        "period": [first, last],
+        "rule": full["rule"],
+        "chosen_from": full["chosen_from"],
+        "labels_from_hidden_rows": full["labels_from_hidden_rows"],
+        "describes": full["describes"],
+        "default_start": default,
+        "busiest": full["busiest"],
+        "starts": starts,
     }
 
 
 def real_response(solved: SolvedRealRun, assets: dict[str, Any]) -> dict[str, Any]:
-    """The `/api/reconstruct` response for a real run: today's keys, then the additive ones.
+    """The `/api/reconstruct` response for a real run: a simulated run's keys, then the additive ones.
 
-    `assets` is built by the server exactly as for a simulated run (terrain-assets lane owns it).
+    `assets` is built by the server exactly as for a simulated run.
     """
     out = {
         "run_id": solved.run_id,

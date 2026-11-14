@@ -1,8 +1,9 @@
 """Values fitted on real rows, loaded from tracked JSON files that say what they were fitted on.
 
   fitted_values/overlap_ratio.json      the single VIIRS over MODIS FRP ratio of the overlap-ratio baseline
-  fitted_values/occupancy_params.json   reconstruction parameters fitted on training fires (unit M2), with the
-                                        validation evidence that decides whether they are switched on
+  fitted_values/occupancy_params.json   reconstruction parameters fitted on training fires from the priors, under
+                                        protocol version 3, with the validation evidence that decides whether
+                                        they are switched on, and every earlier decision
 
 Each file is written by `backend/model/fit_real.py` from rows read through `backend.firms`. A learned value is used
 only when its file says `"adopted": true`; otherwise the priors in `OccupancyParams` stand and the payload labels
@@ -63,14 +64,28 @@ def learned_parts() -> list[dict[str, Any]]:
             "detail": "every value is a prior (backend/model/occupancy.py); nothing has been fitted on real rows yet",
         })
     else:
+        used = bool(doc.get("adopted", False))
         parts.append({
             "name": "reconstruction parameters",
-            "status": "on" if doc.get("adopted", False) else "experimental",
+            "status": "fitted values in use" if used else "fitted values not in use (priors stand)",
             "detail": doc.get("decision", ""),
+            "rule": doc.get("rule"),
             "trained_on": doc.get("trained_on"),
             "validated_on": doc.get("validated_on"),
-            "evidence": doc.get("evidence"),
         })
+        # one entry per part of the estimate, each with its own status and the validation scores behind it
+        for name, part in (doc.get("parts") or {}).items():
+            parts.append({
+                "name": name,
+                "status": part["status"] if used else "experimental",
+                "validation_scores": {
+                    k: {"reconstruction": row["reconstruction"], "painted_modis": row["painted_modis"],
+                        "overlap_ratio": row["overlap_ratio"], "better_is": row["better_is"], "class": row.get("class"),
+                        "improvement_interval": row.get("improvement_interval")}
+                    for k, row in part["scores"].items()
+                },
+                **({"interval_holds_on_validation": part["interval_holds"]} if "interval_holds" in part else {}),
+            })
     ratio = _read(RATIO_FILE)
     if ratio is not None:
         parts.append({

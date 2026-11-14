@@ -8,9 +8,13 @@ outside every exclusion below, each of which is wider than the fire it protects:
   lytton_bc     the test box grown by 0.2 degrees, from 2021-06-15 to 2021-09-30 (Lytton Creek fire)
   evia_greece   the test box grown by 0.2 degrees, from 2021-07-25 to 2021-08-31 (northern Evia fire)
 
-Training rows are therefore other years in the same three context boxes, and 2021 rows away from the test fires
-(for example the Beckwourth Complex east of the Plumas box in early July 2021, the Sparks Lake fire north of Lytton,
-and the Attica fires south of Evia).
+and, for all three, the test box grown by 0.2 degrees for the whole of the year of its fire: nothing that happened
+in a test box in 2021 is learned from, before or after the fire's own dates.
+
+Training rows are therefore other years in the same three context boxes, and 2021 rows away from the test boxes and
+the test fires (for example the Sparks Lake fire north of Lytton and the Attica fires south of Evia; in the Plumas
+context box nothing after 30 June 2021 is used). Later years than 2021 are used as freely as earlier ones: the
+test is of fires the model has not seen, not of a forecast in time.
 """
 
 from __future__ import annotations
@@ -41,14 +45,24 @@ def _day_s(d: str) -> float:
     return float(calendar.timegm((y, m, dd, 0, 0, 0, 0, 0, 0)))
 
 
+TEST_BOX_MARGIN_DEG: float = 0.2
+
+
 def excluded_mask(det: Detections, region_id: str, test_box: tuple[float, float, float, float]) -> np.ndarray:
-    """True for rows of `region_id`'s context box that fall inside that region's exclusion."""
+    """True for rows of `region_id`'s context box that may not be learned from: the region's exclusion, and its
+    test box (grown by the margin) for the whole of every year the exclusion touches."""
     first, after, margin = EXCLUSIONS[region_id]
     in_time = (det.time_s >= _day_s(first)) & (det.time_s < _day_s(after))
-    if margin is None:
-        return in_time
     w, s, e, n = test_box
-    return in_time & det.in_box((w - margin, s - margin, e + margin, n + margin))
+    m = TEST_BOX_MARGIN_DEG
+    near_test_box = det.in_box((w - m, s - m, e + m, n + m))
+    y0 = int(first[:4])
+    y1 = int(str(np.datetime64(int(_day_s(after) - 1.0), "s"))[:4])
+    in_year = (det.time_s >= _day_s(f"{y0}-01-01")) & (det.time_s < _day_s(f"{y1 + 1}-01-01"))
+    whole_year = near_test_box & in_year
+    if margin is None:
+        return in_time | whole_year
+    return (in_time & det.in_box((w - margin, s - margin, e + margin, n + margin))) | whole_year
 
 
 def region_training_detections(

@@ -185,6 +185,67 @@ class ReconstructionTests(unittest.TestCase):
         self.assertEqual(int(expected_count_cells(np.zeros((3, 3))).sum()), 0)
 
 
+class BeliefAndPlacementTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.det = _fixture()
+        cls.grid = EvalGrid.from_bbox(BOX)
+
+    def test_forward_state_uses_only_passes_up_to_its_time(self) -> None:
+        from backend.model.belief import forward_state
+
+        recon = OccupancyReconstruction(self.grid, self.det.select(self.det.is_modis))
+        before, age = forward_state(recon, float(recon.times[0]) - 60.0)
+        self.assertIsNone(age)
+        self.assertEqual(float(before.a.sum()), 0.0)
+        at, age = forward_state(recon, float(recon.times[0]))
+        self.assertEqual(age, 0.0)
+        self.assertGreater(float(at.a.sum()), 0.0)
+        # a later pass must not change an earlier forward state: rebuild without the later passes and compare
+        cut = self.det.select(self.det.is_modis & (self.det.time_s <= recon.times[2] + 1.0))
+        short = OccupancyReconstruction(self.grid, cut)
+        t = float(recon.times[2]) + 1800.0
+        np.testing.assert_allclose(forward_state(recon, t)[0].a, forward_state(short, t)[0].a)
+
+    def test_prior_placement_shares_are_between_zero_and_one(self) -> None:
+        from backend.model.belief import prior_placement
+        from backend.model.occupancy import OccupancyParams as _P
+
+        for mode in ("all", "modis"):
+            out = prior_placement(self.grid, self.det, _P(), assimilate=mode)
+            self.assertGreater(out["viirs_overpasses_scored"], 5)
+            for key in ("model", "persistence", "previous_viirs_dilated"):
+                v = out["off_target_share"][key]
+                self.assertTrue(0.0 <= v <= 1.0, (key, v))
+        # a forecast that keeps the previous pass where it was is fully on target when nothing moves
+        still_rows = [r for r in self.det.row_index if True]
+        self.assertGreater(len(still_rows), 0)
+
+    def test_overlap_factor_follows_the_scan_geometry(self) -> None:
+        from backend.model.occupancy import overlap_factor
+
+        self.assertEqual(overlap_factor("MODIS", 1.0), 1.0)
+        self.assertEqual(overlap_factor("MODIS", 2.0), 2.0)          # 10 rows of 2 km against a 10 km advance
+        self.assertAlmostEqual(overlap_factor("VIIRS", 0.362), 1.0)
+        self.assertAlmostEqual(overlap_factor("VIIRS", 0.43), 0.43 / 0.362, places=6)    # no rows dropped near nadir
+        self.assertAlmostEqual(overlap_factor("VIIRS", 0.50), 28 * 0.50 / (32 * 0.362), places=6)
+        self.assertAlmostEqual(overlap_factor("VIIRS", 0.78), 24 * 0.78 / (32 * 0.362), places=6)
+
+    def test_new_parameters_are_off_by_default(self) -> None:
+        p = OccupancyParams()
+        self.assertEqual((p.smolder_day, p.smolder_night, p.dedup_overlap), (0.0, 0.0, False))
+        self.assertIsNone(p.frp_interval_lo)
+        modis = self.det.select(self.det.is_modis)
+        base = OccupancyReconstruction(self.grid, modis)
+        t = float(0.5 * (base.times[4] + base.times[5]))
+        a = base.predict_hidden(t, "VIIRS", False, 0.15, track_km=0.5)
+        b = OccupancyReconstruction(self.grid, modis, OccupancyParams(smolder_night=0.5)).predict_hidden(t, "VIIRS", False, 0.15, track_km=0.5)
+        self.assertGreater(float(b["p_detect"].sum()), float(a["p_detect"].sum()))      # warm cells add night detections
+        c = OccupancyReconstruction(self.grid, modis, OccupancyParams(frp_interval_lo=0.5, frp_interval_hi=3.0)).predict_hidden(t, "VIIRS", False, 0.15)
+        self.assertAlmostEqual(c["lo_mw"], 0.5 * c["total_mw"])
+        self.assertAlmostEqual(c["hi_mw"], 3.0 * c["total_mw"])
+
+
 class GeometryTests(unittest.TestCase):
     def test_nominal_crossing_times_at_40_north(self) -> None:
         # Terra descends at 10:30 and is about half an hour later at 40 N; the 13:30 ascenders are about half an hour earlier

@@ -62,7 +62,7 @@ def _write_verified_json(path: Path, payload: dict[str, Any], compact: bool = Fa
         encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
     else:
         encoded = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
-    if "\u2014" in encoded:
+    if chr(0x2014) in encoded:
         raise ValueError(f"Forbidden em dash (U+2014) detected in {path.name}")
     raw = encoded.encode("utf-8")
     path.write_bytes(raw)
@@ -121,8 +121,8 @@ def run_reconstruction(
                 else "Deterministic analytical Feather River / Plumas fallback topography (re-run reconstruct.py once ca_dem_f32.bin is present)"
             ),
             "fire_activity_and_hotspots": (
-                "Modeled physics-informed spatiotemporal fire-activity reconstruction and clean-room "
-                "MODIS/VIIRS forward-operator simulation. Zero NASA FIRMS rows downloaded."
+                "Modeled physics-informed spatiotemporal fire-activity reconstruction and "
+                "MODIS/VIIRS forward-operator simulation. No NASA FIRMS row is used in these static fields."
             ),
             "downloaded_firms_rows": 0,
         },

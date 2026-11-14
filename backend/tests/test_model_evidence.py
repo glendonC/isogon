@@ -1,7 +1,7 @@
 """The evidence sheet's dict (backend/model/evidence.py): its shape, and that no figure in it is typed by hand.
 
 Every assertion compares the dict with the tracked files it is read from, or recomputes a figure from them. The
-shape is the page lane's demo file for surface S2 (`website/src/content/demo/evidence.ts`, `EvidenceDoc`).
+shape is the type the page reads it as (`website/src/content/demo/evidence.ts`, `EvidenceDoc`).
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class EvidenceShapeTests(unittest.TestCase):
         self.assertEqual([f["region_id"] for f in tf["fires"]], ["plumas_ca", "lytton_bc", "evia_greece"])
         for fire in tf["fires"]:
             self.assertTrue(fire["name"])
-            self.assertEqual((fire["old"]["protocol_version"], fire["new"]["protocol_version"]), (1, 2))
+            self.assertEqual((fire["old"]["protocol_version"], fire["new"]["protocol_version"]), (1, 3))
             for side in ("old", "new"):
                 t = fire[side]
                 self.assertTrue(FIRE_TEST_KEYS <= set(t))
@@ -80,13 +80,20 @@ class EvidenceShapeTests(unittest.TestCase):
 
     def test_every_look_is_there_and_the_other_scorings_are_listed(self) -> None:
         tf = self.doc["test_fires"]
-        self.assertEqual([(e["look"], e["unit"], e["protocol_version"]) for e in tf["looks"]], [(1, "M2", 1), (2, "M8", 2)])
+        self.assertEqual([(e["look"], e["unit"], e["protocol_version"]) for e in tf["looks"]], [(1, "first fit", 1), (2, "sealed protocol", 2), (3, "final look", 3)])
+        self.assertIn("final look", tf["note"])
+        self.assertIn("not scored again", tf["note"])
         for fire in tf["fires"]:
-            self.assertEqual([e["look"] for e in fire["looks"]], [1, 2])
+            self.assertEqual([e["look"] for e in fire["looks"]], [1, 2, 3])
+            # the final look scores every pass: it says how many flagged nothing and what was left out
+            for key in ("looks_that_flagged_nothing_in_the_box", "passes_that_held_part_of_the_box_not_scored", "hidden_rows_of_those_passes"):
+                self.assertIn(key, fire["new"])
+                self.assertNotIn(key, fire["old"])
             self.assertEqual(fire["looks"][0]["ahead_of_both_on"], fire["old"]["ahead_of_both_on"])
             self.assertEqual(fire["looks"][-1]["scores"], fire["new"]["scores"])
         units = [(o["unit"], o["protocol_version"]) for o in tf["also_scored"]]
-        for unit in (("M1a", 1), ("M1b", 1), ("M4", 1), ("M6", 1), ("M8", 2), ("M8b", 2)):
+        for unit in (("first reconstruction", 1), ("one platform hidden", 1), ("Terra morning estimate", 1),
+                     ("other windows", 1), ("sealed protocol", 2), ("sealed protocol with scheduled frames", 2)):
             self.assertIn(unit, units)
         for o in tf["also_scored"]:
             for f in o["fires"].values():
@@ -100,8 +107,10 @@ class EvidenceShapeTests(unittest.TestCase):
         for fire in self.doc["test_fires"]["fires"]:
             r = fire["region_id"]
             self.assertEqual(fire["old"], by_look[1]["fires"][r])
-            self.assertEqual(fire["new"], by_look[2]["fires"][r])
-            for t in (fire["old"], fire["new"]):
+            self.assertEqual(fire["new"], by_look[max(by_look)]["fires"][r])       # the final look
+            self.assertEqual([{k: v for k, v in e.items() if k not in ("look", "unit")} for e in fire["looks"]],
+                             [by_look[k]["fires"][r] for k in sorted(by_look)])
+            for t in [by_look[k]["fires"][r] for k in sorted(by_look)]:
                 # recount, from the scores alone, how many the reconstruction is ahead of both baselines on
                 ahead = 0
                 for sid in SCORE_IDS:
@@ -139,6 +148,64 @@ class EvidenceShapeTests(unittest.TestCase):
         if p.get("previous_decision"):
             self.assertEqual(v["before"]["parts"], p["previous_decision"]["parts"])
 
+    def test_the_sheet_says_which_fitted_values_its_test_fire_figures_were_made_with(self) -> None:
+        tf, p = self.doc["test_fires"], self.params
+        latest = max(self.record["looks"], key=lambda e: e["look"])
+        now = tf["values_in_use"]
+        fitted_under = p["protocol"]["parameters_fitted_under"]
+        self.assertEqual(now["fitted_under_protocol"], fitted_under)
+        self.assertEqual(now["scored_on_the_test_fires"], fitted_under <= latest["protocol_version"])
+        self.assertEqual(now["figures_shown"], {"look": latest["look"], "unit": latest["unit"], "protocol_version": latest["protocol_version"]})
+        if now["scored_on_the_test_fires"]:
+            self.assertIn("made with the fitted values now in use", now["note"])
+        else:
+            # values fitted after the latest look: the sheet must not pass that look's figures off as theirs
+            self.assertIn("have not been scored on the three test fires", now["note"])
+            self.assertIn(f"look {latest['look']}", now["note"])
+            self.assertIn(now["note"], self.doc["limits"][0])
+        if latest["look"] == 2:
+            self.assertEqual(tf["note"], "a protocol correction, not a fresh test")
+
+    def test_validation_keeps_every_earlier_decision_and_says_how_empty_looks_are_treated(self) -> None:
+        v, p = self.doc["validation"], self.params
+        earlier = ([p["previous_decision"]] if p.get("previous_decision") else []) + list(p.get("earlier_decisions") or [])
+        self.assertEqual([h["what"] for h in v["history"]], [d["protocol"] for d in earlier])
+        self.assertEqual(v["before"], v["history"][0] if earlier else None)
+        self.assertEqual(v["trained_on"], p["trained_on"])
+        if p.get("intervals"):
+            prm = p["parameters"]
+            self.assertEqual(v["intervals"]["frp_multiples_of_the_prediction"], [prm["frp_interval_lo"], prm["frp_interval_hi"]])
+            self.assertEqual(v["intervals"]["pixel_multiples_of_the_prediction"], [prm["pixel_interval_lo"], prm["pixel_interval_hi"]])
+            self.assertEqual(v["intervals"]["rule"], p["intervals"]["rule"])
+        else:
+            self.assertIsNone(v["intervals"])
+        if p.get("empty_looks"):
+            e = p["empty_looks"]["validation"]
+            self.assertEqual(v["empty_looks"]["validation"], e)
+            self.assertEqual(e["scored_looks"], v["scored_overpasses"])
+            self.assertIn(f"{e['no_hidden_pixel_in_the_box']} of {e['scored_looks']} validation looks", " ".join(self.doc["limits"]))
+        else:
+            self.assertIsNone(v["empty_looks"])
+        made = self.doc["next_look"]["made_with"]
+        self.assertEqual(made["reconstruction_values"], self.env["test_protocol_2"].get("reconstruction_values") or self.env["reconstruction_parameters"])
+        self.assertEqual(made["policy_trained_with"], self.env["reconstruction_parameters"])
+        # the table the sheet shows was measured with the values the tree uses, so the served round and the table agree
+        self.assertEqual(made["reconstruction_values"], p["parameters"]["fitted_on"])
+        earlier = self.env.get("test_protocol_2_m2_values")
+        if earlier:
+            shown = self.doc["next_look"]["with_the_earlier_values"]
+            self.assertEqual(shown["agents"]["oracle"]["mean_gain"], earlier["agents"]["oracle"]["mean_gain"])
+            self.assertEqual(shown["reconstruction_values"], self.env["reconstruction_parameters"])
+            self.assertNotEqual(shown["reconstruction_values"], made["reconstruction_values"])
+        # the table before the environment's bug fix is shown beside the one after it, both from the tracked file
+        was = self.env.get("test_protocol_2_before_m8c")
+        if was:
+            shown = self.doc["next_look"]["before_the_bug_fix"]
+            self.assertEqual(shown["agents"]["least_sure"]["mean_gain"], was["agents"]["least_sure"]["mean_gain"])
+            self.assertEqual(shown["agents"]["learned"]["mean_gain"], was["agents"]["linear"]["mean_gain"])
+            self.assertEqual(shown["what"], self.env["test_protocol_2"]["bug_fix"])
+            self.assertEqual(self.env["test_protocol_2"]["episodes"], was["episodes"])
+
     def test_the_environment_table_is_read_from_the_tracked_file(self) -> None:
         n, env = self.doc["next_look"], self.env
         self.assertEqual(n["test_episodes"], {"new": env["test_protocol_2"]["episodes"], "old": env["test"]["episodes"]})
@@ -157,19 +224,24 @@ class EvidenceShapeTests(unittest.TestCase):
 
     def test_audit_lines_and_limits_take_their_figures_from_the_record(self) -> None:
         d = self.doc
-        self.assertEqual([f["id"] for f in d["audit_findings"]], ["H-1", "H-2", "H-3", "H-4", "H-5"])
+        self.assertEqual([f["id"] for f in d["audit_findings"]], ["1", "2", "3", "4", "5"])
         for f in d["audit_findings"]:
             self.assertTrue(f["found"] and f["answer"])
             test_file = f["guarded_by"].split("::")[0]
             self.assertTrue((_REPO_ROOT / test_file).is_file(), test_file)
             self.assertIn(f["found"], d["audit"])
-        h5 = self.record["rows_of_the_test_year_in_test_boxes_outside_exclusion_dates"]["by_region"]
-        self.assertTrue(d["audit_findings"][4]["found"].startswith(f"{sum(h5.values())} rows of 2021"))
-        for n in h5.values():
+        outside = self.record["rows_of_the_test_year_in_test_boxes_outside_exclusion_dates"]["by_region"]
+        self.assertTrue(d["audit_findings"][4]["found"].startswith(f"{sum(outside.values())} rows of 2021"))
+        for n in outside.values():
             self.assertIn(f"{n} in ", d["audit_findings"][4]["found"])
         cost = self.record["schedule_cost_on_training_episodes"]["by_schedule"]
         d_csi = cost["hidden_pass_times"]["scores"]["reconstruction"]["csi_strict_375m"] - cost["nominal"]["scores"]["reconstruction"]["csi_strict_375m"]
-        self.assertIn(f"about {d_csi:.3f} of strict CSI", d["limits"][0])
+        latest = max(self.record["looks"], key=lambda e: e["look"])
+        if latest["protocol_version"] <= 2:
+            self.assertIn(f"about {d_csi:.3f} of strict CSI", d["limits"][0])      # figures made on the nominal schedule
+        else:
+            self.assertNotIn("nominal schedule", d["limits"][0])                   # the final look ran on the pass list
+            self.assertTrue(d["test_fires"]["values_in_use"]["scored_on_the_test_fires"])
         self.assertIn(f"{d['validation']['episodes']} episodes", " ".join(d["limits"]))
         weakest = min(d["test_fires"]["fires"], key=lambda f: f["new"]["ahead_of_both_on"])
         self.assertIn(weakest["name"], " ".join(d["limits"]))

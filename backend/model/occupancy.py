@@ -20,7 +20,8 @@ prior, never a measurement. No cloud mask exists in FIRMS rows.
 The same filter is run backward in time (burned then means "burns later") and the two are combined at any time by
 the age of their newest information. Hidden overpasses are query times only.
 
-Every number in `OccupancyParams` is a prior unless `fitted_on` says otherwise (unit M2 fits them on real overlap).
+Every number in `OccupancyParams` is a prior unless `fitted_on` says otherwise (`fit_real.py` fits them on real
+overlap).
 """
 
 from __future__ import annotations
@@ -54,11 +55,29 @@ class OccupancyParams:
     burned_discount: float = 0.9       # a cell that already burned keeps (1 - this) of its weight
     clear_sky: float = 0.8             # prior share of looks that are clear; FIRMS rows carry no cloud mask
     age_tau_h: float = 3.0             # forward and backward estimates are weighted by exp(-age / this)
-    diurnal_amplitude: float = 0.38    # the engine's diurnal curve (hand set for the simulator, carried over)
+    diurnal_amplitude: float = 0.38    # the simulated engine's diurnal curve, hand set, used as a prior
     process_log_sd_per_sqrt_h: float = 0.15   # growth of the FRP total's log uncertainty with information age
-    frp_scale: float = 1.0             # multiplies predicted hidden-instrument FRP (1.0 means no cross calibration)
+    frp_scale: float = 1.0             # multiplies predicted hidden-instrument FRP by day (1.0: no cross calibration)
+    frp_scale_night: float = 1.0       # the same at night
     count_scale_day: float = 1.0       # multiplies the expected number of burning cells in a flagged pixel, day
     count_scale_night: float = 1.0     # the same at night
+    # Smouldering: a cell that stopped burning stays warm for a while. The finer instrument flags many such cells
+    # at night that the coarse one misses. With both shares at zero (the prior) the term is off.
+    tau_smolder_h: float = 24.0        # e-folding time a burned-out cell stays warm
+    smolder_day: float = 0.0           # share of warm cells the hidden instrument flags by day
+    smolder_night: float = 0.0         # the same at night
+    smolder_frp_mw: float = 1.0        # FRP of a flagged warm cell, MW
+    # Pixels counted twice: at the swath edge successive scans overlap, so one fire is reported in two pixels.
+    # False (the prior) takes every pixel's FRP as it is; True divides by the overlap the scan geometry implies.
+    dedup_overlap: bool = False
+    # Interval for the hidden total and pixel count as factors on the prediction; None uses the lognormal spread
+    # above. Fitted values are split conformal quantiles of hidden over predicted on training overpasses.
+    frp_interval_lo: float | None = None
+    frp_interval_hi: float | None = None
+    pixel_interval_lo: float | None = None
+    pixel_interval_hi: float | None = None
+    # Multiplies the probability that a coarse hidden pixel is flagged (used when the hidden instrument is MODIS).
+    hidden_pixel_scale: float = 1.0
     fitted_on: str = "nothing: every value is a prior"
 
     def as_dict(self) -> dict[str, Any]:
@@ -69,6 +88,37 @@ def diurnal_factor(lst_hr: float, amplitude: float = 0.38) -> float:
     """The engine's diurnal multiplier (`world_model._diurnal_multiplier`): peak near 14:45 local solar time."""
     phase = 2.0 * math.pi * (lst_hr - 14.75) / 24.0
     return 0.84 + amplitude * math.cos(phase) + 0.06 * math.cos(2.0 * phase)
+
+
+# VIIRS: 32 detector rows per scan, of which 4 are not sent in the middle aggregation zone and 8 in the outer one
+# (Sofiev and Kouznetsov 2026, section 3.2). MODIS: 10 rows per scan, all sent.
+_VIIRS_ROWS: tuple[int, int, int] = (32, 28, 24)
+_VIIRS_TRACK_NADIR_KM: float = 0.362
+_VIIRS_ZONE_TRACK_KM: tuple[float, float] = (0.4367, 0.5486)   # track size at the two zone boundaries (31.72, 44.86 deg)
+
+
+def overlap_factor(fam: str, track_km: float) -> float:
+    """How many times one ground point is reported by successive scans at this pixel size (1 means once).
+
+    A scan advances the ground track by its number of rows times the nadir row size. Off nadir each row is longer
+    along track, so the rows of one scan cover more ground than the advance and successive scans overlap. The
+    factor is rows sent times row size over the advance, never below one.
+    """
+    if fam == "MODIS":
+        return max(1.0, float(track_km))            # 10 rows of track_km against a 10 km advance
+    zone = 0 if track_km < _VIIRS_ZONE_TRACK_KM[0] else (1 if track_km < _VIIRS_ZONE_TRACK_KM[1] else 2)
+    return max(1.0, _VIIRS_ROWS[zone] * float(track_km) / (32.0 * _VIIRS_TRACK_NADIR_KM))
+
+
+def _box_sum(field2d: NDArray[np.float64], n_rows: int, n_cols: int) -> NDArray[np.float64]:
+    """Sum over a window of n_rows by n_cols cells centred on each cell (zero outside the grid)."""
+    def run(v: NDArray[np.float64], n: int) -> NDArray[np.float64]:
+        if n <= 1:
+            return v
+        return np.convolve(np.pad(v, ((n - 1) // 2, n // 2)), np.ones(n), mode="valid")
+
+    out = np.apply_along_axis(run, 1, field2d, n_cols)
+    return np.apply_along_axis(run, 0, out, n_rows)
 
 
 def _blur(field2d: NDArray[np.float64], sigma_cells: float) -> NDArray[np.float64]:
@@ -92,10 +142,15 @@ class GridState:
     a: NDArray[np.float64]
     F: NDArray[np.float64]
     b: NDArray[np.float64]
+    r: NDArray[np.float64] | None = None     # probability the cell burned out recently and is still warm
 
     @classmethod
     def empty(cls, shape: tuple[int, int]) -> GridState:
-        return cls(np.zeros(shape), np.zeros(shape), np.zeros(shape))
+        return cls(np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape))
+
+    @property
+    def warm(self) -> NDArray[np.float64]:
+        return np.zeros_like(self.a) if self.r is None else self.r
 
 
 @dataclass(frozen=True)
@@ -111,6 +166,10 @@ class PassPixels:
     frp_mw: tuple[float, ...]                          # per pixel inside the grid
     min_side_km: tuple[float, ...]                     # min(scan, track) per pixel
     n_context: int                                     # flagged pixels of the pass anywhere in the rows given
+    track_km: tuple[float, ...] = ()                   # track size per pixel (for the scan overlap factor)
+    # Cells the pass is known to have looked at. None means the whole grid. A cell outside it is not censored by
+    # this pass: nothing is known about it (used when only part of a pass has been revealed).
+    looked: NDArray[np.bool_] | None = None
 
     @property
     def n_in_grid(self) -> int:
@@ -128,6 +187,7 @@ def build_pass_pixels(grid: EvalGrid, det: Detections, passes: list[Overpass]) -
         cells: list[tuple[NDArray[np.int64], NDArray[np.int64]]] = []
         frp: list[float] = []
         side: list[float] = []
+        track: list[float] = []
         for i in op.index:
             axis = scan_axis_deg(PLATFORMS[int(det.platform_code[i])], bool(det.is_day[i]), float(det.lat[i]))
             rows, cols = footprint_cells(
@@ -138,11 +198,12 @@ def build_pass_pixels(grid: EvalGrid, det: Detections, passes: list[Overpass]) -
             cells.append((rows, cols))
             frp.append(float(det.frp_mw[i]))
             side.append(float(min(det.scan_km[i], det.track_km[i])))
+            track.append(float(det.track_km[i]))
         out.append(
             PassPixels(
                 time_s=op.time_s, platform=op.platform, is_day=op.is_day, lst_hr=op.lst_hr,
                 pixel_area_km2=float(op.scan_km * op.track_km), cells=tuple(cells), frp_mw=tuple(frp),
-                min_side_km=tuple(side), n_context=op.n,
+                min_side_km=tuple(side), n_context=op.n, track_km=tuple(track),
             )
         )
     return out
@@ -171,7 +232,8 @@ def predict(state: GridState, dt_h: float, cell_km: float, p: OccupancyParams, d
     a_new = np.where(faint, 0.0, a_new)
     F_new = np.where(faint, 0.0, F_new)
     b_new = np.clip(b + s * a, 0.0, 1.0)
-    return GridState(a_new, F_new, b_new)
+    r_new = np.clip(state.warm * math.exp(-dt_h / p.tau_smolder_h) + s * a, 0.0, 1.0)
+    return GridState(a_new, F_new, b_new, r_new)
 
 
 def update(state: GridState, obs: PassPixels, p: OccupancyParams) -> GridState:
@@ -182,7 +244,10 @@ def update(state: GridState, obs: PassPixels, p: OccupancyParams) -> GridState:
     not_a = np.ones(a.shape)            # running product of (1 - a from pixel j), a noisy OR over pixels
     F_obs = np.zeros(a.shape)
     count_scale = p.count_scale_day if obs.is_day else p.count_scale_night
-    for (rows, cols), y, side in zip(obs.cells, obs.frp_mw, obs.min_side_km):
+    tracks = obs.track_km if obs.track_km else tuple(1.0 for _ in obs.frp_mw)
+    for (rows, cols), y, side, trk in zip(obs.cells, obs.frp_mw, obs.min_side_km, tracks):
+        if p.dedup_overlap:
+            y = y / overlap_factor(fam, trk)
         n_cells = rows.size
         fill = min(1.0, p.line_width_km / max(side, 1e-6))
         n_burn = float(np.clip(fill * n_cells * count_scale, 1.0, n_cells))
@@ -198,9 +263,12 @@ def update(state: GridState, obs: PassPixels, p: OccupancyParams) -> GridState:
     q = p.clear_sky * detection_probability(per_cell, obs.pixel_area_km2, fam, is_day=obs.is_day)
     a_miss = a * (1.0 - q) / np.maximum(1.0 - a * q, 1e-9)
     F_miss = np.where(a > 1e-9, F * a_miss / np.maximum(a, 1e-9), 0.0)
+    if obs.looked is not None:
+        a_miss = np.where(obs.looked, a_miss, a)
+        F_miss = np.where(obs.looked, F_miss, F)
     a_new = np.where(covered, 1.0 - not_a, a_miss)
     F_new = np.where(covered, F_obs, F_miss)
-    return GridState(np.clip(a_new, 0.0, 1.0), np.maximum(F_new, 0.0), b)
+    return GridState(np.clip(a_new, 0.0, 1.0), np.maximum(F_new, 0.0), b, state.r)
 
 
 @dataclass(frozen=True)
@@ -211,17 +279,25 @@ class Estimate:
     F: NDArray[np.float64]              # expected FRP per cell, MW
     age_h: float                        # hours to the nearest assimilated overpass (inf when there is none)
     rel_sd_log: float                   # stated log standard deviation of the FRP total
+    r: NDArray[np.float64] | None = None    # probability of a warm, recently burned-out cell
 
 
 class OccupancyReconstruction:
     """Forward and backward filter over the assimilated overpasses of `det`, queried at any time."""
 
-    def __init__(self, grid: EvalGrid, det: Detections, params: OccupancyParams | None = None) -> None:
+    def __init__(
+        self, grid: EvalGrid, det: Detections | None, params: OccupancyParams | None = None,
+        passes: list[PassPixels] | None = None,
+    ) -> None:
+        """From detections (grouped into overpasses here) or from passes prepared by the caller, in any order."""
         self.grid = grid
         self.params = params or OccupancyParams()
         self.lon_mid = 0.5 * (grid.west + grid.east)
-        passes = group_overpasses(det)
-        self.passes: list[PassPixels] = build_pass_pixels(grid, det, passes)
+        if passes is None:
+            if det is None:
+                raise ValueError("give detections or prepared passes")
+            passes = build_pass_pixels(grid, det, group_overpasses(det))
+        self.passes: list[PassPixels] = sorted(passes, key=lambda q: q.time_s)
         self.times = np.array([q.time_s for q in self.passes], dtype=np.float64)
         self._fwd: list[GridState] = []
         self._bwd: list[GridState] = []
@@ -279,6 +355,9 @@ class OccupancyReconstruction:
             w_each = [w / wsum for w, _, _, _ in parts]
         a = sum(w * st.a for w, (_, st, _, _) in zip(w_each, parts))
         F = sum(w * st.F for w, (_, st, _, _) in zip(w_each, parts))
+        # Warm cells are what the fire has already left, so only the forward filter knows them (the backward
+        # filter's "burned" means "burns later").
+        r = parts[0][1].warm if i_prev >= 0 else np.zeros(shape)
         age_h = min(age for _, _, age, _ in parts)
         # stated uncertainty of the total: radiometric part from the pixels of the nearest pass, plus a process part
         # that grows with the age of the information
@@ -290,28 +369,101 @@ class OccupancyReconstruction:
             else:
                 rad2 += w * PIXEL_FRP_REL_SD ** 2
         rel = math.sqrt(rad2 + (p.process_log_sd_per_sqrt_h ** 2) * age_h)
-        return Estimate(np.asarray(a), np.asarray(F), age_h, rel)
+        return Estimate(np.asarray(a), np.asarray(F), age_h, rel, np.asarray(r))
 
-    def predict_hidden(self, time_s: float, hidden_family: str, is_day: bool, pixel_area_km2: float) -> dict[str, Any]:
+    def _predict_coarse(self, est: Estimate, is_day: bool, pixel_area_km2: float, scan_km: float, track_km: float) -> dict[str, Any]:
+        """What a coarse hidden instrument (MODIS) is expected to report; see `_coarse_doc`.
+
+        The footprint is taken as a box of scan by track with the scan side east to west (the scan axis lies
+        within about 25 degrees of east to west at these latitudes).
+        """
+        prm = self.params
+        cell = self.grid.cell_km
+        n_cols = max(1, int(round(scan_km / cell)))
+        n_rows = max(1, int(round(track_km / cell)))
+        a_sum = _box_sum(est.a, n_rows, n_cols)
+        f_sum = _box_sum(est.F, n_rows, n_cols)
+        any_fire = 1.0 - np.exp(-a_sum)
+        power_if = np.where(any_fire > 1e-6, f_sum / np.maximum(any_fire, 1e-6), 0.0)
+        pi = detection_probability(power_if, pixel_area_km2, "MODIS", is_day=is_day)
+        p_detect = np.clip(any_fire * pi * prm.hidden_pixel_scale, 0.0, 1.0)
+        frp = est.F * pi * (prm.frp_scale if is_day else prm.frp_scale_night)
+        dup = overlap_factor("MODIS", track_km) if prm.dedup_overlap else 1.0
+        frp = frp * dup
+        total = float(frp.sum())
+        z = 1.6448536269514722
+        if prm.frp_interval_lo is not None and prm.frp_interval_hi is not None:
+            lo, hi = total * prm.frp_interval_lo, total * prm.frp_interval_hi
+        elif math.isfinite(est.rel_sd_log):
+            lo, hi = total * math.exp(-z * est.rel_sd_log), total * math.exp(z * est.rel_sd_log)
+        else:
+            lo, hi = 0.0, 0.0
+        return {"p_detect": p_detect, "frp_mw": frp, "total_mw": total, "lo_mw": lo, "hi_mw": hi, "level": 0.90,
+                "age_h": est.age_h, "estimate": est, "overlap_factor": dup}
+
+    def predict_hidden(
+        self, time_s: float, hidden_family: str, is_day: bool, pixel_area_km2: float, track_km: float | None = None,
+        scan_km: float | None = None,
+    ) -> dict[str, Any]:
         """What the hidden instrument is expected to report at `time_s`.
 
         p_detect is burning probability times the published probability that a pixel of that instrument and area
         flags a cell of that power; expected FRP is the cell's FRP times the same detection fraction (Eq. 7) and
         `frp_scale`. The interval is lognormal around the total at the stated log standard deviation.
         """
+        prm = self.params
         est = self.estimate(time_s)
+        if hidden_family == "MODIS" and scan_km is not None and track_km is not None:
+            return self._predict_coarse(est, is_day, pixel_area_km2, scan_km, track_km)
         per_cell = np.where(est.a > 1e-6, est.F / np.maximum(est.a, 1e-6), 0.0)
         pi = detection_probability(per_cell, pixel_area_km2, hidden_family, is_day=is_day)
-        p_detect = np.clip(est.a * pi, 0.0, 1.0)
-        frp = est.F * pi * self.params.frp_scale
+        burning = np.clip(est.a * pi, 0.0, 1.0)
+        share = prm.smolder_day if is_day else prm.smolder_night
+        warm = np.clip((est.r if est.r is not None else 0.0) * share, 0.0, 1.0) if share > 0.0 else 0.0
+        p_detect = 1.0 - (1.0 - burning) * (1.0 - warm)
+        frp = est.F * pi * (prm.frp_scale if is_day else prm.frp_scale_night)
+        if share > 0.0:
+            frp = frp + (1.0 - burning) * warm * prm.smolder_frp_mw
+        # what the hidden instrument reports includes its own scan overlap (pixels and FRP counted twice)
+        dup = 1.0
+        if prm.dedup_overlap and track_km is not None:
+            dup = overlap_factor(hidden_family, track_km)
+            frp = frp * dup
         total = float(frp.sum())
         z = 1.6448536269514722
-        if math.isfinite(est.rel_sd_log):
+        if prm.frp_interval_lo is not None and prm.frp_interval_hi is not None:
+            lo, hi = total * prm.frp_interval_lo, total * prm.frp_interval_hi
+        elif math.isfinite(est.rel_sd_log):
             lo, hi = total * math.exp(-z * est.rel_sd_log), total * math.exp(z * est.rel_sd_log)
         else:
             lo, hi = 0.0, 0.0
         return {"p_detect": p_detect, "frp_mw": frp, "total_mw": total, "lo_mw": lo, "hi_mw": hi, "level": 0.90,
-                "age_h": est.age_h, "estimate": est}
+                "age_h": est.age_h, "estimate": est, "overlap_factor": dup}
+
+
+def _coarse_doc() -> str:
+    return (
+        "A coarse hidden pixel covers many 375 m cells. It is flagged when the power inside its footprint passes its "
+        "detection limit, and then every cell of the footprint counts as flagged. So the probability for a cell is "
+        "the probability that some cell of the footprint around it burns, times the published detection probability "
+        "for the footprint's power given that it burns."
+    )
+
+
+def look_count_factor(truth_cells: float, predicted_cells: float, prior_cells: float, prior_factor: float = 1.0) -> float:
+    """How far off the model's count was where a sharp look has now shown the answer.
+
+    (prior_cells * prior_factor + cells the look found flagged) / (prior_cells + cells the model expected there).
+    With nothing looked at it is `prior_factor`; `prior_cells` says how many cells of evidence it takes to move it.
+    Kept within 0.2 to 5.
+    """
+    f = (prior_cells * prior_factor + truth_cells) / max(prior_cells + predicted_cells, 1e-9)
+    return float(min(5.0, max(0.2, f)))
+
+
+def rescale_probability(p: NDArray[np.float64], factor: float) -> NDArray[np.float64]:
+    """Probabilities with their expected count multiplied by about `factor` and kept within 0 to 1: 1 - (1 - p) ** factor."""
+    return 1.0 - (1.0 - np.clip(p, 0.0, 1.0)) ** factor
 
 
 def expected_count_cells(p_detect: NDArray[np.float64]) -> NDArray[np.bool_]:

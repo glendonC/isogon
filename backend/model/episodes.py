@@ -1,10 +1,15 @@
-"""Fire episodes for fitting and validating: 24 overpass windows away from the three test fires.
+"""Fire episodes for fitting and validating: windows of MODIS overpasses away from the three test fires.
 
 A region's context box is five times its test box on each side, so it splits into 25 tiles the size of the test
-box. For every tile and year the episode is the run of 24 consecutive overpasses with a detection in the tile
-whose MODIS overpasses flagged the most pixels there (the rule the test windows use, `real_blind.pick_window`),
-kept when MODIS flagged at least `min_modis_pixels` in it. Rows inside a test fire's exclusion are removed before
-anything is looked at (`training.py`), and the tile that is the test box is skipped in the exclusion year.
+box. For every tile and year the episode is the run of `EPISODE_OVERPASSES` consecutive MODIS overpasses with a
+detection in the tile that flagged the most pixels there (the rule the test windows use,
+`real_blind.pick_window`), kept when they flagged at least `min_modis_pixels` and lie within `max_span_h`.
+
+An episode is chosen from MODIS rows alone. VIIRS, the instrument a blind test hides, is dropped before the choice,
+so no episode exists or is placed because of what the hidden instrument saw.
+
+Rows inside a test fire's exclusion are removed before anything is looked at (`training.excluded_mask`), and that
+includes the region's test box for the whole of the test year.
 
 Training episodes come from `training.TRAINING_YEARS`, validation episodes from `training.VALIDATION_YEARS`:
 different years, so no validation fire is a training fire.
@@ -16,10 +21,8 @@ import calendar
 from dataclasses import dataclass
 from typing import Any, Callable
 
-import numpy as np
-
 from backend.eval.rows import Detections, detections_from_rows
-from backend.model.real_blind import Window, pick_window
+from backend.model.real_blind import EPISODE_OVERPASSES, Window, pick_window
 from backend.model.training import REGIONS, excluded_mask
 
 PAD_S: float = 2.0 * 86400.0
@@ -56,9 +59,9 @@ def find_episodes(
     preset_by_id: dict[str, Any],
     regions: tuple[str, ...] = REGIONS,
     min_modis_pixels: int = 60,
-    min_viirs_overpasses: int = 6,
     max_per_region_year: int = 3,
     max_span_h: float = 120.0,
+    overpasses: int = EPISODE_OVERPASSES,
 ) -> list[Episode]:
     """Episodes in time order per region, at most `max_per_region_year` (the busiest tiles) for each region and year."""
     out: list[Episode] = []
@@ -76,17 +79,16 @@ def find_episodes(
             t1 = float(calendar.timegm((year + 1, 1, 1, 0, 0, 0, 0, 0, 0)))
             found: list[Episode] = []
             for tile, box in tiles(ctx):
-                inb = det.in_box(box)
-                if int((inb & det.is_modis).sum()) < min_modis_pixels:
+                if int((det.in_box(box) & det.is_modis).sum()) < min_modis_pixels:
                     continue
                 try:
-                    win = pick_window(det, box, t0, t1)
+                    win = pick_window(det, box, t0, t1, n=overpasses, hidden="VIIRS")
                 except ValueError:
                     continue
-                if win.modis_pixels_in_box < min_modis_pixels or win.n_viirs < min_viirs_overpasses or win.n_modis < 4:
+                if win.modis_pixels_in_box < min_modis_pixels:
                     continue
                 if (win.end_s - win.start_s) / 3600.0 > max_span_h:
-                    continue   # 24 overpasses spread over weeks are scattered hot spots, not one fire episode
+                    continue   # overpasses spread over weeks are scattered hot spots, not one fire episode
                 keep = (det.time_s >= win.start_s - PAD_S) & (det.time_s < win.end_s + PAD_S)
                 found.append(Episode(region, year, tile, box, win, det.select(keep)))
             found.sort(key=lambda ep: -ep.window.modis_pixels_in_box)

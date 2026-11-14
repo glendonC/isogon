@@ -1,13 +1,12 @@
-"""Hidden rows must not reach anything but the score (unit M8), on SYNTHETIC rows.
+"""Hidden rows must not reach anything but the score, on SYNTHETIC rows.
 
-These are the perturbations of the outside audit (JOB-H, parts 1 and 3): every row of the hidden instrument is
-shifted, scaled, deleted or removed altogether while every visible row stays as it was. Whatever the run built
-must come out byte for byte the same; only what the scorer wrote may differ, and it must differ, or the
-perturbation proved nothing.
+Every row of the hidden instrument is shifted, scaled, deleted or removed altogether while every visible row stays
+as it was. Whatever the run built must come out byte for byte the same; only what the scorer wrote may differ, and
+it must differ, or the perturbation proved nothing.
 
-The tests use only calls that existed before the fix (`solve_real_reconstruction`, `real_response`,
-`pick_window`, `window_from_start`, `real_start_dates`), so the same file can be run against the earlier code,
-where it fails.
+Every run test is made twice: once where no pass list answers, so the frames are overpasses of the
+visible rows and the schedule is the nominal one, and once with a made-up pass list, so the frames are its passes,
+the hidden platforms' passes are held-out frames and every one of them is scored.
 """
 
 from __future__ import annotations
@@ -40,18 +39,24 @@ SOURCE = fx.SOURCE_LABEL
 # What the scorer writes. Everything else in the response must not move with the hidden rows.
 SCORER_KEYS_OF_BLIND_TEST = (
     "hidden_rows_in_test_box", "scored_overpasses", "scored_overpasses_with_hidden_detections_in_test_box",
-    "hidden_overpasses_without_a_slot", "targets", "methods", "reveal", "verdict",
+    "scored_overpasses_with_no_hidden_detection", "hidden_overpasses_without_a_slot", "hidden_rows_without_a_pass",
+    "targets", "methods", "subset_with_hidden_detections", "reveal", "verdict",
 )
 SCORER_METRICS = (
     "raw_modis_rmse_mw_km2", "reconstructed_rmse_mw_km2", "rmse_reduction_pct", "empirical_90_coverage_pct",
-    "subpixel_viirs_fires_recovered_pct", "step_2012_raw_ratio", "step_2012_harmonized_ratio", "step_2012_coobs_frames",
+    "cells_gained_over_painted_modis_pct",
 )
 
 CASES: dict[str, list[dict[str, str]]] = {
-    name: fx.perturb_hidden(ROWS6, **kw) for name, kw in fx.AUDIT_PERTURBATIONS.items()   # type: ignore[arg-type]
+    name: fx.perturb_hidden(ROWS6, **kw) for name, kw in fx.HIDDEN_ROW_PERTURBATIONS.items()   # type: ignore[arg-type]
 }
 CASES["every hidden row removed"] = [r for r in ROWS6 if r["instrument"] != "VIIRS"]
 CASES["pixel sizes of hidden rows changed"] = fx.perturb_hidden(ROWS6, scan="0.80", track="0.78")
+# NOAA-20's night rows moved to 08:55, where the made-up pass list has a pass that held only part of the box
+CASES["hidden rows of one pass moved to another time"] = [
+    {**r, "acq_time": "0855"} if (r["instrument"] == "VIIRS" and r["satellite"] == "N20" and r["acq_time"] == "1036") else dict(r)
+    for r in ROWS6
+]
 
 
 def _terrain() -> LoadedRegionTerrain:
@@ -86,12 +91,13 @@ class _Ratio:
         return {"ratio": self.ratio, "p10": self.p10, "p90": self.p90, "nominal_level": self.level}
 
 
-def _solve(rows):
+def _solve(rows, read_passes=fx.no_pass_list, holdout=True):
     fit = fit_overlap_ratio(detections_from_rows(BASE, SOURCE), trained_on="the synthetic fixture (test only)")
     return solve_real_reconstruction(
-        _terrain(), "2099-07-01", holdout_viirs=True, read_firms=_reader(rows), context_box=fx.CONTEXT_BOX,
+        _terrain(), "2099-07-01", holdout_viirs=holdout, read_firms=_reader(rows), context_box=fx.CONTEXT_BOX,
         ratio_fit=fit, row_source=SOURCE, params=OccupancyParams(),
         learned_parts=[{"name": "reconstruction parameters", "status": "not learned"}], count_ratio=_Ratio(),
+        read_passes=read_passes,
     )
 
 
@@ -113,10 +119,19 @@ def _sha(b: bytes) -> str:
 
 
 class RunIgnoresHiddenRowsTests(unittest.TestCase):
+    """No pass list answers: frames are overpasses of the visible rows, the schedule is the nominal one."""
+
+    READ_PASSES = staticmethod(fx.no_pass_list)
+    FRAMES_FROM = "detections"
+
     @classmethod
     def setUpClass(cls) -> None:
-        cls.real = _solve(ROWS6)
-        cls.other = {name: _solve(rows) for name, rows in CASES.items()}
+        cls.real = _solve(ROWS6, cls.READ_PASSES)
+        cls.other = {name: _solve(rows, cls.READ_PASSES) for name, rows in CASES.items()}
+
+    def test_the_frames_come_from_where_the_class_says(self) -> None:
+        self.assertTrue(self.real.extras["window"]["frames_from"].startswith(self.FRAMES_FROM))
+        self.assertEqual(self.real.observer_passes["frames_from"], self.real.extras["window"]["frames_from"])
 
     def test_the_perturbations_are_real(self) -> None:
         viirs = [r for r in ROWS6 if r["instrument"] == "VIIRS"]
@@ -190,17 +205,90 @@ class RunIgnoresHiddenRowsTests(unittest.TestCase):
         def hidden_frp(run):
             return run.extras["blind_test"]["methods"]["reconstruction"]["frp_total"]["sum_hidden_mw"]
 
-        for name in ("1A shift, scale, delete a third", "1B larger shift, scale, delete three in four"):
+        for name in ("shift, scale, delete a third", "larger shift, scale, delete three in four"):
             self.assertNotEqual(csi(self.other[name]), csi(self.real), name)
-        self.assertAlmostEqual(hidden_frp(self.other["1C scale only"]), 3.7 * hidden_frp(self.real), delta=0.02 * hidden_frp(self.real))
-        self.assertEqual(csi(self.other["1C scale only"]), csi(self.real))       # FRP alone moves no cell
+        self.assertAlmostEqual(hidden_frp(self.other["scale only"]), 3.7 * hidden_frp(self.real), delta=0.02 * hidden_frp(self.real))
+        self.assertEqual(csi(self.other["scale only"]), csi(self.real))       # FRP alone moves no cell
         gone = self.other["every hidden row removed"].extras["blind_test"]
         self.assertEqual((gone["scored_overpasses"], gone["hidden_rows_in_test_box"]), (0, 0))
         self.assertGreater(self.real.extras["blind_test"]["scored_overpasses"], 0)
 
 
+class RunFromThePassListIgnoresHiddenRowsTests(RunIgnoresHiddenRowsTests):
+    """The same perturbations where a pass list answers: the frames are its passes, the passes of the
+    hidden platforms are held-out frames, and every held-out frame is scored whether or not it left a detection."""
+
+    READ_PASSES = staticmethod(fx.fixture_pass_reader())
+    FRAMES_FROM = "cmr"
+
+    def test_schedule_and_frames_are_identical_with_the_hidden_rows_deleted(self) -> None:
+        gone = self.other["every hidden row removed"]
+        frames = self.real.observer_passes["frames"]
+        held = [f for f in frames if f["held_out"]]
+        self.assertEqual(len(frames), 24)
+        self.assertGreater(len(held), 0)
+        self.assertEqual({f["sensor"][:5] for f in held}, {"VIIRS"})
+        self.assertEqual(gone.observer_passes["frames"], frames)
+        self.assertEqual(gone.extras["window"], self.real.extras["window"])
+        schedule = self.real.extras["blind_test"]["schedule"]
+        self.assertEqual(schedule["source"], "cmr")
+        self.assertEqual(gone.extras["blind_test"]["schedule"], schedule)
+        # every held-out frame is a slot of the schedule and no slot is anything else
+        self.assertEqual([s["frame"] for s in schedule["slots"]], [f["frame"] for f in held])
+        self.assertEqual([(s["platform"], s["time_utc"]) for s in schedule["slots"]], [(f["sensor"], f["timestamp_utc"]) for f in held])
+        self.assertEqual(gone.extras["blind_test"]["published"], self.real.extras["blind_test"]["published"])
+        self.assertEqual(_sha(gone.reconstruction_u8_bytes), _sha(self.real.reconstruction_u8_bytes))
+        self.assertEqual(self.real.extras["blind_test"]["protocol"]["version"], 3)
+
+    def test_schedule_and_frames_are_identical_under_every_perturbation(self) -> None:
+        for name, run in self.other.items():
+            self.assertEqual(run.observer_passes["frames"], self.real.observer_passes["frames"], name)
+            self.assertEqual(run.extras["blind_test"]["schedule"], self.real.extras["blind_test"]["schedule"], name)
+
+    def test_a_run_with_nothing_hidden_plays_the_same_passes(self) -> None:
+        both = _solve(ROWS6, self.READ_PASSES, holdout=False)
+        key = lambda run: [(f["sensor"], f["timestamp_utc"]) for f in run.observer_passes["frames"]]  # noqa: E731
+        self.assertEqual(key(both), key(self.real))
+        self.assertEqual(both.run_id.replace("allsensors", ""), self.real.run_id.replace("holdoutviirs", ""))
+        self.assertFalse(any(f["held_out"] for f in both.observer_passes["frames"]))
+
+    def test_the_scores_do_change(self) -> None:
+        def csi(run):
+            return run.extras["blind_test"]["methods"]["reconstruction"]["strict_375m"]["csi"]
+
+        def hidden_frp(run):
+            return run.extras["blind_test"]["methods"]["reconstruction"]["frp_total"]["sum_hidden_mw"]
+
+        real = self.real.extras["blind_test"]
+        held = sum(1 for f in self.real.observer_passes["frames"] if f["held_out"])
+        for name in ("shift, scale, delete a third", "larger shift, scale, delete three in four"):
+            self.assertNotEqual(csi(self.other[name]), csi(self.real), name)
+        self.assertAlmostEqual(hidden_frp(self.other["scale only"]), 3.7 * hidden_frp(self.real), delta=0.02 * hidden_frp(self.real))
+        self.assertEqual(csi(self.other["scale only"]), csi(self.real))       # FRP alone moves no cell
+        # with the hidden rows deleted every held-out pass is still scored: as a look that flagged nothing
+        gone = self.other["every hidden row removed"].extras["blind_test"]
+        self.assertEqual(real["scored_overpasses"], held)
+        self.assertEqual(gone["scored_overpasses"], held)
+        self.assertEqual(gone["scored_overpasses_with_no_hidden_detection"], held)
+        self.assertEqual(gone["hidden_rows_in_test_box"], 0)
+        self.assertEqual(gone["subset_with_hidden_detections"]["scored_overpasses"], 0)
+        # the made-up NOAA-21 flags nothing: its passes are scored looks even with every row in place
+        n21 = sum(1 for f in self.real.observer_passes["frames"] if f["sensor"] == "VIIRS_NOAA21")
+        self.assertGreater(n21, 0)
+        self.assertEqual(real["scored_overpasses_with_no_hidden_detection"], n21)
+        self.assertEqual(real["subset_with_hidden_detections"]["scored_overpasses"], held - n21)
+        # rows moved into a pass that held only part of the box belong to no slot: counted, revealed, not scored
+        moved = self.other["hidden rows of one pass moved to another time"].extras["blind_test"]
+        self.assertEqual(real["hidden_rows_without_a_pass"], 0)
+        self.assertGreater(moved["hidden_rows_without_a_pass"], 0)
+        loose = [o for o in moved["reveal"]["overpasses"] if o["frame"] is None]
+        self.assertEqual(sum(o["pixels_in_box"] for o in loose), moved["hidden_rows_without_a_pass"])
+        self.assertTrue(all(o["scored"] is False for o in loose))
+        self.assertLess(moved["hidden_rows_in_test_box"], real["hidden_rows_in_test_box"])
+
+
 class WindowChoiceIgnoresHiddenRowsTests(unittest.TestCase):
-    """The audit's part 3: the same window with the hidden instrument present, altered or removed."""
+    """The same window with the hidden instrument present, altered or removed."""
 
     def setUp(self) -> None:
         self.full = detections_from_rows(ROWS6, SOURCE)

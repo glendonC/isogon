@@ -242,7 +242,7 @@ def build_calendar_2000_2026() -> dict[str, Any]:
         "provenance": PROVENANCE_NOTE,
         "downloaded_firms_rows": 0,
         "region_id": "norcal_feather_plumas",
-        "region_name": "Northern California · Feather River / Plumas Corridor",
+        "region_name": "Northern California, Feather River / Plumas Corridor",
         "bbox": [WEST, SOUTH, EAST, NORTH],
         "reference_frame": "MODIS_NADIR_EQUIV_1330LST",
         "units": {

@@ -1,4 +1,4 @@
-"""A run whose frames are the passes of a pass list (unit M9a), on SYNTHETIC rows and a made-up pass list.
+"""A run whose frames are the passes of a pass list, on SYNTHETIC rows and a made-up pass list.
 
 Every pass that covered the box is a frame, fire or no fire. With VIIRS hidden the VIIRS passes are frames that
 carry the estimate and nothing observed, and they are exactly the looks the blind test scores. The hidden-row
@@ -59,7 +59,7 @@ class PassListFramesTests(unittest.TestCase):
         self.assertEqual(win["hidden_passes"], sum(1 for x in f if x["held_out"]))
         self.assertEqual(win["viirs_pixels_in_box"], 0)
         self.assertIn("no row of a hidden instrument", win["chosen_from"])
-        self.assertLess(win["span_hours"], 60.0)                                  # about two days, not M8's six
+        self.assertLess(win["span_hours"], 60.0)                                  # about two days, not the six of 24 MODIS overpasses
         self.assertEqual(self.held.observer_passes["frames_from"], "cmr")
         self.assertIn("swath polygon", self.held.observer_passes["geometry_note"])
 

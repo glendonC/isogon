@@ -1,9 +1,10 @@
-"""The evidence sheet's data: one JSON-ready dict (contract item 13, surface S2).
+"""The evidence sheet's data: one JSON-ready dict.
 
   evidence()                                 the dict a route serves at GET /api/evidence
   python3 -m backend.model.evidence          prints it
-  python3 -m backend.model.evidence record <notes folder>
-                                             rebuilds the tracked record of every time the test fires were scored
+  python3 -m backend.model.evidence record <reports folder>
+                                             rebuilds the tracked record of every time the test fires were scored,
+                                             from the reports those runs wrote (the reports are not in the repository)
 
 Nothing in the dict is typed by hand. Every number is read from a tracked file or computed here from one:
 
@@ -15,8 +16,8 @@ Nothing in the dict is typed by hand. Every number is read from a tracked file o
 The sentences are written here; where one states a figure, the figure is filled in from those files, and a test
 checks that it is.
 
-Shape. The page lane's demo file (`website/src/content/demo/evidence.ts`, `EvidenceDoc`) is the requested shape and
-this follows it key for key. What is added to it is listed in `evidence()["additions"]`.
+Shape. The page reads the dict as `EvidenceDoc` (`website/src/content/demo/evidence.ts`) and this follows that
+type key for key. What is added to it is listed in `evidence()["additions"]`.
 """
 
 from __future__ import annotations
@@ -55,33 +56,42 @@ REMARK_MARGIN: float = 0.001
 REGIONS: tuple[str, ...] = ("plumas_ca", "lytton_bc", "evia_greece")
 FIRE_NAMES: dict[str, str] = {"plumas_ca": "Dixie", "lytton_bc": "Lytton Creek", "evia_greece": "northern Evia"}
 
-# The two looks at the test fires that count as the test, and every other time rows of those fires were scored.
-# `files` are paths inside the lane's notes folder, with {region} filled in; `key` picks the report out of a payload.
+# The three looks at the test fires that count as the test, and every other time rows of those fires were scored.
+# Look 3 is the final one: it is taken once, with the protocol and the fitted values frozen before it. No fourth
+# entry is to be added.
+# `files` are paths inside the reports folder given to `record`, with {region} filled in; `key` picks the report
+# out of a payload.
 LOOKS: tuple[dict[str, Any], ...] = (
-    {"look": 1, "unit": "M2", "protocol_version": 1,
+    {"look": 1, "unit": "first fit", "protocol_version": 1,
      "what": "fitted values on windows of 24 overpasses that counted the hidden ones; each prediction made at the hidden overpass's own time and pixel size",
+     "note": "the first test; its protocol let the hidden rows shape the window and each prediction",
      "files": "M2-evidence/blind_{region}_fitted.json"},
-    {"look": 2, "unit": "M8", "protocol_version": 2,
+    {"look": 2, "unit": "sealed protocol", "protocol_version": 2,
      "what": "the same fitted values, not refitted, on windows of 12 MODIS overpasses chosen with VIIRS dropped; predictions published on a nominal schedule before the hidden rows are opened",
+     "note": "a protocol correction, not a fresh test",
      "files": "M8-evidence/test_fire_{region}.json"},
+    {"look": 3, "unit": "final look", "protocol_version": 3,
+     "what": "values refitted from the priors under protocol version 3 and frozen before the look, on the windows of look 2; every pass of the pass list whose swath held the box is a scored look at its real time and pixel size, a pass that flagged nothing included",
+     "note": "the final look: taken once, with the protocol and the fitted values frozen before it; the test fires are not scored again",
+     "files": "M9-final-look/final_look_{region}.json"},
 )
 OTHER_SCORINGS: tuple[dict[str, Any], ...] = (
-    {"unit": "M1a", "protocol_version": 1, "what": "untuned priors on the windows of look 1, before anything was fitted",
+    {"unit": "first reconstruction", "protocol_version": 1, "what": "untuned priors on the windows of look 1, before anything was fitted",
      "files": "M1a-evidence/blind_{region}.json"},
-    {"unit": "M1b", "protocol_version": 1, "what": "Dixie with one VIIRS platform hidden and the other left visible (an easier test)",
+    {"unit": "one platform hidden", "protocol_version": 1, "what": "Dixie with one VIIRS platform hidden and the other left visible (an easier test)",
      "files": {"plumas_ca hiding NOAA-20": "M1a-evidence/blind_plumas_ca_hide_VIIRS_NOAA20.json",
                "plumas_ca hiding Suomi NPP": "M1a-evidence/blind_plumas_ca_hide_VIIRS_SNPP.json"}},
-    {"unit": "M4", "protocol_version": 1, "what": "the other direction: MODIS hidden and Terra's morning pass estimated from VIIRS, each fire over its whole period",
+    {"unit": "Terra morning estimate", "protocol_version": 1, "what": "the other direction: MODIS hidden and Terra's morning pass estimated from VIIRS, each fire over its whole period",
      "files": "M4-evidence/terra_test_fires.json", "key": "{region}", "baselines": ("painted_viirs", "viirs_ratio")},
-    {"unit": "M6", "protocol_version": 1, "what": "a run with VIIRS hidden from each region's default start date",
+    {"unit": "other windows", "protocol_version": 1, "what": "a run with VIIRS hidden from each region's default start date",
      "files": {"plumas_ca": "M6-evidence/blind_plumas_ca_2021-07-22.json", "lytton_bc": "M6-evidence/blind_lytton_bc_2021-06-30.json",
                "evia_greece": "M6-evidence/blind_evia_greece_2021-08-03.json"}},
-    {"unit": "M6", "protocol_version": 1, "what": "the same from the start the window rule would have picked instead (reported, not adopted)",
+    {"unit": "other windows", "protocol_version": 1, "what": "the same from the start the window rule would have picked instead (reported, not adopted)",
      "files": {"lytton_bc": "M6-evidence/blind_lytton_bc_2021-07-01.json", "evia_greece": "M6-evidence/blind_evia_greece_2021-08-07.json"}},
-    {"unit": "M8", "protocol_version": 2, "what": "a run with VIIRS hidden from each default start, 24 MODIS frames",
+    {"unit": "sealed protocol", "protocol_version": 2, "what": "a run with VIIRS hidden from each default start, 24 MODIS frames",
      "files": {"plumas_ca": "M8-evidence/payload_plumas_ca_2021-07-20_holdout_viirs.json", "lytton_bc": "M8-evidence/payload_lytton_bc_2021-06-30_holdout_viirs.json",
                "evia_greece": "M8-evidence/payload_evia_greece_2021-08-03_holdout_viirs.json"}, "key": "blind_test"},
-    {"unit": "M8b", "protocol_version": 2, "what": "the same with scheduled looks of the hidden platforms among the frames (a commit that was not landed)",
+    {"unit": "sealed protocol with scheduled frames", "protocol_version": 2, "what": "the same with scheduled looks of the hidden platforms among the frames (a variant that was not adopted)",
      "files": {"plumas_ca": "M8b-evidence/payload_plumas_ca_2021-07-22_holdout_viirs.json", "lytton_bc": "M8b-evidence/payload_lytton_bc_2021-06-30_holdout_viirs.json",
                "evia_greece": "M8b-evidence/payload_evia_greece_2021-08-03_holdout_viirs.json"}, "key": "blind_test"},
 )
@@ -92,31 +102,32 @@ AGENTS: tuple[tuple[str, str, str, str, str], ...] = (
     ("random", "Random", "a tile at random, the mean over the seeds", "random", "random"),
     ("latest_modis", "Latest MODIS", "the tile with the most recent MODIS fire power", "latest_modis", "latest_modis"),
     ("least_sure", "Least sure", "the tile where the model is least sure", "least_sure", "least_sure"),
-    ("learned", "Learned (M7)", "a linear policy with the weights of unit M7, not refitted", "linear", "learned"),
+    ("learned", "Learned", "a linear policy with weights fitted under protocol version 1, not refitted", "linear", "learned"),
     ("oracle", "Oracle", "sees the hidden data and takes the best tile at each look: a greedy ceiling", "oracle", "oracle"),
 )
 
-# What the outside audit (JOB-H) found, one line each, the change that answers it and the test that guards it.
+# What the first protocol let the hidden rows decide, one line each (the sheet's `audit` block), the change that
+# answers it and the test that guards it.
 # Figures inside the lines are filled in from the tracked record.
 AUDIT: tuple[dict[str, str], ...] = (
-    {"id": "H-1",
+    {"id": "1",
      "found": "A run's window was the next 24 overpasses counting the hidden ones, and each prediction was made at the hidden overpass's own time and pixel size, so the hidden rows moved the window, the estimate, the belief frames and the exports.",
      "answer": "Rows part ways once, before anything is chosen (backend/eval/holdout.py). Predictions are published on a schedule that reads no hidden row, and only then is the sealed box opened.",
      "guarded_by": "backend/tests/test_model_hidden_rows.py::RunIgnoresHiddenRowsTests"},
-    {"id": "H-2",
+    {"id": "2",
      "found": "The second baseline's pixel ratio in validation came from a calendar that still held the three test fires.",
      "answer": "The ratio leaves out the run's year and every year that holds a test fire (backend/model/calendar_ratio.py).",
      "guarded_by": "backend/tests/test_model_real_run.py::CalendarRatioAndProvenanceTests"},
-    {"id": "H-3",
+    {"id": "3",
      "found": "Windows, start dates and episodes were chosen counting hidden overpasses, so removing the hidden instrument moved them.",
      "answer": "They are chosen after the hidden instrument's rows are dropped.",
      "guarded_by": "backend/tests/test_model_hidden_rows.py::WindowChoiceIgnoresHiddenRowsTests"},
-    {"id": "H-4",
+    {"id": "4",
      "found": "In the next-look environment the decisions were the hidden overpasses themselves and a pixel size was taken over the whole hidden pass, so rows an agent had not been shown changed what it saw and how many turns it had.",
      "answer": "The looks are scheduled slots; a look hands over that slot's rows in one tile and only those rows are read.",
      "guarded_by": "backend/tests/test_env_hidden_rows.py::ObservationIgnoresUnrevealedRowsTests"},
-    {"id": "H-5",
-     "found": "{h5_total} rows of 2021 inside the test boxes ({h5_each}) lay outside the fires' own dates and stayed in the baseline's training rows.",
+    {"id": "5",
+     "found": "{rows_total} rows of 2021 inside the test boxes ({rows_each}) lay outside the fires' own dates and stayed in the baseline's training rows.",
      "answer": "Each test box is closed for the whole of its test year (backend/model/training.py).",
      "guarded_by": "backend/tests/test_eval_holdout.py::PublishedBeforeScoredTests::test_training_rows_never_hold_a_row_of_a_test_box_in_the_test_year"},
 )
@@ -201,6 +212,12 @@ def fire_test(report: dict[str, Any], protocol_version: int, baselines: tuple[st
     }
     if remarks:
         out["remarks"] = remarks
+    if "subset_with_hidden_detections" in report:
+        # a protocol that scores every pass: say how many looks flagged nothing and what was left out
+        with_pixels = int(report["scored_overpasses_with_hidden_detections_in_test_box"])
+        out["looks_that_flagged_nothing_in_the_box"] = int(report["scored_overpasses"]) - with_pixels
+        out["passes_that_held_part_of_the_box_not_scored"] = int((report.get("schedule") or {}).get("partly_in_swath", 0))
+        out["hidden_rows_of_those_passes"] = int(report.get("hidden_rows_without_a_pass", 0))
     return out
 
 
@@ -208,7 +225,7 @@ def fire_test(report: dict[str, Any], protocol_version: int, baselines: tuple[st
 # The tracked record
 # ----------------------------------------------------------------------------------------------------------------
 
-def _h5_rows() -> dict[str, int]:
+def _rows_outside_exclusion_dates() -> dict[str, int]:
     """Rows of the test year inside each test box that lie outside the fire's own exclusion dates: the rows the
     first exclusion rule left in the training rows. Recomputed from the cached FIRMS rows."""
     from backend.eval.rows import detections_from_rows
@@ -228,7 +245,7 @@ def _h5_rows() -> dict[str, int]:
 
 
 def build_record(notes_dir: Path | str) -> dict[str, Any]:
-    """Read the reports the runs wrote into the lane's notes folder and write `fitted_values/test_fire_looks.json`.
+    """Read the reports the runs wrote, from the folder given, and write `fitted_values/test_fire_looks.json`.
 
     The record keeps what the sheet needs of each report and the report's sha256, so the tracked file can be
     checked against the evidence it was copied from. Nothing is run on the test fires here.
@@ -278,7 +295,7 @@ def build_record(notes_dir: Path | str) -> dict[str, Any]:
     }
     doc = {
         "what": "every time rows of the three 2021 test fires were scored, copied from the reports the runs wrote",
-        "built_by": "python3 -m backend.model.evidence record <the lane's notes folder>",
+        "built_by": "python3 -m backend.model.evidence record <reports folder>",
         "built_utc": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "looks": looks,
         "other_scorings": others,
@@ -288,8 +305,8 @@ def build_record(notes_dir: Path | str) -> dict[str, Any]:
             "by_schedule": schedule_cost,
         },
         "rows_of_the_test_year_in_test_boxes_outside_exclusion_dates": {
-            "what": "rows the first exclusion rule left available to training (audit finding H-5), recounted from the cached FIRMS rows",
-            "by_region": _h5_rows(),
+            "what": "rows the first exclusion rule left available to training (finding 5 of the audit), recounted from the cached FIRMS rows",
+            "by_region": _rows_outside_exclusion_dates(),
         },
         "sources_sha256": dict(sorted(sources.items())),
     }
@@ -321,6 +338,18 @@ def _validation(params: dict[str, Any]) -> dict[str, Any]:
             **({"interval_holds": part["interval_holds"]} if "interval_holds" in part else {}),
         })
     prev = params.get("previous_decision")
+
+    def before(d: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "what": d.get("protocol"),
+            "classes": None if not d.get("classes") else {_CLASS[k]: int(n) for k, n in d["classes"].items()},
+            "fitted_values": "in use" if d.get("adopted") else "not used",
+            "parts": d.get("parts"),
+            "frp_interval": None if not d.get("interval") else {"held_share": d["interval"].get("observed_coverage"),
+                                                                "of": d["interval"].get("overpasses"), "stated": d["interval"].get("stated_level")},
+        }
+
+    intervals, empty = params.get("intervals"), params.get("empty_looks")
     return {
         "protocol_version": protocol.get("validated_under"),
         "episodes": len(episodes),
@@ -337,11 +366,21 @@ def _validation(params: dict[str, Any]) -> dict[str, Any]:
         "rule": params["rule"],
         "parts": parts,
         "frp_interval": {"held": int(iv["covered"]), "of": int(iv["n"]), "stated": iv["stated_level"]},
-        "before": None if not prev else {
-            "what": prev.get("protocol"),
-            "classes": None if not prev.get("classes") else {_CLASS[k]: int(n) for k, n in prev["classes"].items()},
-            "fitted_values": "in use" if prev.get("adopted") else "not used",
-            "parts": prev.get("parts"),
+        "before": None if not prev else before(prev),
+        # every decision before this one, the latest first
+        "history": [before(d) for d in ([prev] if prev else []) + list(params.get("earlier_decisions") or [])],
+        "trained_on": params.get("trained_on"),
+        "validated_on": params.get("validated_on"),
+        "empty_looks": None if not empty else {
+            "what": "scored looks at which the hidden instrument flagged no pixel in the box; cloud is not known",
+            **empty,
+        },
+        "intervals": None if not intervals else {
+            "rule": intervals["rule"],
+            "frp_multiples_of_the_prediction": [intervals["frp"]["lo"], intervals["frp"]["hi"]],
+            "frp_given_a_detection": intervals["frp"]["given_a_detection"],
+            "pixel_multiples_of_the_prediction": [intervals["pixels"]["lo"], intervals["pixels"]["hi"]],
+            "pixels_given_a_detection": intervals["pixels"]["given_a_detection"],
         },
     }
 
@@ -385,6 +424,44 @@ def _next_look(env: dict[str, Any]) -> dict[str, Any]:
         "holds_in_both": ("In both tests " + ", ".join(said[:-1]) + (" and " if len(said) > 1 else "") + said[-1] + ".") if said else "",
         "not_the_same_game_twice": new["note"],
         "other_settings": new.get("other_settings"),
+        "made_with": {
+            # the table's own label when it carries one; the file's top-level label is what the policy was trained with
+            "reconstruction_values": new.get("reconstruction_values") or env.get("reconstruction_parameters"),
+            "values_note": new.get("values"),
+            "policy_trained_with": env.get("reconstruction_parameters"),
+            "looks": "nominal half-day slots (the environment's default schedule)",
+        },
+        # the same table with the reconstruction values it was first measured with, when the tracked file keeps it
+        "with_the_earlier_values": None if "test_protocol_2_m2_values" not in env else {
+            "what": "the same test episodes after the bug fix, with the reconstruction values of the first fit",
+            "reconstruction_values": env["test_protocol_2_m2_values"].get("reconstruction_values"),
+            "mean_start_score": env["test_protocol_2_m2_values"]["mean_start_score"],
+            "agents": {aid: _agent_row(env["test_protocol_2_m2_values"], k_new) for aid, _, _, k_new, _ in AGENTS},
+        },
+        # the same table before a bug fix in the environment, when the tracked file keeps one
+        "before_the_bug_fix": None if "test_protocol_2_before_m8c" not in env else {
+            "what": new.get("bug_fix"),
+            "mean_start_score": env["test_protocol_2_before_m8c"]["mean_start_score"],
+            "agents": {aid: _agent_row(env["test_protocol_2_before_m8c"], k_new) for aid, _, _, k_new, _ in AGENTS},
+        },
+    }
+
+
+def values_in_use(record: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    """Whether the fitted values now in use are the ones the latest look at the test fires was made with."""
+    latest = max(record["looks"], key=lambda e: e["look"])
+    fitted_under = (params.get("protocol") or {}).get("parameters_fitted_under")
+    scored = not (fitted_under is not None and fitted_under > latest["protocol_version"])
+    return {
+        "fitted_under_protocol": fitted_under,
+        "scored_on_the_test_fires": scored,
+        "figures_shown": {"look": latest["look"], "unit": latest["unit"], "protocol_version": latest["protocol_version"]},
+        "note": (
+            "The figures here were made with the fitted values now in use." if scored else
+            f"The values now in use were fitted under protocol version {fitted_under} and have not been scored on the "
+            f"three test fires. The figures here are look {latest['look']} ({latest['unit']}, protocol version "
+            f"{latest['protocol_version']}), made with the values of that time. One final look is to be taken, once."
+        ),
     }
 
 
@@ -397,11 +474,15 @@ def _limits(record: dict[str, Any], params: dict[str, Any], fires: list[dict[str
     nominal, real = cost[S.SOURCE_NOMINAL], cost[S.SOURCE_HIDDEN_TIMES]
     d_csi = real["scores"]["reconstruction"]["csi_strict_375m"] - nominal["scores"]["reconstruction"]["csi_strict_375m"]
     d_ahead = real["ahead_of_both_on"] - nominal["ahead_of_both_on"]
-    out.append(
-        "Pass times come from a nominal schedule. A prediction can be about 100 minutes from the pass it is scored "
-        f"against and assumes a typical pixel; on training fires this costs about {d_csi:.3f} of strict CSI and "
-        f"{d_ahead} of the seven scores."
-    )
+    latest = max(record["looks"], key=lambda e: e["look"])
+    now = values_in_use(record, params)
+    if latest["protocol_version"] <= 2:
+        out.append(
+            ("" if now["scored_on_the_test_fires"] else now["note"] + " ")
+            + "The test-fire figures were made on a nominal schedule. A prediction could be about 100 minutes from the "
+            f"pass it was scored against and assumed a typical pixel; on training fires this costs about {d_csi:.3f} of "
+            f"strict CSI and {d_ahead} of the seven scores."
+        )
     protocol = params.get("protocol") or {}
     if protocol.get("parameters_fitted_under") != protocol.get("validated_under"):
         out.append(
@@ -409,17 +490,37 @@ def _limits(record: dict[str, Any], params: dict[str, Any], fires: list[dict[str
             "not been refitted. A clean refit with its own validation is the next step."
         )
     val = _validation(params)
+    empty = (params.get("empty_looks") or {}).get("validation")
+    if empty:
+        iv = params.get("intervals") or {}
+        zero = bool(iv) and iv["frp"]["lo"] == 0.0
+        out.append(
+            f"A pass that flagged nothing is scored as a look that flagged nothing: {empty['no_hidden_pixel_in_the_box']} of "
+            f"{empty['scored_looks']} validation looks. Cloud is not known, so such a pass may have been cloudy rather "
+            "than free of fire" + (", and the stated FRP interval starts at zero for that reason." if zero else ".")
+        )
     missing = [FIRE_NAMES[r] + "'s region" for r in REGIONS if r not in val["regions"]]
     pixel = next((p for p in val["parts"] if "pixels" in p["name"]), None)
     narrow = ""
-    if pixel is not None:
+    if pixel is not None and pixel["status"] == "on":
         lows = [min(lo for lo, _ in s["improvement_interval"].values()) for s in pixel["scores"] if s.get("improvement_interval")]
         if lows:
             narrow = f" The pixel count verdict rests on an improvement whose lower end is {min(lows):.3f}."
+    elif not any(p["status"] == "on" for p in val["parts"]):
+        c = val["classes"]
+        narrow = (f" No part of the estimate is switched on there: {c['ahead']} of {sum(c.values())} scores are ahead of both "
+                  f"baselines, {c['tied']} are tied and {c['behind']} are behind.")
     out.append(
         f"Validation rests on {val['episodes']} episodes of {' and '.join(str(y) for y in val['years'])} from "
         f"{len(val['regions'])} of the three regions" + (f" ({', '.join(missing)} has none)" if missing else "") + "." + narrow
     )
+    left_out = [(f["name"], f["new"]["passes_that_held_part_of_the_box_not_scored"], f["new"]["hidden_rows_of_those_passes"])
+                for f in fires if f["new"].get("passes_that_held_part_of_the_box_not_scored")]
+    if left_out:
+        out.append(
+            "A pass whose swath held only part of the box is not scored: "
+            + "; ".join(f"{n} on {name} ({rows} hidden pixels)" for name, n, rows in left_out) + "."
+        )
     weakest = min(fires, key=lambda f: f["new"]["ahead_of_both_on"])
     remark = (weakest["new"].get("remarks") or {}).get("csi_strict_375m")
     out.append(
@@ -435,10 +536,8 @@ def evidence() -> dict[str, Any]:
     record = _read(FITTED_DIR / LOOKS_FILE)
     params = _read(FITTED_DIR / PARAMS_FILE)
     env = _read(ENV_FILE)
-    from backend.model.real_run import _test_fire_note
-    from backend.model.training import EXCLUSIONS, _day_s
-
     by_look = {entry["look"]: entry for entry in record["looks"]}
+    look_notes = {entry["look"]: entry.get("note", "") for entry in LOOKS}
     old_look, new_look = by_look[min(by_look)], by_look[max(by_look)]
     fires = []
     for region in REGIONS:
@@ -449,10 +548,9 @@ def evidence() -> dict[str, Any]:
             "old": old_look["fires"][region],
             "looks": [{"look": e["look"], "unit": e["unit"], **e["fires"][region]} for e in record["looks"]],
         })
-    first, after, _ = EXCLUSIONS["plumas_ca"]
-    note = _test_fire_note("plumas_ca", _day_s(first), _day_s(after))
-    h5 = record["rows_of_the_test_year_in_test_boxes_outside_exclusion_dates"]["by_region"]
-    fill = {"h5_total": sum(h5.values()), "h5_each": ", ".join(f"{h5[r]} in {FIRE_NAMES[r]}'s" for r in REGIONS)}
+    outside = record["rows_of_the_test_year_in_test_boxes_outside_exclusion_dates"]["by_region"]
+    fill = {"rows_total": sum(outside.values()),
+            "rows_each": ", ".join(f"{outside[r]} in {FIRE_NAMES[r]}'s" for r in REGIONS)}
     findings = [{**f, "found": f["found"].format(**fill)} for f in AUDIT]
     protocol = params.get("protocol") or {}
     refitted = protocol.get("parameters_fitted_under") == protocol.get("validated_under")
@@ -462,7 +560,8 @@ def evidence() -> dict[str, Any]:
         "test_fires": {
             "hidden": "VIIRS",
             "interval_level": params["evidence"]["validation_fitted"]["methods"]["reconstruction"]["interval"]["stated_level"],
-            "note": "a protocol correction, not a fresh test" if note and "a protocol correction, not a fresh test" in note["note"] else "",
+            "note": look_notes.get(new_look["look"], ""),
+            "values_in_use": values_in_use(record, params),
             "scores": [{"id": sid, "label": label, "better": better} for sid, label, better, _ in SCORES],
             "fires": fires,
             "looks": [{k: e[k] for k in ("look", "unit", "protocol_version", "what")} for e in record["looks"]],
@@ -470,11 +569,12 @@ def evidence() -> dict[str, Any]:
             "also_scored_note": (
                 "every other time rows of the three test fires were scored. None of these is the test; they are "
                 "listed so that the count of looks hides nothing. The environment's test episodes are windows of "
-                "the same fires and are under next_look."
+                "the same fires and are under next_look. A run of a hero fire with VIIRS hidden, asked for from the "
+                "page, computes a score of its own window each time; those are payloads, not looks, and are not listed."
             ),
         },
         "audit": " ".join(f["found"] for f in findings) + " None of this carried the hidden fire's position or power "
-                 "into the estimate, but each path let the hidden instrument shape the test. The lane's own leak tests "
+                 "into the estimate, but each path let the hidden instrument shape the test. The project's own leak tests "
                  "missed it: they changed hidden values and never deleted a row. The corrected protocol seals the "
                  "hidden rows away until scoring." + ("" if refitted else " Nothing was refitted."),
         "audit_findings": findings,
@@ -485,8 +585,9 @@ def evidence() -> dict[str, Any]:
             "test_fires.fires[].looks, test_fires.looks, test_fires.also_scored: every look and every other scoring",
             "each fire test: pixel_interval, scores_judged, ahead_on",
             "audit_findings: the audit's findings one line each, with the answer and the guarding test",
-            "validation: regions, decision, rule, before, and improvement_interval and interval_holds inside parts",
-            "next_look: reward, differences, not_the_same_game_twice, other_settings",
+            "test_fires.values_in_use: whether the fitted values now in use are the ones the figures were made with",
+            "validation: regions, decision, rule, before, history, trained_on, validated_on, empty_looks, intervals, and improvement_interval and interval_holds inside parts",
+            "next_look: reward, differences, not_the_same_game_twice, other_settings, made_with, with_the_earlier_values, before_the_bug_fix",
             "sources",
         ],
         "sources": {

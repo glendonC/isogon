@@ -1,4 +1,4 @@
-"""Unit M4, Terra's morning pass from VIIRS alone (backend/model/terra_morning.py), on the SYNTHETIC fixture."""
+"""Terra's morning pass from VIIRS alone (backend/model/terra_morning.py), on the SYNTHETIC fixture."""
 
 from __future__ import annotations
 
