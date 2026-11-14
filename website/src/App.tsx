@@ -6,7 +6,6 @@ import {
 import { ReadingSheet, type ReadingSection } from './components/ReadingSheet';
 import { EvidenceSheet } from './components/EvidenceSheet';
 import type { EvidenceDoc, EvidenceState } from './content/evidence';
-import { DEMO_PASSES } from './content/demo/passes';
 import { DEMO_TERRA_MORNING } from './content/demo/terraMorning';
 import { TerraMorningPanel } from './components/TerraMorning';
 import { AreaSheet } from './components/AreaSheet';
@@ -34,6 +33,7 @@ import { useSensorModel } from './ui/useSensorModel';
 import { LandingComposition } from './ui/LandingComposition';
 import { imageryCredit } from './ui/attribution';
 import { useCalendar } from './ui/useCalendar';
+import { usePassList } from './ui/usePassList';
 import {
   isRealRun,
   parseBlindTest,
@@ -1156,6 +1156,7 @@ export function App() {
   // What the pass track shows, what each step needs, and the quiet control's contents.
   const trackState: TrackState = !runIsReal ? 'simulated' : holdoutViirs ? 'hidden' : revealed ? 'revealed' : 'normal';
   const trackRevealed = useMemo(() => (revealed ? revealedPassesOf(activeRun) : []), [revealed, activeRun]);
+  const passLists = usePassList(API_BASE, activeRun);
   const stageMonth = activeRun?.epoch_summaries?.[0]?.timestamp_utc?.slice(0, 7) ?? null;
   const lookHere = activeRun?.region.id === roundEpisode.episode.region_id || Boolean(round);
   const stepBlocked: Partial<Record<Step, string | null>> = {
@@ -1482,7 +1483,7 @@ export function App() {
                 <div className="iso-ws__track">
                   <PassTrack
                     run={activeRun}
-                    passLists={SURFACE_SOURCE.passes === 'demo' ? DEMO_PASSES : null}
+                    passLists={passLists}
                     state={trackState}
                     revealed={trackRevealed}
                     timeProgress={timeProgress}

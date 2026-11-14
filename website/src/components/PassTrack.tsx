@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { DynamicRegionRun } from '../stage/types';
-import type { PassList } from '../content/demo/passes';
+import type { PassList } from '../content/passes';
 import {
   localSolarHours,
   passTrack,
@@ -121,7 +121,9 @@ export function PassTrack({ run, passLists, state, revealed, timeProgress, onCha
           <span>
             Pass {current + 1} of {data.frames.length}
           </span>
-          <span className="iso-track__state">{STATE_WORDS[state]}</span>
+          <span className="iso-track__state">
+            {state === 'normal' && !data.showsEmptyPasses ? 'NASA FIRMS passes with fire only' : STATE_WORDS[state]}
+          </span>
         </div>
       </div>
 

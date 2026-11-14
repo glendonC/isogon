@@ -49,7 +49,7 @@ Other keys: Enter takes the step's forward action, Space plays or pauses, the le
 
 A real run and a simulated run are kept apart. When the site asks for a real run and the answer is not one, it is refused, so modelled numbers are never shown as observations.
 
-Some surfaces read stand-in files in `src/content/demo/` instead of a route and say "Demo data" on screen: the passes on the track that flagged nothing, the Terra morning panel, and the calendar of a box outside the three regions with FIRMS rows. The evidence sheet reads `GET /api/evidence` and shows no figure until it answers. [`../docs/architecture.md`](../docs/architecture.md) lists them.
+Some surfaces read stand-in files in `src/content/demo/` instead of a route and say "Demo data" on screen: the Terra morning panel, and the calendar of a box outside the three regions with FIRMS rows. The evidence sheet reads `GET /api/evidence` and shows no figure until it answers. On the pass track, the passes that looked and flagged nothing come from the run itself when its frames are the NASA CMR pass list, and otherwise from `GET /api/passes`; where neither has them (before 2012), the track says it shows passes with fire only. [`../docs/architecture.md`](../docs/architecture.md) lists them.
 
 ## Static files
 

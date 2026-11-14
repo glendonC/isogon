@@ -1,71 +1,68 @@
-import type { EpochSummary } from '../stage/types';
-import type { CmrPass, PassList } from './demo/passes';
-
 /**
- * Every pass that looked at the box during a run, from NASA CMR, set against the run's own frames. Where a frame is
- * a pass with a detection in the box, a pass in the window that matches no frame looked and saw nothing (or saw only
- * cloud). FIRMS alone cannot tell this: it lists detections, not looks.
+ * Every satellite pass over a region's box in a window, fire or no fire: `GET /api/passes` (NASA CMR granule
+ * metadata, matched with the FIRMS rows of each pass). The pass track adds these to a real run whose frames are
+ * only the passes with a detection, so a pass that looked and flagged nothing shows. A run whose frames are the
+ * pass list already holds them and needs no second request.
  */
 
-export interface PassMark {
-  /** Place on the pass scrubber, 0 to 1, between the frames on either side. */
-  at: number;
+export interface CmrPass {
   platform: string;
-  timeUtc: string;
-  sawFire: boolean;
-  cloudPct: number | null;
+  time_mid: string;
+  day_night: 'DAY' | 'NIGHT' | 'BOTH' | string;
+  /** Mean over a whole MODIS granule, not over the box; null for VIIRS. */
+  cloud_cover_pct: number | null;
+  box_share: number;
 }
 
-export interface PassStripData {
-  marks: PassMark[];
-  looked: number;
-  sawFire: number;
-  /** MODIS granule cloud cover of the pass behind each frame, where CMR gives one. */
-  frameCloud: Array<number | null>;
+export interface PassList {
+  region_id: string;
+  box: [number, number, number, number];
+  start: string;
+  end: string;
+  source: string;
+  passes: CmrPass[];
 }
 
-const TOLERANCE_S = 10 * 60;
-const toS = (iso: string) => Date.parse(iso) / 1000;
+type Obj = Record<string, unknown>;
+const obj = (v: unknown): Obj | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : null);
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-function matches(p: CmrPass, sensor: string, t: number) {
-  return p.platform === sensor && Math.abs(toS(p.time_mid) - t) <= TOLERANCE_S;
-}
-
-/**
- * The passes of a run's window, or null when the list does not cover it. With an instrument hidden (a blind run)
- * its passes are left out: they are hidden, not empty.
- */
-export function passStrip(
-  epochs: readonly EpochSummary[] | undefined,
-  lists: readonly PassList[] | null,
-  regionId: string,
-  hiddenFamily: 'VIIRS' | null,
-): PassStripData | null {
-  if (!epochs || epochs.length < 2 || !lists) return null;
-  const frames = epochs.map((e) => ({ t: toS(e.timestamp_utc), sensor: e.primary_sensor }));
-  const t0 = frames[0].t;
-  const tN = frames[frames.length - 1].t;
-  const list = lists.find((l) => l.region_id === regionId && toS(l.start) <= t0 && toS(l.end) >= tN);
-  if (!list) return null;
-  const last = frames.length - 1;
-  const place = (t: number) => {
-    if (t <= t0) return 0;
-    if (t >= tN) return 1;
-    let i = 0;
-    while (i < last - 1 && frames[i + 1].t < t) i += 1;
-    const span = Math.max(1, frames[i + 1].t - frames[i].t);
-    return (i + (t - frames[i].t) / span) / last;
-  };
-  const marks: PassMark[] = list.passes
-    .filter((p) => toS(p.time_mid) >= t0 - TOLERANCE_S && toS(p.time_mid) <= tN + TOLERANCE_S)
-    .filter((p) => !(hiddenFamily && p.platform.startsWith(hiddenFamily)))
+/** The route's answer as a pass list, or null when it is not one. */
+export function parsePassList(body: unknown): PassList | null {
+  const b = obj(body);
+  if (!b || typeof b.region_id !== 'string' || typeof b.start !== 'string' || typeof b.end !== 'string') return null;
+  if (!Array.isArray(b.passes)) return null;
+  const box = Array.isArray(b.box_wsen) && b.box_wsen.length === 4 ? (b.box_wsen as [number, number, number, number]) : [0, 0, 0, 0];
+  const passes: CmrPass[] = b.passes
+    .map(obj)
+    .filter((p): p is Obj => p !== null && typeof p.platform === 'string' && typeof p.time_mid === 'string')
     .map((p) => ({
-      at: place(toS(p.time_mid)),
-      platform: p.platform,
-      timeUtc: p.time_mid,
-      sawFire: frames.some((f) => matches(p, f.sensor, f.t)),
-      cloudPct: p.cloud_cover_pct,
+      platform: String(p.platform),
+      time_mid: String(p.time_mid),
+      day_night: typeof p.day_night === 'string' ? p.day_night : '',
+      cloud_cover_pct: num(p.cloud_cover_pct),
+      box_share: num(p.box_share) ?? 1,
     }));
-  const frameCloud = frames.map((f) => list.passes.find((p) => matches(p, f.sensor, f.t))?.cloud_cover_pct ?? null);
-  return { marks, looked: marks.length, sawFire: marks.filter((m) => m.sawFire).length, frameCloud };
+  return {
+    region_id: b.region_id,
+    box: box as [number, number, number, number],
+    start: b.start,
+    end: b.end,
+    source: typeof b.provenance === 'string' ? b.provenance : 'NASA CMR granule metadata',
+    passes,
+  };
+}
+
+/** The pass list of a window, or null when the route has none for it (not cached, or a region with no schedule). */
+export async function fetchPassList(
+  apiBase: string,
+  regionId: string,
+  startIso: string,
+  endIso: string,
+  signal?: AbortSignal,
+): Promise<PassList | null> {
+  const q = new URLSearchParams({ region_id: regionId, start: startIso, end: endIso });
+  const resp = await fetch(`${apiBase}/api/passes?${q.toString()}`, { signal });
+  if (!resp.ok) return null;
+  return parsePassList(await resp.json());
 }

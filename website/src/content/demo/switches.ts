@@ -7,6 +7,4 @@ export type SurfaceSource = 'demo' | 'live';
 export const SURFACE_SOURCE = {
   /** A round of next look: POST /api/env/next_look/reset and /step, GET /api/env/next_look/state. */
   nextLookRound: 'live',
-  /** The passes that looked and saw nothing: GET /api/passes. */
-  passes: 'demo',
 } as const satisfies Record<string, SurfaceSource>;

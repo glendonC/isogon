@@ -1,5 +1,5 @@
 import type { DynamicRegionRun } from '../stage/types';
-import type { PassList } from './demo/passes';
+import type { PassList } from './passes';
 
 /**
  * The pass track, the workspace's time control. Every pass sits at its real time; VIIRS above the axis, MODIS
@@ -58,6 +58,8 @@ export interface TrackData {
   midnights: number[];
   /** Whether a separate pass list covers the window and added marks (never for a run whose frames are the CMR list). */
   hasPassList: boolean;
+  /** Whether the passes that looked and flagged nothing are on the track: frames from the pass list, or a list added. */
+  showsEmptyPasses: boolean;
   hiddenCount: number;
 }
 
@@ -269,7 +271,20 @@ export function passTrack(
   for (let m = Math.ceil((t0 + offset) / 86400) * 86400 - offset; m <= t1; m += 86400) midnights.push(m);
 
   const maxPixels = Math.max(1, ...marks.map((m) => m.pixels ?? 0));
-  return { t0, t1, lat, lon, frames, marks, maxPixels, nights, midnights, hasPassList: Boolean(list), hiddenCount };
+  return {
+    t0,
+    t1,
+    lat,
+    lon,
+    frames,
+    marks,
+    maxPixels,
+    nights,
+    midnights,
+    hasPassList: Boolean(list),
+    showsEmptyPasses: framesFrom === 'cmr' || Boolean(list),
+    hiddenCount,
+  };
 }
 
 /** The playhead's time for a fractional frame index: between the two frames' real times. */
