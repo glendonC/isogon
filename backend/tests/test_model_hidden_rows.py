@@ -187,6 +187,61 @@ class RunIgnoresHiddenRowsTests(unittest.TestCase):
             self.assertEqual(run.extras["blind_test"]["published"], want, name)
             self.assertEqual(run.extras["blind_test"]["schedule"], self.real.extras["blind_test"]["schedule"], name)
 
+    def test_the_answer_holds_the_cells_each_scored_look_declares_outside_the_scorer_s_part(self) -> None:
+        """`declared_cells` lies beside `blind_test`, not inside it, so an answer that withholds the scorer's part
+        still has it. It is what the scorer compared with the hidden rows: the same looks, the same number of
+        cells and the same digest at each, and the scorer's hits and false alarms add up to them."""
+        doc = real_response(self.real, {})
+        dc, bt = doc["declared_cells"], doc["blind_test"]
+        self.assertNotIn("declared_cells", bt)
+        self.assertNotIn("declared_cells", bt["built_without_hidden_rows"] + bt["from_the_scorer"])
+        self.assertNotIn("declared_cells", doc["hidden_rows"]["payload_keys_from_the_scorer"])
+        self.assertEqual(dc["method"], "reconstruction")
+        g = dc["grid"]
+        self.assertEqual((g["nx"], g["ny"], g["cell_km"]), (bt["grid"]["nx"], bt["grid"]["ny"], bt["grid"]["cell_km"]))
+        self.assertEqual(g["box"], bt["test_box"])
+        slots, pub = bt["schedule"]["slots"], bt["published"]["reconstruction"]
+        self.assertGreater(len(slots), 0)
+        self.assertEqual(len(dc["looks"]), len(slots))
+        for look, slot, p in zip(dc["looks"], slots, pub):
+            self.assertEqual((look["slot"], look["platform"], look["time_utc"]), (slot["index"], slot["platform"], slot["time_utc"]))
+            self.assertEqual(look["frame"], slot.get("frame"))
+            cells = look["cells"]
+            self.assertEqual(cells, sorted(set(cells)))
+            self.assertEqual(len(cells), p["predicted_cells"])
+            mask = np.zeros(g["ny"] * g["nx"], dtype=np.uint8)
+            mask[cells] = 1
+            self.assertEqual(_sha(mask.tobytes()), p["cells_sha256"])
+            self.assertEqual(look["cells_sha256"], p["cells_sha256"])
+        self.assertGreater(sum(len(look["cells"]) for look in dc["looks"]), 0)
+        rows = bt["methods"]["reconstruction"]["per_overpass"]
+        self.assertGreater(len(rows), 0)
+        for po in rows:
+            self.assertEqual(po["tp"] + po["fp"], len(dc["looks"][po["slot"]]["cells"]))
+
+    def test_a_declared_cell_is_where_its_index_says(self) -> None:
+        """The answer says how to place a cell from its index; that rule gives the scorer's own cell centres."""
+        from backend.eval.grid import EvalGrid
+
+        g = self.real.extras["declared_cells"]["grid"]
+        grid = EvalGrid.from_bbox(tuple(g["box"]), g["cell_km"])
+        lon, lat = grid.cell_lonlat()
+        self.assertEqual((g["rows_run"], g["index"]), ("north to south", "row * nx + column"))
+        for index in (0, g["nx"] - 1, g["nx"], g["nx"] * g["ny"] - 1):
+            row, col = divmod(index, g["nx"])
+            self.assertAlmostEqual(g["box"][0] + (col + 0.5) * g["cell_deg"][0], float(lon[row, col]), places=9)
+            self.assertAlmostEqual(g["box"][1] + (g["ny"] - row - 0.5) * g["cell_deg"][1], float(lat[row, col]), places=9)
+
+    def test_the_declared_cells_do_not_move_with_the_hidden_rows(self) -> None:
+        want = json.dumps(self.real.extras["declared_cells"], sort_keys=True)
+        for name, run in self.other.items():
+            self.assertEqual(json.dumps(run.extras["declared_cells"], sort_keys=True), want, name)
+
+    def test_a_run_with_nothing_hidden_declares_no_cells(self) -> None:
+        both = _solve(ROWS6, self.READ_PASSES, holdout=False)
+        self.assertIsNone(both.extras["declared_cells"])
+        self.assertNotIn("declared_cells", both.extras["fit_residuals"])
+
     def test_every_payload_key_outside_the_scorer_is_byte_identical(self) -> None:
         want = _without_the_scorer(self.real)
         for name, run in self.other.items():
@@ -239,6 +294,10 @@ class RunFromThePassListIgnoresHiddenRowsTests(RunIgnoresHiddenRowsTests):
         self.assertEqual(gone.extras["blind_test"]["published"], self.real.extras["blind_test"]["published"])
         self.assertEqual(_sha(gone.reconstruction_u8_bytes), _sha(self.real.reconstruction_u8_bytes))
         self.assertEqual(self.real.extras["blind_test"]["protocol"]["version"], 3)
+
+    def test_each_look_that_declares_cells_is_a_held_out_frame(self) -> None:
+        held = [f["frame"] for f in self.real.observer_passes["frames"] if f["held_out"]]
+        self.assertEqual([look["frame"] for look in self.real.extras["declared_cells"]["looks"]], held)
 
     def test_schedule_and_frames_are_identical_under_every_perturbation(self) -> None:
         for name, run in self.other.items():

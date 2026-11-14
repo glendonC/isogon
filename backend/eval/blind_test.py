@@ -138,6 +138,47 @@ def declared(pred: Prediction) -> NDArray[np.bool_]:
     return pred.cells if pred.cells is not None else pred.p_detect >= PREDICTED_CELL_PROBABILITY
 
 
+def cells_digest(mask: NDArray[np.bool_]) -> str:
+    """sha256 of a set of declared cells: one byte per cell of the grid, row by row, 1 where the cell is declared."""
+    return hashlib.sha256(np.ascontiguousarray(mask, dtype=np.uint8).tobytes()).hexdigest()
+
+
+def declared_cells(grid: EvalGrid, slots: list[Slot], masks: list[dict[str, NDArray[np.bool_]]], method: str) -> dict[str, Any]:
+    """The cells one method declares at each scheduled look, as plain lists, for a page that draws what is scored.
+
+    `masks` are the masks the scorer compares with the hidden detections (`declared` of each published
+    prediction), so what is listed here and what is scored are the same arrays. They are fixed before the sealed
+    rows are opened: nothing here depends on a hidden row. Each look carries the digest its published entry
+    carries (`cells_sha256`), so the two can be checked against each other once the scorer's part is shown.
+    """
+    return {
+        "what": (
+            f"the cells the {method} declares as burning at each scheduled look of the hidden instrument: the cells "
+            "the blind test compares with the hidden detections of that look, fixed before those are opened"
+        ),
+        "method": method,
+        "grid": {
+            "box": [round(v, 6) for v in grid.bbox],
+            "cell_km": grid.cell_km,
+            "nx": grid.nx,
+            "ny": grid.ny,
+            "index": "row * nx + column",
+            "rows_run": "north to south",
+            "cell_deg": [grid.cell_km / grid.km_per_deg_lon, grid.cell_km / grid.km_per_deg_lat],
+            "centre_of_a_cell": (
+                "longitude: box[0] + (column + 0.5) * cell_deg[0]; latitude: box[1] + (ny - row - 0.5) * cell_deg[1]. "
+                "The grid starts at the south-west corner of the box and may reach a part of a cell past its east and north edges"
+            ),
+        },
+        "looks": [
+            {"slot": s.index, "frame": None, "platform": s.platform, "time_utc": _iso(s.time_s), "is_day": s.is_day,
+             "cells": [int(i) for i in np.flatnonzero(row[method])], "cells_sha256": cells_digest(row[method])}
+            for s, row in zip(slots, masks)
+        ],
+        "frame_note": "looks[i].frame is the frame of a run that the look is, when the run's frames come from the pass list; null otherwise",
+    }
+
+
 def _published_entry(slot: Slot, pred: Prediction) -> dict[str, Any]:
     """What a method fixed for one slot, with a digest of its fields so two runs can be compared byte for byte."""
     mask = declared(pred)
@@ -153,6 +194,7 @@ def _published_entry(slot: Slot, pred: Prediction) -> dict[str, Any]:
         "pixel_interval": None if pred.pixels_lo is None else [round(float(pred.pixels_lo), 2), round(float(pred.pixels_hi), 2)],
         "interval_mw": None if pred.frp_total_lo is None else [round(float(pred.frp_total_lo), 3), round(float(pred.frp_total_hi), 3)],
         "fields_sha256": h.hexdigest(),
+        "cells_sha256": cells_digest(mask),
     }
 
 
@@ -280,6 +322,7 @@ def blind_test_sealed(
     schedule: str = S.SOURCE_AUTO,
     read_passes: S.PassReader | None = None,
     given: tuple[list[Slot], str, dict[str, Any]] | None = None,
+    declare: str | None = None,
 ) -> dict[str, Any]:
     """Run the protocol above and return a report dict (JSON serialisable).
 
@@ -293,6 +336,8 @@ def blind_test_sealed(
     `given` is a schedule the caller already holds, as `schedule.schedule_for` returns it (slots, source, what was
     left out): a run hands over the held-out passes among its frames, so the looks scored are those frames and
     no other. It must come from the pass list or the nominal schedule; nothing checks that here.
+    `declare` names a method whose declared cells at every look the report then lists (`declared_cells`), for a
+    page that draws what is scored. They are the masks the scorer uses, fixed before the sealed rows are opened.
     """
     grid = EvalGrid.from_bbox(bbox, cell_km)
     if window is None:
@@ -321,6 +366,9 @@ def blind_test_sealed(
     published = publish(methods, slots, grid)
     published_out = {m.name: [_published_entry(slot, row[m.name]) for slot, row in zip(slots, published)] for m in methods}
     masks = [{name: declared(pred) for name, pred in row.items()} for row in published]
+    if declare is not None and declare not in names:
+        raise ValueError(f"no method named {declare} declares cells here")
+    declared_out = None if declare is None else declared_cells(grid, slots, masks, declare)
     vis_in = visible.select(visible.in_box(bbox))
 
     # ---- the scorer: with the pass list or the nominal schedule nothing above this line has read the sealed rows ---
@@ -381,7 +429,7 @@ def blind_test_sealed(
     ref = reference_method if has_ref else None
     hidden_label = sealed.family or "named platforms"
     blind = source != S.SOURCE_HIDDEN_TIMES
-    return {
+    report: dict[str, Any] = {
         "source": visible.source,
         "protocol": dict(PROTOCOLS[source]),
         "hidden_instrument": hidden_label,
@@ -433,6 +481,11 @@ def blind_test_sealed(
             "methods": {name: t.result(ref, with_rows=False) for name, t in subset.items()},
         },
     }
+    if declared_out is not None:
+        report["declared_cells"] = declared_out
+        if blind:
+            report["built_without_hidden_rows"].append("declared_cells")
+    return report
 
 
 def reveal(

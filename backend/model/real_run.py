@@ -375,6 +375,7 @@ def solve_real_reconstruction(
     # test: the sealed rows go to the scorer. Without one the same scoring runs with VIIRS assimilated, so the
     # figures are fit residuals and are labelled so.
     report: dict[str, Any] | None = None
+    declared: dict[str, Any] | None = None       # the cells the reconstruction declares at each scored look
     count_ratio_missing: str | None = None
     if ratio_fit is not None and count_ratio is None:
         from backend.model.calendar_ratio import calendar_ratio
@@ -397,12 +398,21 @@ def solve_real_reconstruction(
                 # from the list again for the hidden platforms alone
                 _, left = S.pass_slots(tuple(hidden_platforms), win.start_s, win.end_s, bbox, read_passes)
                 given = ([s for _, s in held], S.SOURCE_CMR, {"platforms": hidden_platforms, **left})
-                report = blind_test_sealed(visible, sealed, bbox, methods, window=span, given=given)
+                report = blind_test_sealed(visible, sealed, bbox, methods, window=span, given=given, declare="reconstruction")
                 for entry, (k, _) in zip(report["schedule"]["slots"], held):
                     entry["frame"] = k
                 report["schedule"]["frames_note"] = "slots[i].frame is the held-out frame of the run that slot i is; every held-out frame is a slot"
             else:
-                report = blind_test_sealed(visible, sealed, bbox, methods, window=span, read_passes=read_passes)
+                report = blind_test_sealed(visible, sealed, bbox, methods, window=span, read_passes=read_passes,
+                                           declare="reconstruction")
+            # The declared cells leave the report and go beside it in the answer: a server withholds the report
+            # until the reveal, and these were fixed before the hidden rows were opened, so a page may draw them
+            # from the first answer. Each published entry keeps their digest (`cells_sha256`).
+            declared = report.pop("declared_cells")
+            report["built_without_hidden_rows"].remove("declared_cells")
+            if from_list:
+                for look, (k, _) in zip(declared["looks"], held):
+                    look["frame"] = k
             report["reveal"] = reveal(sealed, bbox, span, [fr.time_s for fr in frames], VIIRS_CLASS_NUMBER,
                                       held_out_frames=held if from_list else None)
             report["from_the_scorer"] = report["from_the_scorer"] + ["reveal", "verdict"]
@@ -599,7 +609,13 @@ def solve_real_reconstruction(
             ),
             "payload_keys_from_the_scorer": (["blind_test"] + [f"metrics.{k}" for k in METRICS_FROM_HIDDEN_ROWS]) if holdout else [],
             "everything_else": "byte for byte the same whatever the hidden rows hold (pipeline_stages durations are wall clock times)",
+            "declared_cells": (
+                "declared_cells holds the cells the reconstruction declares at each scored look. They are the cells "
+                "the scorer compares with the hidden detections, they were fixed before the hidden rows were opened, "
+                "and they are not part of what the scorer wrote" if holdout else "nothing was hidden, so no cell was declared"
+            ),
         },
+        "declared_cells": declared,
         "model": {
             "version": REAL_MODEL_VERSION,
             "method": "forward and backward occupancy filter on the 375 m grid (backend/model/occupancy.py)",
