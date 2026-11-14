@@ -707,7 +707,8 @@ One frame's passes and footprints, filtered, with what the filter leaves.
     "observable_flux_fraction": 0.8786,
     "reconstructed_field_total_frp_mw": 10301.18,
     "mean_epistemic_sigma_mw_km2": 1.262,
-    "high_uncertainty_area_fraction": 0.0
+    "high_uncertainty_area_fraction": 0.0,
+    "intensity_scale": "linear"
   },
   "footprint_schema": ["lon", "lat", "scan_km", "track_km", "angle_deg", "frp_mw", "confidence", "sensor_code"],
   "footprints": [[-121.1162, 40.0471, 0.42, 0.38, 75.6, 14.25, 94, 2]]
@@ -716,7 +717,7 @@ One frame's passes and footprints, filtered, with what the filter leaves.
 
 Shortened: `footprints` has 92 rows. This is `GET /api/observer?frame=12&sensor=viirs`.
 
-A footprint is also dropped when the modelled probability of detecting it is under 0.25. The last three values of `sensitivity_diagnostics` read the tensor on the simulated run's linear scale, so on a real run, whose tensor is on the log scale, they are not in MW; use the run's `epoch_summaries` there.
+A footprint is also dropped when the modelled probability of detecting it is under 0.25. `reconstructed_field_total_frp_mw`, `mean_epistemic_sigma_mw_km2` and `high_uncertainty_area_fraction` (the share of cells whose standard deviation is above 8 MW/km2) read the frame's tensor on the scale the run wrote it, named in `intensity_scale`: `linear` for a simulated run, `log10` for a real run (its payload's `encoding`).
 
 Errors: `400` when `frame` is not a whole number from 0 to 23, when `sensor` is not one of the values above, or when `min_frp` or `max_zenith` is not a finite number.
 

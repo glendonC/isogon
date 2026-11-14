@@ -288,6 +288,19 @@ def query_number(raw: str, name: str) -> float:
     return f
 
 
+def frame_fields(tensor_u8: NDArray[np.uint8], frame_idx: int, encoding: dict[str, Any] | None) -> tuple[NDArray[np.float64], NDArray[np.float64], str]:
+    """(FRP density, its standard deviation, the scale read) of one frame, both in MW/km2. A real run writes its
+    channels on the logarithmic byte scale its payload's ``encoding`` names (`backend/model/encoding.py`); a
+    simulated run writes them linearly over 0 to Z_MAX_MW_KM2 and 0 to SIGMA_MAX_MW_KM2."""
+    if encoding and encoding.get("scale") == "log10":
+        from backend.model.encoding import decode_u8
+
+        return decode_u8(tensor_u8[frame_idx, :, :, 0]), decode_u8(tensor_u8[frame_idx, :, :, 1]), "log10"
+    z = tensor_u8[frame_idx, :, :, 0].astype(np.float64) / 255.0 * Z_MAX_MW_KM2
+    sigma = tensor_u8[frame_idx, :, :, 1].astype(np.float64) / 255.0 * SIGMA_MAX_MW_KM2
+    return z, sigma, "linear"
+
+
 class IsogonDataStore:
     """In-memory scientific artifact store, dynamic world-model solver, and query engine."""
 
@@ -820,6 +833,7 @@ class IsogonDataStore:
         active_tensor = self.tensor_u8
         active_area = self.cell_area_km2
         active_prov = PROVENANCE_NOTE
+        active_encoding: dict[str, Any] | None = None
 
         if run_id:
             entry = self.get_run(run_id)
@@ -830,6 +844,7 @@ class IsogonDataStore:
                 active_tensor = run_obj.tensor_u8
                 active_area = run_obj.cell_area_km2
                 active_prov = run_obj.provenance
+                active_encoding = (getattr(run_obj, "extras", None) or {}).get("encoding")
 
         frame_meta = active_obs["frames"][frame_idx]
         fp_mat = active_fp_arrays[frame_idx]
@@ -927,12 +942,7 @@ class IsogonDataStore:
             }
             pass_present = False
 
-        z_hat_slice = (
-            active_tensor[frame_idx, :, :, 0].astype(np.float64) / 255.0 * Z_MAX_MW_KM2
-        )
-        sigma_slice = (
-            active_tensor[frame_idx, :, :, 1].astype(np.float64) / 255.0 * SIGMA_MAX_MW_KM2
-        )
+        z_hat_slice, sigma_slice, scale_read = frame_fields(active_tensor, frame_idx, active_encoding)
         reconstructed_total_frp_mw = float(np.sum(z_hat_slice * active_area))
         high_sigma_frac = float(np.mean(sigma_slice > 8.0))
 
@@ -981,6 +991,7 @@ class IsogonDataStore:
                 "reconstructed_field_total_frp_mw": round(reconstructed_total_frp_mw, 2),
                 "mean_epistemic_sigma_mw_km2": round(float(np.mean(sigma_slice)), 3),
                 "high_uncertainty_area_fraction": round(high_sigma_frac, 3),
+                "intensity_scale": scale_read,
             },
             "footprint_schema": active_obs["footprint_schema"],
             "footprints": footprints_out,
