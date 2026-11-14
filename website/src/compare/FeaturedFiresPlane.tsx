@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FeaturedFire, Place, Places } from '../app/places';
+import { useWorkspace } from '../app/store';
 import { canonicalJson, postJson } from '../lib/api';
 import { ComparePlane } from './ComparePlane';
 import { fireBlock } from './blocks';
@@ -27,11 +28,17 @@ export interface FeaturedFiresPlaneProps {
   runBody?: (place: Place, fire: FeaturedFire) => unknown;
 }
 
+/**
+ * The body the shell opens a fire with (`executeWorldModel` in App.tsx), so that the plane's request is the one
+ * the page already makes: a recorded test fire with every satellite, any other fire with the sharp one held out.
+ */
 const defaultBody = (place: Place, fire: FeaturedFire): unknown => ({
-  region_id: place.id,
+  holdout_viirs: !fire.blind_test_fire,
+  cloud_override: null,
   source: 'firms',
   start: fire.default_start,
-  holdout_viirs: !fire.blind_test_fire,
+  ...(fire.blind_test_fire ? {} : { holdout: 'viirs' }),
+  region_id: place.id,
 });
 
 /** Runs already asked for, by their request, so that opening the place screen again costs nothing. */
@@ -104,4 +111,13 @@ export function FeaturedFiresPlane({ places, currentFire, onFire, include = 'all
       />
     </div>
   );
+}
+
+/**
+ * The featured fires from the workspace's own store: the registry, the fire on the terrain, and the store's way of
+ * opening a fire. `standing` is the page's own wording of what a fire is to the model, when it has one.
+ */
+export function FeaturedFires({ standing }: { standing?: (fire: FeaturedFire) => string | null }) {
+  const ws = useWorkspace();
+  return <FeaturedFiresPlane places={ws.places} currentFire={ws.currentFire} onFire={ws.calendar.chooseFire} standing={standing} />;
 }

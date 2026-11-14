@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '../../app/store';
 import { ComparePlane } from '../../compare/ComparePlane';
-import { groundOfRun, playBlocks, playerBlocks, readPlay, roundLooks, seenRows, signed, type PlaySummary } from '../../compare/blocks';
+import { groundOfRun, playBlocks, readPlay, seenRows, signed, type PlaySummary } from '../../compare/blocks';
 import type { CompareAnchor } from '../../compare/types';
 import { platformName } from '../../content/realRuns';
 import { usePlays } from './usePlays';
@@ -15,16 +15,18 @@ import './agent.css';
 
 /** Time between two looks while a play is watched, ms. */
 const LOOK_MS = 1100;
+/** Room kept under the row of blocks: the label, then the picked player's card. Pixels. */
+const UNDER_BLOCKS = 344;
+/** Where the card starts under a block's lowest corner, below the label. Pixels. */
+const CARD_BELOW = 92;
+const CARD_WIDTH = 400;
 
 function PlayCard({ play, anchor, width }: { play: PlaySummary; anchor: CompareAnchor; width: number }) {
-  // Beside the block, on the side with more room
-  const onRight = anchor.rect.left + anchor.rect.width / 2 < width / 2;
-  const style = onRight
-    ? { left: anchor.rect.left + anchor.rect.width + 12, top: anchor.rect.top }
-    : { right: width - anchor.rect.left + 12, top: anchor.rect.top };
+  // Under its own block, so that it covers no other; kept inside the picture at the sides
+  const left = Math.min(Math.max(anchor.x - CARD_WIDTH / 2, 8), Math.max(8, width - CARD_WIDTH - 8));
   const why = [...new Set(play.looks.map((l) => l.why).filter((w): w is string => !!w))];
   return (
-    <div className="agent-card sys-card sys-plate" style={style}>
+    <div className="agent-card sys-card sys-plate" style={{ left, top: anchor.y + CARD_BELOW, width: CARD_WIDTH }}>
       <div className="sys-label sys-strong">{play.name}</div>
       <table className="sys-table">
         <thead>
@@ -40,7 +42,7 @@ function PlayCard({ play, anchor, width }: { play: PlaySummary; anchor: CompareA
             <tr key={l.decision}>
               <td className="sys-num">{i + 1}</td>
               <td>
-                {l.platform ? platformName(l.platform) : ''} {l.timeUtc ? `${l.timeUtc.slice(11, 16)} UTC` : ''}
+                {l.platform ? platformName(l.platform) : ''} {l.timeUtc ? `${l.timeUtc.slice(0, 10)} ${l.timeUtc.slice(11, 16)} UTC` : ''}
               </td>
               <td className="sys-num">{l.found.length}</td>
               <td className="sys-num">{l.reward !== null ? signed(l.reward) : ''}</td>
@@ -77,20 +79,10 @@ export function AgentPicture() {
     () => (plays.state === 'plays' ? plays.plays.map(readPlay).filter((p): p is PlaySummary => p !== null) : []),
     [plays],
   );
-  const most = useMemo(() => {
-    if (plays.state === 'plays') return Math.max(0, ...summaries.map((p) => p.looks.length));
-    if (plays.state === 'round') return roundLooks(plays.end);
-    return 0;
-  }, [plays, summaries]);
+  const most = useMemo(() => Math.max(0, ...summaries.map((p) => p.looks.length)), [summaries]);
 
   const blocks = useMemo(() => {
-    const shown = looks ?? undefined;
-    const made =
-      plays.state === 'plays'
-        ? playBlocks(ground, plays.plays, { seen, looks: shown })
-        : plays.state === 'round'
-          ? playerBlocks(ground, plays.start, plays.end, { looks: shown })
-          : [];
+    const made = plays.state === 'plays' ? playBlocks(ground, plays.plays, { seen, looks: looks ?? undefined }) : [];
     return made.map((b) => (b.id === picked ? { ...b, state: 'selected' as const } : b));
   }, [plays, ground, seen, looks, picked]);
 
@@ -125,7 +117,7 @@ export function AgentPicture() {
 
   const pickedPlay = summaries.find((p) => p.id === picked);
   const pickedAnchor = anchors.find((a) => a.id === picked);
-  const start = plays.state === 'plays' ? summaries[0]?.scoreStart : null;
+  const start = summaries[0]?.scoreStart ?? null;
 
   return (
     <div className="agent-picture" ref={hostRef}>
@@ -134,6 +126,7 @@ export function AgentPicture() {
       ) : (
         <ComparePlane
           blocks={blocks}
+          labelSpace={UNDER_BLOCKS}
           ariaLabel="The players of this round"
           onPick={(id) => setPicked((was) => (was === id ? null : id))}
           onAnchors={setAnchors}

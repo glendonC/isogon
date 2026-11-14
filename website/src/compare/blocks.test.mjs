@@ -2,7 +2,7 @@
 // not been shown: no row of the hidden satellite before the reveal, and for a player only what its own looks found.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cutAround, fireBlock, groundOfRun, playBlocks, playerBlocks, readPlay, seenRows, threeWays } from './blocks.ts';
+import { cutAround, fireBlock, groundOfRun, playBlocks, playerBlocks, readPlay, seenRows, signed, threeWays } from './blocks.ts';
 import { levelLines } from './marks.ts';
 
 const BOX = [-121, 39, -120, 40];
@@ -253,4 +253,11 @@ test('what every player could see never holds a row of the sharp satellite, even
   assert.deepEqual(seenRows(allSensors).map((r) => r.lon), [-120.5]);
   // The same holds for a featured fire's block
   assert.equal(fireBlock({ name: 'Somewhere' }, { id: 'f', label: 'January 2020' }, allSensors).marks[0].rows.length, 1);
+});
+
+test('a gain carries its sign, and one that rounds to nothing carries none', () => {
+  assert.equal(signed(0.1182), '+0.118');
+  assert.equal(signed(-0.0111), '-0.011');
+  assert.equal(signed(-0.0003), '0.000');
+  assert.equal(signed(0), '0.000');
 });

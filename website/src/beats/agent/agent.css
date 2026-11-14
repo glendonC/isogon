@@ -24,9 +24,14 @@
   padding: var(--sys-s3) var(--sys-s5) var(--sys-s4);
 }
 
-/* What a picked player did, look by look, beside its block. */
+/* What a picked player did, look by look, under its own block. */
 .agent-card {
   position: absolute;
   z-index: 1;
   max-width: none;
+}
+
+.agent-card .sys-table {
+  width: 100%;
+  white-space: nowrap;
 }

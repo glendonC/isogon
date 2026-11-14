@@ -36,8 +36,11 @@ const boxOf = (x: unknown): Box | null => {
 
 const clock = (iso: string): string => `${iso.slice(11, 16)} UTC`;
 const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
-/** A gain with its sign, to three places. */
-export const signed = (g: number): string => `${g >= 0 ? '+' : '-'}${Math.abs(g).toFixed(3)}`;
+/** A gain with its sign, to three places. One that rounds to nothing carries no sign. */
+export const signed = (g: number): string => {
+  const shown = Math.abs(g).toFixed(3);
+  return Number(shown) === 0 ? shown : `${g >= 0 ? '+' : '-'}${shown}`;
+};
 
 /** The ground of a run: its 512 elevation, its 2K image, its box and its size on the ground. */
 export function groundOfRun(run: unknown): CompareGround | null {
