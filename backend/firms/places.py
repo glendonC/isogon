@@ -12,7 +12,11 @@
   never seen), comes from the model lane's function when it exists (`MODEL_ROLE_FUNCTION`): two fields,
   `to_the_world_model` and `to_the_learned_agent`, null until then.
 - The default: the largest featured fire the world model never saw; while the standings are null, the largest that
-  is not a blind test fire. The answer says which reading chose it. The learned agent's standing is served beside it
+  is not a blind test fire. The answer says which reading chose it. Each place's own default follows the same rule
+  inside the place; a place whose only fires are recorded test fires opens on its largest one.
+- A recorded test fire opens on its recorded window (the last look of `backend/model/fitted_values/test_fire_looks.json`)
+  with every satellite shown: its blind test is on record and is not run, revealed or played again. Every other fire
+  opens held out, at its busiest start. The learned agent's standing is served beside it
   and is not part of the rule: its episodes cover 2012 to 2023, so a fire the world model never saw may be one the
   agent was fitted on.
 
@@ -37,6 +41,10 @@ NAME_MATCH_DEG: float = 0.5           # a named fire's point within this of the 
 MODEL_ROLE_FUNCTION: tuple[str, str] = ("backend.model.fire_roles", "fire_roles")
 PARTS: dict[str, str] = {"world_model": "to_the_world_model", "learned_agent": "to_the_learned_agent"}
 NEVER_SEEN: str = "never seen"
+LOOKS_FILE: Path = Path(__file__).resolve().parents[1] / "model" / "fitted_values" / "test_fire_looks.json"
+OPEN_RECORDED: str = ("a recorded test fire: it opens on its recorded window with every satellite shown "
+                      "(holdout_viirs false); its blind test is on record at GET /api/evidence and is not run again")
+OPEN_HELD_OUT: str = "opens held out (holdout_viirs true) at its busiest start; the reveal scores it"
 DEFAULT_RULE: str = ("the largest featured fire the world model never saw (MODIS pixels in the box at its busiest "
                      "start); while the standings are not served, the largest featured fire that is not a blind test "
                      "fire")
@@ -128,6 +136,42 @@ def featured_periods(region_id: str, starts: list[dict[str, Any]], named: list[d
     return out
 
 
+def recorded_windows(path: Path = LOOKS_FILE) -> dict[str, dict[str, Any]]:
+    """{region_id: the window of the last recorded look at its test fire}, from the tracked record of the looks."""
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        last = doc["looks"][-1]
+    except (OSError, ValueError, KeyError, IndexError):
+        return {}
+    return {r: {"first_overpass_utc": f.get("first_overpass_utc"), "last_overpass_utc": f.get("last_overpass_utc"),
+                "look": last.get("look"), "protocol_version": last.get("protocol_version")}
+            for r, f in (last.get("fires") or {}).items()}
+
+
+def opening(p: dict[str, Any], recorded: dict[str, dict[str, Any]]) -> None:
+    """Set how a featured fire opens: a recorded test fire on its recorded window with every satellite shown."""
+    rec = recorded.get(p["region_id"]) if p["blind_test_fire"] else None
+    if rec and rec.get("first_overpass_utc"):
+        p["default_start"] = rec["first_overpass_utc"]
+        p["default_start_rule"] = (f"the recorded window of look {rec['look']} at this test fire "
+                                   f"({LOOKS_FILE.relative_to(LOOKS_FILE.parents[2]).as_posix()})")
+        p["opens"] = {"holdout_viirs": False, "what": OPEN_RECORDED, "recorded_window": rec}
+    else:
+        p["opens"] = {"holdout_viirs": True, "what": OPEN_HELD_OUT}
+
+
+def choose(periods: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:
+    """(the featured fire a place or the whole entry opens on, the reading that chose it)."""
+    known = [p for p in periods if p.get(PARTS["world_model"]) is not None]
+    if known:
+        pool, reading = [p for p in known if p[PARTS["world_model"]] == NEVER_SEEN], "the world model's standing"
+    else:
+        pool, reading = [p for p in periods if not p["blind_test_fire"]], "while the standings are not served"
+    if not pool:
+        pool, reading = list(periods), "only recorded test fires here: the largest, on its recorded window"
+    return max(pool, key=lambda p: p["size"]["modis_pixels_in_box"], default=None), reading
+
+
 def _model_roles() -> Callable[..., Any] | None:
     import importlib
 
@@ -157,16 +201,17 @@ def region_years(region_id: str) -> dict[str, Any]:
 
 
 def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any = None,
-                   path: Path = PLACES_FILE, default_start_of: Callable[[str], Any] | None = None) -> dict[str, Any]:
+                   path: Path = PLACES_FILE, recorded: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     """{"places": [...], "default": {...}, "box_calendar": {...}} for `GET /api/regions`. ``starts_of(region_id)``
-    gives the region's real run starts and ``default_start_of(region_id)`` the start a run opens on; ``index`` is
-    the box index, for the countries it covers."""
+    gives the region's real run starts; ``index`` is the box index, for the countries it covers; ``recorded`` the
+    recorded test fire windows (read from the record of the looks when not given)."""
     from backend.firms.archive import REGION_COUNTRY, region_box
     from backend.firms.real_calendar import BOX_MAX_SPAN_DEG, BOX_MIN_SPAN_DEG
     from backend.terrain.live_region import PRESET_REGIONS
 
     doc = load_places(path)
     roles = _model_roles()
+    recorded = recorded_windows() if recorded is None else recorded
     out, periods = [], []
     for spec in PRESET_REGIONS:
         b = spec.bbox
@@ -183,9 +228,12 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
                     got = {}
                 for part, field in PARTS.items():
                     p[field] = got.get(part)
+        for p in featured:
+            opening(p, recorded)
         for f in named:
             f["featured_fire"] = next((p["id"] for p in featured if f["id"] in p["named_fires"]), None)
         periods += featured
+        here, here_reading = choose(featured)
         out.append({
             "id": spec.id,
             "name": spec.name,
@@ -196,17 +244,15 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
             "calendar": f"/api/calendar?source=firms&region_id={spec.id}" if real else None,
             "years": region_years(spec.id) if real else None,
             "starts": ({"route": f"/api/runs/starts?region_id={spec.id}&source=firms", "count": len(starts),
-                        "default_start": default_start_of(spec.id) if default_start_of else None} if real else None),
+                        "default_start": here["default_start"] if here else None,
+                        "default_featured_fire": here["id"] if here else None,
+                        "default_holdout_viirs": here["opens"]["holdout_viirs"] if here else None,
+                        "default_rule": f"{DEFAULT_RULE}, inside this place ({here_reading})"} if real else None),
             "featured_fires": featured,
             "named_fires": named,
         })
 
-    known = [p for p in periods if p.get(PARTS["world_model"]) is not None]
-    if known:
-        pool, reading = [p for p in known if p[PARTS["world_model"]] == NEVER_SEEN], "the world model's standing"
-    else:
-        pool, reading = [p for p in periods if not p["blind_test_fire"]], "while the standings are not served"
-    pick = max(pool, key=lambda p: p["size"]["modis_pixels_in_box"], default=None)
+    pick, reading = choose(periods)
     countries: dict[str, list[float]] = {}
     if index is not None:
         try:
@@ -216,7 +262,7 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
     return {
         "places": out,
         "default": ({"region_id": pick["region_id"], "featured_fire": pick["id"], "start": pick["default_start"],
-                     "rule": DEFAULT_RULE, "chosen_by": reading,
+                     "holdout_viirs": pick["opens"]["holdout_viirs"], "rule": DEFAULT_RULE, "chosen_by": reading,
                      **{field: pick[field] for field in PARTS.values()}} if pick else
                     {"region_id": None, "featured_fire": None, "start": None, "rule": DEFAULT_RULE, "chosen_by": reading}),
         "featured_fires_rule": (f"periods of the starts the start search marks busiest, less than {PERIOD_GAP_DAYS} "

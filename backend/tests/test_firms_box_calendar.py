@@ -207,9 +207,22 @@ class PlacesRegistryTests(unittest.TestCase):
         self.assertEqual([s["start"] for s in got[1]["run_starts"]], ["2012-08-02", "2012-08-10"])
         self.assertIsNone(got[1]["to_the_world_model"])
         self.assertIsNone(got[1]["to_the_learned_agent"])
-        out = places_payload(lambda region: starts if region == "plumas_ca" else [])
+        recorded = {"plumas_ca": {"first_overpass_utc": "2021-07-22T21:13:00Z", "last_overpass_utc": "2021-07-25T06:22:00Z",
+                                  "look": 3, "protocol_version": 3}}
+        out = places_payload(lambda region: starts if region == "plumas_ca" else [], recorded=recorded)
         self.assertEqual((out["default"]["featured_fire"], out["default"]["start"]), ("plumas_ca:2012-08", "2012-08-10"))
         self.assertEqual(out["default"]["chosen_by"], "while the standings are not served")
+        self.assertTrue(out["default"]["holdout_viirs"])
+        place = next(p for p in out["places"] if p["id"] == "plumas_ca")
+        self.assertEqual((place["starts"]["default_start"], place["starts"]["default_holdout_viirs"]), ("2012-08-10", True))
+        # a recorded test fire opens on its recorded window with every satellite shown, never held out
+        dixie = next(p for p in place["featured_fires"] if p["blind_test_fire"])
+        self.assertEqual((dixie["default_start"], dixie["opens"]["holdout_viirs"]), ("2021-07-22T21:13:00Z", False))
+        # a place whose only fires are recorded test fires opens on its record
+        only = places_payload(lambda region: [st("2021-07-18", 1700), st("2021-08-03", 1749)] if region == "plumas_ca" else [],
+                              recorded=recorded)
+        p0 = next(p for p in only["places"] if p["id"] == "plumas_ca")
+        self.assertEqual((p0["starts"]["default_start"], p0["starts"]["default_holdout_viirs"]), ("2021-07-22T21:13:00Z", False))
         # with the model's standings served, the default is the largest fire the world model never saw
         from unittest import mock
 
@@ -283,6 +296,9 @@ class RoutesTests(unittest.TestCase):
         self.assertEqual(ids["evia_greece"]["years"]["country_files"][0], 2000)
         self.assertEqual(ids["evia_greece"]["starts"]["count"], len(self._get("/api/runs/starts?region_id=evia_greece&source=firms")[1]["starts"]))
         self.assertIn("default", places)
+        evia = ids["evia_greece"]   # only a recorded test fire there: it opens on its record, every satellite shown
+        self.assertEqual(evia["starts"]["default_holdout_viirs"], False)
+        self.assertTrue(all(f["opens"]["holdout_viirs"] is False for f in evia["featured_fires"] if f["blind_test_fire"]))
         self.assertIn("Greece", places["box_calendar"]["countries"])
         self.assertEqual(self._get("/api/calendar?source=firms&box=1,2,3")[0], 400)
         status, missing = self._get("/api/calendar?source=firms&box=10,10,11,11")

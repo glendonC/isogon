@@ -111,7 +111,7 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
       "rows": "firms",
       "calendar": "/api/calendar?source=firms&region_id=plumas_ca",
       "years": {"country_files": [2000, 2025], "area_api_through": "2026-11-13", "what": "..."},
-      "starts": {"route": "/api/runs/starts?region_id=plumas_ca&source=firms", "count": 53, "default_start": "..."},
+      "starts": {"route": "/api/runs/starts?region_id=plumas_ca&source=firms", "count": 53, "default_start": "2012-08-10", "default_featured_fire": "plumas_ca:2012-08", "default_holdout_viirs": true, "default_rule": "..."},
       "featured_fires": [
         {
           "id": "plumas_ca:2012-08",
@@ -130,6 +130,7 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
           "to_the_learned_agent": null,
           "default_start": "2012-08-10",
           "default_start_rule": "the period's start with the most MODIS pixels in the box (the earliest on a tie)",
+          "opens": {"holdout_viirs": true, "what": "opens held out (holdout_viirs true) at its busiest start; the reveal scores it"},
           "calendar": "/api/calendar?source=firms&region_id=plumas_ca",
           "run_starts": [{"start": "2012-08-01", "label": "...", "...": "..."}]
         }
@@ -153,7 +154,7 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
       ]
     }
   ],
-  "default": {"region_id": "plumas_ca", "featured_fire": "plumas_ca:2012-08", "start": "2012-08-10", "rule": "...", "chosen_by": "while the standings are not served", "to_the_world_model": null, "to_the_learned_agent": null},
+  "default": {"region_id": "plumas_ca", "featured_fire": "plumas_ca:2012-08", "start": "2012-08-10", "holdout_viirs": true, "rule": "...", "chosen_by": "while the standings are not served", "to_the_world_model": null, "to_the_learned_agent": null},
   "featured_fires_rule": "...",
   "standing": "...",
   "named_fires_from": "...",
@@ -171,7 +172,8 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
 Shortened: `places` has five entries, one per preset; one featured fire and one named fire are shown, and `country_extents` is cut.
 
 - `rows` is `firms` for a region with cached FIRMS rows and `simulated` for one without; a simulated place has `country`, `calendar`, `years` and `starts` `null` and no fires.
-- `years.country_files` is the first and last year of the FIRMS country files cached for the region; `years.area_api_through` the last day its area API rows cover. `starts` names the start list, how many starts it has and the start a run opens on (`default_start` of `GET /api/runs/starts`).
+- `years.country_files` is the first and last year of the FIRMS country files cached for the region; `years.area_api_through` the last day its area API rows cover. `starts` names the start list and how many starts it has, and the place's own default by the registry's rule: `default_start`, the `default_featured_fire` it belongs to and `default_holdout_viirs`. The rule is the one of `default` below, inside the place; a place whose only fires are recorded test fires (today `evia_greece`) opens on its largest one, on its recorded window, with every satellite shown. This replaces the model's default of the start list, which is a closed window in all three regions.
+- `opens` says how a featured fire opens. A recorded test fire opens on its recorded window, the last look of `backend/model/fitted_values/test_fire_looks.json` (Dixie from 2021-07-22T21:13Z, Lytton Creek from 2021-06-30T21:52Z, northern Evia from 2021-08-05T20:53Z), with `holdout_viirs` false and `recorded_window`: its blind test is on record at `GET /api/evidence`, and a held-out run of it answers `409`. Every other fire opens held out at its busiest start.
 - Featured fires are chosen by rule from the region's real run starts (`GET /api/runs/starts`, which reads MODIS rows only): the starts the start search marks busiest, grouped into periods less than 31 days apart, largest first by the MODIS pixels in the box at the busiest start. Today they are July and August 2021 (1,749), August 2012 (394) and September 2020 (175) in `plumas_ca`, June and July 2021 (514) and August 2023 (301) in `lytton_bc`, and August 2021 (714) in `evia_greece`. `run_starts` are the region's starts inside the period's months; `default_start` is the period's start with the most MODIS pixels.
 - A featured fire takes its `name` from every named fire whose dates overlap it and whose point lies within 0.5 degrees of the region's box (`named_fires` lists them, `named_fire` and `name_source` give the first); one without a name is shown by place and month. Today: Dixie, Chips (August 2012) and North Complex in `plumas_ca`; Lytton Creek, and Stein Mountain, Ponderosa Creek and Kookipi Creek (August 2023) in `lytton_bc`; Northern Evia in `evia_greece`. `blind_test_fire` marks the three 2021 test fires.
 - `to_the_world_model` and `to_the_learned_agent` say what the fire is to each part: fitted on, validated on, a recorded test fire, or never seen. Both are `null` until the model's function is served (`backend.model.fire_roles.fire_roles`). The two can differ: the world model was fitted on fires of 2018 to 2023 and validated on 2024 and 2025 (`backend/model/training.py`), the learned agent on episodes of 2012 to 2023 (`backend/env/learn.py`).

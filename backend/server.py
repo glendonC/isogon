@@ -551,13 +551,7 @@ class IsogonDataStore:
             except Exception:  # noqa: BLE001  (the registry answers without a start list)
                 return []
 
-        def default_start(region_id: str) -> Any:
-            try:
-                return self.firms_calendar_payload(region_id)[1].get("default_start")
-            except Exception:  # noqa: BLE001
-                return None
-
-        out.update(places_payload(starts, self.box_index, default_start_of=default_start))
+        out.update(places_payload(starts, self.box_index))
         return out
 
     def real_run_starts(self, region_id: str, cal: dict[str, Any], rows_key: int) -> dict[str, Any]:
