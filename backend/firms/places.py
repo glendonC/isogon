@@ -125,10 +125,29 @@ def _model_roles() -> Callable[..., Any] | None:
         return None
 
 
+def region_years(region_id: str) -> dict[str, Any]:
+    """The years a region's cached rows cover: country file years, and how far the area API rows reach."""
+    from backend.firms.archive import FIRMS_CACHE_DIR, read_manifest
+
+    base = FIRMS_CACHE_DIR / "extract" / region_id
+    country, area_to = set(), None
+    for p in sorted(base.glob("*.csv")) if base.is_dir() else []:
+        m = read_manifest(p) or {}
+        year = p.stem.rpartition("_")[2]
+        if (m.get("lineage") or {}).get("source") == "area_api":
+            last = (m.get("covered_days") or [None, None])[1]
+            area_to = max(area_to or "", last or "") or area_to
+        elif year.isdigit():
+            country.add(int(year))
+    return {"country_files": [min(country), max(country)] if country else None, "area_api_through": area_to,
+            "what": "years of the FIRMS country files cached for the region, and the last day its area API rows cover"}
+
+
 def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any = None,
-                   path: Path = PLACES_FILE) -> dict[str, Any]:
+                   path: Path = PLACES_FILE, default_start_of: Callable[[str], Any] | None = None) -> dict[str, Any]:
     """{"places": [...], "default": {...}, "box_calendar": {...}} for `GET /api/regions`. ``starts_of(region_id)``
-    gives the region's real run starts; ``index`` is the box index, for the countries it covers."""
+    gives the region's real run starts and ``default_start_of(region_id)`` the start a run opens on; ``index`` is
+    the box index, for the countries it covers."""
     from backend.firms.archive import REGION_COUNTRY, region_box
     from backend.firms.real_calendar import BOX_MAX_SPAN_DEG, BOX_MIN_SPAN_DEG
     from backend.terrain.live_region import PRESET_REGIONS
@@ -141,7 +160,8 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
         box = [round(b.west, 5), round(b.south, 5), round(b.east, 5), round(b.north, 5)]
         real = spec.id in REGION_COUNTRY
         named = [named_fire_entry(f) for f in doc.get("regions", {}).get(spec.id, {}).get("named_fires", [])] if real else []
-        featured = featured_periods(spec.id, starts_of(spec.id), named, box) if real else []
+        starts = starts_of(spec.id) if real else []
+        featured = featured_periods(spec.id, starts, named, box) if real else []
         if roles is not None:
             for p in featured:
                 try:
@@ -159,6 +179,9 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
             "context_box": list(region_box(spec.id)),
             "rows": "firms" if real else "simulated",
             "calendar": f"/api/calendar?source=firms&region_id={spec.id}" if real else None,
+            "years": region_years(spec.id) if real else None,
+            "starts": ({"route": f"/api/runs/starts?region_id={spec.id}&source=firms", "count": len(starts),
+                        "default_start": default_start_of(spec.id) if default_start_of else None} if real else None),
             "featured_fires": featured,
             "named_fires": named,
         })

@@ -106,6 +106,8 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
       "context_box": [-122.48, 39.1, -119.88, 41.0],
       "rows": "firms",
       "calendar": "/api/calendar?source=firms&region_id=plumas_ca",
+      "years": {"country_files": [2000, 2025], "area_api_through": "2026-11-13", "what": "..."},
+      "starts": {"route": "/api/runs/starts?region_id=plumas_ca&source=firms", "count": 53, "default_start": "..."},
       "featured_fires": [
         {
           "id": "plumas_ca:2012-08",
@@ -162,7 +164,8 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
 
 Shortened: `places` has five entries, one per preset; one featured fire and one named fire are shown, and `country_extents` is cut.
 
-- `rows` is `firms` for a region with cached FIRMS rows and `simulated` for one without; a simulated place has `country` and `calendar` `null` and no fires.
+- `rows` is `firms` for a region with cached FIRMS rows and `simulated` for one without; a simulated place has `country`, `calendar`, `years` and `starts` `null` and no fires.
+- `years.country_files` is the first and last year of the FIRMS country files cached for the region; `years.area_api_through` the last day its area API rows cover. `starts` names the start list, how many starts it has and the start a run opens on (`default_start` of `GET /api/runs/starts`).
 - Featured fires are chosen by rule from the region's real run starts (`GET /api/runs/starts`, which reads MODIS rows only): the starts the start search marks busiest, grouped into periods less than 31 days apart, largest first by the MODIS pixels in the box at the busiest start. Today they are July and August 2021 (1,749), August 2012 (394) and September 2020 (175) in `plumas_ca`, June and July 2021 (514) and August 2023 (301) in `lytton_bc`, and August 2021 (714) in `evia_greece`. `run_starts` are the region's starts inside the period's months; `default_start` is the period's start with the most MODIS pixels.
 - A featured fire takes its `name` from a named fire whose dates overlap it and whose point lies within 0.5 degrees of the region's box; one without a name is shown by place and month. `blind_test_fire` marks the three 2021 test fires.
 - `to_the_model` is `null` until the model's function is served (`backend.model.fire_roles.fire_roles`); it will say, per part, whether a fire was fitted on, validated on, a recorded test fire or never seen.

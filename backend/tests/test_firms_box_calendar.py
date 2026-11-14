@@ -248,6 +248,9 @@ class RoutesTests(unittest.TestCase):
         ids = {p["id"]: p for p in places["places"]}
         self.assertEqual(ids["evia_greece"]["rows"], "firms")
         self.assertEqual(ids["blue_mountains_au"]["rows"], "simulated")
+        self.assertEqual(ids["evia_greece"]["years"]["country_files"][0], 2000)
+        self.assertEqual(ids["evia_greece"]["starts"]["count"], len(self._get("/api/runs/starts?region_id=evia_greece&source=firms")[1]["starts"]))
+        self.assertIn("default", places)
         self.assertIn("Greece", places["box_calendar"]["countries"])
         self.assertEqual(self._get("/api/calendar?source=firms&box=1,2,3")[0], 400)
         self.assertEqual(self._get("/api/calendar?source=firms&box=10,10,11,11")[0], 404)
