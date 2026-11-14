@@ -1,4 +1,4 @@
-"""Spacecraft model manifest integrity (CONTRACT section 2)."""
+"""Spacecraft model manifest integrity."""
 
 from __future__ import annotations
 

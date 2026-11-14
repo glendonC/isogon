@@ -4,14 +4,14 @@
     {
       "id": "terra",
       "url": "/models/spacecraft/terra.glb",
-      "bytes": 2150600,
-      "sha256": "8794857595f7a7d416184fe926ecb50e11bf267dbe471d1cf2728a85e8d017fa",
+      "bytes": 2150364,
+      "sha256": "015d7b3b1dd3dc5f5473d7cbf6825f0c8d31cafce4ba3efcc72ba4e5296dafbf",
       "source_url": "https://github.com/nasa/NASA-3D-Resources/blob/master/3D%20Models/Terra/Terra.glb",
       "license": "NASA 3D Resources, free to use and without copyright (repository README); NASA media is generally not subject to copyright in the United States (https://www.nasa.gov/nasa-brand-center/images-and-media/). The NASA insignia and logotype are not public domain and NASA endorsement must not be implied.",
       "credit": "NASA",
       "up_axis": "+Y",
       "approx_length_m": 26.1,
-      "notes": "Unmodified file. glTF 2.0 written by assimp, no Draco, 22 meshes, about 117k triangles. Model units look like millimetres: bounds 13,622 x 10,276 x 26,054 units (x, y, z), longest along +z with the solar array; scale by the bounds, not by the units. It references two external textures by Windows relative paths ('..\\Terra.fbm\\Side_Panels_TERRA.tga', '..\\Terra.fbm\\solarpanels.tga') that are not in the NASA repository, so GLTFLoader logs two texture load errors and renders the materials' base colours."
+      "notes": "Derived from NASA Terra.glb (2,150,600 B, sha256 8794857595f7a7d416184fe926ecb50e11bf267dbe471d1cf2728a85e8d017fa) with backend/terrain/glb_tools.py strip-external-images: the two images that pointed at missing external files ('..\\Terra.fbm\\Side_Panels_TERRA.tga', '..\\Terra.fbm\\solarpanels.tga'), their two textures and samplers, and the baseColorTexture slots of materials 'Side Panels' and 'Main Solar Panels' were removed; the JSON chunk was re-serialised compactly and the binary chunk is byte for byte the original. Materials keep their base colour factors, so it renders as the original did once its textures failed to load, without the two failed requests. glTF 2.0 written by assimp, no Draco, 22 meshes, about 117k triangles. Model units look like millimetres: bounds 13,622 x 10,276 x 26,054 units (x, y, z), longest along +z with the solar array; scale by the bounds, not by the units."
     },
     {
       "id": "aqua",
