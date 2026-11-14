@@ -199,3 +199,148 @@ def write_fixture(directory: Path = FIXTURE_DIR) -> tuple[Path, Path]:
 if __name__ == "__main__":
     for p in write_fixture():
         print(p, len(p.read_text(encoding="utf-8").splitlines()) - 1, "rows")
+
+
+# ---- helpers for the hidden-row invariance tests --------------------------------------------------------------------
+
+def shift_days(rows: list[dict[str, str]], days: int) -> list[dict[str, str]]:
+    """The same rows `days` later (SYNTHETIC dates only)."""
+    import datetime as _dt
+
+    out = []
+    for r in rows:
+        r2 = dict(r)
+        d = _dt.date.fromisoformat(r["acq_date"]) + _dt.timedelta(days=days)
+        r2["acq_date"] = d.isoformat()
+        out.append(r2)
+    return out
+
+
+def extended_rows(repeats: int = 2) -> list[dict[str, str]]:
+    """The fixture's rows followed by copies of themselves three days later, `repeats` times in all: six made-up
+    days by default, which hold 24 MODIS overpasses, the number a run with VIIRS hidden needs for its frames."""
+    from backend.eval.rows import read_csv_rows
+
+    base = read_csv_rows(FIXTURE_DIR / MODIS_FILE) + read_csv_rows(FIXTURE_DIR / VIIRS_FILE)
+    out: list[dict[str, str]] = []
+    for k in range(repeats):
+        out.extend(shift_days(base, 3 * k))
+    return out
+
+
+def perturb_hidden(
+    rows: list[dict[str, str]], instrument: str = "VIIRS", dlon: float = 0.0, dlat: float = 0.0, frp_times: float = 1.0,
+    keep_one_in: int | None = None, drop_every: int | None = None, scan: str | None = None, track: str | None = None,
+) -> list[dict[str, str]]:
+    """Rows with every row of the hidden instrument altered and every other row untouched.
+
+    `drop_every=3` deletes every third hidden row; `keep_one_in=4` keeps one hidden row in four. The kept rows are
+    moved by (`dlon`, `dlat`) degrees, their FRP is multiplied by `frp_times`, and `scan` and `track` replace
+    their pixel sizes when given.
+    """
+    out: list[dict[str, str]] = []
+    n = 0
+    for r in rows:
+        if r["instrument"] != instrument:
+            out.append(dict(r))
+            continue
+        n += 1
+        if drop_every is not None and n % drop_every == 0:
+            continue
+        if keep_one_in is not None and n % keep_one_in != 0:
+            continue
+        r2 = dict(r)
+        r2["longitude"] = f"{float(r['longitude']) + dlon:.5f}"
+        r2["latitude"] = f"{float(r['latitude']) + dlat:.5f}"
+        r2["frp"] = f"{float(r['frp']) * frp_times:.2f}"
+        if scan is not None:
+            r2["scan"] = scan
+        if track is not None:
+            r2["track"] = track
+        out.append(r2)
+    return out
+
+
+# Three perturbations of the hidden rows, by name.
+HIDDEN_ROW_PERTURBATIONS: dict[str, dict[str, float | int]] = {
+    "shift, scale, delete a third": {"dlon": 0.22, "dlat": 0.14, "frp_times": 3.7, "drop_every": 3},
+    "larger shift, scale, delete three in four": {"dlon": 0.40, "dlat": 0.25, "frp_times": 3.7, "keep_one_in": 4},
+    "scale only": {"frp_times": 3.7},
+}
+
+
+# ---- a made-up pass list for the fixture ----------------------------------------------------------------------------
+
+# Passes of the made-up satellites that covered the box and flagged nothing, every day: a platform with no row at all
+# in the fixture, and a second night pass of Terra. (platform, HHMM UTC, day or night, scan angle in degrees)
+_EMPTY_PASSES: tuple[tuple[str, str, str, float], ...] = (
+    ("MODIS_TERRA", "0457", "N", 52.0),
+    ("VIIRS_NOAA21", "1012", "N", 20.0),
+    ("VIIRS_NOAA21", "2118", "D", 31.0),
+)
+# A pass whose swath held only part of the box, every day: it is listed and it is no slot.
+_PARTIAL_PASSES: tuple[tuple[str, str, str, float], ...] = (("VIIRS_NOAA20", "0855", "N", 56.0),)
+
+
+def _ground_km(instrument_family: str, scan_deg: float) -> float:
+    """Distance from the ground track of a pixel seen at this scan angle, on a spherical Earth."""
+    from backend.model.grid import EARTH_RADIUS_KM
+    from backend.model.sensor_physics import MODIS_ALTITUDE_KM, VIIRS_ALTITUDE_KM
+
+    alt = MODIS_ALTITUDE_KM if instrument_family == "MODIS" else VIIRS_ALTITUDE_KM
+    th = math.radians(scan_deg)
+    return EARTH_RADIUS_KM * (math.asin(min(1.0, (EARTH_RADIUS_KM + alt) / EARTH_RADIUS_KM * math.sin(th))) - th)
+
+
+def fixture_passes(days: int = 8) -> list[dict[str, object]]:
+    """The made-up pass list that goes with the fixture's rows, in the shape `backend.firms.cmr_passes.cmr_passes`
+    answers, for `days` days from 2099-07-01. Every pass of the fixture is in it, and so are passes that flagged
+    nothing and one a day that held only part of the box. A pass says itself when its scan crossed the box
+    (`time_at_box`, the minute its rows carry) and how far the box lay from its track (`cross_track_km`, from the
+    scan angle the rows' pixel sizes were made with), which the real list leaves to the swath polygon."""
+    import datetime as _dt
+
+    out: list[dict[str, object]] = []
+    day0 = _dt.datetime(2099, 7, 1)
+    for d in range(days):
+        date = day0 + _dt.timedelta(days=d)
+        listed = [(p, hhmm, dn, scans[d % 3], True) for p, _, hhmm, dn, scans in _PASSES]
+        listed += [(p, hhmm, dn, scan, True) for p, hhmm, dn, scan in _EMPTY_PASSES]
+        listed += [(p, hhmm, dn, scan, False) for p, hhmm, dn, scan in _PARTIAL_PASSES]
+        for k, (platform, hhmm, dn, scan, whole) in enumerate(listed):
+            at = date + _dt.timedelta(hours=int(hhmm[:2]), minutes=int(hhmm[2:]))
+            a, b = at - _dt.timedelta(minutes=2), at + _dt.timedelta(minutes=3)
+            fam = family(platform)
+            out.append({
+                "platform": platform,
+                "time_start": a.isoformat() + "Z",
+                "time_end": b.isoformat() + "Z",
+                "time_mid": (a + (b - a) / 2).isoformat() + "Z",
+                "day_night": "DAY" if dn == "D" else "NIGHT",
+                "cloud_cover_pct": float(10 * ((d + k) % 7)) if fam == "MODIS" else None,
+                "granules": [f"SYNTHETIC-{platform}-{at:%Y%m%dT%H%M}"],
+                "box_share": 1.0 if whole else 0.4,
+                "box_inside": whole,
+                "time_at_box": at.isoformat() + "Z",
+                "cross_track_km": _ground_km(fam, scan),
+                "satellite_side": "west" if (d + k) % 2 == 0 else "east",
+            })
+    out.sort(key=lambda p: (str(p["time_at_box"]), str(p["platform"])))
+    return out
+
+
+def fixture_pass_reader(days: int = 8):
+    """A reader with the signature of `backend.firms.cmr_passes.cmr_passes` over `fixture_passes`."""
+    listed = fixture_passes(days)
+
+    def read(box, start, end, platforms=None, tiles=None):
+        lo, hi = str(start).replace("Z", ""), str(end).replace("Z", "")
+        return [dict(p) for p in listed
+                if str(p["time_end"])[:-1] >= lo and str(p["time_start"])[:-1] < hi and (platforms is None or p["platform"] in platforms)]
+
+    return read
+
+
+def no_pass_list(box, start, end, platforms=None, tiles=None):
+    """A reader that has no list for any window, as the real one has none for a made-up year."""
+    raise LookupError("the synthetic fixture was asked for no pass list")

@@ -1,4 +1,4 @@
-"""The schedule from a pass list (unit M9a): where a box lies in a swath polygon, which passes are slots, which rows
+"""The schedule from a pass list: where a box lies in a swath polygon, which passes are slots, which rows
 belong to a slot, and a blind test in which every pass is scored, fire or no fire. SYNTHETIC rows and a made-up pass
 list; no test reads NASA's.
 """
@@ -147,6 +147,22 @@ class PassSlotTests(unittest.TestCase):
         self.assertEqual([s.as_dict()["time_utc"] for s in slots], ["2018-07-01T10:03:00Z"])
         self.assertEqual(left["before_the_collection_is_whole"], 1)
 
+    def test_no_slot_before_the_day_the_archive_serves_the_platform_from(self) -> None:
+        # NASA's CMR lists NOAA-21 granules from 2023-02-10; FIRMS serves its rows from 2023-03-01 (its own statement,
+        # backend/model/platforms.py). A pass in between has no row behind it and must not be scored as an empty look.
+        def listed(box, start, end, platforms=None, tiles=None):
+            return [
+                {"platform": "VIIRS_NOAA21", "time_start": f"2023-{d}T10:00:00Z", "time_end": f"2023-{d}T10:06:00Z", "granules": [d],
+                 "box_inside": True, "box_share": 1.0, "cloud_cover_pct": None, "time_at_box": f"2023-{d}T10:03:00Z", "cross_track_km": 100.0}
+                for d in ("02-20", "02-28", "03-01", "03-02")
+            ]
+
+        a = parse_acq_time_s("2023-02-15", "0000")
+        slots, left = S.pass_slots(("VIIRS_NOAA21",), a, a + 20 * DAY, fx.TEST_BOX, listed)
+        self.assertEqual([s.as_dict()["time_utc"][:10] for s in slots], ["2023-03-01", "2023-03-02"])
+        self.assertEqual(left["before_the_collection_is_whole"], 2)
+        self.assertEqual(P.ARCHIVE_FIRST_DAY["VIIRS_NOAA21"], "2023-03-01")
+
     def test_without_a_pass_list_the_nominal_schedule_stands_in_and_says_why(self) -> None:
         slots, source, info = S.schedule_for("VIIRS", None, T0, T0 + DAY, fx.TEST_BOX, read_passes=fx.no_pass_list)
         self.assertEqual(source, S.SOURCE_NOMINAL)
@@ -212,7 +228,7 @@ class BlindTestOnThePassListTests(unittest.TestCase):
         self.assertNotIn("per_overpass", sub["methods"]["reconstruction"])
 
     def test_schedule_and_predictions_are_identical_whatever_the_hidden_rows_hold(self) -> None:
-        cases = {name: fx.perturb_hidden(ROWS, **kw) for name, kw in fx.AUDIT_PERTURBATIONS.items()}   # type: ignore[arg-type]
+        cases = {name: fx.perturb_hidden(ROWS, **kw) for name, kw in fx.HIDDEN_ROW_PERTURBATIONS.items()}   # type: ignore[arg-type]
         cases["every hidden row deleted"] = [r for r in ROWS if r["instrument"] != "VIIRS"]
         cases["pixel sizes changed"] = fx.perturb_hidden(ROWS, scan="0.80", track="0.78")
         want = self.report
@@ -223,7 +239,7 @@ class BlindTestOnThePassListTests(unittest.TestCase):
             self.assertEqual(sorted(set(got) - set(got["from_the_scorer"])), sorted(got["built_without_hidden_rows"]), name)
         gone = _report(cases["every hidden row deleted"])
         self.assertEqual((gone["scored_overpasses"], gone["scored_overpasses_with_no_hidden_detection"], gone["hidden_rows_in_test_box"]), (18, 18, 0))
-        self.assertNotEqual(_report(cases["1A shift, scale, delete a third"])["methods"], want["methods"])
+        self.assertNotEqual(_report(cases["shift, scale, delete a third"])["methods"], want["methods"])
 
     def test_rows_of_a_pass_that_is_no_slot_are_counted_and_not_scored(self) -> None:
         moved = [{**r, "acq_time": "0855"} if (r["instrument"] == "VIIRS" and r["satellite"] == "N20" and r["acq_time"] == "1036") else dict(r) for r in ROWS]

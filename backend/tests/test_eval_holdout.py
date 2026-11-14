@@ -1,6 +1,6 @@
 """The seal on hidden rows and the schedule of looks (backend/eval/holdout.py, backend/eval/schedule.py).
 
-Rows are the SYNTHETIC fixture. One test reads the lane's source files to check who opens the sealed rows.
+Rows are the SYNTHETIC fixture. One test reads the backend's source files to check who opens the sealed rows.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from backend.eval import schedule as S  # noqa: E402
 from backend.eval import synthetic_fixture as fx  # noqa: E402
 from backend.eval.baselines import painted_modis_factory  # noqa: E402
 from backend.eval.blind_test import run_blind_test  # noqa: E402
-from backend.eval.holdout import SCORERS, Sealed, seal, visible_rows  # noqa: E402
+from backend.eval.holdout import SCORER_ENTRY_POINTS, SCORERS, Sealed, seal, visible_rows  # noqa: E402
 from backend.eval.rows import detections_from_rows, read_csv_rows  # noqa: E402
 from backend.model.platforms import ARCHIVE_FIRST_DAY, archive_platforms  # noqa: E402
 from backend.model.real_geometry import pixel_km_at_ground_distance, pixel_km_from_pass_time, typical_pixel_km  # noqa: E402
@@ -58,22 +58,61 @@ class SealTests(unittest.TestCase):
             seal(det, "GOES")
 
     def test_only_the_scorers_open_the_box(self) -> None:
-        # every Python file of the lane's packages: who calls open_for_scoring, and who asks for hidden pass times
-        openers, timers = set(), set()
-        for folder in ("backend/eval", "backend/model", "backend/env"):
-            for path in sorted((_REPO_ROOT / folder).rglob("*.py")):
-                text = path.read_text(encoding="utf-8")
-                rel = str(path.relative_to(_REPO_ROOT))
-                if re.search(r"\.open_for_scoring\(", text):
-                    openers.add(rel)
-                if re.search(r"\.pass_times\(", text):
-                    timers.add(rel)
+        # every Python file under backend/ but the tests (the server and `backend/firms` included): who
+        # calls open_for_scoring, who asks for hidden pass times, and who reaches for the box's private rows
+        openers, timers, reachers = set(), set(), set()
+        scanned = 0
+        for path in sorted((_REPO_ROOT / "backend").rglob("*.py")):
+            rel = str(path.relative_to(_REPO_ROOT))
+            if rel.startswith("backend/tests/"):
+                continue
+            scanned += 1
+            text = path.read_text(encoding="utf-8")
+            if re.search(r"\.open_for_scoring\(", text):
+                openers.add(rel)
+            if re.search(r"\.pass_times\(", text):
+                timers.add(rel)
+            # an object's own `self._det` is not the sealed box's; the box's own file names the attribute in a comment
+            if rel != "backend/eval/holdout.py" and re.search(r"(?<!self)\._det\b", text):
+                reachers.add(rel)
+        self.assertGreater(scanned, 40)
+        self.assertTrue((_REPO_ROOT / "backend" / "server.py").is_file() and any((_REPO_ROOT / "backend" / "firms").glob("*.py")))
         self.assertEqual(openers, set(SCORERS))
         self.assertEqual(timers, {"backend/eval/blind_test.py"})       # the diagnostic schedule only
+        self.assertEqual(reachers, set())                              # nobody reads another object's private rows
         # and the files that build a run or an episode never split rows by instrument on their own
         for rel in ("backend/model/real_run.py", "backend/model/belief.py", "backend/model/real_blind.py"):
             text = (_REPO_ROOT / rel).read_text(encoding="utf-8")
             self.assertIsNone(re.search(r"\.is_viirs\b", text), rel)
+
+
+    def test_the_box_leaves_a_builder_only_through_the_named_entry_points(self) -> None:
+        import ast
+
+        # in the blind test, the functions that open the box are the named entry points and no other
+        tree = ast.parse((_REPO_ROOT / "backend/eval/blind_test.py").read_text(encoding="utf-8"))
+        opens = set()
+        for fn in [n for n in tree.body if isinstance(n, ast.FunctionDef)]:
+            for call in [n for n in ast.walk(fn) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]:
+                if call.func.attr in ("open_for_scoring", "pass_times"):
+                    opens.add(fn.name)
+        self.assertEqual(opens, set(SCORER_ENTRY_POINTS))
+        # in the module that builds a run, the box is made by seal() and then only ever passed to one of them
+        tree = ast.parse((_REPO_ROOT / "backend/model/real_run.py").read_text(encoding="utf-8"))
+        handed, loose = set(), []
+        ok = set()
+        for call in [n for n in ast.walk(tree) if isinstance(n, ast.Call)]:
+            name = call.func.id if isinstance(call.func, ast.Name) else None
+            for arg in list(call.args) + [k.value for k in call.keywords]:
+                if isinstance(arg, ast.Name) and arg.id == "sealed":
+                    ok.add(id(arg))
+                    handed.add(name)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id == "sealed" and isinstance(node.ctx, ast.Load) and id(node) not in ok:
+                loose.append(node.lineno)
+        self.assertEqual(loose, [], "the sealed box is used outside a call")
+        self.assertEqual(handed, set(SCORER_ENTRY_POINTS))
+        self.assertIsNone(re.search(r"sealed\.", (_REPO_ROOT / "backend/model/real_run.py").read_text(encoding="utf-8")))
 
 
 class ScheduleTests(unittest.TestCase):

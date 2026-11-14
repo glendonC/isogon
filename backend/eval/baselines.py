@@ -61,8 +61,21 @@ class PaintedModis:
         p = self.painted_for(target.time_s)
         if p is None:
             z = np.zeros(self.grid.shape)
-            return Prediction(p_detect=z, frp_mw=z.copy(), frp_total_mw=0.0)
-        return Prediction(p_detect=p.mask.astype(np.float64), frp_mw=p.frp_mw.copy(), frp_total_mw=p.frp_total_mw)
+            return Prediction(p_detect=z, frp_mw=z.copy(), frp_total_mw=0.0, pixels=0.0)
+        return Prediction(
+            p_detect=p.mask.astype(np.float64), frp_mw=p.frp_mw.copy(), frp_total_mw=p.frp_total_mw,
+            pixels=float(p.n_pixels),
+        )
+
+    def platform_pixels(self, time_s: float, platform: str) -> int:
+        """Pixels in the box of the nearest overpass of one platform within the gap limit (0 when there is none)."""
+        best: Overpass | None = None
+        for op in self._passes:
+            if op.platform != platform or abs(op.time_s - time_s) > self.max_gap_s:
+                continue
+            if best is None or abs(op.time_s - time_s) < abs(best.time_s - time_s):
+                best = op
+        return 0 if best is None else best.n
 
 
 @dataclass(frozen=True)
@@ -140,25 +153,43 @@ def fit_overlap_ratio(det: Detections, trained_on: str, max_gap_s: float = PAIR_
 
 
 class OverlapRatio:
-    """Baseline 2. Painted MODIS cells; FRP times one fitted ratio; interval from the spread of per pair ratios."""
+    """Baseline 2. Painted MODIS cells; counts and FRP each multiplied by one fitted ratio.
+
+    Pixel counts use the calendar's ratio when one is given (`count_ratio`, an object with `ratio`, `p10`, `p90`
+    and `level`: Suomi NPP rows over Terra plus Aqua rows): the expected number of VIIRS pixels at an overpass is
+    that ratio times the pixels of the nearest Terra overpass plus the pixels of the nearest Aqua overpass, which
+    is the calendar's own formula applied to one half day. FRP uses the FRP ratio fitted on overpass pairs.
+    """
 
     name = "overlap_ratio"
     level = 0.90
 
-    def __init__(self, visible: Detections, grid: EvalGrid, fit: OverlapRatioFit) -> None:
+    def __init__(self, visible: Detections, grid: EvalGrid, fit: OverlapRatioFit, count_ratio: Any | None = None) -> None:
         self._painted = PaintedModis(visible, grid)
         self.fit = fit
+        self.count_ratio = count_ratio
         self.grid = grid
-        self.label = (
-            f"painted MODIS cells, FRP times one overlap ratio {fit.ratio:.3f} "
-            f"(from {fit.n_pairs} pairs: {fit.trained_on}); interval from the 5th to 95th percentile of pair ratios"
+        counts = "" if count_ratio is None else (
+            f"pixel count = calendar overlap ratio {count_ratio.ratio:.3f} times (nearest Terra + nearest Aqua pixels); "
         )
+        self.label = (
+            f"painted MODIS cells; {counts}FRP times one overlap ratio {fit.ratio:.3f} "
+            f"(from {fit.n_pairs} pairs: {fit.trained_on}); FRP interval from the 5th to 95th percentile of pair ratios"
+        )
+
+    def _pixels(self, target: Target) -> dict[str, float | None]:
+        if self.count_ratio is None:
+            return {}
+        n = self._painted.platform_pixels(target.time_s, "MODIS_TERRA") + self._painted.platform_pixels(target.time_s, "MODIS_AQUA")
+        c = self.count_ratio
+        return {"pixels": c.ratio * n, "pixels_lo": c.p10 * n, "pixels_hi": c.p90 * n, "pixels_level": c.level}
 
     def predict(self, target: Target) -> Prediction:
         p = self._painted.painted_for(target.time_s)
         if p is None:
             z = np.zeros(self.grid.shape)
-            return Prediction(p_detect=z, frp_mw=z.copy(), frp_total_mw=0.0, frp_total_lo=0.0, frp_total_hi=0.0, level=self.level)
+            return Prediction(p_detect=z, frp_mw=z.copy(), frp_total_mw=0.0, frp_total_lo=0.0, frp_total_hi=0.0,
+                              level=self.level, **self._pixels(target))
         total = self.fit.ratio * p.frp_total_mw
         return Prediction(
             p_detect=p.mask.astype(np.float64),
@@ -167,6 +198,7 @@ class OverlapRatio:
             frp_total_lo=self.fit.ratio_p05 * p.frp_total_mw,
             frp_total_hi=self.fit.ratio_p95 * p.frp_total_mw,
             level=self.level,
+            **self._pixels(target),
         )
 
 
@@ -174,8 +206,8 @@ def painted_modis_factory(visible: Detections, grid: EvalGrid) -> Method:
     return PaintedModis(visible, grid)
 
 
-def overlap_ratio_factory(fit: OverlapRatioFit):
+def overlap_ratio_factory(fit: OverlapRatioFit, count_ratio: Any | None = None):
     def factory(visible: Detections, grid: EvalGrid) -> Method:
-        return OverlapRatio(visible, grid, fit)
+        return OverlapRatio(visible, grid, fit, count_ratio)
 
     return factory

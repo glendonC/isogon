@@ -1,6 +1,6 @@
 """The one place where hidden rows are separated from everything else.
 
-The rule (unit M8). With an instrument hidden, the code that chooses the window, builds the estimate, the declared
+The rule. With an instrument hidden, the code that chooses the window, builds the estimate, the declared
 cells, the intervals, the belief frames, the exports and an agent's observation never receives a row of that
 instrument. Only the scorer does. `seal` is where the rows part ways: it returns the visible rows and a `Sealed`
 box. Everything that builds something takes the visible rows. The sealed box has one door, `open_for_scoring`,
@@ -26,6 +26,12 @@ FAMILIES: tuple[str, ...] = ("VIIRS", "MODIS")
 # The modules that may open a sealed box: the blind-test scorer, and the next-look environment, which reveals
 # a tile's rows when an agent looks at it and pays the reward.
 SCORERS: tuple[str, ...] = ("backend/eval/blind_test.py", "backend/env/next_look.py")
+# The functions of the blind test through which a caller outside the scorers may hand the sealed box on. A module
+# that builds a run holds the box and cannot read it; it may only pass it to one of these. A test reads the source
+# and fails when the box goes anywhere else, or when a function not named here opens it.
+SCORER_ENTRY_POINTS: tuple[str, ...] = ("blind_test_sealed", "reveal", "hidden_pixels_in_spans")
+# Python cannot lock an attribute: `Sealed._det` can be read by code that means to. The rule is kept by the test
+# that scans every Python file under backend/ for `open_for_scoring`, `pass_times` and `._det`.
 
 
 class Sealed:

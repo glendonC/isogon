@@ -23,7 +23,17 @@ DEFINITIONS: dict[str, str] = {
         "flagged pixels (real scan by track footprint), and the sum of its FRP over pixels centred in the box. This "
         "is what the hidden instrument reported, not the fire itself."
     ),
-    "predicted_cells": "The 375 m cells where the method's probability of a hidden-instrument detection is at least 0.5.",
+    "predicted_cells": (
+        "The 375 m cells a method declares. A method that gives only a probability field is cut at 0.5 (the "
+        "baselines paint 0 or 1). The reconstruction declares its N most probable cells, N being the number of "
+        "cells it expects to be flagged (the sum of its probabilities): a coarse pixel says fire is somewhere "
+        "inside it, so an honest probability is rarely above 0.5 and a fixed cut would declare nothing."
+    ),
+    "equal_area": (
+        "Every method cut to the same number of cells: its N most probable cells, N being the number of cells "
+        "the painted MODIS baseline declares at that overpass (ties go to larger expected FRP, then grid order). "
+        "Hit rate and false alarm ratio at equal area compare where a method puts fire, not how much it declares."
+    ),
     "hit_rate": "TP / (TP + FN): the share of truth cells that are predicted cells. Undefined when there is no truth cell.",
     "false_alarm_ratio": "FP / (TP + FP): the share of predicted cells that are not truth cells. Undefined with no predicted cell.",
     "false_alarm_rate": "FP / (FP + TN): the share of cells without a hidden detection that are predicted cells.",
@@ -33,11 +43,21 @@ DEFINITIONS: dict[str, str] = {
         "within one cell of it, and a predicted cell is a false alarm only when no truth cell lies within one cell."
     ),
     "brier": "Mean over all cells of (probability minus truth as 0 or 1) squared. Lower is better.",
+    "cell_rmse": (
+        "Root mean square difference between predicted and hidden FRP density (MW per km2 of a 375 m cell), over "
+        "the cells where either is above zero, pooled over the scored overpasses."
+    ),
     "frp_total_error": (
         "Per overpass, predicted total FRP in the box minus the hidden instrument's total, divided by the hidden "
         "total (signed, so minus 0.5 means half). Summarised by its median, by the median absolute value, and by "
         "the ratio of the two totals summed over the scored overpasses. Overpasses with a hidden total of zero are "
         "left out of the relative figures and counted."
+    ),
+    "pixel_count": (
+        "The number of pixels the hidden instrument flags in the box at an overpass, against the number a method "
+        "expects. Summarised like FRP: ratio of the sums over the scored overpasses, median signed and median "
+        "absolute relative error, and the coverage of a stated interval. This is the currency of the calendar "
+        "(hotspot counts), so it is where the overlap ratio baseline makes its own prediction."
     ),
     "interval_coverage": (
         "The share of scored overpasses whose hidden total FRP lies inside the method's stated interval, next to "
@@ -143,3 +163,17 @@ def interval_coverage(lo: list[float | None], hi: list[float | None], truth: lis
     cov = covered / n
     se = math.sqrt(max(cov * (1.0 - cov), 0.0) / n)
     return {"stated_level": float(level), "n": n, "covered": covered, "coverage": cov, "standard_error": round(se, 4)}
+
+
+def summarise_counts(
+    pred: list[float | None], truth: list[float], lo: list[float | None], hi: list[float | None], level: float | None
+) -> dict[str, Any]:
+    """Pixel-count summary over the overpasses where the method stated a count."""
+    pairs = [(p, t) for p, t in zip(pred, truth) if p is not None]
+    if not pairs:
+        return {"n_overpasses": 0, "ratio_of_sums": None, "note": "method states no pixel count"}
+    out = summarise_frp([p for p, _ in pairs], [t for _, t in pairs])
+    out["sum_predicted"] = out.pop("sum_predicted_mw")
+    out["sum_hidden"] = out.pop("sum_hidden_mw")
+    out["interval"] = interval_coverage(lo, hi, truth, level)
+    return out

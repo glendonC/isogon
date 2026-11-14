@@ -21,7 +21,16 @@ from backend.eval.baselines import (  # noqa: E402
     overlap_ratio_factory,
     painted_modis_factory,
 )
-from backend.eval.blind_test import Prediction, Target, format_report, run_blind_test, split_hidden  # noqa: E402
+from backend.eval.blind_test import (  # noqa: E402
+    Prediction,
+    Target,
+    bootstrap_verdict,
+    format_report,
+    pool_reports,
+    run_blind_test,
+    split_hidden,
+    verdict,
+)
 from backend.eval.grid import EvalGrid, paint  # noqa: E402
 from backend.eval.overpass import group_overpasses  # noqa: E402
 from backend.eval.rows import Detections, detections_from_rows, read_csv_rows  # noqa: E402
@@ -44,11 +53,12 @@ class _Oracle:
         self.passes = group_overpasses(self.hidden)
 
     def predict(self, target: Target) -> Prediction:
-        match = [p for p in self.passes if p.platform == target.platform and abs(p.time_s - target.time_s) < 600.0]
-        if not match:
+        # the hidden overpass of the slot's platform nearest in time (a slot is a nominal time, not the pass's own)
+        match = sorted((abs(p.time_s - target.time_s), i) for i, p in enumerate(self.passes) if p.platform == target.platform)
+        if not match or match[0][0] > 3.0 * 3600.0:
             z = np.zeros(self.grid.shape)
             return Prediction(z, z.copy(), 0.0, 0.0, 0.0, 0.9)
-        p = paint(self.grid, self.hidden.select(match[0].index))
+        p = paint(self.grid, self.hidden.select(self.passes[match[0][1]].index))
         return Prediction(p.mask.astype(float), p.frp_mw, p.frp_total_mw, 0.9 * p.frp_total_mw, 1.1 * p.frp_total_mw, 0.9)
 
 
@@ -166,6 +176,60 @@ class BlindTestProtocolTests(unittest.TestCase):
         table = format_report(r)
         self.assertIn("painted_modis", table)
         self.assertIn("synthetic fixture", table)
+
+    def test_verdict_is_computed_score_by_score(self) -> None:
+        v = verdict(self.report, method="oracle")
+        self.assertTrue(v["beats_every_baseline_on_every_score"])
+        self.assertEqual(v["scores"]["brier"]["better_is"], "lower")
+        # a baseline against itself never "beats" (a tie is not a win)
+        tie = verdict(self.report, method="painted_modis", baselines=("painted_modis",))
+        self.assertEqual(tie["beats_every_baseline_on"], 0)
+        self.assertFalse(verdict(self.report, method="absent")["evaluated"])
+
+    def test_pooling_one_report_changes_no_score(self) -> None:
+        pooled = pool_reports([self.report])
+        for name in ("painted_modis", "overlap_ratio", "oracle"):
+            a, b = self.report["methods"][name], pooled["methods"][name]
+            for block in ("strict_375m", "tolerant_1_cell", "equal_area"):
+                for k in ("tp", "fp", "fn", "tn", "hit_rate", "csi"):
+                    self.assertEqual(a[block][k], b[block][k])
+            self.assertAlmostEqual(a["brier"], b["brier"], places=12)
+            self.assertAlmostEqual(a["frp_total"]["ratio_of_sums"], b["frp_total"]["ratio_of_sums"], places=3)
+            self.assertEqual(a["interval"]["covered"], b["interval"]["covered"])
+        two = pool_reports([self.report, self.report])
+        self.assertEqual(two["scored_overpasses"], 2 * self.report["scored_overpasses"])
+        self.assertEqual(two["methods"]["painted_modis"]["strict_375m"]["tp"], 2 * PINNED_PAINTED_COUNTS["tp"])
+        self.assertAlmostEqual(two["methods"]["painted_modis"]["strict_375m"]["csi"], self.report["methods"]["painted_modis"]["strict_375m"]["csi"])
+
+    def test_bootstrap_verdict_separates_a_lead_from_a_tie(self) -> None:
+        # a method identical to a baseline can never be "ahead" however the fires are resampled
+        tie = bootstrap_verdict([self.report, self.report, self.report], method="overlap_ratio", baselines=("painted_modis",), n_boot=200)
+        for key in ("csi_strict_375m", "csi_one_cell_tolerance", "brier"):
+            self.assertEqual(tie["scores"][key]["class"], "tie")
+        lead = bootstrap_verdict([self.report, self.report, self.report], method="oracle", n_boot=200)
+        for key in ("csi_strict_375m", "csi_one_cell_tolerance", "brier", "frp_median_abs_relative_error"):
+            self.assertEqual(lead["scores"][key]["class"], "ahead")
+        self.assertEqual(lead["classes"]["behind"], 0)
+        self.assertEqual(lead["bootstrap"]["resampled"], "whole runs, with replacement")
+
+    def test_hiding_one_viirs_platform_keeps_the_other_visible(self) -> None:
+        seen: dict[str, Detections] = {}
+
+        class _Spy(PaintedModis):
+            name = "spy"
+
+            def __init__(self, visible: Detections, grid: EvalGrid) -> None:
+                seen["visible"] = visible
+                super().__init__(visible, grid)
+
+        r = run_blind_test(self.det, fx.TEST_BOX, [_Spy], hidden_platforms=("VIIRS_NOAA20",), reference_method="spy")
+        names = set(seen["visible"].platform_names())
+        self.assertNotIn("VIIRS_NOAA20", names)
+        self.assertIn("VIIRS_SNPP", names)
+        self.assertIn("MODIS_AQUA", names)
+        self.assertEqual({t["platform"] for t in r["targets"]}, {"VIIRS_NOAA20"})
+        self.assertEqual(r["hidden_platforms"], ["VIIRS_NOAA20"])
+        self.assertEqual(r["scored_overpasses"], 6)
 
     def test_window_limits_the_scored_overpasses(self) -> None:
         t0 = float(self.det.time_s.min())
