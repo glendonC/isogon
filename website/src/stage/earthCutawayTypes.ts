@@ -59,6 +59,14 @@ export interface EarthStageTelemetry {
   wavePosition: number;
   /** Attribution of the imagery on screen, empty when the imagery is procedural. */
   imageryAttribution?: string;
+  /**
+   * Real runs: the files of the run on show that did not load and that nothing true stands in for.
+   * The stage puts nothing drawn in their place and no other run's field: flat ground for the
+   * elevation, ground of one plain tone for the imagery, no field, no estimate. The ground and its
+   * picture belong to the place, so an earlier run of the same place may lend them, and then they
+   * are not listed. Absent when nothing is missing.
+   */
+  missingFiles?: StageMissingFile[];
   /** Vertical exaggeration of the relief (one value for every region). */
   verticalExaggeration?: number;
   /**
@@ -96,6 +104,9 @@ export interface EarthStageTelemetry {
   /** Landing world view only: the standpoint check of the region on screen. */
   landingStandpoint?: LandingStandpointCheck;
 }
+
+/** A file of a real run the stage could not load. */
+export type StageMissingFile = 'elevation' | 'imagery' | 'field' | 'estimate';
 
 /** The sensor curtain's seam on screen. No curtain is drawn: `visible` is always false. */
 export interface CurtainScreenSeam {

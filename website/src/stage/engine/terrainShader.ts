@@ -847,13 +847,10 @@ void main() {
         // belief's change of time does not pop)
         postRgb = mix(postRgb, ink, marks.x * mix(0.84, 0.48, uBeliefQuiet) * mix(0.4, 1.0, uLightGain) * hazeTrans.g);
       } else {
-        // A run without belief frames: the estimate of the pass on show as a faint tint
-        float zWide = mix(textureLod(uFieldTex0, vUv, 3.0).r, textureLod(uFieldTex1, vUv, 3.0).r, uFrameMix);
-        float glowA = smoothstep(0.04, 0.75, zWide) * (1.0 - waterMask);
-        // By day: the ground a little darker and warmer where the estimate is
-        vec3 byDay = litEarth * (1.0 - 0.20 * glowA) + vec3(0.150, 0.050, 0.018) * (glowA * hazeTrans.g);
-        vec3 byNight = litEarth + vec3(0.062, 0.023, 0.014) * (glowA * hazeTrans.g);
-        postRgb = mix(byDay, byNight, uNight);
+        // No belief frames on show (the file has not come yet, or did not load): no estimate is
+        // drawn. A tint read off the run's field used to stand in here; on a real field it washed
+        // the whole block red, since that field is above its floor almost everywhere.
+        postRgb = litEarth;
       }
       // 2. What the overpass on show detected, as emitted light, each detection in its own
       // footprint. A paired MODIS overpass (landing) belongs to the raw side only.

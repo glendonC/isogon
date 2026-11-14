@@ -16,7 +16,6 @@ import {
   alignReconstructionTensor,
   buildProceduralSatelliteTexture,
   buildProceduralTheaterDem,
-  buildProceduralTheaterTensor,
   buildStratigraphicSkirtGeometry,
   createDemR32FTexture,
   createLipariLutTexture,
@@ -31,6 +30,7 @@ import type {
   StageFireAnchor,
   StageTileAnchor,
   TheaterId,
+  StageMissingFile,
 } from './earthCutawayTypes';
 import {
   CinemaDirector,
@@ -45,7 +45,6 @@ import {
 } from './orbitalDirector';
 import {
   DEFAULT_FIELD_INTENSITY_SCALE,
-  createFallbackObserverDataset,
   fieldScalePosition,
   fieldScaleValue,
   normalizeObserverDataset,
@@ -221,6 +220,12 @@ interface CachedTheaterBundle {
   key: string;
   regionId: string;
   runId: string | null;
+  /** Real runs: the run's files that did not load. Nothing of another run and nothing drawn stands in for them. */
+  missingFiles?: StageMissingFile[];
+  /** The relief is not from a file of the place (drawn, or flat). A real run never borrows it. */
+  noRealGround?: boolean;
+  /** The picture on the ground is not from a file of the place (drawn, or one tone). A real run never borrows it. */
+  noRealPicture?: boolean;
   demTex: THREE.DataTexture;
   alignedDem: Float32Array;
   demGridRes: number;
@@ -281,6 +286,49 @@ interface CachedTheaterBundle {
   residenceHours?: number;
   /** Real runs: where the run's fire is in the region (u east, v north). Worked out once. */
   fireCentre?: [number, number] | null;
+}
+
+/**
+ * No field: every byte zero. One array stands for every stand-in and every run whose field did
+ * not load (nothing writes to a bundle's field).
+ */
+let emptyFieldBytes: Uint8Array | null = null;
+function emptyField(): Uint8Array {
+  if (!emptyFieldBytes) emptyFieldBytes = new Uint8Array(FIELD_FRAME_COUNT * FIELD_GRID_SIZE * FIELD_GRID_SIZE * 4);
+  return emptyFieldBytes;
+}
+
+/**
+ * No passes. A stand-in is the ground of a place before its run has answered: it carries no fire,
+ * no pass and no satellite of anyone's making.
+ */
+function noPasses(): NormalizedObserverDataset {
+  return {
+    source: 'procedural_fallback',
+    provenanceNote: 'No run on show.',
+    frames: Array.from({ length: FIELD_FRAME_COUNT }, () => []),
+  };
+}
+
+/**
+ * Ground of one plain tone, for a real run whose imagery did not load: the relief still reads by
+ * its shading, and nothing on it can be taken for a picture of the place.
+ */
+function plainGroundTexture(): THREE.Texture {
+  const tex = new THREE.DataTexture(new Uint8Array([104, 106, 102, 255]), 1, 1, THREE.RGBAFormat);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** The files of the run on show that did not load, the estimate's among them. Undefined when none is missing. */
+function missingFilesOf(bundle: CachedTheaterBundle, beliefFailed: ReadonlySet<string>): StageMissingFile[] | undefined {
+  const estimate = bundle.runId !== null && beliefFailed.has(bundle.runId);
+  if (!bundle.missingFiles && !estimate) return undefined;
+  // A loaded terrain pack is the place's own ground and picture: with it neither is missing
+  const own = (bundle.missingFiles ?? []).filter((f) => !(bundle.pack && (f === 'elevation' || f === 'imagery')));
+  const all: StageMissingFile[] = estimate ? [...own, 'estimate'] : own;
+  return all.length > 0 ? all : undefined;
 }
 
 /**
@@ -620,6 +668,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
   // Real runs: the belief frames of the last few runs, by run id (about 3 MB each)
   const beliefStoreRef = useRef<Map<string, BeliefFrames>>(new Map());
+  /** Runs whose belief file did not load: the stage draws no estimate for them and the telemetry says so. */
+  const beliefFailedRef = useRef<Set<string>>(new Set());
 
   // Live prop mirror for zero-rebind 60fps render loop
   const propsRef = useRef<EarthCutawayStageProps>(props);
@@ -724,7 +774,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         demPack.maxElev,
         maxAnisotropy,
       );
-      const procTensor = buildProceduralTheaterTensor(tId);
+      const procTensor = emptyField();
       const found = findingsOf(
         tId,
         prof.bbox,
@@ -737,6 +787,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         key: `proc-${tId}`,
         regionId: tId,
         runId: null,
+        noRealGround: true,
+        noRealPicture: true,
         demTex: demPack.texture,
         alignedDem: demPack.aligned,
         demGridRes: demPack.gridRes,
@@ -750,7 +802,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         bbox: [...prof.bbox] as [number, number, number, number],
         windDirUv: [...prof.windDirUv] as [number, number],
         hasSeaCoast: prof.hasSeaCoast,
-        observerDataset: createFallbackObserverDataset(prof.bbox),
+        observerDataset: noPasses(),
         findings: found.anchors,
         callouts: found.callouts,
         fireHistory: null,
@@ -2308,11 +2360,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     // 5. Immediate Offline Static Asset Hydration for Feather River, CA (plumas_ca)
     void (async () => {
       try {
-        const [demResp, fieldResp, obsResp] = await Promise.all([
-          fetch(siteFile('generated/terrain/ca_dem_f32.bin')).catch(() => null),
-          fetch(siteFile('generated/fields/reconstruction_u8.bin')).catch(() => null),
-          fetch(siteFile('generated/fields/observer_passes.json')).catch(() => null),
-        ]);
+        // The place's ground and its picture, and nothing else: the field and the pass list that
+        // used to come with them are a simulation, which is not shown on a real place
+        const demResp = await fetch(siteFile('generated/terrain/ca_dem_f32.bin')).catch(() => null);
 
         const satPromise = new Promise<THREE.Texture | null>((resolve) => {
           texLoader.load(
@@ -2329,10 +2379,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           );
         });
 
-        const [demBuf, fieldBuf, obsJson, satLoaded] = await Promise.all([
+        const [demBuf, satLoaded] = await Promise.all([
           demResp && demResp.ok ? demResp.arrayBuffer() : Promise.resolve(null),
-          fieldResp && fieldResp.ok ? fieldResp.arrayBuffer() : Promise.resolve(null),
-          obsResp && obsResp.ok ? obsResp.json().catch(() => null) : Promise.resolve(null),
           satPromise,
         ]);
 
@@ -2352,13 +2400,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
               maxElev: existing.maxElevM,
             };
 
-        const tensorPack = fieldBuf
-          ? alignReconstructionTensor(new Uint8Array(fieldBuf), true)
-          : { buffer: existing.tensor, frames: existing.frameCount };
-
-        const observerDataset = obsJson
-          ? normalizeObserverDataset(obsJson, prof.bbox)
-          : existing.observerDataset;
+        const tensorPack = { buffer: emptyField(), frames: FIELD_FRAME_COUNT };
+        const observerDataset = noPasses();
 
         const found = findingsOf(
           'plumas_ca',
@@ -2380,6 +2423,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           ),
           fireHistory: null,
           key: 'static-plumas_ca',
+          noRealGround: demBuf ? undefined : existing.noRealGround,
+          noRealPicture: satLoaded ? undefined : existing.noRealPicture,
           demTex: demPack.texture,
           alignedDem: demPack.aligned,
           demGridRes: demPack.gridRes,
@@ -3289,7 +3334,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       // On a real run the fire history is not drawn, and its sampler carries the detections' light
       terrainUniforms.uFireHist.value = realRun ? footprintField.lightTexture : ensureFireHistory(nextBundle).texture;
       // Time of day comes from the overpass on show: a night overpass is drawn by night
-      const nightTarget = realRun && rawPasses[0]?.isDay === false ? 1.0 : 0.0;
+      // A stand-in (the ground of a place whose run has not answered) is drawn by night: the first
+      // pass a landing rests on is a night pass, so the fire's lights come up on ground that is
+      // already dark, and the stand-in's coarse picture of the ground is not put on show by day
+      const nightTarget = (realRun && rawPasses[0]?.isDay === false) || nextBundle.runId === null ? 1.0 : 0.0;
       uNight.value = THREE.MathUtils.lerp(uNight.value, nightTarget, 1.0 - Math.exp(-dtSec * 2.4));
       domeNight.value = uNight.value;
       const fieldScale = nextBundle.fieldScale ?? DEFAULT_FIELD_INTENSITY_SCALE;
@@ -3866,6 +3914,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             cinemaProgress,
             wavePosition: 0,
             imageryAttribution: creditWithContext(nextBundle),
+            missingFiles: missingFilesOf(nextBundle, beliefFailedRef.current),
             verticalExaggeration: VERTICAL_EXAGGERATION,
             landingStandpoint: landingWorld && landingWorldPose ? landingWorldStats : undefined,
             intensityLegend: intensityLegendOf(nextBundle),
@@ -4054,27 +4103,51 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           ? THEATER_PROFILES[run.region.id]
           : null;
 
+        const bbox = run.region.bbox;
+        const observerDataset = run.observer_passes ? normalizeObserverDataset(run.observer_passes, bbox) : noPasses();
+        // A real run shows its own files or nothing in their place: no drawn relief, no drawn
+        // fire, no field of another run. What is missing is named in the telemetry.
+        const realFiles = observerDataset.dataSource === 'firms';
+        const missingFiles: StageMissingFile[] = [];
+        // (the ground and its picture are the place's: an earlier bundle of the same place may
+        // lend them when they came from the place's files, and then they are not missing; a
+        // drawn or flat ground is never lent to a real run; a field is a run's own and is
+        // never lent)
+        const lendGround = prevRegionBundle && !(realFiles && prevRegionBundle.noRealGround) ? prevRegionBundle : undefined;
+        const lendPicture = prevRegionBundle && !(realFiles && prevRegionBundle.noRealPicture) ? prevRegionBundle : undefined;
+        if (realFiles && !demBuf && !lendGround) missingFiles.push('elevation');
+        if (realFiles && !satTexLoaded && !lendPicture) missingFiles.push('imagery');
+        if (realFiles && !tensorBuf) missingFiles.push('field');
+
         const demPack = demBuf
           ? createDemR32FTexture(new Float32Array(demBuf), true)
-          : prevRegionBundle
+          : lendGround
             ? {
-                texture: prevRegionBundle.demTex,
-                aligned: prevRegionBundle.alignedDem,
-                gridRes: prevRegionBundle.demGridRes,
-                minElev: prevRegionBundle.minElevM,
-                maxElev: prevRegionBundle.maxElevM,
+                // (an earlier bundle of the same place: the same ground)
+                texture: lendGround.demTex,
+                aligned: lendGround.alignedDem,
+                gridRes: lendGround.demGridRes,
+                minElev: lendGround.minElevM,
+                maxElev: lendGround.maxElevM,
               }
-            : createDemR32FTexture(buildProceduralTheaterDem('plumas_ca', 256), false);
+            : realFiles
+              ? // Flat ground at the run's lowest elevation: plainly no relief, not someone else's
+                createDemR32FTexture(
+                  new Float32Array(64 * 64).fill(Number.isFinite(run.region.min_elev_m) ? run.region.min_elev_m : 0),
+                  false,
+                )
+              : createDemR32FTexture(buildProceduralTheaterDem('plumas_ca', 256), false);
 
         const tensorPack = tensorBuf
           ? alignReconstructionTensor(new Uint8Array(tensorBuf), true)
-          : prevRegionBundle
-            ? { buffer: prevRegionBundle.tensor, frames: prevRegionBundle.frameCount }
-            : { buffer: buildProceduralTheaterTensor('plumas_ca'), frames: FIELD_FRAME_COUNT };
+          : realFiles || !prevRegionBundle
+            ? { buffer: emptyField(), frames: FIELD_FRAME_COUNT }
+            : { buffer: prevRegionBundle.tensor, frames: prevRegionBundle.frameCount };
 
         const finalSatTex =
           satTexLoaded ??
-          prevRegionBundle?.satTex ??
+          lendPicture?.satTex ??
+          (realFiles ? plainGroundTexture() : null) ??
           buildProceduralSatelliteTexture(
             knownProf ? knownProf.id : 'plumas_ca',
             demPack.aligned,
@@ -4089,11 +4162,6 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           typeof (satTexLoaded.image as { width?: number } | undefined)?.width === 'number'
             ? (satTexLoaded.image as { width: number }).width
             : 2048;
-
-        const bbox = run.region.bbox;
-        const observerDataset = run.observer_passes
-          ? normalizeObserverDataset(run.observer_passes, bbox)
-          : createFallbackObserverDataset(bbox);
 
         const found = findingsOf(
           run.region.id,
@@ -4111,6 +4179,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           key: `run-${run.run_id}`,
           regionId: run.region.id,
           runId: run.run_id,
+          missingFiles: missingFiles.length > 0 ? missingFiles : undefined,
           demTex: demPack.texture,
           alignedDem: demPack.aligned,
           demGridRes: demPack.gridRes,
@@ -4125,8 +4194,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             ? imgW >= 1600
               ? '2K'
               : '1K'
-            : (prevRegionBundle?.orthoLabel ?? 'drawn stand-in'),
-          demLabel: `${demPack.gridRes}²`,
+            : (lendPicture?.orthoLabel ?? (realFiles ? 'not loaded' : 'drawn stand-in')),
+          demLabel: demBuf || lendGround || !realFiles ? `${demPack.gridRes}²` : 'not loaded',
+          noRealGround: demBuf ? undefined : lendGround ? lendGround.noRealGround : true,
+          noRealPicture: satTexLoaded ? undefined : lendPicture ? lendPicture.noRealPicture : true,
           tensor: tensorPack.buffer,
           frameCount: tensorPack.frames,
           bbox,
@@ -4144,7 +4215,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             Math.max(12.0, run.region.depth_km || bboxDepthKm(bbox)),
             run.assets.terrain_pack,
             imgW,
-            satTexLoaded ? FALLBACK_IMAGERY_ATTRIBUTION : (prevRegionBundle?.attribution ?? ''),
+            satTexLoaded ? FALLBACK_IMAGERY_ATTRIBUTION : (lendPicture?.attribution ?? ''),
           ),
         };
 
@@ -4172,7 +4243,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           void fetch(assetAddress(propsRef.current, beliefInfo.url))
             .then((resp) => (resp.ok ? resp.arrayBuffer() : null))
             .then((buf) => {
-              if (!buf || buf.byteLength !== beliefInfo.steps * beliefInfo.nx * beliefInfo.ny * 2) return;
+              if (!buf || buf.byteLength !== beliefInfo.steps * beliefInfo.nx * beliefInfo.ny * 2) {
+                beliefFailedRef.current.add(run.run_id);
+                return;
+              }
               beliefStore.set(run.run_id, {
                 info: beliefInfo,
                 bytes: new Uint8Array(buf),
@@ -4180,7 +4254,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
               });
               while (beliefStore.size > 6) beliefStore.delete(beliefStore.keys().next().value as string);
             })
-            .catch(() => undefined);
+            .catch(() => {
+              beliefFailedRef.current.add(run.run_id);
+            });
         }
 
         // Activate if this run matches the currently viewed theater or is a custom coordinate query
