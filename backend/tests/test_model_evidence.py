@@ -191,14 +191,14 @@ class EvidenceShapeTests(unittest.TestCase):
         self.assertEqual(made["policy_trained_with"], self.env["reconstruction_parameters"])
         # the table the sheet shows was measured with the values the tree uses, so the served round and the table agree
         self.assertEqual(made["reconstruction_values"], p["parameters"]["fitted_on"])
-        earlier = self.env.get("test_protocol_2_m2_values")
+        earlier = self.env.get("test_protocol_2_with_the_earlier_values")
         if earlier:
             shown = self.doc["next_look"]["with_the_earlier_values"]
             self.assertEqual(shown["agents"]["oracle"]["mean_gain"], earlier["agents"]["oracle"]["mean_gain"])
             self.assertEqual(shown["reconstruction_values"], self.env["reconstruction_parameters"])
             self.assertNotEqual(shown["reconstruction_values"], made["reconstruction_values"])
         # the table before the environment's bug fix is shown beside the one after it, both from the tracked file
-        was = self.env.get("test_protocol_2_before_m8c")
+        was = self.env.get("test_protocol_2_before_the_look_rows_correction")
         if was:
             shown = self.doc["next_look"]["before_the_bug_fix"]
             self.assertEqual(shown["agents"]["least_sure"]["mean_gain"], was["agents"]["least_sure"]["mean_gain"])
@@ -309,6 +309,62 @@ class EvidenceShapeTests(unittest.TestCase):
         for path in self.doc["sources"]["tracked_files"]:
             self.assertTrue((_REPO_ROOT / path).is_file(), path)
         self.assertTrue(self.doc["additions"])
+
+
+class PlainNamesTests(unittest.TestCase):
+    """The answer, the record and the environment's tracked file name a report or a table by what it is, never by
+    the step of the work that made it, and the answer names no commit: a recording of it outlives the checkout."""
+
+    # a letter M and a number as a word or a folder (the way the work's steps were numbered), in any case
+    STEP_NAME = re.compile(r"(?<![A-Za-z0-9])[Mm]\d+[a-z]?(?![A-Za-z0-9.])")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.doc = E.evidence()
+        cls.record_text = (E.FITTED_DIR / E.LOOKS_FILE).read_text(encoding="utf-8")
+        cls.env_text = E.ENV_FILE.read_text(encoding="utf-8")
+        cls.record = json.loads(cls.record_text)
+
+    def test_nothing_is_named_by_a_step_of_the_work(self) -> None:
+        for what, text in (("the answer", json.dumps(self.doc)), ("the record", self.record_text),
+                           ("the environment's file", self.env_text),
+                           ("the evidence module", Path(E.__file__).read_text(encoding="utf-8"))):
+            found = sorted(set(self.STEP_NAME.findall(text)))
+            self.assertEqual(found, [], what)
+            self.assertNotIn("-evidence/", text, what)
+
+    def test_the_pattern_would_find_a_step_name(self) -> None:
+        for text in ("M7-notes/a.json", "a_table_before_m7c", "a_table_m7_values", "m7/x.json"):
+            self.assertTrue(self.STEP_NAME.search(text), text)
+        for text in ("0.375 km", "VIIRS_NOAA20", "MODIS", "4m2", "protocol_2", "2021-07-22"):
+            self.assertIsNone(self.STEP_NAME.search(text), text)
+
+    def test_every_report_is_named_by_what_it_is_and_keeps_its_digest(self) -> None:
+        named = self.record["sources_sha256"]
+        self.assertEqual(len(named), 27)
+        folders = {name.split("/")[0] for name in named}
+        self.assertEqual(folders, set(E.REPORT_FOLDERS))
+        for folder, what in E.REPORT_FOLDERS.items():
+            self.assertTrue(what)
+        self.assertEqual(self.doc["sources"]["reports_sha256"], named)
+        self.assertIn("not in the repository", self.doc["sources"]["reports_note"])
+        self.assertEqual(self.doc["sources"]["report_folders"], E.REPORT_FOLDERS)
+
+    def test_the_answer_names_no_commit(self) -> None:
+        self.assertIn("commit", self.doc)                 # the page's type has the key
+        self.assertIsNone(self.doc["commit"])
+
+    def test_the_tables_on_record_are_named_by_what_they_are(self) -> None:
+        env = json.loads(self.env_text)
+        self.assertEqual(env["rewards"]["tables_on_record"],
+                         ["test", "test_protocol_2_before_the_look_rows_correction", "test_protocol_2_with_the_earlier_values", "test_protocol_2"])
+        for key in env["rewards"]["tables_on_record"]:
+            self.assertIn(key, env)
+        shown = self.doc["next_look"]
+        self.assertEqual(shown["before_the_bug_fix"]["agents"]["least_sure"]["mean_gain"],
+                         env["test_protocol_2_before_the_look_rows_correction"]["agents"]["least_sure"]["mean_gain"])
+        self.assertEqual(shown["with_the_earlier_values"]["agents"]["oracle"]["mean_gain"],
+                         env["test_protocol_2_with_the_earlier_values"]["agents"]["oracle"]["mean_gain"])
 
 
 if __name__ == "__main__":

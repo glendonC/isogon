@@ -76,7 +76,7 @@
       "pixel_ratio_of_sums",
       "frp_median_abs_relative_error"
      ],
-     "report": "M2-evidence/blind_plumas_ca_fitted.json"
+     "report": "first-fit/blind_plumas_ca_fitted.json"
     },
     "lytton_bc": {
      "protocol_version": 1,
@@ -146,7 +146,7 @@
       "frp_ratio_of_sums",
       "frp_median_abs_relative_error"
      ],
-     "report": "M2-evidence/blind_lytton_bc_fitted.json"
+     "report": "first-fit/blind_lytton_bc_fitted.json"
     },
     "evia_greece": {
      "protocol_version": 1,
@@ -213,7 +213,7 @@
       "pixel_ratio_of_sums",
       "frp_ratio_of_sums"
      ],
-     "report": "M2-evidence/blind_evia_greece_fitted.json"
+     "report": "first-fit/blind_evia_greece_fitted.json"
     }
    }
   },
@@ -290,7 +290,7 @@
       "pixel_ratio_of_sums",
       "frp_median_abs_relative_error"
      ],
-     "report": "M8-evidence/test_fire_plumas_ca.json"
+     "report": "sealed-protocol/test_fire_plumas_ca.json"
     },
     "lytton_bc": {
      "protocol_version": 2,
@@ -360,7 +360,7 @@
       "frp_ratio_of_sums",
       "frp_median_abs_relative_error"
      ],
-     "report": "M8-evidence/test_fire_lytton_bc.json"
+     "report": "sealed-protocol/test_fire_lytton_bc.json"
     },
     "evia_greece": {
      "protocol_version": 2,
@@ -429,7 +429,7 @@
      "remarks": {
       "csi_strict_375m": "by 0.0002, in effect a tie"
      },
-     "report": "M8-evidence/test_fire_evia_greece.json"
+     "report": "sealed-protocol/test_fire_evia_greece.json"
     }
    }
   },
@@ -509,7 +509,7 @@
      "looks_that_flagged_nothing_in_the_box": 0,
      "passes_that_held_part_of_the_box_not_scored": 0,
      "hidden_rows_of_those_passes": 0,
-     "report": "M9-final-look/final_look_plumas_ca.json"
+     "report": "final-look/final_look_plumas_ca.json"
     },
     "lytton_bc": {
      "protocol_version": 3,
@@ -582,7 +582,7 @@
      "looks_that_flagged_nothing_in_the_box": 3,
      "passes_that_held_part_of_the_box_not_scored": 0,
      "hidden_rows_of_those_passes": 0,
-     "report": "M9-final-look/final_look_lytton_bc.json"
+     "report": "final-look/final_look_lytton_bc.json"
     },
     "evia_greece": {
      "protocol_version": 3,
@@ -651,7 +651,7 @@
      "looks_that_flagged_nothing_in_the_box": 0,
      "passes_that_held_part_of_the_box_not_scored": 1,
      "hidden_rows_of_those_passes": 133,
-     "report": "M9-final-look/final_look_evia_greece.json"
+     "report": "final-look/final_look_evia_greece.json"
     }
    }
   }
@@ -677,7 +677,7 @@
       "held": 2,
       "of": 13
      },
-     "report": "M1a-evidence/blind_plumas_ca.json"
+     "report": "first-reconstruction/blind_plumas_ca.json"
     },
     "lytton_bc": {
      "first_overpass_utc": "2021-06-30T21:52:00Z",
@@ -690,7 +690,7 @@
       "held": 3,
       "of": 15
      },
-     "report": "M1a-evidence/blind_lytton_bc.json"
+     "report": "first-reconstruction/blind_lytton_bc.json"
     },
     "evia_greece": {
      "first_overpass_utc": "2021-08-06T12:14:00Z",
@@ -703,7 +703,7 @@
       "held": 2,
       "of": 14
      },
-     "report": "M1a-evidence/blind_evia_greece.json"
+     "report": "first-reconstruction/blind_evia_greece.json"
     }
    }
   },
@@ -727,7 +727,7 @@
       "held": 6,
       "of": 7
      },
-     "report": "M1a-evidence/blind_plumas_ca_hide_VIIRS_NOAA20.json"
+     "report": "first-reconstruction/blind_plumas_ca_hide_VIIRS_NOAA20.json"
     },
     "plumas_ca hiding Suomi NPP": {
      "first_overpass_utc": "2021-07-22T20:34:00Z",
@@ -740,7 +740,7 @@
       "held": 5,
       "of": 6
      },
-     "report": "M1a-evidence/blind_plumas_ca_hide_VIIRS_SNPP.json"
+     "report": "first-reconstruction/blind_plumas_ca_hide_VIIRS_SNPP.json"
     }
    }
   },
@@ -764,7 +764,7 @@
       "held": 24,
       "of": 31
      },
-     "report": "M4-evidence/terra_test_fires.json"
+     "report": "terra-morning/terra_test_fires.json"
     },
     "lytton_bc": {
      "first_overpass_utc": "2021-06-30T00:00:00Z",
@@ -777,7 +777,7 @@
       "held": 6,
       "of": 13
      },
-     "report": "M4-evidence/terra_test_fires.json"
+     "report": "terra-morning/terra_test_fires.json"
     },
     "evia_greece": {
      "first_overpass_utc": "2021-08-03T00:00:00Z",
@@ -790,7 +790,7 @@
       "held": 5,
       "of": 6
      },
-     "report": "M4-evidence/terra_test_fires.json"
+     "report": "terra-morning/terra_test_fires.json"
     }
    }
   },
@@ -814,7 +814,7 @@
       "held": 12,
       "of": 13
      },
-     "report": "M6-evidence/blind_plumas_ca_2021-07-22.json"
+     "report": "other-windows/blind_plumas_ca_2021-07-22.json"
     },
     "lytton_bc": {
      "first_overpass_utc": "2021-06-30T04:54:00Z",
@@ -827,7 +827,7 @@
       "held": 10,
       "of": 13
      },
-     "report": "M6-evidence/blind_lytton_bc_2021-06-30.json"
+     "report": "other-windows/blind_lytton_bc_2021-06-30.json"
     },
     "evia_greece": {
      "first_overpass_utc": "2021-08-03T21:06:00Z",
@@ -840,7 +840,7 @@
       "held": 5,
       "of": 12
      },
-     "report": "M6-evidence/blind_evia_greece_2021-08-03.json"
+     "report": "other-windows/blind_evia_greece_2021-08-03.json"
     }
    }
   },
@@ -864,7 +864,7 @@
       "held": 13,
       "of": 16
      },
-     "report": "M6-evidence/blind_lytton_bc_2021-07-01.json"
+     "report": "other-windows/blind_lytton_bc_2021-07-01.json"
     },
     "evia_greece": {
      "first_overpass_utc": "2021-08-07T00:15:00Z",
@@ -877,7 +877,7 @@
       "held": 14,
       "of": 15
      },
-     "report": "M6-evidence/blind_evia_greece_2021-08-07.json"
+     "report": "other-windows/blind_evia_greece_2021-08-07.json"
     }
    }
   },
@@ -901,7 +901,7 @@
       "held": 23,
       "of": 27
      },
-     "report": "M8-evidence/payload_plumas_ca_2021-07-20_holdout_viirs.json"
+     "report": "sealed-protocol/payload_plumas_ca_2021-07-20_holdout_viirs.json"
     },
     "lytton_bc": {
      "first_overpass_utc": "2021-06-30T04:54:00Z",
@@ -914,7 +914,7 @@
       "held": 24,
       "of": 46
      },
-     "report": "M8-evidence/payload_lytton_bc_2021-06-30_holdout_viirs.json"
+     "report": "sealed-protocol/payload_lytton_bc_2021-06-30_holdout_viirs.json"
     },
     "evia_greece": {
      "first_overpass_utc": "2021-08-03T21:06:00Z",
@@ -927,7 +927,7 @@
       "held": 21,
       "of": 29
      },
-     "report": "M8-evidence/payload_evia_greece_2021-08-03_holdout_viirs.json"
+     "report": "sealed-protocol/payload_evia_greece_2021-08-03_holdout_viirs.json"
     }
    }
   },
@@ -951,7 +951,7 @@
       "held": 15,
       "of": 16
      },
-     "report": "M8b-evidence/payload_plumas_ca_2021-07-22_holdout_viirs.json"
+     "report": "sealed-protocol-scheduled-frames/payload_plumas_ca_2021-07-22_holdout_viirs.json"
     },
     "lytton_bc": {
      "first_overpass_utc": "2021-06-30T04:54:00Z",
@@ -964,7 +964,7 @@
       "held": 12,
       "of": 18
      },
-     "report": "M8b-evidence/payload_lytton_bc_2021-06-30_holdout_viirs.json"
+     "report": "sealed-protocol-scheduled-frames/payload_lytton_bc_2021-06-30_holdout_viirs.json"
     },
     "evia_greece": {
      "first_overpass_utc": "2021-08-03T21:06:00Z",
@@ -977,14 +977,14 @@
       "held": 7,
       "of": 14
      },
-     "report": "M8b-evidence/payload_evia_greece_2021-08-03_holdout_viirs.json"
+     "report": "sealed-protocol-scheduled-frames/payload_evia_greece_2021-08-03_holdout_viirs.json"
     }
    }
   }
  ],
  "schedule_cost_on_training_episodes": {
   "what": "the tracked parameters on the training episodes, scored on the nominal schedule and on a diagnostic schedule that reads each prediction's time and platform from the hidden overpass (not blind); what a list of real pass times is worth",
-  "report": "M8-evidence/schedule_cost_training.json",
+  "report": "sealed-protocol/schedule_cost_training.json",
   "by_schedule": {
    "nominal": {
     "scored_overpasses": 400,
@@ -1063,32 +1063,32 @@
   }
  },
  "sources_sha256": {
-  "M1a-evidence/blind_evia_greece.json": "148392bfdd121a50b22052c23b8b915c54751819c0d907f800fdd5500110ff9e",
-  "M1a-evidence/blind_lytton_bc.json": "5b0a7baaaaab23772d20ca4fd93bd69d4d4a97b1c986aef4a4d722620380af23",
-  "M1a-evidence/blind_plumas_ca.json": "bbecf356555e4baf29abd8bdea9d9bd2f7665f0e13260751dd77575358b5712d",
-  "M1a-evidence/blind_plumas_ca_hide_VIIRS_NOAA20.json": "76f2060ad55823107d7aaa10e88cc53a3719c64ce6d529be3b4d19c08dbd64d1",
-  "M1a-evidence/blind_plumas_ca_hide_VIIRS_SNPP.json": "b2c29d93033938c636236efeccab8f46675961234c69f0f9112aaf684b0a0481",
-  "M2-evidence/blind_evia_greece_fitted.json": "b3d7135895895467f3a0e1f8796499bc9c39b6c67eca5a56e36bd8870dd9397a",
-  "M2-evidence/blind_lytton_bc_fitted.json": "d66b6978acb6bcfcf4ae48dc570b0078a7bb66328a2489bf6c0b18a664f6a9b8",
-  "M2-evidence/blind_plumas_ca_fitted.json": "44fb920679ebde870d194b2d125155ee485c4f732d89f0056155ff6e1ecc2f95",
-  "M4-evidence/terra_test_fires.json": "fa544489fec1cb2c332d1ae876a39c92cf8b99dff859db997ea4253b07e48e71",
-  "M6-evidence/blind_evia_greece_2021-08-03.json": "2b261a4c372a5ee566e31db3a4778feeebac65884b7ed5daaea8dfda4cdc6d4d",
-  "M6-evidence/blind_evia_greece_2021-08-07.json": "b04d7b4f07448968a197ff80beb528da35ef4c5c41b04d23e34ce18c2e15d468",
-  "M6-evidence/blind_lytton_bc_2021-06-30.json": "d6ef77bf7fa92fd9f4fd64cd967345839ed6984973001ff4ec08bd6914517f2a",
-  "M6-evidence/blind_lytton_bc_2021-07-01.json": "5ae86c56e2f4f810722656836268c04bec9773cc25afd3f6bed8a844a4c209f3",
-  "M6-evidence/blind_plumas_ca_2021-07-22.json": "714b208ed6570ec26bf8d894234c0a0d4accf241799a62a19dd10dac7835c2ac",
-  "M8-evidence/payload_evia_greece_2021-08-03_holdout_viirs.json": "0e30549c361aba335c560b023a9606a47739771b21f82990771f6c6fb04dcd69",
-  "M8-evidence/payload_lytton_bc_2021-06-30_holdout_viirs.json": "3b9902886d72d14b3f087335a7d4c1dd447d5bcdf99403ef943f519b138e4e22",
-  "M8-evidence/payload_plumas_ca_2021-07-20_holdout_viirs.json": "7607de0b0f36695b95fb20ad4413fd176a945adf07b68568d5ea7df562284312",
-  "M8-evidence/schedule_cost_training.json": "6494fcd59e1196ce19ddf6e16e382cef6551fdccc5f7d143571b06fb848cef21",
-  "M8-evidence/test_fire_evia_greece.json": "ad54d67c2415b44e6cc81dc863e3cc214e89bc8a37de4ab8ae29f384369aec6f",
-  "M8-evidence/test_fire_lytton_bc.json": "cceb4d792484eb0767015e6405aa506c6b6e133ddcf6caf2359aa256a161d687",
-  "M8-evidence/test_fire_plumas_ca.json": "4440ffc1a255b75aab711e3de068fe392474f5e33a902ad2b0725f9528af9512",
-  "M8b-evidence/payload_evia_greece_2021-08-03_holdout_viirs.json": "968b06863944e30944b11868fdcf154fe998679613f613c88b2714fe32641971",
-  "M8b-evidence/payload_lytton_bc_2021-06-30_holdout_viirs.json": "3acbf99e30e5f99faea396b6a1073c0ecee6a5f4d2254ff8f9e2445213286c81",
-  "M8b-evidence/payload_plumas_ca_2021-07-22_holdout_viirs.json": "32bfdcc19ec05c78d70412e466626ed1d2fc0ece7e48bc7aa4960800b54cb3f0",
-  "M9-final-look/final_look_evia_greece.json": "c9a3b0feb03aa86942acc95e637991a8dbe055897e7359e829d442497e49acbf",
-  "M9-final-look/final_look_lytton_bc.json": "0467ef7046d1403b4bac16bd53b566e5d58715c60bd646d3949973b379fc1248",
-  "M9-final-look/final_look_plumas_ca.json": "6e80673850b0a3740e94374a095bb44a039d55ed2b5d0f7d5e722e6a3098fa4c"
+  "first-reconstruction/blind_evia_greece.json": "148392bfdd121a50b22052c23b8b915c54751819c0d907f800fdd5500110ff9e",
+  "first-reconstruction/blind_lytton_bc.json": "5b0a7baaaaab23772d20ca4fd93bd69d4d4a97b1c986aef4a4d722620380af23",
+  "first-reconstruction/blind_plumas_ca.json": "bbecf356555e4baf29abd8bdea9d9bd2f7665f0e13260751dd77575358b5712d",
+  "first-reconstruction/blind_plumas_ca_hide_VIIRS_NOAA20.json": "76f2060ad55823107d7aaa10e88cc53a3719c64ce6d529be3b4d19c08dbd64d1",
+  "first-reconstruction/blind_plumas_ca_hide_VIIRS_SNPP.json": "b2c29d93033938c636236efeccab8f46675961234c69f0f9112aaf684b0a0481",
+  "first-fit/blind_evia_greece_fitted.json": "b3d7135895895467f3a0e1f8796499bc9c39b6c67eca5a56e36bd8870dd9397a",
+  "first-fit/blind_lytton_bc_fitted.json": "d66b6978acb6bcfcf4ae48dc570b0078a7bb66328a2489bf6c0b18a664f6a9b8",
+  "first-fit/blind_plumas_ca_fitted.json": "44fb920679ebde870d194b2d125155ee485c4f732d89f0056155ff6e1ecc2f95",
+  "terra-morning/terra_test_fires.json": "fa544489fec1cb2c332d1ae876a39c92cf8b99dff859db997ea4253b07e48e71",
+  "other-windows/blind_evia_greece_2021-08-03.json": "2b261a4c372a5ee566e31db3a4778feeebac65884b7ed5daaea8dfda4cdc6d4d",
+  "other-windows/blind_evia_greece_2021-08-07.json": "b04d7b4f07448968a197ff80beb528da35ef4c5c41b04d23e34ce18c2e15d468",
+  "other-windows/blind_lytton_bc_2021-06-30.json": "d6ef77bf7fa92fd9f4fd64cd967345839ed6984973001ff4ec08bd6914517f2a",
+  "other-windows/blind_lytton_bc_2021-07-01.json": "5ae86c56e2f4f810722656836268c04bec9773cc25afd3f6bed8a844a4c209f3",
+  "other-windows/blind_plumas_ca_2021-07-22.json": "714b208ed6570ec26bf8d894234c0a0d4accf241799a62a19dd10dac7835c2ac",
+  "sealed-protocol/payload_evia_greece_2021-08-03_holdout_viirs.json": "0e30549c361aba335c560b023a9606a47739771b21f82990771f6c6fb04dcd69",
+  "sealed-protocol/payload_lytton_bc_2021-06-30_holdout_viirs.json": "3b9902886d72d14b3f087335a7d4c1dd447d5bcdf99403ef943f519b138e4e22",
+  "sealed-protocol/payload_plumas_ca_2021-07-20_holdout_viirs.json": "7607de0b0f36695b95fb20ad4413fd176a945adf07b68568d5ea7df562284312",
+  "sealed-protocol/schedule_cost_training.json": "6494fcd59e1196ce19ddf6e16e382cef6551fdccc5f7d143571b06fb848cef21",
+  "sealed-protocol/test_fire_evia_greece.json": "ad54d67c2415b44e6cc81dc863e3cc214e89bc8a37de4ab8ae29f384369aec6f",
+  "sealed-protocol/test_fire_lytton_bc.json": "cceb4d792484eb0767015e6405aa506c6b6e133ddcf6caf2359aa256a161d687",
+  "sealed-protocol/test_fire_plumas_ca.json": "4440ffc1a255b75aab711e3de068fe392474f5e33a902ad2b0725f9528af9512",
+  "sealed-protocol-scheduled-frames/payload_evia_greece_2021-08-03_holdout_viirs.json": "968b06863944e30944b11868fdcf154fe998679613f613c88b2714fe32641971",
+  "sealed-protocol-scheduled-frames/payload_lytton_bc_2021-06-30_holdout_viirs.json": "3acbf99e30e5f99faea396b6a1073c0ecee6a5f4d2254ff8f9e2445213286c81",
+  "sealed-protocol-scheduled-frames/payload_plumas_ca_2021-07-22_holdout_viirs.json": "32bfdcc19ec05c78d70412e466626ed1d2fc0ece7e48bc7aa4960800b54cb3f0",
+  "final-look/final_look_evia_greece.json": "c9a3b0feb03aa86942acc95e637991a8dbe055897e7359e829d442497e49acbf",
+  "final-look/final_look_lytton_bc.json": "0467ef7046d1403b4bac16bd53b566e5d58715c60bd646d3949973b379fc1248",
+  "final-look/final_look_plumas_ca.json": "6e80673850b0a3740e94374a095bb44a039d55ed2b5d0f7d5e722e6a3098fa4c"
  }
 }

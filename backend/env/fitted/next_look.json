@@ -24,8 +24,8 @@
   "when_the_tables_on_record_were_measured": "the first reward: each look was paid the change in the score on the detections still hidden after it. That scoring set shrank with every look, so the rewards of a round did not add up to the change in its score: a mean gain in this table is a sum of such rewards, not the final score minus the starting score.",
   "tables_on_record": [
    "test",
-   "test_protocol_2_before_m8c",
-   "test_protocol_2_m2_values",
+   "test_protocol_2_before_the_look_rows_correction",
+   "test_protocol_2_with_the_earlier_values",
    "test_protocol_2"
   ],
   "why_they_are_not_measured_again": "they are measured on the test episodes, which are windows of the three 2021 test fires. That test is closed, so the tables stay as measured and are labelled. The reward in use is measured on the validation episodes (validation_reference)."
@@ -884,8 +884,8 @@
   "note": "second look at the three 2021 test fires: a protocol correction. Episodes are chosen from MODIS rows alone; looks are nominal slots; the policy weights are those fitted under version 1, not refitted.",
   "reward": "the first reward: each look was paid the change in the score on the detections still hidden after it. That scoring set shrank with every look, so the rewards of a round did not add up to the change in its score: a mean gain in this table is a sum of such rewards, not the final score minus the starting score.",
   "empty_look": "a look that revealed nothing was unknown and paid nothing (nominal looks)",
-  "values": "measured with the reconstruction values in use (refitted from the priors under protocol version 3), which the served round plays with, so that the round and this table agree. The same table with the earlier values (the first fit) is kept as test_protocol_2_m2_values, and the one before the bug fix as test_protocol_2_before_m8c. The learned policy's weights are those fitted under version 1, trained with the earlier values; they were not retrained.",
-  "bug_fix": "measured again after a bug fix. Before it a look kept only the hidden rows inside the window, so a look at a slot laid out just before the window handed over nothing although its pass had flagged fire, and the model took an empty look for a clear one. Now a look owns the rows of its own pass, and an empty look on the nominal schedule is unknown and teaches the model nothing. Same test episodes, same reconstruction values and same policy weights as the table it replaces, which is kept as test_protocol_2_before_m8c.",
+  "values": "measured with the reconstruction values in use (refitted from the priors under protocol version 3), which the served round plays with, so that the round and this table agree. The same table with the earlier values (the first fit) is kept as test_protocol_2_with_the_earlier_values, and the one before the bug fix as test_protocol_2_before_the_look_rows_correction. The learned policy's weights are those fitted under version 1, trained with the earlier values; they were not retrained.",
+  "bug_fix": "measured again after a bug fix. Before it a look kept only the hidden rows inside the window, so a look at a slot laid out just before the window handed over nothing although its pass had flagged fire, and the model took an empty look for a clear one. Now a look owns the rows of its own pass, and an empty look on the nominal schedule is unknown and teaches the model nothing. Same test episodes, same reconstruction values and same policy weights as the table it replaces, which is kept as test_protocol_2_before_the_look_rows_correction.",
   "reconstruction_values": "22 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)",
   "known_limits": "FIRMS lists detections, not where a satellite looked and saw nothing, and has no cloud mask: a revealed tile with no detection may have been cloudy rather than free of fire. On the nominal schedule it may also be a half day on which the platform did not fly or its swath missed the box, so such a look is taken as unknown and teaches the model nothing. The looks are the nominal half-day slots of each VIIRS platform, taken from the platform and the calendar and not from the hidden detections; the real pass is up to about 90 minutes from a slot's time, sometimes comes twice, and its pixel size is not known in advance. A list of real overpass times would remove that approximation.",
   "episodes": 21,
@@ -1088,7 +1088,7 @@
    }
   ]
  },
- "test_protocol_2_before_m8c": {
+ "test_protocol_2_before_the_look_rows_correction": {
   "what": "next-look environment, reference agents and the learned policy on the test episodes, protocol version 2",
   "note": "second look at the three 2021 test fires: a protocol correction. Episodes are chosen from MODIS rows alone; looks are nominal slots; the policy weights are those fitted under version 1, not refitted.",
   "reward": "the first reward: each look was paid the change in the score on the detections still hidden after it. That scoring set shrank with every look, so the rewards of a round did not add up to the change in its score: a mean gain in this table is a sum of such rewards, not the final score minus the starting score.",
@@ -1294,12 +1294,12 @@
    }
   ]
  },
- "test_protocol_2_m2_values": {
+ "test_protocol_2_with_the_earlier_values": {
   "what": "next-look environment, reference agents and the learned policy on the test episodes, protocol version 2, after the bug fix",
   "note": "second look at the three 2021 test fires: a protocol correction. Episodes are chosen from MODIS rows alone; looks are nominal slots; the policy weights are those fitted under version 1, not refitted.",
   "reward": "the first reward: each look was paid the change in the score on the detections still hidden after it. That scoring set shrank with every look, so the rewards of a round did not add up to the change in its score: a mean gain in this table is a sum of such rewards, not the final score minus the starting score.",
   "empty_look": "a look that revealed nothing was unknown and paid nothing (nominal looks)",
-  "bug_fix": "measured again after a bug fix. Before it a look kept only the hidden rows inside the window, so a look at a slot laid out just before the window handed over nothing although its pass had flagged fire, and the model took an empty look for a clear one. Now a look owns the rows of its own pass, and an empty look on the nominal schedule is unknown and teaches the model nothing. Same test episodes, same reconstruction values and same policy weights as the table it replaces, which is kept as test_protocol_2_before_m8c.",
+  "bug_fix": "measured again after a bug fix. Before it a look kept only the hidden rows inside the window, so a look at a slot laid out just before the window handed over nothing although its pass had flagged fire, and the model took an empty look for a clear one. Now a look owns the rows of its own pass, and an empty look on the nominal schedule is unknown and teaches the model nothing. Same test episodes, same reconstruction values and same policy weights as the table it replaces, which is kept as test_protocol_2_before_the_look_rows_correction.",
   "reconstruction_values": "21 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)",
   "known_limits": "FIRMS lists detections, not where a satellite looked and saw nothing, and has no cloud mask: a revealed tile with no detection may have been cloudy rather than free of fire. On the nominal schedule it may also be a half day on which the platform did not fly or its swath missed the box, so such a look is taken as unknown and teaches the model nothing. The looks are the nominal half-day slots of each VIIRS platform, taken from the platform and the calendar and not from the hidden detections; the real pass is up to about 90 minutes from a slot's time, sometimes comes twice, and its pixel size is not known in advance. A list of real overpass times would remove that approximation.",
   "episodes": 21,

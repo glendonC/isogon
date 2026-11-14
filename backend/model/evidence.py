@@ -4,7 +4,8 @@
   python3 -m backend.model.evidence          prints it
   python3 -m backend.model.evidence record <reports folder>
                                              rebuilds the tracked record of every time the test fires were scored,
-                                             from the reports those runs wrote (the reports are not in the repository)
+                                             from the reports those runs wrote (the reports are not in the repository;
+                                             the folder holds one folder per name of `REPORT_FOLDERS`)
 
 Nothing in the dict is typed by hand. Every number is read from a tracked file or computed here from one:
 
@@ -28,7 +29,6 @@ import datetime as _dt
 import hashlib
 import json
 from pathlib import Path
-import subprocess
 import sys
 from typing import Any
 
@@ -67,37 +67,37 @@ LOOKS: tuple[dict[str, Any], ...] = (
     {"look": 1, "unit": "first fit", "protocol_version": 1,
      "what": "fitted values on windows of 24 overpasses that counted the hidden ones; each prediction made at the hidden overpass's own time and pixel size",
      "note": "the first test; its protocol let the hidden rows shape the window and each prediction",
-     "files": "M2-evidence/blind_{region}_fitted.json"},
+     "files": "first-fit/blind_{region}_fitted.json"},
     {"look": 2, "unit": "sealed protocol", "protocol_version": 2,
      "what": "the same fitted values, not refitted, on windows of 12 MODIS overpasses chosen with VIIRS dropped; predictions published on a nominal schedule before the hidden rows are opened",
      "note": "a protocol correction, not a fresh test",
-     "files": "M8-evidence/test_fire_{region}.json"},
+     "files": "sealed-protocol/test_fire_{region}.json"},
     {"look": 3, "unit": "final look", "protocol_version": 3,
      "what": "values refitted from the priors under protocol version 3 and frozen before the look, on the windows of look 2; every pass of the pass list whose swath held the box is a scored look at its real time and pixel size, a pass that flagged nothing included",
      "note": "the final look: taken once, with the protocol and the fitted values frozen before it; the test fires are not scored again",
-     "files": "M9-final-look/final_look_{region}.json"},
+     "files": "final-look/final_look_{region}.json"},
 )
 OTHER_SCORINGS: tuple[dict[str, Any], ...] = (
     {"unit": "first reconstruction", "protocol_version": 1, "what": "untuned priors on the windows of look 1, before anything was fitted",
-     "files": "M1a-evidence/blind_{region}.json"},
+     "files": "first-reconstruction/blind_{region}.json"},
     {"unit": "one platform hidden", "protocol_version": 1, "what": "Dixie with one VIIRS platform hidden and the other left visible (an easier test)",
-     "files": {"plumas_ca hiding NOAA-20": "M1a-evidence/blind_plumas_ca_hide_VIIRS_NOAA20.json",
-               "plumas_ca hiding Suomi NPP": "M1a-evidence/blind_plumas_ca_hide_VIIRS_SNPP.json"}},
+     "files": {"plumas_ca hiding NOAA-20": "first-reconstruction/blind_plumas_ca_hide_VIIRS_NOAA20.json",
+               "plumas_ca hiding Suomi NPP": "first-reconstruction/blind_plumas_ca_hide_VIIRS_SNPP.json"}},
     {"unit": "Terra morning estimate", "protocol_version": 1, "what": "the other direction: MODIS hidden and Terra's morning pass estimated from VIIRS, each fire over its whole period",
-     "files": "M4-evidence/terra_test_fires.json", "key": "{region}", "baselines": ("painted_viirs", "viirs_ratio")},
+     "files": "terra-morning/terra_test_fires.json", "key": "{region}", "baselines": ("painted_viirs", "viirs_ratio")},
     {"unit": "other windows", "protocol_version": 1, "what": "a run with VIIRS hidden from each region's default start date",
-     "files": {"plumas_ca": "M6-evidence/blind_plumas_ca_2021-07-22.json", "lytton_bc": "M6-evidence/blind_lytton_bc_2021-06-30.json",
-               "evia_greece": "M6-evidence/blind_evia_greece_2021-08-03.json"}},
+     "files": {"plumas_ca": "other-windows/blind_plumas_ca_2021-07-22.json", "lytton_bc": "other-windows/blind_lytton_bc_2021-06-30.json",
+               "evia_greece": "other-windows/blind_evia_greece_2021-08-03.json"}},
     {"unit": "other windows", "protocol_version": 1, "what": "the same from the start the window rule would have picked instead (reported, not adopted)",
-     "files": {"lytton_bc": "M6-evidence/blind_lytton_bc_2021-07-01.json", "evia_greece": "M6-evidence/blind_evia_greece_2021-08-07.json"}},
+     "files": {"lytton_bc": "other-windows/blind_lytton_bc_2021-07-01.json", "evia_greece": "other-windows/blind_evia_greece_2021-08-07.json"}},
     {"unit": "sealed protocol", "protocol_version": 2, "what": "a run with VIIRS hidden from each default start, 24 MODIS frames",
-     "files": {"plumas_ca": "M8-evidence/payload_plumas_ca_2021-07-20_holdout_viirs.json", "lytton_bc": "M8-evidence/payload_lytton_bc_2021-06-30_holdout_viirs.json",
-               "evia_greece": "M8-evidence/payload_evia_greece_2021-08-03_holdout_viirs.json"}, "key": "blind_test"},
+     "files": {"plumas_ca": "sealed-protocol/payload_plumas_ca_2021-07-20_holdout_viirs.json", "lytton_bc": "sealed-protocol/payload_lytton_bc_2021-06-30_holdout_viirs.json",
+               "evia_greece": "sealed-protocol/payload_evia_greece_2021-08-03_holdout_viirs.json"}, "key": "blind_test"},
     {"unit": "sealed protocol with scheduled frames", "protocol_version": 2, "what": "the same with scheduled looks of the hidden platforms among the frames (a variant that was not adopted)",
-     "files": {"plumas_ca": "M8b-evidence/payload_plumas_ca_2021-07-22_holdout_viirs.json", "lytton_bc": "M8b-evidence/payload_lytton_bc_2021-06-30_holdout_viirs.json",
-               "evia_greece": "M8b-evidence/payload_evia_greece_2021-08-03_holdout_viirs.json"}, "key": "blind_test"},
+     "files": {"plumas_ca": "sealed-protocol-scheduled-frames/payload_plumas_ca_2021-07-22_holdout_viirs.json", "lytton_bc": "sealed-protocol-scheduled-frames/payload_lytton_bc_2021-06-30_holdout_viirs.json",
+               "evia_greece": "sealed-protocol-scheduled-frames/payload_evia_greece_2021-08-03_holdout_viirs.json"}, "key": "blind_test"},
 )
-SCHEDULE_COST_FILE: str = "M8-evidence/schedule_cost_training.json"
+SCHEDULE_COST_FILE: str = "sealed-protocol/schedule_cost_training.json"
 
 AGENTS: tuple[tuple[str, str, str, str, str], ...] = (
     # id on the sheet, label, what it does, key under protocol 2, key under protocol 1
@@ -143,14 +143,22 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _commit() -> str | None:
-    """The commit of the code answering, when it runs from a git checkout."""
-    try:
-        out = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=Path(__file__).resolve().parent,
-                             capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return out.stdout.strip() or None if out.returncode == 0 else None
+# The folders of the reports folder given to `record`, each named by what its reports are. The reports are the
+# files the runs on the test fires wrote; they are not in the repository, and the record keeps each one's sha256.
+REPORT_FOLDERS: dict[str, str] = {
+    "first-reconstruction": "untuned priors on the windows of look 1, and Dixie with one VIIRS platform hidden",
+    "first-fit": "look 1: the first fitted values, under protocol version 1",
+    "terra-morning": "the other direction: Terra's morning pass estimated from VIIRS",
+    "other-windows": "runs with VIIRS hidden from other start dates, under protocol version 1",
+    "sealed-protocol": "look 2 and the runs from each default start, under protocol version 2; and what the schedule costs, on training fires",
+    "sealed-protocol-scheduled-frames": "the same runs with scheduled looks among the frames, a variant that was not adopted",
+    "final-look": "look 3, the final look, under protocol version 3",
+}
+REPORTS_NOTE: str = (
+    "the reports are the files the runs on the three test fires wrote. They are not in the repository: the record "
+    "holds what the sheet needs of each, and each report's sha256, so that whoever holds the reports can check the "
+    "record against them. Each is named by its folder (report_folders says what a folder holds) and its file"
+)
 
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -511,17 +519,17 @@ def _next_look(env: dict[str, Any]) -> dict[str, Any]:
             "looks": "nominal half-day slots (the environment's default schedule)",
         },
         # the same table with the reconstruction values it was first measured with, when the tracked file keeps it
-        "with_the_earlier_values": None if "test_protocol_2_m2_values" not in env else {
+        "with_the_earlier_values": None if "test_protocol_2_with_the_earlier_values" not in env else {
             "what": "the same test episodes after the bug fix, with the reconstruction values of the first fit",
-            "reconstruction_values": env["test_protocol_2_m2_values"].get("reconstruction_values"),
-            "mean_start_score": env["test_protocol_2_m2_values"]["mean_start_score"],
-            "agents": {aid: _agent_row(env["test_protocol_2_m2_values"], k_new) for aid, _, _, k_new, _ in AGENTS},
+            "reconstruction_values": env["test_protocol_2_with_the_earlier_values"].get("reconstruction_values"),
+            "mean_start_score": env["test_protocol_2_with_the_earlier_values"]["mean_start_score"],
+            "agents": {aid: _agent_row(env["test_protocol_2_with_the_earlier_values"], k_new) for aid, _, _, k_new, _ in AGENTS},
         },
         # the same table before a bug fix in the environment, when the tracked file keeps one
-        "before_the_bug_fix": None if "test_protocol_2_before_m8c" not in env else {
+        "before_the_bug_fix": None if "test_protocol_2_before_the_look_rows_correction" not in env else {
             "what": new.get("bug_fix"),
-            "mean_start_score": env["test_protocol_2_before_m8c"]["mean_start_score"],
-            "agents": {aid: _agent_row(env["test_protocol_2_before_m8c"], k_new) for aid, _, _, k_new, _ in AGENTS},
+            "mean_start_score": env["test_protocol_2_before_the_look_rows_correction"]["mean_start_score"],
+            "agents": {aid: _agent_row(env["test_protocol_2_before_the_look_rows_correction"], k_new) for aid, _, _, k_new, _ in AGENTS},
         },
     }
 
@@ -634,7 +642,9 @@ def evidence() -> dict[str, Any]:
     protocol = params.get("protocol") or {}
     refitted = protocol.get("parameters_fitted_under") == protocol.get("validated_under")
     return {
-        "commit": _commit(),
+        # The page's type has the key. No commit is named: a recording of this answer outlives the checkout that
+        # made it, and the tracked files it is read from are listed under sources.
+        "commit": None,
         "unit": new_look["unit"],
         "test_fires": {
             "hidden": "VIIRS",
@@ -674,6 +684,8 @@ def evidence() -> dict[str, Any]:
             "tracked_files": ["backend/model/fitted_values/" + LOOKS_FILE, "backend/model/fitted_values/" + PARAMS_FILE,
                               "backend/env/fitted/next_look.json"],
             "reports_sha256": record["sources_sha256"],
+            "reports_note": REPORTS_NOTE,
+            "report_folders": dict(REPORT_FOLDERS),
             "record_built_utc": record["built_utc"],
         },
     }
