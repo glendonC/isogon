@@ -2,17 +2,17 @@
    pass track along the bottom, the debrief as its own screen. */
 
 .iso-ws {
-  --w1-panel: 360px;
-  --w1-track: 176px;
+  --ws-panel: 360px;
+  --ws-track: 176px;
 }
 
 /* The scrims follow the layout: a column for the panel, a band for the track. */
 .iso-ws__scrim--right {
-  width: calc(var(--w1-panel) + 2 * var(--iso-gutter) + 120px);
+  width: calc(var(--ws-panel) + 2 * var(--iso-gutter) + 120px);
 }
 
 .iso-ws__scrim--bottom {
-  height: calc(var(--w1-track) + 90px);
+  height: calc(var(--ws-track) + 90px);
 }
 
 .iso-ws[data-debrief='true']::before {
@@ -343,8 +343,8 @@
   position: absolute;
   top: calc(var(--iso-gutter) + 64px);
   right: var(--iso-gutter);
-  width: var(--w1-panel);
-  max-height: calc(100dvh - var(--iso-gutter) - 64px - var(--w1-track) - 24px);
+  width: var(--ws-panel);
+  max-height: calc(100dvh - var(--iso-gutter) - 64px - var(--ws-track) - 24px);
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
@@ -392,12 +392,12 @@
 
 /* The record step's panel is the calendar, so it is wider, and the calendar's lines wrap inside it. */
 .iso-ws[data-step='record'] {
-  --w1-panel: 452px;
+  --ws-panel: 452px;
 }
 
 /* A round hides the track, so its panel may run to the bottom. */
 .iso-ws[data-step='look'] {
-  --w1-track: 0px;
+  --ws-track: 0px;
 }
 
 .iso-step .iso-cal {
@@ -465,7 +465,7 @@
   top: calc(var(--iso-gutter) + 64px);
   transform: translateX(-50%);
   width: min(860px, calc(100vw - 2 * var(--iso-gutter)));
-  max-height: calc(100dvh - var(--iso-gutter) - 64px - var(--w1-track) - 24px);
+  max-height: calc(100dvh - var(--iso-gutter) - 64px - var(--ws-track) - 24px);
   overflow-y: auto;
   scrollbar-width: none;
   display: grid;

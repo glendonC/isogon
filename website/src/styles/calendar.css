@@ -4,6 +4,8 @@
 .iso-cal {
   display: grid;
   gap: 8px;
+  /* Room between the readout and the pass line below it, so the two never read as one line. */
+  padding-bottom: 12px;
   pointer-events: auto;
 }
 
@@ -14,21 +16,58 @@
   gap: 12px;
 }
 
-.iso-cal__scale {
-  white-space: nowrap;
+/* The real record's unit is long: ramp and scale take their own row and wrap inside the calendar's width. */
+.iso-cal__scalerow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
 }
 
-.iso-cal__end {
-  display: inline-flex;
+.iso-cal__scale {
+  min-width: 0;
+}
+
+.iso-cal__source {
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 16px;
-  flex-shrink: 0;
-  margin-left: auto;
+  column-gap: 18px;
+  row-gap: 6px;
 }
 
 .iso-cal__tag {
   font: 400 11px/16px var(--font-mono);
   color: var(--iso-modis-ink);
+}
+
+.iso-cal__tag[data-source='firms'] {
+  color: var(--iso-ink-2);
+}
+
+/* Months with a real run: a notch in the night colour, so it shows on every ramp step. */
+.iso-cal__run {
+  fill: var(--iso-night);
+  pointer-events: none;
+}
+
+/* A month the sensor delivered and saw nothing: hollow, so it never reads as the lowest colour. */
+.iso-cal__zero {
+  fill: none;
+  stroke: var(--iso-ink-3);
+  stroke-width: 1;
+}
+
+.iso-cal__runkey {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.iso-cal__runkey svg {
+  width: 16px;
+  height: 7px;
 }
 
 .iso-cal__body {
@@ -110,11 +149,8 @@
 }
 
 .iso-cal__legend {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: 10px;
-  row-gap: 6px;
+  display: grid;
+  row-gap: 8px;
   min-width: 0;
   padding-left: 32px;
   font: 400 11px/14px var(--font-mono);
@@ -125,6 +161,8 @@
   flex-shrink: 0;
   width: 72px;
   height: 6px;
+  margin-top: 4px;
+  align-self: flex-start;
 }
 
 .iso-cal__readout {
@@ -160,6 +198,13 @@
   font-size: 12px;
 }
 
+.iso-cal__counts {
+  margin: 4px 0 0;
+  font: 400 11.5px/16px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--iso-ink-3);
+}
+
 .iso-cal__note,
 .iso-cal__empty {
   margin: 0;
@@ -171,4 +216,17 @@
 .iso-cal__empty {
   padding: 8px 0;
   color: var(--iso-ink-3);
+}
+
+@media (max-width: 760px) {
+  .iso-cal__table th {
+    white-space: normal;
+    vertical-align: bottom;
+  }
+
+  .iso-cal__legend,
+  .iso-cal__readout,
+  .iso-cal__note {
+    padding-left: 0;
+  }
 }

@@ -1,4 +1,4 @@
-/* S1, a round of next look (components/NextLookRound.tsx). The readout takes the inspector's place; the tiles
+/* A round of next look (components/NextLookRound.tsx). The readout takes the inspector's place; the tiles
    lie over the terrain seen from straight above. Hairlines, no boxes, nothing moves on its own. */
 
 .iso-round {

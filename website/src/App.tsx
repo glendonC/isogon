@@ -3,18 +3,50 @@ import {
   CommandAskPalette,
   type ReconstructRequestParams,
 } from './components/CommandAskPalette';
-import { MethodSheet, type DocTabId } from './components/MethodSheet';
-import { StageTimelineTrack } from './components/StageTimelineTrack';
+import { ReadingSheet, type ReadingSection } from './components/ReadingSheet';
+import { EvidenceSheet } from './components/EvidenceSheet';
+import { DEMO_EVIDENCE } from './content/demo/evidence';
+import { DEMO_PASSES } from './content/demo/passes';
+import { DEMO_TERRA_MORNING } from './content/demo/terraMorning';
+import { TerraMorningPanel } from './components/TerraMorning';
+import { AreaSheet } from './components/AreaSheet';
+import { SURFACE_SOURCE } from './content/demo/switches';
+import { PassTrack } from './components/PassTrack';
+import { BurningCalendar } from './components/BurningCalendar';
+import { Debrief } from './components/Debrief';
+import { WorkspaceBar, MenuGroup, MenuItem, STEPS, type Step } from './components/WorkspaceBar';
+import { revealedPassesOf, type TrackState } from './content/passTrack';
+import { partsStatus, type PartId } from './content/partsStatus';
+import { NEW_ROUND, RoundReadout, TileOverlay, type RoundState, type ScreenRect } from './components/NextLookRound';
+import { DEMO_NEXT_LOOK_START, type NextLookEnd } from './content/demo/nextLook';
+import { frameNearest, withLooks } from './content/nextLook';
+import { demoNextLookEnv, liveNextLookEnv, runWithEndReveal, type NextLookEnv } from './content/nextLookEnv';
 import { EarthCutawayStage } from './stage/EarthCutawayStage';
 import {
   THEATER_CATALOG,
   type EarthStageTelemetry,
   type InspectorCameraPreset,
   type OrbitalSlewRequest,
-  type RecordEraJumpId,
   type TheaterId,
 } from './stage/earthCutawayTypes';
-import { SensorDiagnosticModal } from './stage/SensorDiagnosticModal';
+import { plainText } from './ui/plainText';
+import { useSensorModel } from './ui/useSensorModel';
+import { LandingComposition } from './ui/LandingComposition';
+import { imageryCredit } from './ui/attribution';
+import { useCalendar } from './ui/useCalendar';
+import {
+  isRealRun,
+  parseBlindTest,
+  parseIntensityLegend,
+  parseModel,
+  withReveal,
+  beforeSharpSatellite,
+  runWindow,
+  startBeforeSharp,
+  startForMonth,
+  utcSpan,
+} from './content/realRuns';
+import { THEATER_DISPLAY, formatLat, formatLon } from './content/theaters';
 import type {
   DynamicRegionRun,
   ObserverFilter,
@@ -22,74 +54,75 @@ import type {
   WorkspaceMode,
 } from './stage/types';
 
-const API_BASE = 'http://127.0.0.1:8788';
+const API_BASE: string = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8788';
 
-const SHORT_THEATER_CODES: Record<TheaterId, string> = {
-  plumas_ca: '01 CA',
-  lytton_bc: '02 BC',
-  evia_greece: '03 GR',
-  blue_mountains_au: '04 AU',
-};
+/**
+ * Landing world view: `landingSubjectFrame` names the rectangle the stage keeps calm (sky or haze) for the type.
+ * Wide screens: the top 38%. Phones: the type wraps longer, so the top 42%.
+ */
+const LANDING_CALM_BAND = { left: 0.0, top: 0.0, right: 1.0, bottom: 0.38 } as const;
+const LANDING_CALM_BAND_NARROW = { left: 0.0, top: 0.0, right: 1.0, bottom: 0.42 } as const;
 
-const STAGE_WINDOW_REGION_LABELS: Record<TheaterId, string> = {
-  plumas_ca: 'SIERRA NEVADA, CA',
-  lytton_bc: 'FRASER CANYON, BC',
-  evia_greece: 'AEGEAN COAST, GR',
-  blue_mountains_au: 'BLUE MOUNTAINS, AU',
-};
-
-const DEFAULT_ELEV_SPANS: Record<TheaterId, string> = {
-  plumas_ca: '313-2,357 m',
-  lytton_bc: '195-2,860 m',
-  evia_greece: '0-1,385 m',
-  blue_mountains_au: '65-1,215 m',
-};
-
-function IsogonMark() {
-  return (
-    <svg
-      className="iso-logo__mark"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        fill="currentColor"
-        d="M8.2 2.5h7.6l5.7 5.7v2.55L10.75 21.5H8.2L2.5 15.8V8.2L8.2 2.5Zm7.6 19 5.7-5.7v-2.15L13.65 21.5h2.15Z"
-      />
-      <rect
-        x="17.3"
-        y="3.9"
-        width="3.2"
-        height="3.2"
-        rx="0.4"
-        transform="rotate(45 18.9 5.5)"
-        fill="currentColor"
-        fillOpacity="0.76"
-      />
-    </svg>
-  );
+function useViewportWidth(): number {
+  const [width, setWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return width;
 }
 
-function ArrowRightGlyph({ className }: { className: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M2.75 8H13.25M13.25 8L8.75 3.5M13.25 8L8.75 12.5"
-        stroke="currentColor"
-        strokeWidth="1.45"
-        strokeLinecap="square"
-      />
-    </svg>
-  );
+/**
+ * Where the slab may sit during a round of next look. The calendar and the pass track step aside, so the terrain may
+ * take more of the screen: it stays clear of the top bar and of the readout column on the right. The column is 336 px
+ * plus the page gutter (styles/workspace.css), so the right edge is computed from the viewport width. Under 960 px
+ * the readout moves to the bottom.
+ */
+function roundFrame(width: number) {
+  if (width < 960) return { left: 0.0, top: 0.12, right: 1.0, bottom: 0.5 };
+  const gutter = Math.min(36, Math.max(20, width * 0.02));
+  const right = 1 - (336 + gutter + 32) / width;
+  return { left: 0.02, top: 0.09, right: Math.max(0.5, right), bottom: 0.93 };
 }
+
+/**
+ * Where the stage puts the region's top face when it looks straight down: fitted into the subject frame, keeping the
+ * box's own proportions (measured on the nadir view at 1440 by 900; perspective moves the corners by up to about 3
+ * percent). The tiles are drawn there, not on the grid the stage can project (`telemetry.regionGrid`).
+ */
+function nadirRect(frame: { left: number; top: number; right: number; bottom: number }, aspect: number): ScreenRect {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const fx = frame.left * W;
+  const fy = frame.top * H;
+  const fw = (frame.right - frame.left) * W;
+  const fh = (frame.bottom - frame.top) * H;
+  const w = Math.min(fw, fh * aspect);
+  const h = w / aspect;
+  return { x: fx + (fw - w) / 2, y: fy + (fh - h) / 2, w, h };
+}
+
+function workspaceFrame(width: number) {
+  if (width < 960) return { left: 0.0, top: 0.12, right: 1.0, bottom: 0.5 };
+  const gutter = Math.min(36, Math.max(20, width * 0.02));
+  const right = 1 - (360 + 2 * gutter + 24) / width;
+  // One panel at the right and the pass track along the bottom (about 170 px plus the gutter).
+  return { left: 0.0, top: 0.08, right: Math.max(0.5, right), bottom: 0.76 };
+}
+
+const WORKSPACE_VIEWS: ReadonlyArray<{ mode: WorkspaceMode; label: string; key: string }> = [
+  { mode: 'cutaway', label: 'Sensor split', key: '1' },
+  { mode: 'reconstruction', label: '375 m field', key: '2' },
+  { mode: 'observer', label: 'Satellite passes', key: '3' },
+  { mode: 'world', label: 'True color', key: '4' },
+];
+
+const OBSERVER_FILTERS: ReadonlyArray<{ id: ObserverFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'modis', label: 'MODIS 1 km' },
+  { id: 'viirs', label: 'VIIRS 375 m' },
+];
 
 interface VernierScrubberProps {
   label: string;
@@ -204,18 +237,16 @@ interface LiveObserverTelemetry {
   reconstructedMw: number;
 }
 
-function formatLatLon(lat: number, lon: number): string {
-  const ns = lat >= 0 ? 'N' : 'S';
-  const ew = lon >= 0 ? 'E' : 'W';
-  return `${Math.abs(lat).toFixed(2)}°${ns}, ${Math.abs(lon).toFixed(2)}°${ew}`;
-}
-
 function isKnownTheaterId(value: string | undefined): value is TheaterId {
   return THEATER_CATALOG.some((t) => t.id === value);
 }
 
 export function App() {
   const [inWorkspace, setInWorkspace] = useState(false);
+  /** Month chosen in the burning calendar ("2021-08"); null until the user picks one. */
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const viewportWidth = useViewportWidth();
+  const narrowViewport = viewportWidth <= 760;
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('cutaway');
   const [activeTheaterId, setActiveTheaterId] = useState<TheaterId>('plumas_ca');
   const [timeProgress, setTimeProgress] = useState<number>(12);
@@ -227,7 +258,6 @@ export function App() {
   const [cameraPreset, setCameraPreset] = useState<InspectorCameraPreset>('overview');
   const [cinemaActive, setCinemaActive] = useState<boolean>(false);
   const [cleanHud, setCleanHud] = useState<boolean>(false);
-  const [activeEra, setActiveEra] = useState<RecordEraJumpId>('2026_fused');
 
   const slewNonceRef = useRef<number>(0);
   const [slewRequest, setSlewRequest] = useState<OrbitalSlewRequest | null>(null);
@@ -239,17 +269,71 @@ export function App() {
   const [cloudOverride, setCloudOverride] = useState<number | null>(null);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [execError, setExecError] = useState<string | null>(null);
+  /** Real runs: the start of the FIRMS run on the stage, the one being requested, and the last failure. */
+  const [realStart, setRealStart] = useState<string | null>(null);
+  const [pendingStart, setPendingStart] = useState<string | null>(null);
+  const [realFailed, setRealFailed] = useState<{ start: string; message: string } | null>(null);
+  /**
+   * The blind test: hiding VIIRS requests the blind run; the reveal keeps that run on the terrain with its hidden
+   * detections laid on (`withReveal`) and its own score in the table. The reveal never swaps in another run.
+   */
+  const [revealed, setRevealed] = useState(false);
+  /** The reveal's request is in flight. */
+  const [revealing, setRevealing] = useState(false);
+  /** A round of next look in progress (null: none). */
+  const [round, setRound] = useState<RoundState | null>(null);
+  /** The round's routes (demo: answered in the page from the blind run) and the answer of /end once it is done. */
+  const [roundEnv, setRoundEnv] = useState<NextLookEnv | null>(null);
+  const [roundEnd, setRoundEnd] = useState<NextLookEnd | null>(null);
+  /** Terra's morning pass estimated from VIIRS alone, shown beside the blind test's score (demo data, experimental). */
+  const [terraOpen, setTerraOpen] = useState(false);
+  /**
+   * The region the user asked for (a tab, the palette, the cinema, or Feather River on load). Opening a region
+   * requests its real run when it has one; the nonce makes asking again for the same region count.
+   */
+  const [regionAsk, setRegionAsk] = useState<{ id: TheaterId; nonce: number } | null>({ id: 'plumas_ca', nonce: 0 });
+  const askRegion = useCallback((id: TheaterId) => setRegionAsk((r) => ({ id, nonce: (r?.nonce ?? 0) + 1 })), []);
+  /** Overlapping requests: each new one aborts the last, and a stale answer is dropped. */
+  const requestSeqRef = useRef(0);
+  const requestAbortRef = useRef<AbortController | null>(null);
 
   const [askOpen, setAskOpen] = useState(false);
-  const [sensorModalOpen, setSensorModalOpen] = useState(false);
-  const [docOpen, setDocOpen] = useState(false);
-  const [docTab] = useState<DocTabId>('architecture');
+  /** The one reading sheet (method, sensors, sources, credits) and its open section; null when closed. */
+  const [reading, setReading] = useState<ReadingSection | null>(null);
+  /** A step asked for from the landing's three parts, taken once the workspace is open. */
+  const pendingStepRef = useRef<Step | null>(null);
+  /** The evidence sheet opened on its agents' table. */
+  const [evidenceFocus, setEvidenceFocus] = useState<'next_look' | null>(null);
+  /** The step of the story the workspace is on, and the blind test's debrief screen. */
+  const [step, setStep] = useState<Step>('fire');
+  const [debriefOpen, setDebriefOpen] = useState(false);
+  const telemetryRef = useRef<EarthStageTelemetry | null>(null);
+  /** How a selected item is marked, from the address (?sel=chip|square|box); chip unless it says otherwise. */
+  const selStyle = useMemo(() => {
+    const v = new URLSearchParams(window.location.search).get('sel');
+    return v === 'square' || v === 'box' ? v : 'chip';
+  }, []);
+  /** The evidence sheet (demo data while `SURFACE_SOURCE.evidence` says so). */
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  /** Any area's record. A month picked there opens its region and month here. */
+  const [areaOpen, setAreaOpen] = useState(false);
+  const [monthAsk, setMonthAsk] = useState<{ region: string; ym: string } | null>(null);
   const [liveTelemetry, setLiveTelemetry] = useState<LiveObserverTelemetry | null>(null);
 
+  const handleTelemetry = useCallback((t: EarthStageTelemetry) => {
+    telemetryRef.current = t;
+    setStageTelemetry(t);
+  }, []);
+
   const enterWorkspace = useCallback((initialMode: WorkspaceMode = 'cutaway') => {
-    setDocOpen(false);
+    setReading(null);
     setCleanHud(false);
     setInWorkspace(true);
+    // The workspace opens on the fire, at the pass the landing showed, so entering does not jump in time.
+    setStep('fire');
+    setDebriefOpen(false);
+    const landingPass = telemetryRef.current?.realPass?.index;
+    if (typeof landingPass === 'number') setTimeProgress(landingPass);
     setWorkspaceMode(initialMode);
     if (initialMode === 'reconstruction') {
       setPlaying(true);
@@ -260,7 +344,9 @@ export function App() {
     setPlaying(false);
     setCinemaActive(false);
     setCleanHud(false);
-    setSensorModalOpen(false);
+    setReading(null);
+    setDebriefOpen(false);
+    setRound(null);
     setCutawaySplit(null);
     setSelectedFinding(null);
     setInWorkspace(false);
@@ -275,8 +361,16 @@ export function App() {
 
   const executeWorldModel = useCallback(
     async (params: ReconstructRequestParams): Promise<boolean> => {
+      const seq = ++requestSeqRef.current;
+      requestAbortRef.current?.abort();
+      const controller = new AbortController();
+      requestAbortRef.current = controller;
+      const stale = () => controller.signal.aborted || seq !== requestSeqRef.current;
       setIsExecuting(true);
       setExecError(null);
+      const realStartParam = params.source === 'firms' && params.start ? params.start : null;
+      if (realStartParam) setPendingStart(realStartParam);
+      if (params.queryText) setRegionAsk(null);
 
       if (params.theaterId) {
         setActiveTheaterId(params.theaterId);
@@ -292,8 +386,15 @@ export function App() {
       try {
         const body: Record<string, unknown> = {
           holdout_viirs: params.holdoutViirs,
-          cloud_override: params.cloudOverride,
+          // A synthetic cloud deck is a simulation knob; the real path keeps the clouds the satellites saw.
+          cloud_override: realStartParam ? null : params.cloudOverride,
         };
+        if (realStartParam) {
+          body.source = 'firms';
+          body.start = realStartParam;
+          if (params.holdoutViirs) body.holdout = 'viirs';
+          if (params.reveal) body.reveal = true;
+        }
         if (params.regionId) {
           body.region_id = params.regionId;
         }
@@ -304,6 +405,7 @@ export function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
+          signal: controller.signal,
         });
         if (!resp.ok) {
           const errJson = (await resp.json().catch(() => null)) as Record<string, unknown> | null;
@@ -312,14 +414,21 @@ export function App() {
           );
         }
         const runData = (await resp.json()) as DynamicRegionRun;
+        if (stale()) return false;
+        // Nothing simulated on the real path: a simulated answer to a FIRMS request is refused, not shown.
+        if (realStartParam && !isRealRun(runData)) {
+          throw new Error('the backend answered with a simulated run');
+        }
         setActiveRun(runData);
+        // A reveal is the same run with what the scorer wrote: the picture keeps its camera and its pass.
+        setRevealed(Boolean(params.reveal));
+        setRealStart(realStartParam);
+        if (realStartParam) setRealFailed(null);
         setSelectedFinding(null);
-        setCameraPreset('overview');
-        const nextHoldout = Boolean(runData.metrics?.holdout_viirs);
+        if (!params.reveal) setCameraPreset('overview');
+        const reported = runData.metrics?.holdout_viirs;
+        const nextHoldout = params.reveal ? false : typeof reported === 'boolean' ? reported : params.holdoutViirs;
         setHoldoutViirs(nextHoldout);
-        setActiveEra((prev) =>
-          nextHoldout ? '2006_modis' : prev === '2006_modis' ? '2026_fused' : prev,
-        );
         setCloudOverride(runData.metrics?.cloud_override ?? null);
         if (isKnownTheaterId(runData.region?.id)) {
           setActiveTheaterId(runData.region.id);
@@ -337,59 +446,36 @@ export function App() {
         }
         return true;
       } catch (err) {
+        if (stale()) return false;
         const msg = err instanceof Error ? err.message : 'Backend unreachable';
         setExecError(msg);
+        if (realStartParam) setRealFailed({ start: realStartParam, message: msg.replace(/\.$/, '') });
         if (params.enterWorkspace && !inWorkspace) {
           setInWorkspace(true);
           setWorkspaceMode('cutaway');
         }
         return false;
       } finally {
-        setIsExecuting(false);
+        if (seq === requestSeqRef.current) setIsExecuting(false);
+        if (realStartParam) setPendingStart((p) => (p === realStartParam ? null : p));
       }
     },
     [inWorkspace, activeTheaterId],
   );
 
-  // Hydrate initial Feather River Canyon, CA run quietly in background
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${API_BASE}/api/reconstruct`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ region_id: 'plumas_ca', holdout_viirs: false, cloud_override: null }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: DynamicRegionRun | null) => {
-        if (!cancelled && data && data.run_id) {
-          setActiveRun(data);
-        }
-      })
-      .catch(() => {
-        // Static assets serve Feather River Canyon, CA seamlessly if backend warms up later
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const slewToTheater = useCallback(
     (targetId: TheaterId, eraLabel?: string) => {
       setActiveTheaterId(targetId);
+      setSelectedMonth(null);
       slewNonceRef.current += 1;
       setSlewRequest({
         nonce: slewNonceRef.current,
         targetTheaterId: targetId,
         eraLabel,
       });
-      void executeWorldModel({
-        regionId: targetId,
-        holdoutViirs,
-        cloudOverride,
-        enterWorkspace: false,
-      });
+      askRegion(targetId);
     },
-    [holdoutViirs, cloudOverride, executeWorldModel],
+    [askRegion],
   );
 
   const cycleNextTheaterSlew = useCallback(() => {
@@ -401,31 +487,63 @@ export function App() {
   const handleCinemaStepTheater = useCallback(
     (nextTheaterId: TheaterId) => {
       setActiveTheaterId(nextTheaterId);
-      if (activeRun?.region.id !== nextTheaterId) {
-        void executeWorldModel({
-          regionId: nextTheaterId,
-          holdoutViirs,
-          cloudOverride,
-          enterWorkspace: false,
-        });
-      }
+      if (activeRun?.region.id !== nextTheaterId) askRegion(nextTheaterId);
     },
-    [activeRun?.region.id, holdoutViirs, cloudOverride, executeWorldModel],
+    [activeRun?.region.id, askRegion],
+  );
+
+  /** The palette opens a known region the same way a tab does; searches go to the backend. */
+  const handlePaletteExecute = useCallback(
+    async (params: ReconstructRequestParams): Promise<boolean> => {
+      if (params.theaterId && !params.queryText) {
+        slewToTheater(params.theaterId);
+        if (params.enterWorkspace) enterWorkspace('cutaway');
+        return true;
+      }
+      return executeWorldModel(params);
+    },
+    [slewToTheater, enterWorkspace, executeWorldModel],
   );
 
   const toggleHoldoutLive = useCallback(() => {
-    const nextHoldout = !holdoutViirs;
+    // Before 2012 no sharp satellite flew: nothing to hide, so no blind test
+    if (beforeSharpSatellite(activeRun)) return;
+    // A real blind run is revealed. Its first response holds nothing the scorer wrote, so the reveal asks again with
+    // `reveal: true` (served from the server's cache); a run that already carries its blind test is revealed in
+    // place.
+    if (holdoutViirs && isRealRun(activeRun) && activeRun?.metrics?.holdout_viirs) {
+      if (!('blind_test' in (activeRun as unknown as Record<string, unknown>))) {
+        if (revealing) return;
+        setRevealing(true);
+        void executeWorldModel({
+          regionId: activeRun.region.id,
+          holdoutViirs: true,
+          cloudOverride: null,
+          enterWorkspace: false,
+          ...(realStart ? { source: 'firms' as const, start: realStart } : {}),
+          reveal: true,
+        }).finally(() => setRevealing(false));
+        return;
+      }
+      setHoldoutViirs(false);
+      setRevealed(true);
+      return;
+    }
+    const nextHoldout = revealed ? false : !holdoutViirs;
+    setRevealed(false);
     setHoldoutViirs(nextHoldout);
-    setActiveEra(nextHoldout ? '2006_modis' : '2026_fused');
     void executeWorldModel({
       regionId: activeRun?.region.id ?? activeTheaterId,
       holdoutViirs: nextHoldout,
       cloudOverride,
       enterWorkspace: false,
+      ...(realStart ? { source: 'firms' as const, start: realStart } : {}),
     });
-  }, [holdoutViirs, activeRun?.region.id, activeTheaterId, cloudOverride, executeWorldModel]);
+  }, [holdoutViirs, revealed, revealing, activeRun, activeTheaterId, cloudOverride, executeWorldModel, realStart]);
 
   const toggleCloudLive = useCallback(() => {
+    // A synthetic cloud deck would put simulated data on the real path.
+    if (realStart) return;
     const nextCloud = cloudOverride === null ? 0.55 : null;
     setCloudOverride(nextCloud);
     if (!askOpen) {
@@ -436,39 +554,300 @@ export function App() {
         enterWorkspace: false,
       });
     }
-  }, [cloudOverride, askOpen, activeRun?.region.id, activeTheaterId, holdoutViirs, executeWorldModel]);
+  }, [cloudOverride, askOpen, activeRun?.region.id, activeTheaterId, holdoutViirs, executeWorldModel, realStart]);
 
-  const handleJumpEra = useCallback(
-    (era: RecordEraJumpId) => {
-      setActiveEra(era);
-      const nextHoldout = era === '2006_modis';
-      const eraLabel =
-        era === '2006_modis'
-          ? '2000-2011 MODIS ONLY (BLIND TEST)'
-          : era === '2012_snpp'
-            ? '2012 S-NPP LAUNCH · 1.03X CONTINUITY'
-            : '2026 FUSED 375 M RECORD';
-      const targetEpoch = era === '2006_modis' ? 6 : era === '2012_snpp' ? 12 : 18;
+  // Burning calendar: real when the backend serves FIRMS for this region, otherwise simulated. It
+  // follows the region asked for, so opening a region can read its start list before any run arrives.
+  const calendarRegionId = regionAsk?.id ?? activeRun?.region.id ?? activeTheaterId;
+  const calendar = useCalendar(API_BASE, calendarRegionId);
 
-      setPlaying(false);
-      setTimeProgress(targetEpoch);
-      setHoldoutViirs(nextHoldout);
-      slewNonceRef.current += 1;
-      setSlewRequest({
-        nonce: slewNonceRef.current,
-        targetTheaterId: activeTheaterId,
-        eraLabel,
-      });
-
+  // Real is the default: a region with real run starts opens on its default start; one without real rows opens on a
+  // simulated run, labelled as such. Each ask is handled once, after its calendar is in.
+  const handledAskRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!regionAsk) return;
+    const key = `${regionAsk.id}:${regionAsk.nonce}`;
+    if (handledAskRef.current === key) return;
+    if (calendar.regionId !== regionAsk.id || calendar.state === 'loading') return;
+    handledAskRef.current = key;
+    const opening = calendar.cal && !calendar.cal.simulated ? calendar.cal.defaultStart : null;
+    if (opening) {
+      if (isRealRun(activeRun) && activeRun?.region.id === regionAsk.id && realStart === opening) return;
       void executeWorldModel({
-        regionId: activeRun?.region.id ?? activeTheaterId,
-        holdoutViirs: nextHoldout,
-        cloudOverride,
+        regionId: regionAsk.id,
+        holdoutViirs: false,
+        cloudOverride: null,
         enterWorkspace: false,
+        source: 'firms',
+        start: opening,
+      });
+    } else if (activeRun?.region.id !== regionAsk.id || isRealRun(activeRun)) {
+      void executeWorldModel({ regionId: regionAsk.id, holdoutViirs: false, cloudOverride, enterWorkspace: false });
+    }
+  }, [regionAsk, calendar, activeRun, realStart, cloudOverride, executeWorldModel]);
+
+  /** Selecting a month that has a real run requests it; the stage replays whatever comes back. */
+  const handleSelectMonth = useCallback(
+    (ym: string) => {
+      setSelectedMonth(ym);
+      if (!calendar.cal || calendar.cal.simulated) return;
+      const month = calendar.cal.months.find((m) => m.yearMonth === ym);
+      const pre = startBeforeSharp(ym, month?.modis ?? null);
+      const start = startForMonth(ym, calendar.runStarts, calendar.cal.defaultStart) ?? pre;
+      if (!start || start === realStart || start === pendingStart) return;
+      void executeWorldModel({
+        regionId: calendarRegionId,
+        // Before 2012 there is no VIIRS to hide
+        holdoutViirs: pre ? false : holdoutViirs,
+        cloudOverride: null,
+        enterWorkspace: false,
+        source: 'firms',
+        start,
       });
     },
-    [activeTheaterId, activeRun?.region.id, cloudOverride, executeWorldModel],
+    [calendar, realStart, pendingStart, calendarRegionId, holdoutViirs, executeWorldModel],
   );
+
+  // A month picked in the any-area sheet waits for its region's calendar, then is selected like a click.
+  useEffect(() => {
+    if (!monthAsk || calendar.regionId !== monthAsk.region || calendar.state !== 'ready') return;
+    setMonthAsk(null);
+    handleSelectMonth(monthAsk.ym);
+  }, [monthAsk, calendar, handleSelectMonth]);
+
+  const openAreaMonth = useCallback(
+    (regionId: string, ym: string) => {
+      setAreaOpen(false);
+      if (isKnownTheaterId(regionId) && regionId !== calendarRegionId) slewToTheater(regionId);
+      setMonthAsk({ region: regionId, ym });
+    },
+    [calendarRegionId, slewToTheater],
+  );
+
+  // A round of next look on the Dixie fire's blind run. The page knows only what the round's routes answered: a
+  // look's detections, then everything at the end.
+  const roundEpisode = roundEnv?.start ?? DEMO_NEXT_LOOK_START;
+  const roundRun =
+    round && activeRun && isRealRun(activeRun) && activeRun.metrics?.holdout_viirs && activeRun.region.id === roundEpisode.episode.region_id
+      ? activeRun
+      : null;
+  const [roundTiles, roundCols] = roundEpisode.episode.tiles;
+  const roundBusyRef = useRef(false);
+
+  // The round's routes: answered in the page from the blind run while the switch says demo.
+  useEffect(() => {
+    if (!round || roundEnv) return;
+    if (String(SURFACE_SOURCE.nextLookRound) === 'demo') {
+      if (roundRun) setRoundEnv(demoNextLookEnv(roundRun));
+      return;
+    }
+    const controller = new AbortController();
+    liveNextLookEnv(API_BASE, roundEpisode.episode.region_id, controller.signal)
+      .then(setRoundEnv)
+      .catch(() => {});
+    return () => controller.abort();
+  }, [round !== null, roundEnv, roundRun]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startRound = useCallback(() => {
+    setRound(NEW_ROUND);
+    setRoundEnv(null);
+    setRoundEnd(null);
+    setRevealed(false);
+    setPlaying(false);
+    setCinemaActive(false);
+    setCleanHud(false);
+    setSelectedFinding(null);
+    void executeWorldModel({
+      regionId: roundEpisode.episode.region_id,
+      holdoutViirs: true,
+      cloudOverride: null,
+      enterWorkspace: false,
+      source: 'firms',
+      start: roundEpisode.estimate.start,
+    });
+  }, [executeWorldModel, roundEpisode]);
+
+  const leaveRound = useCallback(() => {
+    setRound(null);
+    setRoundEnv(null);
+    setRoundEnd(null);
+    setCameraPreset('overview');
+    askRegion(roundEpisode.episode.region_id as TheaterId);
+  }, [askRegion, roundEpisode]);
+
+  /** Spend the current look on a tile (or pass with -1); the answer says what it revealed and what comes next. */
+  const answerLook = useCallback(
+    (tile: number) => {
+      if (!round || round.done || !roundEnv || roundBusyRef.current) return;
+      const decision = round.decision;
+      roundBusyRef.current = true;
+      roundEnv
+        .look(decision, tile)
+        .then((res) => {
+          setRound((r) =>
+            r && r.decision === decision
+              ? {
+                  ...r,
+                  picks: [...r.picks, { decision, tile: res.tile >= 0 ? res.tile : null, pixels: res.pixels, revealed: res.revealed, reward: res.reward }],
+                  awaitingNext: res.tile >= 0,
+                  next: res.next_decision,
+                  decision: res.tile >= 0 || res.next_decision === null ? decision : res.next_decision,
+                  done: res.tile < 0 && res.done,
+                }
+              : r,
+          );
+          if (res.tile < 0 && res.done) return roundEnv.end().then(setRoundEnd);
+        })
+        .catch(() => {})
+        .finally(() => {
+          roundBusyRef.current = false;
+        });
+    },
+    [round, roundEnv],
+  );
+
+  const pickTile = useCallback(
+    (tile: number) => {
+      if (!round || round.awaitingNext) return;
+      answerLook(tile);
+    },
+    [round, answerLook],
+  );
+
+  const nextLook = useCallback(() => {
+    if (!round) return;
+    if (round.done) {
+      // Play again on the same run: a fresh round from the routes.
+      setRound(NEW_ROUND);
+      setRoundEnd(null);
+      setRoundEnv(null);
+      return;
+    }
+    if (!round.awaitingNext) {
+      answerLook(-1);
+      return;
+    }
+    if (round.next === null) {
+      setRound({ ...round, awaitingNext: false, done: true });
+      void roundEnv?.end().then(setRoundEnd).catch(() => {});
+    } else {
+      setRound({ ...round, decision: round.next, awaitingNext: false });
+    }
+  }, [round, roundEnv, answerLook]);
+
+  // The steps. Record and fire show the run with every sensor; the test hides VIIRS and reveals it; the look is
+  // a round of next look. Moving between them undoes what the step left behind.
+  const pendingHideRef = useRef(false);
+  const restoreFullRun = useCallback(() => {
+    if (!holdoutViirs && !revealed) return;
+    setRevealed(false);
+    setHoldoutViirs(false);
+    void executeWorldModel({
+      regionId: activeRun?.region.id ?? activeTheaterId,
+      holdoutViirs: false,
+      cloudOverride,
+      enterWorkspace: false,
+      ...(realStart ? { source: 'firms' as const, start: realStart } : {}),
+    });
+  }, [holdoutViirs, revealed, activeRun, activeTheaterId, cloudOverride, executeWorldModel, realStart]);
+
+  const goStep = useCallback(
+    (next: Step) => {
+      setDebriefOpen(false);
+      if (next === step && next !== 'look') return;
+      if (step === 'look' && next !== 'look' && round) leaveRound();
+      if (next === 'record' || next === 'fire') {
+        if (step === 'test') restoreFullRun();
+      } else if (next === 'test') {
+        if (!holdoutViirs && !revealed) {
+          if (round || step === 'look') pendingHideRef.current = true;
+          else toggleHoldoutLive();
+        }
+      } else if (next === 'look') {
+        startRound();
+      }
+      setStep(next);
+    },
+    [step, round, leaveRound, restoreFullRun, holdoutViirs, revealed, toggleHoldoutLive, startRound],
+  );
+
+  // The reference players are computed on the server from the round's start; when the end arrived before them, ask
+  // once more (the ask waits up to two more minutes on the state route) and show them when they come.
+  const referenceTriesRef = useRef(0);
+  useEffect(() => {
+    if (!roundEnv || !roundEnd || roundEnd.reference) {
+      referenceTriesRef.current = 0;
+      return;
+    }
+    if (referenceTriesRef.current >= 3) return;
+    referenceTriesRef.current += 1;
+    let live = true;
+    roundEnv
+      .end()
+      .then((e) => {
+        if (live && e.reference) setRoundEnd(e);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [roundEnv, roundEnd]);
+
+  // A part opened from the landing enters the workspace, then takes its step.
+  useEffect(() => {
+    if (!inWorkspace || !pendingStepRef.current) return;
+    const next = pendingStepRef.current;
+    pendingStepRef.current = null;
+    goStep(next);
+  }, [inWorkspace, goStep]);
+
+  // The parts' status lines read the evidence route live; until it answers they show what they do, no figures.
+  const [evidenceLive, setEvidenceLive] = useState<typeof DEMO_EVIDENCE | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${API_BASE}/api/evidence`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && typeof d === 'object') setEvidenceLive(d as typeof DEMO_EVIDENCE);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+  const landingParts = useMemo(() => partsStatus(evidenceLive), [evidenceLive]);
+  const openPart = useCallback(
+    (id: PartId) => {
+      if (id === 'agent') {
+        setEvidenceFocus('next_look');
+        setEvidenceOpen(true);
+        return;
+      }
+      pendingStepRef.current = id === 'model' ? 'test' : 'look';
+      enterWorkspace('cutaway');
+    },
+    [enterWorkspace],
+  );
+
+  // A test asked for while a round was closing waits for the region's run to come back, then hides VIIRS.
+  useEffect(() => {
+    if (!pendingHideRef.current || step !== 'test' || round || isExecuting || !activeRun || !isRealRun(activeRun)) return;
+    pendingHideRef.current = false;
+    if (!holdoutViirs && !revealed) toggleHoldoutLive();
+  }, [step, round, isExecuting, activeRun, holdoutViirs, revealed, toggleHoldoutLive]);
+
+  /** V: on the test step it hides, then reveals, then opens the score; elsewhere it goes to the test. */
+  const testAction = useCallback(() => {
+    if (step !== 'test') return goStep('test');
+    if (revealed) return setDebriefOpen(true);
+    toggleHoldoutLive();
+  }, [step, revealed, goStep, toggleHoldoutLive]);
+
+  // The round looks straight down on the 375 m field, at the frame nearest the look being decided.
+  useEffect(() => {
+    if (!round || !roundRun) return;
+    setCameraPreset('nadir');
+    const slot = roundEpisode.looks[round.decision];
+    setTimeProgress(frameNearest(roundRun, Date.parse(slot.time_utc) / 1000));
+  }, [round?.decision, round !== null, roundRun, roundEpisode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Continuous 60fps time evolution when playback is active
   useEffect(() => {
@@ -552,21 +931,46 @@ export function App() {
         return;
       }
 
-      if (askOpen || sensorModalOpen || docOpen) return;
+      if (askOpen || reading !== null || evidenceOpen || areaOpen) return;
 
-      if (e.key.toLowerCase() === 'v' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (round && inWorkspace) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          leaveRound();
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          nextLook();
+        }
+        return;
+      }
+
+      if (e.key.toLowerCase() === 't' && inWorkspace && debriefOpen && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        toggleHoldoutLive();
+        setTerraOpen((o) => !o);
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'l' && inWorkspace && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        goStep('look');
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'v' && inWorkspace && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        testAction();
         return;
       }
 
       if (e.key.toLowerCase() === 'm' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        setSensorModalOpen(true);
+        setReading('sensors');
         return;
       }
 
-      if (!inWorkspace && e.key === 'Enter') {
+      // Enter on a focused trigger activates that trigger; only a bare Enter opens the terrain.
+      const onControl = Boolean(target?.closest('button, a, [role="slider"], [role="option"]'));
+      if (!inWorkspace && e.key === 'Enter' && !onControl) {
         e.preventDefault();
         enterWorkspace('cutaway');
         return;
@@ -576,13 +980,32 @@ export function App() {
         const lower = e.key.toLowerCase();
         if (e.key === 'Escape') {
           e.preventDefault();
-          if (cinemaActive) {
+          if (debriefOpen) {
+            setDebriefOpen(false);
+          } else if (cinemaActive) {
             setCinemaActive(false);
           } else if (cleanHud) {
             setCleanHud(false);
           } else {
             exitToOverview();
           }
+        } else if (e.key === 'Enter' && (!onControl || Boolean(target?.closest('.iso-bar__step[data-active="true"], .iso-track__lane')))) {
+          e.preventDefault();
+          // The step's one forward action
+          if (step === 'record') goStep('fire');
+          else if (step === 'fire') goStep('test');
+          else if (step === 'test') {
+            if (debriefOpen) goStep('look');
+            else testAction();
+          }
+        } else if (e.key === 'ArrowRight' && !onControl) {
+          e.preventDefault();
+          setPlaying(false);
+          setTimeProgress((t) => Math.min(23, Math.round(t) + 1));
+        } else if (e.key === 'ArrowLeft' && !onControl) {
+          e.preventDefault();
+          setPlaying(false);
+          setTimeProgress((t) => Math.max(0, Math.round(t) - 1));
         } else if (e.key === ' ') {
           e.preventDefault();
           setPlaying((p) => !p);
@@ -598,14 +1021,8 @@ export function App() {
         } else if (lower === 'u' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setShowUncertainty((u) => !u);
-        } else if (e.key === '1') {
-          selectWorkspaceMode('cutaway');
-        } else if (e.key === '2') {
-          selectWorkspaceMode('reconstruction');
-        } else if (e.key === '3') {
-          selectWorkspaceMode('observer');
-        } else if (e.key === '4') {
-          selectWorkspaceMode('world');
+        } else if (/^[1-4]$/.test(e.key)) {
+          goStep(STEPS[Number(e.key) - 1].id);
         }
       }
     };
@@ -614,66 +1031,61 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
     askOpen,
-    sensorModalOpen,
-    docOpen,
+    reading,
+    debriefOpen,
+    step,
+    goStep,
+    testAction,
+    evidenceOpen,
+    areaOpen,
     inWorkspace,
     cinemaActive,
     cleanHud,
     enterWorkspace,
     exitToOverview,
-    selectWorkspaceMode,
     toggleHoldoutLive,
     cycleNextTheaterSlew,
+    round,
+    leaveRound,
+    nextLook,
+    startRound,
   ]);
-
-  const activeTheaterMeta = useMemo(
-    () => THEATER_CATALOG.find((t) => t.id === activeTheaterId) ?? THEATER_CATALOG[0],
-    [activeTheaterId],
-  );
 
   const isCustomRegion = Boolean(activeRun && !isKnownTheaterId(activeRun.region.id));
 
-  const topCoordBarLabel =
-    isCustomRegion && activeRun
-      ? `XY · ${activeRun.region.name.toUpperCase()} · ${formatLatLon(activeRun.region.center_lat, activeRun.region.center_lon)}`
-      : `${activeTheaterMeta.indexCode} · ${activeTheaterMeta.title.toUpperCase()} · ${activeTheaterMeta.coordsLabel}`;
-
-  const stageBottomLeftRegion =
-    isCustomRegion && activeRun
-      ? activeRun.region.name.toUpperCase()
-      : STAGE_WINDOW_REGION_LABELS[activeTheaterId];
-
-  const regionTitle = isCustomRegion && activeRun ? activeRun.region.name : activeTheaterMeta.title;
-  const regionCoords =
-    isCustomRegion && activeRun
-      ? formatLatLon(activeRun.region.center_lat, activeRun.region.center_lon)
-      : activeRun && activeRun.region.id === activeTheaterId
-        ? formatLatLon(activeRun.region.center_lat, activeRun.region.center_lon)
-        : activeTheaterMeta.coordsLabel;
+  const activeDisplay = THEATER_DISPLAY[activeTheaterId];
+  const runMatchesRegion = Boolean(
+    activeRun && (isCustomRegion || activeRun.region.id === activeTheaterId),
+  );
+  const regionTitle =
+    isCustomRegion && activeRun ? plainText(activeRun.region.name) : activeDisplay.title;
+  const regionSetting = isCustomRegion ? 'Live terrain from search' : activeDisplay.setting;
+  const regionLat =
+    runMatchesRegion && activeRun ? formatLat(activeRun.region.center_lat) : activeDisplay.lat;
+  const regionLon =
+    runMatchesRegion && activeRun ? formatLon(activeRun.region.center_lon) : activeDisplay.lon;
 
   const elevRangeText =
+    runMatchesRegion &&
     activeRun &&
-    (isCustomRegion || activeRun.region.id === activeTheaterId) &&
     Number.isFinite(activeRun.region.min_elev_m) &&
     Number.isFinite(activeRun.region.max_elev_m)
-      ? `${Math.round(activeRun.region.min_elev_m).toLocaleString()}-${Math.round(activeRun.region.max_elev_m).toLocaleString()} m`
-      : DEFAULT_ELEV_SPANS[activeTheaterId];
+      ? `${Math.round(activeRun.region.min_elev_m).toLocaleString()} to ${Math.round(activeRun.region.max_elev_m).toLocaleString()} m`
+      : activeDisplay.elevation;
 
-  const epochSummary = activeRun?.epoch_summaries?.[activeEpoch];
-  const currentMw = Math.round(
-    epochSummary?.reconstructed_total_mw ??
-      liveTelemetry?.reconstructedMw ??
-      1140 + activeEpoch * 28,
-  );
-  const metrics = activeRun?.metrics;
-  const rmseReductionPct = metrics ? Math.round(metrics.rmse_reduction_pct) : 18;
-  const reconRmseText = metrics ? metrics.reconstructed_rmse_mw_km2.toFixed(2) : '4.85';
-  const coverageText = metrics ? metrics.empirical_90_coverage_pct.toFixed(1) : '90.6';
-  const stepHarmText = metrics ? metrics.step_2012_harmonized_ratio.toFixed(2) : '1.03';
-  const stepRawText = metrics ? metrics.step_2012_raw_ratio.toFixed(2) : '3.81';
+  // No invented numbers: until a run for this region reports, readouts say so.
+  const epochSummary = runMatchesRegion ? activeRun?.epoch_summaries?.[activeEpoch] : undefined;
+  const rawMw = epochSummary?.reconstructed_total_mw ?? liveTelemetry?.reconstructedMw ?? null;
+  const currentMw = rawMw === null || !Number.isFinite(rawMw) ? null : Math.round(rawMw);
 
+  // The physics briefing's diagram data. Its simulated self-check and gates are not shown.
+  const sensorModel = useSensorModel(activeRun?.run_id ?? null);
+
+  const pipelineStages = activeRun?.pipeline_stages ?? [];
+  const pipelineStageCount = pipelineStages.length;
+  const completedStages = pipelineStages.filter((st) => st.status === 'completed').length;
   const totalPipelineMs = Math.round(
-    (activeRun?.pipeline_stages ?? []).reduce((acc, s) => acc + (s.duration_ms || 0), 0) || 142,
+    pipelineStages.reduce((acc, st) => acc + (st.duration_ms || 0), 0),
   );
 
   const rawGeoJsonUrl =
@@ -690,22 +1102,418 @@ export function App() {
   const orthoShort = stageTelemetry?.orthoResolution || 'Maxar 2K';
   const demShort = stageTelemetry?.demResolution || '512²';
 
+  // Real or simulated, for every number on screen. A real run's blind test shows only after the reveal.
+  const runIsReal = isRealRun(activeRun);
+  const runModel = runIsReal ? parseModel(activeRun) : null;
+  const runSpan = runIsReal ? runWindow(activeRun) : null;
+  const noSharp = beforeSharpSatellite(activeRun);
+  const blindKey = runIsReal && activeRun && realStart ? `${activeRun.region.id}:${realStart}` : '';
+  const blindTest = useMemo(() => (revealed ? parseBlindTest(activeRun, blindKey) : null), [revealed, activeRun, blindKey]);
+  const blindModel = revealed ? parseModel(activeRun) : null;
+  const blindInterval = blindTest?.methods.find((m) => m.id === 'reconstruction') ?? null;
+  const sourceSlug = runIsReal ? 'firms' : 'simulated';
+  /** What the terrain shows: after a reveal, the blind run with its hidden detections laid on. */
+  const stageRun = useMemo(() => {
+    if (round && roundRun) {
+      if (round.done) return roundEnd ? withReveal(runWithEndReveal(roundRun, roundEnd)) : roundRun;
+      const looked = round.picks.filter((p) => p.tile !== null);
+      const layers = looked.flatMap((p) =>
+        p.revealed.map((o) => ({
+          frame: frameNearest(roundRun, Date.parse(o.time_utc) / 1000),
+          platform: o.platform,
+          footprints: o.footprints,
+        })),
+      );
+      return withLooks(roundRun, layers, `looks_${looked.map((p) => `${p.decision}-${p.tile}`).join('_')}`);
+    }
+    return revealed && activeRun ? withReveal(activeRun) : activeRun;
+  }, [revealed, activeRun, round, roundRun, roundEnd]);
+  /** Real runs carry their own intensity scale (`encoding`); simulated runs use the fixed linear key. */
+  const intensity = runIsReal ? parseIntensityLegend(activeRun) : null;
+
   const effectiveMode: WorkspaceMode = inWorkspace ? workspaceMode : 'cutaway';
+  const credit = imageryCredit(activeRun);
+  const calendarArea = {
+    name: regionTitle,
+    lat: runMatchesRegion && activeRun ? activeRun.region.center_lat : activeDisplay.centerLat,
+    lon: runMatchesRegion && activeRun ? activeRun.region.center_lon : activeDisplay.centerLon,
+  };
+
+  // What the pass track shows, what each step needs, and the quiet control's contents.
+  const trackState: TrackState = !runIsReal ? 'simulated' : holdoutViirs ? 'hidden' : revealed ? 'revealed' : 'normal';
+  const trackRevealed = useMemo(() => (revealed ? revealedPassesOf(activeRun) : []), [revealed, activeRun]);
+  const stageMonth = activeRun?.epoch_summaries?.[0]?.timestamp_utc?.slice(0, 7) ?? null;
+  const lookHere = activeRun?.region.id === roundEpisode.episode.region_id || Boolean(round);
+  const stepBlocked: Partial<Record<Step, string | null>> = {
+    test: noSharp
+      ? 'No VIIRS flew before 2012, so there is nothing to hide'
+      : !runIsReal
+        ? 'The test needs a real NASA FIRMS run'
+        : null,
+    look: lookHere ? null : 'A round is ready for the Dixie fire, in Feather River only',
+  };
+  const span = runSpan ? utcSpan(runSpan.first, runSpan.last) : null;
+  const blindLoading = holdoutViirs && !revealing && (isExecuting || !activeRun?.metrics?.holdout_viirs);
+  const terraPanel =
+    runIsReal && activeRun && DEMO_TERRA_MORNING.fires[activeRun.region.id] ? (
+      <TerraMorningPanel doc={DEMO_TERRA_MORNING} regionId={activeRun.region.id} onClose={() => setTerraOpen(false)} />
+    ) : null;
+
+  const quietMenu = (
+    <>
+      <MenuGroup title="Show">
+        <MenuItem label="Hide the interface" hint="H" active={cleanHud} onClick={() => setCleanHud((h) => !h)} />
+        <MenuItem label="Cinema" hint="C" active={cinemaActive} onClick={() => setCinemaActive((c) => !c)} />
+        <MenuItem label="Uncertainty" hint="U" active={showUncertainty} onClick={() => setShowUncertainty((u) => !u)} />
+      </MenuGroup>
+      <MenuGroup title="View">
+        {WORKSPACE_VIEWS.map((v) => (
+          <MenuItem key={v.mode} label={v.label} active={workspaceMode === v.mode} onClick={() => selectWorkspaceMode(v.mode)} />
+        ))}
+        {workspaceMode === 'cutaway' && (
+          <VernierScrubber
+            label="Curtain"
+            valueText={cutawaySplit === null ? 'auto sweep' : `${Math.round(((cutawaySplit + 1) / 2) * 100)}%`}
+            fraction={cutawaySplit === null ? 0.5 : (cutawaySplit + 1) / 2}
+            onChangeFraction={(u) => setCutawaySplit(u * 2 - 1)}
+            onResetAuto={cutawaySplit !== null ? () => setCutawaySplit(null) : undefined}
+          />
+        )}
+        {workspaceMode === 'observer' && (
+          <>
+            {OBSERVER_FILTERS.map((f) => (
+              <MenuItem key={f.id} label={`Sensor: ${f.label}`} active={observerFilter === f.id} onClick={() => setObserverFilter(f.id)} />
+            ))}
+            <VernierScrubber
+              label="Minimum fire power"
+              valueText={`${Math.round(sensitivityThreshold * 38)} MW`}
+              fraction={(sensitivityThreshold - 0.04) / 0.78}
+              onChangeFraction={(u) => setSensitivityThreshold(0.04 + u * 0.78)}
+            />
+          </>
+        )}
+      </MenuGroup>
+      <MenuGroup title="Camera">
+        {(['overview', 'canyon', 'ridge', 'nadir'] as const).map((preset) => (
+          <MenuItem
+            key={preset}
+            label={preset.charAt(0).toUpperCase() + preset.slice(1)}
+            active={cameraPreset === preset}
+            onClick={() => setCameraPreset(preset)}
+          />
+        ))}
+      </MenuGroup>
+      <MenuGroup title="This run">
+        <p className="iso-menu__fact">
+          Terrain: Esri World Imagery at {orthoShort.replace(/^(Maxar|Esri)\s*/, '')}, elevation {demShort}
+        </p>
+        <p className="iso-menu__fact">Frame rate: {stageFps} fps</p>
+        <p className="iso-menu__fact">
+          Pipeline: {activeRun ? `${completedStages} of ${pipelineStageCount} stages, ${totalPipelineMs.toLocaleString()} ms` : 'pending'}
+        </p>
+        {workspaceMode === 'observer' && liveTelemetry && (
+          <p className="iso-menu__fact">
+            Footprints: {liveTelemetry.retainedFootprints} of {liveTelemetry.poolFootprints}, {liveTelemetry.observableFluxPct}% of flux
+          </p>
+        )}
+        <MenuItem label="Export GeoJSON" href={exportGeoJsonUrl} download={`${activeRun?.region.id ?? activeTheaterId}_${sourceSlug}_harmonized.geojson`} />
+        <MenuItem label="Export CSV" href={exportCsvUrl} download={`${activeRun?.region.id ?? activeTheaterId}_${sourceSlug}_harmonized.csv`} />
+      </MenuGroup>
+      <MenuGroup title="Keys">
+        <p className="iso-menu__keys">
+          <span><kbd>1</kbd> to <kbd>4</kbd> steps</span>
+          <span><kbd>Space</kbd> play</span>
+          <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> pass</span>
+          <span><kbd>V</kbd> hide, reveal</span>
+          <span><kbd>/</kbd> place</span>
+          <span><kbd>N</kbd> next place</span>
+          <span><kbd>M</kbd> sensors</span>
+          <span><kbd>Esc</kbd> back</span>
+        </p>
+      </MenuGroup>
+    </>
+  );
+
+  const action = (label: string, onClick: () => void, key = 'Enter', disabled = false) => (
+    <button type="button" className="iso-action" onClick={onClick} disabled={disabled}>
+      <kbd>{key}</kbd>
+      <span>{label}</span>
+    </button>
+  );
+  const finding = selectedFinding && (
+    <div className="iso-finding">
+      <div className="iso-finding__head">
+        <span>{selectedFinding.title}</span>
+        <button type="button" className="iso-finding__close" onClick={() => setSelectedFinding(null)} aria-label="Dismiss finding">
+          Close
+        </button>
+      </div>
+      <p className="iso-finding__sub">{selectedFinding.subtitle}</p>
+      <p className="iso-finding__val">{selectedFinding.valueText}</p>
+    </div>
+  );
+  const firePower = (caption: string) => (
+    <div className="iso-readout__power">
+      <span className={`iso-readout__mw${currentMw === null ? ' iso-readout__mw--pending' : ''}`}>
+        {currentMw === null ? 'Waiting for the run' : currentMw.toLocaleString()}
+      </span>
+      {currentMw !== null && <span className="iso-readout__unit">MW</span>}
+      <span className="iso-readout__caption">{caption}</span>
+    </div>
+  );
+  const legend = intensity ? (
+    <div className="iso-scale">
+      <div className="iso-scale__bar" aria-hidden="true" />
+      <div className="iso-scale__ticks iso-scale__ticks--placed">
+        {intensity.ticks
+          .filter((_, i, all) => all.length <= 4 || i % 2 === 0)
+          .map((t, i, shown) => (
+            <span key={t.mwKm2} style={{ left: `${t.at * 100}%` }} data-edge={i === 0 ? 'start' : i === shown.length - 1 ? 'end' : undefined}>
+              {t.mwKm2.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              {i === shown.length - 1 ? ` ${intensity.unit}` : ''}
+            </span>
+          ))}
+      </div>
+      <p className="iso-scale__caption">Estimated fire power, {intensity.scale === 'log10' ? 'log scale' : 'linear scale'}</p>
+    </div>
+  ) : (
+    <div className="iso-scale">
+      <div className="iso-scale__bar" aria-hidden="true" />
+      <div className="iso-scale__ticks">
+        <span>0</span>
+        <span>40</span>
+        <span>80+ MW/km²</span>
+      </div>
+      <p className="iso-scale__caption">Simulated intensity, linear scale</p>
+    </div>
+  );
+
+  let stepPanel: React.ReactNode = null;
+  if (step === 'record') {
+    stepPanel = (
+      <>
+        <h2 className="iso-step__title">Pick a month to replay</h2>
+        <BurningCalendar
+          apiBase={API_BASE}
+          regionId={calendarRegionId}
+          area={calendarArea}
+          calendar={calendar}
+          run={{ realStart, pendingStart, failed: realFailed }}
+          stageMonth={stageMonth}
+          selectedMonth={selectedMonth}
+          onSelectMonth={handleSelectMonth}
+          onOpenArea={() => setAreaOpen(true)}
+        />
+        <div className="iso-step__foot">{action(span ? `Replay ${span}` : 'Replay this run', () => goStep('fire'), 'Enter', !activeRun)}</div>
+      </>
+    );
+  } else if (step === 'fire') {
+    stepPanel = (
+      <>
+        <h2 className="iso-step__title">{runIsReal ? `The fire, ${span ?? ''}` : 'A simulated fire'}</h2>
+        <p className="iso-step__line" data-source={sourceSlug}>
+          {runIsReal
+            ? 'Every NASA FIRMS detection, pass by pass, at its real time. Play the passes, or pick one on the track.'
+            : 'Simulated satellite passes, with no score: the simulation would score itself against its own answer.'}
+        </p>
+        {firePower(`Estimated fire power at pass ${activeEpoch + 1}`)}
+        {legend}
+        {runModel && (
+          <p className="iso-step__note" data-status={runModel.status}>
+            Model <strong>{runModel.status}</strong>
+            {runModel.reason && !noSharp ? `: ${runModel.reason.replace(/\s*\([a-z_]+(\.[a-z_]+)+\)/g, '')}.` : '.'}
+          </p>
+        )}
+        {noSharp && (
+          <p className="iso-step__note">
+            Before 2012 no sharp satellite flew: VIIRS began in January 2012. This is the estimate from MODIS alone, with
+            nothing hidden to reveal, so there is no blind test.
+          </p>
+        )}
+        {finding}
+        <div className="iso-step__foot">
+          {action('Hide VIIRS and test the estimate', () => goStep('test'), 'Enter', Boolean(stepBlocked.test))}
+        </div>
+      </>
+    );
+  } else if (step === 'test') {
+    stepPanel = blindLoading ? (
+      <>
+        <h2 className="iso-step__title">Hiding VIIRS</h2>
+        <p className="iso-step__line">Running the estimate from MODIS alone.</p>
+      </>
+    ) : holdoutViirs ? (
+      <>
+        <h2 className="iso-step__title">Blind test</h2>
+        <p className="iso-step__line">
+          VIIRS is hidden. The terrain shows the estimate made from MODIS alone{span ? `, ${span}` : ''}. The track
+          shows when VIIRS passed over, not what it saw.
+        </p>
+        {firePower(`Estimated fire power at pass ${activeEpoch + 1}, from MODIS alone`)}
+        {legend}
+        <div className="iso-step__foot">{action(revealing ? 'Opening the hidden detections' : 'Reveal VIIRS', testAction, 'V', revealing)}</div>
+      </>
+    ) : revealed ? (
+      <>
+        <h2 className="iso-step__title">Revealed</h2>
+        <p className="iso-step__line">
+          The terrain shows the blind run: the estimate made from MODIS alone, with the hidden VIIRS detections now laid
+          on it. Step through the passes to see where they fall.
+        </p>
+        {legend}
+        <div className="iso-step__foot">{action('See the score', () => setDebriefOpen(true), 'Enter', !blindTest)}</div>
+        {!blindTest && <p className="iso-step__note">The blind test run came back without a score.</p>}
+      </>
+    ) : (
+      <>
+        <h2 className="iso-step__title">Blind test</h2>
+        <p className="iso-step__line">
+          {stepBlocked.test ?? 'Hide VIIRS, the sharp satellite, and see what the estimate makes of MODIS alone.'}
+        </p>
+        {!stepBlocked.test && <div className="iso-step__foot">{action('Hide VIIRS', testAction, 'V')}</div>}
+      </>
+    );
+  } else if (step === 'look') {
+    stepPanel = round ? (
+      <RoundReadout
+        start={roundEpisode}
+        end={roundEnd}
+        round={round}
+        runError={realFailed && realFailed.start === roundEpisode.estimate.start ? realFailed.message : null}
+        onNext={nextLook}
+        onAgain={nextLook}
+        onLeave={() => goStep('fire')}
+      />
+    ) : (
+      <>
+        <h2 className="iso-step__title">Your look</h2>
+        <p className="iso-step__line">{stepBlocked.look ?? 'Starting a round.'}</p>
+      </>
+    );
+  }
 
   return (
-    <div className="iso-app" data-workspace={inWorkspace ? 'true' : 'false'}>
-      {/* Persistent 60fps GPU clip-path stage container (never resizes WebGL canvas) */}
+    <div className="iso-app" data-workspace={inWorkspace ? 'true' : 'false'} data-sel={selStyle}>
+      {!inWorkspace && (
+        <LandingComposition
+          activeTheaterId={activeTheaterId}
+          imageryCredit={credit}
+          customRegion={
+            isCustomRegion && activeRun
+              ? {
+                  name: plainText(activeRun.region.name),
+                  lat: activeRun.region.center_lat,
+                  lon: activeRun.region.center_lon,
+                }
+              : null
+          }
+          runYear={isRealRun(activeRun) ? (runWindow(activeRun)?.first.slice(0, 4) ?? null) : null}
+          parts={landingParts}
+          onOpenPart={openPart}
+          realPass={stageTelemetry?.realPass ?? null}
+          onOpenSearch={() => setAskOpen(true)}
+          onOpenSensor={() => setReading('sensors')}
+          onOpenMethod={() => setReading('method')}
+          onEnter={() => enterWorkspace('cutaway')}
+        />
+      )}
+
+      {inWorkspace && (
+        <>
+          {cleanHud && (
+            <button type="button" className="iso-restore" onClick={() => setCleanHud(false)}>
+              <kbd>H</kbd>
+              <span>Show the interface</span>
+            </button>
+          )}
+
+          <div className="iso-ws" data-clean={cleanHud ? 'true' : 'false'} data-step={step} data-debrief={debriefOpen ? 'true' : 'false'}>
+            <div className="iso-ws__scrim iso-ws__scrim--top" aria-hidden="true" />
+            <div className="iso-ws__scrim iso-ws__scrim--right" aria-hidden="true" />
+            <div className="iso-ws__scrim iso-ws__scrim--bottom" aria-hidden="true" />
+
+            <WorkspaceBar
+              place={regionTitle}
+              placeDetail={[regionSetting, `${regionLat} ${regionLon}`, elevRangeText].filter(Boolean).join(', ')}
+              onPlace={() => setAskOpen(true)}
+              step={step}
+              onStep={goStep}
+              stepBlocked={stepBlocked}
+              onReading={() => setReading('method')}
+              onLanding={exitToOverview}
+              menu={quietMenu}
+            />
+
+            {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
+            <div className="iso-ws__dock">
+              {debriefOpen && blindTest ? (
+                <Debrief
+                  score={blindTest}
+                  model={blindModel}
+                  place={regionTitle}
+                  onBack={() => setDebriefOpen(false)}
+                  onNext={lookHere ? () => goStep('look') : null}
+                  onEvidence={() => setEvidenceOpen(true)}
+                  terra={terraPanel}
+                  terraOpen={terraOpen}
+                  onToggleTerra={() => setTerraOpen((o) => !o)}
+                />
+              ) : (
+                <aside className="iso-step" data-step={step} aria-label="Step">
+                  {stepPanel}
+                </aside>
+              )}
+
+              {!round && (
+                <div className="iso-ws__track">
+                  <PassTrack
+                    run={activeRun}
+                    passLists={SURFACE_SOURCE.passes === 'demo' ? DEMO_PASSES : null}
+                    state={trackState}
+                    revealed={trackRevealed}
+                    timeProgress={timeProgress}
+                    onChangeTime={(next) => {
+                      setPlaying(false);
+                      setTimeProgress(next);
+                    }}
+                    playing={playing}
+                    onTogglePlay={() => setPlaying((p) => !p)}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {round && roundRun && activeRun && (
+            <TileOverlay
+              rect={nadirRect(roundFrame(viewportWidth), activeRun.region.width_km / Math.max(1e-6, activeRun.region.depth_km))}
+              rows={roundTiles}
+              cols={roundCols}
+              round={round}
+              canPick={Boolean(roundEnv) && !round.done && !round.awaitingNext && round.picks.filter((p) => p.tile !== null).length < roundEpisode.episode.budget}
+              onPick={pickTile}
+            />
+          )}
+
+          <button type="button" className="iso-credit" onClick={() => setReading('credits')} title="Imagery credit and sources">
+            Imagery: {credit}
+          </button>
+        </>
+      )}
+
+      {/* The stage comes after the interface in DOM order so Tab reaches the triggers first;
+          stacking is by z-index, not order. */}
       <div className="iso-stage-clip" data-workspace={inWorkspace ? 'true' : 'false'}>
         <EarthCutawayStage
           apiBase={API_BASE}
           inWorkspace={inWorkspace}
-          mode={effectiveMode}
+          mode={round ? 'reconstruction' : effectiveMode}
           activeTheaterId={activeTheaterId}
-          activeRun={activeRun}
+          activeRun={stageRun}
           timeProgress={timeProgress / 23}
           observerFilter={observerFilter}
           showUncertainty={showUncertainty}
-          holdoutViirs={holdoutViirs}
+          holdoutViirs={round ? !round.done : holdoutViirs}
           sensitivityThreshold={sensitivityThreshold}
           cutawaySplit={cutawaySplit}
           cameraPreset={cameraPreset}
@@ -716,513 +1524,12 @@ export function App() {
           onSelectFinding={setSelectedFinding}
           onEnterWorkspace={() => enterWorkspace('cutaway')}
           onCinemaStepTheater={handleCinemaStepTheater}
-          onTelemetry={setStageTelemetry}
+          onTelemetry={handleTelemetry}
+          landingView="world"
+          landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
+          workspaceSubjectFrame={round ? roundFrame(viewportWidth) : workspaceFrame(viewportWidth)}
         />
       </div>
-
-      {/* Daylight Mineral Studio Sheet (!inWorkspace) */}
-      {!inWorkspace && (
-        <div className="iso-landing-shell">
-          {/* Top Architectural Bar (height: 58px) */}
-          <header className="iso-land-topbar">
-            <div className="iso-land-topbar__left">
-              <button
-                type="button"
-                className="iso-brand"
-                onClick={() => enterWorkspace('cutaway')}
-                aria-label="Isogon home"
-              >
-                <IsogonMark />
-                <span>Isogon</span>
-              </button>
-
-              <span className="iso-vrule" aria-hidden="true" />
-
-              <button
-                type="button"
-                className="iso-coord-trigger"
-                onClick={() => setAskOpen(true)}
-                title="Search any coordinate or select calibrated region (/)"
-              >
-                <span>{topCoordBarLabel}</span>
-                <span className="iso-coord-trigger__key">[/]</span>
-              </button>
-            </div>
-
-            <nav className="iso-joined-cells" aria-label="Search coordinates and scientific reference">
-              <button
-                type="button"
-                className="iso-cell-btn"
-                onClick={() => setAskOpen(true)}
-              >
-                <span>Search Coordinate</span>
-                <span className="iso-cell-btn__key">· /</span>
-              </button>
-              <button
-                type="button"
-                className="iso-cell-btn"
-                onClick={() => setSensorModalOpen(true)}
-              >
-                Sensor Physics
-              </button>
-              <button
-                type="button"
-                className="iso-cell-btn"
-                onClick={() => setDocOpen(true)}
-              >
-                Methodology
-              </button>
-            </nav>
-          </header>
-
-          {/* Asymmetric 12-Column Hero Band */}
-          <section className="iso-hero-band" aria-label="Calibrated Global Fire Record">
-            <div className="iso-hero-band__left">
-              <p className="iso-eyebrow">
-                NASA SPACE APPS 2026 · MODIS 1,000 M + VIIRS 375 M HARMONIZATION
-              </p>
-              <h1 className="iso-hero-h1">
-                <span className="iso-hero-h1__primary">One Calibrated</span>
-                <span className="iso-hero-h1__secondary">Fire Record.</span>
-              </h1>
-            </div>
-
-            <div className="iso-hero-band__right">
-              <p className="iso-hero-subcopy">
-                NASA&apos;s 1 km MODIS and 375 m VIIRS satellites see the same mountain wildfire
-                differently. Isogon reconciles 26 years of orbital passes into one terrain-aware
-                375-meter record.
-              </p>
-
-              <div className="iso-hero-cta-row">
-                <button
-                  type="button"
-                  className="iso-coupled-cta"
-                  onClick={() => enterWorkspace('cutaway')}
-                >
-                  <span className="iso-coupled-cta__cell-label">
-                    <span className="iso-slot-roll">
-                      <span className="iso-slot-roll__primary">Enter 3D Terrain</span>
-                      <span className="iso-slot-roll__clone" aria-hidden="true">
-                        Enter 3D Terrain
-                      </span>
-                    </span>
-                  </span>
-                  <span className="iso-coupled-cta__cell-icon" aria-hidden="true">
-                    <ArrowRightGlyph className="iso-arrow-svg iso-arrow-svg--lead" />
-                    <ArrowRightGlyph className="iso-arrow-svg iso-arrow-svg--trail" />
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  className="iso-secondary-cell"
-                  onClick={() => setAskOpen(true)}
-                >
-                  <span>Search Any Coordinate</span>
-                  <span className="iso-secondary-cell__key">· /</span>
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* Unobstructed Framed 3D Stage Window Chrome (pointer-events: none) */}
-          <div className="iso-stage-window-chrome" aria-hidden="true">
-            <div className="iso-stage-window-chrome__top">
-              <span className="iso-stage-window-chrome__tag">
-                LEFT OF CURTAIN · RAW MODIS (1 KM SMEARED PIXELS)
-              </span>
-              <span className="iso-stage-window-chrome__tag iso-stage-window-chrome__tag--right">
-                RIGHT OF CURTAIN · HARMONIZED 375 M FIRE FRONT + 90% CI
-              </span>
-            </div>
-
-            <div className="iso-stage-window-chrome__bottom">
-              <span className="iso-stage-window-chrome__tag iso-stage-window-chrome__tag--subtle">
-                REAL 30 M DEM + MAXAR 2K SATELLITE · {stageBottomLeftRegion}
-              </span>
-              <span className="iso-stage-window-chrome__tag iso-stage-window-chrome__tag--right iso-stage-window-chrome__tag--subtle">
-                MOVE CURSOR TO SWEEP SENSOR CURTAIN · DRAG TO ORBIT
-              </span>
-            </div>
-          </div>
-
-          {/* Bottom Architectural Datum Rail */}
-          <footer className="iso-datum-rail" aria-label="Calibrated mountain regions">
-            <div className="iso-datum-rail__left">
-              <span className="iso-crosshair" aria-hidden="true">
-                +
-              </span>
-              {THEATER_CATALOG.map((theater) => {
-                const isActive = !isCustomRegion && activeTheaterId === theater.id;
-                return (
-                  <button
-                    key={theater.id}
-                    type="button"
-                    className="iso-datum-theater"
-                    data-active={isActive ? 'true' : 'false'}
-                    onClick={() => slewToTheater(theater.id)}
-                  >
-                    <span className="iso-datum-theater__idx">{theater.indexCode}</span>
-                    <span>{theater.shortLabel}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="iso-datum-rail__right">
-              <button
-                type="button"
-                className="iso-datum-search"
-                onClick={() => setAskOpen(true)}
-              >
-                <span>[ / ] Search Any Coordinate</span>
-              </button>
-              <span className="iso-crosshair" aria-hidden="true">
-                +
-              </span>
-            </div>
-          </footer>
-        </div>
-      )}
-
-      {/* Full-Bleed Dark 3D Workspace (inWorkspace === true) */}
-      {inWorkspace && (
-        <>
-          {cleanHud && (
-            <button
-              type="button"
-              className="iso-clean-restore"
-              onClick={() => setCleanHud(false)}
-            >
-              H · Restore HUD
-            </button>
-          )}
-
-          <div className="iso-ws-layer" data-clean={cleanHud ? 'true' : 'false'}>
-            {/* Top Workspace Perimeter Bar (50px) */}
-            <header className="iso-ws-topbar">
-              <div className="iso-ws-topbar__left">
-                <button
-                  type="button"
-                  className="iso-ws-back"
-                  onClick={exitToOverview}
-                  title="Return to Daylight Sheet (Esc)"
-                >
-                  <IsogonMark />
-                  <span>Isogon</span>
-                </button>
-
-                <div
-                  className="iso-joined-cells--night"
-                  role="group"
-                  aria-label="Slew across calibrated mountain regions"
-                >
-                  {THEATER_CATALOG.map((theater) => (
-                    <button
-                      key={theater.id}
-                      type="button"
-                      className="iso-ws-cell iso-ws-cell--mono"
-                      data-active={!isCustomRegion && activeTheaterId === theater.id ? 'true' : 'false'}
-                      onClick={() => slewToTheater(theater.id)}
-                      title={`Slew to ${theater.title}`}
-                    >
-                      {SHORT_THEATER_CODES[theater.id]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <nav className="iso-ws-topbar__center" aria-label="3D terrain view modes">
-                <div className="iso-joined-cells--night">
-                  <button
-                    type="button"
-                    className="iso-ws-cell"
-                    data-active={workspaceMode === 'cutaway' ? 'true' : 'false'}
-                    onClick={() => selectWorkspaceMode('cutaway')}
-                  >
-                    Sensor Split
-                  </button>
-                  <button
-                    type="button"
-                    className="iso-ws-cell"
-                    data-active={workspaceMode === 'reconstruction' ? 'true' : 'false'}
-                    onClick={() => selectWorkspaceMode('reconstruction')}
-                  >
-                    375 m Fire Field
-                  </button>
-                  <button
-                    type="button"
-                    className="iso-ws-cell"
-                    data-active={workspaceMode === 'observer' ? 'true' : 'false'}
-                    onClick={() => selectWorkspaceMode('observer')}
-                  >
-                    Satellite Passes
-                  </button>
-                  <button
-                    type="button"
-                    className="iso-ws-cell"
-                    data-active={workspaceMode === 'world' ? 'true' : 'false'}
-                    onClick={() => selectWorkspaceMode('world')}
-                  >
-                    True-Color Earth
-                  </button>
-                </div>
-              </nav>
-
-              <div className="iso-ws-topbar__right">
-                <div className="iso-joined-cells--night">
-                  <button
-                    type="button"
-                    className="iso-ws-cell"
-                    data-active={cinemaActive ? 'true' : 'false'}
-                    onClick={() => setCinemaActive((c) => !c)}
-                  >
-                    <span>Cinema</span>
-                    <span className="iso-ws-cell__key">· C</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="iso-ws-cell"
-                    data-active={cleanHud ? 'true' : 'false'}
-                    onClick={() => setCleanHud((h) => !h)}
-                  >
-                    <span>Clean Feed</span>
-                    <span className="iso-ws-cell__key">· H</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="iso-ws-cell"
-                    onClick={() => setAskOpen(true)}
-                  >
-                    <span>Search</span>
-                    <span className="iso-ws-cell__key">· /</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="iso-ws-cell"
-                    onClick={() => setSensorModalOpen(true)}
-                  >
-                    <span>Physics</span>
-                    <span className="iso-ws-cell__key">· M</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="iso-ws-cell"
-                    onClick={() => setDocOpen(true)}
-                  >
-                    Method
-                  </button>
-                </div>
-              </div>
-            </header>
-
-            {/* Right Compact Scientific Telemetry Frame (320px) */}
-            <aside className="iso-telemetry-frame" aria-label="Scientific reconstruction telemetry">
-              <div className="iso-telemetry-head">
-                <div>
-                  <div className="iso-telemetry-head__code">
-                    {isCustomRegion
-                      ? 'XY · LIVE GLOBAL TERRAIN'
-                      : `${activeTheaterMeta.indexCode} · ${activeTheaterMeta.regionTag}`}
-                  </div>
-                  <div className="iso-telemetry-head__title">{regionTitle}</div>
-                  <div className="iso-telemetry-head__coords">
-                    {regionCoords} · {elevRangeText}
-                  </div>
-                </div>
-                {holdoutViirs && <span className="iso-telemetry-badge">Blind Test</span>}
-              </div>
-
-              <div className="iso-telemetry-body">
-                <div className="iso-power-readout">
-                  <div>
-                    <span className="iso-power-readout__val">{currentMw.toLocaleString()}</span>
-                    <span className="iso-power-readout__unit">MW</span>
-                  </div>
-                  <span className="iso-power-readout__label">RECONSTRUCTED FIRE POWER</span>
-                </div>
-
-                <div className="iso-kv-rows">
-                  <div className="iso-kv-row">
-                    <span className="iso-kv-row__k">Error vs Raw 1 km MODIS</span>
-                    <span className="iso-kv-row__v">
-                      {reconRmseText} MW/km&sup2; (-{rmseReductionPct}%)
-                    </span>
-                  </div>
-                  <div className="iso-kv-row">
-                    <span className="iso-kv-row__k">90% Confidence Coverage</span>
-                    <span className="iso-kv-row__v">{coverageText}%</span>
-                  </div>
-                  {workspaceMode === 'observer' && liveTelemetry ? (
-                    <div className="iso-kv-row">
-                      <span className="iso-kv-row__k">Captured Footprints</span>
-                      <span className="iso-kv-row__v">
-                        {liveTelemetry.retainedFootprints}/{liveTelemetry.poolFootprints} (
-                        {liveTelemetry.observableFluxPct}% flux)
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="iso-kv-row">
-                      <span className="iso-kv-row__k">2012 Sensor Continuity</span>
-                      <span className="iso-kv-row__v">
-                        {stepHarmText}x (raw {stepRawText}x)
-                      </span>
-                    </div>
-                  )}
-                  <div className="iso-kv-row">
-                    <span className="iso-kv-row__k">3D Terrain &amp; Ortho</span>
-                    <span className="iso-kv-row__v">
-                      {orthoShort} · {demShort} DEM · {stageFps} fps
-                    </span>
-                  </div>
-                </div>
-
-                {workspaceMode === 'observer' ? (
-                  <>
-                    <div className="iso-cell-grid" role="group" aria-label="Orbital sensor filter">
-                      <button
-                        type="button"
-                        className="iso-ws-cell"
-                        data-active={observerFilter === 'all' ? 'true' : 'false'}
-                        onClick={() => setObserverFilter('all')}
-                      >
-                        All
-                      </button>
-                      <button
-                        type="button"
-                        className="iso-ws-cell"
-                        data-active={observerFilter === 'modis' ? 'true' : 'false'}
-                        onClick={() => setObserverFilter('modis')}
-                      >
-                        MODIS 1 km
-                      </button>
-                      <button
-                        type="button"
-                        className="iso-ws-cell"
-                        data-active={observerFilter === 'viirs' ? 'true' : 'false'}
-                        onClick={() => setObserverFilter('viirs')}
-                      >
-                        VIIRS 375 m
-                      </button>
-                    </div>
-
-                    <VernierScrubber
-                      label="Minimum FRP Filter"
-                      valueText={`${Math.round(sensitivityThreshold * 38)} MW`}
-                      fraction={(sensitivityThreshold - 0.04) / 0.78}
-                      onChangeFraction={(u) => setSensitivityThreshold(0.04 + u * 0.78)}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <div className="iso-cell-grid" role="group" aria-label="Camera preset">
-                      {(['overview', 'canyon', 'ridge', 'nadir'] as const).map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          className="iso-ws-cell"
-                          data-active={cameraPreset === preset ? 'true' : 'false'}
-                          onClick={() => setCameraPreset(preset)}
-                        >
-                          {preset.charAt(0).toUpperCase() + preset.slice(1)}
-                        </button>
-                      ))}
-                    </div>
-
-                    {workspaceMode === 'cutaway' && (
-                      <VernierScrubber
-                        label="Sensor Scan Curtain"
-                        valueText={
-                          cutawaySplit === null
-                            ? 'Auto sweep'
-                            : `${Math.round(((cutawaySplit + 1) / 2) * 100)}%`
-                        }
-                        fraction={cutawaySplit === null ? 0.5 : (cutawaySplit + 1) / 2}
-                        onChangeFraction={(u) => setCutawaySplit(u * 2 - 1)}
-                        onResetAuto={
-                          cutawaySplit !== null ? () => setCutawaySplit(null) : undefined
-                        }
-                      />
-                    )}
-                  </>
-                )}
-
-                <div className="iso-lipari-block">
-                  <div className="iso-lipari-bar" aria-hidden="true" />
-                  <div className="iso-lipari-ticks">
-                    <span>0 MW/km&sup2;</span>
-                    <span>40 · Reconstructed Intensity (Lipari)</span>
-                    <span>80+ MW/km&sup2;</span>
-                  </div>
-                </div>
-
-                {selectedFinding && (
-                  <div className="iso-finding-inset">
-                    <div className="iso-finding-inset__head">
-                      <span>{selectedFinding.title}</span>
-                      <button
-                        type="button"
-                        className="iso-finding-inset__close"
-                        onClick={() => setSelectedFinding(null)}
-                        aria-label="Dismiss finding"
-                      >
-                        x
-                      </button>
-                    </div>
-                    <div className="iso-finding-inset__sub">{selectedFinding.subtitle}</div>
-                    <div className="iso-finding-inset__val">{selectedFinding.valueText}</div>
-                  </div>
-                )}
-              </div>
-
-              <div className="iso-telemetry-foot">
-                <span className="iso-telemetry-foot__meta">5/5 · {totalPipelineMs} ms</span>
-                <div className="iso-joined-cells--night">
-                  <a
-                    href={exportGeoJsonUrl}
-                    download={`${activeRun?.region.id ?? activeTheaterId}_harmonized.geojson`}
-                    className="iso-ws-cell"
-                  >
-                    Export GeoJSON
-                  </a>
-                  <a
-                    href={exportCsvUrl}
-                    download={`${activeRun?.region.id ?? activeTheaterId}_harmonized.csv`}
-                    className="iso-ws-cell"
-                  >
-                    Export CSV
-                  </a>
-                </div>
-              </div>
-            </aside>
-
-            {/* Bottom Linked Timeline & Continuity Record */}
-            <StageTimelineTrack
-              timeProgress={timeProgress}
-              onChangeTime={(next) => {
-                setPlaying(false);
-                setTimeProgress(next);
-              }}
-              playing={playing}
-              onTogglePlay={() => setPlaying((p) => !p)}
-              epochSummaries={activeRun?.epoch_summaries}
-              cinemaActive={cinemaActive}
-              onToggleCinema={() => setCinemaActive((c) => !c)}
-              cleanHud={cleanHud}
-              onToggleCleanHud={() => setCleanHud((h) => !h)}
-              onNextRegion={cycleNextTheaterSlew}
-              onToggleHoldout={toggleHoldoutLive}
-              holdoutViirs={holdoutViirs}
-              showUncertainty={showUncertainty}
-              onToggleUncertainty={() => setShowUncertainty((u) => !u)}
-              activeEra={activeEra}
-              onJumpEra={handleJumpEra}
-              onExitOverview={exitToOverview}
-            />
-          </div>
-        </>
-      )}
 
       <CommandAskPalette
         open={askOpen}
@@ -1235,12 +1542,51 @@ export function App() {
         onToggleCloudOverride={toggleCloudLive}
         isExecuting={isExecuting}
         errorMessage={execError}
-        onExecute={executeWorldModel}
+        onExecute={handlePaletteExecute}
       />
 
-      <SensorDiagnosticModal open={sensorModalOpen} onClose={() => setSensorModalOpen(false)} />
+      <AreaSheet
+        open={areaOpen}
+        onClose={() => setAreaOpen(false)}
+        apiBase={API_BASE}
+        centre={{ lat: calendarArea.lat, lon: calendarArea.lon }}
+        onOpenMonth={openAreaMonth}
+      />
 
-      <MethodSheet open={docOpen} initialTab={docTab} onClose={() => setDocOpen(false)} />
+      <EvidenceSheet
+        open={evidenceOpen}
+        onClose={() => {
+          setEvidenceOpen(false);
+          setEvidenceFocus(null);
+        }}
+        focus={evidenceFocus}
+        doc={DEMO_EVIDENCE}
+        source={SURFACE_SOURCE.evidence}
+      />
+
+      <ReadingSheet
+        section={reading}
+        onSection={setReading}
+        onClose={() => setReading(null)}
+        imageryCredit={credit}
+        verticalExaggeration={stageTelemetry?.verticalExaggeration ?? null}
+        apiBase={API_BASE}
+        regionId={calendarRegionId}
+        regionName={regionTitle}
+        sensorModel={sensorModel}
+        overlap={calendar.cal?.overlap ?? null}
+        overlapPlace={calendar.cal && !calendar.cal.simulated ? calendar.cal.regionName.split(',')[0] : null}
+        evidence={{
+          real: runIsReal,
+          model: runModel,
+          overlap: calendar.cal?.overlap ?? null,
+          overlapPlace: calendar.cal && !calendar.cal.simulated ? calendar.cal.regionName.split(',')[0] : null,
+          interval:
+            blindInterval && blindInterval.intervalCovered !== null && blindInterval.intervalN !== null
+              ? { covered: blindInterval.intervalCovered, n: blindInterval.intervalN, level: blindInterval.intervalLevel }
+              : null,
+        }}
+      />
     </div>
   );
 }

@@ -1,11 +1,8 @@
-/* Landing composition over the full-bleed stage.
-   The sky band carries one monumental headline, split by the sensor curtain: left of the seam it is
-   sampled into 1 km cells, right of it the type is crisp. Four edges carry spare text triggers. */
+/* Landing: type over the full-bleed world, inside the calm sky band; one light sentence, one sentence of what
+   it is, one quiet way in. The stage keeps the band calm (landingSubjectFrame names it). */
 
 .iso-land {
-  --h-size: clamp(64px, 9.6vw, 184px);
-  --h-top: calc(var(--iso-gutter) + 52px);
-  --seam-x: 50vw;
+  --h-size: clamp(32px, 3.4vw, 64px);
   position: fixed;
   inset: 0;
   z-index: 10;
@@ -33,36 +30,42 @@
   }
 }
 
-/* Scrims keep text legible over terrain without drawing a box. */
+/* The sky band darkens under the type and holds through the sentence, fading out before the terrain.
+   Sized from measured contrast. */
 .iso-land__scrim {
   position: absolute;
-  left: 0;
-  right: 0;
-}
-
-.iso-land__scrim--top {
-  top: 0;
-  height: 52vh;
+  inset: 0 0 auto 0;
+  height: 54vh;
   background: linear-gradient(
     180deg,
-    rgba(8, 11, 17, 0.66) 0%,
-    rgba(8, 11, 17, 0.34) 48%,
+    rgba(8, 11, 17, 0.64) 0%,
+    rgba(8, 11, 17, 0.52) 42%,
+    rgba(8, 11, 17, 0.24) 72%,
     rgba(8, 11, 17, 0) 100%
   );
 }
 
+/* A quiet band at the bottom edge so the credit and legend read over bright terrain. */
 .iso-land__scrim--bottom {
-  bottom: 0;
-  height: 40vh;
+  inset: auto 0 0 0;
+  height: 18vh;
   background: linear-gradient(
     0deg,
-    rgba(8, 11, 17, 0.82) 0%,
-    rgba(8, 11, 17, 0.42) 45%,
+    rgba(8, 11, 17, 0.88) 0%,
+    rgba(8, 11, 17, 0.62) 30%,
     rgba(8, 11, 17, 0) 100%
   );
 }
 
-/* Brand, top left */
+/* Credit and legend sit on live terrain and fire: a tight dark halo keeps each glyph legible without a box. */
+.iso-land__credit,
+.iso-land__legend {
+  text-shadow:
+    0 0 1px rgba(8, 11, 17, 0.95),
+    0 0 6px rgba(8, 11, 17, 0.85),
+    0 1px 14px rgba(8, 11, 17, 0.7);
+}
+
 .iso-land__brand {
   position: absolute;
   top: var(--iso-gutter);
@@ -70,98 +73,155 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 16px;
-  line-height: 18px;
-  font-weight: 500;
+  font: 500 16px/18px var(--font-sans);
   letter-spacing: -0.01em;
 }
 
-/* Reference triggers, top right: labels share a right edge, keys share a column. */
 .iso-land__menu {
   position: absolute;
-  top: calc(var(--iso-gutter) - 4px);
+  top: calc(var(--iso-gutter) - 6px);
   right: var(--iso-gutter);
-  display: grid;
-  width: max-content;
+  display: flex;
+  gap: 28px;
 }
 
-.iso-trig {
-  display: grid;
-  grid-template-columns: 1fr 2ch;
-  column-gap: 16px;
+.iso-navlink {
+  display: inline-flex;
   align-items: baseline;
-  padding: 4px 0;
+  gap: 8px;
+  padding: 6px 0;
   border: 0;
   background: none;
   color: var(--iso-ink-2);
   font: 500 14px/18px var(--font-sans);
+  cursor: pointer;
+  transition: color 200ms var(--ease-studio);
+}
+
+.iso-navlink:hover,
+.iso-navlink:focus-visible {
+  color: var(--iso-ink);
+}
+
+/* The hero: one left axis on the logo's left edge, inside the calm band; the right of the sky stays open. */
+.iso-land__hero {
+  position: absolute;
+  top: calc(var(--iso-gutter) + 58px);
+  left: var(--iso-gutter);
+  width: min(760px, calc(100vw - 2 * var(--iso-gutter)));
+  display: grid;
+  justify-items: start;
+  text-align: left;
+  text-shadow: 0 1px 18px rgba(8, 11, 17, 0.45);
+}
+
+.iso-land__sentence {
+  margin: 18px 0 0;
+  max-width: 72ch;
+  font-size: clamp(15px, 1.1vw, 19px);
+  line-height: 1.55;
+  letter-spacing: -0.004em;
+  color: var(--iso-ink);
+  text-wrap: balance;
+}
+
+/* The one way in: a quiet text trigger with its key. A hairline draws under the label on hover. */
+.iso-entry {
+  margin-top: 22px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--iso-ink);
+  font: 400 15.5px/20px var(--font-sans);
   letter-spacing: -0.005em;
   cursor: pointer;
-  transition: color 220ms var(--ease-studio);
 }
 
-.iso-trig__label {
+.iso-entry__label {
   position: relative;
-  justify-self: end;
 }
 
-.iso-trig__label::before {
+.iso-entry__label::after {
   content: '';
   position: absolute;
-  top: 50%;
-  right: calc(100% + 12px);
-  width: 32px;
+  left: 0;
+  right: 0;
+  bottom: -4px;
   height: 1px;
   background: currentColor;
   transform: scaleX(0);
-  transform-origin: right center;
-  transition: transform 360ms var(--ease-studio);
+  transform-origin: left center;
+  transition: transform 420ms var(--ease-studio);
 }
 
-.iso-trig__key {
-  justify-self: end;
-  font: 400 11.5px/18px var(--font-mono);
-  color: var(--iso-ink-4);
-  transition: color 220ms var(--ease-studio);
-}
-
-.iso-trig:hover,
-.iso-trig:focus-visible {
-  color: var(--iso-ink);
-}
-
-.iso-trig:hover .iso-trig__label::before,
-.iso-trig:focus-visible .iso-trig__label::before {
+/* Nothing at rest; on hover or focus the hairline draws the full width of the label. */
+.iso-entry:hover .iso-entry__label::after,
+.iso-entry:focus-visible .iso-entry__label::after {
   transform: scaleX(1);
 }
 
-.iso-trig:hover .iso-trig__key,
-.iso-trig:focus-visible .iso-trig__key {
-  color: var(--iso-ink-2);
+/* Legend for the terrain: which look is which. */
+.iso-land__legend {
+  position: absolute;
+  right: var(--iso-gutter);
+  bottom: var(--iso-gutter);
+  display: flex;
+  gap: 22px;
+  font: 400 11.5px/14px var(--font-mono);
+  color: rgba(243, 244, 246, 0.86);
 }
 
-/* Headline: crisp DOM text (375 m) and a cell canvas (1 km), clipped at the seam. */
-.iso-split {
+.iso-land__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.iso-land__legend-item::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 1px rgba(8, 11, 17, 0.8);
+}
+
+.iso-land__legend-item--modis::before {
+  background: var(--iso-modis-ink);
+}
+
+.iso-land__legend-item--fused::before {
+  background: #7f9a62;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.iso-land__credit {
   position: absolute;
+  left: var(--iso-gutter);
+  bottom: var(--iso-gutter);
+  margin: 0;
+  font: 400 11px/14px var(--font-mono);
+  color: rgba(243, 244, 246, 0.86);
+}
+
+/* Headline: crisp DOM text (375 m) over a cell canvas (1 km) that shows only on load and in the lens. */
+.iso-split {
+  position: relative;
   margin: 0;
   font-family: var(--font-sans);
   font-size: var(--h-size);
-  font-weight: 600;
-  line-height: 0.86;
-  letter-spacing: -0.052em;
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
   color: var(--iso-ink);
-}
-
-.iso-land__headline {
-  top: var(--h-top);
-  left: var(--iso-gutter);
+  width: max-content;
+  max-width: 100%;
 }
 
 .iso-split__fine {
-  --cut: max(0px, calc(var(--seam-x) - var(--split-left, 0px)));
   position: relative;
   display: block;
-  clip-path: polygon(var(--cut) -40%, 140% -40%, 140% 140%, var(--cut) 140%);
 }
 
 .iso-split__line {
@@ -169,293 +229,106 @@
   white-space: nowrap;
 }
 
+/* The 1 km layer is hidden unless the headline is resolving or the lens is on. */
 .iso-split__coarse {
-  --ccut: max(0px, calc(var(--seam-x) - var(--coarse-left, 0px)));
   position: absolute;
   color: var(--iso-modis-ink);
   pointer-events: none;
-  clip-path: polygon(0 0, var(--ccut) 0, var(--ccut) 100%, 0 100%);
-}
-
-.iso-land[data-seam-modis='right'] .iso-split__fine {
-  clip-path: polygon(-40% -40%, var(--cut) -40%, var(--cut) 140%, -40% 140%);
-}
-
-.iso-land[data-seam-modis='right'] .iso-split__coarse {
-  clip-path: polygon(var(--ccut) 0, 100% 0, 100% 100%, var(--ccut) 100%);
-}
-
-/* The seam: the curtain's edge rising through the headline, labelled on both sides. */
-.iso-seam {
-  position: absolute;
-  left: 0;
-  transform: translate3d(var(--seam-x), 0, 0);
-  will-change: transform;
-  top: calc(var(--h-top) - 28px);
-  width: 0;
-  height: calc(var(--h-size) * 1.72 + 52px);
-}
-
-.iso-land[data-seam-source='stage'] .iso-seam {
-  height: max(calc(var(--h-size) * 1.72 + 52px), calc(var(--seam-bottom) - var(--h-top) + 28px));
-}
-
-.iso-seam__rule {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -0.5px;
-  width: 1px;
-  background: linear-gradient(
-    180deg,
-    rgba(214, 241, 255, 0) 0%,
-    rgba(214, 241, 255, 0.9) 14%,
-    rgba(214, 241, 255, 0.9) 100%
-  );
-  transition: opacity 260ms var(--ease-studio);
-}
-
-.iso-land[data-seam-over='scene'] .iso-seam__rule {
   opacity: 0;
+  transition: opacity 220ms var(--ease-studio);
 }
 
-.iso-seam__label {
-  position: absolute;
-  top: 100%;
-  display: grid;
-  padding-top: 10px;
-  font: 400 11.5px/16px var(--font-mono);
-  white-space: nowrap;
+/* Load: crisp type grows from the left while the cells give way on the right. */
+.iso-split[data-resolving='true'] .iso-split__fine {
+  clip-path: polygon(
+    -10% -40%,
+    calc(var(--res, 0) * 120% - 10%) -40%,
+    calc(var(--res, 0) * 120% - 10%) 140%,
+    -10% 140%
+  );
 }
 
-.iso-seam__label--modis {
-  right: 12px;
-  text-align: right;
-  color: var(--iso-modis-ink);
+.iso-split[data-resolving='true'] .iso-split__coarse {
+  opacity: 1;
+  transition: none;
+  clip-path: polygon(
+    calc(var(--res, 0) * 120% - 10%) 0,
+    110% 0,
+    110% 100%,
+    calc(var(--res, 0) * 120% - 10%) 100%
+  );
 }
 
-.iso-seam__label--fused {
-  left: 12px;
-  color: var(--iso-ink);
+/* Lens: a circle about one line tall shows the letters at 1 km; outside it they stay crisp. */
+.iso-split {
+  --lens-r: calc(var(--h-size, 120px) * 0.62);
 }
 
-.iso-seam__label > span + span {
-  color: var(--iso-ink-3);
+.iso-split[data-lens='on'][data-resolving='false'] .iso-split__coarse {
+  opacity: 1;
+  -webkit-mask-image: radial-gradient(
+    circle var(--lens-r) at var(--clx, -999px) var(--cly, -999px),
+    #000 72%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    circle var(--lens-r) at var(--clx, -999px) var(--cly, -999px),
+    #000 72%,
+    transparent 100%
+  );
 }
 
-.iso-land[data-seam-modis='right'] .iso-seam__label--modis {
-  right: auto;
-  left: 12px;
-  text-align: left;
+.iso-split[data-lens='on'][data-resolving='false'] .iso-split__fine {
+  -webkit-mask-image: radial-gradient(
+    circle var(--lens-r) at var(--lx, -999px) var(--ly, -999px),
+    transparent 66%,
+    #000 96%
+  );
+  mask-image: radial-gradient(
+    circle var(--lens-r) at var(--lx, -999px) var(--ly, -999px),
+    transparent 66%,
+    #000 96%
+  );
 }
 
-.iso-land[data-seam-modis='right'] .iso-seam__label--fused {
-  left: auto;
-  right: 12px;
-  text-align: right;
-}
 
-/* Lede: right column, starting on the second headline line. */
-.iso-land__lede {
-  position: absolute;
-  top: calc(var(--h-top) + var(--h-size) * 0.86 + var(--h-size) * 0.12);
-  right: var(--iso-gutter);
-  width: min(32ch, 26vw);
-  font-size: 15px;
-  line-height: 22px;
-  letter-spacing: -0.006em;
-  color: var(--iso-ink-2);
-}
-
-.iso-land__lede p {
-  margin: 0;
-}
-
-.iso-land__hint {
-  margin-top: 14px !important;
-  font: 400 11.5px/16px var(--font-mono);
-  color: var(--iso-ink-3);
-}
-
-/* Regions, bottom left: name, area, latitude, longitude in shared columns. */
-.iso-land__regions {
-  position: absolute;
-  left: var(--iso-gutter);
-  bottom: calc(var(--iso-gutter) + 26px);
-  display: grid;
-  grid-template-columns: max-content 3ch max-content max-content;
-  column-gap: 22px;
-}
-
-.iso-region {
-  position: relative;
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: subgrid;
-  align-items: baseline;
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  color: var(--iso-ink-3);
-  font: 500 15px/20px var(--font-sans);
-  letter-spacing: -0.01em;
-  text-align: left;
-  cursor: pointer;
-  transition: color 220ms var(--ease-studio);
-}
-
-div.iso-region {
-  cursor: default;
-}
-
-.iso-region::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: calc(-1 * var(--iso-gutter));
-  width: calc(var(--iso-gutter) - 10px);
-  height: 1px;
-  background: currentColor;
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 360ms var(--ease-studio);
-}
-
-.iso-region__area,
-.iso-region__coord {
-  font: 400 12px/20px var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.iso-region__coord {
-  justify-self: end;
-}
-
-.iso-region:hover,
-.iso-region:focus-visible {
-  color: var(--iso-ink-2);
-}
-
-.iso-region:hover::before,
-.iso-region:focus-visible::before {
-  transform: scaleX(0.5);
-}
-
-.iso-region[data-active='true'] {
-  color: var(--iso-ink);
-}
-
-.iso-region[data-active='true']::before {
-  transform: scaleX(1);
-}
-
-/* Enter, bottom right: the one larger trigger. The hairline reaches for the label on hover. */
-.iso-enter {
-  position: absolute;
-  right: var(--iso-gutter);
-  bottom: calc(var(--iso-gutter) + 26px);
-  display: flex;
-  align-items: baseline;
-  gap: 18px;
-  padding: 6px 0;
-  border: 0;
-  background: none;
-  color: var(--iso-ink);
-  font: 500 28px/32px var(--font-sans);
-  letter-spacing: -0.025em;
-  cursor: pointer;
-}
-
-.iso-enter__rule {
-  align-self: center;
-  width: clamp(72px, 11vw, 200px);
-  height: 1px;
-  background: var(--iso-hair-strong);
-  transform: scaleX(0.4);
-  transform-origin: right center;
-  transition:
-    transform 520ms var(--ease-studio),
-    background-color 220ms ease;
-}
-
-.iso-enter__label {
-  display: inline-block;
-  height: 32px;
-  overflow: hidden;
-}
-
-.iso-enter__roll {
-  display: grid;
-  transition: transform 420ms var(--ease-studio);
-}
-
-.iso-enter__key {
-  font: 400 11.5px/16px var(--font-mono);
-  color: var(--iso-ink-3);
-}
-
-.iso-enter:hover .iso-enter__rule,
-.iso-enter:focus-visible .iso-enter__rule {
-  transform: scaleX(1);
-  background: var(--iso-curtain);
-}
-
-.iso-enter:hover .iso-enter__roll,
-.iso-enter:focus-visible .iso-enter__roll {
-  transform: translateY(-32px);
-}
-
-/* Credits on the bottom edge */
-.iso-land__credit {
-  position: absolute;
-  bottom: calc(var(--iso-gutter) - 6px);
-  margin: 0;
-  font: 400 11px/14px var(--font-mono);
-  color: var(--iso-ink-4);
-}
-
-.iso-land__credit--imagery {
-  left: var(--iso-gutter);
-}
-
-.iso-land__credit--event {
-  right: var(--iso-gutter);
-}
-
-@media (max-width: 960px) {
+@media (max-width: 760px) {
   .iso-land {
-    --h-size: clamp(48px, 12.5vw, 120px);
+    --h-size: clamp(28px, 7.6vw, 40px);
   }
 
-  .iso-land__lede {
-    top: auto;
-    bottom: calc(var(--iso-gutter) + 210px);
+  .iso-land__hero {
+    top: calc(var(--iso-gutter) + 56px);
+  }
+
+  .iso-split {
+    width: auto;
+  }
+
+  .iso-split__line {
+    white-space: normal;
+    text-wrap: balance;
+  }
+
+  .iso-split__coarse {
+    display: none;
+  }
+
+  .iso-split[data-resolving='true'] .iso-split__fine {
+    clip-path: none;
+  }
+
+  .iso-land__menu {
+    gap: 16px;
+  }
+
+  .iso-land__menu .iso-navlink:nth-child(2) {
+    display: none;
+  }
+
+  .iso-land__legend {
+    bottom: calc(var(--iso-gutter) + 46px);
     left: var(--iso-gutter);
     right: auto;
-    width: min(46ch, calc(100vw - 2 * var(--iso-gutter)));
-  }
-
-  .iso-land__regions {
-    grid-template-columns: max-content 3ch max-content;
-  }
-
-  .iso-region__coord + .iso-region__coord {
-    display: none;
-  }
-
-  .iso-enter {
-    bottom: calc(var(--iso-gutter) + 26px + 140px);
-    font-size: 22px;
-  }
-}
-
-@media (max-width: 640px) {
-  .iso-land {
-    --h-size: clamp(44px, 14vw, 72px);
-    --h-top: calc(var(--iso-gutter) + 118px);
-  }
-
-  .iso-land__credit--event {
-    display: none;
   }
 }

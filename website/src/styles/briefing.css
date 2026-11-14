@@ -64,7 +64,7 @@
 .iso-brief__body {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
-  height: min(470px, calc(100dvh - 2 * var(--iso-gutter) - 140px));
+  height: min(560px, calc(100dvh - 2 * var(--iso-gutter) - 140px));
   min-height: 0;
   overflow-y: auto;
   animation: iso-brief-page 320ms var(--ease-studio) backwards;
@@ -115,7 +115,9 @@
 .iso-brief__text {
   display: grid;
   align-content: start;
-  gap: 22px;
+  gap: 18px;
+  overflow-y: auto;
+  scrollbar-width: thin;
   padding: 26px 28px 26px 26px;
   border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -170,14 +172,46 @@
 .iso-brief__checks li {
   display: grid;
   grid-template-columns: 7px 1fr auto;
-  align-items: center;
+  align-items: baseline;
   column-gap: 10px;
   font-size: 13.5px;
-  color: rgba(243, 244, 246, 0.82);
+  line-height: 1.4;
+  color: rgba(243, 244, 246, 0.86);
 }
 
-.iso-brief__checks li[data-status='pass'] .iso-check__box {
+.iso-brief__checks .iso-check__box {
+  align-self: center;
+}
+
+.iso-brief__check-main {
+  display: grid;
+  gap: 2px;
+}
+
+.iso-brief__check-detail {
+  font: 400 12px/16px var(--font-mono);
+  color: rgba(243, 244, 246, 0.6);
+}
+
+/* Passed: filled mark. Failed: open mark and a warm status word. Target: dashed mark, quieter. */
+.iso-brief__checks li[data-status='passed'] .iso-check__box {
   background: currentColor;
+}
+
+.iso-brief__checks li[data-status='failed'] .iso-brief__check-status {
+  color: var(--iso-fail);
+}
+
+.iso-brief__checks li[data-status='failed'] .iso-check__box {
+  border-color: var(--iso-fail);
+}
+
+.iso-brief__checks li[data-kind='design_target'] {
+  color: rgba(243, 244, 246, 0.62);
+}
+
+.iso-brief__checks li[data-kind='design_target'] .iso-check__box {
+  border-style: dashed;
 }
 
 .iso-brief__check-status {

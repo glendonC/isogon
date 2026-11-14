@@ -123,7 +123,7 @@
   color: var(--iso-ink);
 }
 
-/* The first protocol sits under the corrected one, one step quieter. */
+/* The first protocol version sits under the later one, one step quieter. */
 .iso-evidence .iso-table tr[data-test='old'] td.iso-evidence__num,
 .iso-evidence .iso-table tr[data-test='old'] td.iso-evidence__who,
 .iso-evidence .iso-table td.iso-evidence__val[data-test='old'] {

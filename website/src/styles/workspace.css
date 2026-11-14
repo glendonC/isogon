@@ -41,21 +41,33 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(520px, 44vw);
+  width: calc(336px + 2 * var(--iso-gutter) + 120px);
+  /* A quiet column: the terrain behind the inspector is blurred and darkened, and the column fades
+     into the scene on its left edge, so there is no box and no hard line. */
   background: linear-gradient(
     270deg,
-    rgba(8, 11, 17, 0.88) 0%,
-    rgba(8, 11, 17, 0.72) 50%,
+    rgba(8, 11, 17, 0.78) 0%,
+    rgba(8, 11, 17, 0.7) 62%,
     rgba(8, 11, 17, 0) 100%
   );
+  backdrop-filter: blur(18px) saturate(70%) brightness(0.7);
+  -webkit-backdrop-filter: blur(18px) saturate(70%) brightness(0.7);
+  -webkit-mask-image: linear-gradient(270deg, #000 0%, #000 70%, transparent 100%);
+  mask-image: linear-gradient(270deg, #000 0%, #000 70%, transparent 100%);
 }
 
 .iso-ws__scrim--bottom {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 200px;
-  background: linear-gradient(0deg, rgba(8, 11, 17, 0.82) 0%, rgba(8, 11, 17, 0) 100%);
+  height: 380px;
+  /* Holds dark behind the burning calendar (its ramp is checked against #0d1118), then fades. */
+  background: linear-gradient(
+    0deg,
+    rgba(8, 11, 17, 0.9) 0%,
+    rgba(8, 11, 17, 0.84) 62%,
+    rgba(8, 11, 17, 0) 100%
+  );
 }
 
 /* Top edge: brand and regions, views, tools */
@@ -156,6 +168,127 @@
   color: var(--iso-modis-ink);
 }
 
+/* Where the numbers come from: real NASA FIRMS detections or the simulation. */
+.iso-readout__source {
+  margin: 8px 0 0;
+  font: 400 12px/16px var(--font-mono);
+  color: var(--iso-ink-2);
+}
+
+.iso-readout__source[data-source='simulated'] {
+  color: var(--iso-modis-ink);
+}
+
+/* The model's own status on a real run, or the line that says a simulated run carries no score. */
+.iso-readout__model {
+  margin: 6px 0 0;
+  font: 400 12.5px/17px var(--font-sans);
+  color: var(--iso-ink-2);
+}
+
+.iso-readout__model strong {
+  font-weight: 500;
+  color: var(--iso-ink);
+}
+
+/* Blind test after the reveal: plain tables, no box. Scores down, methods across, Isogon brightest. */
+.iso-score {
+  display: grid;
+  gap: 8px;
+}
+
+.iso-score__table th[scope='col'] {
+  padding: 4px 0 4px 8px;
+  font: 400 11.5px/15px var(--font-sans);
+  color: var(--iso-ink-3);
+  text-align: right;
+  white-space: normal;
+  vertical-align: bottom;
+}
+
+.iso-score__table th[scope='col']:first-child {
+  padding-left: 0;
+  color: var(--iso-ink);
+  text-align: left;
+}
+
+.iso-score__table th[scope='col'][data-model] {
+  color: var(--iso-ink);
+}
+
+.iso-score__table tbody th {
+  width: 9.5em;
+  font-size: 12.5px;
+  white-space: normal;
+  vertical-align: top;
+}
+
+.iso-score__table td {
+  padding-left: 8px;
+  color: var(--iso-ink-2);
+  vertical-align: top;
+}
+
+.iso-score__table td[data-model] {
+  color: var(--iso-ink);
+}
+
+.iso-readout .iso-table.iso-score__table td,
+.iso-readout .iso-table.iso-score__table td:last-child {
+  white-space: nowrap;
+}
+
+.iso-readout .iso-table.iso-score__table td:last-child {
+  color: var(--iso-ink-2);
+}
+
+/* Who is ahead on each row, in words under the score's name. One colour whoever is ahead, so a row a baseline
+   wins reads as plainly as one Isogon wins. */
+.iso-score__verdict {
+  display: block;
+  font: 400 11.5px/15px var(--font-sans);
+  color: var(--iso-ink-2);
+}
+
+.iso-score__line {
+  margin: 0;
+  font: 400 12px/17px var(--font-sans);
+  color: var(--iso-ink-2);
+}
+
+.iso-score__model {
+  display: grid;
+  gap: 4px;
+}
+
+.iso-score__status {
+  margin: 4px 0 0;
+  font: 400 12.5px/17px var(--font-sans);
+  color: var(--iso-ink-2);
+}
+
+.iso-score__status strong {
+  font-weight: 500;
+  color: var(--iso-ink);
+}
+
+.iso-score__parts th {
+  font-size: 12px;
+  line-height: 16px;
+  white-space: normal;
+}
+
+.iso-readout .iso-table.iso-score__parts td:last-child {
+  font-size: 11.5px;
+  color: var(--iso-ink-2);
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.iso-readout .iso-table.iso-score__parts tr[data-status='experimental'] td {
+  color: var(--iso-ink);
+}
+
 .iso-readout__power {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -167,6 +300,13 @@
   font: 500 52px/1 var(--font-sans);
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
+}
+
+.iso-readout__mw--pending {
+  font-size: 20px;
+  line-height: 24px;
+  letter-spacing: -0.015em;
+  color: var(--iso-ink-3);
 }
 
 .iso-readout__unit {
@@ -185,6 +325,11 @@
   border-top: 1px solid var(--iso-hair);
 }
 
+/* The context column wraps rather than pushing the table past the column's right edge. */
+.iso-readout .iso-table td:last-child {
+  white-space: normal;
+}
+
 .iso-readout .iso-choice {
   column-gap: 12px;
 }
@@ -201,6 +346,27 @@
 .iso-scale {
   display: grid;
   gap: 5px;
+}
+
+/* Ticks placed where the run's encoding puts them (real runs). */
+.iso-scale__ticks--placed {
+  position: relative;
+  height: 14px;
+}
+
+.iso-scale__ticks--placed span {
+  position: absolute;
+  top: 0;
+  translate: -50% 0;
+  white-space: nowrap;
+}
+
+.iso-scale__ticks--placed span[data-edge='start'] {
+  translate: 0 0;
+}
+
+.iso-scale__ticks--placed span[data-edge='end'] {
+  translate: -100% 0;
 }
 
 .iso-scale__bar {
@@ -278,7 +444,8 @@
 
 .iso-timeline {
   position: relative;
-  width: min(520px, 42vw);
+  flex-shrink: 0;
+  width: min(580px, 40vw);
   display: grid;
   gap: 6px;
 }
@@ -306,130 +473,9 @@
 
 .iso-keys {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  column-gap: 20px;
-  row-gap: 2px;
-  max-width: min(760px, 56vw);
-}
-
-/* Continuity record above the timeline */
-.iso-record {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 22px);
-  width: min(580px, calc(100vw - 2 * var(--iso-gutter)));
-  padding: 20px 22px 18px;
-  border: 1px solid var(--iso-hair);
-  background: var(--iso-sheet);
-  backdrop-filter: var(--iso-blur);
-  -webkit-backdrop-filter: var(--iso-blur);
-  display: grid;
-  gap: 10px;
-}
-
-.iso-record__title {
-  margin: 0;
-  font: 500 18px/22px var(--font-sans);
-  letter-spacing: -0.015em;
-}
-
-.iso-record__lede {
-  margin: 0;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--iso-ink-2);
-}
-
-.iso-record__chart {
-  display: block;
-  overflow: visible;
-}
-
-.iso-record__base {
-  stroke: var(--iso-hair);
-  stroke-width: 1;
-}
-
-.iso-record__mark {
-  stroke: var(--iso-curtain);
-  stroke-width: 1;
-  opacity: 0.6;
-}
-
-.iso-record__modis,
-.iso-record__viirs,
-.iso-record__harm {
-  fill: none;
-  vector-effect: non-scaling-stroke;
-}
-
-.iso-record__modis {
-  stroke: var(--iso-modis-ink);
-  stroke-width: 1.2;
-}
-
-.iso-record__viirs {
-  stroke: #e87428;
-  stroke-width: 1.2;
-  stroke-dasharray: 3 2;
-}
-
-.iso-record__harm {
-  stroke: var(--iso-ink);
-  stroke-width: 2;
-}
-
-.iso-record__legend {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
   column-gap: 16px;
-  row-gap: 2px;
-  font-size: 12.5px;
-  color: var(--iso-ink-2);
-}
-
-.iso-record__key::before {
-  content: '';
-  display: inline-block;
-  width: 16px;
-  height: 2px;
-  margin-right: 7px;
-  vertical-align: middle;
-  background: currentColor;
-}
-
-.iso-record__key--harm::before {
-  background: var(--iso-ink);
-}
-
-.iso-record__key--modis::before {
-  height: 1px;
-  background: var(--iso-modis-ink);
-}
-
-.iso-record__key--viirs::before {
-  height: 1px;
-  background: repeating-linear-gradient(90deg, #e87428 0 3px, transparent 3px 5px);
-}
-
-.iso-record__axis {
-  margin-left: auto;
-  font: 400 11px/14px var(--font-mono);
-  color: var(--iso-ink-3);
-}
-
-.iso-record__source,
-.iso-record__empty {
-  margin: 0;
-  font: 400 11px/14px var(--font-mono);
-  color: var(--iso-ink-4);
-}
-
-.iso-record__empty {
-  padding: 24px 0;
-  color: var(--iso-ink-3);
 }
 
 /* Attribution: visible whenever the terrain is, clean feed and cinema included. */
@@ -480,9 +526,66 @@
   .iso-tab kbd {
     display: none;
   }
+
+  .iso-timeline {
+    width: min(520px, 40vw);
+  }
+
+  .iso-keys {
+    column-gap: 12px;
+  }
+
+  .iso-key {
+    font-size: 12.5px;
+  }
+}
+
+/* The inspector and the timeline share one dock: invisible on wide screens, the bottom half under 960 px. */
+.iso-ws__dock {
+  display: contents;
 }
 
 @media (max-width: 960px) {
+  .iso-ws__dock {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50dvh;
+    /* Ends above the imagery credit, which stays fixed at the bottom (two lines on a phone). */
+    bottom: 44px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 20px var(--iso-gutter) 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    pointer-events: auto;
+    background: linear-gradient(180deg, rgba(8, 11, 17, 0) 0, rgba(8, 11, 17, 0.86) 56px);
+  }
+
+  .iso-ws__dock > .iso-readout,
+  .iso-ws__dock > .iso-timeline-hud {
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .iso-ws__dock > .iso-timeline-hud {
+    order: -1;
+  }
+
+  .iso-keys {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .iso-timeline__meta {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 2px;
+  }
+
   .iso-ws__top {
     grid-template-columns: 1fr auto;
     row-gap: 6px;
@@ -491,13 +594,6 @@
   .iso-ws__top > .iso-tabs:nth-child(2) {
     grid-row: 2;
     grid-column: 1 / -1;
-  }
-
-  .iso-readout {
-    top: auto;
-    bottom: calc(var(--iso-gutter) + 150px);
-    width: min(360px, calc(100vw - 2 * var(--iso-gutter)));
-    max-height: 40dvh;
   }
 
   .iso-timeline-hud {
@@ -511,5 +607,91 @@
     width: 100%;
     max-width: none;
     justify-content: flex-start;
+  }
+}
+
+/* The way into a round of next look, under the run's lines in the readout. */
+.iso-readout__round {
+  margin-top: 12px;
+}
+
+/* Every pass that looked at the box (NASA CMR), under the pass scrubber. Bright: saw fire; dim: saw nothing. */
+.iso-passes {
+  display: grid;
+  gap: 4px;
+}
+
+.iso-passes__rail {
+  position: relative;
+  height: 7px;
+}
+
+.iso-passes__tick {
+  position: absolute;
+  top: 0;
+  width: 1.5px;
+  height: 7px;
+  translate: -50% 0;
+  background: var(--iso-ink-3);
+}
+
+.iso-passes__tick[data-fire='true'] {
+  background: var(--iso-ink);
+}
+
+.iso-passes__legend {
+  margin: 0;
+  font: 400 11px/15px var(--font-mono);
+  color: var(--iso-ink-3);
+}
+
+.iso-passes__key {
+  display: inline-block;
+  width: 1.5px;
+  height: 9px;
+  margin: 0 6px 0 14px;
+  vertical-align: -1px;
+  background: var(--iso-ink-3);
+}
+
+.iso-passes__key[data-fire='true'] {
+  margin-left: 0;
+  background: var(--iso-ink);
+}
+
+/* Terra's morning pass estimated from VIIRS alone. */
+.iso-terra {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--iso-hair);
+}
+
+.iso-terra__title {
+  margin: 0;
+  font: 400 20px/26px var(--font-sans);
+  color: var(--iso-ink);
+}
+
+/* On a phone the header's tool items take their own row and scroll sideways within it, so every one stays
+   reachable. */
+@media (max-width: 760px) {
+  .iso-ws__top > .iso-tabs:last-child {
+    grid-row: 3;
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .iso-ws__top > .iso-tabs:nth-child(2),
+  .iso-ws__top > .iso-tabs:last-child {
+    overflow-x: auto;
+    scrollbar-width: none;
+    pointer-events: auto;
+    gap: 18px;
+  }
+
+  .iso-ws__top .iso-tab {
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 }

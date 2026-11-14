@@ -1,13 +1,42 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { TheaterId } from '../stage/earthCutawayTypes';
-import { THEATER_DISPLAY, THEATER_ORDER, formatLat, formatLon } from '../content/theaters';
-import { curtainSeam } from './curtainSeam';
+import { THEATER_DISPLAY } from '../content/theaters';
 import { IsogonMark } from './IsogonMark';
 import { SplitHeadline } from './SplitHeadline';
+import type { PartId, PartStatus } from '../content/partsStatus';
+import type { EarthStageTelemetry } from '../stage/earthCutawayTypes';
 
-export const IMAGERY_ATTRIBUTION = 'Imagery: Esri, Maxar, Earthstar Geographics';
+/**
+ * The landing's copy: the headline, the second line and one entry that names the first application.
+ */
+const HEADLINE = ['Turn real-world observations', 'into testable worlds.'] as const;
+const SENTENCE =
+  'Scientific world models that reconstruct physical systems from imperfect measurements, predict what other instruments will see, and learn what to investigate next.';
 
-const HEADLINE = ['One calibrated', 'fire record.'] as const;
+/** The faces the landing draws with. Text renders once these are loaded, so nothing re-flows. */
+const LANDING_FACES = ['300 52px Geist', '400 17px Geist', '500 14px Geist', '400 11px "IBM Plex Mono"'];
+
+function facesLoaded(): boolean {
+  if (typeof document === 'undefined' || !document.fonts) return true;
+  return LANDING_FACES.every((f) => document.fonts.check(f));
+}
+
+const PLATFORM_NAMES: Record<string, string> = {
+  VIIRS_SNPP: 'Suomi NPP VIIRS',
+  VIIRS_NOAA20: 'NOAA-20 VIIRS',
+  VIIRS_NOAA21: 'NOAA-21 VIIRS',
+  MODIS_TERRA: 'Terra MODIS',
+  MODIS_AQUA: 'Aqua MODIS',
+};
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** The picture's facts line: the NASA satellite, the date and the count of detections, from telemetry.realPass. */
+function passFacts(p: NonNullable<EarthStageTelemetry['realPass']>): string {
+  const d = new Date(p.timeUtc);
+  const date = Number.isNaN(d.getTime()) ? p.timeUtc : `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  const sat = PLATFORM_NAMES[p.sensor] ?? p.sensor.replace(/_/g, ' ');
+  return `NASA ${sat}, ${date}, ${p.isDay ? 'day' : 'night'} pass: ${p.detections.toLocaleString('en-US')} detections`;
+}
 
 export interface CustomRegionSummary {
   name: string;
@@ -17,154 +46,141 @@ export interface CustomRegionSummary {
 
 interface LandingCompositionProps {
   activeTheaterId: TheaterId;
+  /** Imagery credit from the active run (ui/attribution.ts). */
+  imageryCredit: string;
   customRegion: CustomRegionSummary | null;
-  onSelectTheater: (id: TheaterId) => void;
+  /** The year of the real run on the landing, from the run's own window; null when no real run is in. */
+  runYear: string | null;
+  /** The three parts under the hero, their status read from the evidence data. */
+  parts: PartStatus[];
+  onOpenPart: (id: PartId) => void;
+  /** The pass the picture shows, for the facts line (stage telemetry). */
+  realPass: EarthStageTelemetry['realPass'] | null;
   onOpenSearch: () => void;
   onOpenSensor: () => void;
   onOpenMethod: () => void;
   onEnter: () => void;
 }
 
-/**
- * The landing page as one composition over the full-bleed stage: a monumental headline in the sky band,
- * split where the sensor curtain splits, and spare text triggers anchored to the four viewport edges.
- * Every interactive element carries data-landing-ui so the curtain stops following the cursor over text.
- */
 export function LandingComposition({
   activeTheaterId,
+  imageryCredit,
   customRegion,
-  onSelectTheater,
+  runYear,
+  parts,
+  onOpenPart,
+  realPass,
   onOpenSearch,
   onOpenSensor,
   onOpenMethod,
   onEnter,
 }: LandingCompositionProps) {
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [ready, setReady] = useState(facesLoaded);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const detach = curtainSeam.attach(el);
-    // The rule only means something where it splits the headline; past its ends it fades out.
-    let span = { left: 0, right: 0 };
-    const measure = () => {
-      const fine = el.querySelector('.iso-split__fine');
-      if (!fine) return;
-      const r = fine.getBoundingClientRect();
-      span = { left: r.left, right: r.right };
+    if (ready) return;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      setReady(true);
     };
-    measure();
-    const ro = new ResizeObserver(measure);
-    const fine = el.querySelector('.iso-split__fine');
-    if (fine) ro.observe(fine);
-    window.addEventListener('resize', measure);
-    void document.fonts.ready.then(measure);
-    let state = '';
-    const unsubscribe = curtainSeam.subscribe((x) => {
-      const next = x > span.left - 8 && x < span.right + 8 ? 'type' : 'scene';
-      if (next !== state) {
-        state = next;
-        el.dataset.seamOver = next;
-      }
-    });
-    return () => {
-      unsubscribe();
-      ro.disconnect();
-      window.removeEventListener('resize', measure);
-      detach();
-    };
-  }, []);
+    // Never hold the page longer than 2.5 s for fonts; fall back to whatever has loaded.
+    const timer = window.setTimeout(finish, 2500);
+    Promise.all(LANDING_FACES.map((f) => document.fonts.load(f)))
+      .catch(() => undefined)
+      .then(finish);
+    return () => window.clearTimeout(timer);
+  }, [ready]);
+
+  const placeName = customRegion ? customRegion.name : THEATER_DISPLAY[activeTheaterId].name;
+  // The entry names the first application: the region's fire and the year of its real run ("the 2021 Dixie Fire").
+  const fire = customRegion ? undefined : THEATER_DISPLAY[activeTheaterId].fire;
+  const entry = fire && runYear ? `Explore the ${runYear} ${fire}` : `Explore ${placeName}`;
 
   return (
-    <div ref={rootRef} className="iso-land" data-seam-modis="left">
-      <div className="iso-land__scrim iso-land__scrim--top" aria-hidden="true" />
+    <div className="iso-land" data-ready={ready ? 'true' : 'false'} ref={scrollRef}>
+      {/* The picture under the first screen: a click on it enters the workspace. Keyboard: Enter. */}
+      <div className="iso-land__picture" aria-hidden="true" onClick={onEnter} />
+      <div className="iso-land__scrim" aria-hidden="true" />
       <div className="iso-land__scrim iso-land__scrim--bottom" aria-hidden="true" />
-
-      <div className="iso-land__brand">
-        <IsogonMark />
-        <span>Isogon</span>
-      </div>
-
-      <nav className="iso-land__menu" aria-label="Search and reference" data-landing-ui="true">
-        <button type="button" className="iso-trig" onClick={onOpenSearch}>
-          <span className="iso-trig__label">Search a place</span>
-          <kbd className="iso-trig__key">/</kbd>
-        </button>
-        <button type="button" className="iso-trig" onClick={onOpenSensor}>
-          <span className="iso-trig__label">Sensor physics</span>
-          <kbd className="iso-trig__key">M</kbd>
-        </button>
-        <button type="button" className="iso-trig" onClick={onOpenMethod}>
-          <span className="iso-trig__label">Method</span>
-          <kbd className="iso-trig__key" aria-hidden="true" />
-        </button>
-      </nav>
-
-      <SplitHeadline lines={HEADLINE} className="iso-land__headline" />
-
-      <div className="iso-seam" aria-hidden="true">
-        <span className="iso-seam__rule" />
-        <span className="iso-seam__label iso-seam__label--modis">
-          <span>1 km MODIS</span>
-          <span>as observed</span>
-        </span>
-        <span className="iso-seam__label iso-seam__label--fused">
-          <span>375 m record</span>
-          <span>harmonized</span>
-        </span>
-      </div>
-
-      <div className="iso-land__lede">
-        <p>
-          MODIS sees a fire in 1 km pixels. VIIRS sees the same fire in 375 m pixels. Isogon calibrates
-          the two into one record and lays it on real terrain.
-        </p>
-        <p className="iso-land__hint">Move across the terrain to sweep the curtain.</p>
-      </div>
-
-      <div className="iso-land__regions" role="group" aria-label="Calibrated regions" data-landing-ui="true">
-        {customRegion && (
-          <div className="iso-region" data-active="true" aria-current="true">
-            <span className="iso-region__name">{customRegion.name}</span>
-            <span className="iso-region__area" />
-            <span className="iso-region__coord">{formatLat(customRegion.lat)}</span>
-            <span className="iso-region__coord">{formatLon(customRegion.lon)}</span>
+      {ready && (
+        <>
+          <div className="iso-land__brand">
+            <IsogonMark />
+            <span>Isogon</span>
           </div>
-        )}
-        {THEATER_ORDER.map((id) => {
-          const t = THEATER_DISPLAY[id];
-          const active = !customRegion && id === activeTheaterId;
-          return (
-            <button
-              key={id}
-              type="button"
-              className="iso-region"
-              data-active={active ? 'true' : 'false'}
-              aria-pressed={active}
-              onClick={() => onSelectTheater(id)}
-            >
-              <span className="iso-region__name">{t.name}</span>
-              <span className="iso-region__area">{t.area}</span>
-              <span className="iso-region__coord">{t.lat}</span>
-              <span className="iso-region__coord">{t.lon}</span>
+
+          <nav className="iso-land__menu" aria-label="Search and reference" data-landing-ui="true">
+            <button type="button" className="iso-navlink" onClick={onOpenSearch}>
+              Search <kbd>/</kbd>
             </button>
-          );
-        })}
-      </div>
+            <button type="button" className="iso-navlink" onClick={onOpenSensor}>
+              Sensor physics
+            </button>
+            <button type="button" className="iso-navlink" onClick={onOpenMethod}>
+              Method
+            </button>
+          </nav>
 
-      <button type="button" className="iso-enter" onClick={onEnter} data-landing-ui="true">
-        <span className="iso-enter__rule" aria-hidden="true" />
-        <span className="iso-enter__label">
-          <span className="iso-enter__roll">
-            <span>Enter the terrain</span>
-            <span aria-hidden="true">Enter the terrain</span>
-          </span>
-        </span>
-        <kbd className="iso-enter__key">Enter</kbd>
-      </button>
+          <div className="iso-land__hero">
+            <SplitHeadline lines={HEADLINE} className="iso-land__headline" play={ready} />
+            <p className="iso-land__sentence">{SENTENCE}</p>
+            <button type="button" className="iso-entry" onClick={onEnter} data-landing-ui="true">
+              <span className="iso-entry__label">{entry}</span>
+              <kbd>Enter</kbd>
+            </button>
+          </div>
 
-      <p className="iso-land__credit iso-land__credit--imagery">{IMAGERY_ATTRIBUTION}</p>
-      <p className="iso-land__credit iso-land__credit--event">NASA Space Apps 2026</p>
+          <div className="iso-land__legend">
+            <div className="iso-land__keys" aria-label="What the picture shows">
+              <span className="iso-land__legend-item iso-land__legend-item--detection">Satellite detection</span>
+              <span className="iso-land__legend-item iso-land__legend-item--estimate">Model estimate</span>
+            </div>
+            {realPass && <p className="iso-land__facts">{passFacts(realPass)}</p>}
+          </div>
+
+          <p className="iso-land__credit">Imagery: {imageryCredit}</p>
+
+          {/* The one hint that there is more below: the first application, a click or a scroll away. */}
+          <button
+            type="button"
+            className="iso-land__more"
+            onClick={() => {
+              const el = scrollRef.current;
+              const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+              el?.scrollTo({ top: el.clientHeight, behavior: reduce ? 'auto' : 'smooth' });
+            }}
+          >
+            <span>The first application</span>
+            <svg viewBox="0 0 10 10" aria-hidden="true">
+              <path d="M2 3.5 5 6.5 8 3.5" />
+            </svg>
+          </button>
+
+          <section className="iso-land__parts" aria-labelledby="iso-land-parts-title" data-landing-ui="true">
+            <p id="iso-land-parts-title" className="iso-land__first">
+              First application: wildfire, across 26 years of NASA satellite observations.
+            </p>
+            <ol className="iso-land__partlist">
+              {parts.map((p, i) => (
+                <li key={p.id} className="iso-land__part">
+                  <span className="iso-land__partnum" aria-hidden="true">
+                    {i + 1}
+                  </span>
+                  <h2 className="iso-land__partname">{p.name}</h2>
+                  <p className="iso-land__partdoes">{p.does}</p>
+                  {p.status && <p className="iso-land__partstatus">{p.status}</p>}
+                  <button type="button" className="iso-land__partopen" onClick={() => onOpenPart(p.id)}>
+                    {p.open}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </>
+      )}
     </div>
   );
 }

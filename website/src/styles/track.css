@@ -1,4 +1,4 @@
-/* W1: the pass track (components/PassTrack.tsx). VIIRS rises above the axis, MODIS hangs below; night is shaded. */
+/* The pass track (components/PassTrack.tsx). VIIRS rises above the axis, MODIS hangs below; night is shaded. */
 
 .iso-track {
   --track-viirs: #f08a45;

@@ -16,7 +16,7 @@ export interface SensorModelPayload {
 export type GateKind = 'computed' | 'design_target' | 'unknown';
 export type GateStatus = 'passed' | 'failed' | 'not evaluated';
 
-/** A benchmark gate (CONTRACT amendment after batch 2, terrain-assets T11). */
+/** A benchmark gate of the sensor model: a computed check or a design target. */
 export interface Gate {
   id: string;
   title: string;
@@ -56,7 +56,7 @@ export function readGates(raw: unknown): Gate[] {
         id: String(g.gate_id ?? g.id ?? g.title ?? ''),
         title: tidy(String(g.title ?? '')).replace(/\s*\((modelled self-check)\)\s*$/i, ''),
         kind,
-        // A gate without a kind is a typed-in literal from an older backend: never a result.
+        // Only a gate marked `computed` carries a result; any other kind, or none, is never read as one.
         status: kind === 'computed' ? readStatus(g.status) : 'not evaluated',
         criterion: tidy(String(g.criterion ?? '')),
         metric: kind === 'computed' ? tidy(String(g.metric ?? '')) : '',
