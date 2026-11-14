@@ -1,0 +1,39 @@
+# OS & Editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Secrets & Credentials (never commit FIRMS MAP_KEY or Earthdata tokens)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.netrc
+
+# Node / Frontend
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Python / Scientific Compute
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Raw & Derived Data Payloads (keep immutable manifests only)
+data/raw/
+data/processed/
+data/cache/
+*.parquet
+*.nc
+*.hdf
+*.h5
+*.tif
+*.tiff
