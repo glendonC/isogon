@@ -33,6 +33,7 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 | `GET /api/calendar` | The burning calendar, simulated or real |
 | `GET /api/calendar/current` | This month so far against the same month's median |
 | `GET /api/calendar/rows.csv` | The FIRMS rows behind a calendar selection |
+| `GET /api/firms/countries` | Every country file the FIRMS listing publishes, its size and whether it is cached |
 | `GET /api/runs/starts` | The start dates worth showing for a real run |
 | `POST /api/reconstruct` | Build or fetch a run |
 | `GET /api/runs/<run_id>/<file>` | A run's files |
@@ -318,7 +319,7 @@ Shortened to the keys that differ, one month and one record.
 - A box leaves out every row of FIRMS type 1 (active volcano), 2 (static land source) and 3 (offshore) and counts them apart. A region keeps type 3 rows on land beside lakes, which its elevation model tells from rows at sea; a box has no such model. On the context box of a region, a box counts every platform's rows of every month exactly as the region does once the left-out kinds are added back (`backend/tests/test_firms_box_calendar.py`).
 - The ratio is fitted on the box's own overlap months, with the same held-out year check; a box with few rows has a wide interval and a larger held-out error, and says so.
 - A box counts only the rows of the cached country files. `GET /api/regions` lists those countries and where their rows lie. Rows of NOAA-21 and of months after the last country file month come from the area API and are not in a box calendar.
-- A box is counted through an index of the country files (`backend/firms/box_index.py`), which the server opens when it starts and builds there the first time (47 seconds on the machine the project was built on); a box asked during that build waits for it. Then a new box takes 0.1 to 0.4 seconds and the same box again about 2 milliseconds. Errors: `400` for a box that is not four finite numbers with west below east and south below north, or that spans more than 20 or less than 0.05 degrees; `404` when no cached country file has a row in the box.
+- A box is counted through an index of the country files (`backend/firms/box_index.py`), which the server opens when it starts and builds there the first time (47 seconds on the machine the project was built on); a box asked during that build waits for it. Then a new box takes 0.1 to 0.4 seconds and the same box again about 2 milliseconds. Errors: `400` for a box that is not four finite numbers with west below east and south below north, or that spans more than 20 or less than 0.05 degrees; `404` when no cached country file has a row in the box. That `404` also carries `cached_countries` (each with the extent of its rows), `country_files` (the route below) and `fetch`, the command that fetches a country's files; the backend holds no country boundaries, so it cannot name the country a box lies in.
 
 ## `GET /api/calendar/current`
 
@@ -365,6 +366,20 @@ The FIRMS rows behind a calendar selection, as CSV (`text/csv; charset=utf-8`).
 Headers: `X-Row-Count` (the number of rows) and `Content-Disposition` (`isogon_firms_<region>_<start>_<end>.csv`, or `isogon_firms_box_<w>_<s>_<e>_<n>_<start>_<end>.csv`). The columns are `_acq_utc`, `_platform`, `_product`, then the source's own: `latitude`, `longitude`, `acq_date`, `acq_time`, `satellite`, `instrument`, `confidence`, `version`, `frp`, `scan`, `track`, `daynight`, `type`, `brightness`, `bright_t31`, `bright_ti4`, `bright_ti5`. MODIS-only and VIIRS-only columns are empty where a platform has none.
 
 Errors: `400` when `start` or `end` is not a date, when `end` is not after `start`, when the selection is over 500,000 rows, for a bad box, or for a box span over 400 days; `404` for a region with no FIRMS data, a box no cached country file has rows in, and a span the cache does not hold.
+
+## `GET /api/firms/countries`
+
+Every country the FIRMS country yearly files listing publishes (`data/cache/firms/listing/`, as downloaded), for adding a country to the box calendar. `country=<name>` (as in the listing, for example `United_States`) gives one country by product and year.
+
+```json
+{
+  "source": "the FIRMS country yearly summary files listing (data/cache/firms/listing), as downloaded",
+  "countries": [{"country": "Portugal", "files": 48, "bytes": 18624412, "cached_files": 0, "years": [2000, 2025], "cached": false, "fetch": "uv run ... backend/firms/archive.py fetch --regions --countries Portugal --years 2000-2025"}],
+  "fetch": "country files need no key; a fetch refuses to start when the cache would pass 5 GB"
+}
+```
+
+Shortened to one of 238 countries. With `country=`, the entry adds `by_product`: per product a list of `{year, bytes, cached}`. Errors: `404` for a country the listing does not hold.
 
 ## `GET /api/runs/starts`
 

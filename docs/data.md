@@ -55,6 +55,14 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 
 `reingest` rebuilds the manifests and extracts from the cached country files without a download.
 
+A box calendar counts any country whose files are cached. To add a country, fetch its files by the name the FIRMS listing gives (`GET /api/firms/countries` lists all 238 with their sizes; Portugal is 48 files and 18.6 MB for 2000 to 2025, Australia 2.66 GB, which the 5 GB cache cap refuses today):
+
+```bash
+uv run --no-project --python 3.12 --with numpy --with pillow python3 backend/firms/archive.py fetch --regions --countries Portugal --years 2000-2025
+```
+
+The next box request indexes the new files.
+
 ### Area API
 
 `backend/firms/area_api.py` fetches what the country files lack: NOAA-21, and the days after the last country file year. A request looks like this:

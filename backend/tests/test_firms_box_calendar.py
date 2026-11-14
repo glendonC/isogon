@@ -66,6 +66,23 @@ class BoxIndexTests(unittest.TestCase):
             self.assertEqual(build(cache, log=lambda *_: None)["built"], 1)
             self.assertEqual(BoxIndex(cache).monthly_counts((-122.0, 39.5, -120.5, 41.0))[2], 2)
 
+    def test_country_files_from_the_listing_and_a_fetch_by_country(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            listing = cache / "listing" / fa.LISTING_NAME
+            listing.parent.mkdir(parents=True)
+            listing.write_text("filename,size,updated\nAttributesReadme.txt,10,x\nmodis_2024_Testland.csv,500,x\n"
+                               "viirs-snpp_2024_Testland.csv,700,x\nmodis_2024_Otherland.csv,90,x\n", encoding="utf-8")
+            _write_country_file(cache, [_row(40.0, -121.0, "2024-07-03")])
+            rows = {r["country"]: r for r in fa.country_files(cache)}
+            self.assertEqual((rows["Testland"]["files"], rows["Testland"]["bytes"], rows["Testland"]["cached_files"]), (2, 1200, 1))
+            self.assertFalse(rows["Testland"]["cached"])
+            self.assertIn("--countries Testland", rows["Testland"]["fetch"])
+            one = fa.country_files(cache, country="Otherland")[0]
+            self.assertEqual(one["by_product"], {"modis": [{"year": 2024, "bytes": 90, "cached": False}]})
+            self.assertEqual(fa.plan([2024], [], ["modis", "viirs-snpp"], fa.load_listing(cache), ["Otherland"]),
+                             [("modis", 2024, "Otherland", 90)])
+
     def test_boxes_are_checked(self) -> None:
         self.assertEqual(parse_box("-121.6,39.6,-120.8,40.3"), (-121.6, 39.6, -120.8, 40.3))
         for bad in ("1,2,3", "a,b,c,d", "nan,1,2,3", "inf,1,2,3", "-120,40,-121,41", "0,0,25,1", "0,0,0.01,0.01",
@@ -268,7 +285,13 @@ class RoutesTests(unittest.TestCase):
         self.assertIn("default", places)
         self.assertIn("Greece", places["box_calendar"]["countries"])
         self.assertEqual(self._get("/api/calendar?source=firms&box=1,2,3")[0], 400)
-        self.assertEqual(self._get("/api/calendar?source=firms&box=10,10,11,11")[0], 404)
+        status, missing = self._get("/api/calendar?source=firms&box=10,10,11,11")
+        self.assertEqual(status, 404)
+        self.assertIn("Greece", missing["cached_countries"])
+        self.assertIn("--countries", missing["fetch"])
+        status, greece = self._get("/api/firms/countries?country=Greece")
+        self.assertEqual((status, greece["countries"][0]["country"]), (200, "Greece"))
+        self.assertEqual(self._get("/api/firms/countries?country=Atlantis")[0], 404)
         self.assertEqual(self._get("/api/calendar?source=firms&box=23,38,24,39&region_id=evia_greece")[0], 400)
         self.assertEqual(self._get("/api/calendar/current?source=firms&box=1,2,3")[0], 400)
 

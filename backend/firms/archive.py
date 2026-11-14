@@ -258,6 +258,49 @@ def fetch_listing(cache_dir: Path = FIRMS_CACHE_DIR, opener: Opener = _default_o
     return load_listing(cache_dir)
 
 
+def _split_name(name: str) -> tuple[str | None, int | None, str | None]:
+    """(product, year, country) of a country file name, or Nones for another file."""
+    if not name.endswith(".csv"):
+        return None, None, None
+    for product in PRODUCTS:
+        head = product + "_"
+        if name.startswith(head):
+            year, _, country = name[len(head):-4].partition("_")
+            if year.isdigit() and country:
+                return product, int(year), country
+    return None, None, None
+
+
+COUNTRY_FETCH: str = ("uv run --no-project --python 3.12 --with numpy --with pillow python3 backend/firms/archive.py "
+                      "fetch --regions --countries {country} --years 2000-2025")
+
+
+def country_files(cache_dir: Path = FIRMS_CACHE_DIR, country: str | None = None) -> list[dict[str, Any]]:
+    """Every country the FIRMS listing publishes yearly files for: how many files, their bytes, the years, and
+    whether they are cached; with ``country``, that country only, by product and year."""
+    by: dict[str, dict[str, Any]] = {}
+    for name, entry in load_listing(cache_dir).items():
+        product, year, c = _split_name(name)
+        if c is None or (country is not None and c != country):
+            continue
+        d = by.setdefault(c, {"country": c, "files": 0, "bytes": 0, "cached_files": 0, "years": [year, year], "by_product": {}})
+        d["files"] += 1
+        d["bytes"] += int(entry["size"])
+        d["years"] = [min(d["years"][0], year), max(d["years"][1], year)]
+        cached = read_manifest(raw_path(product, year, c, cache_dir)) is not None
+        d["cached_files"] += int(cached)
+        if country is not None:
+            d["by_product"].setdefault(product, []).append({"year": year, "bytes": int(entry["size"]), "cached": cached})
+    out = []
+    for c, d in sorted(by.items()):
+        if country is None:
+            d.pop("by_product")
+        d["cached"] = d["cached_files"] == d["files"]
+        d["fetch"] = COUNTRY_FETCH.format(country=c)
+        out.append(d)
+    return out
+
+
 def load_listing(cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, dict[str, Any]]:
     path = cache_dir / "listing" / LISTING_NAME
     if not path.is_file():
@@ -391,9 +434,10 @@ def ingest(product: str, year: int, country: str, url: str, n_bytes: int, sha: s
 
 
 def plan(years: Iterable[int], regions: Iterable[str], products: Iterable[str],
-         listing: dict[str, dict[str, Any]]) -> list[tuple[str, int, str, int]]:
-    """(product, year, country, listed bytes) for every listed country file the regions need."""
-    countries = sorted({REGION_COUNTRY[r] for r in regions})
+         listing: dict[str, dict[str, Any]], countries: Iterable[str] = ()) -> list[tuple[str, int, str, int]]:
+    """(product, year, country, listed bytes) for every listed country file the regions need, and the files of
+    ``countries`` (named as in the listing, for example "Australia"), which any box inside them can then count."""
+    countries = sorted({REGION_COUNTRY[r] for r in regions} | set(countries))
     out = []
     for p in products:
         for y in sorted(set(years)):
@@ -406,13 +450,18 @@ def plan(years: Iterable[int], regions: Iterable[str], products: Iterable[str],
 
 def fetch(years: Iterable[int], regions: Iterable[str] = tuple(REGION_COUNTRY), products: Iterable[str] = tuple(PRODUCTS),
           cache_dir: Path = FIRMS_CACHE_DIR, opener: Opener = _default_opener, cap_bytes: int = DISK_CAP_BYTES,
-          force: bool = False, log: Callable[[str], None] = print, pause_s: float = PAUSE_BETWEEN_FILES_S) -> list[dict[str, Any]]:
+          force: bool = False, log: Callable[[str], None] = print, pause_s: float = PAUSE_BETWEEN_FILES_S,
+          countries: Iterable[str] = ()) -> list[dict[str, Any]]:
     """Download and ingest the country files for ``years``. Refuses to start when the cache would pass ``cap_bytes``."""
-    regions, products = list(regions), list(products)
+    regions, products, countries = list(regions), list(products), list(countries)
     log(f"FIRMS_MAP_KEY {map_key_state()}; route: country yearly summary files (no key needed)")
     listing = fetch_listing(cache_dir, opener)
+    known = {c for _, _, c in (_split_name(n) for n in listing) if c}
+    unknown = [c for c in countries if c not in known]
+    if unknown:
+        raise ValueError(f"not in the FIRMS listing: {unknown}; names are as in GET /api/firms/countries")
     todo = []
-    for p, y, c, size in plan(years, regions, products, listing):
+    for p, y, c, size in plan(years, regions, products, listing, countries):
         if not force and (read_manifest(raw_path(p, y, c, cache_dir)) or {}).get("bytes") == size:
             continue
         todo.append((p, y, c, size))
@@ -592,7 +641,9 @@ def _main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     f = sub.add_parser("fetch", help="download and ingest country yearly files")
     f.add_argument("--years", required=True, help="e.g. 2021 or 2000-2025")
-    f.add_argument("--regions", nargs="*", default=list(REGION_COUNTRY))
+    f.add_argument("--regions", nargs="*", default=list(REGION_COUNTRY),
+                   help="regions whose country files to fetch; give it empty (--regions) to fetch --countries only")
+    f.add_argument("--countries", nargs="*", default=[], help="country files to fetch, named as in the listing")
     f.add_argument("--products", nargs="*", default=list(PRODUCTS))
     f.add_argument("--force", action="store_true")
     sub.add_parser("status", help="print cache counts")
@@ -601,7 +652,7 @@ def _main(argv: list[str] | None = None) -> int:
     if args.cmd == "fetch":
         a, _, b = args.years.partition("-")
         years = range(int(a), int(b or a) + 1)
-        fetch(years, args.regions, args.products, force=args.force)
+        fetch(years, args.regions, args.products, force=args.force, countries=args.countries)
     if args.cmd == "reingest":
         reingest()
     print(json.dumps({**cache_summary(), "disk_bytes": disk_usage()}, indent=2))

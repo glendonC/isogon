@@ -49,7 +49,9 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from backend.firms.archive import FIRMS_CACHE_DIR, REGION_COUNTRY, FirmsCacheMissing, region_rows_digest  # noqa: E402
+from backend.firms.archive import COUNTRY_FETCH as firms_country_fetch  # noqa: E402
 from backend.firms.archive import cache_summary as firms_cache_summary  # noqa: E402
+from backend.firms.archive import country_files as firms_country_files  # noqa: E402
 from backend.firms.cmr_passes import CmrCacheMissing, pass_files_digest  # noqa: E402
 from backend.firms.pass_timeline import pass_timeline  # noqa: E402
 from backend.firms.box_index import BoxIndex  # noqa: E402
@@ -1163,9 +1165,32 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                 try:
                     body = store.firms_calendar_bytes(region_id) if region_id else store.box_calendar_payload(parse_box(box_text))[1]
                 except KeyError as exc:
-                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc.args[0])})
+                    out = {"error": str(exc.args[0])}
+                    if box_text:
+                        # A box outside the cached countries: no country boundaries are held here, so the answer
+                        # names what is cached and where every country file NASA publishes is listed with its size.
+                        out.update({
+                            "cached_countries": store.box_index.countries(),
+                            "country_files": "/api/firms/countries (every country file the FIRMS listing publishes, its bytes and whether it is cached)",
+                            "fetch": firms_country_fetch.format(country="<Country, as in that list>"),
+                            "after_fetch": "the next box request indexes the new files (47 s for the 2.1 GB of country files cached when this was written)",
+                        })
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, out)
                     return
                 self._send_json_bytes(HTTPStatus.OK, body)
+                return
+
+            if route == "/api/firms/countries":
+                country = qs.get("country", [""])[0] or None
+                rows = firms_country_files(country=country)
+                if country is not None and not rows:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": f"no FIRMS country file is listed for '{country}'"})
+                    return
+                self._send_json_obj(HTTPStatus.OK, {
+                    "source": "the FIRMS country yearly summary files listing (data/cache/firms/listing), as downloaded",
+                    "countries": rows,
+                    "fetch": "country files need no key; a fetch refuses to start when the cache would pass 5 GB",
+                })
                 return
 
             if route == "/api/calendar/current":
