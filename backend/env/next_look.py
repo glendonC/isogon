@@ -79,6 +79,14 @@ REWARD: str = (
     "episode. The rewards of a round add up to the score at the end minus the score at the start. A look that "
     "hands over no hidden pixel earns nothing."
 )
+# Why a round may not be built with learning from looks. `_teach` counts every look as one that saw its tile, an
+# empty one included, so with it an empty look changes what a later look is paid: the two properties of the reward
+# (rewards that add up, nothing for an empty look) do not both hold.
+LEARN_FROM_LOOKS_REFUSED: str = (
+    "learning from looks is refused: it was tried under the first reward and not adopted, and under the reward in "
+    "use a look that hands over nothing would not be inert with it (it would change what a later look is paid). "
+    "It stays off until it is corrected and tried again under the reward in use"
+)
 AN_EMPTY_LOOK: dict[str, str] = {
     SOURCE_NOMINAL: (
         "unknown: nothing says the platform flew or that its swath held the box, so the model learns nothing from "
@@ -180,8 +188,11 @@ class NextLookEnv:
                 "rewards add up to the change in score"
             )
         self.reward_target = reward_target
-        # When on, every look also corrects the model's count level in the tiles it did not look at (see _teach).
-        self.learn_from_looks = bool(learn_from_looks)
+        # When on, every look would also correct the model's count level in the tiles it did not look at (see
+        # _teach). It is refused for now, so the code below it is not reached from a round.
+        if learn_from_looks:
+            raise ValueError(LEARN_FROM_LOOKS_REFUSED)
+        self.learn_from_looks = False
         self.prior_cells = float(prior_cells)
         self._preds0: list[NDArray[np.float64]] | None = None
         if budget < 0 or tiles[0] < 1 or tiles[1] < 1:

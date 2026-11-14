@@ -25,6 +25,7 @@ from backend.env import KNOWN_LIMITS
 from backend.env.agents import (
     CentreTileAgent,
     ConstantTileAgent,
+    ExpectedNewAgent,
     LatestModisAgent,
     LeastSureAgent,
     OracleAgent,
@@ -246,7 +247,7 @@ def play_steps(env: NextLookEnv, agent: Any, seed: int = 0, ceiling: bool = Fals
 
 def reference_player(name: str, seed: int = 0, policy: Any | None = None) -> Any:
     """A reference player by the id the tables use: random, constant_<tile>, centre, latest_modis, least_sure,
-    learned (the tracked policy, or the one given) or oracle."""
+    expected_new, learned (the tracked policy, or the one given) or oracle."""
     if name == "random":
         return RandomAgent(seed=seed)
     if name.startswith("constant_"):
@@ -257,6 +258,8 @@ def reference_player(name: str, seed: int = 0, policy: Any | None = None) -> Any
         return LatestModisAgent()
     if name == "least_sure":
         return LeastSureAgent()
+    if name == "expected_new":
+        return ExpectedNewAgent()
     if name == "oracle":
         return OracleAgent()
     if name == "learned":

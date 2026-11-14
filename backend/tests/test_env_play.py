@@ -217,8 +217,18 @@ class ShapeTests(unittest.TestCase):
         self.assertAlmostEqual(step["reward"], max(step["tile_scores"]), places=6)
 
     def test_a_reference_player_by_its_id(self) -> None:
-        for name in ("random", "constant_6", "centre", "latest_modis", "least_sure", "oracle"):
+        for name in ("random", "constant_6", "centre", "latest_modis", "least_sure", "expected_new", "oracle"):
             self.assertEqual(reference_player(name).name, name)
+        # every player the reference tables name can be played step by step, the oracle only as the ceiling
+        table = A.play_reference(_env(DET, "nominal", budget=2), random_seeds=1)
+        not_a_single_player = ("constant", "learned", "oracle", "score_start", "reads_nothing", "reads_hidden_rows")
+        played = [name for name in table if name not in not_a_single_player]
+        self.assertIn("expected_new", played)
+        for name in played:
+            play = play_steps(_env(DET, "nominal", budget=2), reference_player(name))
+            self.assertEqual(play["player"]["id"], name)
+            self.assertEqual(len(play["steps"]), play["episode"]["looks"])
+            self.assertAlmostEqual(play["gain"], table[name]["gains"][0] if name == "random" else table[name]["gain"], places=12)
         self.assertEqual(reference_player("learned", policy=LinearPolicyAgent(np.zeros(len(FEATURE_NAMES)))).name, "learned")
         with self.assertRaises(LookupError):
             reference_player("nobody")

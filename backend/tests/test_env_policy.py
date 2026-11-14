@@ -104,24 +104,21 @@ class LearnFromLooksTests(unittest.TestCase):
         self.assertTrue(np.all((up >= p) & (up <= 1.0)))
         self.assertAlmostEqual(float(up[1]), 1.0 - 0.9 ** 2)
 
-    def test_a_look_changes_the_cells_it_did_not_look_at_only_when_teaching_is_on(self) -> None:
-        plain, teach = _env(), _env(learn_from_looks=True, prior_cells=5.0)
+    def test_a_round_cannot_be_built_with_teaching_on(self) -> None:
+        """Teaching counts an empty look as one that saw its tile, which the reward in use does not allow. The
+        look factors it would use can still be read; a round with it is refused."""
+        with self.assertRaises(ValueError):
+            _env(learn_from_looks=True, prior_cells=5.0)
+        plain = _env(prior_cells=5.0)
         plain.reset()
-        teach.reset()
         tile = int(np.argmax(plain.hidden_pixels_per_tile()))
-        looks = [(0, tile)]
-        a, b = plain._predictions(looks), teach._predictions(looks)
-        f = teach.look_factors(looks)
-        self.assertNotEqual(f["night"] if not teach._looks[0].is_day else f["day"], 1.0)
-        inside = teach.tile_of_cell == tile
-        np.testing.assert_array_equal(a[0][inside], b[0][inside])               # the revealed tile keeps what the look put there
-        self.assertFalse(np.array_equal(a[0][~inside], b[0][~inside]))
-        self.assertFalse(np.array_equal(a[3], b[3]))                             # and other overpasses are rescaled too
-        np.testing.assert_array_equal(plain._predictions([])[2], teach._predictions([])[2])   # no look, no change
+        f = plain.look_factors([(0, tile)])
+        self.assertNotEqual(f["night"] if not plain._looks[0].is_day else f["day"], 1.0)
+        self.assertIsNone(plain.step(tile)[3]["look_factors"])                   # and a round does not use them
 
-    def test_teaching_reads_hidden_detections_only_inside_revealed_tiles(self) -> None:
+    def test_the_look_factors_read_hidden_detections_only_inside_revealed_tiles(self) -> None:
         det = detections_from_rows(ROWS, fx.SOURCE_LABEL)
-        base = _env(learn_from_looks=True, prior_cells=5.0)
+        base = _env(prior_cells=5.0)
         base.reset()
         tile = int(np.argmax(base.hidden_pixels_per_tile()))
         keep = np.zeros(len(det), dtype=bool)
@@ -130,7 +127,7 @@ class LearnFromLooksTests(unittest.TestCase):
         change = det.is_viirs & ~keep
         altered = replace(det, frp_mw=np.where(change, det.frp_mw * 9.0, det.frp_mw), lat=np.where(change, det.lat + 0.004, det.lat))
         window = (float(det.time_s.min()), float(det.time_s.max()) + 1.0)
-        other = NextLookEnv(altered, fx.TEST_BOX, window, tiles=(4, 4), budget=3, learn_from_looks=True, prior_cells=5.0)
+        other = NextLookEnv(altered, fx.TEST_BOX, window, tiles=(4, 4), budget=3, prior_cells=5.0)
         other.reset()
         self.assertEqual(base.look_factors([(0, tile)]), other.look_factors([(0, tile)]))
         o1, _, _, i1 = base.step(tile)
@@ -153,7 +150,7 @@ class LearnPipelineTests(unittest.TestCase):
             self.assertEqual(feats.shape, (L.TILES * L.TILES, len(FEATURE_NAMES)))
             self.assertEqual(gains.shape, (L.TILES * L.TILES,))
         w = fit_ridge(np.vstack([f for f, _ in samples]), np.concatenate([g for _, g in samples]), 1.0)
-        out = L._rollout((eps[0], params, {"learn_from_looks": True, "prior_cells": 40.0}, ("linear", [float(v) for v in w])))
+        out = L._rollout((eps[0], params, {}, ("linear", [float(v) for v in w])))
         self.assertEqual(out["agent"], "linear")
         self.assertTrue(np.isfinite(out["gain"]))
         oracle = L._rollout((eps[0], params, {}, ("oracle",)))

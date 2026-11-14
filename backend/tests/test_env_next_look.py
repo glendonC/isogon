@@ -343,8 +343,8 @@ class LookOwnsItsPassTests(unittest.TestCase):
         ob, rb, _, _ = b.step(NO_LOOK)
         self.assertEqual((ra, rb), (0.0, 0.0))
         self.assertTrue(np.array_equal(oa.p_burning, ob.p_burning))
-        # with learning from looks on, an unknown look is not a count of zero
-        c = _env(learn_from_looks=True)
+        # an unknown look is not a count of zero in the look factors either
+        c = _env()
         c.reset(seed=0)
         self.assertEqual(c.look_factors([(k, 5)]), c.look_factors([]))
 
@@ -359,7 +359,7 @@ class LookOwnsItsPassTests(unittest.TestCase):
         # the pass is in the scoring set all the same: a look that flagged nothing, every declared cell a false alarm
         self.assertEqual(len(env._truth[k]), 1)
         self.assertEqual(int(env._truth[k][0].mask.sum()), 0)
-        c = _env(schedule="cmr", read_passes=fx.fixture_pass_reader(), learn_from_looks=True)
+        c = _env(schedule="cmr", read_passes=fx.fixture_pass_reader())
         c.reset(seed=0)
         self.assertEqual(c.look_factors([(k, 5)]), c.look_factors([]))
 

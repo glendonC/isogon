@@ -205,6 +205,18 @@ class EmptyRevealTests(unittest.TestCase):
             self.assertEqual(r["rewards"], [0.0] * len(r["rewards"]), schedule)
             self.assertEqual(r["scores"][-1], r["start"], schedule)
 
+    def test_learning_from_looks_is_refused_with_the_reason(self) -> None:
+        """With that option an empty look was counted as a look that saw the tile, so it changed what a later
+        look was paid. It was tried under the first reward and not adopted; it is refused until it is corrected."""
+        for schedule in ("nominal", "cmr"):
+            with self.assertRaises(ValueError) as caught:
+                _env(schedule, learn_from_looks=True)
+            self.assertIn("a look that hands over nothing would not be inert", str(caught.exception))
+            self.assertIn("first reward", str(caught.exception))
+            env = _env(schedule, learn_from_looks=False)
+            self.assertIs(env.describe()["learn_from_looks"], False)
+            self.assertIsNone(env.describe()["prior_cells"])
+
     def test_the_description_says_what_an_empty_look_means_on_either_schedule(self) -> None:
         for schedule in SCHEDULES:
             looks = _env(schedule).describe()["looks"]
