@@ -11,6 +11,8 @@ Isogon runs as two local processes. There is no database and no queue.
 
 A fresh clone runs both with no data cache: the backend serves simulated runs, and the site falls back to the tracked files under `website/public/generated/` when the backend is not running. Real runs need the local cache that [data.md](data.md) describes.
 
+A page with no backend at all can read a recording instead: `backend/server_recorder.py` calls a running backend over a plan of requests (by default the demo path of the featured fires that are not blind test fires: places, calendars, start lists, runs held out and revealed with their assets, pass lists, one round of next look each), and writes every answer and asset into one folder with an `index.json` keyed by method, path with its query sorted, and the body as canonical JSON. Imagery published for viewing only (Esri World Imagery and what is derived from it) is listed as withheld and not stored; United States places ask for `usgs_naip`. The tool fails when a stored file holds the FIRMS key, `MAP_KEY=` or a local path.
+
 ### Two kinds of run, never mixed
 
 - **A simulated run** models a fire on real terrain and the satellite passes over it (`backend/model/solver.py`, `backend/model/world_model.py`). It uses no FIRMS row. It exists for regions without cached rows and for trying a cloud setting.
