@@ -129,6 +129,18 @@ class HeldOutRunTests(unittest.TestCase):
 
         self.assertEqual(withhold_scorer_keys(r), b)
 
+    def test_the_first_answer_declares_its_cells_and_the_reveal_matches_them(self) -> None:
+        b, r = self.blind, self.revealed
+        self.assertNotIn("blind_test", b)
+        declared = b["declared_cells"]
+        held = [f for f in b["observer_passes"]["frames"] if f.get("held_out")]
+        self.assertEqual(len(declared["looks"]), len(held))                   # one look per held-out frame
+        self.assertEqual(sorted(l["frame"] for l in declared["looks"]), sorted(f["frame"] for f in held))
+        published = r["blind_test"]["published"]["reconstruction"]
+        for i, look in enumerate(declared["looks"]):
+            self.assertEqual(published[i]["cells_sha256"], look["cells_sha256"], i)
+        self.assertEqual(r["declared_cells"], declared)                       # the reveal does not change them
+
     def test_a_run_with_nothing_hidden_is_unchanged(self) -> None:
         status, _, raw = self.http._req("/api/reconstruct", json.dumps({**OPEN_RUN, "holdout_viirs": False}).encode())
         self.assertEqual(status, 200)
