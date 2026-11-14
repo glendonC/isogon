@@ -9,7 +9,6 @@ import type { EvidenceDoc, EvidenceState } from './content/evidence';
 import { DEMO_TERRA_MORNING } from './content/demo/terraMorning';
 import { TerraMorningPanel } from './components/TerraMorning';
 import { AreaSheet } from './components/AreaSheet';
-import { SURFACE_SOURCE } from './content/demo/switches';
 import { PassTrack } from './components/PassTrack';
 import { BurningCalendar } from './components/BurningCalendar';
 import { Debrief } from './components/Debrief';
@@ -19,7 +18,7 @@ import { partsStatus, type PartId } from './content/partsStatus';
 import { NEW_ROUND, RoundReadout, TileOverlay, type RoundState, type ScreenRect } from './components/NextLookRound';
 import { DEMO_NEXT_LOOK_START, type NextLookEnd } from './content/demo/nextLook';
 import { frameNearest, withLooks } from './content/nextLook';
-import { demoNextLookEnv, liveNextLookEnv, runWithEndReveal, type NextLookEnv } from './content/nextLookEnv';
+import { liveNextLookEnv, runWithEndReveal, type NextLookEnv } from './content/nextLookEnv';
 import { EarthCutawayStage } from './stage/EarthCutawayStage';
 import {
   THEATER_CATALOG,
@@ -634,13 +633,9 @@ export function App() {
   const [roundTiles, roundCols] = roundEpisode.episode.tiles;
   const roundBusyRef = useRef(false);
 
-  // The round's routes: answered in the page from the blind run while the switch says demo.
+  // The round's routes.
   useEffect(() => {
     if (!round || roundEnv) return;
-    if (String(SURFACE_SOURCE.nextLookRound) === 'demo') {
-      if (roundRun) setRoundEnv(demoNextLookEnv(roundRun));
-      return;
-    }
     const controller = new AbortController();
     liveNextLookEnv(API_BASE, roundEpisode.episode.region_id, controller.signal)
       .then(setRoundEnv)

@@ -67,7 +67,7 @@ export function RoundReadout({ start, end, round, runError, onNext, onAgain, onL
       <p className="iso-round__source">
         {start.data
           ? 'The round runs on the server: each look is scored as you take it, and the reference players play the same episode. The detections a look shows are NASA FIRMS.'
-          : "Demo data: the turns follow the published schedule and the reference players' scores are from the model's own test of this episode. The detections a look shows are NASA FIRMS."}
+          : 'Starting the round on the server.'}
       </p>
       <p className="iso-round__episode">
         Dixie fire, {utcSpan(ep.first_overpass_utc, ep.last_overpass_utc)}. You see {ep.modis_overpasses} MODIS passes;

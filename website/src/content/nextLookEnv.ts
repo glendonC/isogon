@@ -1,6 +1,5 @@
 import type { DynamicRegionRun } from '../stage/types';
 import {
-  DEMO_NEXT_LOOK_REFERENCE,
   DEMO_NEXT_LOOK_START,
   FOOTPRINT_SCHEMA,
   type Footprint,
@@ -11,7 +10,7 @@ import {
   type NextLookState,
   type NextLookTaken,
 } from './demo/nextLook';
-import { frameNearest, hiddenOverpassesOf, slotOf, tileOf } from './nextLook';
+import { frameNearest, tileOf } from './nextLook';
 
 /**
  * A round as the page drives it: its start, a look, its state and its end (shapes in content/demo/nextLook.ts). The
@@ -23,77 +22,6 @@ export interface NextLookEnv {
   look(decision: number, tile: number): Promise<NextLookLook>;
   state(): Promise<NextLookState>;
   end(): Promise<NextLookEnd>;
-}
-
-/**
- * Demo: the routes answered in the page from a real blind run. The run's hidden rows stay inside this closure; each
- * answer carries only what the route would.
- */
-export function demoNextLookEnv(run: DynamicRegionRun): NextLookEnv {
-  const start = DEMO_NEXT_LOOK_START;
-  const { box, tiles, budget } = start.episode;
-  const [rows, cols] = tiles;
-  const hidden = hiddenOverpassesOf(run);
-  const taken: NextLookTaken[] = [];
-  let next: number | null = 0;
-
-  const lookedAt = (decision: number, tile: number): NextLookRevealed[] => {
-    const out: NextLookRevealed[] = [];
-    for (const o of hidden) {
-      if (slotOf(start.looks, o.platform, o.timeS) !== decision) continue;
-      const fps = o.footprints.filter((fp) => tileOf(Number(fp[0]), Number(fp[1]), box, rows, cols) === tile) as Footprint[];
-      if (fps.length) out.push({ platform: o.platform, time_utc: new Date(o.timeS * 1000).toISOString().replace('.000', ''), footprints: fps });
-    }
-    return out;
-  };
-  const spent = () => taken.filter((t) => t.tile >= 0).length;
-  const done = () => next === null;
-
-  return {
-    start,
-    async look(decision, tile) {
-      if (done() || decision !== next) throw new Error(`look ${decision} is not the one to decide`);
-      const canSpend = spent() < budget;
-      const t = tile >= 0 && canSpend ? tile : -1;
-      const revealed = t >= 0 ? lookedAt(decision, t) : [];
-      const pixels = revealed.reduce((a, r) => a + r.footprints.length, 0);
-      taken.push({ decision, tile: t, pixels, reward: null });
-      const following = decision + 1;
-      next = following >= start.looks.length || spent() >= budget ? null : following;
-      return {
-        round_id: start.round_id,
-        decision,
-        tile: t,
-        revealed,
-        pixels,
-        reward: null,
-        score: null,
-        looks_left: budget - spent(),
-        next_decision: next,
-        done: done(),
-      };
-    },
-    async state() {
-      return { round_id: start.round_id, next_decision: next, looks_left: budget - spent(), taken: [...taken], score: null, done: done() };
-    },
-    async end() {
-      if (!done()) throw new Error('the round is not done');
-      return {
-        round_id: start.round_id,
-        player: { taken: [...taken], gain: null, final: null },
-        reveal: {
-          footprint_schema: FOOTPRINT_SCHEMA,
-          overpasses: hidden.map((o) => ({
-            platform: o.platform,
-            time_utc: new Date(o.timeS * 1000).toISOString().replace('.000', ''),
-            look: slotOf(start.looks, o.platform, o.timeS),
-            footprints: o.footprints as Footprint[],
-          })),
-        },
-        ...DEMO_NEXT_LOOK_REFERENCE,
-      };
-    },
-  };
 }
 
 /** Live: the round on the backend's routes, mapped onto the page's types. */

@@ -1,5 +1,5 @@
 /**
- * Demo data for a round of "next look".
+ * The round of "next look": the shapes the page maps the routes onto, and the episode the page asks for.
  *
  * The backend serves the round (backend/server_next_look.py) as:
  *
@@ -11,19 +11,12 @@
  *
  * No response holds a hidden row before the look that reveals it. The page reads them through
  * `content/nextLookEnv.ts`, which maps the backend's answers onto the page's own types below (NextLookStart,
- * NextLookLook, NextLookEnd); while `switches.ts` says demo it answers them in the page from a real blind run instead.
+ * NextLookLook, NextLookEnd).
  *
- * Every value below is a real result of the next-look environment under test protocol version 2:
- *   - episode, box, window, MODIS pixels: the test episode `plumas_ca:22:2021-07-22T05` of the Dixie fire;
- *   - start score, each reference agent's gain and final score on that episode;
- *   - the means over the 21 test episodes;
- *   - the looks: `backend/eval/schedule.py::nominal_slots` for Suomi NPP and NOAA-20 over the episode window at the
- *     box centre (40.05 N, 121.18 W); the schedule reads no detection;
- *   - the example look: the real NOAA-20 pass of 2021-07-22 20:34 UTC inside tile C2, from the blind run's
- *     `blind_test.reveal`;
- *   - the known limits.
- * Not in any of those results, so null in the demo: the reward and score after a look the player chooses. The page
- * says "not measured yet" instead of showing a number.
+ * `DEMO_NEXT_LOOK_START` names the episode the page resets (its key, tiles and budget) and stands in for the reset's
+ * answer until it arrives: the test episode `plumas_ca:22:2021-07-22T05` of the Dixie fire, its window and its looks
+ * from `backend/eval/schedule.py::nominal_slots`. Until the reset answers, the readout shows this record's window and
+ * counts; no score of it is shown.
  */
 
 /** A footprint as the payload writes it: [lon, lat, scan_km, track_km, angle_deg, frp_mw, confidence, sensor_code]. */
@@ -209,56 +202,4 @@ export const DEMO_NEXT_LOOK_START: NextLookStart = {
     version: 2,
     note: 'Second look at the three 2021 test fires: a protocol correction. Episodes are chosen from MODIS rows alone; looks are nominal slots.',
   },
-};
-
-/** An example answer to a look: look 4 (index 3, NOAA-20 by day), tile C2 (index 6). Real FIRMS rows. */
-export const DEMO_NEXT_LOOK_EXAMPLE: NextLookLook = {
-  round_id: 'demo_plumas_ca_22_2021-07-22T05',
-  decision: 3,
-  tile: 6,
-  revealed: [
-    {
-      platform: 'VIIRS_NOAA20',
-      time_utc: '2021-07-22T20:34:00Z',
-      footprints: [
-        [-121.17744, 40.11072, 0.38, 0.44, 75.6, 26.37, 55, 2],
-        [-121.17914, 40.11453, 0.38, 0.44, 75.6, 9.94, 55, 2],
-        [-121.17055, 40.11636, 0.38, 0.43, 75.6, 67.53, 55, 2],
-        [-121.17403, 40.12395, 0.38, 0.43, 75.6, 10.51, 55, 2],
-      ],
-    },
-  ],
-  pixels: 4,
-  reward: null,
-  score: null,
-  looks_left: 3,
-  next_decision: 4,
-  done: false,
-};
-
-/** The parts of a round's end that do not depend on the player: the reference agents and the test-episode means. */
-export const DEMO_NEXT_LOOK_REFERENCE = {
-  reference: {
-    random: {
-      gains: [
-        0.007998034056856007, 0.0004285315476629803, 0.00581986483763125, 0.004080205805926995,
-        4.944934676620605e-5, 0.005475079934007698, 0.0007882086301624902, 0.009040784257874024,
-        0.0004963984007654298, 0.0027719950316675845,
-      ],
-      finals: [
-        0.3304745568896512, 0.32056676153941344, 0.32369190770230744, 0.3215938946578256, 0.32008406997589167,
-        0.32665610142630747, 0.3209707529558183, 0.332282552753474, 0.3204937352685771, 0.321,
-      ],
-    },
-    latest_modis: { gain: 0.008431215474028197, final: 0.323189926547744 },
-    least_sure: { gain: 0.006582908803626608, final: 0.3285629099582588 },
-    learned: { gain: 0.006582908803626608, final: 0.3285629099582588 },
-    oracle: { gain: 0.016330071325661333, final: 0.33732887928211175 },
-  },
-  test_episodes: {
-    episodes: 21,
-    mean_start_score: 0.2435470924248191,
-    mean_gain: { random: 0.0028, latest_modis: 0.0163, least_sure: 0.0179, learned: 0.0157, oracle: 0.0269 },
-  },
-  source: { unit: 'sealed protocol', commit: '6c3857d' },
 };
