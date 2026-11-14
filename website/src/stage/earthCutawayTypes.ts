@@ -100,6 +100,42 @@ export interface CurtainScreenSeam {
   visible: boolean;
 }
 
+/** One tile of a board (see StageTileBoard). */
+export interface StageTile {
+  /**
+   * 0 to 1: how strongly the tile is marked as worth a look. The page says what it is (the model's
+   * doubt in the tile, or the score an agent gave it); the stage only draws more or less of it.
+   * Absent: unmarked.
+   */
+  level?: number;
+  /** A look was spent on this tile. */
+  looked?: boolean;
+  /** The tile chosen at this step: the one an agent is taking now, or the one under keyboard focus. */
+  chosen?: boolean;
+  /** The tile cannot be looked at in this step. */
+  closed?: boolean;
+}
+
+/** A board of tiles over the region's box, drawn on the terrain. At most 64 tiles. */
+export interface StageTileBoard {
+  /** Rows run north to south, columns west to east. Tile = row * cols + col. */
+  rows: number;
+  cols: number;
+  /** One entry per tile in that order. A missing entry is a plain tile. */
+  tiles: StageTile[];
+  /** A tile can be picked now: the stage marks the tile under the pointer and reports hover and pick. */
+  pickable: boolean;
+}
+
+/** Where a tile's label can sit: its north-west corner on the terrain surface, in viewport CSS px. */
+export interface StageTileAnchor {
+  tile: number;
+  x: number;
+  y: number;
+  /** False when that corner is behind the camera or outside the viewport. */
+  visible: boolean;
+}
+
 export interface EarthCutawayStageProps {
   apiBase: string;
   inWorkspace: boolean;
@@ -133,10 +169,36 @@ export interface EarthCutawayStageProps {
    * so it holds sky and haze. In the `slab` view it is where the slab should sit.
    */
   landingSubjectFrame?: { left: number; top: number; right: number; bottom: number };
+  /**
+   * Landing only, real runs. The pass the landing shows: 0 is the run's first pass, and a fraction is
+   * a time between two passes. Absent: the stage chooses the pass (`telemetry.realPass`). The
+   * standpoint does not move with it.
+   */
+  landingPass?: number;
+  /**
+   * Real runs. When the time on show reaches another pass, the pass arrives as a scan: a front
+   * crosses the region along the pass's ground track and what the pass brought appears behind it.
+   * Off by default. Never under reduced motion.
+   */
+  passScan?: boolean;
+  /**
+   * Real runs. Draws the outline of each detection's own pixel around its light, on the landing and
+   * on the estimate's side of the workspace (a 1 km MODIS pixel then reads as coarse beside the
+   * model's 375 m cells). Off by default.
+   */
+  detectionPixels?: boolean;
   /** Landing only. Projected sensor curtain seam in viewport CSS px, called each rendered frame. */
   onCurtainScreen?: (seam: CurtainScreenSeam) => void;
   /** Asks for `telemetry.regionGrid` with this many cells each way (1 to 32). */
   regionGridDivisions?: number;
+  /** A board of tiles over the region's box, drawn on the terrain. Null or absent: no board. */
+  tileBoard?: StageTileBoard | null;
+  /** The tile under the pointer, or null. Called on change, only while `tileBoard.pickable` is true. */
+  onTileHover?: (tile: number | null) => void;
+  /** A click or tap on a tile, only while `tileBoard.pickable` is true. */
+  onTilePick?: (tile: number) => void;
+  /** Screen point of each tile's label corner, every rendered frame while a board is set. */
+  onTileAnchors?: (anchors: StageTileAnchor[]) => void;
   /** Workspace only. Viewport rectangle (fractions 0..1) the slab should stay inside, so HUD columns stay clear. */
   workspaceSubjectFrame?: { left: number; top: number; right: number; bottom: number };
 }

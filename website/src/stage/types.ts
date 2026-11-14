@@ -91,6 +91,8 @@ export interface DynamicRegionRun {
   observer_passes?: unknown;
   /** How the field bytes map to MW/km2 (real runs). Read through parseFieldIntensityScale. */
   encoding?: unknown;
+  /** Real runs: what the model believes between the passes. Read through parseBeliefFrames. */
+  belief_frames?: unknown;
 }
 
 /**
@@ -153,6 +155,46 @@ export function fieldScalePosition(scale: FieldIntensityScale, mwPerKm2: number)
   if (mwPerKm2 < scale.minMwKm2) return 0;
   const byte = 1 + (254 * Math.log(mwPerKm2 / scale.minMwKm2)) / Math.log(scale.maxMwKm2 / scale.minMwKm2);
   return Math.min(1, byte / 255);
+}
+
+/**
+ * The belief frames of a real run: the model's forward estimate at fixed time steps on its own
+ * grid, which covers the region's box. The file at `url` holds steps x ny x nx x 2 bytes, row 0
+ * north, column 0 west: the probability that the cell burns (byte / 255) and the expected fire
+ * radiative power density on the run's intensity scale.
+ */
+export interface BeliefFramesInfo {
+  url: string;
+  steps: number;
+  stepMs: number;
+  /** Time of step 0, ms since the epoch. */
+  firstTimeMs: number;
+  nx: number;
+  ny: number;
+  cellKm: number;
+}
+
+/** Reads the `belief_frames` block of a run. Null when the run has none or the block is not usable. */
+export function parseBeliefFrames(raw: unknown): BeliefFramesInfo | null {
+  if (!isRecord(raw) || !isRecord(raw.grid)) return null;
+  const steps = Number(raw.steps);
+  const stepMinutes = Number(raw.step_minutes);
+  const nx = Number(raw.grid.nx);
+  const ny = Number(raw.grid.ny);
+  const cellKm = Number(raw.grid.cell_km);
+  const firstTimeMs = Date.parse(String(raw.first_time_utc));
+  if (typeof raw.url !== 'string' || raw.url.length === 0) return null;
+  if (!Number.isInteger(steps) || steps < 1 || !Number.isInteger(nx) || !Number.isInteger(ny) || nx < 2 || ny < 2) return null;
+  if (!Number.isFinite(stepMinutes) || stepMinutes <= 0 || !Number.isFinite(firstTimeMs)) return null;
+  return {
+    url: raw.url,
+    steps,
+    stepMs: stepMinutes * 60000,
+    firstTimeMs,
+    nx,
+    ny,
+    cellKm: Number.isFinite(cellKm) && cellKm > 0 ? cellKm : 0.375,
+  };
 }
 
 export interface SensorDiagnosticModalProps {

@@ -84,6 +84,11 @@ export const TERRAIN_FRAGMENT_SHADER = /* glsl */ `
 ${COMMON_HEIGHTFIELD_GLSL}
 ${SCAN_LATTICE_GLSL}
 
+// How strongly the detections' light falls on the ground near them and farther out (display choice)
+const float FIRE_CAST_NEAR = 10.0;
+const float FIRE_CAST_FAR = 9.0;
+const float FIRE_CAST_EASE = 0.8;
+
 // Display choices of the close-range look
 const float WALL_STRETCH_FROM = 1.3; // imagery stretched this much down a slope starts to count as a wall
 const float WALL_STRETCH_FULL = 2.3; // about 46 degrees of true slope at the stage's vertical factor
@@ -146,10 +151,26 @@ uniform vec2 uFootMix;      // (MODIS, VIIRS): 1 on a real run, where footprints
 uniform float uLightModis;  // 1 when the lights on show are MODIS detections (the raw side shows them too), 0 for VIIRS
 uniform float uLightTexels; // side of the light texture, texels
 uniform vec2 uRevealed;     // (MODIS, VIIRS): 1 when that family's footprints on show were revealed after scoring
+uniform float uPixelOutline; // 1 draws the outline of each detection's pixel around its light, on the estimate's side too
 // The run's intensity scale, from its payload: (0 linear or 1 log10, top MW/km2, bottom MW/km2)
 uniform vec3 uFieldScale;
 // Positions on that scale where emitted light starts and where it is at its brightest
 uniform vec2 uHeatRange;
+// Real runs: what the model believes at the time on show (./beliefField.ts). The texture rides on
+// uLipariTex, whose legend ramp is not drawn on a real run (the shader is at its sampler limit):
+// r, g probability that the cell burns and its expected intensity at one time step, b, a the same
+// at the next step, one texel per cell of the model's grid.
+uniform vec2 uBeliefGrid;    // cells east-west and north-south; (0, 0) when the run has no belief frames
+uniform float uBeliefMix;    // position between the two steps
+uniform float uHeldOut;      // 1 on a pass whose detections were kept from the estimate
+// A pass as a scan: while a pass arrives, a front crosses the region along its ground track and
+// what the pass brought appears behind it. (track east, track north, front along the track km, 1
+// while the front is crossing)
+uniform vec4 uScan;
+// A board of tiles over the region's box (the page's round of looks). Row 0 is the north edge.
+uniform vec2 uTileGrid;       // (columns, rows); (0, 0) without a board
+uniform vec4 uTileState[64];  // per tile: level 0..1, looked, chosen, closed
+uniform float uTileHover;     // the tile under the pointer, -1 for none
 
 varying vec2 vUv;
 varying vec3 vWorldPos;
@@ -354,6 +375,156 @@ float revealCore(float field) {
   return smoothstep(0.80, 0.98, clamp(-field, 0.0, 1.0));
 }
 
+// --- The model's belief (real runs) -----------------------------------------------------------
+// A detection is a measurement: light at a place and a time. The estimate is a belief, and it is
+// drawn as one: marks in ink on the model's own grid, never as light and never as a coat of colour.
+//   one square per cell of the model's 375 m grid, its area growing with the probability that
+//   the cell burns (a large square is near certain, a small dot is doubt), its strength with the
+//   expected intensity
+//   a dotted line around the ground where the model holds that fire may be
+//   on a pass that was kept from the model, an open frame in place of the square of every cell it
+//   declares burning (one half or more, the blind test's own rule): the answer it committed to
+// Everything comes from the belief frames. The ink, the dot shape and the line are drawing.
+const float BELIEF_DECLARED = 0.5;   // a cell at this probability or more is declared burning
+const float BELIEF_MAY_BURN = 0.02;  // the dotted line runs where the smoothed probability crosses this
+const float BELIEF_CELL_FILL = 0.58; // side of a certain cell's square, as a share of the cell
+const float BELIEF_FRAME_HALF = 0.40; // half side of the open frame of a declared cell on a held-out pass
+
+// Probability and expected intensity of one cell at the time on show
+vec2 beliefCell(vec2 cellId) {
+  vec4 b = textureLod(uLipariTex, (cellId + 0.5) / uBeliefGrid, 0.0);
+  return mix(b.rg, b.ba, uBeliefMix);
+}
+
+float beliefTap(vec2 texel) {
+  vec4 b = textureLod(uLipariTex, texel / uBeliefGrid, 0.0);
+  return mix(b.r, b.b, uBeliefMix);
+}
+
+// The probability as a smooth surface over the cells: a cubic B-spline through four bilinear taps
+float beliefSmooth(vec2 uv) {
+  vec2 st = uv * uBeliefGrid - 0.5;
+  vec2 i = floor(st);
+  vec2 f = st - i;
+  vec2 f2 = f * f;
+  vec2 f3 = f2 * f;
+  vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+  vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+  vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+  vec2 w3 = f3 / 6.0;
+  vec2 g0 = w0 + w1;
+  vec2 g1 = w2 + w3;
+  vec2 h0 = i - 0.5 + w1 / g0 + 0.5;
+  vec2 h1 = i + 1.5 + w3 / g1 + 0.5;
+  return g0.y * (g0.x * beliefTap(vec2(h0.x, h0.y)) + g1.x * beliefTap(vec2(h1.x, h0.y)))
+       + g1.y * (g0.x * beliefTap(vec2(h0.x, h1.y)) + g1.x * beliefTap(vec2(h1.x, h1.y)));
+}
+
+// Ink over the ground: (coverage of the marks, coverage of the dark edge that holds the lines on
+// bright ground by day, strength of the ink)
+vec3 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
+  vec2 g = uv * uBeliefGrid;
+  vec2 id = floor(g);
+  vec2 fc = g - id - 0.5;
+  vec2 aa = max(fwidth(g), vec2(1e-5));   // cells per pixel along each axis
+  float px = max(aa.x, aa.y);
+  float cellPx = 1.0 / px;
+  vec2 be = beliefCell(id);
+  float p = clamp(be.x, 0.0, 1.0);
+  float some = step(0.004, p);
+
+  // The cell's square: its area grows with the probability. Even a certain cell leaves ground
+  // showing around it, so a sure area is a field of squares and never a fill. How it is drawn
+  // depends on its size on screen, so the marks weigh about the same at any distance: solid when
+  // small, an outline over a faint pane when larger, and its four corners alone in a close view,
+  // where an outline around every cell would cage the ground and the lights.
+  float halfSide = BELIEF_CELL_FILL * 0.5 * sqrt(p);
+  vec2 d = abs(fc) - halfSide;
+  float inside = (1.0 - smoothstep(-0.5 * aa.x, 0.5 * aa.x, d.x)) * (1.0 - smoothstep(-0.5 * aa.y, 0.5 * aa.y, d.y)) * some;
+  vec2 dIn = d + 1.3 * aa;
+  float inner = (1.0 - smoothstep(-0.5 * aa.x, 0.5 * aa.x, dIn.x)) * (1.0 - smoothstep(-0.5 * aa.y, 0.5 * aa.y, dIn.y)) * some;
+  // (its size on screen: the mean of its two sides, since a cell on a slope seen at a low angle
+  // is long one way and short the other)
+  float sizePx = inversesqrt(aa.x * aa.y);
+  float close = smoothstep(13.0, 22.0, sizePx);
+  float pane = mix(mix(1.0, 0.20, smoothstep(6.0, 13.0, sizePx)), 0.0, close);
+  float corners = step(0.55 * halfSide, min(abs(fc.x), abs(fc.y)));
+  float square = max((inside - inner) * mix(1.0, corners, close), inside * pane);
+
+  // A pass kept from the model: every cell the model declares burning is an open frame in place
+  // of its square, the answer it committed to and has not been shown. The other cells stay as
+  // they are.
+  float declared = step(BELIEF_DECLARED, p) * heldOut;
+  float box = max(abs(fc.x), abs(fc.y));
+  float strokeCells = max(1.5 * px, 0.06);
+  float ring = (1.0 - smoothstep(BELIEF_FRAME_HALF - 0.5 * px, BELIEF_FRAME_HALF + 0.5 * px, box))
+             * smoothstep(BELIEF_FRAME_HALF - strokeCells - 0.5 * px, BELIEF_FRAME_HALF - strokeCells + 0.5 * px, box);
+  float mark = mix(square, ring, declared);
+
+  // Cells too small to draw one by one run together into a tone of the same coverage
+  float resolved = smoothstep(2.0, 3.6, cellPx);
+  vec4 near = texture2D(uLipariTex, uv);
+  float tone = BELIEF_CELL_FILL * BELIEF_CELL_FILL * mix(near.r, near.b, uBeliefMix);
+  float cells = mix(tone * 0.8, mark, resolved);
+
+  // The dotted line around the ground that may burn
+  float ps = beliefSmooth(uv);
+  float grad = max(fwidth(ps), 1e-5);
+  float line = 1.0 - smoothstep(0.55, 1.45, abs(ps - BELIEF_MAY_BURN) / grad);
+  float lineEdge = 1.0 - smoothstep(1.4, 2.6, abs(ps - BELIEF_MAY_BURN) / grad);
+  // Dots of a steady size on screen, fixed to the ground (their size steps by octaves with distance)
+  float dotKm = exp2(floor(log2(max(kmPerPx, 1e-4) * 5.0)));
+  vec2 q = pKm / dotKm;
+  float dots = step(0.0, sin(3.14159265 * (q.x + q.y)) * sin(3.14159265 * (q.x - q.y)));
+  line *= dots;
+  lineEdge *= dots;
+
+  float strength = mix(0.70, 1.0, heatOf(be.y));
+  return vec3(max(cells, line * 0.9), lineEdge * 0.7, mix(strength, 1.0, line));
+}
+
+// --- The board of tiles ------------------------------------------------------------------------
+// Lines in ink on the ground, never a fill: a hairline along every tile edge; a frame inside the
+// tile that grows heavier with its level; a firm outline where a look was spent; corner brackets
+// on the tile chosen now; a brighter outline under the pointer.
+// Returns (coverage of the ink, coverage of the dark edge under it, strength of the ink).
+vec3 tileMarks(vec2 uv) {
+  vec2 tg = vec2(uv.x, 1.0 - uv.y) * uTileGrid;
+  vec2 id = min(floor(tg), uTileGrid - 1.0);
+  vec2 tf = tg - id;
+  float index = id.y * uTileGrid.x + id.x;
+  vec4 state = uTileState[int(clamp(index, 0.0, 63.0))];
+  // Tiles per pixel across each family of edges (measured along its own direction, so an edge
+  // that runs away from the camera keeps its width)
+  vec2 px = max(vec2(length(vec2(dFdx(tg.x), dFdy(tg.x))), length(vec2(dFdx(tg.y), dFdy(tg.y)))), vec2(1e-6));
+  vec2 edgePx = min(tf, 1.0 - tf) / px;          // distance to the tile's edges, pixels
+  float d = min(edgePx.x, edgePx.y);
+  float hover = 1.0 - step(0.5, abs(index - uTileHover));
+
+  float hair = 1.0 - smoothstep(0.35, 1.05, d);
+  float ink = hair * mix(0.30, 0.12, state.a);
+  float strength = 0.8;
+  // Level: a frame set in from the edge, one to four pixels thick
+  float thick = 1.0 + 3.0 * state.r;
+  float frame = smoothstep(2.6, 3.4, d) * (1.0 - smoothstep(3.0 + thick - 0.4, 3.0 + thick + 0.4, d)) * step(0.004, state.r);
+  ink = max(ink, frame * (0.16 + 0.60 * state.r));
+  // Looked at: a firm outline
+  float firm = (1.0 - smoothstep(1.6, 2.4, d)) * state.g;
+  ink = max(ink, firm * 0.92);
+  // Under the pointer
+  ink = max(ink, (1.0 - smoothstep(1.2, 2.0, d)) * hover * 0.75);
+  // Chosen: brackets at the four corners
+  vec2 cornerPx = min(tf, 1.0 - tf) / px;
+  float arm = 0.19 / max(px.x, px.y);            // arm length: 19 percent of the tile's side
+  float inCorner = step(max(cornerPx.x, cornerPx.y), arm);
+  float bracket = (1.0 - smoothstep(2.6, 3.6, d)) * inCorner * state.b;
+  ink = max(ink, bracket);
+  strength = mix(strength, 1.0, max(bracket, max(firm, hover)));
+  float edge = 1.0 - smoothstep(2.4, 4.6, d);
+  edge *= max(max(state.g, state.b), hover);
+  return vec3(ink, edge, strength);
+}
+
 // Border visibility. A lit cell keeps its border until the cell is only a few pixels across. The
 // lattice over empty ground fades out much earlier so it never turns into a wireframe texture.
 float scanLitFade(float cellPx) { return smoothstep(3.0, 9.0, cellPx); }
@@ -373,7 +544,15 @@ void main() {
   float footGradM = max(length(vec2(dFdx(foot.r), dFdy(foot.r))), 1e-6);
   float footGradV = max(length(vec2(dFdx(foot.b), dFdy(foot.b))), 1e-6);
   // What the overpass on show detected, as emitted light (nothing on a simulated run)
-  vec4 lit = detectionLight(vUv) * uFootMix.x;
+  // The pass being scanned: 1 on ground the front has crossed (everywhere once it is through)
+  float scanAlong = dot(pKm, uScan.xy);
+  float scanned = mix(1.0, 1.0 - smoothstep(uScan.z - 0.25, uScan.z, scanAlong), uScan.w);
+  vec4 lit = detectionLight(vUv) * uFootMix.x * scanned;
+  // The model's belief as ink marks (worked out here, outside any branch, for its derivatives)
+  vec3 marks = vec3(0.0);
+  if (uBeliefGrid.x > 0.5) marks = beliefMarks(vUv, pKm, kmPerPx, uHeldOut * scanned);
+  vec3 tiles = vec3(0.0);
+  if (uTileGrid.x > 0.5) tiles = tileMarks(vUv);
 
   // --- Surface normal and sky visibility ------------------------------------------------------
   float slopeMag = 0.0;   // stage-space gradient magnitude
@@ -586,22 +765,39 @@ void main() {
     vec3 postRgb;
     if (uFootMix.x > 0.5) {
       // A real run. Two things are drawn and nothing is invented: no flames, no embers, no
-      // burned ground, no outline.
-      // 1. The model's estimate: a dim, soft glow. The field is read blurred (it has a mip
-      // chain), so the glow has no edge of its own.
-      // The estimate is a faint glow in the ground. It is read from a coarse level of the
-      // field's mip chain, over a kilometre wide, so it has no edge and takes no shape of its own (no
-      // band along a ridge), and its strength rises slowly. A dull ember colour: dimmer and less
-      // saturated than the dimmest detection light, and with no core.
-      float zWide = mix(textureLod(uFieldTex0, vUv, 3.0).r, textureLod(uFieldTex1, vUv, 3.0).r, uFrameMix);
-      float glowA = smoothstep(0.04, 0.75, zWide) * (1.0 - waterMask);
-      // By day: the ground a little darker and warmer where the estimate is
-      vec3 byDay = litEarth * (1.0 - 0.20 * glowA) + vec3(0.150, 0.050, 0.018) * (glowA * hazeTrans.g);
-      vec3 byNight = litEarth + vec3(0.062, 0.023, 0.014) * (glowA * hazeTrans.g);
-      postRgb = mix(byDay, byNight, uNight);
+      // burned ground.
+      // 1. The model's estimate.
+      if (uBeliefGrid.x > 0.5) {
+        // The belief, in ink (see beliefMarks). By day a dark edge holds the ink on bright ground.
+        vec3 ink = mix(vec3(1.30, 1.32, 1.36), vec3(0.40, 0.46, 0.56), uNight) * marks.z;
+        postRgb = litEarth * (1.0 - 0.55 * marks.y * (1.0 - uNight) * hazeTrans.g);
+        postRgb = mix(postRgb, ink, marks.x * 0.84 * hazeTrans.g);
+      } else {
+        // A run without belief frames: the estimate of the pass on show as a faint tint
+        float zWide = mix(textureLod(uFieldTex0, vUv, 3.0).r, textureLod(uFieldTex1, vUv, 3.0).r, uFrameMix);
+        float glowA = smoothstep(0.04, 0.75, zWide) * (1.0 - waterMask);
+        // By day: the ground a little darker and warmer where the estimate is
+        vec3 byDay = litEarth * (1.0 - 0.20 * glowA) + vec3(0.150, 0.050, 0.018) * (glowA * hazeTrans.g);
+        vec3 byNight = litEarth + vec3(0.062, 0.023, 0.014) * (glowA * hazeTrans.g);
+        postRgb = mix(byDay, byNight, uNight);
+      }
       // 2. What the overpass on show detected, as emitted light, each detection in its own
       // footprint. A paired MODIS overpass (landing) belongs to the raw side only.
+      // The light falls on the ground around it: the same light texture read at two coarse levels
+      // (about half a kilometre and two kilometres wide), taken up by the ground's own colour. Where the
+      // light is and how strong comes from the detections; how far it reaches is drawing.
+      vec3 castLight = textureLod(uFireHist, vUv, 4.4).rgb * FIRE_CAST_NEAR + textureLod(uFireHist, vUv, 6.2).rgb * FIRE_CAST_FAR;
+      // Eased toward a ceiling: a few very strong detections light their ridge, they do not flood it
+      castLight /= 1.0 + FIRE_CAST_EASE * dot(castLight, vec3(0.3, 0.5, 0.2));
+      postRgb += (satRgb + vec3(0.012)) * castLight * mix(0.3, 1.0, uNight) * (1.0 - 0.6 * waterMask) * hazeTrans * uFootMix.x * scanned;
       postRgb += lit.rgb * hazeTrans.g;
+      // The instrument's pixel around each light, when asked for: a faint warm hairline, so a
+      // coarse pixel reads as coarse beside the model's finer cells
+      if (uPixelOutline > 0.01) {
+        float pixelHair = scanHairline(abs(foot.r), footGradM, 1.2) * (1.0 - uRevealed.x)
+                        + scanHairline(abs(foot.b), footGradV, 1.2) * (1.0 - uRevealed.y);
+        postRgb = mix(postRgb, vec3(1.05, 0.66, 0.42) * mix(1.0, 0.8, uNight), clamp(pixelHair, 0.0, 1.0) * 0.55 * uPixelOutline * scanned * hazeTrans.g);
+      }
       // 3. Detections revealed after scoring (the hidden instrument of a blind run, or what a look
       // uncovered): the instrument's pixels in outline with a cool centre, so they are never taken
       // for the detections the estimate was made from
@@ -798,6 +994,25 @@ void main() {
     // By night the seam is kept quiet: the fire is the brightest thing in the frame
     finalRgb += (vec3(0.35, 0.82, 1.0) * scanHalo * 0.15 + vec3(0.92, 0.99, 1.0) * scanLine * 0.70)
               * mix(1.0, 0.22, uNight);
+  }
+
+  // The scan front of a pass that is arriving: one hairline across the ground. Warm for a
+  // pass the estimate takes in, in ink and broken for a pass kept from it.
+  if (uScan.w > 0.001) {
+    float behindKm = uScan.z - scanAlong;
+    float frontLine = scanHairline(abs(behindKm), max(length(vec2(dFdx(scanAlong), dFdy(scanAlong))), 1e-6), 1.4);
+    float acrossKm = dot(pKm, vec2(-uScan.y, uScan.x));
+    float dashKm = 7.0 * max(length(vec2(dFdx(acrossKm), dFdy(acrossKm))), 1e-6);
+    float broken = mix(1.0, step(0.5, fract(acrossKm / exp2(floor(log2(dashKm))))), uHeldOut);
+    vec3 scanRgb = mix(vec3(1.25, 1.02, 0.74), mix(vec3(1.16, 1.18, 1.22), vec3(0.62, 0.68, 0.78), uNight), uHeldOut);
+    finalRgb = mix(finalRgb, scanRgb, frontLine * broken * 0.9 * uScan.w * hazeTrans.g);
+  }
+
+  // The board of tiles, over every view of the ground
+  if (uTileGrid.x > 0.5) {
+    vec3 tileInk = mix(vec3(1.16, 1.18, 1.22), vec3(0.62, 0.68, 0.78), uNight) * tiles.z;
+    finalRgb *= 1.0 - 0.5 * tiles.y * (1.0 - uNight) * hazeTrans.g;
+    finalRgb = mix(finalRgb, tileInk, tiles.x * hazeTrans.g);
   }
 
   // Close views: the far edge of the slab dissolves into what the dome draws behind it (sky, or

@@ -31,6 +31,7 @@ import type {
   EarthStageTelemetry,
   LandingStandpointCheck,
   InspectorCameraPreset,
+  StageTileAnchor,
   TheaterId,
 } from './earthCutawayTypes';
 import {
@@ -57,6 +58,7 @@ import {
   type NormalizedObserverDataset,
   type NormalizedSatellitePass,
   type TerrainFindingCallout,
+  parseBeliefFrames,
 } from './types';
 import {
   HAZE_STRENGTH,
@@ -78,6 +80,8 @@ import {
 } from './engine/contextTerrain';
 import { FIRE_THRESHOLD_NORM, buildFireHistory, type FireHistory } from './engine/fireField';
 import { FootprintField, LIGHT_TEX_SIZE, buildDetectionSource } from './engine/footprintField';
+import { BeliefField } from './engine/beliefField';
+import type { BeliefFrames } from './engine/beliefField';
 import { HdrPipeline, resolveStagePixelRatio } from './engine/hdrPipeline';
 import {
   MODIS_SCAN,
@@ -277,6 +281,8 @@ interface CachedTheaterBundle {
   fieldScale?: FieldIntensityScale;
   /** Real runs: the overpass the landing shows (see landingFrameOf). Worked out once. */
   landingFrame?: number | null;
+  /** Real runs: where the run's fire is in the region (u east, v north). Worked out once. */
+  fireCentre?: [number, number] | null;
 }
 
 /**
@@ -305,6 +311,15 @@ function intensityLegendOf(bundle: CachedTheaterBundle): NonNullable<EarthStageT
     ticks: scale.ticks ?? [0, 0.25, 0.5, 0.75, 1].map((at) => ({ at, mwPerKm2: fieldScaleValue(scale, at) })),
   };
 }
+
+/**
+ * Seconds a pass takes to cross the region as a scan front. The satellites cross these regions in
+ * six to nine seconds; the front is drawn about three times faster.
+ */
+const SCAN_SECONDS = 2.6;
+
+/** Share of the day's smoke opacity that a night overpass keeps. */
+const NIGHT_SMOKE_OPACITY = 0.6;
 
 /** The estimate's glow on a real run starts at this fire radiative power density, MW/km2. It is strongest at the top of the run's scale. */
 const HEAT_FROM_MW_KM2 = 1;
@@ -554,6 +569,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
   const [renderedFindings, setRenderedFindings] = useState<TerrainFindingCallout[]>([]);
   const [curtainHovered, setCurtainHovered] = useState(false);
+
+  // Real runs: the belief frames of the last few runs, by run id (about 3 MB each)
+  const beliefStoreRef = useRef<Map<string, BeliefFrames>>(new Map());
 
   // Live prop mirror for zero-rebind 60fps render loop
   const propsRef = useRef<EarthCutawayStageProps>(props);
@@ -870,6 +888,25 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
     // Real runs: the footprints of the overpass on show, drawn on the ground by the terrain shader
     const footprintField = new FootprintField();
+    // Real runs: what the model believes at the time on show (see ./engine/beliefField.ts)
+    const beliefField = new BeliefField();
+    const beliefStore = beliefStoreRef.current;
+    const uBeliefMix = { value: 0.0 };
+    const uHeldOut = { value: 0.0 };
+    // The page's board of tiles (see tileMarks in the terrain shader)
+    const uTileGrid = new THREE.Vector2(0, 0);
+    const uTileState = Array.from({ length: 64 }, () => new THREE.Vector4(0, 0, 0, 0));
+    const uTileHover = { value: -1.0 };
+    let tileHoverSent: number | null = null;
+    const tileAnchors: StageTileAnchor[] = [];
+    // By night the smoke is lit from below only while the pass on show has detections of its own
+    let smokeFireLight = 1.0;
+    // A pass as a scan: (track east, track north, front along the track km, 1 while it crosses)
+    const uScan = new THREE.Vector4(0, 1, 0, 0);
+    let scanStartSec = -1e9;
+    // Time of each frame of the run on show, ms since the epoch (NaN where the payload gives none)
+    let frameTimesKey = '';
+    let frameTimesMs: number[] = [];
     const uFootMix = new THREE.Vector2(0, 0);
     const uFieldScale = new THREE.Vector3(0, DEFAULT_FIELD_INTENSITY_SCALE.maxMwKm2, DEFAULT_FIELD_INTENSITY_SCALE.minMwKm2);
     const uHeatRange = new THREE.Vector2(0.02, 1.0);
@@ -1114,6 +1151,14 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uFootMix: { value: uFootMix },
       uFieldScale: { value: uFieldScale },
       uHeatRange: { value: uHeatRange },
+      uBeliefGrid: { value: beliefField.grid },
+      uTileGrid: { value: uTileGrid },
+      uTileState: { value: uTileState },
+      uTileHover,
+      uScan: { value: uScan },
+      uPixelOutline: { value: 0.0 },
+      uBeliefMix,
+      uHeldOut,
       uLightModis,
       uLightTexels: { value: LIGHT_TEX_SIZE },
       uRevealed: { value: uRevealed },
@@ -1577,6 +1622,30 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     // The close presets look at the fire itself: Canyon centers on the fire the 1 km sensor
     // missed, Ridge on the strongest front. Both anchors come from the solver field of the active
     // region, so every region gets a meaningful close oblique.
+    /** Where a real run's fire is in the region (u east, v north): null for a simulated run or a run that shows no detection. */
+    const realFireCentre = (bundle: CachedTheaterBundle): [number, number] | null => {
+      if (bundle.fireCentre !== undefined) return bundle.fireCentre;
+      bundle.fireCentre = null;
+      if (bundle.observerDataset.dataSource !== 'firms') return null;
+      const [lonMin, latMin, lonMax, latMax] = bundle.bbox;
+      let sumU = 0;
+      let sumV = 0;
+      let sumW = 0;
+      for (const passes of bundle.observerDataset.frames) {
+        for (const sp of passes) {
+          if (sp.hidden || sp.revealed) continue;
+          for (const fp of sp.footprints) {
+            const w = Math.max(1, fp.frpMw);
+            sumU += w * ((fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin));
+            sumV += w * ((fp.lat - latMin) / Math.max(1e-9, latMax - latMin));
+            sumW += w;
+          }
+        }
+      }
+      if (sumW > 0) bundle.fireCentre = [sumU / sumW, sumV / sumW];
+      return bundle.fireCentre;
+    };
+
     const resolveLivePreset = (
       preset: InspectorCameraPreset,
       inWorkspace: boolean,
@@ -1587,11 +1656,19 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       if (!inWorkspace || (preset !== 'canyon' && preset !== 'ridge')) return dest;
       const wantedKind = preset === 'canyon' ? 'subpixel' : 'front';
       const anchor = nextBundle.findings.find((f) => f.kind === wantedKind);
-      if (!anchor) return dest;
+      // A real run looks at its fire: the centre of every detection the run shows, weighted by
+      // radiative power (the anchors above are read off a simulated run's field)
+      const fire = realFireCentre(nextBundle);
+      if (!anchor && !fire) return dest;
       const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
-      // Keep the anchor away from the cut faces of the slab
-      const u = THREE.MathUtils.clamp((anchor.lon - lonMin) / Math.max(1e-4, lonMax - lonMin), 0.2, 0.8);
-      const v = THREE.MathUtils.clamp((anchor.lat - latMin) / Math.max(1e-4, latMax - latMin), 0.2, 0.8);
+      // Keep the anchor away from the cut faces of the slab (a real run's close views have the
+      // context terrain behind them, so its fire may sit nearer the edge)
+      const u = fire
+        ? THREE.MathUtils.clamp(fire[0], 0.1, 0.9)
+        : THREE.MathUtils.clamp((anchor!.lon - lonMin) / Math.max(1e-4, lonMax - lonMin), 0.2, 0.8);
+      const v = fire
+        ? THREE.MathUtils.clamp(fire[1], 0.1, 0.9)
+        : THREE.MathUtils.clamp((anchor!.lat - latMin) / Math.max(1e-4, latMax - latMin), 0.2, 0.8);
       const ax = worldX(u);
       const az = worldZ(v);
       // Where to stand. Three wishes, scored over the compass:
@@ -2322,6 +2399,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let pointerLastY = 0;
     let dragTravelPx = 0;
     let draggingCurtainDirectly = false;
+    // Last pointer position over the canvas, for the tile under it (NaN while the pointer is away)
+    let pointerClientX = Number.NaN;
+    let pointerClientY = Number.NaN;
 
     let seamReported = false;
     let directWorkspaceSplit: number | null = null;
@@ -2360,6 +2440,37 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       };
     };
 
+    const tileRay = new THREE.Raycaster();
+    const tileNdc = new THREE.Vector2();
+    /**
+     * The tile of a board under a viewport point: the first ground the ray from the eye meets, read
+     * off the terrain held on the CPU. Null when the ray meets no ground inside the region.
+     */
+    const tileAt = (clientX: number, clientY: number, cols: number, rows: number): number | null => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
+      tileNdc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+      tileRay.setFromCamera(tileNdc, camera);
+      const o = tileRay.ray.origin;
+      const d = tileRay.ray.direction;
+      const step = Math.max(0.02, slabNow.width / 400);
+      for (let t = 0; t < slabNow.width * 6; t += step) {
+        const x = o.x + d.x * t;
+        const yy = o.y + d.y * t;
+        const z = o.z + d.z * t;
+        const u = slabU(x);
+        const v = slabV(z);
+        if (u < 0 || u > 1 || v < 0 || v > 1) continue;
+        if (yy <= sampleCpuTerrainY(u, v)) {
+          const col = Math.min(cols - 1, Math.floor(u * cols));
+          const row = Math.min(rows - 1, Math.floor((1 - v) * rows));
+          return row * cols + col;
+        }
+      }
+      return null;
+    };
+
     const onPointerDown = (e: PointerEvent) => {
       if (e.target instanceof HTMLElement && e.target.closest('[data-stage-ui="true"]')) {
         return;
@@ -2386,6 +2497,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
     const onPointerMove = (e: PointerEvent) => {
       const p = propsRef.current;
+      pointerClientX = e.clientX;
+      pointerClientY = e.clientY;
 
       if (!pointerDown) {
         if (p.mode === 'cutaway' && !p.cinemaActive) {
@@ -2458,11 +2571,19 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       if (!p.inWorkspace && dragTravelPx < 5 && e.button === 0) {
         p.onEnterWorkspace?.();
       }
+      // A click without a drag on a tile of a pickable board picks it
+      const board = p.tileBoard;
+      if (board && board.pickable && p.inWorkspace && dragTravelPx < 5 && e.button === 0) {
+        const tile = tileAt(e.clientX, e.clientY, board.cols, board.rows);
+        if (tile !== null && !board.tiles[tile]?.closed) p.onTilePick?.(tile);
+      }
       void pointerStartX;
       void pointerStartY;
     };
 
     const onPointerLeave = () => {
+      pointerClientX = Number.NaN;
+      pointerClientY = Number.NaN;
       curtainHoverTarget = 0.0;
       setCurtainHovered(false);
     };
@@ -2756,7 +2877,12 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       // C. Step Camera Controller (Cinema Catmull-Rom Spline vs Sub-Orbital Slew vs Damped Orbit)
       let effectiveTimeProg = p.timeProgress;
       // The landing of a real run shows the overpass the stage chose for it (see landingFrameOf)
-      const landingFrame = landingWorld ? landingFrameFor(nextBundle) : null;
+      const chosenLanding = landingWorld ? landingFrameFor(nextBundle) : null;
+      // The page may name the pass the landing shows; the standpoint stays with the stage's own choice
+      const landingFrame =
+        chosenLanding !== null && typeof p.landingPass === 'number' && Number.isFinite(p.landingPass)
+          ? THREE.MathUtils.clamp(p.landingPass, 0, nextBundle.frameCount - 1)
+          : chosenLanding;
       if (landingFrame !== null) effectiveTimeProg = landingFrame / Math.max(1, nextBundle.frameCount - 1);
       let cinemaProgress = 0.0;
       let slewActive = false;
@@ -3025,8 +3151,13 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       );
       curtainMesh.visible = terrainUniforms.uCutawayMix.value > 0.008 && currentCurtainPlane < 1.5;
 
-      // By night smoke is not lit by anything the data holds, and it would hide the lights
-      smokeOpacity = THREE.MathUtils.lerp(smokeOpacity, targetPlumeOpacity * (1.0 - uNight.value), dampMed);
+      // By night the smoke is thinner on screen, so the lights under it read: it is lit by the moon
+      // and, from below, by the detections it rises from
+      smokeOpacity = THREE.MathUtils.lerp(
+        smokeOpacity,
+        targetPlumeOpacity * THREE.MathUtils.lerp(1.0, NIGHT_SMOKE_OPACITY, uNight.value),
+        dampMed,
+      );
 
       const fMix = syncEpochTextures(
         nextBundle.tensor,
@@ -3070,6 +3201,21 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
                 detections: shown.footprints.length,
               }
             : undefined;
+          // The pass arrives as a scan: a front along its ground track, in its direction of travel
+          const scanOf = shown ?? rawPasses[0];
+          if (p.passScan && (p.inWorkspace || typeof p.landingPass === 'number') && scanOf && !reducedMotion) {
+            const az = THREE.MathUtils.degToRad(scanOf.azimuthDeg);
+            let trackEast = Math.cos(az);
+            let trackNorth = -Math.sin(az);
+            const northward = scanOf.orbitNode === 'ascending';
+            if (scanOf.orbitNode && northward !== trackNorth > 0) {
+              trackEast = -trackEast;
+              trackNorth = -trackNorth;
+            }
+            uScan.x = trackEast;
+            uScan.y = trackNorth;
+            scanStartSec = elapsedSec;
+          }
           footprintList.length = 0;
           revealedList.length = 0;
           uRevealed.set(0, 0);
@@ -3122,6 +3268,58 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         realPassNow = undefined;
         realPassKey = '';
       }
+      // The scan front crosses the region, a little past each edge, in SCAN_SECONDS
+      const scanProgress = (elapsedSec - scanStartSec) / SCAN_SECONDS;
+      if (realRun && scanProgress >= 0 && scanProgress < 1) {
+        const reachKm = 0.5 * (Math.abs(uScan.x) * nextBundle.widthKm + Math.abs(uScan.y) * nextBundle.depthKm) + 1.5;
+        uScan.z = -reachKm + 2 * reachKm * scanProgress;
+        uScan.w = 1;
+      } else {
+        uScan.w = 0;
+      }
+      // The model's belief at the time on show. Passes are unevenly spaced: the time between two
+      // frames is read off their real pass times, and the belief frames are stepped through at it.
+      const beliefNow = realRun && nextBundle.runId ? beliefStore.get(nextBundle.runId) : undefined;
+      if (beliefNow) {
+        if (frameTimesKey !== nextBundle.key) {
+          frameTimesKey = nextBundle.key;
+          frameTimesMs = obsFrames.map((passes) => Date.parse(passes[0]?.timeUtc ?? ''));
+        }
+        const exactFrame = THREE.MathUtils.clamp(effectiveTimeProg, 0, 1) * Math.max(1, obsFrames.length - 1);
+        const fA = Math.min(obsFrames.length - 1, Math.floor(exactFrame));
+        const fB = Math.min(obsFrames.length - 1, fA + 1);
+        const tA = frameTimesMs[fA];
+        const tB = frameTimesMs[fB];
+        if (Number.isFinite(tA) && Number.isFinite(tB)) {
+          // The belief frames are the forward estimate at fixed steps, and the step that holds a
+          // pass's time was made before that pass was taken in. The belief is therefore shown one
+          // step later than the time on show, so a pass on show is already part of it.
+          const beliefTimeMs = tA + (tB - tA) * (exactFrame - fA) + beliefNow.info.stepMs;
+          uBeliefMix.value = beliefField.sync(beliefNow, nextBundle.key, beliefTimeMs);
+        } else {
+          beliefField.clear();
+        }
+      } else {
+        beliefField.clear();
+      }
+      // The legend ramp's sampler carries the belief on a real run (the ramp is not drawn there)
+      terrainUniforms.uLipariTex.value = beliefField.grid.x > 0 ? beliefField.texture : lipariTex;
+      // A pass kept from the model: every pass of the frame is hidden, or was laid on after scoring
+      const heldOutTarget =
+        realRun && rawPasses.length > 0 && rawPasses.every((sp) => sp.revealed || passIsHidden(sp, p.holdoutViirs))
+          ? 1.0
+          : 0.0;
+      uHeldOut.value = THREE.MathUtils.lerp(uHeldOut.value, heldOutTarget, 1.0 - Math.exp(-dtSec * 6.0));
+      smokeFireLight = THREE.MathUtils.lerp(
+        smokeFireLight,
+        !realRun || footprintList.length > 0 ? 1.0 : 0.0,
+        1.0 - Math.exp(-dtSec * 4.0),
+      );
+      terrainUniforms.uPixelOutline.value = THREE.MathUtils.lerp(
+        terrainUniforms.uPixelOutline.value,
+        p.detectionPixels ? 1.0 : 0.0,
+        dampFast,
+      );
       // On a real run the fire history is not drawn, and its sampler carries the detections' light
       terrainUniforms.uFireHist.value = realRun ? footprintField.lightTexture : ensureFireHistory(nextBundle).texture;
       // Time of day comes from the overpass on show: a night overpass is drawn by night
@@ -3323,8 +3521,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           lid: smokeLid,
           lidAmount: worldMix,
           clearRadius: SMOKE_CLEAR_RADIUS,
-          // A real run by day: thin the smoke over the detections so their light reads (illustrative)
-          thinOverFire: realRun ? 0.82 * (1.0 - uNight.value) : 0.0,
+          // A real run: thin the smoke over the detections so their light reads (illustrative)
+          thinOverFire: realRun ? 0.82 : 0.0,
+          night: uNight.value,
+          fireLight: smokeFireLight,
         });
       }
       pipeline.render(dtSec);
@@ -3406,6 +3606,57 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           // One closing report so the page stops following a seam that left the landing view
           onSeam({ near: { x: 0, y: 0 }, far: { x: 0, y: 0 }, modisSide: 'left', visible: false });
           seamReported = false;
+        }
+      }
+
+      // The page's board of tiles: its states go to the terrain shader, the tile under the pointer
+      // and each tile's label corner go back to the page
+      const board = p.tileBoard;
+      const boardOn = Boolean(board) && board!.cols >= 1 && board!.rows >= 1 && board!.cols * board!.rows <= 64;
+      if (board && boardOn) {
+        uTileGrid.set(board.cols, board.rows);
+        const count = board.cols * board.rows;
+        for (let i = 0; i < count; i++) {
+          const tile = board.tiles[i];
+          uTileState[i].set(
+            THREE.MathUtils.clamp(tile?.level ?? 0, 0, 1),
+            tile?.looked ? 1 : 0,
+            tile?.chosen ? 1 : 0,
+            tile?.closed ? 1 : 0,
+          );
+        }
+        const under =
+          board.pickable && !pointerDown && Number.isFinite(pointerClientX)
+            ? tileAt(pointerClientX, pointerClientY, board.cols, board.rows)
+            : null;
+        uTileHover.value = under ?? -1;
+        if (under !== tileHoverSent) {
+          tileHoverSent = under;
+          p.onTileHover?.(under);
+        }
+        if (p.onTileAnchors) {
+          tileAnchors.length = 0;
+          for (let i = 0; i < count; i++) {
+            const u = (i % board.cols) / board.cols;
+            const v = 1 - Math.floor(i / board.cols) / board.rows;
+            projVec.set(worldX(u), sampleCpuTerrainY(u, v), worldZ(v)).project(camera);
+            const x = (projVec.x * 0.5 + 0.5) * viewportW;
+            const yPx = (-projVec.y * 0.5 + 0.5) * viewportH;
+            tileAnchors.push({
+              tile: i,
+              x,
+              y: yPx,
+              visible: projVec.z > -1 && projVec.z < 1 && x >= 0 && x <= viewportW && yPx >= 0 && yPx <= viewportH,
+            });
+          }
+          p.onTileAnchors(tileAnchors.slice());
+        }
+      } else {
+        uTileGrid.set(0, 0);
+        uTileHover.value = -1;
+        if (tileHoverSent !== null) {
+          tileHoverSent = null;
+          p.onTileHover?.(null);
         }
       }
 
@@ -3590,6 +3841,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       detectionTex0.dispose();
       detectionTex1.dispose();
       footprintField.dispose();
+      beliefField.dispose();
       lipariTex.dispose();
       hiResTerrainGeom?.dispose();
       hiResSkirtGeom?.dispose();
@@ -3819,6 +4071,20 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         };
 
         bridge.storeRunBundle(run.region.id, run.run_id, hydratedBundle);
+
+        // What the model believes between the passes: fetched once per run, after the run is on show
+        const beliefInfo = parseBeliefFrames(run.belief_frames);
+        const beliefStore = beliefStoreRef.current;
+        if (beliefInfo && !beliefStore.has(run.run_id)) {
+          void fetch(resolveAssetUrl(props.apiBase, beliefInfo.url))
+            .then((resp) => (resp.ok ? resp.arrayBuffer() : null))
+            .then((buf) => {
+              if (!buf || buf.byteLength !== beliefInfo.steps * beliefInfo.nx * beliefInfo.ny * 2) return;
+              beliefStore.set(run.run_id, { info: beliefInfo, bytes: new Uint8Array(buf) });
+              while (beliefStore.size > 6) beliefStore.delete(beliefStore.keys().next().value as string);
+            })
+            .catch(() => undefined);
+        }
 
         // Activate if this run matches the currently viewed theater or is a custom coordinate query
         const currentTarget = propsRef.current.activeTheaterId;

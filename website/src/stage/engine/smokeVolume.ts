@@ -374,6 +374,8 @@ uniform sampler2D uHistoryTex;   // the march result of the previous frame
 uniform mat4 uPrevViewProj;
 uniform float uHistoryWeight;    // share of the previous result that is kept, 0 without history
 uniform float uFrame;
+uniform float uNight;          // 1 on a night overpass: moonlight, and the fire lights its own smoke
+uniform float uFireLight;      // by night: 1 when the pass on show has detections of its own to light the smoke
 uniform float uProxyY;           // height of the middle of the smoke layer, for reprojection
 uniform vec2 uHalfSize;
 varying vec2 vUv;
@@ -427,7 +429,8 @@ void main() {
     float cosT = dot(rd, sun);
     // Forward-peaked phase function blended with an isotropic term (multiple scattering)
     float phase = mix(1.0, min(3.0, hgRel(cosT, 0.6)), 0.45);
-    vec3 sunColor = uSunColor * 0.73;
+    // By night the key light is the moon: the same picture as the moonlit ground, far dimmer
+    vec3 sunColor = uSunColor * 0.73 * mix(1.0, 0.045, uNight);
 
     // Adaptive march: long steps through empty air, short steps where a plume can be
     float fine = uStepFine;
@@ -509,12 +512,16 @@ void main() {
         vec3 skyLight = vec3(0.152, 0.160, 0.176) * (0.50 + 0.50 * skyVis);
         // Light bounced up from the sunlit ground keeps undersides from going black
         skyLight += vec3(0.070, 0.066, 0.058) * (1.0 - skyVis);
+        skyLight *= mix(1.0, 0.05, uNight);
         vec3 light = sunColor * sunVis * phase + skyLight;
-        // Warm light from the flames scattered inside the base of the column
+        // Warm light from the fire scattered inside the base of the column. By night it is the main
+        // light the smoke has: it reaches higher into the column and is read from a wider source.
         vec3 fireGlow = vec3(0.0);
-        if (hn < 0.28) {
-          float src = textureLod(uSourceTex, smokeUv(p), 1.5).r;
-          fireGlow = vec3(1.0, 0.36, 0.08) * src * exp(-hn * uSmokeTop * 14.0) * 0.9;
+        if (hn < mix(0.28, 0.72, uNight)) {
+          float src = textureLod(uSourceTex, smokeUv(p), mix(1.5, 2.6, uNight)).r;
+          // Smoke lingers from the pass before (see buildDetectionSource), but by night it is lit
+          // only by detections that are on show: a pass that shows none leaves it dark
+          fireGlow = vec3(1.0, 0.36, 0.08) * src * exp(-hn * uSmokeTop * mix(14.0, 4.6, uNight)) * mix(0.9, 2.1 * uFireLight, uNight);
         }
 
         float a = 1.0 - exp(-d * uSigma * stepLen);
@@ -638,6 +645,10 @@ export interface SmokeFrameInputs {
   clearRadius: number;
   /** Share of the smoke taken away right over its source (0 = none). */
   thinOverFire: number;
+  /** 1 on a night overpass: the smoke is lit by the moon and, from below, by the fire. */
+  night?: number;
+  /** By night: 1 when the pass on show has detections of its own to light the smoke, 0 when it has none. */
+  fireLight?: number;
 }
 
 export class SmokePass extends Pass {
@@ -794,6 +805,8 @@ export class SmokePass extends Pass {
         uCameraPos: { value: new THREE.Vector3() },
         uBoxTop: { value: 4.0 },
         uSunColor: { value: new THREE.Vector3(1.4, 1.29, 1.17) },
+        uNight: { value: 0.0 },
+        uFireLight: { value: 1.0 },
         uStepFine: { value: 0.075 },
         uHistoryTex: { value: null },
         uPrevViewProj: { value: new THREE.Matrix4() },
@@ -873,6 +886,8 @@ export class SmokePass extends Pass {
     (m.uViewInv.value as THREE.Matrix4).copy(cam.matrixWorld);
     (m.uCameraPos.value as THREE.Vector3).setFromMatrixPosition(cam.matrixWorld);
     (m.uSunColor.value as THREE.Vector3).copy(inputs.sunColor);
+    m.uNight.value = inputs.night ?? 0.0;
+    m.uFireLight.value = inputs.fireLight ?? 1.0;
     m.uBoxTop.value = inputs.reliefTop + (u.uSmokeTop.value as number) + 0.05;
     m.uProxyY.value = 0.5 * (inputs.reliefTop + (u.uSmokeTop.value as number));
 
