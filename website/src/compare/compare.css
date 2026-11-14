@@ -1,0 +1,67 @@
+/* The compare plane. Placement only: every size, weight and colour is the design system's. */
+
+.cmp-plane {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.cmp-plane[data-pickable='true'][data-hovering='true'] {
+  cursor: pointer;
+}
+
+.cmp-plane > canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A block's place for the keyboard, and the frame its state is drawn on: corner brackets when selected, a dashed
+   edge when its content is withheld. A pointer goes through it to the plane, which picks by the block itself. */
+.cmp-stop {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  pointer-events: none;
+}
+
+.cmp-stop.sys-hidden {
+  border: 1px dashed var(--sys-edge);
+}
+
+/* A label hangs under its block's lowest corner. */
+.cmp-label {
+  position: absolute;
+  transform: translateX(-50%);
+  padding-top: var(--sys-s2);
+  pointer-events: none;
+}
+
+.cmp-label__text {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.cmp-label__text.sys-plate {
+  padding: var(--sys-s2) var(--sys-s3);
+}
+
+.cmp-block[data-state='dimmed'] .cmp-label {
+  opacity: 0.6;
+}
+
+/* A numbered point on the ground. */
+.cmp-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 0 var(--sys-s1);
+  pointer-events: none;
+}
