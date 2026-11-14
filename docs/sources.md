@@ -19,7 +19,7 @@ Related work that the code does not use:
 
 | Reference | Access |
 | --- | --- |
-| Chen, Y. et al. (2026), Global Fire Emissions Database `GFED5NRT`, *Earth System Science Data*, 18, 1791 (`https://essd.copernicus.org/articles/18/1791/2026/`) | CC BY 4.0 |
+| Chen, Y. et al. (2026), the near real time extension of the Global Fire Emissions Database, `GFED5NRT`, *Earth System Science Data*, 18, 7535 to 7555, doi:10.5194/essd-18-7535-2026 (`https://essd.copernicus.org/articles/18/7535/2026/`) | CC BY 4.0 |
 | Spatiotemporal fusion of `MYD14` and `VNP14IMG` active-fire detections (2026), *International Journal of Applied Earth Observation and Geoinformation* (`https://www.sciencedirect.com/science/article/pii/S1569843226002013`) | Open access |
 
 ## NASA data and services
