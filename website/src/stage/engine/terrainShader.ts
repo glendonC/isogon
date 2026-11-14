@@ -105,7 +105,6 @@ uniform float uObserverMix;
 uniform float uModisWeight;
 uniform float uViirsWeight;
 uniform float uUncertaintyMix;
-uniform float uHoldoutBoost;
 uniform float uSensitivity;
 uniform vec2 uExtentKm;   // region size on the ground (east-west, north-south)
 uniform vec4 uModisPass;  // (scan axis east, scan axis north, nadir distance km, valid)
@@ -566,7 +565,7 @@ void main() {
 
   float sensGate = max(0.015, uSensitivity * 0.42);
   float zHatNorm  = field.r;
-  float sigmaNorm = clamp(field.g * (1.0 + 0.28 * uHoldoutBoost), 0.0, 1.0);
+  float sigmaNorm = field.g;
 
   // Orbital Sensor Split Curtain plane signed distance
   vec2 cutDir = normalize(uCutawayDir);
@@ -642,9 +641,11 @@ void main() {
       postRgb = mix(postRgb, vec3(0.0), clamp(fire.front, 0.0, 1.0) * 0.85);
       postRgb += fire.emission;
 
-      // 4. 90% bounds of the active fire line: where z_hat + sigma and z_hat - sigma cross the
-      // fire threshold. Hairlines from screen-space derivatives. Nothing is drawn where the bound
-      // does not cross the threshold (for example a swath-gap epoch with saturated sigma).
+      // 4. One standard deviation around the active fire line: where the estimate plus its sigma
+      // and the estimate minus its sigma cross the fire threshold. This is the run's own sigma, not
+      // an interval of a stated coverage. Hairlines from screen-space derivatives. Nothing is drawn
+      // where a bound does not cross the threshold (for example an epoch in a swath gap, where
+      // sigma is saturated).
       if (uUncertaintyMix > 0.01) {
         float zMw = zHatNorm * 80.0;
         float sMw = sigmaNorm * 24.0;

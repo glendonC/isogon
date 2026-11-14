@@ -24,6 +24,8 @@ import {
   createDemR32FTexture,
   createLipariLutTexture,
 } from './earthCutawayShaders';
+import { extractTerrainFindings } from './engine/terrainFindings';
+import type { TerrainFindings } from './engine/terrainFindings';
 import type {
   EarthCutawayStageProps,
   EarthStageTelemetry,
@@ -235,7 +237,10 @@ interface CachedTheaterBundle {
   windDirUv: [number, number];
   hasSeaCoast: boolean;
   observerDataset: NormalizedObserverDataset;
+  /** Where the camera presets look (three places, always present). */
   findings: TerrainFindingCallout[];
+  /** The callouts shown on the terrain: only places the field holds, with the values it holds. */
+  callouts: TerrainFindingCallout[];
   /** Arrival, extinction, peak and burned mask derived from `tensor`. Built on first activation. */
   fireHistory: FireHistory | null;
   /** Map frame: slab size with the region's aspect ratio and the fixed vertical exaggeration. */
@@ -283,13 +288,13 @@ function passIsHidden(pass: NormalizedSatellitePass, holdoutViirs: boolean): boo
 }
 
 /**
- * Callouts on the terrain. They are written for the simulated scenario (its named findings and
- * their values), so a real run shows none. The findings themselves stay on the bundle: the landing
- * standpoint still looks at the strongest fire.
+ * Callouts on the terrain. They read a simulated run's field on its linear scale, so a real run
+ * shows none. The camera anchors stay on the bundle: the landing standpoint still looks at the
+ * strongest fire.
  */
 const NO_CALLOUTS: TerrainFindingCallout[] = [];
 function calloutsFor(bundle: CachedTheaterBundle): TerrainFindingCallout[] {
-  return bundle.observerDataset.dataSource === 'firms' ? NO_CALLOUTS : bundle.findings;
+  return bundle.observerDataset.dataSource === 'firms' ? NO_CALLOUTS : bundle.callouts;
 }
 
 /** What the intensity scale of a bundle shows along its length, for the page's legend. */
@@ -522,127 +527,23 @@ function bundleWorldY(elevM: number, b: CachedTheaterBundle): number {
   return elevationToWorldY(elevM, b.minElevM, b.maxElevM, b.frame);
 }
 
-function extractTerrainFindings(
+/** The callouts and camera anchors of a field (see ./engine/terrainFindings.ts). */
+function findingsOf(
   regionId: string,
-  bbox: [number, number, number, number],
+  bbox: readonly [number, number, number, number],
   alignedDem: Float32Array,
   demRes: number,
   tensor: Uint8Array,
   frameCount: number,
-): TerrainFindingCallout[] {
-  const [lonMin, latMin, lonMax, latMax] = bbox;
-  const refFrame = Math.min(frameCount - 1, Math.floor((frameCount - 1) * 0.52));
-  const fBase = refFrame * FIELD_GRID_SIZE * FIELD_GRID_SIZE * 4;
-
-  let bestFrontScore = -1;
-  let frontCell = { gx: 128, gy: 128, zMw: 42.0 };
-
-  let bestSubpixelScore = -1;
-  let subpixelCell = { gx: 96, gy: 108, zMw: 18.4, modisMw: 0.0 };
-
-  let bestSigmaScore = -1;
-  let sigmaCell = { gx: 164, gy: 104, sigmaMw: 4.2 };
-
-  for (let gy = 14; gy < FIELD_GRID_SIZE - 14; gy += 2) {
-    for (let gx = 14; gx < FIELD_GRID_SIZE - 14; gx += 2) {
-      const off = fBase + (gy * FIELD_GRID_SIZE + gx) * 4;
-      const zMw = (tensor[off] / 255.0) * Z_MAX_MW_KM2;
-      if (zMw > bestFrontScore) {
-        bestFrontScore = zMw;
-        frontCell = { gx, gy, zMw };
-      }
-    }
-  }
-
-  for (let gy = 14; gy < FIELD_GRID_SIZE - 14; gy += 2) {
-    for (let gx = 14; gx < FIELD_GRID_SIZE - 14; gx += 2) {
-      const off = fBase + (gy * FIELD_GRID_SIZE + gx) * 4;
-      const zMw = (tensor[off] / 255.0) * Z_MAX_MW_KM2;
-      const modisMw = (tensor[off + 2] / 255.0) * Z_MAX_MW_KM2;
-      const u = gx / (FIELD_GRID_SIZE - 1);
-      const v = gy / (FIELD_GRID_SIZE - 1);
-      const elev = sampleAlignedDemBilinear(alignedDem, demRes, u, v);
-
-      const distFromFront = Math.hypot(gx - frontCell.gx, gy - frontCell.gy);
-      if (zMw >= 11.0 && modisMw < zMw * 0.42 && distFromFront > 24) {
-        const subScore = zMw - modisMw * 1.25 - elev * 0.0006;
-        if (subScore > bestSubpixelScore) {
-          bestSubpixelScore = subScore;
-          subpixelCell = { gx, gy, zMw, modisMw };
-        }
-      }
-    }
-  }
-
-  for (let gy = 14; gy < FIELD_GRID_SIZE - 14; gy += 2) {
-    for (let gx = 14; gx < FIELD_GRID_SIZE - 14; gx += 2) {
-      const off = fBase + (gy * FIELD_GRID_SIZE + gx) * 4;
-      const zMw = (tensor[off] / 255.0) * Z_MAX_MW_KM2;
-      const sigmaMw = (tensor[off + 1] / 255.0) * SIGMA_MAX_MW_KM2;
-      const distA = Math.hypot(gx - frontCell.gx, gy - frontCell.gy);
-      const distB = Math.hypot(gx - subpixelCell.gx, gy - subpixelCell.gy);
-      if (zMw >= 8.0 && sigmaMw > bestSigmaScore && distA > 28 && distB > 24) {
-        bestSigmaScore = sigmaMw;
-        sigmaCell = { gx, gy, sigmaMw };
-      }
-    }
-  }
-
-  const makeFinding = (
-    suffix: string,
-    kind: TerrainFindingCallout['kind'],
-    gx: number,
-    gy: number,
-    title: string,
-    subtitle: string,
-    valueText: string,
-  ): TerrainFindingCallout => {
-    const u = gx / (FIELD_GRID_SIZE - 1);
-    const v = gy / (FIELD_GRID_SIZE - 1);
-    const lon = lonMin + u * (lonMax - lonMin);
-    const lat = latMin + v * (latMax - latMin);
-    const elevM = Math.round(sampleAlignedDemBilinear(alignedDem, demRes, u, v));
-    return {
-      id: `${regionId}-${suffix}`,
-      kind,
-      title,
-      subtitle,
-      valueText,
-      lat,
-      lon,
-      elevM,
-    };
-  };
-
-  return [
-    makeFinding(
-      'front-core',
-      'front',
-      frontCell.gx,
-      frontCell.gy,
-      'Flaming Ridge Core',
-      'Harmonized 375 m radiative peak',
-      `${Math.max(18.0, frontCell.zMw).toFixed(1)} MW/km²`,
-    ),
-    makeFinding(
-      'canyon-subpixel',
-      'subpixel',
-      subpixelCell.gx,
-      subpixelCell.gy,
-      'Missed Canyon Fire Recovered',
-      'Sub-canopy 375 m gorge detection',
-      `${Math.max(11.0, subpixelCell.zMw).toFixed(1)} MW/km², MODIS ${subpixelCell.modisMw.toFixed(1)}`,
-    ),
-    makeFinding(
-      'conformal-ci',
-      'uncertainty',
-      sigmaCell.gx,
-      sigmaCell.gy,
-      '90% Confidence Bound',
-      'Calibrated conformal interval',
-      `±${Math.max(1.8, sigmaCell.sigmaMw).toFixed(1)} MW/km² (90% CI)`,
-    ),
-  ];
+): TerrainFindings {
+  return extractTerrainFindings(
+    regionId,
+    bbox,
+    tensor,
+    frameCount,
+    { gridSize: FIELD_GRID_SIZE, zMaxMwKm2: Z_MAX_MW_KM2, sigmaMaxMwKm2: SIGMA_MAX_MW_KM2 },
+    (u, v) => sampleAlignedDemBilinear(alignedDem, demRes, u, v),
+  );
 }
 
 export function EarthCutawayStage(props: EarthCutawayStageProps) {
@@ -758,7 +659,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         maxAnisotropy,
       );
       const procTensor = buildProceduralTheaterTensor(tId);
-      const findings = extractTerrainFindings(
+      const found = findingsOf(
         tId,
         prof.bbox,
         demPack.aligned,
@@ -784,7 +685,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         windDirUv: [...prof.windDirUv] as [number, number],
         hasSeaCoast: prof.hasSeaCoast,
         observerDataset: createFallbackObserverDataset(prof.bbox),
-        findings,
+        findings: found.anchors,
+        callouts: found.callouts,
         fireHistory: null,
         ...liteShadingFields(prof.widthKm, bboxDepthKm(prof.bbox), null, 512, ''),
       });
@@ -1170,7 +1072,6 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uModisWeight: { value: 1.0 },
       uViirsWeight: { value: 1.0 },
       uUncertaintyMix: { value: propsRef.current.showUncertainty ? 1.0 : 0.0 },
-      uHoldoutBoost: { value: propsRef.current.holdoutViirs ? 1.0 : 0.0 },
       uSensitivity: { value: propsRef.current.sensitivityThreshold },
       uExtentKm: { value: uExtentKm },
       uModisPass: { value: uModisPass },
@@ -2336,7 +2237,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           ? normalizeObserverDataset(obsJson, prof.bbox)
           : existing.observerDataset;
 
-        const findings = extractTerrainFindings(
+        const found = findingsOf(
           'plumas_ca',
           prof.bbox,
           demPack.aligned,
@@ -2367,7 +2268,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           tensor: tensorPack.buffer,
           frameCount: tensorPack.frames,
           observerDataset,
-          findings,
+          findings: found.anchors,
+          callouts: found.callouts,
         };
 
         setRegionBundle('plumas_ca', staticBundle);
@@ -3092,11 +2994,6 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       terrainUniforms.uUncertaintyMix.value = THREE.MathUtils.lerp(
         terrainUniforms.uUncertaintyMix.value,
         p.showUncertainty ? 1.0 : 0.0,
-        dampFast,
-      );
-      terrainUniforms.uHoldoutBoost.value = THREE.MathUtils.lerp(
-        terrainUniforms.uHoldoutBoost.value,
-        p.holdoutViirs ? 1.0 : 0.0,
         dampFast,
       );
       terrainUniforms.uSensitivity.value = THREE.MathUtils.lerp(
@@ -3875,7 +3772,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           ? normalizeObserverDataset(run.observer_passes, bbox)
           : createFallbackObserverDataset(bbox);
 
-        const findings = extractTerrainFindings(
+        const found = findingsOf(
           run.region.id,
           bbox,
           demPack.aligned,
@@ -3908,7 +3805,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           windDirUv: knownProf ? [...knownProf.windDirUv] : [0.64, 0.76],
           hasSeaCoast,
           observerDataset,
-          findings,
+          findings: found.anchors,
+          callouts: found.callouts,
           fieldScale: parseFieldIntensityScale(run.encoding),
           fireHistory: null,
           ...liteShadingFields(
