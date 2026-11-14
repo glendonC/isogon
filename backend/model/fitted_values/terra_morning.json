@@ -1,9 +1,9 @@
 {
- "what": "estimate of Terra's morning pass from VIIRS alone (unit M4)",
+ "what": "estimate of Terra's morning pass from VIIRS alone",
  "adopted": false,
  "decision": "on validation fires the estimate is ahead of both baselines on 4 of 7 scores, tied on 2 and behind on 1, beyond the noise of resampling the fires; its 90 percent interval held for 0.775 of the validation overpasses",
  "status": "experimental",
- "rule": "the rule of unit M2: fires resampled whole 2,000 times; ahead, tie or behind per score at 90 percent",
+ "rule": "the validation rule: fires resampled whole 2,000 times; ahead, tie or behind per score at 90 percent",
  "parameters": {
   "tau_res_h": 12.0,
   "spread_km_per_h": 0.15,
@@ -669,5 +669,10 @@
    }
   }
  },
- "generated_utc": "2026-11-14T06:01:02Z"
+ "generated_utc": "2026-11-14T06:01:02Z",
+ "protocol": {
+  "validated_under": 1,
+  "not_measured_under": 2,
+  "note": "fitted and validated under protocol version 1: each prediction used the hidden Terra overpass's own time and pixel size, and the episodes were chosen counting both instruments. Not measured again after the protocol correction (version 2); the figures below are not clean and the direction stays experimental."
+ }
 }

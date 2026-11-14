@@ -1,11 +1,11 @@
 {
  "what": "every time rows of the three 2021 test fires were scored, copied from the reports the runs wrote",
- "built_by": "python3 -m backend.model.evidence record <the lane's notes folder>",
- "built_utc": "2026-11-14T15:14:21Z",
+ "built_by": "python3 -m backend.model.evidence record <reports folder>",
+ "built_utc": "2026-11-14T17:01:04Z",
  "looks": [
   {
    "look": 1,
-   "unit": "M2",
+   "unit": "first fit",
    "protocol_version": 1,
    "what": "fitted values on windows of 24 overpasses that counted the hidden ones; each prediction made at the hidden overpass's own time and pixel size",
    "fires": {
@@ -219,7 +219,7 @@
   },
   {
    "look": 2,
-   "unit": "M8",
+   "unit": "sealed protocol",
    "protocol_version": 2,
    "what": "the same fitted values, not refitted, on windows of 12 MODIS overpasses chosen with VIIRS dropped; predictions published on a nominal schedule before the hidden rows are opened",
    "fires": {
@@ -432,11 +432,233 @@
      "report": "M8-evidence/test_fire_evia_greece.json"
     }
    }
+  },
+  {
+   "look": 3,
+   "unit": "final look",
+   "protocol_version": 3,
+   "what": "values refitted from the priors under protocol version 3 and frozen before the look, on the windows of look 2; every pass of the pass list whose swath held the box is a scored look at its real time and pixel size, a pass that flagged nothing included",
+   "fires": {
+    "plumas_ca": {
+     "protocol_version": 3,
+     "first_overpass_utc": "2021-07-22T21:13:00Z",
+     "last_overpass_utc": "2021-07-25T06:22:00Z",
+     "scored_overpasses": 13,
+     "hidden_pixels": 7144,
+     "scores": {
+      "reconstruction": {
+       "csi_strict_375m": 0.3193546473693576,
+       "csi_one_cell_tolerance": 0.6167083394616856,
+       "hit_rate_at_equal_area": 0.4623231023708877,
+       "brier": 0.04032230299407849,
+       "pixel_ratio_of_sums": 0.9466743740029937,
+       "frp_ratio_of_sums": 0.7970743638767765,
+       "frp_median_abs_relative_error": 0.36820850587581416
+      },
+      "painted_modis": {
+       "csi_strict_375m": 0.2593341133921923,
+       "csi_one_cell_tolerance": 0.4035933681220688,
+       "hit_rate_at_equal_area": 0.44807939716963796,
+       "brier": 0.0803382907777688,
+       "pixel_ratio_of_sums": 0.15033594624860022,
+       "frp_ratio_of_sums": 1.0672714920693338,
+       "frp_median_abs_relative_error": 0.552681378458282
+      },
+      "overlap_ratio": {
+       "csi_strict_375m": 0.2593341133921923,
+       "csi_one_cell_tolerance": 0.4035933681220688,
+       "hit_rate_at_equal_area": 0.44807939716963796,
+       "brier": 0.0803382907777688,
+       "pixel_ratio_of_sums": 1.2980869829721,
+       "frp_ratio_of_sums": 0.8683320859476099,
+       "frp_median_abs_relative_error": 0.5288988708205802
+      }
+     },
+     "frp_interval": {
+      "reconstruction": {
+       "held": 13,
+       "of": 13
+      },
+      "painted_modis": null,
+      "overlap_ratio": {
+       "held": 12,
+       "of": 13
+      }
+     },
+     "pixel_interval": {
+      "reconstruction": {
+       "held": 13,
+       "of": 13
+      },
+      "painted_modis": null,
+      "overlap_ratio": {
+       "held": 3,
+       "of": 13
+      }
+     },
+     "ahead_of_both_on": 6,
+     "scores_judged": 7,
+     "ahead_on": [
+      "csi_strict_375m",
+      "csi_one_cell_tolerance",
+      "hit_rate_at_equal_area",
+      "brier",
+      "pixel_ratio_of_sums",
+      "frp_median_abs_relative_error"
+     ],
+     "looks_that_flagged_nothing_in_the_box": 0,
+     "passes_that_held_part_of_the_box_not_scored": 0,
+     "hidden_rows_of_those_passes": 0,
+     "report": "M9-final-look/final_look_plumas_ca.json"
+    },
+    "lytton_bc": {
+     "protocol_version": 3,
+     "first_overpass_utc": "2021-06-30T21:52:00Z",
+     "last_overpass_utc": "2021-07-03T05:24:00Z",
+     "scored_overpasses": 15,
+     "hidden_pixels": 938,
+     "scores": {
+      "reconstruction": {
+       "csi_strict_375m": 0.19179986101459348,
+       "csi_one_cell_tolerance": 0.4844559585492228,
+       "hit_rate_at_equal_area": 0.270891364902507,
+       "brier": 0.006403133178422658,
+       "pixel_ratio_of_sums": 1.3069356738853448,
+       "frp_ratio_of_sums": 1.0119748832589899,
+       "frp_median_abs_relative_error": 0.46191220368306235
+      },
+      "painted_modis": {
+       "csi_strict_375m": 0.12778702163061564,
+       "csi_one_cell_tolerance": 0.24192905540055798,
+       "hit_rate_at_equal_area": 0.26740947075208915,
+       "brier": 0.015012744508405649,
+       "pixel_ratio_of_sums": 0.1908315565031983,
+       "frp_ratio_of_sums": 1.271345219250516,
+       "frp_median_abs_relative_error": 0.46882306362803194
+      },
+      "overlap_ratio": {
+       "csi_strict_375m": 0.12778702163061564,
+       "csi_one_cell_tolerance": 0.24192905540055798,
+       "hit_rate_at_equal_area": 0.26740947075208915,
+       "brier": 0.015012744508405649,
+       "pixel_ratio_of_sums": 2.1718730411240115,
+       "frp_ratio_of_sums": 1.0343664703822197,
+       "frp_median_abs_relative_error": 0.5093655058157232
+      }
+     },
+     "frp_interval": {
+      "reconstruction": {
+       "held": 15,
+       "of": 15
+      },
+      "painted_modis": null,
+      "overlap_ratio": {
+       "held": 12,
+       "of": 15
+      }
+     },
+     "pixel_interval": {
+      "reconstruction": {
+       "held": 13,
+       "of": 15
+      },
+      "painted_modis": null,
+      "overlap_ratio": {
+       "held": 1,
+       "of": 15
+      }
+     },
+     "ahead_of_both_on": 7,
+     "scores_judged": 7,
+     "ahead_on": [
+      "csi_strict_375m",
+      "csi_one_cell_tolerance",
+      "hit_rate_at_equal_area",
+      "brier",
+      "pixel_ratio_of_sums",
+      "frp_ratio_of_sums",
+      "frp_median_abs_relative_error"
+     ],
+     "looks_that_flagged_nothing_in_the_box": 3,
+     "passes_that_held_part_of_the_box_not_scored": 0,
+     "hidden_rows_of_those_passes": 0,
+     "report": "M9-final-look/final_look_lytton_bc.json"
+    },
+    "evia_greece": {
+     "protocol_version": 3,
+     "first_overpass_utc": "2021-08-05T20:53:00Z",
+     "last_overpass_utc": "2021-08-08T19:46:00Z",
+     "scored_overpasses": 16,
+     "hidden_pixels": 5940,
+     "scores": {
+      "reconstruction": {
+       "csi_strict_375m": 0.27719665271966526,
+       "csi_one_cell_tolerance": 0.5231780699799421,
+       "hit_rate_at_equal_area": 0.4200728976828951,
+       "brier": 0.027455314587285555,
+       "pixel_ratio_of_sums": 0.693156166982347,
+       "frp_ratio_of_sums": 0.8373638038166413,
+       "frp_median_abs_relative_error": 0.36368337945828544
+      },
+      "painted_modis": {
+       "csi_strict_375m": 0.2873293693995478,
+       "csi_one_cell_tolerance": 0.427645121449156,
+       "hit_rate_at_equal_area": 0.44662848216610257,
+       "brier": 0.04285167579761521,
+       "pixel_ratio_of_sums": 0.10336700336700337,
+       "frp_ratio_of_sums": 0.9372085719000763,
+       "frp_median_abs_relative_error": 0.4384443000892958
+      },
+      "overlap_ratio": {
+       "csi_strict_375m": 0.2873293693995478,
+       "csi_one_cell_tolerance": 0.427645121449156,
+       "hit_rate_at_equal_area": 0.44662848216610257,
+       "brier": 0.04285167579761521,
+       "pixel_ratio_of_sums": 0.8389693235231805,
+       "frp_ratio_of_sums": 0.7625128940979021,
+       "frp_median_abs_relative_error": 0.38404044751258515
+      }
+     },
+     "frp_interval": {
+      "reconstruction": {
+       "held": 14,
+       "of": 16
+      },
+      "painted_modis": null,
+      "overlap_ratio": {
+       "held": 13,
+       "of": 16
+      }
+     },
+     "pixel_interval": {
+      "reconstruction": {
+       "held": 14,
+       "of": 16
+      },
+      "painted_modis": null,
+      "overlap_ratio": {
+       "held": 1,
+       "of": 16
+      }
+     },
+     "ahead_of_both_on": 3,
+     "scores_judged": 7,
+     "ahead_on": [
+      "csi_one_cell_tolerance",
+      "brier",
+      "frp_median_abs_relative_error"
+     ],
+     "looks_that_flagged_nothing_in_the_box": 0,
+     "passes_that_held_part_of_the_box_not_scored": 1,
+     "hidden_rows_of_those_passes": 133,
+     "report": "M9-final-look/final_look_evia_greece.json"
+    }
+   }
   }
  ],
  "other_scorings": [
   {
-   "unit": "M1a",
+   "unit": "first reconstruction",
    "protocol_version": 1,
    "what": "untuned priors on the windows of look 1, before anything was fitted",
    "baselines": [
@@ -486,7 +708,7 @@
    }
   },
   {
-   "unit": "M1b",
+   "unit": "one platform hidden",
    "protocol_version": 1,
    "what": "Dixie with one VIIRS platform hidden and the other left visible (an easier test)",
    "baselines": [
@@ -523,7 +745,7 @@
    }
   },
   {
-   "unit": "M4",
+   "unit": "Terra morning estimate",
    "protocol_version": 1,
    "what": "the other direction: MODIS hidden and Terra's morning pass estimated from VIIRS, each fire over its whole period",
    "baselines": [
@@ -573,7 +795,7 @@
    }
   },
   {
-   "unit": "M6",
+   "unit": "other windows",
    "protocol_version": 1,
    "what": "a run with VIIRS hidden from each region's default start date",
    "baselines": [
@@ -623,7 +845,7 @@
    }
   },
   {
-   "unit": "M6",
+   "unit": "other windows",
    "protocol_version": 1,
    "what": "the same from the start the window rule would have picked instead (reported, not adopted)",
    "baselines": [
@@ -660,7 +882,7 @@
    }
   },
   {
-   "unit": "M8",
+   "unit": "sealed protocol",
    "protocol_version": 2,
    "what": "a run with VIIRS hidden from each default start, 24 MODIS frames",
    "baselines": [
@@ -710,9 +932,9 @@
    }
   },
   {
-   "unit": "M8b",
+   "unit": "sealed protocol with scheduled frames",
    "protocol_version": 2,
-   "what": "the same with scheduled looks of the hidden platforms among the frames (a commit that was not landed)",
+   "what": "the same with scheduled looks of the hidden platforms among the frames (a variant that was not adopted)",
    "baselines": [
     "painted_modis",
     "overlap_ratio"
@@ -833,7 +1055,7 @@
   }
  },
  "rows_of_the_test_year_in_test_boxes_outside_exclusion_dates": {
-  "what": "rows the first exclusion rule left available to training (audit finding H-5), recounted from the cached FIRMS rows",
+  "what": "rows the first exclusion rule left available to training (finding 5 of the audit), recounted from the cached FIRMS rows",
   "by_region": {
    "plumas_ca": 32,
    "lytton_bc": 9,
@@ -864,6 +1086,9 @@
   "M8-evidence/test_fire_plumas_ca.json": "4440ffc1a255b75aab711e3de068fe392474f5e33a902ad2b0725f9528af9512",
   "M8b-evidence/payload_evia_greece_2021-08-03_holdout_viirs.json": "968b06863944e30944b11868fdcf154fe998679613f613c88b2714fe32641971",
   "M8b-evidence/payload_lytton_bc_2021-06-30_holdout_viirs.json": "3acbf99e30e5f99faea396b6a1073c0ecee6a5f4d2254ff8f9e2445213286c81",
-  "M8b-evidence/payload_plumas_ca_2021-07-22_holdout_viirs.json": "32bfdcc19ec05c78d70412e466626ed1d2fc0ece7e48bc7aa4960800b54cb3f0"
+  "M8b-evidence/payload_plumas_ca_2021-07-22_holdout_viirs.json": "32bfdcc19ec05c78d70412e466626ed1d2fc0ece7e48bc7aa4960800b54cb3f0",
+  "M9-final-look/final_look_evia_greece.json": "c9a3b0feb03aa86942acc95e637991a8dbe055897e7359e829d442497e49acbf",
+  "M9-final-look/final_look_lytton_bc.json": "0467ef7046d1403b4bac16bd53b566e5d58715c60bd646d3949973b379fc1248",
+  "M9-final-look/final_look_plumas_ca.json": "6e80673850b0a3740e94374a095bb44a039d55ed2b5d0f7d5e722e6a3098fa4c"
  }
 }

@@ -1,17 +1,17 @@
 {
  "what": "single VIIRS over MODIS FRP ratio for the overlap-ratio baseline",
  "fit": {
-  "ratio": 0.8129,
-  "ratio_p05": 0.078,
-  "ratio_p50": 0.9962,
-  "ratio_p95": 6.3742,
-  "n_pairs": 2673,
-  "sum_viirs_mw": 2029998.1,
-  "sum_modis_mw": 2497189.6,
+  "ratio": 0.8136,
+  "ratio_p05": 0.0787,
+  "ratio_p50": 0.9958,
+  "ratio_p95": 6.3768,
+  "n_pairs": 2685,
+  "sum_viirs_mw": 2034088.2,
+  "sum_modis_mw": 2500046.9,
   "trained_on": "real FIRMS rows of plumas_ca, lytton_bc, evia_greece context boxes, years 2018, 2019, 2020, 2022, 2023, 2021, with the three 2021 test fires excluded (backend/model/training.py)",
   "definition": "Pairs are one MODIS overpass and the VIIRS overpass nearest in time, at most 90 minutes apart, both with detections in the training rows given. ratio = sum of VIIRS FRP / sum of MODIS FRP over all pairs; the percentiles are of the per pair ratios."
  },
- "training_rows": 245595,
+ "training_rows": 262125,
  "training_years": [
   2018,
   2019,
@@ -38,5 +38,5 @@
   ]
  },
  "outside_reference": "Sofiev and Kouznetsov (GMD 19, 10123, 2026) report 177 TW for VIIRS against 128 TW for MODIS over the 2020 Aqua and Suomi NPP granules worldwide, a ratio of 1.38",
- "generated_utc": "2026-11-14T05:24:48Z"
+ "generated_utc": "2026-11-14T08:52:18Z"
 }

@@ -1,7 +1,7 @@
 {
  "what": "reconstruction parameters (backend/model/occupancy.py) fitted on real fire episodes",
  "adopted": true,
- "decision": "fitted values are used: on validation fires they are ahead of both baselines on 3 of 7 scores, tied on 4 and behind on none, beyond the noise of resampling the fires",
+ "decision": "fitted values are used: on validation fires they are ahead of both baselines on 2 of 7 scores, tied on 5 and behind on none, beyond the noise of resampling the fires",
  "parameters": {
   "tau_res_h": 12.0,
   "spread_km_per_h": 0.15,
@@ -12,20 +12,21 @@
   "age_tau_h": 6.0,
   "diurnal_amplitude": 0.38,
   "process_log_sd_per_sqrt_h": 0.15,
-  "frp_scale": 0.5418491718367228,
-  "frp_scale_night": 0.41175225096886964,
-  "count_scale_day": 0.520970980552464,
-  "count_scale_night": 1.6457187879257635,
+  "frp_scale": 0.5171996697594163,
+  "frp_scale_night": 0.5272951707316146,
+  "count_scale_day": 0.4540386724839027,
+  "count_scale_night": 1.664485124043849,
   "tau_smolder_h": 24.0,
   "smolder_day": 0.2,
   "smolder_night": 0.4,
   "smolder_frp_mw": 1.0,
   "dedup_overlap": false,
-  "frp_interval_lo": 0.2123562014535429,
-  "frp_interval_hi": 2.540122998539028,
-  "pixel_interval_lo": 0.2815224389526015,
-  "pixel_interval_hi": 1.9192359655288012,
-  "fitted_on": "21 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)"
+  "frp_interval_lo": 0.0,
+  "frp_interval_hi": 2.62415395943915,
+  "pixel_interval_lo": 0.0,
+  "pixel_interval_hi": 1.9342794986951775,
+  "hidden_pixel_scale": 1.0,
+  "fitted_on": "22 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)"
  },
  "priors": {
   "tau_res_h": 12.0,
@@ -50,11 +51,353 @@
   "frp_interval_hi": null,
   "pixel_interval_lo": null,
   "pixel_interval_hi": null,
+  "hidden_pixel_scale": 1.0,
   "fitted_on": "nothing: every value is a prior"
  },
- "trained_on": "21 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)",
- "validated_on": "7 real fire episodes of 2024, 2025 in the same three context boxes (other years than training; none of them a test fire), each chosen from MODIS rows alone",
+ "trained_on": "22 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)",
+ "validated_on": "7 real fire episodes of 2024, 2025 in the same three context boxes (other years than training; none of them a test fire)",
  "rule": "validation fires are resampled whole (2,000 times); a score is ahead when the 90 percent interval of its improvement over each baseline is above zero, behind when it is below zero against one of them, a tie otherwise. The fitted values are used when no score is behind and at least one is ahead. A part is on when every score of the part is ahead (and, for FRP, the 90 percent interval held for at least 80 percent of validation overpasses); otherwise the part is experimental.",
+ "protocol": {
+  "validated_under": 3,
+  "parameters_fitted_under": 3,
+  "name": "sealed hidden rows, schedule from the pass list, empty passes scored",
+  "note": "fitted and validated under the same protocol"
+ },
+ "intervals": {
+  "rule": "the 5th and the 95th percentile of hidden over predicted on the training looks, every look with a positive prediction counted. A pass that flagged nothing has a ratio of zero, so when more than one training look in twenty flagged nothing the interval starts at zero: cloud is not known, and an interval that could not hold an empty pass would claim more than the record supports.",
+  "level": 0.9,
+  "frp": {
+   "lo": 0.0,
+   "hi": 2.62415395943915,
+   "training_looks": 400,
+   "looks_that_flagged_nothing": 29,
+   "given_a_detection": [
+    0.19514928236122803,
+    2.6469299501475723
+   ]
+  },
+  "pixels": {
+   "lo": 0.0,
+   "hi": 1.9342794986951775,
+   "training_looks": 400,
+   "looks_that_flagged_nothing": 29,
+   "given_a_detection": [
+    0.2552432992459307,
+    1.9504327590323198
+   ]
+  }
+ },
+ "empty_looks": {
+  "training": {
+   "scored_looks": 400,
+   "no_hidden_pixel_in_the_box": 29,
+   "passes_that_held_part_of_the_box_not_scored": 16
+  },
+  "validation": {
+   "scored_looks": 153,
+   "no_hidden_pixel_in_the_box": 6,
+   "passes_that_held_part_of_the_box_not_scored": 5
+  }
+ },
+ "previous_decision": {
+  "protocol": "version 2: hidden rows sealed, predictions published on nominal half-day slots with a typical pixel size, only hidden overpasses that left a detection scored; the values had been fitted under version 1 and were not refitted",
+  "adopted": true,
+  "decision": "fitted values are used: on validation fires they are ahead of both baselines on 3 of 7 scores, tied on 4 and behind on none, beyond the noise of resampling the fires",
+  "validated_on": "7 real fire episodes of 2024, 2025 in the same three context boxes (other years than training; none of them a test fire), each chosen from MODIS rows alone",
+  "parts": {
+   "where the fire is (cells and probabilities)": "experimental",
+   "how many pixels the hidden instrument flags": "on",
+   "total fire radiative power and its interval": "experimental"
+  },
+  "classes": {
+   "ahead": 3,
+   "tie": 4,
+   "behind": 0
+  },
+  "scores": {
+   "csi_strict_375m": {
+    "reconstruction": 0.30370122630992197,
+    "painted_modis": 0.30278029378175086,
+    "overlap_ratio": 0.30278029378175086,
+    "class": "tie",
+    "improvement_interval": {
+     "painted_modis": [
+      -0.01469,
+      0.02286
+     ],
+     "overlap_ratio": [
+      -0.01469,
+      0.02286
+     ]
+    }
+   },
+   "csi_one_cell_tolerance": {
+    "reconstruction": 0.5801151523662407,
+    "painted_modis": 0.47644346431435447,
+    "overlap_ratio": 0.47644346431435447,
+    "class": "ahead",
+    "improvement_interval": {
+     "painted_modis": [
+      0.0734,
+      0.13224
+     ],
+     "overlap_ratio": [
+      0.0734,
+      0.13224
+     ]
+    }
+   },
+   "hit_rate_at_equal_area": {
+    "reconstruction": 0.574927403331805,
+    "painted_modis": 0.5875362983340975,
+    "overlap_ratio": 0.5875362983340975,
+    "class": "tie",
+    "improvement_interval": {
+     "painted_modis": [
+      -0.04189,
+      0.02619
+     ],
+     "overlap_ratio": [
+      -0.04189,
+      0.02619
+     ]
+    }
+   },
+   "brier": {
+    "reconstruction": 0.009012419787876088,
+    "painted_modis": 0.01840056810390651,
+    "overlap_ratio": 0.01840056810390651,
+    "class": "ahead",
+    "improvement_interval": {
+     "painted_modis": [
+      0.00499,
+      0.01545
+     ],
+     "overlap_ratio": [
+      0.00499,
+      0.01545
+     ]
+    }
+   },
+   "pixel_count_error_of_sums": {
+    "reconstruction": 0.054976645665870016,
+    "painted_modis": 0.8039322181186183,
+    "overlap_ratio": 0.5298815989572019,
+    "class": "ahead",
+    "improvement_interval": {
+     "painted_modis": [
+      0.39843,
+      0.79759
+     ],
+     "overlap_ratio": [
+      0.03436,
+      0.60646
+     ]
+    }
+   },
+   "frp_error_of_sums": {
+    "reconstruction": 0.0691002291783176,
+    "painted_modis": 0.8434512841240458,
+    "overlap_ratio": 0.49983198736832524,
+    "class": "tie",
+    "improvement_interval": {
+     "painted_modis": [
+      0.06668,
+      1.36452
+     ],
+     "overlap_ratio": [
+      -0.1246,
+      0.91672
+     ]
+    }
+   },
+   "frp_median_abs_relative_error": {
+    "reconstruction": 0.49090852761661685,
+    "painted_modis": 0.619827598460297,
+    "overlap_ratio": 0.6334944414082471,
+    "class": "tie",
+    "improvement_interval": {
+     "painted_modis": [
+      -0.12654,
+      0.24436
+     ],
+     "overlap_ratio": [
+      -0.12293,
+      0.25992
+     ]
+    }
+   }
+  },
+  "interval": {
+   "stated_level": 0.9,
+   "observed_coverage": 0.8026315789473685,
+   "overpasses": 152
+  },
+  "generated_utc": "2026-11-14T08:52:32Z",
+  "parameters": {
+   "tau_res_h": 12.0,
+   "spread_km_per_h": 0.15,
+   "line_width_km": 0.375,
+   "new_cell_weight": 0.02,
+   "burned_discount": 0.5,
+   "clear_sky": 0.8,
+   "age_tau_h": 6.0,
+   "diurnal_amplitude": 0.38,
+   "process_log_sd_per_sqrt_h": 0.15,
+   "frp_scale": 0.5418491718367228,
+   "frp_scale_night": 0.41175225096886964,
+   "count_scale_day": 0.520970980552464,
+   "count_scale_night": 1.6457187879257635,
+   "tau_smolder_h": 24.0,
+   "smolder_day": 0.2,
+   "smolder_night": 0.4,
+   "smolder_frp_mw": 1.0,
+   "dedup_overlap": false,
+   "frp_interval_lo": 0.2123562014535429,
+   "frp_interval_hi": 2.540122998539028,
+   "pixel_interval_lo": 0.2815224389526015,
+   "pixel_interval_hi": 1.9192359655288012,
+   "fitted_on": "21 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)"
+  }
+ },
+ "earlier_decisions": [
+  {
+   "protocol": "version 1: windows counted hidden overpasses, each prediction used the hidden overpass's time and pixel size, and the calendar ratio held the 2021 test fires",
+   "adopted": true,
+   "decision": "fitted values are used: on validation fires they are ahead of both baselines on 3 of 7 scores, tied on 4 and behind on none, beyond the noise of resampling the fires",
+   "validated_on": "6 real fire episodes of 2024, 2025 in the same three context boxes (other years than training; none of them a test fire)",
+   "parts": {
+    "where the fire is (cells and probabilities)": "experimental",
+    "how many pixels the hidden instrument flags": "on",
+    "total fire radiative power and its interval": "experimental"
+   },
+   "classes": {
+    "ahead": 3,
+    "tie": 4,
+    "behind": 0
+   },
+   "scores": {
+    "csi_strict_375m": {
+     "reconstruction": 0.2800436205016358,
+     "painted_modis": 0.27855672505534623,
+     "overlap_ratio": 0.27855672505534623,
+     "class": "tie",
+     "improvement_interval": {
+      "painted_modis": [
+       -0.00953,
+       0.01584
+      ],
+      "overlap_ratio": [
+       -0.00953,
+       0.01584
+      ]
+     }
+    },
+    "csi_one_cell_tolerance": {
+     "reconstruction": 0.5625530950897661,
+     "painted_modis": 0.4538907076303198,
+     "overlap_ratio": 0.4538907076303198,
+     "class": "ahead",
+     "improvement_interval": {
+      "painted_modis": [
+       0.07062,
+       0.13379
+      ],
+      "overlap_ratio": [
+       0.07062,
+       0.13379
+      ]
+     }
+    },
+    "hit_rate_at_equal_area": {
+     "reconstruction": 0.564945845521385,
+     "painted_modis": 0.5670013439797612,
+     "overlap_ratio": 0.5670013439797612,
+     "class": "tie",
+     "improvement_interval": {
+      "painted_modis": [
+       -0.01908,
+       0.02515
+      ],
+      "overlap_ratio": [
+       -0.01908,
+       0.02515
+      ]
+     }
+    },
+    "brier": {
+     "reconstruction": 0.009581771073892933,
+     "painted_modis": 0.0198098643944734,
+     "overlap_ratio": 0.0198098643944734,
+     "class": "ahead",
+     "improvement_interval": {
+      "painted_modis": [
+       0.00557,
+       0.01639
+      ],
+      "overlap_ratio": [
+       0.00557,
+       0.01639
+      ]
+     }
+    },
+    "pixel_count_error_of_sums": {
+     "reconstruction": 0.16958700141288996,
+     "painted_modis": 0.7982827953483317,
+     "overlap_ratio": 0.5730779263123573,
+     "class": "ahead",
+     "improvement_interval": {
+      "painted_modis": [
+       0.41247,
+       0.76334
+      ],
+      "overlap_ratio": [
+       0.00419,
+       0.63323
+      ]
+     }
+    },
+    "frp_error_of_sums": {
+     "reconstruction": 0.10960509753228076,
+     "painted_modis": 0.6944983692831039,
+     "overlap_ratio": 0.3774577109568711,
+     "class": "tie",
+     "improvement_interval": {
+      "painted_modis": [
+       -0.05308,
+       0.94597
+      ],
+      "overlap_ratio": [
+       -0.17008,
+       0.57948
+      ]
+     }
+    },
+    "frp_median_abs_relative_error": {
+     "reconstruction": 0.405515861880401,
+     "painted_modis": 0.5480218605514275,
+     "overlap_ratio": 0.6018857136450778,
+     "class": "tie",
+     "improvement_interval": {
+      "painted_modis": [
+       -0.04923,
+       0.28189
+      ],
+      "overlap_ratio": [
+       -0.03637,
+       0.33904
+      ]
+     }
+    }
+   },
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9054054054054054,
+    "overpasses": 74
+   },
+   "generated_utc": "2026-11-14T05:49:00Z"
+  }
+ ],
  "first_rule_outcome": {
   "rule": "every cell score strictly above both baselines on the pooled validation fires, no allowance for noise",
   "met": false,
@@ -66,73 +409,73 @@
    "ahead_of_both_baselines_on_validation": false,
    "scores": {
     "csi_strict_375m": {
-     "reconstruction": 0.30370122630992197,
-     "painted_modis": 0.30278029378175086,
-     "overlap_ratio": 0.30278029378175086,
+     "reconstruction": 0.29817249832850456,
+     "painted_modis": 0.31250773482942124,
+     "overlap_ratio": 0.31250773482942124,
      "better_is": "higher",
-     "beats_every_baseline": true,
+     "beats_every_baseline": false,
      "improvement_interval": {
       "painted_modis": [
-       -0.01469,
-       0.02286
+       -0.03262,
+       0.00897
       ],
       "overlap_ratio": [
-       -0.01469,
-       0.02286
+       -0.03262,
+       0.00897
       ]
      },
      "class": "tie"
     },
     "csi_one_cell_tolerance": {
-     "reconstruction": 0.5801151523662407,
-     "painted_modis": 0.47644346431435447,
-     "overlap_ratio": 0.47644346431435447,
+     "reconstruction": 0.5781834421928208,
+     "painted_modis": 0.4943327911003831,
+     "overlap_ratio": 0.4943327911003831,
      "better_is": "higher",
      "beats_every_baseline": true,
      "improvement_interval": {
       "painted_modis": [
-       0.0734,
-       0.13224
+       0.05524,
+       0.11503
       ],
       "overlap_ratio": [
-       0.0734,
-       0.13224
+       0.05524,
+       0.11503
       ]
      },
      "class": "ahead"
     },
     "hit_rate_at_equal_area": {
-     "reconstruction": 0.574927403331805,
-     "painted_modis": 0.5875362983340975,
-     "overlap_ratio": 0.5875362983340975,
+     "reconstruction": 0.5669496061787872,
+     "painted_modis": 0.5792995335321557,
+     "overlap_ratio": 0.5792995335321557,
      "better_is": "higher",
      "beats_every_baseline": false,
      "improvement_interval": {
       "painted_modis": [
-       -0.04189,
-       0.02619
+       -0.035,
+       0.02156
       ],
       "overlap_ratio": [
-       -0.04189,
-       0.02619
+       -0.035,
+       0.02156
       ]
      },
      "class": "tie"
     },
     "brier": {
-     "reconstruction": 0.009012419787876088,
-     "painted_modis": 0.01840056810390651,
-     "overlap_ratio": 0.01840056810390651,
+     "reconstruction": 0.008997541085931685,
+     "painted_modis": 0.01721298455337963,
+     "overlap_ratio": 0.01721298455337963,
      "better_is": "lower",
      "beats_every_baseline": true,
      "improvement_interval": {
       "painted_modis": [
-       0.00499,
-       0.01545
+       0.00457,
+       0.01326
       ],
       "overlap_ratio": [
-       0.00499,
-       0.01545
+       0.00457,
+       0.01326
       ]
      },
      "class": "ahead"
@@ -140,26 +483,26 @@
    }
   },
   "how many pixels the hidden instrument flags": {
-   "status": "on",
-   "ahead_of_both_baselines_on_validation": true,
+   "status": "experimental",
+   "ahead_of_both_baselines_on_validation": false,
    "scores": {
     "pixel_count_error_of_sums": {
-     "reconstruction": 0.054976645665870016,
-     "painted_modis": 0.8039322181186183,
-     "overlap_ratio": 0.5298815989572019,
+     "reconstruction": 0.09745028794958177,
+     "painted_modis": 0.8172335108116918,
+     "overlap_ratio": 0.5134168206019776,
      "better_is": "lower",
      "beats_every_baseline": true,
      "improvement_interval": {
       "painted_modis": [
-       0.39843,
-       0.79759
+       0.33124,
+       0.81143
       ],
       "overlap_ratio": [
-       0.03436,
-       0.60646
+       -0.05084,
+       0.59455
       ]
      },
-     "class": "ahead"
+     "class": "tie"
     }
    }
   },
@@ -168,37 +511,37 @@
    "ahead_of_both_baselines_on_validation": false,
    "scores": {
     "frp_error_of_sums": {
-     "reconstruction": 0.0691002291783176,
-     "painted_modis": 0.8434512841240458,
-     "overlap_ratio": 0.49983198736832524,
+     "reconstruction": 0.05688716309621966,
+     "painted_modis": 0.48810874869345855,
+     "overlap_ratio": 0.21072530100262687,
      "better_is": "lower",
      "beats_every_baseline": true,
      "improvement_interval": {
       "painted_modis": [
-       0.06668,
-       1.36452
+       -0.06554,
+       0.97654
       ],
       "overlap_ratio": [
-       -0.1246,
-       0.91672
+       -0.13476,
+       0.59126
       ]
      },
      "class": "tie"
     },
     "frp_median_abs_relative_error": {
-     "reconstruction": 0.49090852761661685,
-     "painted_modis": 0.619827598460297,
-     "overlap_ratio": 0.6334944414082471,
+     "reconstruction": 0.5742556934137136,
+     "painted_modis": 0.6002795248078266,
+     "overlap_ratio": 0.6192755257196645,
      "better_is": "lower",
      "beats_every_baseline": true,
      "improvement_interval": {
       "painted_modis": [
-       -0.12654,
-       0.24436
+       -0.28938,
+       0.19829
       ],
       "overlap_ratio": [
-       -0.12293,
-       0.25992
+       -0.29608,
+       0.24855
       ]
      },
      "class": "tie"
@@ -208,760 +551,6 @@
   }
  },
  "evidence": {
-  "training_fitted": {
-   "verdict": {
-    "evaluated": true,
-    "method": "reconstruction",
-    "baselines": [
-     "painted_modis",
-     "overlap_ratio"
-    ],
-    "scores": {
-     "csi_strict_375m": {
-      "reconstruction": 0.28091792558505646,
-      "painted_modis": 0.28263559225362617,
-      "overlap_ratio": 0.28263559225362617,
-      "better_is": "higher",
-      "beats_every_baseline": false
-     },
-     "csi_one_cell_tolerance": {
-      "reconstruction": 0.561340590233492,
-      "painted_modis": 0.43769500992777816,
-      "overlap_ratio": 0.43769500992777816,
-      "better_is": "higher",
-      "beats_every_baseline": true
-     },
-     "hit_rate_at_equal_area": {
-      "reconstruction": 0.5652969297412975,
-      "painted_modis": 0.5558911343906943,
-      "overlap_ratio": 0.5558911343906943,
-      "better_is": "higher",
-      "beats_every_baseline": true
-     },
-     "brier": {
-      "reconstruction": 0.010950840211466825,
-      "painted_modis": 0.021905425206043848,
-      "overlap_ratio": 0.021905425206043848,
-      "better_is": "lower",
-      "beats_every_baseline": true
-     },
-     "pixel_count_error_of_sums": {
-      "reconstruction": 0.03332913465171927,
-      "painted_modis": 0.8285426376117899,
-      "overlap_ratio": 0.5871545534702103,
-      "better_is": "lower",
-      "beats_every_baseline": true
-     },
-     "frp_error_of_sums": {
-      "reconstruction": 0.008108808115396382,
-      "painted_modis": 0.7276170645040732,
-      "overlap_ratio": 0.4043799114021287,
-      "better_is": "lower",
-      "beats_every_baseline": true
-     },
-     "frp_median_abs_relative_error": {
-      "reconstruction": 0.3975253253613056,
-      "painted_modis": 0.4734089465341893,
-      "overlap_ratio": 0.4171331898188928,
-      "better_is": "lower",
-      "beats_every_baseline": true
-     }
-    },
-    "beats_every_baseline_on": 6,
-    "scores_judged": 7,
-    "interval": {
-     "stated_level": 0.9,
-     "observed_coverage": 0.8412162162162162,
-     "overpasses": 296
-    },
-    "beats_every_baseline_on_every_score": false
-   },
-   "methods": {
-    "painted_modis": {
-     "strict_375m": {
-      "tp": 32210,
-      "fp": 56020,
-      "fn": 25733,
-      "tn": 3564901,
-      "hit_rate": 0.5558911343906943,
-      "false_alarm_ratio": 0.6349314292190865,
-      "false_alarm_rate": 0.015471201940058897,
-      "csi": 0.28263559225362617
-     },
-     "tolerant_1_cell": {
-      "tp": 40120,
-      "fp": 33719,
-      "fn": 17823,
-      "tn": 3564901,
-      "hit_rate": 0.6924046045251367,
-      "false_alarm_ratio": 0.45665569685396606,
-      "false_alarm_rate": 0.009369980714829574,
-      "csi": 0.43769500992777816
-     },
-     "equal_area": {
-      "tp": 32210,
-      "fp": 56020,
-      "fn": 25733,
-      "tn": 3564901,
-      "hit_rate": 0.5558911343906943,
-      "false_alarm_ratio": 0.6349314292190865,
-      "false_alarm_rate": 0.015471201940058897,
-      "csi": 0.28263559225362617
-     },
-     "brier": 0.021905425206043848,
-     "pixel_count": {
-      "n_overpasses": 296,
-      "n_with_zero_hidden_total": 19,
-      "median_relative_error": -0.8085106382978723,
-      "median_abs_relative_error": 0.8089887640449438,
-      "ratio_of_sums": 0.1714573623882101,
-      "sum_predicted": 6806.0,
-      "sum_hidden": 39695.0,
-      "interval": {
-       "stated_level": null,
-       "n": 0,
-       "covered": 0,
-       "coverage": null,
-       "note": "method states no interval"
-      }
-     },
-     "frp_total": {
-      "n_overpasses": 296,
-      "n_with_zero_hidden_total": 19,
-      "median_relative_error": -0.008649588213384136,
-      "median_abs_relative_error": 0.4734089465341893,
-      "sum_predicted_mw": 1918235.3,
-      "sum_hidden_mw": 1110335.93,
-      "ratio_of_sums": 1.7276170645040732
-     },
-     "interval": {
-      "stated_level": null,
-      "n": 0,
-      "covered": 0,
-      "coverage": null,
-      "note": "method states no interval"
-     }
-    },
-    "overlap_ratio": {
-     "strict_375m": {
-      "tp": 32210,
-      "fp": 56020,
-      "fn": 25733,
-      "tn": 3564901,
-      "hit_rate": 0.5558911343906943,
-      "false_alarm_ratio": 0.6349314292190865,
-      "false_alarm_rate": 0.015471201940058897,
-      "csi": 0.28263559225362617
-     },
-     "tolerant_1_cell": {
-      "tp": 40120,
-      "fp": 33719,
-      "fn": 17823,
-      "tn": 3564901,
-      "hit_rate": 0.6924046045251367,
-      "false_alarm_ratio": 0.45665569685396606,
-      "false_alarm_rate": 0.009369980714829574,
-      "csi": 0.43769500992777816
-     },
-     "equal_area": {
-      "tp": 32210,
-      "fp": 56020,
-      "fn": 25733,
-      "tn": 3564901,
-      "hit_rate": 0.5558911343906943,
-      "false_alarm_ratio": 0.6349314292190865,
-      "false_alarm_rate": 0.015471201940058897,
-      "csi": 0.28263559225362617
-     },
-     "brier": 0.021905425206043848,
-     "pixel_count": {
-      "n_overpasses": 296,
-      "n_with_zero_hidden_total": 19,
-      "median_relative_error": 0.7491025641025642,
-      "median_abs_relative_error": 0.7491025641025642,
-      "ratio_of_sums": 1.5871545534702103,
-      "sum_predicted": 63002.1,
-      "sum_hidden": 39695.0,
-      "interval": {
-       "stated_level": 0.8,
-       "n": 296,
-       "covered": 25,
-       "coverage": 0.08445945945945946,
-       "standard_error": 0.0162
-      }
-     },
-     "frp_total": {
-      "n_overpasses": 296,
-      "n_with_zero_hidden_total": 19,
-      "median_relative_error": -0.19413152340355094,
-      "median_abs_relative_error": 0.4171331898188928,
-      "sum_predicted_mw": 1559333.475,
-      "sum_hidden_mw": 1110335.93,
-      "ratio_of_sums": 1.4043799114021287
-     },
-     "interval": {
-      "stated_level": 0.9,
-      "n": 296,
-      "covered": 260,
-      "coverage": 0.8783783783783784,
-      "standard_error": 0.019
-     }
-    },
-    "reconstruction": {
-     "strict_375m": {
-      "tp": 27837,
-      "fp": 41150,
-      "fn": 30106,
-      "tn": 3579771,
-      "hit_rate": 0.48042041316466183,
-      "false_alarm_ratio": 0.5964891936161886,
-      "false_alarm_rate": 0.011364511957040763,
-      "csi": 0.28091792558505646
-     },
-     "tolerant_1_cell": {
-      "tp": 44452,
-      "fp": 21246,
-      "fn": 13491,
-      "tn": 3579771,
-      "hit_rate": 0.7671677338073624,
-      "false_alarm_ratio": 0.3233888398429176,
-      "false_alarm_rate": 0.005899999916690202,
-      "csi": 0.561340590233492
-     },
-     "equal_area": {
-      "tp": 32755,
-      "fp": 55475,
-      "fn": 25188,
-      "tn": 3565446,
-      "hit_rate": 0.5652969297412975,
-      "false_alarm_ratio": 0.6287543919301825,
-      "false_alarm_rate": 0.015320687747675246,
-      "csi": 0.2887989560739918
-     },
-     "brier": 0.010950840211466825,
-     "pixel_count": {
-      "n_overpasses": 296,
-      "n_with_zero_hidden_total": 19,
-      "median_relative_error": 0.15206896551724125,
-      "median_abs_relative_error": 0.32490079365079366,
-      "ratio_of_sums": 1.0333291346517193,
-      "sum_predicted": 41018.0,
-      "sum_hidden": 39695.0,
-      "interval": {
-       "stated_level": 0.9,
-       "n": 296,
-       "covered": 249,
-       "coverage": 0.8412162162162162,
-       "standard_error": 0.0212
-      }
-     },
-     "frp_total": {
-      "n_overpasses": 296,
-      "n_with_zero_hidden_total": 19,
-      "median_relative_error": -0.0781775530839231,
-      "median_abs_relative_error": 0.3975253253613056,
-      "sum_predicted_mw": 1119339.431,
-      "sum_hidden_mw": 1110335.93,
-      "ratio_of_sums": 1.0081088081153964
-     },
-     "interval": {
-      "stated_level": 0.9,
-      "n": 296,
-      "covered": 249,
-      "coverage": 0.8412162162162162,
-      "standard_error": 0.0212
-     }
-    },
-    "_scored_overpasses": 296,
-    "_runs": 21
-   }
-  },
-  "training_episodes": [
-   {
-    "region_id": "plumas_ca",
-    "year": 2018,
-    "tile": [
-     1,
-     1
-    ],
-    "box": [
-     -121.96,
-     39.48,
-     -121.44,
-     39.86
-    ],
-    "first_overpass_utc": "2018-11-07T21:49:00Z",
-    "last_overpass_utc": "2018-11-10T19:40:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 11,
-    "viirs_overpasses": 13,
-    "modis_pixels_in_box": 469,
-    "viirs_pixels_in_box": 3990,
-    "span_hours": 69.85,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "plumas_ca",
-    "year": 2018,
-    "tile": [
-     2,
-     1
-    ],
-    "box": [
-     -121.44,
-     39.48,
-     -120.92,
-     39.86
-    ],
-    "first_overpass_utc": "2018-11-12T05:49:00Z",
-    "last_overpass_utc": "2018-11-15T06:20:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 10,
-    "viirs_overpasses": 14,
-    "modis_pixels_in_box": 127,
-    "viirs_pixels_in_box": 928,
-    "span_hours": 72.52,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "plumas_ca",
-    "year": 2018,
-    "tile": [
-     0,
-     4
-    ],
-    "box": [
-     -122.48,
-     40.62,
-     -121.96,
-     41.0
-    ],
-    "first_overpass_utc": "2018-08-13T21:26:00Z",
-    "last_overpass_utc": "2018-08-16T06:40:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 11,
-    "viirs_overpasses": 13,
-    "modis_pixels_in_box": 122,
-    "viirs_pixels_in_box": 710,
-    "span_hours": 57.23,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "plumas_ca",
-    "year": 2019,
-    "tile": [
-     3,
-     2
-    ],
-    "box": [
-     -120.92,
-     39.86,
-     -120.4,
-     40.24
-    ],
-    "first_overpass_utc": "2019-09-06T18:25:00Z",
-    "last_overpass_utc": "2019-09-08T21:31:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 11,
-    "viirs_overpasses": 13,
-    "modis_pixels_in_box": 343,
-    "viirs_pixels_in_box": 2861,
-    "span_hours": 51.1,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "plumas_ca",
-    "year": 2020,
-    "tile": [
-     2,
-     1
-    ],
-    "box": [
-     -121.44,
-     39.48,
-     -120.92,
-     39.86
-    ],
-    "first_overpass_utc": "2020-09-08T21:44:00Z",
-    "last_overpass_utc": "2020-09-11T05:18:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 11,
-    "viirs_overpasses": 13,
-    "modis_pixels_in_box": 1318,
-    "viirs_pixels_in_box": 10884,
-    "span_hours": 55.57,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "plumas_ca",
-    "year": 2020,
-    "tile": [
-     3,
-     3
-    ],
-    "box": [
-     -120.92,
-     40.24,
-     -120.4,
-     40.62
-    ],
-    "first_overpass_utc": "2020-08-21T18:38:00Z",
-    "last_overpass_utc": "2020-08-24T19:08:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 10,
-    "viirs_overpasses": 14,
-    "modis_pixels_in_box": 240,
-    "viirs_pixels_in_box": 1626,
-    "span_hours": 72.5,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "plumas_ca",
-    "year": 2020,
-    "tile": [
-     2,
-     2
-    ],
-    "box": [
-     -121.44,
-     39.86,
-     -120.92,
-     40.24
-    ],
-    "first_overpass_utc": "2020-09-28T21:19:00Z",
-    "last_overpass_utc": "2020-10-01T06:32:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 12,
-    "viirs_overpasses": 12,
-    "modis_pixels_in_box": 99,
-    "viirs_pixels_in_box": 530,
-    "span_hours": 57.22,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "plumas_ca",
-    "year": 2022,
-    "tile": [
-     3,
-     0
-    ],
-    "box": [
-     -120.92,
-     39.1,
-     -120.4,
-     39.48
-    ],
-    "first_overpass_utc": "2022-09-13T21:36:00Z",
-    "last_overpass_utc": "2022-09-16T09:54:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 10,
-    "viirs_overpasses": 14,
-    "modis_pixels_in_box": 108,
-    "viirs_pixels_in_box": 883,
-    "span_hours": 60.3,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "lytton_bc",
-    "year": 2018,
-    "tile": [
-     3,
-     1
-    ],
-    "box": [
-     -121.31,
-     49.66,
-     -120.77,
-     50.04
-    ],
-    "first_overpass_utc": "2018-08-21T22:04:00Z",
-    "last_overpass_utc": "2018-08-23T20:27:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 11,
-    "viirs_overpasses": 13,
-    "modis_pixels_in_box": 81,
-    "viirs_pixels_in_box": 609,
-    "span_hours": 46.38,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "lytton_bc",
-    "year": 2022,
-    "tile": [
-     1,
-     2
-    ],
-    "box": [
-     -122.39,
-     50.04,
-     -121.85,
-     50.42
-    ],
-    "first_overpass_utc": "2022-09-02T09:28:00Z",
-    "last_overpass_utc": "2022-09-04T05:38:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 10,
-    "viirs_overpasses": 14,
-    "modis_pixels_in_box": 158,
-    "viirs_pixels_in_box": 1016,
-    "span_hours": 44.17,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "lytton_bc",
-    "year": 2022,
-    "tile": [
-     1,
-     4
-    ],
-    "box": [
-     -122.39,
-     50.8,
-     -121.85,
-     51.18
-    ],
-    "first_overpass_utc": "2022-09-10T18:33:00Z",
-    "last_overpass_utc": "2022-09-12T18:21:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 12,
-    "viirs_overpasses": 12,
-    "modis_pixels_in_box": 72,
-    "viirs_pixels_in_box": 452,
-    "span_hours": 47.8,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "lytton_bc",
-    "year": 2023,
-    "tile": [
-     2,
-     2
-    ],
-    "box": [
-     -121.85,
-     50.04,
-     -121.31,
-     50.42
-    ],
-    "first_overpass_utc": "2023-08-19T11:27:00Z",
-    "last_overpass_utc": "2023-08-22T05:21:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 9,
-    "viirs_overpasses": 15,
-    "modis_pixels_in_box": 156,
-    "viirs_pixels_in_box": 1027,
-    "span_hours": 65.9,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "lytton_bc",
-    "year": 2023,
-    "tile": [
-     4,
-     3
-    ],
-    "box": [
-     -120.77,
-     50.42,
-     -120.23,
-     50.8
-    ],
-    "first_overpass_utc": "2023-08-04T19:17:00Z",
-    "last_overpass_utc": "2023-08-06T10:51:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 10,
-    "viirs_overpasses": 14,
-    "modis_pixels_in_box": 139,
-    "viirs_pixels_in_box": 798,
-    "span_hours": 39.57,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "lytton_bc",
-    "year": 2023,
-    "tile": [
-     2,
-     1
-    ],
-    "box": [
-     -121.85,
-     49.66,
-     -121.31,
-     50.04
-    ],
-    "first_overpass_utc": "2023-08-18T05:54:00Z",
-    "last_overpass_utc": "2023-08-19T21:16:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 10,
-    "viirs_overpasses": 14,
-    "modis_pixels_in_box": 114,
-    "viirs_pixels_in_box": 714,
-    "span_hours": 39.37,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "lytton_bc",
-    "year": 2021,
-    "tile": [
-     3,
-     4
-    ],
-    "box": [
-     -121.31,
-     50.8,
-     -120.77,
-     51.18
-    ],
-    "first_overpass_utc": "2021-06-29T21:08:00Z",
-    "last_overpass_utc": "2021-07-01T19:09:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 12,
-    "viirs_overpasses": 12,
-    "modis_pixels_in_box": 504,
-    "viirs_pixels_in_box": 3530,
-    "span_hours": 46.02,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "lytton_bc",
-    "year": 2021,
-    "tile": [
-     3,
-     3
-    ],
-    "box": [
-     -121.31,
-     50.42,
-     -120.77,
-     50.8
-    ],
-    "first_overpass_utc": "2021-08-13T05:18:00Z",
-    "last_overpass_utc": "2021-08-14T21:22:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 10,
-    "viirs_overpasses": 14,
-    "modis_pixels_in_box": 474,
-    "viirs_pixels_in_box": 3157,
-    "span_hours": 40.07,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "lytton_bc",
-    "year": 2021,
-    "tile": [
-     1,
-     4
-    ],
-    "box": [
-     -122.39,
-     50.8,
-     -121.85,
-     51.18
-    ],
-    "first_overpass_utc": "2021-06-30T04:54:00Z",
-    "last_overpass_utc": "2021-07-01T20:57:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 11,
-    "viirs_overpasses": 13,
-    "modis_pixels_in_box": 337,
-    "viirs_pixels_in_box": 2275,
-    "span_hours": 40.05,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "evia_greece",
-    "year": 2023,
-    "tile": [
-     2,
-     0
-    ],
-    "box": [
-     23.05,
-     37.96,
-     23.55,
-     38.32
-    ],
-    "first_overpass_utc": "2023-07-17T12:12:00Z",
-    "last_overpass_utc": "2023-07-19T19:52:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 13,
-    "viirs_overpasses": 11,
-    "modis_pixels_in_box": 258,
-    "viirs_pixels_in_box": 962,
-    "span_hours": 55.67,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "evia_greece",
-    "year": 2023,
-    "tile": [
-     3,
-     0
-    ],
-    "box": [
-     23.55,
-     37.96,
-     24.05,
-     38.32
-    ],
-    "first_overpass_utc": "2023-08-22T11:47:00Z",
-    "last_overpass_utc": "2023-08-24T19:50:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 11,
-    "viirs_overpasses": 13,
-    "modis_pixels_in_box": 115,
-    "viirs_pixels_in_box": 679,
-    "span_hours": 56.05,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "evia_greece",
-    "year": 2021,
-    "tile": [
-     2,
-     0
-    ],
-    "box": [
-     23.05,
-     37.96,
-     23.55,
-     38.32
-    ],
-    "first_overpass_utc": "2021-08-16T11:46:00Z",
-    "last_overpass_utc": "2021-08-18T20:22:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 11,
-    "viirs_overpasses": 13,
-    "modis_pixels_in_box": 168,
-    "viirs_pixels_in_box": 905,
-    "span_hours": 56.6,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   },
-   {
-    "region_id": "evia_greece",
-    "year": 2021,
-    "tile": [
-     3,
-     0
-    ],
-    "box": [
-     23.55,
-     37.96,
-     24.05,
-     38.32
-    ],
-    "first_overpass_utc": "2021-08-03T12:30:00Z",
-    "last_overpass_utc": "2021-08-07T11:19:00Z",
-    "overpasses": 24,
-    "modis_overpasses": 11,
-    "viirs_overpasses": 13,
-    "modis_pixels_in_box": 160,
-    "viirs_pixels_in_box": 1159,
-    "span_hours": 94.82,
-    "rule": "of all runs of 24 consecutive overpasses with a detection in the box that start in the period, the one whose MODIS overpasses flagged the most pixels in the box (the hidden VIIRS values are not consulted)"
-   }
-  ],
-  "training_note": "training_fitted and training_episodes are the record of the fit under protocol version 1",
   "validation_fitted": {
    "verdict": {
     "evaluated": true,
@@ -972,143 +561,143 @@
     ],
     "scores": {
      "csi_strict_375m": {
-      "reconstruction": 0.30370122630992197,
-      "painted_modis": 0.30278029378175086,
-      "overlap_ratio": 0.30278029378175086,
+      "reconstruction": 0.29817249832850456,
+      "painted_modis": 0.31250773482942124,
+      "overlap_ratio": 0.31250773482942124,
       "better_is": "higher",
-      "beats_every_baseline": true,
+      "beats_every_baseline": false,
       "improvement_interval": {
        "painted_modis": [
-        -0.01469,
-        0.02286
+        -0.03262,
+        0.00897
        ],
        "overlap_ratio": [
-        -0.01469,
-        0.02286
+        -0.03262,
+        0.00897
        ]
       },
       "class": "tie"
      },
      "csi_one_cell_tolerance": {
-      "reconstruction": 0.5801151523662407,
-      "painted_modis": 0.47644346431435447,
-      "overlap_ratio": 0.47644346431435447,
+      "reconstruction": 0.5781834421928208,
+      "painted_modis": 0.4943327911003831,
+      "overlap_ratio": 0.4943327911003831,
       "better_is": "higher",
       "beats_every_baseline": true,
       "improvement_interval": {
        "painted_modis": [
-        0.0734,
-        0.13224
+        0.05524,
+        0.11503
        ],
        "overlap_ratio": [
-        0.0734,
-        0.13224
+        0.05524,
+        0.11503
        ]
       },
       "class": "ahead"
      },
      "hit_rate_at_equal_area": {
-      "reconstruction": 0.574927403331805,
-      "painted_modis": 0.5875362983340975,
-      "overlap_ratio": 0.5875362983340975,
+      "reconstruction": 0.5669496061787872,
+      "painted_modis": 0.5792995335321557,
+      "overlap_ratio": 0.5792995335321557,
       "better_is": "higher",
       "beats_every_baseline": false,
       "improvement_interval": {
        "painted_modis": [
-        -0.04189,
-        0.02619
+        -0.035,
+        0.02156
        ],
        "overlap_ratio": [
-        -0.04189,
-        0.02619
+        -0.035,
+        0.02156
        ]
       },
       "class": "tie"
      },
      "brier": {
-      "reconstruction": 0.009012419787876088,
-      "painted_modis": 0.01840056810390651,
-      "overlap_ratio": 0.01840056810390651,
+      "reconstruction": 0.008997541085931685,
+      "painted_modis": 0.01721298455337963,
+      "overlap_ratio": 0.01721298455337963,
       "better_is": "lower",
       "beats_every_baseline": true,
       "improvement_interval": {
        "painted_modis": [
-        0.00499,
-        0.01545
+        0.00457,
+        0.01326
        ],
        "overlap_ratio": [
-        0.00499,
-        0.01545
+        0.00457,
+        0.01326
        ]
       },
       "class": "ahead"
      },
      "pixel_count_error_of_sums": {
-      "reconstruction": 0.054976645665870016,
-      "painted_modis": 0.8039322181186183,
-      "overlap_ratio": 0.5298815989572019,
+      "reconstruction": 0.09745028794958177,
+      "painted_modis": 0.8172335108116918,
+      "overlap_ratio": 0.5134168206019776,
       "better_is": "lower",
       "beats_every_baseline": true,
       "improvement_interval": {
        "painted_modis": [
-        0.39843,
-        0.79759
+        0.33124,
+        0.81143
        ],
        "overlap_ratio": [
-        0.03436,
-        0.60646
+        -0.05084,
+        0.59455
        ]
       },
-      "class": "ahead"
+      "class": "tie"
      },
      "frp_error_of_sums": {
-      "reconstruction": 0.0691002291783176,
-      "painted_modis": 0.8434512841240458,
-      "overlap_ratio": 0.49983198736832524,
+      "reconstruction": 0.05688716309621966,
+      "painted_modis": 0.48810874869345855,
+      "overlap_ratio": 0.21072530100262687,
       "better_is": "lower",
       "beats_every_baseline": true,
       "improvement_interval": {
        "painted_modis": [
-        0.06668,
-        1.36452
+        -0.06554,
+        0.97654
        ],
        "overlap_ratio": [
-        -0.1246,
-        0.91672
+        -0.13476,
+        0.59126
        ]
       },
       "class": "tie"
      },
      "frp_median_abs_relative_error": {
-      "reconstruction": 0.49090852761661685,
-      "painted_modis": 0.619827598460297,
-      "overlap_ratio": 0.6334944414082471,
+      "reconstruction": 0.5742556934137136,
+      "painted_modis": 0.6002795248078266,
+      "overlap_ratio": 0.6192755257196645,
       "better_is": "lower",
       "beats_every_baseline": true,
       "improvement_interval": {
        "painted_modis": [
-        -0.12654,
-        0.24436
+        -0.28938,
+        0.19829
        ],
        "overlap_ratio": [
-        -0.12293,
-        0.25992
+        -0.29608,
+        0.24855
        ]
       },
       "class": "tie"
      }
     },
-    "beats_every_baseline_on": 6,
+    "beats_every_baseline_on": 5,
     "scores_judged": 7,
     "interval": {
      "stated_level": 0.9,
-     "observed_coverage": 0.8026315789473685,
-     "overpasses": 152
+     "observed_coverage": 0.9673202614379085,
+     "overpasses": 153
     },
     "beats_every_baseline_on_every_score": false,
     "classes": {
-     "ahead": 3,
-     "tie": 4,
+     "ahead": 2,
+     "tie": 5,
      "behind": 0
     },
     "bootstrap": {
@@ -1122,44 +711,44 @@
    "methods": {
     "painted_modis": {
      "strict_375m": {
-      "tp": 15377,
-      "fp": 24614,
-      "fn": 10795,
-      "tn": 1859366,
-      "hit_rate": 0.5875362983340975,
-      "false_alarm_ratio": 0.6154884849091046,
-      "false_alarm_rate": 0.013064894531789085,
-      "csi": 0.30278029378175086
+      "tp": 15151,
+      "fp": 22328,
+      "fn": 11003,
+      "tn": 1873083,
+      "hit_rate": 0.5792995335321557,
+      "false_alarm_ratio": 0.595746951626244,
+      "false_alarm_rate": 0.011780030821811206,
+      "csi": 0.31250773482942124
      },
      "tolerant_1_cell": {
-      "tp": 19012,
-      "fp": 13732,
-      "fn": 7160,
-      "tn": 1859366,
-      "hit_rate": 0.7264251872229864,
-      "false_alarm_ratio": 0.41937454190080625,
-      "false_alarm_rate": 0.007331170072254628,
-      "csi": 0.47644346431435447
+      "tp": 18841,
+      "fp": 11960,
+      "fn": 7313,
+      "tn": 1873083,
+      "hit_rate": 0.7203869389003594,
+      "false_alarm_ratio": 0.38829908119866235,
+      "false_alarm_rate": 0.00634468285338849,
+      "csi": 0.4943327911003831
      },
      "equal_area": {
-      "tp": 15377,
-      "fp": 24614,
-      "fn": 10795,
-      "tn": 1859366,
-      "hit_rate": 0.5875362983340975,
-      "false_alarm_ratio": 0.6154884849091046,
-      "false_alarm_rate": 0.013064894531789085,
-      "csi": 0.30278029378175086
+      "tp": 15151,
+      "fp": 22328,
+      "fn": 11003,
+      "tn": 1873083,
+      "hit_rate": 0.5792995335321557,
+      "false_alarm_ratio": 0.595746951626244,
+      "false_alarm_rate": 0.011780030821811206,
+      "csi": 0.31250773482942124
      },
-     "brier": 0.01840056810390651,
+     "brier": 0.01721298455337963,
      "pixel_count": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": -0.8292940647482014,
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": -0.8333333333333334,
       "median_abs_relative_error": 0.8333333333333334,
-      "ratio_of_sums": 0.19606778188138171,
-      "sum_predicted": 3610.0,
-      "sum_hidden": 18412.0,
+      "ratio_of_sums": 0.18276648918830815,
+      "sum_predicted": 3364.0,
+      "sum_hidden": 18406.0,
       "interval": {
        "stated_level": null,
        "n": 0,
@@ -1169,13 +758,13 @@
       }
      },
      "frp_total": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": -0.11011773854000187,
-      "median_abs_relative_error": 0.619827598460297,
-      "sum_predicted_mw": 962297.0,
-      "sum_hidden_mw": 522008.37,
-      "ratio_of_sums": 1.8434512841240458
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": -0.15293607382954633,
+      "median_abs_relative_error": 0.6002795248078266,
+      "sum_predicted_mw": 776776.1,
+      "sum_hidden_mw": 521988.8,
+      "ratio_of_sums": 1.4881087486934585
      },
      "interval": {
       "stated_level": null,
@@ -1187,135 +776,135 @@
     },
     "overlap_ratio": {
      "strict_375m": {
-      "tp": 15377,
-      "fp": 24614,
-      "fn": 10795,
-      "tn": 1859366,
-      "hit_rate": 0.5875362983340975,
-      "false_alarm_ratio": 0.6154884849091046,
-      "false_alarm_rate": 0.013064894531789085,
-      "csi": 0.30278029378175086
+      "tp": 15151,
+      "fp": 22328,
+      "fn": 11003,
+      "tn": 1873083,
+      "hit_rate": 0.5792995335321557,
+      "false_alarm_ratio": 0.595746951626244,
+      "false_alarm_rate": 0.011780030821811206,
+      "csi": 0.31250773482942124
      },
      "tolerant_1_cell": {
-      "tp": 19012,
-      "fp": 13732,
-      "fn": 7160,
-      "tn": 1859366,
-      "hit_rate": 0.7264251872229864,
-      "false_alarm_ratio": 0.41937454190080625,
-      "false_alarm_rate": 0.007331170072254628,
-      "csi": 0.47644346431435447
+      "tp": 18841,
+      "fp": 11960,
+      "fn": 7313,
+      "tn": 1873083,
+      "hit_rate": 0.7203869389003594,
+      "false_alarm_ratio": 0.38829908119866235,
+      "false_alarm_rate": 0.00634468285338849,
+      "csi": 0.4943327911003831
      },
      "equal_area": {
-      "tp": 15377,
-      "fp": 24614,
-      "fn": 10795,
-      "tn": 1859366,
-      "hit_rate": 0.5875362983340975,
-      "false_alarm_ratio": 0.6154884849091046,
-      "false_alarm_rate": 0.013064894531789085,
-      "csi": 0.30278029378175086
+      "tp": 15151,
+      "fp": 22328,
+      "fn": 11003,
+      "tn": 1873083,
+      "hit_rate": 0.5792995335321557,
+      "false_alarm_ratio": 0.595746951626244,
+      "false_alarm_rate": 0.011780030821811206,
+      "csi": 0.31250773482942124
      },
-     "brier": 0.01840056810390651,
+     "brier": 0.01721298455337963,
      "pixel_count": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": 0.45943269230769235,
-      "median_abs_relative_error": 0.5666019417475727,
-      "ratio_of_sums": 1.5298815989572019,
-      "sum_predicted": 28168.18,
-      "sum_hidden": 18412.0,
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": 0.4426153846153846,
+      "median_abs_relative_error": 0.5632038834951455,
+      "ratio_of_sums": 1.5134168206019776,
+      "sum_predicted": 27855.95,
+      "sum_hidden": 18406.0,
       "interval": {
        "stated_level": 0.8,
-       "n": 152,
-       "covered": 24,
-       "coverage": 0.15789473684210525,
-       "standard_error": 0.0296
+       "n": 153,
+       "covered": 25,
+       "coverage": 0.16339869281045752,
+       "standard_error": 0.0299
       }
      },
      "frp_total": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": -0.2759919200987436,
-      "median_abs_relative_error": 0.6334944414082471,
-      "sum_predicted_mw": 782924.851,
-      "sum_hidden_mw": 522008.37,
-      "ratio_of_sums": 1.4998319873683252
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": -0.31082865473121135,
+      "median_abs_relative_error": 0.6192755257196645,
+      "sum_predicted_mw": 631985.047,
+      "sum_hidden_mw": 521988.8,
+      "ratio_of_sums": 1.2107253010026269
      },
      "interval": {
       "stated_level": 0.9,
-      "n": 152,
-      "covered": 134,
-      "coverage": 0.881578947368421,
-      "standard_error": 0.0262
+      "n": 153,
+      "covered": 135,
+      "coverage": 0.8823529411764706,
+      "standard_error": 0.026
      }
     },
     "reconstruction": {
      "strict_375m": {
-      "tp": 13621,
-      "fp": 18678,
-      "fn": 12551,
-      "tn": 1865302,
-      "hit_rate": 0.5204416934128075,
-      "false_alarm_ratio": 0.578284157404254,
-      "false_alarm_rate": 0.009914117984267348,
-      "csi": 0.30370122630992197
+      "tp": 13379,
+      "fp": 18716,
+      "fn": 12775,
+      "tn": 1876695,
+      "hit_rate": 0.5115469909000535,
+      "false_alarm_ratio": 0.5831437918678922,
+      "false_alarm_rate": 0.00987437553121724,
+      "csi": 0.29817249832850456
      },
      "tolerant_1_cell": {
-      "tp": 20655,
-      "fp": 9433,
-      "fn": 5517,
-      "tn": 1865302,
-      "hit_rate": 0.7892022008253095,
-      "false_alarm_ratio": 0.31351369316671096,
-      "false_alarm_rate": 0.005031644472418768,
-      "csi": 0.5801151523662407
+      "tp": 20714,
+      "fp": 9672,
+      "fn": 5440,
+      "tn": 1876695,
+      "hit_rate": 0.7920012235222146,
+      "false_alarm_ratio": 0.3183044823273876,
+      "false_alarm_rate": 0.0051273161585205845,
+      "csi": 0.5781834421928208
      },
      "equal_area": {
-      "tp": 15047,
-      "fp": 24944,
-      "fn": 11125,
-      "tn": 1859036,
-      "hit_rate": 0.574927403331805,
-      "false_alarm_ratio": 0.6237403415768548,
-      "false_alarm_rate": 0.013240055626917484,
-      "csi": 0.29436966898818373
+      "tp": 14828,
+      "fp": 22651,
+      "fn": 11326,
+      "tn": 1872760,
+      "hit_rate": 0.5669496061787872,
+      "false_alarm_ratio": 0.6043651111288989,
+      "false_alarm_rate": 0.011950442410643391,
+      "csi": 0.30382132978178467
      },
-     "brier": 0.009012419787876088,
+     "brier": 0.008997541085931685,
      "pixel_count": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": 0.4671624392876417,
-      "median_abs_relative_error": 0.49503359462485996,
-      "ratio_of_sums": 1.05497664566587,
-      "sum_predicted": 19424.23,
-      "sum_hidden": 18412.0,
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": 0.47875,
+      "median_abs_relative_error": 0.5860280373831775,
+      "ratio_of_sums": 1.0974502879495818,
+      "sum_predicted": 20199.67,
+      "sum_hidden": 18406.0,
       "interval": {
        "stated_level": 0.9,
-       "n": 152,
-       "covered": 119,
-       "coverage": 0.7828947368421053,
-       "standard_error": 0.0334
+       "n": 153,
+       "covered": 147,
+       "coverage": 0.9607843137254902,
+       "standard_error": 0.0157
       }
      },
      "frp_total": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": 0.2188999711922222,
-      "median_abs_relative_error": 0.49090852761661685,
-      "sum_predicted_mw": 485937.472,
-      "sum_hidden_mw": 522008.37,
-      "ratio_of_sums": 0.9308997708216824
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": 0.3079028007976076,
+      "median_abs_relative_error": 0.5742556934137136,
+      "sum_predicted_mw": 492294.338,
+      "sum_hidden_mw": 521988.8,
+      "ratio_of_sums": 0.9431128369037803
      },
      "interval": {
       "stated_level": 0.9,
-      "n": 152,
-      "covered": 122,
-      "coverage": 0.8026315789473685,
-      "standard_error": 0.0323
+      "n": 153,
+      "covered": 148,
+      "coverage": 0.9673202614379085,
+      "standard_error": 0.0144
      }
     },
-    "_scored_overpasses": 152,
+    "_scored_overpasses": 153,
     "_runs": 7
    }
   },
@@ -1329,144 +918,144 @@
     ],
     "scores": {
      "csi_strict_375m": {
-      "reconstruction": 0.23890310985240457,
-      "painted_modis": 0.30278029378175086,
-      "overlap_ratio": 0.30278029378175086,
+      "reconstruction": 0.24207375153082053,
+      "painted_modis": 0.31250773482942124,
+      "overlap_ratio": 0.31250773482942124,
       "better_is": "higher",
       "beats_every_baseline": false,
       "improvement_interval": {
        "painted_modis": [
-        -0.08273,
-        -0.029
+        -0.09075,
+        -0.03324
        ],
        "overlap_ratio": [
-        -0.08273,
-        -0.029
+        -0.09075,
+        -0.03324
        ]
       },
       "class": "behind"
      },
      "csi_one_cell_tolerance": {
-      "reconstruction": 0.5653929390484189,
-      "painted_modis": 0.47644346431435447,
-      "overlap_ratio": 0.47644346431435447,
+      "reconstruction": 0.5702863038431777,
+      "painted_modis": 0.4943327911003831,
+      "overlap_ratio": 0.4943327911003831,
       "better_is": "higher",
       "beats_every_baseline": true,
       "improvement_interval": {
        "painted_modis": [
-        0.06784,
-        0.11736
+        0.05678,
+        0.10855
        ],
        "overlap_ratio": [
-        0.06784,
-        0.11736
+        0.05678,
+        0.10855
        ]
       },
       "class": "ahead"
      },
      "hit_rate_at_equal_area": {
-      "reconstruction": 0.5866957053339447,
-      "painted_modis": 0.5875362983340975,
-      "overlap_ratio": 0.5875362983340975,
+      "reconstruction": 0.5850730289821825,
+      "painted_modis": 0.5792995335321557,
+      "overlap_ratio": 0.5792995335321557,
       "better_is": "higher",
-      "beats_every_baseline": false,
+      "beats_every_baseline": true,
       "improvement_interval": {
        "painted_modis": [
-        -0.01846,
-        0.00958
+        -0.01017,
+        0.01408
        ],
        "overlap_ratio": [
-        -0.01846,
-        0.00958
+        -0.01017,
+        0.01408
        ]
       },
       "class": "tie"
      },
      "brier": {
-      "reconstruction": 0.009671145471409187,
-      "painted_modis": 0.01840056810390651,
-      "overlap_ratio": 0.01840056810390651,
+      "reconstruction": 0.009496508781276367,
+      "painted_modis": 0.01721298455337963,
+      "overlap_ratio": 0.01721298455337963,
       "better_is": "lower",
       "beats_every_baseline": true,
       "improvement_interval": {
        "painted_modis": [
-        0.00484,
-        0.01405
+        0.00441,
+        0.01222
        ],
        "overlap_ratio": [
-        0.00484,
-        0.01405
+        0.00441,
+        0.01222
        ]
       },
       "class": "ahead"
      },
      "pixel_count_error_of_sums": {
-      "reconstruction": 0.3688898544427547,
-      "painted_modis": 0.8039322181186183,
-      "overlap_ratio": 0.5298815989572019,
+      "reconstruction": 0.33467347604042164,
+      "painted_modis": 0.8172335108116918,
+      "overlap_ratio": 0.5134168206019776,
       "better_is": "lower",
       "beats_every_baseline": true,
       "improvement_interval": {
        "painted_modis": [
-        0.37289,
-        0.60929
+        0.42287,
+        0.65579
        ],
        "overlap_ratio": [
-        0.00566,
-        0.32895
+        0.00789,
+        0.38938
        ]
       },
       "class": "ahead"
      },
      "frp_error_of_sums": {
-      "reconstruction": 0.7484478802514221,
-      "painted_modis": 0.8434512841240458,
-      "overlap_ratio": 0.49983198736832524,
+      "reconstruction": 0.7340503244514058,
+      "painted_modis": 0.48810874869345855,
+      "overlap_ratio": 0.21072530100262687,
       "better_is": "lower",
       "beats_every_baseline": false,
       "improvement_interval": {
        "painted_modis": [
-        -0.15801,
-        0.66574
+        -0.41812,
+        0.31873
        ],
        "overlap_ratio": [
-        -0.39482,
-        0.24187
+        -0.66372,
+        -0.05136
        ]
       },
-      "class": "tie"
+      "class": "behind"
      },
      "frp_median_abs_relative_error": {
-      "reconstruction": 1.167764151768397,
-      "painted_modis": 0.619827598460297,
-      "overlap_ratio": 0.6334944414082471,
+      "reconstruction": 1.1938491776145648,
+      "painted_modis": 0.6002795248078266,
+      "overlap_ratio": 0.6192755257196645,
       "better_is": "lower",
       "beats_every_baseline": false,
       "improvement_interval": {
        "painted_modis": [
-        -1.28876,
-        -0.09962
+        -1.24577,
+        -0.10892
        ],
        "overlap_ratio": [
-        -1.30511,
-        -0.07361
+        -1.23608,
+        -0.05586
        ]
       },
       "class": "behind"
      }
     },
-    "beats_every_baseline_on": 3,
+    "beats_every_baseline_on": 4,
     "scores_judged": 7,
     "interval": {
      "stated_level": 0.9,
-     "observed_coverage": 0.17763157894736842,
-     "overpasses": 152
+     "observed_coverage": 0.20915032679738563,
+     "overpasses": 153
     },
     "beats_every_baseline_on_every_score": false,
     "classes": {
      "ahead": 3,
-     "tie": 2,
-     "behind": 2
+     "tie": 1,
+     "behind": 3
     },
     "bootstrap": {
      "resampled": "whole runs, with replacement",
@@ -1479,44 +1068,44 @@
    "methods": {
     "painted_modis": {
      "strict_375m": {
-      "tp": 15377,
-      "fp": 24614,
-      "fn": 10795,
-      "tn": 1859366,
-      "hit_rate": 0.5875362983340975,
-      "false_alarm_ratio": 0.6154884849091046,
-      "false_alarm_rate": 0.013064894531789085,
-      "csi": 0.30278029378175086
+      "tp": 15151,
+      "fp": 22328,
+      "fn": 11003,
+      "tn": 1873083,
+      "hit_rate": 0.5792995335321557,
+      "false_alarm_ratio": 0.595746951626244,
+      "false_alarm_rate": 0.011780030821811206,
+      "csi": 0.31250773482942124
      },
      "tolerant_1_cell": {
-      "tp": 19012,
-      "fp": 13732,
-      "fn": 7160,
-      "tn": 1859366,
-      "hit_rate": 0.7264251872229864,
-      "false_alarm_ratio": 0.41937454190080625,
-      "false_alarm_rate": 0.007331170072254628,
-      "csi": 0.47644346431435447
+      "tp": 18841,
+      "fp": 11960,
+      "fn": 7313,
+      "tn": 1873083,
+      "hit_rate": 0.7203869389003594,
+      "false_alarm_ratio": 0.38829908119866235,
+      "false_alarm_rate": 0.00634468285338849,
+      "csi": 0.4943327911003831
      },
      "equal_area": {
-      "tp": 15377,
-      "fp": 24614,
-      "fn": 10795,
-      "tn": 1859366,
-      "hit_rate": 0.5875362983340975,
-      "false_alarm_ratio": 0.6154884849091046,
-      "false_alarm_rate": 0.013064894531789085,
-      "csi": 0.30278029378175086
+      "tp": 15151,
+      "fp": 22328,
+      "fn": 11003,
+      "tn": 1873083,
+      "hit_rate": 0.5792995335321557,
+      "false_alarm_ratio": 0.595746951626244,
+      "false_alarm_rate": 0.011780030821811206,
+      "csi": 0.31250773482942124
      },
-     "brier": 0.01840056810390651,
+     "brier": 0.01721298455337963,
      "pixel_count": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": -0.8292940647482014,
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": -0.8333333333333334,
       "median_abs_relative_error": 0.8333333333333334,
-      "ratio_of_sums": 0.19606778188138171,
-      "sum_predicted": 3610.0,
-      "sum_hidden": 18412.0,
+      "ratio_of_sums": 0.18276648918830815,
+      "sum_predicted": 3364.0,
+      "sum_hidden": 18406.0,
       "interval": {
        "stated_level": null,
        "n": 0,
@@ -1526,13 +1115,13 @@
       }
      },
      "frp_total": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": -0.11011773854000187,
-      "median_abs_relative_error": 0.619827598460297,
-      "sum_predicted_mw": 962297.0,
-      "sum_hidden_mw": 522008.37,
-      "ratio_of_sums": 1.8434512841240458
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": -0.15293607382954633,
+      "median_abs_relative_error": 0.6002795248078266,
+      "sum_predicted_mw": 776776.1,
+      "sum_hidden_mw": 521988.8,
+      "ratio_of_sums": 1.4881087486934585
      },
      "interval": {
       "stated_level": null,
@@ -1544,109 +1133,109 @@
     },
     "overlap_ratio": {
      "strict_375m": {
-      "tp": 15377,
-      "fp": 24614,
-      "fn": 10795,
-      "tn": 1859366,
-      "hit_rate": 0.5875362983340975,
-      "false_alarm_ratio": 0.6154884849091046,
-      "false_alarm_rate": 0.013064894531789085,
-      "csi": 0.30278029378175086
+      "tp": 15151,
+      "fp": 22328,
+      "fn": 11003,
+      "tn": 1873083,
+      "hit_rate": 0.5792995335321557,
+      "false_alarm_ratio": 0.595746951626244,
+      "false_alarm_rate": 0.011780030821811206,
+      "csi": 0.31250773482942124
      },
      "tolerant_1_cell": {
-      "tp": 19012,
-      "fp": 13732,
-      "fn": 7160,
-      "tn": 1859366,
-      "hit_rate": 0.7264251872229864,
-      "false_alarm_ratio": 0.41937454190080625,
-      "false_alarm_rate": 0.007331170072254628,
-      "csi": 0.47644346431435447
+      "tp": 18841,
+      "fp": 11960,
+      "fn": 7313,
+      "tn": 1873083,
+      "hit_rate": 0.7203869389003594,
+      "false_alarm_ratio": 0.38829908119866235,
+      "false_alarm_rate": 0.00634468285338849,
+      "csi": 0.4943327911003831
      },
      "equal_area": {
-      "tp": 15377,
-      "fp": 24614,
-      "fn": 10795,
-      "tn": 1859366,
-      "hit_rate": 0.5875362983340975,
-      "false_alarm_ratio": 0.6154884849091046,
-      "false_alarm_rate": 0.013064894531789085,
-      "csi": 0.30278029378175086
+      "tp": 15151,
+      "fp": 22328,
+      "fn": 11003,
+      "tn": 1873083,
+      "hit_rate": 0.5792995335321557,
+      "false_alarm_ratio": 0.595746951626244,
+      "false_alarm_rate": 0.011780030821811206,
+      "csi": 0.31250773482942124
      },
-     "brier": 0.01840056810390651,
+     "brier": 0.01721298455337963,
      "pixel_count": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": 0.45943269230769235,
-      "median_abs_relative_error": 0.5666019417475727,
-      "ratio_of_sums": 1.5298815989572019,
-      "sum_predicted": 28168.18,
-      "sum_hidden": 18412.0,
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": 0.4426153846153846,
+      "median_abs_relative_error": 0.5632038834951455,
+      "ratio_of_sums": 1.5134168206019776,
+      "sum_predicted": 27855.95,
+      "sum_hidden": 18406.0,
       "interval": {
        "stated_level": 0.8,
-       "n": 152,
-       "covered": 24,
-       "coverage": 0.15789473684210525,
-       "standard_error": 0.0296
+       "n": 153,
+       "covered": 25,
+       "coverage": 0.16339869281045752,
+       "standard_error": 0.0299
       }
      },
      "frp_total": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": -0.2759919200987436,
-      "median_abs_relative_error": 0.6334944414082471,
-      "sum_predicted_mw": 782924.851,
-      "sum_hidden_mw": 522008.37,
-      "ratio_of_sums": 1.4998319873683252
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": -0.31082865473121135,
+      "median_abs_relative_error": 0.6192755257196645,
+      "sum_predicted_mw": 631985.047,
+      "sum_hidden_mw": 521988.8,
+      "ratio_of_sums": 1.2107253010026269
      },
      "interval": {
       "stated_level": 0.9,
-      "n": 152,
-      "covered": 134,
-      "coverage": 0.881578947368421,
-      "standard_error": 0.0262
+      "n": 153,
+      "covered": 135,
+      "coverage": 0.8823529411764706,
+      "standard_error": 0.026
      }
     },
     "reconstruction": {
      "strict_375m": {
-      "tp": 8773,
-      "fp": 10550,
-      "fn": 17399,
-      "tn": 1873430,
-      "hit_rate": 0.3352055631973101,
-      "false_alarm_ratio": 0.5459814728561817,
-      "false_alarm_rate": 0.00559984713213516,
-      "csi": 0.23890310985240457
+      "tp": 8895,
+      "fp": 10591,
+      "fn": 17259,
+      "tn": 1884820,
+      "hit_rate": 0.34010094058270246,
+      "false_alarm_ratio": 0.5435184234835266,
+      "false_alarm_rate": 0.005587706307497424,
+      "csi": 0.24207375153082053
      },
      "tolerant_1_cell": {
-      "tp": 17504,
-      "fp": 4787,
-      "fn": 8668,
-      "tn": 1873430,
-      "hit_rate": 0.6688063579397829,
-      "false_alarm_ratio": 0.21475034767394913,
-      "false_alarm_rate": 0.0025486937877785155,
-      "csi": 0.5653929390484189
+      "tp": 17688,
+      "fp": 4862,
+      "fn": 8466,
+      "tn": 1884820,
+      "hit_rate": 0.6763019041064464,
+      "false_alarm_ratio": 0.21560975609756097,
+      "false_alarm_rate": 0.002572919676432331,
+      "csi": 0.5702863038431777
      },
      "equal_area": {
-      "tp": 15355,
-      "fp": 24636,
-      "fn": 10817,
-      "tn": 1859344,
-      "hit_rate": 0.5866957053339447,
-      "false_alarm_ratio": 0.6160386086869546,
-      "false_alarm_rate": 0.013076571938130978,
-      "csi": 0.3022161864273343
+      "tp": 15302,
+      "fp": 22177,
+      "fn": 10852,
+      "tn": 1873234,
+      "hit_rate": 0.5850730289821825,
+      "false_alarm_ratio": 0.5917180287627738,
+      "false_alarm_rate": 0.011700364723007306,
+      "csi": 0.3166083879911444
      },
-     "brier": 0.009671145471409187,
+     "brier": 0.009496508781276367,
      "pixel_count": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": -0.08528159340659341,
-      "median_abs_relative_error": 0.3925526315789474,
-      "ratio_of_sums": 0.6311101455572453,
-      "sum_predicted": 11620.0,
-      "sum_hidden": 18412.0,
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": -0.0788571428571428,
+      "median_abs_relative_error": 0.4266666666666667,
+      "ratio_of_sums": 0.6653265239595784,
+      "sum_predicted": 12246.0,
+      "sum_hidden": 18406.0,
       "interval": {
        "stated_level": null,
        "n": 0,
@@ -1656,24 +1245,292 @@
       }
      },
      "frp_total": {
-      "n_overpasses": 152,
-      "n_with_zero_hidden_total": 4,
-      "median_relative_error": 1.167764151768397,
-      "median_abs_relative_error": 1.167764151768397,
-      "sum_predicted_mw": 912704.428,
-      "sum_hidden_mw": 522008.37,
-      "ratio_of_sums": 1.748447880251422
+      "n_overpasses": 153,
+      "n_with_zero_hidden_total": 6,
+      "median_relative_error": 1.1938491776145648,
+      "median_abs_relative_error": 1.1938491776145648,
+      "sum_predicted_mw": 905154.848,
+      "sum_hidden_mw": 521988.8,
+      "ratio_of_sums": 1.7340503244514058
      },
      "interval": {
       "stated_level": 0.9,
-      "n": 152,
-      "covered": 27,
-      "coverage": 0.17763157894736842,
-      "standard_error": 0.031
+      "n": 153,
+      "covered": 32,
+      "coverage": 0.20915032679738563,
+      "standard_error": 0.0329
      }
     },
-    "_scored_overpasses": 152,
+    "_scored_overpasses": 153,
     "_runs": 7
+   }
+  },
+  "training_fitted": {
+   "verdict": {
+    "evaluated": true,
+    "method": "reconstruction",
+    "baselines": [
+     "painted_modis",
+     "overlap_ratio"
+    ],
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.2789265840962125,
+      "painted_modis": 0.29180725390254214,
+      "overlap_ratio": 0.29180725390254214,
+      "better_is": "higher",
+      "beats_every_baseline": false
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.5615284245573778,
+      "painted_modis": 0.46030259075708124,
+      "overlap_ratio": 0.46030259075708124,
+      "better_is": "higher",
+      "beats_every_baseline": true
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.5585368824998477,
+      "painted_modis": 0.5570902113662667,
+      "overlap_ratio": 0.5570902113662667,
+      "better_is": "higher",
+      "beats_every_baseline": true
+     },
+     "brier": {
+      "reconstruction": 0.0091090997978201,
+      "painted_modis": 0.017713204982367097,
+      "overlap_ratio": 0.017713204982367097,
+      "better_is": "lower",
+      "beats_every_baseline": true
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.04291930518909415,
+      "painted_modis": 0.8329815303430079,
+      "overlap_ratio": 0.4667172383465261,
+      "better_is": "lower",
+      "beats_every_baseline": true
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.007178857019894069,
+      "painted_modis": 0.6265369359243349,
+      "overlap_ratio": 0.3233504418565263,
+      "better_is": "lower",
+      "beats_every_baseline": true
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.408981300460305,
+      "painted_modis": 0.4665203975362994,
+      "overlap_ratio": 0.4324100708298537,
+      "better_is": "lower",
+      "beats_every_baseline": true
+     }
+    },
+    "beats_every_baseline_on": 6,
+    "scores_judged": 7,
+    "interval": {
+     "stated_level": 0.9,
+     "observed_coverage": 0.95,
+     "overpasses": 400
+    },
+    "beats_every_baseline_on_every_score": false
+   },
+   "methods": {
+    "painted_modis": {
+     "strict_375m": {
+      "tp": 36583,
+      "fp": 59699,
+      "fn": 29085,
+      "tn": 4843223,
+      "hit_rate": 0.5570902113662667,
+      "false_alarm_ratio": 0.6200432064144907,
+      "false_alarm_rate": 0.012176208391648898,
+      "csi": 0.29180725390254214
+     },
+     "tolerant_1_cell": {
+      "tp": 45697,
+      "fp": 33608,
+      "fn": 19971,
+      "tn": 4843223,
+      "hit_rate": 0.6958792714868733,
+      "false_alarm_ratio": 0.4237816026732236,
+      "false_alarm_rate": 0.006891360393665477,
+      "csi": 0.46030259075708124
+     },
+     "equal_area": {
+      "tp": 36583,
+      "fp": 59699,
+      "fn": 29085,
+      "tn": 4843223,
+      "hit_rate": 0.5570902113662667,
+      "false_alarm_ratio": 0.6200432064144907,
+      "false_alarm_rate": 0.012176208391648898,
+      "csi": 0.29180725390254214
+     },
+     "brier": 0.017713204982367097,
+     "pixel_count": {
+      "n_overpasses": 400,
+      "n_with_zero_hidden_total": 29,
+      "median_relative_error": -0.8,
+      "median_abs_relative_error": 0.8076923076923077,
+      "ratio_of_sums": 0.16701846965699207,
+      "sum_predicted": 7596.0,
+      "sum_hidden": 45480.0,
+      "interval": {
+       "stated_level": null,
+       "n": 0,
+       "covered": 0,
+       "coverage": null,
+       "note": "method states no interval"
+      }
+     },
+     "frp_total": {
+      "n_overpasses": 400,
+      "n_with_zero_hidden_total": 29,
+      "median_relative_error": -0.004038004281114728,
+      "median_abs_relative_error": 0.4665203975362994,
+      "sum_predicted_mw": 2125981.4,
+      "sum_hidden_mw": 1307060.02,
+      "ratio_of_sums": 1.626536935924335
+     },
+     "interval": {
+      "stated_level": null,
+      "n": 0,
+      "covered": 0,
+      "coverage": null,
+      "note": "method states no interval"
+     }
+    },
+    "overlap_ratio": {
+     "strict_375m": {
+      "tp": 36583,
+      "fp": 59699,
+      "fn": 29085,
+      "tn": 4843223,
+      "hit_rate": 0.5570902113662667,
+      "false_alarm_ratio": 0.6200432064144907,
+      "false_alarm_rate": 0.012176208391648898,
+      "csi": 0.29180725390254214
+     },
+     "tolerant_1_cell": {
+      "tp": 45697,
+      "fp": 33608,
+      "fn": 19971,
+      "tn": 4843223,
+      "hit_rate": 0.6958792714868733,
+      "false_alarm_ratio": 0.4237816026732236,
+      "false_alarm_rate": 0.006891360393665477,
+      "csi": 0.46030259075708124
+     },
+     "equal_area": {
+      "tp": 36583,
+      "fp": 59699,
+      "fn": 29085,
+      "tn": 4843223,
+      "hit_rate": 0.5570902113662667,
+      "false_alarm_ratio": 0.6200432064144907,
+      "false_alarm_rate": 0.012176208391648898,
+      "csi": 0.29180725390254214
+     },
+     "brier": 0.017713204982367097,
+     "pixel_count": {
+      "n_overpasses": 400,
+      "n_with_zero_hidden_total": 29,
+      "median_relative_error": 0.683939393939394,
+      "median_abs_relative_error": 0.6886363636363636,
+      "ratio_of_sums": 1.4667172383465261,
+      "sum_predicted": 66706.3,
+      "sum_hidden": 45480.0,
+      "interval": {
+       "stated_level": 0.8,
+       "n": 400,
+       "covered": 36,
+       "coverage": 0.09,
+       "standard_error": 0.0143
+      }
+     },
+     "frp_total": {
+      "n_overpasses": 400,
+      "n_with_zero_hidden_total": 29,
+      "median_relative_error": -0.18968539934340442,
+      "median_abs_relative_error": 0.4324100708298537,
+      "sum_predicted_mw": 1729698.455,
+      "sum_hidden_mw": 1307060.02,
+      "ratio_of_sums": 1.3233504418565263
+     },
+     "interval": {
+      "stated_level": 0.9,
+      "n": 400,
+      "covered": 356,
+      "coverage": 0.89,
+      "standard_error": 0.0156
+     }
+    },
+    "reconstruction": {
+     "strict_375m": {
+      "tp": 31078,
+      "fp": 45752,
+      "fn": 34590,
+      "tn": 4857170,
+      "hit_rate": 0.4732594262045441,
+      "false_alarm_ratio": 0.5954965508265001,
+      "false_alarm_rate": 0.009331578189495978,
+      "csi": 0.2789265840962125
+     },
+     "tolerant_1_cell": {
+      "tp": 49921,
+      "fp": 23234,
+      "fn": 15747,
+      "tn": 4857170,
+      "hit_rate": 0.7602028385210453,
+      "false_alarm_ratio": 0.3175996172510423,
+      "false_alarm_rate": 0.0047606714526092515,
+      "csi": 0.5615284245573778
+     },
+     "equal_area": {
+      "tp": 36678,
+      "fp": 59604,
+      "fn": 28990,
+      "tn": 4843318,
+      "hit_rate": 0.5585368824998477,
+      "false_alarm_ratio": 0.6190565214681872,
+      "false_alarm_rate": 0.012156832191089314,
+      "csi": 0.29278689571492433
+     },
+     "brier": 0.0091090997978201,
+     "pixel_count": {
+      "n_overpasses": 400,
+      "n_with_zero_hidden_total": 29,
+      "median_relative_error": 0.11655172413793112,
+      "median_abs_relative_error": 0.3229000000000001,
+      "ratio_of_sums": 1.0429193051890941,
+      "sum_predicted": 47431.97,
+      "sum_hidden": 45480.0,
+      "interval": {
+       "stated_level": 0.9,
+       "n": 400,
+       "covered": 380,
+       "coverage": 0.95,
+       "standard_error": 0.0109
+      }
+     },
+     "frp_total": {
+      "n_overpasses": 400,
+      "n_with_zero_hidden_total": 29,
+      "median_relative_error": -0.010136554621848686,
+      "median_abs_relative_error": 0.408981300460305,
+      "sum_predicted_mw": 1316443.217,
+      "sum_hidden_mw": 1307060.02,
+      "ratio_of_sums": 1.007178857019894
+     },
+     "interval": {
+      "stated_level": 0.9,
+      "n": 400,
+      "covered": 380,
+      "coverage": 0.95,
+      "standard_error": 0.0109
+     }
+    },
+    "_scored_overpasses": 400,
+    "_runs": 22
    }
   },
   "validation_episodes": [
@@ -1699,7 +1556,10 @@
     "viirs_pixels_in_box": 0,
     "span_hours": 61.32,
     "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
-    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)"
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
    },
    {
     "region_id": "plumas_ca",
@@ -1723,7 +1583,10 @@
     "viirs_pixels_in_box": 0,
     "span_hours": 61.3,
     "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
-    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)"
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
    },
    {
     "region_id": "plumas_ca",
@@ -1747,7 +1610,10 @@
     "viirs_pixels_in_box": 0,
     "span_hours": 92.05,
     "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
-    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)"
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
    },
    {
     "region_id": "plumas_ca",
@@ -1771,7 +1637,10 @@
     "viirs_pixels_in_box": 0,
     "span_hours": 72.32,
     "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
-    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)"
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
    },
    {
     "region_id": "lytton_bc",
@@ -1795,7 +1664,10 @@
     "viirs_pixels_in_box": 0,
     "span_hours": 47.7,
     "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
-    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)"
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
    },
    {
     "region_id": "lytton_bc",
@@ -1819,7 +1691,10 @@
     "viirs_pixels_in_box": 0,
     "span_hours": 42.18,
     "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
-    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)"
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
    },
    {
     "region_id": "lytton_bc",
@@ -1843,7 +1718,606 @@
     "viirs_pixels_in_box": 0,
     "span_hours": 66.32,
     "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
-    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)"
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   }
+  ],
+  "training_episodes": [
+   {
+    "region_id": "plumas_ca",
+    "year": 2018,
+    "tile": [
+     1,
+     1
+    ],
+    "box": [
+     -121.96,
+     39.48,
+     -121.44,
+     39.86
+    ],
+    "first_overpass_utc": "2018-11-08T18:14:00Z",
+    "last_overpass_utc": "2018-11-10T21:19:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 492,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 51.08,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "plumas_ca",
+    "year": 2018,
+    "tile": [
+     2,
+     1
+    ],
+    "box": [
+     -121.44,
+     39.48,
+     -120.92,
+     39.86
+    ],
+    "first_overpass_utc": "2018-11-11T22:02:00Z",
+    "last_overpass_utc": "2018-11-15T18:20:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 135,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 92.3,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "plumas_ca",
+    "year": 2018,
+    "tile": [
+     0,
+     4
+    ],
+    "box": [
+     -122.48,
+     40.62,
+     -121.96,
+     41.0
+    ],
+    "first_overpass_utc": "2018-08-13T19:46:00Z",
+    "last_overpass_utc": "2018-08-16T06:40:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 130,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 58.9,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "plumas_ca",
+    "year": 2019,
+    "tile": [
+     3,
+     2
+    ],
+    "box": [
+     -120.92,
+     39.86,
+     -120.4,
+     40.24
+    ],
+    "first_overpass_utc": "2019-09-06T10:38:00Z",
+    "last_overpass_utc": "2019-09-08T21:31:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 354,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 58.88,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "plumas_ca",
+    "year": 2020,
+    "tile": [
+     2,
+     1
+    ],
+    "box": [
+     -121.44,
+     39.48,
+     -120.92,
+     39.86
+    ],
+    "first_overpass_utc": "2020-09-08T18:26:00Z",
+    "last_overpass_utc": "2020-09-11T05:18:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 1339,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 58.87,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "plumas_ca",
+    "year": 2020,
+    "tile": [
+     3,
+     3
+    ],
+    "box": [
+     -120.92,
+     40.24,
+     -120.4,
+     40.62
+    ],
+    "first_overpass_utc": "2020-08-20T21:13:00Z",
+    "last_overpass_utc": "2020-08-23T21:44:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 279,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 72.52,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "plumas_ca",
+    "year": 2020,
+    "tile": [
+     3,
+     2
+    ],
+    "box": [
+     -120.92,
+     39.86,
+     -120.4,
+     40.24
+    ],
+    "first_overpass_utc": "2020-08-19T20:30:00Z",
+    "last_overpass_utc": "2020-08-23T06:26:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 110,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 81.93,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "plumas_ca",
+    "year": 2022,
+    "tile": [
+     3,
+     0
+    ],
+    "box": [
+     -120.92,
+     39.1,
+     -120.4,
+     39.48
+    ],
+    "first_overpass_utc": "2022-09-13T05:28:00Z",
+    "last_overpass_utc": "2022-09-16T09:54:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 120,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 76.43,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "lytton_bc",
+    "year": 2018,
+    "tile": [
+     3,
+     1
+    ],
+    "box": [
+     -121.31,
+     49.66,
+     -120.77,
+     50.04
+    ],
+    "first_overpass_utc": "2018-08-20T21:35:00Z",
+    "last_overpass_utc": "2018-08-23T10:55:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 91,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 61.33,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "lytton_bc",
+    "year": 2022,
+    "tile": [
+     1,
+     2
+    ],
+    "box": [
+     -122.39,
+     50.04,
+     -121.85,
+     50.42
+    ],
+    "first_overpass_utc": "2022-09-01T21:48:00Z",
+    "last_overpass_utc": "2022-09-04T05:38:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 179,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 55.83,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "lytton_bc",
+    "year": 2022,
+    "tile": [
+     1,
+     4
+    ],
+    "box": [
+     -122.39,
+     50.8,
+     -121.85,
+     51.18
+    ],
+    "first_overpass_utc": "2022-09-10T18:33:00Z",
+    "last_overpass_utc": "2022-09-12T18:21:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 72,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 47.8,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "lytton_bc",
+    "year": 2023,
+    "tile": [
+     2,
+     2
+    ],
+    "box": [
+     -121.85,
+     50.04,
+     -121.31,
+     50.42
+    ],
+    "first_overpass_utc": "2023-08-19T21:16:00Z",
+    "last_overpass_utc": "2023-08-23T06:02:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 206,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 80.77,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "lytton_bc",
+    "year": 2023,
+    "tile": [
+     2,
+     1
+    ],
+    "box": [
+     -121.85,
+     49.66,
+     -121.31,
+     50.04
+    ],
+    "first_overpass_utc": "2023-08-18T05:54:00Z",
+    "last_overpass_utc": "2023-08-20T10:48:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 153,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 52.9,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "lytton_bc",
+    "year": 2023,
+    "tile": [
+     4,
+     3
+    ],
+    "box": [
+     -120.77,
+     50.42,
+     -120.23,
+     50.8
+    ],
+    "first_overpass_utc": "2023-08-04T11:05:00Z",
+    "last_overpass_utc": "2023-08-06T10:51:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 151,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 47.77,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "lytton_bc",
+    "year": 2021,
+    "tile": [
+     3,
+     3
+    ],
+    "box": [
+     -121.31,
+     50.42,
+     -120.77,
+     50.8
+    ],
+    "first_overpass_utc": "2021-08-12T21:34:00Z",
+    "last_overpass_utc": "2021-08-15T05:05:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 578,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 55.52,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "lytton_bc",
+    "year": 2021,
+    "tile": [
+     3,
+     4
+    ],
+    "box": [
+     -121.31,
+     50.8,
+     -120.77,
+     51.18
+    ],
+    "first_overpass_utc": "2021-06-29T21:09:00Z",
+    "last_overpass_utc": "2021-07-01T19:09:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 504,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 46.0,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "lytton_bc",
+    "year": 2021,
+    "tile": [
+     1,
+     4
+    ],
+    "box": [
+     -122.39,
+     50.8,
+     -121.85,
+     51.18
+    ],
+    "first_overpass_utc": "2021-06-30T04:54:00Z",
+    "last_overpass_utc": "2021-07-02T19:52:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 340,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 62.97,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "evia_greece",
+    "year": 2023,
+    "tile": [
+     2,
+     0
+    ],
+    "box": [
+     23.05,
+     37.96,
+     23.55,
+     38.32
+    ],
+    "first_overpass_utc": "2023-07-17T20:09:00Z",
+    "last_overpass_utc": "2023-07-19T12:36:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 255,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 40.45,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "evia_greece",
+    "year": 2023,
+    "tile": [
+     3,
+     0
+    ],
+    "box": [
+     23.55,
+     37.96,
+     24.05,
+     38.32
+    ],
+    "first_overpass_utc": "2023-08-22T09:03:00Z",
+    "last_overpass_utc": "2023-08-24T19:50:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 120,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 58.78,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "evia_greece",
+    "year": 2023,
+    "tile": [
+     1,
+     0
+    ],
+    "box": [
+     22.55,
+     37.96,
+     23.05,
+     38.32
+    ],
+    "first_overpass_utc": "2023-08-21T08:22:00Z",
+    "last_overpass_utc": "2023-08-24T00:29:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 60,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 64.12,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "evia_greece",
+    "year": 2021,
+    "tile": [
+     2,
+     0
+    ],
+    "box": [
+     23.05,
+     37.96,
+     23.55,
+     38.32
+    ],
+    "first_overpass_utc": "2021-08-16T20:35:00Z",
+    "last_overpass_utc": "2021-08-19T00:40:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 188,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 52.08,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
+   },
+   {
+    "region_id": "evia_greece",
+    "year": 2021,
+    "tile": [
+     3,
+     0
+    ],
+    "box": [
+     23.55,
+     37.96,
+     24.05,
+     38.32
+    ],
+    "first_overpass_utc": "2021-08-03T11:44:00Z",
+    "last_overpass_utc": "2021-08-07T11:19:00Z",
+    "overpasses": 12,
+    "modis_overpasses": 12,
+    "viirs_overpasses": 0,
+    "modis_pixels_in_box": 165,
+    "viirs_pixels_in_box": 0,
+    "span_hours": 95.58,
+    "rule": "of all runs of 12 consecutive overpasses with a detection in the box that start in the period, the one that flagged the most pixels in the box",
+    "chosen_from": "MODIS rows only (VIIRS is hidden and was dropped before choosing)",
+    "frames_from": "detections",
+    "hidden_passes": 0,
+    "passes_with_no_visible_detection": 0
    }
   ],
   "validation_per_episode": [
@@ -1851,154 +2325,154 @@
     "episode": "plumas_ca:2024:12",
     "scored_overpasses": 14,
     "painted_modis": {
-     "csi": 0.35138031331326225,
-     "csi_one_cell": 0.5059689490938332,
-     "brier": 0.06809123829522809,
-     "frp_ratio_of_sums": 1.9726788111774558
+     "csi": 0.37095638038471956,
+     "csi_one_cell": 0.5373085050184891,
+     "brier": 0.062187962030469904,
+     "frp_ratio_of_sums": 1.5248554764491629
     },
     "overlap_ratio": {
-     "csi": 0.35138031331326225,
-     "csi_one_cell": 0.5059689490938332,
-     "brier": 0.06809123829522809,
-     "frp_ratio_of_sums": 1.604971480773978
+     "csi": 0.37095638038471956,
+     "csi_one_cell": 0.5373085050184891,
+     "brier": 0.062187962030469904,
+     "frp_ratio_of_sums": 1.2406224156390389
     },
     "reconstruction": {
-     "csi": 0.3405660949148433,
-     "csi_one_cell": 0.601390083118372,
-     "brier": 0.035799189647463744,
-     "frp_ratio_of_sums": 1.002057796057413
+     "csi": 0.3354149153356551,
+     "csi_one_cell": 0.6053285968028419,
+     "brier": 0.0361212459678762,
+     "frp_ratio_of_sums": 1.0058334292221125
     }
    },
    {
     "episode": "plumas_ca:2024:13",
     "scored_overpasses": 22,
     "painted_modis": {
-     "csi": 0.34316730523627076,
-     "csi_one_cell": 0.5296773114863735,
-     "brier": 0.017532077941557464,
-     "frp_ratio_of_sums": 1.4023265497738113
+     "csi": 0.3482487681448928,
+     "csi_one_cell": 0.5386490250696379,
+     "brier": 0.016683256746253594,
+     "frp_ratio_of_sums": 1.2893120376162077
     },
     "overlap_ratio": {
-     "csi": 0.34316730523627076,
-     "csi_one_cell": 0.5296773114863735,
-     "brier": 0.017532077941557464,
-     "frp_ratio_of_sums": 1.140932880895973
+     "csi": 0.3482487681448928,
+     "csi_one_cell": 0.5386490250696379,
+     "brier": 0.016683256746253594,
+     "frp_ratio_of_sums": 1.0489842738045465
     },
     "reconstruction": {
-     "csi": 0.3593631539044731,
-     "csi_one_cell": 0.6602405039129605,
-     "brier": 0.008931657293677708,
-     "frp_ratio_of_sums": 0.6508489291734695
+     "csi": 0.3607759279059111,
+     "csi_one_cell": 0.6565714285714286,
+     "brier": 0.008946521568615994,
+     "frp_ratio_of_sums": 0.6652719555869301
     }
    },
    {
     "episode": "plumas_ca:2024:02",
-    "scored_overpasses": 24,
+    "scored_overpasses": 23,
     "painted_modis": {
-     "csi": 0.26270733012306047,
-     "csi_one_cell": 0.39106145251396646,
-     "brier": 0.008612069396530175,
-     "frp_ratio_of_sums": 11.631760225750526
+     "csi": 0.2603968469692851,
+     "csi_one_cell": 0.3850777934936351,
+     "brier": 0.00887238246783313,
+     "frp_ratio_of_sums": 11.505514157074307
     },
     "overlap_ratio": {
-     "csi": 0.26270733012306047,
-     "csi_one_cell": 0.39106145251396646,
-     "brier": 0.008612069396530175,
-     "frp_ratio_of_sums": 9.463600119670627
+     "csi": 0.2603968469692851,
+     "csi_one_cell": 0.3850777934936351,
+     "brier": 0.00887238246783313,
+     "frp_ratio_of_sums": 9.360886318195655
     },
     "reconstruction": {
-     "csi": 0.19269644603847408,
-     "csi_one_cell": 0.364570489108097,
-     "brier": 0.0035211150645305784,
-     "frp_ratio_of_sums": 2.153886482792988
+     "csi": 0.18517241379310345,
+     "csi_one_cell": 0.3684436801375752,
+     "brier": 0.003571580615998519,
+     "frp_ratio_of_sums": 2.4872152948615875
     }
    },
    {
     "episode": "plumas_ca:2025:04",
-    "scored_overpasses": 25,
+    "scored_overpasses": 26,
     "painted_modis": {
-     "csi": 0.18079841636423621,
-     "csi_one_cell": 0.379584622182943,
-     "brier": 0.007512291052114063,
-     "frp_ratio_of_sums": 0.7490916704277124
+     "csi": 0.18715175352343494,
+     "csi_one_cell": 0.3849868305531168,
+     "brier": 0.007214629406596732,
+     "frp_ratio_of_sums": 0.7546418875478608
     },
     "overlap_ratio": {
-     "csi": 0.18079841636423621,
-     "csi_one_cell": 0.379584622182943,
-     "brier": 0.007512291052114063,
-     "frp_ratio_of_sums": 0.6094609830599869
+     "csi": 0.18715175352343494,
+     "csi_one_cell": 0.3849868305531168,
+     "brier": 0.007214629406596732,
+     "frp_ratio_of_sums": 0.6139766397089396
     },
     "reconstruction": {
-     "csi": 0.20571071279699876,
-     "csi_one_cell": 0.44034978138663333,
-     "brier": 0.004201280553987671,
-     "frp_ratio_of_sums": 1.0802395277876329
+     "csi": 0.20178349232683535,
+     "csi_one_cell": 0.42940097799511,
+     "brier": 0.004066418426871863,
+     "frp_ratio_of_sums": 1.14467489387463
     }
    },
    {
     "episode": "lytton_bc:2024:23",
     "scored_overpasses": 20,
     "painted_modis": {
-     "csi": 0.27264898380985186,
-     "csi_one_cell": 0.47195576120076743,
-     "brier": 0.0366389033489502,
-     "frp_ratio_of_sums": 0.818416612099706
+     "csi": 0.277088948787062,
+     "csi_one_cell": 0.4838973162193699,
+     "brier": 0.034903695991671,
+     "frp_ratio_of_sums": 0.7730366869290951
     },
     "overlap_ratio": {
-     "csi": 0.27264898380985186,
-     "csi_one_cell": 0.47195576120076743,
-     "brier": 0.0366389033489502,
-     "frp_ratio_of_sums": 0.6658637556043207
+     "csi": 0.277088948787062,
+     "csi_one_cell": 0.4838973162193699,
+     "brier": 0.034903695991671,
+     "frp_ratio_of_sums": 0.6289426484855117
     },
     "reconstruction": {
-     "csi": 0.2945205479452055,
-     "csi_one_cell": 0.615493138386559,
-     "brier": 0.01786314027087045,
-     "frp_ratio_of_sums": 0.7813342273518625
+     "csi": 0.2896544756516468,
+     "csi_one_cell": 0.6200077051496083,
+     "brier": 0.01790503342068723,
+     "frp_ratio_of_sums": 0.8017626325934727
     }
    },
    {
     "episode": "lytton_bc:2025:31",
-    "scored_overpasses": 18,
+    "scored_overpasses": 17,
     "painted_modis": {
-     "csi": 0.2613932291666667,
-     "csi_one_cell": 0.46470333477695974,
-     "brier": 0.01072630663338628,
-     "frp_ratio_of_sums": 2.329169551476104
+     "csi": 0.3039561300430866,
+     "csi_one_cell": 0.5675531914893617,
+     "brier": 0.008894606174668643,
+     "frp_ratio_of_sums": 1.2469416191819787
     },
     "overlap_ratio": {
-     "csi": 0.2613932291666667,
-     "csi_one_cell": 0.46470333477695974,
-     "brier": 0.01072630663338628,
-     "frp_ratio_of_sums": 1.8950123470809586
+     "csi": 0.3039561300430866,
+     "csi_one_cell": 0.5675531914893617,
+     "brier": 0.008894606174668643,
+     "frp_ratio_of_sums": 1.014511701366458
     },
     "reconstruction": {
-     "csi": 0.32148900169204736,
-     "csi_one_cell": 0.6534435261707989,
-     "brier": 0.004451608470414999,
-     "frp_ratio_of_sums": 0.8987040305567057
+     "csi": 0.3330300272975432,
+     "csi_one_cell": 0.6799524092801904,
+     "brier": 0.004467142058288382,
+     "frp_ratio_of_sums": 0.832720522698901
     }
    },
    {
     "episode": "lytton_bc:2025:22",
-    "scored_overpasses": 29,
+    "scored_overpasses": 31,
     "painted_modis": {
-     "csi": 0.16002098635886675,
-     "csi_one_cell": 0.29472241261137766,
-     "brier": 0.004743268025751709,
-     "frp_ratio_of_sums": 4.5782608818374015
+     "csi": 0.14299287410926365,
+     "csi_one_cell": 0.25748502994011974,
+     "brier": 0.004999875280272941,
+     "frp_ratio_of_sums": 5.035353093430957
     },
     "overlap_ratio": {
-     "csi": 0.16002098635886675,
-     "csi_one_cell": 0.29472241261137766,
-     "brier": 0.004743268025751709,
-     "frp_ratio_of_sums": 3.7248730534629093
+     "csi": 0.14299287410926365,
+     "csi_one_cell": 0.25748502994011974,
+     "brier": 0.004999875280272941,
+     "frp_ratio_of_sums": 4.096763276815427
     },
     "reconstruction": {
-     "csi": 0.2313946216385241,
-     "csi_one_cell": 0.4479793637145314,
-     "brier": 0.0015611089292572025,
-     "frp_ratio_of_sums": 2.435061298705874
+     "csi": 0.17396002160994056,
+     "csi_one_cell": 0.3581881533101045,
+     "brier": 0.001683469400530572,
+     "frp_ratio_of_sums": 2.9476982950878625
     }
    }
   ]
@@ -2069,277 +2543,133 @@
   "history": [
    {
     "step": "priors",
-    "objective": 0.81
+    "objective": 0.8117
    },
    {
     "step": "sweep 1: dedup_overlap",
     "chosen": false,
-    "objective": 0.81
+    "objective": 0.8117
    },
    {
     "step": "sweep 1: tau_res_h",
     "chosen": 24.0,
-    "objective": 0.8484
+    "objective": 0.8494
    },
    {
     "step": "sweep 1: spread_km_per_h",
     "chosen": 0.15,
-    "objective": 0.8521
+    "objective": 0.8535
    },
    {
     "step": "sweep 1: age_tau_h",
     "chosen": 6.0,
-    "objective": 0.8727
+    "objective": 0.8721
    },
    {
     "step": "sweep 1: clear_sky",
     "chosen": 0.5,
-    "objective": 0.9077
+    "objective": 0.8988
    },
    {
     "step": "sweep 1: new_cell_weight",
     "chosen": 0.05,
-    "objective": 0.9077
+    "objective": 0.8988
    },
    {
     "step": "sweep 1: burned_discount",
     "chosen": 0.5,
-    "objective": 0.9142
+    "objective": 0.905
    },
    {
     "step": "sweep 1: line_width_km",
     "chosen": 0.375,
-    "objective": 0.9142
+    "objective": 0.905
    },
    {
     "step": "sweep 1: tau_smolder_h",
     "chosen": 24.0,
-    "objective": 0.9142
+    "objective": 0.905
    },
    {
     "step": "sweep 1: smolder_night",
     "chosen": 0.4,
-    "objective": 0.9366
+    "objective": 0.9266
    },
    {
     "step": "sweep 1: smolder_day",
     "chosen": 0.0,
-    "objective": 0.9366
+    "objective": 0.9266
    },
    {
     "step": "sweep 1: pixel counts matched",
-    "count_scale_day": 0.685,
-    "count_scale_night": 1.37,
-    "objective": 0.9005
+    "count_scale_day": 0.618,
+    "count_scale_night": 1.403,
+    "objective": 0.854
    },
    {
     "step": "sweep 2: dedup_overlap",
     "chosen": false,
-    "objective": 0.9005
+    "objective": 0.854
    },
    {
     "step": "sweep 2: tau_res_h",
     "chosen": 12.0,
-    "objective": 0.9202
+    "objective": 0.8797
    },
    {
     "step": "sweep 2: spread_km_per_h",
     "chosen": 0.15,
-    "objective": 0.9202
+    "objective": 0.8797
    },
    {
     "step": "sweep 2: age_tau_h",
     "chosen": 6.0,
-    "objective": 0.9202
+    "objective": 0.8797
    },
    {
     "step": "sweep 2: clear_sky",
     "chosen": 0.8,
-    "objective": 0.9302
+    "objective": 0.9216
    },
    {
     "step": "sweep 2: new_cell_weight",
     "chosen": 0.02,
-    "objective": 0.9366
+    "objective": 0.9308
    },
    {
     "step": "sweep 2: burned_discount",
     "chosen": 0.5,
-    "objective": 0.9366
+    "objective": 0.9308
    },
    {
     "step": "sweep 2: line_width_km",
     "chosen": 0.375,
-    "objective": 0.9366
+    "objective": 0.9308
    },
    {
     "step": "sweep 2: tau_smolder_h",
     "chosen": 24.0,
-    "objective": 0.9366
+    "objective": 0.9308
    },
    {
     "step": "sweep 2: smolder_night",
     "chosen": 0.4,
-    "objective": 0.9366
+    "objective": 0.9308
    },
    {
     "step": "sweep 2: smolder_day",
     "chosen": 0.2,
-    "objective": 0.9513
+    "objective": 0.9418
    },
    {
     "step": "sweep 2: pixel counts matched",
-    "count_scale_day": 0.521,
-    "count_scale_night": 1.646,
-    "objective": 0.9076
+    "count_scale_day": 0.454,
+    "count_scale_night": 1.664,
+    "objective": 0.8847
    }
   ],
   "blind_test_runs": 83,
-  "seconds": 162.1
+  "seconds": 89.6
  },
- "generated_utc": "2026-11-14T05:49:00Z",
- "protocol": {
-  "validated_under": 2,
-  "parameters_fitted_under": 1,
-  "name": "sealed hidden rows, published schedule (unit M8)",
-  "note": "the parameters were fitted under protocol version 1 and have not been refitted; only the validation and the decision were recomputed under version 2"
- },
- "previous_decision": {
-  "protocol": "version 1: windows counted hidden overpasses, each prediction used the hidden overpass's time and pixel size, and the calendar ratio held the 2021 test fires",
-  "adopted": true,
-  "decision": "fitted values are used: on validation fires they are ahead of both baselines on 3 of 7 scores, tied on 4 and behind on none, beyond the noise of resampling the fires",
-  "validated_on": "6 real fire episodes of 2024, 2025 in the same three context boxes (other years than training; none of them a test fire)",
-  "parts": {
-   "where the fire is (cells and probabilities)": "experimental",
-   "how many pixels the hidden instrument flags": "on",
-   "total fire radiative power and its interval": "experimental"
-  },
-  "classes": {
-   "ahead": 3,
-   "tie": 4,
-   "behind": 0
-  },
-  "scores": {
-   "csi_strict_375m": {
-    "reconstruction": 0.2800436205016358,
-    "painted_modis": 0.27855672505534623,
-    "overlap_ratio": 0.27855672505534623,
-    "class": "tie",
-    "improvement_interval": {
-     "painted_modis": [
-      -0.00953,
-      0.01584
-     ],
-     "overlap_ratio": [
-      -0.00953,
-      0.01584
-     ]
-    }
-   },
-   "csi_one_cell_tolerance": {
-    "reconstruction": 0.5625530950897661,
-    "painted_modis": 0.4538907076303198,
-    "overlap_ratio": 0.4538907076303198,
-    "class": "ahead",
-    "improvement_interval": {
-     "painted_modis": [
-      0.07062,
-      0.13379
-     ],
-     "overlap_ratio": [
-      0.07062,
-      0.13379
-     ]
-    }
-   },
-   "hit_rate_at_equal_area": {
-    "reconstruction": 0.564945845521385,
-    "painted_modis": 0.5670013439797612,
-    "overlap_ratio": 0.5670013439797612,
-    "class": "tie",
-    "improvement_interval": {
-     "painted_modis": [
-      -0.01908,
-      0.02515
-     ],
-     "overlap_ratio": [
-      -0.01908,
-      0.02515
-     ]
-    }
-   },
-   "brier": {
-    "reconstruction": 0.009581771073892933,
-    "painted_modis": 0.0198098643944734,
-    "overlap_ratio": 0.0198098643944734,
-    "class": "ahead",
-    "improvement_interval": {
-     "painted_modis": [
-      0.00557,
-      0.01639
-     ],
-     "overlap_ratio": [
-      0.00557,
-      0.01639
-     ]
-    }
-   },
-   "pixel_count_error_of_sums": {
-    "reconstruction": 0.16958700141288996,
-    "painted_modis": 0.7982827953483317,
-    "overlap_ratio": 0.5730779263123573,
-    "class": "ahead",
-    "improvement_interval": {
-     "painted_modis": [
-      0.41247,
-      0.76334
-     ],
-     "overlap_ratio": [
-      0.00419,
-      0.63323
-     ]
-    }
-   },
-   "frp_error_of_sums": {
-    "reconstruction": 0.10960509753228076,
-    "painted_modis": 0.6944983692831039,
-    "overlap_ratio": 0.3774577109568711,
-    "class": "tie",
-    "improvement_interval": {
-     "painted_modis": [
-      -0.05308,
-      0.94597
-     ],
-     "overlap_ratio": [
-      -0.17008,
-      0.57948
-     ]
-    }
-   },
-   "frp_median_abs_relative_error": {
-    "reconstruction": 0.405515861880401,
-    "painted_modis": 0.5480218605514275,
-    "overlap_ratio": 0.6018857136450778,
-    "class": "tie",
-    "improvement_interval": {
-     "painted_modis": [
-      -0.04923,
-      0.28189
-     ],
-     "overlap_ratio": [
-      -0.03637,
-      0.33904
-     ]
-    }
-   }
-  },
-  "interval": {
-   "stated_level": 0.9,
-   "observed_coverage": 0.9054054054054054,
-   "overpasses": 74
-  },
-  "generated_utc": "2026-11-14T05:49:00Z"
- },
- "revalidated_utc": "2026-11-14T08:52:32Z",
- "revalidation_seconds": 4.9
+ "generated_utc": "2026-11-14T16:11:28Z"
 }
