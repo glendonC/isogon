@@ -14,6 +14,8 @@ import { BEATS, beatOf, type BeatId } from './app/names';
 import { WorkspaceProvider, type WorkspaceStore } from './app/store';
 import { CalendarBeat } from './beats/calendar/CalendarBeat';
 import { WorldModelBeat } from './beats/world-model/WorldModelBeat';
+import { WorldModelScene } from './beats/world-model/WorldModelScene';
+import { isClosedWindow } from './beats/world-model/fire';
 import { TestWorldBeat } from './beats/test-world/TestWorldBeat';
 import { revealedPassesOf, type TrackState } from './content/passTrack';
 import { partsStatus, type PartId } from './content/partsStatus';
@@ -58,7 +60,7 @@ import type {
   WorkspaceMode,
 } from './stage/types';
 
-import { API_BASE, getJson } from './lib/api';
+import { API_BASE, getJson, postJson } from './lib/api';
 
 /**
  * Landing world view: `landingSubjectFrame` names the rectangle the stage keeps calm (sky or haze) for the type.
@@ -113,6 +115,12 @@ function workspaceFrame(width: number) {
   const right = 1 - (360 + 2 * gutter + 24) / width;
   // One panel at the right and the pass track along the bottom (about 170 px plus the gutter).
   return { left: 0.0, top: 0.08, right: Math.max(0.5, right), bottom: 0.76 };
+}
+
+/** World model on a real run: no column, so the fire takes the width, low enough for its label to hang above it. */
+function modelFrame(width: number) {
+  if (width < 960) return workspaceFrame(width);
+  return { left: 0.04, top: 0.2, right: 0.96, bottom: 0.78 };
 }
 
 const WORKSPACE_VIEWS: ReadonlyArray<{ mode: WorkspaceMode; label: string; key: string }> = [
@@ -328,6 +336,19 @@ export function App() {
   /** A featured fire chosen on the place screen: its start replaces the place's opening start once. */
   const fireStartRef = useRef<{ region: string; start: string } | null>(null);
   const [liveTelemetry, setLiveTelemetry] = useState<LiveObserverTelemetry | null>(null);
+  // The places registry: the default fire, each place's opening start, and the recorded test fires.
+  const placesState = usePlaces();
+  /**
+   * A window of a recorded test fire is never hidden, revealed or scored again. Until the registry has answered, no
+   * window can be hidden.
+   */
+  const placesRef = useRef(placesState);
+  placesRef.current = placesState;
+  const hideRefused = useCallback(
+    (regionId: string, start: string | null) =>
+      placesRef.current.state !== 'ready' || isClosedWindow(placesRef.current.places, regionId, start),
+    [],
+  );
 
   const handleTelemetry = useCallback((t: EarthStageTelemetry) => {
     telemetryRef.current = t;
@@ -369,7 +390,11 @@ export function App() {
   }, []);
 
   const executeWorldModel = useCallback(
-    async (params: ReconstructRequestParams): Promise<boolean> => {
+    async (asked: ReconstructRequestParams): Promise<boolean> => {
+      // A held-out run or a reveal on a recorded test fire's window is never asked for: the run with every satellite is.
+      const closed =
+        asked.source === 'firms' && Boolean(asked.start) && Boolean(asked.regionId) && hideRefused(asked.regionId ?? '', asked.start ?? null);
+      const params = closed && (asked.holdoutViirs || asked.reveal) ? { ...asked, holdoutViirs: false, reveal: false } : asked;
       const seq = ++requestSeqRef.current;
       requestAbortRef.current?.abort();
       const controller = new AbortController();
@@ -410,19 +435,7 @@ export function App() {
         if (params.queryText) {
           body.query_text = params.queryText;
         }
-        const resp = await fetch(`${API_BASE}/api/reconstruct`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
-        if (!resp.ok) {
-          const errJson = (await resp.json().catch(() => null)) as Record<string, unknown> | null;
-          throw new Error(
-            typeof errJson?.error === 'string' ? errJson.error : `HTTP ${resp.status}`,
-          );
-        }
-        const runData = (await resp.json()) as DynamicRegionRun;
+        const runData = await postJson<DynamicRegionRun>('/api/reconstruct', body, { signal: controller.signal });
         if (stale()) return false;
         // Nothing simulated on the real path: a simulated answer to a FIRMS request is refused, not shown.
         if (realStartParam && !isRealRun(runData)) {
@@ -469,7 +482,7 @@ export function App() {
         if (realStartParam) setPendingStart((p) => (p === realStartParam ? null : p));
       }
     },
-    [inWorkspace, activeTheaterId],
+    [inWorkspace, activeTheaterId, hideRefused],
   );
 
   const slewToTheater = useCallback(
@@ -515,8 +528,9 @@ export function App() {
   );
 
   const toggleHoldoutLive = useCallback(() => {
-    // Before 2012 no sharp satellite flew: nothing to hide, so no blind test
+    // Before 2012 no sharp satellite flew: nothing to hide, so no blind test. A recorded test fire is not tested again.
     if (beforeSharpSatellite(activeRun)) return;
+    if (hideRefused(activeRun?.region.id ?? activeTheaterId, realStart)) return;
     // A real blind run is revealed. Its first response holds nothing the scorer wrote, so the reveal asks again with
     // `reveal: true` (served from the server's cache); a run that already carries its blind test is revealed in
     // place.
@@ -548,7 +562,7 @@ export function App() {
       enterWorkspace: false,
       ...(realStart ? { source: 'firms' as const, start: realStart } : {}),
     });
-  }, [holdoutViirs, revealed, revealing, activeRun, activeTheaterId, cloudOverride, executeWorldModel, realStart]);
+  }, [holdoutViirs, revealed, revealing, activeRun, activeTheaterId, cloudOverride, executeWorldModel, realStart, hideRefused]);
 
   const toggleCloudLive = useCallback(() => {
     // A synthetic cloud deck would put simulated data on the real path.
@@ -569,8 +583,6 @@ export function App() {
   // follows the region asked for, so opening a region can read its start list before any run arrives.
   const calendarRegionId = regionAsk?.id ?? activeRun?.region.id ?? activeTheaterId;
   const calendar = useCalendar(API_BASE, calendarRegionId);
-  // The places registry: the default fire and each place's opening start, by the rule the route states.
-  const placesState = usePlaces();
 
   // Real is the default: a region with real run starts opens on its default start; one without real rows opens on a
   // simulated run, labelled as such. Each ask is handled once, after its calendar is in.
@@ -766,6 +778,11 @@ export function App() {
   const goStep = useCallback(
     (next: Step) => {
       setDebriefOpen(false);
+      // The round's episode on a recorded test fire, or a test on one: not played or run again.
+      if (next === 'look' && hideRefused(roundEpisode.episode.region_id, roundEpisode.estimate.start)) return;
+      if (next === 'test' && step !== 'test' && !holdoutViirs && !revealed) {
+        if (!isRealRun(activeRun) || beforeSharpSatellite(activeRun) || hideRefused(activeRun?.region.id ?? '', realStart)) return;
+      }
       if (next === step && next !== 'look') return;
       if (step === 'look' && next !== 'look' && round) leaveRound();
       if (next === 'record' || next === 'fire') {
@@ -780,7 +797,7 @@ export function App() {
       }
       setStep(next);
     },
-    [step, round, leaveRound, restoreFullRun, holdoutViirs, revealed, toggleHoldoutLive, startRound],
+    [step, round, leaveRound, restoreFullRun, holdoutViirs, revealed, toggleHoldoutLive, startRound, hideRefused, roundEpisode, activeRun, realStart],
   );
 
   /** A part from the bar or its key: the Calendar, the fire and its test, a round. The Agent is not open yet. */
@@ -788,11 +805,14 @@ export function App() {
     (b: BeatId) => {
       if (b === 'calendar') goStep('record');
       else if (b === 'model') {
-        if (step !== 'fire' && step !== 'test') goStep('fire');
-        else setDebriefOpen(false);
+        if (step === 'fire' || step === 'test') return setDebriefOpen(false);
+        // World model opens with VIIRS hidden where it can be hidden, and on the estimate's own view.
+        setWorkspaceMode('reconstruction');
+        const blind = isRealRun(activeRun) && !beforeSharpSatellite(activeRun) && !hideRefused(activeRun?.region.id ?? '', realStart);
+        goStep(blind ? 'test' : 'fire');
       } else if (b === 'world') goStep('look');
     },
-    [goStep, step],
+    [goStep, step, activeRun, realStart, hideRefused],
   );
 
   // The reference players are computed on the server from the round's start; when the end arrived before them, ask
@@ -860,6 +880,7 @@ export function App() {
       }
       pendingStepRef.current = id === 'model' ? 'test' : 'look';
       enterWorkspace('cutaway');
+      if (id === 'model') setWorkspaceMode('reconstruction');
     },
     [enterWorkspace],
   );
@@ -1059,6 +1080,9 @@ export function App() {
         } else if (lower === 'h' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setCleanHud((h) => !h);
+        } else if (lower === 'e' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault();
+          setEvidenceOpen(true);
         } else if (lower === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           cycleNextTheaterSlew();
@@ -1196,13 +1220,22 @@ export function App() {
   const passLists = usePassList(activeRun);
   const stageMonth = activeRun?.epoch_summaries?.[0]?.timestamp_utc?.slice(0, 7) ?? null;
   const lookHere = activeRun?.region.id === roundEpisode.episode.region_id || Boolean(round);
+  /** The run on the terrain is a recorded test fire's window: its record shows, and it is not tested again. */
+  const closedWindow = Boolean(runIsReal && activeRun && isClosedWindow(placesState.places, activeRun.region.id, realStart));
+  const roundClosed = isClosedWindow(placesState.places, roundEpisode.episode.region_id, roundEpisode.estimate.start);
   const stepBlocked: Partial<Record<Step, string | null>> = {
     test: noSharp
       ? 'No VIIRS flew before 2012, so there is nothing to hide'
       : !runIsReal
         ? 'The test needs a real NASA FIRMS run'
-        : null,
-    look: lookHere ? null : 'A round is ready for the Dixie fire, in Feather River only',
+        : closedWindow
+          ? 'A recorded test fire: its test is on record and is not run again'
+          : null,
+    look: roundClosed
+      ? 'Closed: the round here is on a recorded test fire, whose looks are on record'
+      : lookHere
+        ? null
+        : 'A round is ready for the Dixie fire, in Feather River only',
   };
   const span = runSpan ? utcSpan(runSpan.first, runSpan.last) : null;
   const beatBlocked: Partial<Record<BeatId, string | null>> = {
@@ -1347,7 +1380,16 @@ export function App() {
       openMonth: (ym: string, rec: FireRecord) => {
         if (rec.place.kind !== 'region') return;
         handleSelectMonth(ym);
-        goStep('fire');
+        setDebriefOpen(false);
+        setWorkspaceMode('reconstruction');
+        // World model opens blind on the month's run once it is in, unless nothing can be hidden there.
+        if (Number(ym.slice(0, 4)) < 2012 || hideRefused(rec.place.regionId, ym)) {
+          pendingHideRef.current = false;
+          setStep('fire');
+        } else {
+          pendingHideRef.current = true;
+          setStep('test');
+        }
       },
       state: calendar,
       selectedMonth,
@@ -1376,6 +1418,18 @@ export function App() {
       act: testAction,
       openScore: () => setDebriefOpen(true),
     },
+    model: {
+      closed: closedWindow,
+      canHide: !stepBlocked.test,
+      grid: stageTelemetry?.regionGrid,
+      evidence: evidenceLive,
+      openEvidence: () => setEvidenceOpen(true),
+      revealedHere: revealed ? trackRevealed.filter((r) => r.frame === activeEpoch).reduce((a, r) => a + r.pixels, 0) : null,
+      revealedTotal:
+        revealed && trackRevealed.length > 0
+          ? { detections: trackRevealed.reduce((a, r) => a + r.pixels, 0), passes: trackRevealed.length }
+          : null,
+    },
     time: { pass: activeEpoch, powerMw: currentMw },
     round: {
       state: round,
@@ -1389,6 +1443,8 @@ export function App() {
     blocked: stepBlocked,
   };
   const beatPanel = step === 'look' ? <TestWorldBeat /> : <WorldModelBeat>{finding}</WorldModelBeat>;
+  /** World model on a real run: in place on the terrain (beats/world-model/WorldModelScene.tsx), no column. */
+  const modelScene = inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen;
 
   return (
     <WorkspaceProvider value={store}>
@@ -1419,7 +1475,13 @@ export function App() {
             </button>
           )}
 
-          <div className="iso-ws" data-clean={cleanHud ? 'true' : 'false'} data-step={step} data-debrief={debriefOpen ? 'true' : 'false'}>
+          <div
+            className="iso-ws"
+            data-clean={cleanHud ? 'true' : 'false'}
+            data-step={step}
+            data-debrief={debriefOpen ? 'true' : 'false'}
+            data-scene={modelScene ? 'model' : undefined}
+          >
             <div className="iso-ws__scrim iso-ws__scrim--top" aria-hidden="true" />
             <div className="iso-ws__scrim iso-ws__scrim--right" aria-hidden="true" />
             <div className="iso-ws__scrim iso-ws__scrim--bottom" aria-hidden="true" />
@@ -1442,6 +1504,7 @@ export function App() {
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
             {step === 'record' && <CalendarBeat />}
+            {modelScene && <WorldModelScene />}
             <div className="iso-ws__dock" hidden={step === 'record'}>
               {debriefOpen && blindTest ? (
                 <Debrief
@@ -1449,13 +1512,13 @@ export function App() {
                   model={blindModel}
                   place={regionTitle}
                   onBack={() => setDebriefOpen(false)}
-                  onNext={lookHere ? () => goStep('look') : null}
+                  onNext={lookHere && !roundClosed ? () => goStep('look') : null}
                   onEvidence={() => setEvidenceOpen(true)}
                   terra={null}
                   terraOpen={terraOpen}
                   onToggleTerra={() => setTerraOpen((o) => !o)}
                 />
-              ) : (
+              ) : modelScene ? null : (
                 <aside className="iso-step" data-step={step} aria-label={beatOf(beatOfStep(step)).name}>
                   {beatPanel}
                 </aside>
@@ -1524,7 +1587,8 @@ export function App() {
           onTelemetry={handleTelemetry}
           landingView="world"
           landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
-          workspaceSubjectFrame={round ? roundFrame(viewportWidth) : workspaceFrame(viewportWidth)}
+          workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
+          regionGridDivisions={modelScene ? 16 : undefined}
         />
       </div>
 

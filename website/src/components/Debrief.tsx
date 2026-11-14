@@ -113,7 +113,7 @@ export function Debrief({ score, model, place, onBack, onNext, onEvidence, terra
       </header>
 
       <p className="iso-debrief__verdict">
-        Ahead of both baselines on {ahead} of the {judged.length} scores the test judges.
+        Ahead of both simple methods on {ahead} of the {judged.length} scores the test judges, by plain comparison.
       </p>
       {score.testFire && (
         <p className="iso-debrief__own">

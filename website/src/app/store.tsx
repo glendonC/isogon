@@ -8,6 +8,8 @@ import type { NextLookEnd, NextLookStart } from '../content/demo/nextLook';
 import type { Step } from '../components/WorkspaceBar';
 import type { Box, FeaturedFire, Place, Places } from './places';
 import type { FireRecord, RecordPlace } from '../beats/calendar/record';
+import type { EarthStageTelemetry } from '../stage/earthCutawayTypes';
+import type { EvidenceDoc } from '../content/evidence';
 
 /**
  * The workspace's shared state, read by every beat: the place, the run on the terrain, the time on show, and the
@@ -69,6 +71,23 @@ export interface WorkspaceStore {
     /** Hide VIIRS, reveal it, or open the score, as the test stands. */
     act: () => void;
     openScore: () => void;
+  };
+  model: {
+    /**
+     * The run on the terrain is a window of a recorded test fire: World model shows the record and the run with every
+     * satellite, and never hides, reveals or scores it again.
+     */
+    closed: boolean;
+    /** VIIRS can be hidden on this run (a real run from 2012 on, not a recorded test fire). */
+    canHide: boolean;
+    /** The region's box on screen, as the stage projects it (`telemetry.regionGrid`). */
+    grid: EarthStageTelemetry['regionGrid'];
+    /** The evidence route's answer, for the record beside a window's own count. */
+    evidence: EvidenceDoc | null;
+    openEvidence: () => void;
+    /** After the reveal: the hidden detections now shown at the pass on show, and over the window. */
+    revealedHere: number | null;
+    revealedTotal: { detections: number; passes: number } | null;
   };
   time: {
     /** The pass on show, 0 based. */

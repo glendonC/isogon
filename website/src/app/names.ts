@@ -13,6 +13,10 @@ export interface BeatName {
   key: string;
   /** One line under the name, the same on the landing and where the part opens. */
   line: string;
+  /** The line where the part opens on a recorded test fire, when the usual line would not be true there. */
+  recordLine?: string;
+  /** The line where the part opens on a run from before VIIRS flew, when the usual line would not be true there. */
+  earlyLine?: string;
 }
 
 export const BEATS: readonly BeatName[] = [
@@ -22,6 +26,8 @@ export const BEATS: readonly BeatName[] = [
     name: '1 World model',
     key: '1',
     line: 'This fire rebuilt from MODIS alone, then checked against VIIRS, which is hidden.',
+    recordLine: 'A recorded test fire: its test is on record, and the terrain shows every satellite.',
+    earlyLine: 'Before 2012 no VIIRS flew: this fire rebuilt from MODIS alone, with nothing hidden.',
   },
   {
     id: 'world',

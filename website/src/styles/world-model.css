@@ -1,0 +1,121 @@
+/* World model in place on the terrain (beats/world-model/WorldModelScene.tsx). Sizes, inks, shapes from system.css. */
+
+.wm-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.wm-scene button,
+.wm-scene .sys-pin__plate {
+  pointer-events: auto;
+}
+
+/* The part's name when it opens; it steps back after a few seconds and the bar keeps the name. */
+.wm-banner {
+  position: absolute;
+  left: 50%;
+  top: 84px;
+  display: grid;
+  gap: var(--sys-s1);
+  justify-items: center;
+  padding: var(--sys-s3) var(--sys-s5);
+  transform: translateX(-50%);
+  text-align: center;
+  animation: wm-banner 6s var(--sys-ease) forwards;
+}
+
+@keyframes wm-banner {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* The anchor has no width, so the plate sizes to its own text up to a measure. */
+.wm-pin .sys-pin__plate {
+  width: max-content;
+  max-width: 440px;
+  padding: var(--sys-s3) var(--sys-s4);
+  gap: var(--sys-s1);
+}
+
+.wm-corner {
+  position: absolute;
+  right: var(--sys-gutter);
+  top: 84px;
+  display: grid;
+  gap: var(--sys-s1);
+  max-width: 420px;
+  padding: var(--sys-s3) var(--sys-s4);
+}
+
+.wm-ink {
+  color: var(--sys-ink);
+}
+
+.wm-wrap {
+  white-space: normal;
+}
+
+.wm-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--sys-s4);
+  margin-top: var(--sys-s2);
+}
+
+.wm-scene .wm-actions .sys-ctl {
+  padding-left: 0;
+}
+
+.wm-readout {
+  position: absolute;
+  left: var(--sys-gutter);
+  bottom: 200px;
+  max-width: 640px;
+}
+
+.wm-scene .wm-act {
+  position: absolute;
+  right: var(--sys-gutter);
+  bottom: 200px;
+  padding: var(--sys-s3) var(--sys-s4);
+  color: var(--sys-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wm-banner {
+    animation: none;
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.wm-pin[data-side='left'] .sys-pin__plate {
+  left: auto;
+  right: 0;
+}
+
+/* No column in World model: the right scrim goes with it. */
+.iso-ws[data-scene='model'] .iso-ws__scrim--right {
+  display: none;
+}
+
+/* The pass facts are on the fire's label here; the track's own bubble stays for screen readers only. */
+.iso-ws[data-scene='model'] .iso-track__bubble {
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+}
