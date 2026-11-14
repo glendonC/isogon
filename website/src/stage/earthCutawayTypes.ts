@@ -86,6 +86,11 @@ export interface EarthStageTelemetry {
    * is null. Sent with the rest of the telemetry (about three times a second).
    */
   regionGrid?: { divisions: number; points: Array<[number, number] | null> };
+  /**
+   * Real runs, on a pass whose detections are hidden: the last pass before it that the stage shows,
+   * whose detections are drawn as an afterglow, and how many hours before the pass on show it was.
+   */
+  lastSeen?: { index: number; sensor: string; timeUtc: string; hoursBefore: number };
   /** Landing world view only: the standpoint check of the region on screen. */
   landingStandpoint?: LandingStandpointCheck;
 }
@@ -136,8 +141,37 @@ export interface StageTileAnchor {
   visible: boolean;
 }
 
+/** Where the fire on show sits on screen (see `onFireAnchor`). */
+export interface StageFireAnchor {
+  /** The frame (pass index) the anchor describes. */
+  frame: number;
+  /**
+   * What it was taken from: the pass's own detections (a pass on show, or a hidden pass once its
+   * detections are laid on), or the estimate's cells on a pass whose detections are hidden.
+   */
+  from: 'detections' | 'estimate';
+  /** CSS px of the viewport: the centre of those cells on the terrain surface, weighted by fire power. */
+  x: number;
+  y: number;
+  /** CSS px: the screen box of those cells. */
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  /** False when the centre is behind the camera, off screen or behind a ridge. */
+  visible: boolean;
+}
+
 export interface EarthCutawayStageProps {
   apiBase: string;
+  /**
+   * How the stage turns the address of a run's file into one it can fetch: the run's terrain,
+   * imagery and field (`assets.*`), the terrain pack's and the context terrain's files, the belief
+   * frames. The page's client maps the address to a live one or to a recorded file. Absent: the
+   * address is joined to `apiBase`. The site's own files (the stand-in terrain, the spacecraft
+   * models) are loaded from the site and do not pass through it.
+   */
+  resolveAsset?: (address: string) => string;
   inWorkspace: boolean;
   mode: WorkspaceMode;
   activeTheaterId: TheaterId;
@@ -191,6 +225,8 @@ export interface EarthCutawayStageProps {
   onCurtainScreen?: (seam: CurtainScreenSeam) => void;
   /** Asks for `telemetry.regionGrid` with this many cells each way (1 to 32). */
   regionGridDivisions?: number;
+  /** Where the fire on show sits on screen, every rendered frame in the workspace. Null when nothing is drawn. */
+  onFireAnchor?: (anchor: StageFireAnchor | null) => void;
   /** A board of tiles over the region's box, drawn on the terrain. Null or absent: no board. */
   tileBoard?: StageTileBoard | null;
   /** The tile under the pointer, or null. Called on change, only while `tileBoard.pickable` is true. */

@@ -55,3 +55,32 @@ test('a time outside the frames shows the nearest step alone, and nothing is dra
   field.clear();
   assert.deepEqual([field.grid.x, field.grid.y], [0, 0]);
 });
+
+test('the cells of the estimate are the ones at or above the probability, each at its own place', () => {
+  const field = new BeliefField();
+  const bytes = payload();
+  // Step 1: probability bytes are 100 + 10 * row + col, so 100 to 112. Ask for 110 of 255 and more.
+  field.sync({ info, bytes }, 'run', info.firstTimeMs + info.stepMs);
+  const cells = field.cellsAbove({ info, bytes }, 110 / 255, (v) => v * 255);
+  assert.equal(cells.length, 3 * 3);
+  for (let i = 0; i < 3; i++) {
+    // Row 1 of the payload is the southern row of two: v is a quarter of the way up
+    assert.ok(Math.abs(cells[i * 3] - (i + 0.5) / NX) < 1e-6);
+    assert.ok(Math.abs(cells[i * 3 + 1] - 0.25) < 1e-6);
+    assert.ok(Math.abs(cells[i * 3 + 2] - 201) < 1e-3);
+  }
+});
+
+test('the box holds every cell with any belief at the two steps, with three cells to spare', () => {
+  const big = { ...info, nx: 40, ny: 30, steps: 2 };
+  const bytes = new Uint8Array(2 * 30 * 40 * 2);
+  // One cell at step 0 (row 10 from the north, column 12) and one at step 1 (row 14, column 20)
+  bytes[(0 * 30 * 40 + 10 * 40 + 12) * 2] = 9;
+  bytes[(1 * 30 * 40 + 14 * 40 + 20) * 2] = 200;
+  const field = new BeliefField();
+  field.sync({ info: big, bytes }, 'run', big.firstTimeMs + 0.5 * big.stepMs);
+  const { x, y, z, w } = field.box;
+  // Columns 12 to 20, three to spare each way; rows from the north 10 to 14 are texture rows 15 to 19
+  assert.ok(Math.abs(x - 9 / 40) < 1e-6 && Math.abs(z - 24 / 40) < 1e-6, `${x} ${z}`);
+  assert.ok(Math.abs(y - 12 / 30) < 1e-6 && Math.abs(w - 23 / 30) < 1e-6, `${y} ${w}`);
+});

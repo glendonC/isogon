@@ -162,7 +162,13 @@ uniform vec2 uHeatRange;
 // at the next step, one texel per cell of the model's grid.
 uniform vec2 uBeliefGrid;    // cells east-west and north-south; (0, 0) when the run has no belief frames
 uniform float uBeliefMix;    // position between the two steps
+uniform vec4 uBeliefBox;     // the part of the region that holds any belief: (u west, v south, u east, v north)
 uniform float uHeldOut;      // 1 on a pass whose detections were kept from the estimate
+// A hidden pass: above 0 the light texture holds the last visible pass, drawn as an afterglow at
+// this share of its light. 0: the lights are the detections of the pass on show.
+uniform float uAfterglow;
+uniform float uLightGain;    // share of the lights drawn (below 1 while the landing fades from one pass to the next)
+uniform float uBeliefQuiet;  // 1 on a run that kept nothing from the model: its squares are drawn quieter
 // A pass as a scan: while a pass arrives, a front crosses the region along its ground track and
 // what the pass brought appears behind it. (track east, track north, front along the track km, 1
 // while the front is crossing)
@@ -449,7 +455,7 @@ vec3 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   float close = smoothstep(13.0, 22.0, sizePx);
   float pane = mix(mix(1.0, 0.20, smoothstep(6.0, 13.0, sizePx)), 0.0, close);
   float corners = step(0.55 * halfSide, min(abs(fc.x), abs(fc.y)));
-  float square = max((inside - inner) * mix(1.0, corners, close), inside * pane);
+  float square = max((inside - inner) * mix(1.0, corners, close), inside * pane * (1.0 - 0.75 * uBeliefQuiet));
 
   // A pass kept from the model: every cell the model declares burning is an open frame in place
   // of its square, the answer it committed to and has not been shown. The other cells stay as
@@ -470,8 +476,11 @@ vec3 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   // The dotted line around the ground that may burn
   float ps = beliefSmooth(uv);
   float grad = max(fwidth(ps), 1e-5);
-  float line = 1.0 - smoothstep(0.55, 1.45, abs(ps - BELIEF_MAY_BURN) / grad);
-  float lineEdge = 1.0 - smoothstep(1.4, 2.6, abs(ps - BELIEF_MAY_BURN) / grad);
+  // (no line where the surface is exactly zero: that is ground beyond every cell's reach, and at
+  // the edge of the box above the gradient is not to be trusted)
+  float reach = step(1e-6, ps);
+  float line = (1.0 - smoothstep(0.55, 1.45, abs(ps - BELIEF_MAY_BURN) / grad)) * reach;
+  float lineEdge = (1.0 - smoothstep(1.4, 2.6, abs(ps - BELIEF_MAY_BURN) / grad)) * reach;
   // Dots of a steady size on screen, fixed to the ground (their size steps by octaves with distance)
   float dotKm = exp2(floor(log2(max(kmPerPx, 1e-4) * 5.0)));
   vec2 q = pKm / dotKm;
@@ -504,23 +513,25 @@ vec3 tileMarks(vec2 uv) {
   float hair = 1.0 - smoothstep(0.35, 1.05, d);
   float ink = hair * mix(0.30, 0.12, state.a);
   float strength = 0.8;
-  // Level: a frame set in from the edge, one to four pixels thick
-  float thick = 1.0 + 3.0 * state.r;
-  float frame = smoothstep(2.6, 3.4, d) * (1.0 - smoothstep(3.0 + thick - 0.4, 3.0 + thick + 0.4, d)) * step(0.004, state.r);
-  ink = max(ink, frame * (0.16 + 0.60 * state.r));
-  // Looked at: a firm outline
-  float firm = (1.0 - smoothstep(1.6, 2.4, d)) * state.g;
-  ink = max(ink, firm * 0.92);
+  // Every mark of a tile is a thin line set inside the tile, so where two marked tiles meet there
+  // are two fine lines with ground between them and never one heavy band.
+  // Level: a frame well inside the edge, one to three pixels thick, brighter as the level rises
+  float thick = 1.0 + 2.0 * state.r;
+  float frame = smoothstep(5.6, 6.4, d) * (1.0 - smoothstep(6.0 + thick - 0.4, 6.0 + thick + 0.4, d)) * step(0.004, state.r);
+  ink = max(ink, frame * (0.14 + 0.62 * state.r));
+  // Looked at: a firm fine outline just inside the edge
+  float firm = smoothstep(1.6, 2.2, d) * (1.0 - smoothstep(3.2, 3.8, d)) * state.g;
+  ink = max(ink, firm * 0.9);
   // Under the pointer
-  ink = max(ink, (1.0 - smoothstep(1.2, 2.0, d)) * hover * 0.75);
+  float under = smoothstep(1.6, 2.2, d) * (1.0 - smoothstep(3.4, 4.0, d)) * hover;
+  ink = max(ink, under * 0.7);
   // Chosen: brackets at the four corners
-  vec2 cornerPx = min(tf, 1.0 - tf) / px;
   float arm = 0.19 / max(px.x, px.y);            // arm length: 19 percent of the tile's side
-  float inCorner = step(max(cornerPx.x, cornerPx.y), arm);
-  float bracket = (1.0 - smoothstep(2.6, 3.6, d)) * inCorner * state.b;
+  float inCorner = step(max(edgePx.x, edgePx.y), arm);
+  float bracket = smoothstep(1.4, 2.0, d) * (1.0 - smoothstep(4.2, 4.8, d)) * inCorner * state.b;
   ink = max(ink, bracket);
-  strength = mix(strength, 1.0, max(bracket, max(firm, hover)));
-  float edge = 1.0 - smoothstep(2.4, 4.6, d);
+  strength = mix(strength, 1.0, max(bracket, max(firm, under)));
+  float edge = smoothstep(0.6, 1.4, d) * (1.0 - smoothstep(4.6, 6.0, d));
   edge *= max(max(state.g, state.b), hover);
   return vec3(ink, edge, strength);
 }
@@ -547,10 +558,25 @@ void main() {
   // The pass being scanned: 1 on ground the front has crossed (everywhere once it is through)
   float scanAlong = dot(pKm, uScan.xy);
   float scanned = mix(1.0, 1.0 - smoothstep(uScan.z - 0.25, uScan.z, scanAlong), uScan.w);
-  vec4 lit = detectionLight(vUv) * uFootMix.x * scanned;
+  vec4 lit = detectionLight(vUv) * uFootMix.x * scanned * uLightGain;
+  // How much of the light's fall on the ground is drawn (all of it for the pass on show)
+  float castShare = uLightGain;
+  if (uAfterglow > 0.001) {
+    // The pass on show is hidden. What the last visible pass detected is kept as an afterglow:
+    // blurred, dull and red, with no point of light, so it cannot be taken for a detection of this pass.
+    // It fades with the hours since that pass (see the stage). It says where the visible
+    // instrument last saw fire, not what burns now. By night only: by day a glow would be a red
+    // tint on sunlit ground, and the trace of the fire is the smoke that pass left.
+    vec4 soft = textureLod(uFireHist, vUv, 3.4);
+    lit = vec4(vec3(0.62, 0.10, 0.03) * dot(soft.rgb, vec3(0.5, 0.4, 0.1)) * 1.3, 0.0) * uAfterglow * uNight * uFootMix.x * uLightGain;
+    castShare = 0.30 * uAfterglow * uLightGain;
+  }
   // The model's belief as ink marks (worked out here, outside any branch, for its derivatives)
   vec3 marks = vec3(0.0);
-  if (uBeliefGrid.x > 0.5) marks = beliefMarks(vUv, pKm, kmPerPx, uHeldOut * scanned);
+  // (only inside the box that holds any belief: most of the ground has none and skips the work)
+  if (uBeliefGrid.x > 0.5 && vUv.x > uBeliefBox.x && vUv.x < uBeliefBox.z && vUv.y > uBeliefBox.y && vUv.y < uBeliefBox.w) {
+    marks = beliefMarks(vUv, pKm, kmPerPx, uHeldOut * scanned);
+  }
   vec3 tiles = vec3(0.0);
   if (uTileGrid.x > 0.5) tiles = tileMarks(vUv);
 
@@ -771,7 +797,7 @@ void main() {
         // The belief, in ink (see beliefMarks). By day a dark edge holds the ink on bright ground.
         vec3 ink = mix(vec3(1.30, 1.32, 1.36), vec3(0.40, 0.46, 0.56), uNight) * marks.z;
         postRgb = litEarth * (1.0 - 0.55 * marks.y * (1.0 - uNight) * hazeTrans.g);
-        postRgb = mix(postRgb, ink, marks.x * 0.84 * hazeTrans.g);
+        postRgb = mix(postRgb, ink, marks.x * mix(0.84, 0.48, uBeliefQuiet) * hazeTrans.g);
       } else {
         // A run without belief frames: the estimate of the pass on show as a faint tint
         float zWide = mix(textureLod(uFieldTex0, vUv, 3.0).r, textureLod(uFieldTex1, vUv, 3.0).r, uFrameMix);
@@ -789,7 +815,7 @@ void main() {
       vec3 castLight = textureLod(uFireHist, vUv, 4.4).rgb * FIRE_CAST_NEAR + textureLod(uFireHist, vUv, 6.2).rgb * FIRE_CAST_FAR;
       // Eased toward a ceiling: a few very strong detections light their ridge, they do not flood it
       castLight /= 1.0 + FIRE_CAST_EASE * dot(castLight, vec3(0.3, 0.5, 0.2));
-      postRgb += (satRgb + vec3(0.012)) * castLight * mix(0.3, 1.0, uNight) * (1.0 - 0.6 * waterMask) * hazeTrans * uFootMix.x * scanned;
+      postRgb += (satRgb + vec3(0.012)) * castLight * mix(0.3, 1.0, uNight) * (1.0 - 0.6 * waterMask) * hazeTrans * uFootMix.x * scanned * castShare;
       postRgb += lit.rgb * hazeTrans.g;
       // The instrument's pixel around each light, when asked for: a faint warm hairline, so a
       // coarse pixel reads as coarse beside the model's finer cells
@@ -886,7 +912,7 @@ void main() {
       // km), with a faint hairline around the pixel: this side is the instrument's view. No empty
       // cells: the source lists detections, not where the sensor looked and saw nothing.
       modisLit = step(0.001, -foot.r);
-      rawPassRgb += lit.rgb * uLightModis * hazeTrans.g;
+      rawPassRgb += lit.rgb * uLightModis * hazeTrans.g * (1.0 - step(0.001, uAfterglow));
       float hair = scanHairline(abs(foot.r), footGradM, 1.6) * scanLitFade(1.0 / footGradM);
       rawPassRgb = mix(rawPassRgb, vec3(0.80, 0.87, 0.96), hair * 0.34);
     } else if (uModisPass.w > 0.5) {
@@ -936,7 +962,7 @@ void main() {
 
     if (uModisWeight > 0.01 && uFootMix.x > 0.5) {
       // Real run: the detections themselves, as light in the sensor's colour, each in its own footprint
-      obsRgb += vec3(1.0, 0.36, 0.10) * (0.55 * lit.a * uLightModis) * uModisWeight;
+      obsRgb += vec3(1.0, 0.36, 0.10) * (0.55 * lit.a * uLightModis) * uModisWeight * (1.0 - step(0.001, uAfterglow));
       float hair = scanHairline(abs(foot.r), footGradM, 1.6);
       obsRgb = mix(obsRgb, vec3(1.0, 0.87, 0.78), hair * 0.60 * uModisWeight);
     } else if (uModisWeight > 0.01 && uModisPass.w > 0.5) {

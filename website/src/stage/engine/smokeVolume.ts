@@ -489,7 +489,11 @@ void main() {
         float tau = 0.0;
         vec4 li;
         float lj = 0.75 + 0.5 * fract(jitter * 7.31 + float(i) * 0.618);
-        if (d > 0.2) {
+        if (uNight > 0.5) {
+          // By night the key light is a twentieth of the sun's: the smoke's own shadow on itself
+          // cannot be seen, and its march is the costly part of every step, so it is left out
+          tau = 0.0;
+        } else if (d > 0.2) {
           tau += smokeDensity(p + sun * (0.05 * lj), -1.0, li) * 0.09;
           tau += smokeDensity(p + sun * (0.17 * lj), -1.0, li) * 0.17;
           tau += smokeDensity(p + sun * (0.42 * lj), -1.0, li) * 0.28;

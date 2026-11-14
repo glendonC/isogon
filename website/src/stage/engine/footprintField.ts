@@ -159,6 +159,7 @@ export class FootprintField {
    * is drawn (0..1) from its fire radiative power per km2 of footprint, on the run's own scale.
    * `revealed` are detections shown only after scoring (a blind run's hidden instrument, or what
    * a look uncovered): they get their footprint in `texture`, for an outline, and no light.
+   * `lightOnly` are detections that get a light and no footprint (the afterglow of an earlier pass).
    */
   public build(
     footprints: readonly NormalizedFootprint[],
@@ -166,6 +167,7 @@ export class FootprintField {
     extentKm: readonly [number, number],
     heatOf: (mwPerKm2: number) => number,
     revealed: readonly NormalizedFootprint[] = [],
+    lightOnly: readonly NormalizedFootprint[] = [],
   ): void {
     // Back to empty: only what the last build wrote
     for (let k = 0; k < this.touchedCount; k++) {
@@ -197,6 +199,7 @@ export class FootprintField {
     for (const fp of footprints) this.drawFootprint(fp, bbox, extentKm);
     for (const fp of revealed) this.drawFootprint(fp, bbox, extentKm);
     for (const fp of footprints) this.drawLight(fp, bbox, extentKm, heatOf);
+    for (const fp of lightOnly) this.drawLight(fp, bbox, extentKm, heatOf);
 
     const toHalf = THREE.DataUtils.toHalfFloat;
     for (let k = 0; k < this.touchedCount; k++) {

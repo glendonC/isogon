@@ -93,6 +93,8 @@ export interface DynamicRegionRun {
   encoding?: unknown;
   /** Real runs: what the model believes between the passes. Read through parseBeliefFrames. */
   belief_frames?: unknown;
+  /** Real runs: the model's own description, with its fitted values. Read through parseResidenceHours. */
+  model?: unknown;
 }
 
 /**
@@ -172,6 +174,16 @@ export interface BeliefFramesInfo {
   nx: number;
   ny: number;
   cellKm: number;
+}
+
+/**
+ * Hours a burning cell stays lit in the run's model (`model.parameters.tau_res_h`). Null when the
+ * run does not say.
+ */
+export function parseResidenceHours(raw: unknown): number | null {
+  if (!isRecord(raw) || !isRecord(raw.parameters)) return null;
+  const hours = Number(raw.parameters.tau_res_h);
+  return Number.isFinite(hours) && hours > 0 ? hours : null;
 }
 
 /** Reads the `belief_frames` block of a run. Null when the run has none or the block is not usable. */

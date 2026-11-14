@@ -31,6 +31,7 @@ import type {
   EarthStageTelemetry,
   LandingStandpointCheck,
   InspectorCameraPreset,
+  StageFireAnchor,
   StageTileAnchor,
   TheaterId,
 } from './earthCutawayTypes';
@@ -59,6 +60,7 @@ import {
   type NormalizedSatellitePass,
   type TerrainFindingCallout,
   parseBeliefFrames,
+  parseResidenceHours,
 } from './types';
 import {
   HAZE_STRENGTH,
@@ -281,6 +283,8 @@ interface CachedTheaterBundle {
   fieldScale?: FieldIntensityScale;
   /** Real runs: the overpass the landing shows (see landingFrameOf). Worked out once. */
   landingFrame?: number | null;
+  /** Real runs: hours a burning cell stays lit in the run's model, from the payload. Absent: 12. */
+  residenceHours?: number;
   /** Real runs: where the run's fire is in the region (u east, v north). Worked out once. */
   fireCentre?: [number, number] | null;
 }
@@ -318,8 +322,23 @@ function intensityLegendOf(bundle: CachedTheaterBundle): NonNullable<EarthStageT
  */
 const SCAN_SECONDS = 2.6;
 
-/** Share of the day's smoke opacity that a night overpass keeps. */
-const NIGHT_SMOKE_OPACITY = 0.6;
+/** Seconds the lights of a pass take to fade out and to come up when the page steps the landing's pass. */
+const LIGHT_FADE_OUT_SECONDS = 0.7;
+const LIGHT_FADE_IN_SECONDS = 1.2;
+
+/** Hours a burning cell stays lit when the run's payload does not say (the model's prior). */
+const DEFAULT_RESIDENCE_HOURS = 12;
+
+/** A cell counts as part of the estimate's fire, for the page's label, from this probability (the dotted line's level). */
+const FIRE_ANCHOR_PROBABILITY = 0.02;
+
+/**
+ * Share of the day's smoke opacity that a night overpass keeps: none. Smoke lit from below by the
+ * detections was tried: its march cost the landing more than half its frame rate, and its glow in
+ * the air read as more fire than the detections hold. By night the fire is its lights and the
+ * light they cast on the ground.
+ */
+const NIGHT_SMOKE_OPACITY = 0.0;
 
 /** The estimate's glow on a real run starts at this fire radiative power density, MW/km2. It is strongest at the top of the run's scale. */
 const HEAT_FROM_MW_KM2 = 1;
@@ -353,9 +372,10 @@ const LANDING_FIRE_MAX_SPAN = 0.45;
  * The overpass a real run shows on the landing: a night VIIRS overpass (about two thirds of the
  * VIIRS detections of these fires were made at night, and a fire at night is light on dark
  * ground), the one with the most detections among those whose fire fits the frame whole. When
- * none fits, the night VIIRS overpass with the most detections; when the run has no night VIIRS
- * overpass, the overpass with the most detections. Hidden passes are never chosen. Null for a
- * simulated run, which follows the page's time.
+ * none fits, the night VIIRS overpass with the most detections; when the run shows no night VIIRS
+ * overpass (a run with VIIRS held out), a night overpass of the instrument it does show, by the same
+ * two rules; when it shows no night overpass at all, the overpass with the most detections. Hidden
+ * passes are never chosen. Null for a simulated run, which follows the page's time.
  */
 function landingFrameOf(
   dataset: NormalizedObserverDataset,
@@ -371,12 +391,14 @@ function landingFrameOf(
   dataset.frames.forEach((passes, f) => {
     let count = 0;
     let nightViirs = false;
+    let night = false;
     const east: number[] = [];
     const north: number[] = [];
     for (const sp of passes) {
       if (sp.hidden) continue;
       count += sp.footprints.length;
       if (sp.family === 'viirs' && sp.isDay === false) nightViirs = true;
+      if (sp.isDay === false && sp.footprints.length > 0) night = true;
       for (const fp of sp.footprints) {
         east.push(((fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin)) * widthKm);
         north.push(((fp.lat - latMin) / Math.max(1e-9, latMax - latMin)) * depthKm);
@@ -388,7 +410,9 @@ function landingFrameOf(
     const lo = Math.floor(0.05 * (count - 1));
     const hi = Math.ceil(0.95 * (count - 1));
     const spanKm = Math.hypot(east[hi] - east[lo], north[hi] - north[lo]);
-    const score = count + (nightViirs ? 1e6 : 0) + (nightViirs && spanKm <= limitKm ? 1e7 : 0);
+    const fits = spanKm <= limitKm;
+    const score =
+      count + (night ? 1e5 : 0) + (night && fits ? 2e5 : 0) + (nightViirs ? 1e6 : 0) + (nightViirs && fits ? 1e7 : 0);
     if (score > bestScore) {
       bestScore = score;
       best = f;
@@ -406,6 +430,15 @@ function creditWithContext(bundle: CachedTheaterBundle): string {
 
 function isKnownTheater(id: string): id is TheaterId {
   return (THEATER_ORDER as readonly string[]).includes(id);
+}
+
+/**
+ * The address the stage fetches an asset of a run from: the page's own resolver when it gives one
+ * (its client maps the address to a live one or to a recorded file), else the address joined to
+ * the API base.
+ */
+function assetAddress(props: EarthCutawayStageProps, rawUrl: string): string {
+  return props.resolveAsset ? props.resolveAsset(rawUrl) : resolveAssetUrl(props.apiBase, rawUrl);
 }
 
 function resolveAssetUrl(apiBase: string, rawUrl: string): string {
@@ -924,6 +957,21 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const passFireBox = { run: '', u0: 0, u1: 0, v0: 0, v1: 0, modis: false };
     const footprintList: NormalizedFootprint[] = [];
     const revealedList: NormalizedFootprint[] = [];
+    // A hidden pass: the detections of the last visible pass before it, drawn as an afterglow
+    const afterglowList: NormalizedFootprint[] = [];
+    const uAfterglow = { value: 0.0 };
+    // Share of the lights drawn: 1, or less while the landing fades from one pass to the next
+    const uLightGain = { value: 1.0 };
+    // 1 when the run on show kept nothing from the model (its squares are then drawn quieter)
+    const uBeliefQuiet = { value: 0.0 };
+    let allSeenKey = '';
+    let allSeen = false;
+    let lastSeenNow: EarthStageTelemetry['lastSeen'];
+    // The fire on show for the page's labels: points on the ground (u, v, weight) and where they came from
+    let fireAnchorKey = '';
+    let fireAnchorFrom: StageFireAnchor['from'] = 'detections';
+    let fireAnchorPoints: Float32Array = new Float32Array(0);
+    let fireAnchorSent = false;
 
     const syncEpochTextures = (tensor: Uint8Array, frameCount: number, timeProg: number): number => {
       const clampedT = Math.min(1, Math.max(0, timeProg));
@@ -1152,6 +1200,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uFieldScale: { value: uFieldScale },
       uHeatRange: { value: uHeatRange },
       uBeliefGrid: { value: beliefField.grid },
+      uBeliefBox: { value: beliefField.box },
       uTileGrid: { value: uTileGrid },
       uTileState: { value: uTileState },
       uTileHover,
@@ -1159,6 +1208,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uPixelOutline: { value: 0.0 },
       uBeliefMix,
       uHeldOut,
+      uAfterglow,
+      uLightGain,
+      uBeliefQuiet,
       uLightModis,
       uLightTexels: { value: LIGHT_TEX_SIZE },
       uRevealed: { value: uRevealed },
@@ -1497,8 +1549,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       if (!pack || !inset || !fullResPack || inset.size > renderer.capabilities.maxTextureSize) return;
       const rect = inset.uv_rect;
       if (!Array.isArray(rect) || rect.length !== 4 || !(rect[2] > rect[0]) || !(rect[3] > rect[1])) return;
-      const apiBase = propsRef.current.apiBase;
-      void loadPackImage(resolveAssetUrl(apiBase, inset.url), maxAnisotropy).then((tex) => {
+      void loadPackImage(assetAddress(propsRef.current, inset.url), maxAnisotropy).then((tex) => {
         if (!tex) return;
         const owner = packBundles.get(packed.regionId);
         if (disposed || !owner || owner.pack !== pack) {
@@ -1519,9 +1570,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       const manifest = parseTerrainContext(pack?.manifest.context);
       if (!pack || !manifest || packed.context || packed.contextState !== 'none') return;
       packed.contextState = 'loading';
-      const apiBase = propsRef.current.apiBase;
       void loadTerrainContext(manifest, {
-        resolveUrl: (raw) => resolveAssetUrl(apiBase, raw),
+        resolveUrl: (raw) => assetAddress(propsRef.current, raw),
         maxTextureSize: renderer.capabilities.maxTextureSize,
         maxAnisotropy,
         isCancelled: () => disposed,
@@ -1542,9 +1592,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       const manifest = lite.packManifest;
       if (!manifest || lite.pack || lite.packState !== 'none') return;
       lite.packState = 'loading';
-      const apiBase = propsRef.current.apiBase;
       void loadTerrainPack(manifest, {
-        resolveUrl: (raw) => resolveAssetUrl(apiBase, raw),
+        resolveUrl: (raw) => assetAddress(propsRef.current, raw),
         maxTextureSize: fullResPack ? renderer.capabilities.maxTextureSize : 4096,
         maxAnisotropy,
         isCancelled: () => disposed,
@@ -3151,8 +3200,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       );
       curtainMesh.visible = terrainUniforms.uCutawayMix.value > 0.008 && currentCurtainPlane < 1.5;
 
-      // By night the smoke is thinner on screen, so the lights under it read: it is lit by the moon
-      // and, from below, by the detections it rises from
+      // By night no smoke is drawn (see NIGHT_SMOKE_OPACITY); it fades out as a night pass comes on
       smokeOpacity = THREE.MathUtils.lerp(
         smokeOpacity,
         targetPlumeOpacity * THREE.MathUtils.lerp(1.0, NIGHT_SMOKE_OPACITY, uNight.value),
@@ -3183,8 +3231,19 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       if (realRun) {
         syncDetectionTextures(nextBundle, uploadedFrame0, uploadedFrame1);
         const key = `${nextBundle.key}:${epochIdx}:${p.holdoutViirs ? 1 : 0}:${landingWorld ? 1 : 0}`;
-        if (key !== realPassKey) {
+        // On the landing, while the page steps the pass on show, the lights of the pass before fade
+        // out before the next pass's come up, so no pass pops in
+        const stepping = landingWorld && typeof p.landingPass === 'number' && !reducedMotion;
+        const fadingOut =
+          key !== realPassKey && stepping && realPassKey.startsWith(`${nextBundle.key}:`) && uLightGain.value > 0.02;
+        if (fadingOut) {
+          uLightGain.value = Math.max(0, uLightGain.value - dtSec / LIGHT_FADE_OUT_SECONDS);
+        } else if (key === realPassKey) {
+          uLightGain.value = stepping ? Math.min(1, uLightGain.value + dtSec / LIGHT_FADE_IN_SECONDS) : 1;
+        }
+        if (key !== realPassKey && !fadingOut) {
           realPassKey = key;
+          uLightGain.value = stepping ? 0 : 1;
           // The pass the frame belongs to: one the estimate was made from, before any pass laid on after scoring
           const shown =
             rawPasses.find((sp) => !passIsHidden(sp, p.holdoutViirs) && !sp.revealed) ??
@@ -3251,6 +3310,30 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             passFireBox.v1 = v1;
             passFireBox.modis = hasModis;
           }
+          // A pass that shows no detection of its own because its detections are hidden keeps a
+          // trace of the fire: the last pass before it that the stage shows, as an afterglow that
+          // fades with the hours since then, at the rate the run's own model lets a burning cell
+          // go out. Nothing is invented: these are that earlier pass's detections, drawn as such.
+          afterglowList.length = 0;
+          uAfterglow.value = 0;
+          lastSeenNow = undefined;
+          const hiddenNow =
+            footprintList.length === 0 &&
+            rawPasses.length > 0 &&
+            rawPasses.every((sp) => sp.revealed || passIsHidden(sp, p.holdoutViirs));
+          if (hiddenNow) {
+            const nowMs = Date.parse(rawPasses[0]?.timeUtc ?? '');
+            for (let f = epochIdx - 1; f >= 0 && afterglowList.length === 0; f--) {
+              for (const sp of obsFrames[f] ?? []) {
+                if (sp.revealed || passIsHidden(sp, p.holdoutViirs) || sp.footprints.length === 0) continue;
+                for (const fp of sp.footprints) afterglowList.push(fp);
+                const thenMs = Date.parse(sp.timeUtc ?? '');
+                const hours = Number.isFinite(nowMs) && Number.isFinite(thenMs) ? Math.max(0, (nowMs - thenMs) / 3600000) : 0;
+                uAfterglow.value = Math.exp(-hours / (nextBundle.residenceHours ?? DEFAULT_RESIDENCE_HOURS));
+                lastSeenNow = { index: f, sensor: sp.sensorLabel, timeUtc: sp.timeUtc ?? '', hoursBefore: hours };
+              }
+            }
+          }
           // How hot each detection is drawn, on the run's own intensity scale
           const lightScale = nextBundle.fieldScale ?? DEFAULT_FIELD_INTENSITY_SCALE;
           lightRangeOf(lightScale, lightRange);
@@ -3261,12 +3344,15 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             (mwPerKm2) =>
               (fieldScalePosition(lightScale, mwPerKm2) - lightRange.x) / Math.max(1e-3, lightRange.y - lightRange.x),
             revealedList,
+            afterglowList,
           );
           uLightModis.value = hasModis ? 1 : 0;
         }
       } else {
         realPassNow = undefined;
         realPassKey = '';
+        uAfterglow.value = 0;
+        lastSeenNow = undefined;
       }
       // The scan front crosses the region, a little past each edge, in SCAN_SECONDS
       const scanProgress = (elapsedSec - scanStartSec) / SCAN_SECONDS;
@@ -3277,6 +3363,13 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       } else {
         uScan.w = 0;
       }
+      // A run that kept nothing from the model: the model is sure of far more cells, and its squares
+      // are drawn quieter so they do not bury the lights
+      if (allSeenKey !== nextBundle.key) {
+        allSeenKey = nextBundle.key;
+        allSeen = realRun && !obsFrames.some((passes) => passes.some((sp) => sp.hidden || sp.revealed));
+      }
+      uBeliefQuiet.value = THREE.MathUtils.lerp(uBeliefQuiet.value, allSeen && !p.holdoutViirs ? 1.0 : 0.0, dampFast);
       // The model's belief at the time on show. Passes are unevenly spaced: the time between two
       // frames is read off their real pass times, and the belief frames are stepped through at it.
       const beliefNow = realRun && nextBundle.runId ? beliefStore.get(nextBundle.runId) : undefined;
@@ -3312,7 +3405,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uHeldOut.value = THREE.MathUtils.lerp(uHeldOut.value, heldOutTarget, 1.0 - Math.exp(-dtSec * 6.0));
       smokeFireLight = THREE.MathUtils.lerp(
         smokeFireLight,
-        !realRun || footprintList.length > 0 ? 1.0 : 0.0,
+        (!realRun || footprintList.length > 0 ? 1.0 : 0.5 * uAfterglow.value) * uLightGain.value,
         1.0 - Math.exp(-dtSec * 4.0),
       );
       terrainUniforms.uPixelOutline.value = THREE.MathUtils.lerp(
@@ -3660,6 +3753,101 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         }
       }
 
+      // Where the fire on show sits on screen, for the page's labels: the pass's own detections,
+      // or the estimate's cells on a pass whose detections are hidden
+      if (p.onFireAnchor && p.inWorkspace && realRun) {
+        const own = footprintList.length > 0 ? footprintList : revealedList;
+        const beliefStep = beliefNow ? Math.round(beliefField.grid.x) + ':' + beliefField.stepKey : '';
+        const key = `${realPassKey}:${own.length}:${own.length === 0 ? beliefStep : ''}`;
+        if (key !== fireAnchorKey) {
+          fireAnchorKey = key;
+          const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
+          if (own.length > 0) {
+            fireAnchorFrom = 'detections';
+            fireAnchorPoints = new Float32Array(own.length * 3);
+            own.forEach((fp, i) => {
+              fireAnchorPoints[i * 3] = (fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin);
+              fireAnchorPoints[i * 3 + 1] = (fp.lat - latMin) / Math.max(1e-9, latMax - latMin);
+              fireAnchorPoints[i * 3 + 2] = Math.max(1, fp.frpMw);
+            });
+          } else {
+            fireAnchorFrom = 'estimate';
+            fireAnchorPoints = beliefNow
+              ? beliefField.cellsAbove(beliefNow, FIRE_ANCHOR_PROBABILITY, (v) =>
+                  fieldScaleValue(nextBundle.fieldScale ?? DEFAULT_FIELD_INTENSITY_SCALE, v),
+                )
+              : new Float32Array(0);
+          }
+        }
+        const count = fireAnchorPoints.length / 3;
+        if (count === 0) {
+          if (fireAnchorSent) p.onFireAnchor(null);
+          fireAnchorSent = false;
+        } else {
+          let sumU = 0;
+          let sumV = 0;
+          let sumW = 0;
+          let left = Infinity;
+          let right = -Infinity;
+          let top = Infinity;
+          let bottom = -Infinity;
+          for (let i = 0; i < count; i++) {
+            const u = fireAnchorPoints[i * 3];
+            const v = fireAnchorPoints[i * 3 + 1];
+            const w = fireAnchorPoints[i * 3 + 2];
+            sumU += u * w;
+            sumV += v * w;
+            sumW += w;
+            projVec.set(worldX(u), sampleCpuTerrainY(u, v), worldZ(v)).project(camera);
+            if (projVec.z <= -1 || projVec.z >= 1) continue;
+            const sx = (projVec.x * 0.5 + 0.5) * viewportW;
+            const sy = (-projVec.y * 0.5 + 0.5) * viewportH;
+            left = Math.min(left, sx);
+            right = Math.max(right, sx);
+            top = Math.min(top, sy);
+            bottom = Math.max(bottom, sy);
+          }
+          const cu = sumU / sumW;
+          const cv = sumV / sumW;
+          const cy = sampleCpuTerrainY(cu, cv);
+          projVec.set(worldX(cu), cy, worldZ(cv)).project(camera);
+          const x = (projVec.x * 0.5 + 0.5) * viewportW;
+          const yPx = (-projVec.y * 0.5 + 0.5) * viewportH;
+          let visible = projVec.z > -1 && projVec.z < 1 && x >= 0 && x <= viewportW && yPx >= 0 && yPx <= viewportH;
+          if (visible) {
+            // Behind a ridge: some ground between the eye and the centre stands above the sight line
+            const ex = camera.position.x;
+            const ey = camera.position.y;
+            const ez = camera.position.z;
+            const tx = worldX(cu);
+            const tz = worldZ(cv);
+            for (let k = 1; k < 48 && visible; k++) {
+              const a = k / 48;
+              const su = slabU(ex + (tx - ex) * a);
+              const sv = slabV(ez + (tz - ez) * a);
+              if (su < 0 || su > 1 || sv < 0 || sv > 1) continue;
+              if (sampleCpuTerrainY(su, sv) > ey + (cy - ey) * a + 0.012) visible = false;
+            }
+          }
+          p.onFireAnchor({
+            frame: epochIdx,
+            from: fireAnchorFrom,
+            x,
+            y: yPx,
+            left: Number.isFinite(left) ? left : x,
+            top: Number.isFinite(top) ? top : yPx,
+            right: Number.isFinite(right) ? right : x,
+            bottom: Number.isFinite(bottom) ? bottom : yPx,
+            visible,
+          });
+          fireAnchorSent = true;
+        }
+      } else if (fireAnchorSent) {
+        p.onFireAnchor?.(null);
+        fireAnchorSent = false;
+        fireAnchorKey = '';
+      }
+
       const showCallouts = p.inWorkspace && !p.cleanHud && !p.cinemaActive;
       const findings = calloutsFor(nextBundle);
       const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
@@ -3799,6 +3987,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             landingStandpoint: landingWorld && landingWorldPose ? landingWorldStats : undefined,
             intensityLegend: intensityLegendOf(nextBundle),
             realPass: realPassNow,
+            lastSeen: lastSeenNow,
             regionGrid: p.regionGridDivisions ? regionGridOf(nextBundle, p.regionGridDivisions) : undefined,
           };
           p.onTelemetry?.(telemetry);
@@ -3935,11 +4124,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       try {
         const prevRegionBundle = bridge.bundleCache.get(run.region.id);
         const hiresDemUrl = run.assets.dem_hires_f32_url
-          ? resolveAssetUrl(props.apiBase, run.assets.dem_hires_f32_url)
+          ? assetAddress(propsRef.current, run.assets.dem_hires_f32_url)
           : null;
-        const stdDemUrl = resolveAssetUrl(props.apiBase, run.assets.dem_f32_url);
-        const satUrl = resolveAssetUrl(props.apiBase, run.assets.satellite_url);
-        const tensorUrl = resolveAssetUrl(props.apiBase, run.assets.reconstruction_u8_url);
+        const stdDemUrl = assetAddress(propsRef.current, run.assets.dem_f32_url);
+        const satUrl = assetAddress(propsRef.current, run.assets.satellite_url);
+        const tensorUrl = assetAddress(propsRef.current, run.assets.reconstruction_u8_url);
 
         const fetchDemBuffer = async (): Promise<ArrayBuffer | null> => {
           if (hiresDemUrl) {
@@ -4060,6 +4249,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           findings: found.anchors,
           callouts: found.callouts,
           fieldScale: parseFieldIntensityScale(run.encoding),
+          residenceHours: parseResidenceHours(run.model) ?? undefined,
           fireHistory: null,
           ...liteShadingFields(
             Math.max(18.0, run.region.width_km || knownProf?.widthKm || 60.0),
@@ -4076,7 +4266,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         const beliefInfo = parseBeliefFrames(run.belief_frames);
         const beliefStore = beliefStoreRef.current;
         if (beliefInfo && !beliefStore.has(run.run_id)) {
-          void fetch(resolveAssetUrl(props.apiBase, beliefInfo.url))
+          void fetch(assetAddress(propsRef.current, beliefInfo.url))
             .then((resp) => (resp.ok ? resp.arrayBuffer() : null))
             .then((buf) => {
               if (!buf || buf.byteLength !== beliefInfo.steps * beliefInfo.nx * beliefInfo.ny * 2) return;
