@@ -14,7 +14,7 @@ const PAD_S = 3600;
  * detection. A run whose frames are the pass list itself (`observer_passes.frames_from` "cmr"), a simulated run, or
  * a window the route has no list for gives null, and the track shows the run's own frames only.
  */
-export function usePassList(apiBase: string, run: DynamicRegionRun | null): PassList[] | null {
+export function usePassList(run: DynamicRegionRun | null): PassList[] | null {
   const real = isRealRun(run) && run !== null;
   const framesFrom = real ? obj(obj(run as unknown as Obj)?.observer_passes)?.frames_from : null;
   const times = real
@@ -31,7 +31,7 @@ export function usePassList(apiBase: string, run: DynamicRegionRun | null): Pass
   useEffect(() => {
     if (!key) return;
     const controller = new AbortController();
-    fetchPassList(apiBase, regionId, start, end, controller.signal)
+    fetchPassList(regionId, start, end, controller.signal)
       .then((list) => {
         if (!controller.signal.aborted) setLists({ key, lists: list ? [list] : null });
       })
@@ -39,7 +39,7 @@ export function usePassList(apiBase: string, run: DynamicRegionRun | null): Pass
         if (!controller.signal.aborted) setLists({ key, lists: null });
       });
     return () => controller.abort();
-  }, [apiBase, key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return key && lists.key === key ? lists.lists : null;
 }

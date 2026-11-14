@@ -51,7 +51,7 @@ import type {
   WorkspaceMode,
 } from './stage/types';
 
-const API_BASE: string = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8788';
+import { API_BASE, getJson } from './lib/api';
 
 /**
  * Landing world view: `landingSubjectFrame` names the rectangle the stage keeps calm (sky or haze) for the type.
@@ -802,8 +802,7 @@ export function App() {
   useEffect(() => {
     const controller = new AbortController();
     setEvidenceState('loading');
-    fetch(`${API_BASE}/api/evidence`, { signal: controller.signal })
-      .then((r) => (r.ok ? r.json() : null))
+    getJson<unknown>('/api/evidence', undefined, { signal: controller.signal })
       .then((d) => {
         if (d && typeof d === 'object' && (d as Partial<EvidenceDoc>).test_fires) {
           setEvidenceLive(d as EvidenceDoc);
@@ -1145,7 +1144,7 @@ export function App() {
   // What the pass track shows, what each step needs, and the quiet control's contents.
   const trackState: TrackState = !runIsReal ? 'simulated' : holdoutViirs ? 'hidden' : revealed ? 'revealed' : 'normal';
   const trackRevealed = useMemo(() => (revealed ? revealedPassesOf(activeRun) : []), [revealed, activeRun]);
-  const passLists = usePassList(API_BASE, activeRun);
+  const passLists = usePassList(activeRun);
   const stageMonth = activeRun?.epoch_summaries?.[0]?.timestamp_utc?.slice(0, 7) ?? null;
   const lookHere = activeRun?.region.id === roundEpisode.episode.region_id || Boolean(round);
   const stepBlocked: Partial<Record<Step, string | null>> = {

@@ -1,3 +1,5 @@
+import { getJson, HttpError, NotRecorded } from '../lib/api';
+
 /**
  * Every satellite pass over a region's box in a window, fire or no fire: `GET /api/passes` (NASA CMR granule
  * metadata, matched with the FIRMS rows of each pass). The pass track adds these to a real run whose frames are
@@ -55,14 +57,15 @@ export function parsePassList(body: unknown): PassList | null {
 
 /** The pass list of a window, or null when the route has none for it (not cached, or a region with no schedule). */
 export async function fetchPassList(
-  apiBase: string,
   regionId: string,
   startIso: string,
   endIso: string,
   signal?: AbortSignal,
 ): Promise<PassList | null> {
-  const q = new URLSearchParams({ region_id: regionId, start: startIso, end: endIso });
-  const resp = await fetch(`${apiBase}/api/passes?${q.toString()}`, { signal });
-  if (!resp.ok) return null;
-  return parsePassList(await resp.json());
+  try {
+    return parsePassList(await getJson<unknown>('/api/passes', { region_id: regionId, start: startIso, end: endIso }, { signal }));
+  } catch (err) {
+    if (err instanceof HttpError || err instanceof NotRecorded) return null;
+    throw err;
+  }
 }

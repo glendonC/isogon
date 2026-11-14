@@ -17,7 +17,7 @@ npm run preview   # serve dist/ on http://127.0.0.1:5188
 
 ## The backend
 
-The site calls the backend at `http://127.0.0.1:8788` (`API_BASE` in `src/App.tsx`). Start it from the repository root:
+The site calls the backend at `http://127.0.0.1:8788` through one client module, `src/lib/api.ts`. Start the backend from the repository root:
 
 ```bash
 uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.server
@@ -28,6 +28,11 @@ To use another address, set `VITE_API_BASE`:
 ```bash
 VITE_API_BASE=http://127.0.0.1:8790 npm run dev
 ```
+
+A build for a public static page reads recorded answers instead of a backend: set `VITE_TRANSPORT=recorded` and,
+if the folder is not `recorded/` beside the page, `VITE_RECORDED_BASE`. The folder holds `index.json`, which maps
+each request's key (its method, its path with the query sorted, and for a POST its body as JSON with sorted keys)
+to a stored answer. A request with no recorded answer says so on the page in one line.
 
 The backend accepts browser requests only from pages served on `localhost`, `127.0.0.1` or `[::1]`. Its routes are described in [`../docs/api.md`](../docs/api.md).
 
@@ -71,7 +76,7 @@ One surface reads a stand-in file in `src/content/demo/` instead of a route and 
 | `src/content/` | Readers of the backend's answers and the page's texts: `calendar.ts`, `realRuns.ts`, `nextLookEnv.ts`, `passTrack.ts`, `partsStatus.ts`, `sources.ts`, `theaters.ts`; stand-in data in `demo/` |
 | `src/stage/` | The stage component (`EarthCutawayStage.tsx`), its shaders and types, and the camera (`orbitalDirector.ts`) |
 | `src/stage/engine/` | The stage's parts: terrain and terrain packs, context terrain, light and atmosphere, shadows, fire, footprints, smoke, spacecraft, framing |
-| `src/lib/` | Colour scales (`colormaps.ts`) and land outlines (`earthAtlas.ts`) |
+| `src/lib/` | The backend client (`api.ts`), colour scales (`colormaps.ts`) and land outlines (`earthAtlas.ts`) |
 | `src/styles/` | Style sheets, with the shared values in `tokens.css` |
 
 ## Related documents
