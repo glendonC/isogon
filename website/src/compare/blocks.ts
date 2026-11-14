@@ -440,7 +440,7 @@ export function playerBlocks(ground: CompareGround | null, start: unknown, end: 
       ground,
       night: true,
       marks: [
-        { kind: 'tiles', rows: rowsN, cols: colsN, looked: taken.map((t) => t.tile) },
+        { kind: 'tiles', rows: rowsN, cols: colsN, looked: taken.map((t) => t.tile), veil: true },
         { kind: 'detections', instrument: 'modis', rows: seen, weight: 'quiet' },
         { kind: 'detections', instrument: 'viirs', rows: found },
       ],
@@ -570,7 +570,7 @@ export function playBlocks(ground: CompareGround | null, plays: readonly unknown
     if (twin) lines.push(`the same looks as ${twin}`);
     else if (play.id === 'oracle') lines.push('sees the answer');
     if (!sameLooks.has(looksKey)) sameLooks.set(looksKey, play.name);
-    const marks: CompareMark[] = [{ kind: 'tiles', rows: rowsN, cols: colsN, looked: shown.map((l) => l.tile) }];
+    const marks: CompareMark[] = [{ kind: 'tiles', rows: rowsN, cols: colsN, looked: shown.map((l) => l.tile), veil: true }];
     if (opts.seen && opts.seen.length > 0) marks.push({ kind: 'detections', instrument: 'modis', rows: opts.seen, weight: 'quiet' });
     marks.push({ kind: 'detections', instrument: 'viirs', rows: found });
     blocks.push({ id: play.id, ground, night: true, marks, pins, label: { title: play.name, lines } });
@@ -595,4 +595,23 @@ export function roundLooks(end: unknown): number {
     most = Math.max(most, actions.filter((a) => (num(a) ?? -1) >= 0).length);
   }
   return most;
+}
+
+/** For each play whose looks equal an earlier play's, the name of that earlier player. */
+export function sameLooks(plays: readonly PlaySummary[]): Map<string, string> {
+  const first = new Map<string, string>();
+  const out = new Map<string, string>();
+  for (const play of plays) {
+    const key = play.looks.map((l) => `${l.decision}:${l.tile}`).join(',');
+    const twin = first.get(key);
+    if (twin) out.set(play.id, twin);
+    else first.set(key, play.name);
+  }
+  return out;
+}
+
+/** A gain as a share of the ceiling's gain, in whole percent; null when there is no ceiling to measure against. */
+export function shareOfCeiling(gain: number | null, ceiling: number | null): number | null {
+  if (gain === null || ceiling === null || !(ceiling > 0)) return null;
+  return Math.round((gain / ceiling) * 100);
 }

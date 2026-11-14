@@ -153,15 +153,14 @@ export function ComparePlane({
             <div className="cmp-label" style={{ left: a.x, top: a.y }}>
               {renderLabel ? renderLabel(block, a, hovered === block.id) : <DefaultLabel block={block} plate={labelPlate} />}
             </div>
-            {!renderLabel &&
-              (block.pins ?? []).map((pin) => {
-                const at = a.pins.find((p) => p.id === pin.id);
-                return at && pin.text ? (
-                  <span key={pin.id} className="cmp-pin sys-plate sys-value" style={{ left: at.x, top: at.y }}>
-                    {pin.text}
-                  </span>
-                ) : null;
-              })}
+            {(block.pins ?? []).map((pin) => {
+              const at = a.pins.find((p) => p.id === pin.id);
+              return at && pin.text ? (
+                <span key={pin.id} className="cmp-pin sys-plate sys-value" style={{ left: at.x, top: at.y }}>
+                  {pin.text}
+                </span>
+              ) : null;
+            })}
           </div>
         );
       })}

@@ -6,10 +6,11 @@ import { PLAYERS } from '../../compare/blocks';
  * The players' plays of the round on the open fire, from the play route, one player at a time. Each play is a
  * round of its own and is what a recorded page holds. A play holds detections of the hidden satellite, so the
  * caller holds it back while a person's own round is under way. A player whose play does not answer is left out.
+ * The ceiling's play comes with them, as the measure of what could be gained.
  */
 export type Plays =
   | { state: 'idle' | 'held' | 'loading' }
-  | { state: 'plays'; plays: unknown[] }
+  | { state: 'plays'; plays: unknown[]; ceiling: unknown | null }
   | { state: 'closed' | 'unserved' | 'failed'; line: string };
 
 const asked = new Map<string, Promise<Plays>>();
@@ -31,7 +32,10 @@ async function ask(regionId: string, start: string): Promise<Plays> {
     }
   }
   if (plays.length === 0) return { state: 'unserved', line: missing ?? 'No play of this round is served.' };
-  return { state: 'plays', plays };
+  // The ceiling reads the hidden rows and is asked for as such. It is the measure, not a player; without it the
+  // players are shown with their gains alone.
+  const ceiling = await postJson<unknown>('/api/env/next_look/play', { region_id: regionId, start, player: 'oracle', ceiling: true }).catch(() => null);
+  return { state: 'plays', plays, ceiling };
 }
 
 /** `hold` is true while a person's own round on this fire is under way: nothing is asked and nothing is shown. */

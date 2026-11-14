@@ -1,25 +1,50 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '../../app/store';
 import { ComparePlane } from '../../compare/ComparePlane';
-import { groundOfRun, playBlocks, readPlay, seenRows, signed, type PlaySummary } from '../../compare/blocks';
+import { groundOfRun, playBlocks, readPlay, sameLooks, seenRows, shareOfCeiling, signed, type PlaySummary } from '../../compare/blocks';
 import type { CompareAnchor } from '../../compare/types';
 import { platformName } from '../../content/realRuns';
 import { usePlays } from './usePlays';
 import './agent.css';
 
 /**
- * The Agent part's picture: the round on the open fire, one block per player, each with the tiles it looked at in
- * order and what its looks found. It fills its parent. It reads the place and the run from the workspace and asks
- * for the plays itself; the shell only has to mount it where the stage is.
+ * The Agent part's picture: the round on the open fire, one block per player. A block says which player, where it
+ * looked (its tiles stay lit, numbered in order, with what its looks found) and what it gained against the
+ * ceiling. It fills its parent. It reads the place and the run from the workspace and asks for the plays itself;
+ * the shell only has to mount it where the stage is.
  */
 
 /** Time between two looks while a play is watched, ms. */
 const LOOK_MS = 1100;
 /** Room kept under the row of blocks: the label, then the picked player's card. Pixels. */
-const UNDER_BLOCKS = 344;
+const UNDER_BLOCKS = 364;
 /** Where the card starts under a block's lowest corner, below the label. Pixels. */
-const CARD_BELOW = 92;
+const CARD_BELOW = 112;
 const CARD_WIDTH = 400;
+
+/** Under a block: the player, its gain, and the gain as a share of the ceiling's on a bar. */
+function PlayerLabel({ play, ceiling, shown, twin }: { play: PlaySummary; ceiling: number | null; shown: number | null; twin: string | undefined }) {
+  // While a play is watched, the gain so far: the rewards of the looks on show
+  const looks = shown === null ? play.looks : play.looks.slice(0, shown);
+  const whole = shown === null || shown >= play.looks.length;
+  const gain = whole ? play.gain : looks.every((l) => l.reward !== null) ? looks.reduce((a, l) => a + (l.reward ?? 0), 0) : null;
+  const share = shareOfCeiling(gain, ceiling);
+  return (
+    <div className="agent-label sys-plate">
+      <div className="sys-title">{play.name}</div>
+      <div className="agent-label__gain">
+        {gain !== null && <span className="sys-value">{signed(gain)}</span>}
+        {share !== null && <span className="sys-label">{share >= 0 ? `${share}% of the Ceiling` : 'below where it started'}</span>}
+      </div>
+      {share !== null && (
+        <div className="sys-readout__bar" style={{ ['--fill' as string]: `${Math.min(100, Math.max(0, share))}%` }}>
+          <span />
+        </div>
+      )}
+      <div className="sys-fine">{whole && twin ? `the same looks as ${twin}` : '\u00a0'}</div>
+    </div>
+  );
+}
 
 function PlayCard({ play, anchor, width }: { play: PlaySummary; anchor: CompareAnchor; width: number }) {
   // Under its own block, so that it covers no other; kept inside the picture at the sides
@@ -115,6 +140,8 @@ export function AgentPicture() {
               ? 'This round is on other ground than the run on show, so it cannot be drawn here.'
               : null;
 
+  const ceiling = useMemo(() => (plays.state === 'plays' && plays.ceiling ? readPlay(plays.ceiling) : null), [plays]);
+  const twins = useMemo(() => sameLooks(summaries), [summaries]);
   const pickedPlay = summaries.find((p) => p.id === picked);
   const pickedAnchor = anchors.find((a) => a.id === picked);
   const start = summaries[0]?.scoreStart ?? null;
@@ -130,7 +157,10 @@ export function AgentPicture() {
           ariaLabel="The players of this round"
           onPick={(id) => setPicked((was) => (was === id ? null : id))}
           onAnchors={setAnchors}
-          labelPlate
+          renderLabel={(block) => {
+            const play = summaries.find((p) => p.id === block.id);
+            return play ? <PlayerLabel play={play} ceiling={ceiling?.gain ?? null} shown={looks} twin={twins.get(play.id)} /> : null;
+          }}
         />
       )}
       {!line && pickedPlay && pickedAnchor && looks === null && (
@@ -142,8 +172,10 @@ export function AgentPicture() {
             Watch it play
           </button>
           <span className="sys-label">
-            Outlines are the MODIS detections every player could see. Filled marks are the VIIRS detections its own looks found.
-            {typeof start === 'number' ? ` The round starts at a score of ${start.toFixed(3)}.` : ''}
+            Lit tiles: where a player looked, in order. Filled marks: the VIIRS detections its looks found. Outlines: the MODIS detections every
+            player could see.
+            {ceiling?.gain != null ? ` The Ceiling sees the answer and gains ${signed(ceiling.gain)}` : ''}
+            {typeof start === 'number' ? `${ceiling?.gain != null ? ',' : ' The round starts'} from a score of ${start.toFixed(3)}.` : ceiling?.gain != null ? '.' : ''}
           </span>
         </div>
       )}

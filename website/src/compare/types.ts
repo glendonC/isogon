@@ -86,6 +86,8 @@ export interface TilesMark {
   cols: number;
   /** Tile indices (row major, row 0 north) that carry brackets. */
   looked?: number[];
+  /** Dim the ground of every tile that was not looked at, so that where a player looked reads at a glance. Drawing. */
+  veil?: boolean;
 }
 
 export type CompareMark = DetectionsMark | EstimateMark | TilesMark;

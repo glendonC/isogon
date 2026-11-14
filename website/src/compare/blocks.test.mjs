@@ -2,7 +2,7 @@
 // not been shown: no row of the hidden satellite before the reveal, and for a player only what its own looks found.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cutAround, fireBlock, groundOfRun, playBlocks, playerBlocks, readPlay, seenRows, signed, threeWays } from './blocks.ts';
+import { cutAround, fireBlock, groundOfRun, playBlocks, playerBlocks, readPlay, sameLooks, seenRows, shareOfCeiling, signed, threeWays } from './blocks.ts';
 import { levelLines } from './marks.ts';
 
 const BOX = [-121, 39, -120, 40];
@@ -280,4 +280,28 @@ test('a block takes the run terrain pack image when the run names one, and satel
   assert.equal(groundOfRun(packed).imageCredit, 'USDA NAIP');
   const noSmall = { ...packed, assets: { ...packed.assets, terrain_pack: { ortho: packed.assets.terrain_pack.ortho } } };
   assert.equal(groundOfRun(noSmall).imageUrl, '/api/runs/x/terrain/ortho_8192.jpg');
+});
+
+test('a gain against the ceiling is a share of the ceiling gain, and nothing without a ceiling', () => {
+  assert.equal(shareOfCeiling(0.1182, 0.1213), 97);
+  assert.equal(shareOfCeiling(0.0069, 0.1213), 6);
+  assert.equal(shareOfCeiling(-0.011, 0.1213), -9);
+  assert.equal(shareOfCeiling(0.1, null), null);
+  assert.equal(shareOfCeiling(0.1, 0), null);
+  assert.equal(shareOfCeiling(null, 0.1), null);
+});
+
+test('the player whose looks equal an earlier player is named with that player, the first is not', () => {
+  const a = readPlay(play);
+  const b = readPlay({ play: { ...play.play, player: { id: 'learned', label: 'Learned agent' } } });
+  const twins = sameLooks([a, b]);
+  assert.equal(twins.get('learned'), 'Least sure');
+  assert.equal(twins.has('least_sure'), false);
+});
+
+test('the board of a player dims the ground it did not look at', () => {
+  const [block] = playBlocks(groundOfRun(run), [play]);
+  const tiles = block.marks.find((m) => m.kind === 'tiles');
+  assert.equal(tiles.veil, true);
+  assert.deepEqual([...new Set(tiles.looked)], [3]);
 });

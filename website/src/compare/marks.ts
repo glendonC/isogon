@@ -280,6 +280,14 @@ function paintTiles(s: MarkSurface, mark: TilesMark, palette: MarkPalette) {
   const tw = width / mark.cols;
   const th = height / mark.rows;
   ctx.save();
+  const lit = new Set(mark.looked ?? []);
+  if (mark.veil && lit.size > 0) {
+    // Drawing, not data: the ground a player did not look at steps back
+    ctx.fillStyle = 'rgba(8,11,17,0.56)';
+    for (let t = 0; t < mark.rows * mark.cols; t++) {
+      if (!lit.has(t)) ctx.fillRect((t % mark.cols) * tw, Math.floor(t / mark.cols) * th, tw + 0.5, th + 0.5);
+    }
+  }
   ctx.strokeStyle = withAlpha(palette.ink, 0.42);
   ctx.lineWidth = Math.max(s.perCssPx, s.pxPerKm * 0.05);
   ctx.beginPath();
@@ -348,7 +356,7 @@ export function marksSignature(marks: readonly CompareMark[]): string {
         const z = m.rows[m.rows.length - 1];
         return `d:${m.instrument}:${m.ink ?? ''}:${m.draw ?? ''}:${m.weight ?? ''}:${m.rows.length}:${a ? `${a.lon},${a.lat}` : ''}:${z ? `${z.lon},${z.lat}` : ''}`;
       }
-      if (m.kind === 'tiles') return `t:${m.rows}x${m.cols}:${(m.looked ?? []).join('.')}`;
+      if (m.kind === 'tiles') return `t:${m.rows}x${m.cols}:${(m.looked ?? []).join('.')}:${m.veil ? 'veil' : ''}`;
       const src = 'url' in m.source ? `${m.source.url}@${m.source.step}` : `bytes${m.source.probability.length}:${m.source.probability[0]}`;
       return `e:${m.grid.nx}x${m.grid.ny}:${src}:${m.open ? 'open' : ''}`;
     })

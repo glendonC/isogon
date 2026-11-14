@@ -24,6 +24,11 @@
   padding: var(--sys-s3) var(--sys-s5) var(--sys-s4);
 }
 
+.agent-picture__foot .sys-ctl {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* What a picked player did, look by look, under its own block. */
 .agent-card {
   position: absolute;
@@ -34,4 +39,27 @@
 .agent-card .sys-table {
   width: 100%;
   white-space: nowrap;
+}
+
+/* Under a block: the player, its gain, and the gain against the ceiling on a bar. */
+.agent-label {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: 232px;
+  padding: var(--sys-s2) var(--sys-s3);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.agent-label__gain {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sys-s2);
+  min-height: var(--sys-lh-label);
+}
+
+.agent-label .sys-readout__bar {
+  width: 100%;
+  margin-top: var(--sys-s1);
 }
