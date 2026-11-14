@@ -1,0 +1,807 @@
+{
+ "what": "next-look environment: the model change and the learned policy of unit M7",
+ "known_limits": "FIRMS lists detections, not where a satellite looked and saw nothing. Every tile is assumed covered by a pass that flagged anything in the wider context box, and cloud is unknown, so a revealed tile with no detection may have been cloudy rather than free of fire.",
+ "setting": {
+  "tiles": "4x4",
+  "budget": 4,
+  "score": "csi",
+  "reward_target": "still_hidden",
+  "spending": "every agent spends the budget on the same looks, spread evenly; only the tile differs"
+ },
+ "episodes": {
+  "train": 118,
+  "validation": 15,
+  "test": "the three 2021 fires, played once",
+  "train_years": "2012 to 2023",
+  "validation_years": "2024 and 2025"
+ },
+ "reconstruction_parameters": "21 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)",
+ "learn_from_looks": {
+  "what": "a look rescales the probabilities of the cells not looked at by the ratio of cells found to cells expected in the tiles looked at, by day and by night",
+  "adopted": false,
+  "rule": "used when, on validation episodes, the oracle's mean gain is higher with it and the 90 percent interval of the paired difference (episodes resampled) lies above zero",
+  "prior_cells": 10.0,
+  "prior_cells_chosen_on": "30 training episodes, by the oracle's mean gain",
+  "training_subset": [
+   {
+    "prior_cells": null,
+    "oracle_gain": 0.03836018413203744,
+    "least_sure_gain": 0.027457619112798527
+   },
+   {
+    "prior_cells": 10.0,
+    "oracle_gain": 0.049717603952277076,
+    "least_sure_gain": 0.016961823469564097
+   },
+   {
+    "prior_cells": 40.0,
+    "oracle_gain": 0.048176714292622026,
+    "least_sure_gain": 0.017743143846581513
+   },
+   {
+    "prior_cells": 160.0,
+    "oracle_gain": 0.046291754647539936,
+    "least_sure_gain": 0.021341184239863007
+   }
+  ],
+  "validation": {
+   "episodes": 15,
+   "off": {
+    "oracle": 0.04127828630409325,
+    "least_sure": 0.0315152482277815,
+    "latest_modis": 0.030653024486370306,
+    "random": 0.005803477925990494
+   },
+   "on": {
+    "oracle": 0.041589492438468614,
+    "least_sure": 0.015818290986432303,
+    "latest_modis": 0.002013255400437854,
+    "random": -0.015507807803547463
+   },
+   "oracle_on_minus_off": {
+    "mean_difference": 0.0003112061343753562,
+    "p05": -0.005646547831569929,
+    "p95": 0.005914241655156958,
+    "episodes": 15,
+    "episodes_a_ahead": 9,
+    "episodes_b_ahead": 6
+   },
+   "least_sure_on_minus_off": {
+    "mean_difference": -0.01569695724134919,
+    "p05": -0.03229209444414402,
+    "p95": -0.000980164302030809,
+    "episodes": 15,
+    "episodes_a_ahead": 5,
+    "episodes_b_ahead": 10
+   }
+  }
+ },
+ "policy": {
+  "kind": "linear score per tile; the tile with the highest score is looked at",
+  "feature_names": [
+   "unsure",
+   "burning",
+   "power",
+   "spread",
+   "modis_recent_frp",
+   "modis_recent_pixels",
+   "modis_all_pixels",
+   "seen_before",
+   "unsure_neighbours",
+   "relief",
+   "unsure_by_day",
+   "unsure_by_night",
+   "modis_recent_frp_by_day",
+   "unsure_when_modis_is_old",
+   "burning_early"
+  ],
+  "features": {
+   "unsure": "sum of p (1 - p) over the tile's cells: how unsure the model is there",
+   "burning": "sum of p: cells the model expects to burn",
+   "power": "sum of the model's expected FRP",
+   "spread": "sum of the model's standard deviation",
+   "modis_recent_frp": "MODIS FRP in the tile, halved for every six hours of age",
+   "modis_recent_pixels": "MODIS pixels in the tile, halved for every six hours of age",
+   "modis_all_pixels": "every MODIS pixel in the tile so far",
+   "seen_before": "earlier looks at this tile, each halved for every twelve hours of age (not rescaled)",
+   "unsure_neighbours": "mean of `unsure` over the tiles around it",
+   "relief": "standard deviation of elevation in the tile (0 when no terrain is given)",
+   "unsure_by_day": "`unsure` on a day overpass, else 0",
+   "unsure_by_night": "`unsure` on a night overpass, else 0",
+   "modis_recent_frp_by_day": "`modis_recent_frp` on a day overpass, else 0",
+   "unsure_when_modis_is_old": "`unsure` times the hours since the last MODIS pass, capped at twelve, over twelve",
+   "burning_early": "`burning` times the share of the episode's looks still to come"
+  },
+  "weights": [
+   0.8841321926325661,
+   -0.9865695550076362,
+   0.21056128871495514,
+   -0.21437156926944617,
+   -0.010973410424028912,
+   0.20145495824200738,
+   0.09553689718827439,
+   0.05643231234840067,
+   -0.10447070395054031,
+   0.021378095988187837,
+   0.4861830800599794,
+   0.39794911242479747,
+   -0.23076649968167223,
+   -0.7917880972338232,
+   0.1007321265318371
+  ],
+  "fit": "ridge regression of each tile's true gain divided by the largest gain of its decision",
+  "ridge": 0.01,
+  "round": 1,
+  "training": {
+   "episodes": 118,
+   "decisions_round_0": 472,
+   "decisions_round_1": 472,
+   "tile_samples": 15104,
+   "behaviour_round_0": "oracle's tile half the time, least sure a quarter, random a quarter",
+   "behaviour_round_1": "the best round 0 policy's own choices"
+  },
+  "candidates_on_validation": [
+   {
+    "round": 0,
+    "ridge": 0.01,
+    "validation_gain": 0.030793049995686612
+   },
+   {
+    "round": 0,
+    "ridge": 0.1,
+    "validation_gain": 0.030793049995686612
+   },
+   {
+    "round": 0,
+    "ridge": 1.0,
+    "validation_gain": 0.03071351504557459
+   },
+   {
+    "round": 0,
+    "ridge": 10.0,
+    "validation_gain": 0.030593843918992673
+   },
+   {
+    "round": 1,
+    "ridge": 0.01,
+    "validation_gain": 0.03097865819852828
+   },
+   {
+    "round": 1,
+    "ridge": 0.1,
+    "validation_gain": 0.03097865819852828
+   },
+   {
+    "round": 1,
+    "ridge": 1.0,
+    "validation_gain": 0.03097865819852828
+   },
+   {
+    "round": 1,
+    "ridge": 10.0,
+    "validation_gain": 0.030654715914126936
+   }
+  ],
+  "validation": {
+   "episodes": 15,
+   "gains": {
+    "learned": 0.03097865819852828,
+    "least_sure": 0.0315152482277815,
+    "latest_modis": 0.030653024486370306,
+    "random": 0.0075664288154415945,
+    "oracle": 0.04127828630409325
+   },
+   "learned_minus_least_sure": {
+    "mean_difference": -0.0005365900292532144,
+    "p05": -0.003030143342953516,
+    "p95": 0.0015798866763065108,
+    "episodes": 15,
+    "episodes_a_ahead": 5,
+    "episodes_b_ahead": 3
+   }
+  }
+ },
+ "test": {
+  "episodes": 22,
+  "mean_start_score": 0.2461,
+  "agents": {
+   "random": {
+    "mean_final_score": 0.2491,
+    "mean_gain": 0.0031,
+    "share_of_oracle_gain": 0.138,
+    "sd_of_mean_gain_across_seeds": 0.0007
+   },
+   "latest_modis": {
+    "mean_final_score": 0.2508,
+    "mean_gain": 0.0102,
+    "share_of_oracle_gain": 0.454,
+    "sd_of_mean_gain_across_seeds": null
+   },
+   "least_sure": {
+    "mean_final_score": 0.2531,
+    "mean_gain": 0.0113,
+    "share_of_oracle_gain": 0.502,
+    "sd_of_mean_gain_across_seeds": null
+   },
+   "learned": {
+    "mean_final_score": 0.2523,
+    "mean_gain": 0.0106,
+    "share_of_oracle_gain": 0.469,
+    "sd_of_mean_gain_across_seeds": null
+   },
+   "oracle": {
+    "mean_final_score": 0.2659,
+    "mean_gain": 0.0225,
+    "share_of_oracle_gain": 1.0,
+    "sd_of_mean_gain_across_seeds": null
+   }
+  },
+  "random_mean_gain_by_seed": [
+   0.0025,
+   0.002,
+   0.0036,
+   0.0038,
+   0.0028,
+   0.0044,
+   0.0032,
+   0.0029,
+   0.0033,
+   0.0026
+  ],
+  "learned_minus_least_sure": {
+   "mean_difference": -0.0007374032017128965,
+   "p05": -0.002030557481172234,
+   "p95": 0.000521974046650962,
+   "episodes": 22,
+   "episodes_a_ahead": 3,
+   "episodes_b_ahead": 9
+  },
+  "oracle_minus_learned": {
+   "mean_difference": 0.011943916124485665,
+   "p05": 0.009341951726328625,
+   "p95": 0.014853958795736854,
+   "episodes": 22,
+   "episodes_a_ahead": 21,
+   "episodes_b_ahead": 0
+  },
+  "plainly": "the learned policy does not differ from least sure by more than the noise",
+  "per_episode": {
+   "latest_modis": [
+    0.03739,
+    0.01946,
+    0.02028,
+    0.01298,
+    0.00422,
+    0.00099,
+    0.01096,
+    0.01105,
+    0.00703,
+    0.01072,
+    0.0223,
+    0.00323,
+    0.01171,
+    0.00337,
+    -0.00625,
+    0.01109,
+    0.02649,
+    0.00013,
+    -0.00472,
+    0.02028,
+    0.01078,
+    -0.00869
+   ],
+   "least_sure": [
+    0.03739,
+    0.01946,
+    0.01547,
+    0.0138,
+    0.01065,
+    0.00064,
+    0.01169,
+    0.01293,
+    0.00608,
+    0.01174,
+    0.0116,
+    0.01749,
+    0.00538,
+    0.00889,
+    -0.00625,
+    0.01297,
+    0.02649,
+    0.00171,
+    0.00502,
+    0.02078,
+    0.01331,
+    -0.0087
+   ],
+   "learned": [
+    0.03739,
+    0.01946,
+    0.01547,
+    0.0138,
+    0.0145,
+    0.00064,
+    0.01334,
+    0.00335,
+    0.00594,
+    0.00869,
+    0.0116,
+    0.01749,
+    -0.00171,
+    0.00889,
+    -0.00683,
+    0.01297,
+    0.02649,
+    0.01208,
+    0.00018,
+    0.01867,
+    0.01088,
+    -0.01098
+   ],
+   "oracle": [
+    0.04358,
+    0.02517,
+    0.02703,
+    0.01807,
+    0.01832,
+    0.01405,
+    0.01753,
+    0.02101,
+    0.02085,
+    0.0116,
+    0.03143,
+    0.03118,
+    0.02213,
+    0.02189,
+    0.02461,
+    0.02213,
+    0.02649,
+    0.02079,
+    0.02122,
+    0.02994,
+    0.03259,
+    -0.00651
+   ]
+  },
+  "episode_keys": [
+   "plumas_ca:22:2021-07-14T09",
+   "plumas_ca:22:2021-07-16T18",
+   "plumas_ca:22:2021-07-18T21",
+   "plumas_ca:22:2021-07-21T09",
+   "plumas_ca:22:2021-07-23T10",
+   "plumas_ca:22:2021-07-25T20",
+   "plumas_ca:22:2021-07-29T20",
+   "plumas_ca:22:2021-08-02T05",
+   "plumas_ca:22:2021-08-04T18",
+   "plumas_ca:22:2021-08-06T20",
+   "plumas_ca:22:2021-08-08T21",
+   "lytton_bc:22:2021-06-29T21",
+   "lytton_bc:22:2021-07-01T20",
+   "lytton_bc:22:2021-07-13T10",
+   "lytton_bc:22:2021-07-19T10",
+   "lytton_bc:22:2021-07-21T09",
+   "lytton_bc:22:2021-07-23T09",
+   "lytton_bc:22:2021-07-25T10",
+   "lytton_bc:22:2021-07-27T09",
+   "lytton_bc:22:2021-07-28T21",
+   "evia_greece:22:2021-08-03T21",
+   "evia_greece:22:2021-08-06T11"
+  ]
+ },
+ "seconds": 1665.1,
+ "generated_utc": "2026-11-14T07:17:40Z",
+ "protocol": {
+  "fitted_under": 1,
+  "note": "the weights, the validation and the `test` block are from unit M7 under protocol version 1 (looks were the hidden instrument's own overpasses, episodes counted hidden overpasses). Nothing was refitted in unit M8. `test_protocol_2` is the same table measured again under version 2."
+ },
+ "test_protocol_2": {
+  "what": "next-look environment, reference agents and the learned policy on the test episodes, protocol version 2, after the bug fix of unit M8c",
+  "note": "second look at the three 2021 test fires: a protocol correction. Episodes are chosen from MODIS rows alone; looks are nominal slots; the policy weights are those of unit M7 (fitted under version 1, not refitted).",
+  "bug_fix": "measured again after a bug fix (unit M8c, outside audit finding J-2). Before it a look kept only the hidden rows inside the window, so a look at a slot laid out just before the window handed over nothing although its pass had flagged fire, and the model took an empty look for a clear one. Now a look owns the rows of its own pass, and an empty look on the nominal schedule is unknown and teaches the model nothing. Same test episodes, same reconstruction values and same policy weights as the table it replaces, which is kept as test_protocol_2_before_m8c.",
+  "reconstruction_values": "21 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)",
+  "known_limits": "FIRMS lists detections, not where a satellite looked and saw nothing, and has no cloud mask: a revealed tile with no detection may have been cloudy rather than free of fire. On the nominal schedule it may also be a half day on which the platform did not fly or its swath missed the box, so such a look is taken as unknown and teaches the model nothing. The looks are the nominal half-day slots of each VIIRS platform, taken from the platform and the calendar and not from the hidden detections; the real pass is up to about 90 minutes from a slot's time, sometimes comes twice, and its pixel size is not known in advance. A list of real overpass times would remove that approximation.",
+  "episodes": 21,
+  "catalogue": {
+   "windows": 889,
+   "episodes": 157,
+   "fit": 136,
+   "test": 21,
+   "per_region_and_split": {
+    "plumas_ca fit": 60,
+    "plumas_ca test": 10,
+    "lytton_bc fit": 74,
+    "lytton_bc test": 9,
+    "evia_greece fit": 2,
+    "evia_greece test": 2
+   }
+  },
+  "mean_start_score": 0.2435,
+  "agents": {
+   "random": {
+    "mean_final": 0.2461,
+    "mean_gain": 0.0026,
+    "sd_across_seeds": 0.0011,
+    "seed_range": [
+     0.0013,
+     0.0046
+    ],
+    "share_of_oracle_gain": 0.098
+   },
+   "latest_modis": {
+    "mean_final": 0.2531,
+    "mean_gain": 0.0168,
+    "share_of_oracle_gain": 0.628
+   },
+   "least_sure": {
+    "mean_final": 0.2561,
+    "mean_gain": 0.0183,
+    "share_of_oracle_gain": 0.686
+   },
+   "linear": {
+    "mean_final": 0.2537,
+    "mean_gain": 0.0158,
+    "share_of_oracle_gain": 0.593
+   },
+   "oracle": {
+    "mean_final": 0.2668,
+    "mean_gain": 0.0267,
+    "share_of_oracle_gain": 1.0
+   }
+  },
+  "learned_minus_least_sure": {
+   "mean_difference": -0.0025,
+   "p05": -0.0076,
+   "p95": 0.0015,
+   "episodes": 21,
+   "episodes_a_ahead": 3,
+   "episodes_b_ahead": 8,
+   "ahead": 3,
+   "behind": 8
+  },
+  "oracle_minus_learned": {
+   "mean_difference": 0.0109,
+   "p05": 0.0062,
+   "p95": 0.0161,
+   "episodes": 21,
+   "episodes_a_ahead": 19,
+   "episodes_b_ahead": 2,
+   "ahead": 19,
+   "behind": 2
+  },
+  "least_sure_minus_random": {
+   "mean_difference": 0.0157,
+   "p05": 0.0109,
+   "p95": 0.0209,
+   "episodes": 21,
+   "episodes_a_ahead": 20,
+   "episodes_b_ahead": 1
+  },
+  "plainly": "On the test episodes under protocol version 2 the learned policy does not differ from least sure by more than the noise, and it is not better.",
+  "other_settings": [
+   {
+    "tiles": "3x3",
+    "budget": 4,
+    "episodes": 21,
+    "mean_start_score": 0.2435,
+    "agents": {
+     "random": {
+      "mean_gain": 0.005,
+      "share_of_oracle_gain": 0.177
+     },
+     "least_sure": {
+      "mean_gain": 0.0212,
+      "share_of_oracle_gain": 0.747
+     },
+     "latest_modis": {
+      "mean_gain": 0.0222,
+      "share_of_oracle_gain": 0.784
+     },
+     "oracle": {
+      "mean_gain": 0.0283,
+      "share_of_oracle_gain": 1.0
+     }
+    }
+   },
+   {
+    "tiles": "4x4",
+    "budget": 4,
+    "episodes": 21,
+    "mean_start_score": 0.2435,
+    "agents": {
+     "random": {
+      "mean_gain": 0.0026,
+      "share_of_oracle_gain": 0.098
+     },
+     "least_sure": {
+      "mean_gain": 0.0183,
+      "share_of_oracle_gain": 0.686
+     },
+     "latest_modis": {
+      "mean_gain": 0.0168,
+      "share_of_oracle_gain": 0.628
+     },
+     "oracle": {
+      "mean_gain": 0.0267,
+      "share_of_oracle_gain": 1.0
+     }
+    }
+   },
+   {
+    "tiles": "6x6",
+    "budget": 4,
+    "episodes": 21,
+    "mean_start_score": 0.2435,
+    "agents": {
+     "random": {
+      "mean_gain": 0.0011,
+      "share_of_oracle_gain": 0.053
+     },
+     "least_sure": {
+      "mean_gain": 0.011,
+      "share_of_oracle_gain": 0.514
+     },
+     "latest_modis": {
+      "mean_gain": 0.0085,
+      "share_of_oracle_gain": 0.397
+     },
+     "oracle": {
+      "mean_gain": 0.0215,
+      "share_of_oracle_gain": 1.0
+     }
+    }
+   },
+   {
+    "tiles": "4x4",
+    "budget": 2,
+    "episodes": 21,
+    "mean_start_score": 0.2435,
+    "agents": {
+     "random": {
+      "mean_gain": 0.0015,
+      "share_of_oracle_gain": 0.109
+     },
+     "least_sure": {
+      "mean_gain": 0.0086,
+      "share_of_oracle_gain": 0.624
+     },
+     "latest_modis": {
+      "mean_gain": 0.007,
+      "share_of_oracle_gain": 0.507
+     },
+     "oracle": {
+      "mean_gain": 0.0138,
+      "share_of_oracle_gain": 1.0
+     }
+    }
+   },
+   {
+    "tiles": "4x4",
+    "budget": 8,
+    "episodes": 21,
+    "mean_start_score": 0.2435,
+    "agents": {
+     "random": {
+      "mean_gain": 0.0052,
+      "share_of_oracle_gain": 0.114
+     },
+     "least_sure": {
+      "mean_gain": 0.0273,
+      "share_of_oracle_gain": 0.601
+     },
+     "latest_modis": {
+      "mean_gain": 0.0197,
+      "share_of_oracle_gain": 0.433
+     },
+     "oracle": {
+      "mean_gain": 0.0455,
+      "share_of_oracle_gain": 1.0
+     }
+    }
+   }
+  ]
+ },
+ "test_protocol_2_before_m8c": {
+  "what": "next-look environment, reference agents and the learned policy on the test episodes, protocol version 2",
+  "note": "second look at the three 2021 test fires: a protocol correction. Episodes are chosen from MODIS rows alone; looks are nominal slots; the policy weights are those of unit M7 (fitted under version 1, not refitted).",
+  "known_limits": "FIRMS lists detections, not where a satellite looked and saw nothing, and has no cloud mask: a revealed tile with no detection may have been cloudy rather than free of fire. The looks are the nominal half-day slots of each VIIRS platform, taken from the platform and the calendar and not from the hidden detections; the real pass is up to about 90 minutes from a slot's time, sometimes comes twice, and its pixel size is not known in advance. A list of real overpass times would remove that approximation.",
+  "episodes": 21,
+  "catalogue": {
+   "windows": 889,
+   "episodes": 157,
+   "fit": 136,
+   "test": 21,
+   "per_region_and_split": {
+    "plumas_ca fit": 60,
+    "plumas_ca test": 10,
+    "lytton_bc fit": 74,
+    "lytton_bc test": 9,
+    "evia_greece fit": 2,
+    "evia_greece test": 2
+   }
+  },
+  "mean_start_score": 0.2435,
+  "agents": {
+   "random": {
+    "mean_final": 0.2462,
+    "mean_gain": 0.0028,
+    "sd_across_seeds": 0.0013,
+    "seed_range": [
+     0.0007,
+     0.0045
+    ],
+    "share_of_oracle_gain": 0.103
+   },
+   "latest_modis": {
+    "mean_final": 0.2525,
+    "mean_gain": 0.0163,
+    "share_of_oracle_gain": 0.607
+   },
+   "least_sure": {
+    "mean_final": 0.2555,
+    "mean_gain": 0.0179,
+    "share_of_oracle_gain": 0.666
+   },
+   "linear": {
+    "mean_final": 0.2535,
+    "mean_gain": 0.0157,
+    "share_of_oracle_gain": 0.586
+   },
+   "oracle": {
+    "mean_final": 0.2665,
+    "mean_gain": 0.0269,
+    "share_of_oracle_gain": 1.0
+   }
+  },
+  "learned_minus_least_sure": {
+   "mean_difference": -0.0022,
+   "p05": -0.0074,
+   "p95": 0.0019,
+   "episodes": 21,
+   "episodes_a_ahead": 5,
+   "episodes_b_ahead": 6,
+   "ahead": 5,
+   "behind": 6
+  },
+  "oracle_minus_learned": {
+   "mean_difference": 0.0111,
+   "p05": 0.0063,
+   "p95": 0.0164,
+   "episodes": 21,
+   "episodes_a_ahead": 18,
+   "episodes_b_ahead": 3,
+   "ahead": 18,
+   "behind": 3
+  },
+  "least_sure_minus_random": {
+   "mean_difference": 0.0151,
+   "p05": 0.0099,
+   "p95": 0.021,
+   "episodes": 21,
+   "episodes_a_ahead": 20,
+   "episodes_b_ahead": 1
+  },
+  "plainly": "On the test episodes under protocol version 2 the learned policy does not differ from least sure by more than the noise, and it is not better.",
+  "other_settings": [
+   {
+    "tiles": "3x3",
+    "budget": 4,
+    "episodes": 21,
+    "mean_start_score": 0.2435,
+    "agents": {
+     "random": {
+      "mean_gain": 0.0051,
+      "share_of_oracle_gain": 0.178
+     },
+     "least_sure": {
+      "mean_gain": 0.0207,
+      "share_of_oracle_gain": 0.72
+     },
+     "latest_modis": {
+      "mean_gain": 0.0218,
+      "share_of_oracle_gain": 0.759
+     },
+     "oracle": {
+      "mean_gain": 0.0287,
+      "share_of_oracle_gain": 1.0
+     }
+    }
+   },
+   {
+    "tiles": "4x4",
+    "budget": 4,
+    "episodes": 21,
+    "mean_start_score": 0.2435,
+    "agents": {
+     "random": {
+      "mean_gain": 0.0028,
+      "share_of_oracle_gain": 0.103
+     },
+     "least_sure": {
+      "mean_gain": 0.0179,
+      "share_of_oracle_gain": 0.666
+     },
+     "latest_modis": {
+      "mean_gain": 0.0163,
+      "share_of_oracle_gain": 0.607
+     },
+     "oracle": {
+      "mean_gain": 0.0269,
+      "share_of_oracle_gain": 1.0
+     }
+    }
+   },
+   {
+    "tiles": "6x6",
+    "budget": 4,
+    "episodes": 21,
+    "mean_start_score": 0.2435,
+    "agents": {
+     "random": {
+      "mean_gain": 0.0015,
+      "share_of_oracle_gain": 0.067
+     },
+     "least_sure": {
+      "mean_gain": 0.0111,
+      "share_of_oracle_gain": 0.51
+     },
+     "latest_modis": {
+      "mean_gain": 0.0088,
+      "share_of_oracle_gain": 0.406
+     },
+     "oracle": {
+      "mean_gain": 0.0217,
+      "share_of_oracle_gain": 1.0
+     }
+    }
+   },
+   {
+    "tiles": "4x4",
+    "budget": 2,
+    "episodes": 21,
+    "mean_start_score": 0.2435,
+    "agents": {
+     "random": {
+      "mean_gain": 0.0011,
+      "share_of_oracle_gain": 0.079
+     },
+     "least_sure": {
+      "mean_gain": 0.0077,
+      "share_of_oracle_gain": 0.575
+     },
+     "latest_modis": {
+      "mean_gain": 0.0062,
+      "share_of_oracle_gain": 0.458
+     },
+     "oracle": {
+      "mean_gain": 0.0134,
+      "share_of_oracle_gain": 1.0
+     }
+    }
+   },
+   {
+    "tiles": "4x4",
+    "budget": 8,
+    "episodes": 21,
+    "mean_start_score": 0.2435,
+    "agents": {
+     "random": {
+      "mean_gain": 0.0047,
+      "share_of_oracle_gain": 0.106
+     },
+     "least_sure": {
+      "mean_gain": 0.0264,
+      "share_of_oracle_gain": 0.595
+     },
+     "latest_modis": {
+      "mean_gain": 0.0187,
+      "share_of_oracle_gain": 0.421
+     },
+     "oracle": {
+      "mean_gain": 0.0444,
+      "share_of_oracle_gain": 1.0
+     }
+    }
+   }
+  ]
+ }
+}
