@@ -1,41 +1,51 @@
-# Local data directory
+# Local data
 
-This directory holds a static dataset reference file (`data/datasets.json`) and the untracked local cache tree (`data/cache/`) populated by Isogon's ingestion and terrain tools. Developers and researchers read this file to understand what lives on disk under `data/`, how sidecar manifests verify cached files, and which commands populate each subdirectory.
+This folder holds one tracked reference file, `datasets.json`, and the local cache, `data/cache/`, that Isogon's tools fill and git ignores. Read this to know what is on disk under `data/`, which tool writes each part, and how a cached file can be traced to its source.
 
-## Cache subdirectories
+Where the data comes from and what it can say is in [`docs/data.md`](../docs/data.md).
 
-All downloaded observations, granule schedules, map tiles, and baked terrain packs are written under `data/cache/` (git-ignored). Fresh clones run without `data/cache/` by falling back to tracked static bundles under `website/public/generated/`; see [docs/data.md](../docs/data.md).
+## The cache
 
-- `data/cache/firms/`: Cached NASA FIRMS active-fire CSVs and JSON sidecar manifests:
-  - `listing/`: Cached `yearly_summary_files.txt` and `AttributesReadme.txt` plus `.manifest.json` sidecars.
-  - `raw/<product>/<year>/<product>_<year>_<Country>.csv`: Raw annual country archives fetched without an API key by `backend/firms/archive.py` (`modis`, `viirs-snpp`, `viirs-jpss1`).
-  - `area/<region_id>/<source>/`: Raw 5-day Area API CSV chunks fetched with `FIRMS_MAP_KEY` by `backend/firms/area_api.py` (with the key redacted to `<MAP_KEY>` in stored metadata).
-  - `extract/<region_id>/<product>_<year>.csv`: Deduplicated regional extracts clipped to each region's 5x context box, paired with `<product>_<year>.csv.manifest.json` recording source URL, byte length, SHA-256 digest, row counts, and version counts.
-  - `derived/`: Cached per-region real-run start lists keyed by data count and rule digest.
-- `data/cache/cmr/`: Keyless NASA Common Metadata Repository (`granules.json`) schedules written by `backend/firms/cmr_passes.py`:
-  - `raw/<region_id>/<platform>/YYYY-MM_pN.json.gz` and `.json.gz.manifest.json`: Compressed paged granule responses and SHA-256 manifests for `MOD14`, `MYD14`, `VNP14IMG`, `VJ114IMG`, and `VJ214IMG`.
-  - `passes/<region_id>/<platform>_<year>.json.gz`: Deduplicated annual overpass intervals, great-circle-densified swath polygons, and `MODIS` granule cloud cover.
-- `data/cache/tiles/`: Raw `256 x 256` Web-Mercator elevation and imagery tiles (`<source>/<z>/<x>/<y>.<ext>`) cached by `TileStore` in `backend/terrain/tile_store.py` (`terrarium`, `esri_world_imagery`, `eox_s2cloudless_2020`, `usgs_naip`).
-- `data/cache/hires_regions/`: Stitched regional terrain packs (`tpack1` tiers with manifest JSON files) built by `backend/terrain/terrain_pack.py`, plus compact per-region DEM and imagery rasters written by `backend/terrain/live_region.py`.
+Nothing under `data/cache/` is tracked. A fresh clone has no cache and still runs: the backend then serves simulated runs only.
 
-## Populating caches from the command line
+| Path | Written by | Holds |
+| --- | --- | --- |
+| `cache/firms/listing/` | `backend/firms/archive.py` | NASA's list of country files and its attribute readme, as downloaded |
+| `cache/firms/raw/<product>/<year>/<product>_<year>_<Country>.csv` | `backend/firms/archive.py` | Each FIRMS country yearly file exactly as downloaded |
+| `cache/firms/area/<region>/<SOURCE>/<YYYY-MM-DD>_<n>d.csv` | `backend/firms/area_api.py` | Each area API reply exactly as returned (at most five days) |
+| `cache/firms/extract/<region>/<product>_<year>.csv` | both | The rows inside the region's context box, every original column, duplicates removed. This is what `read_firms` reads. |
+| `cache/firms/derived/` | `backend/server.py` | The start dates worth showing per region, kept until the rows or the rule change |
+| `cache/cmr/raw/<region>/<platform>/<YYYY-MM>_p<n>.json.gz` | `backend/firms/cmr_passes.py` | Each NASA CMR reply, compressed |
+| `cache/cmr/passes/<region>/<platform>_<year>.json.gz` | `backend/firms/cmr_passes.py` | The passes of a year, compact and deduplicated. This is what `cmr_passes` reads. |
+| `cache/tiles/<source>/<z>/<x>/<y>.<ext>` | `backend/terrain/tile_store.py` | Elevation and imagery tiles: `terrarium`, `esri_world_imagery`, `usgs_naip`, `eox_s2cloudless_2020` |
+| `cache/hires_regions/` | `backend/terrain/live_region.py`, `backend/terrain/terrain_pack.py` | Per region: the 256 and 512 elevation grids, a 2048 pixel image, and the terrain pack with its context terrain |
 
-Run commands from the repository root using Python 3.12 with `numpy` and `Pillow`:
+Every downloaded file and every extract has a manifest beside it, `<file>.manifest.json`, with the source URL, the query, the retrieval time, the byte count, the SHA-256, the row count, the columns and the lineage. A FIRMS key never appears in one: stored URLs carry `<MAP_KEY>` in its place.
+
+## Filling it
+
+Run from the repository root.
 
 ```bash
-# 1. Keyless annual FIRMS country archives and regional context extracts
+# 1. FIRMS country yearly files and the regions' extracts (no key)
 uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.firms.archive fetch --years 2000-2025
 
-# 2. Check live FIRMS Area API key status and availability (requires FIRMS_MAP_KEY in .env)
-uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.firms.area_api status
-
-# 3. Keyless NASA CMR active-fire granule pass schedules
+# 2. NASA's list of passes (no key)
 uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.firms.cmr_passes fetch --first 2012-01 --last 2025-12
 
-# 4. Regional elevation and orthoimagery terrain packs
-uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.terrain.terrain_pack build plumas_ca lytton_bc evia_greece --imagery usgs_naip
+# 3. Terrain packs and context terrain for the three regions with FIRMS rows
+uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.terrain.terrain_pack build plumas_ca lytton_bc evia_greece
+uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.terrain.terrain_pack context
+
+# 4. Optional, needs FIRMS_MAP_KEY in .env: NOAA-21 and recent days from the area API
+uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.firms.area_api --env-file .env status
+uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.firms.area_api --env-file .env fetch --sources VIIRS_NOAA21 --start 2023-01-01
 ```
 
-## Status of `data/datasets.json`
+`archive status` and `cmr_passes status` print what the cache holds.
 
-`data/datasets.json` is a static 15-entry reference catalogue summarizing upstream NASA active-fire, geolocation, cloud-mask, burned-area, elevation, and orbital specifications. No backend or frontend module reads `data/datasets.json` at runtime.
+The cache is not meant to be shared as it is. Tiles from Esri World Imagery are published for viewing, not for export; see [`docs/sources.md`](../docs/sources.md).
+
+## `datasets.json`
+
+A reference list of 15 NASA and related products: the FIRMS sources with their area API codes and CMR collection ids, the CMR granule search, gridded fire products, GIBS layers and the reference paper for the detection law. It also records how FIRMS counts area API transactions. No code reads this file; the identifiers the code uses are in `backend/firms/`.

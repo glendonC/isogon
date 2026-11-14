@@ -1,16 +1,4 @@
 {
-  "audit_date": "2026-11-12T18:00:00Z",
-  "official_challenge_url": "https://www.spaceappschallenge.org/2026/challenges/modis-and-viirs-hot-spots/",
-  "official_challenge_http_status": 200,
-  "official_resources_tab_status": "Live page retrieved 2026-11-12; official resourcesTabContent currently states: 'Resources will be available on Friday, November 13.'",
-  "official_resource_list_verified": false,
-  "downloaded_observation_count": 0,
-  "compliance_notes": [
-    "Pre-event research audit only. Zero authenticated NASA observation files downloaded.",
-    "Do not flip official_challenge_resource_verified to true on any entry until Friday, November 13, 2026 after matching against the live Resources tab on spaceappschallenge.org.",
-    "Global Judging team rule (verified FAQ Nov 12, 2026): Universal Event teams require 2 to 6 members; Local Event teams require 1 to 6 members.",
-    "Mandatory 2026 Super Intelligence (SI) disclosure: project submission must describe how SI/AI tools were used during development."
-  ],
   "firms_rate_limit_spec": {
     "quota_transactions_per_10_min": 5000,
     "status_endpoint": "https://firms.modaps.eosdis.nasa.gov/mapserver/mapkey_status/?MAP_KEY=<MAP_KEY>",
@@ -41,25 +29,21 @@
       },
       "temporal_coverage": "Terra: 2000-11-01 to ~2025-12 wind-down; Aqua: 2002-07-04 to 2026 SP cutoff (2-5 month SP lag)",
       "spatial_resolution": "1000 m nadir (up to 4.8 km x 2.0 km at 55 deg scan edge)",
-      "role": "primary historical observation (must split Terra vs Aqua on ingestion)",
+      "role": "primary historical observation (Terra and Aqua rows share one file; the satellite column tells them apart)",
       "schema_notes": "15 CSV columns including brightness (Ch21/22 K), bright_t31 (Ch31 K), integer confidence (0-100), satellite ('T'/'A' in archive or 'Terra'/'Aqua' in API), and type (0=vegetation fire, 1=volcano, 2=static land/industrial, 3=offshore).",
       "orbital_drift_warning": "Non-stationary post-2022 local crossing times: Terra exited Morning Constellation Oct 2022 (lowered to 694 km) and drifted from 10:30 AM toward ~09:00 AM MLT by Dec 2025; Aqua exited A-Train early 2022 and drifted from 13:30 PM to ~15:50 PM MLT by Aug 2026.",
-      "requires": "free FIRMS MAP_KEY (or async FIRMS Archive Download)",
-      "recommended_tier": "tier_1_primary",
-      "official_challenge_resource_verified": false
+      "requires": "free FIRMS MAP_KEY (or async FIRMS Archive Download)"
     },
     {
       "id": "firms_modis_nrt",
       "name": "NASA FIRMS MODIS Collection 6.1 Near Real-Time (MCD14DL)",
       "url": "https://firms.modaps.eosdis.nasa.gov/api/area/",
       "source_code": "MODIS_NRT",
-      "temporal_coverage": "Recent 2-5 month tail after MODIS_SP max_date (confirm active platform cutoff via /api/data_availability)",
+      "temporal_coverage": "Recent 2-5 month tail after MODIS_SP max_date (the cutoff of each platform is given by /api/data_availability)",
       "spatial_resolution": "1000 m nadir",
       "role": "recent-tail observation supplement (post-MODIS_SP cutoff only)",
-      "schema_notes": "14 CSV columns in Area API (type column is OMITTED in NRT; version='6.1NRT'/'6.1URT'). Never mix silently on dates covered by MODIS_SP.",
-      "requires": "free FIRMS MAP_KEY",
-      "recommended_tier": "tier_1_recent_tail",
-      "official_challenge_resource_verified": false
+      "schema_notes": "14 CSV columns in Area API (type column is OMITTED in NRT; version='6.1NRT'/'6.1URT'). MODIS_SP replaces these rows on the dates it covers.",
+      "requires": "free FIRMS MAP_KEY"
     },
     {
       "id": "firms_viirs_snpp_sp",
@@ -72,9 +56,7 @@
       "role": "primary historical VIIRS bridge (2012-2026)",
       "schema_notes": "15 CSV columns in SP: bright_ti4 (I4 K, saturates 367 K day), bright_ti5 (I5 K), categorical confidence ('l'/'n'/'h'), satellite ('N'), version ('2.0'), and type (0,1,2,3). Filter nighttime 'l' in South Atlantic Anomaly.",
       "orbital_phasing_notes": "13:30 asc / 01:30 desc (~833 km). Flew ~50 min opposite NOAA-20 pre-2024 and ~24-30 min quarter-orbit between NOAA-21 and NOAA-20 from Apr 2024 until Nov 2, 2026 shutdown.",
-      "requires": "free FIRMS MAP_KEY (or async FIRMS Archive Download)",
-      "recommended_tier": "tier_1_primary",
-      "official_challenge_resource_verified": false
+      "requires": "free FIRMS MAP_KEY (or async FIRMS Archive Download)"
     },
     {
       "id": "firms_viirs_noaa20_sp",
@@ -84,12 +66,10 @@
       "cmr_l2_concept": "C2734197957-LPCLOUD",
       "temporal_coverage": "2018-04-01 to 2026 SP cutoff (operational)",
       "spatial_resolution": "375 m nominal",
-      "role": "primary operational VIIRS standard record (omitted in initial datasets.json)",
+      "role": "primary operational VIIRS standard record",
       "schema_notes": "15 CSV columns in SP (type included); satellite='N20' or '1'; categorical confidence ('l'/'n'/'h').",
       "orbital_phasing_notes": "13:30 asc / 01:30 desc (~833 km), separated by ~50-51 min (180 deg half-orbit) from NOAA-21.",
-      "requires": "free FIRMS MAP_KEY (or async FIRMS Archive Download)",
-      "recommended_tier": "tier_1_primary",
-      "official_challenge_resource_verified": false
+      "requires": "free FIRMS MAP_KEY (or async FIRMS Archive Download)"
     },
     {
       "id": "firms_viirs_noaa20_nrt",
@@ -98,11 +78,9 @@
       "source_code": "VIIRS_NOAA20_NRT",
       "temporal_coverage": "Recent 2-5 month tail after VIIRS_NOAA20_SP max_date to present (operational)",
       "spatial_resolution": "375 m nominal",
-      "role": "live 2026 operational VIIRS tail (post-SP cutoff)",
-      "schema_notes": "14 CSV columns in Area API (type column omitted; impute static industrial/volcanic mask from multi-year SP type in {1,2,3}).",
-      "requires": "free FIRMS MAP_KEY",
-      "recommended_tier": "tier_1_recent_tail",
-      "official_challenge_resource_verified": false
+      "role": "operational VIIRS tail (post-SP cutoff)",
+      "schema_notes": "14 CSV columns in Area API (type column omitted).",
+      "requires": "free FIRMS MAP_KEY"
     },
     {
       "id": "firms_viirs_noaa21_sp",
@@ -110,14 +88,12 @@
       "url": "https://firms.modaps.eosdis.nasa.gov/api/area/",
       "source_code": "VIIRS_NOAA21_SP",
       "cmr_l2_concept": "C2831626262-LPCLOUD",
-      "temporal_coverage": "2024-01-17 to 2026 SP cutoff (verified live in FIRMS Area API source selector Nov 12, 2026)",
+      "temporal_coverage": "2024-01-17 to 2026 SP cutoff",
       "spatial_resolution": "375 m nominal",
-      "role": "primary operational VIIRS standard record (2024+, omitted in initial datasets.json)",
+      "role": "primary operational VIIRS standard record (2024+)",
       "schema_notes": "15 CSV columns in SP; satellite='N21' or '2'; categorical confidence ('l'/'n'/'h').",
       "orbital_phasing_notes": "13:30 asc / 01:30 desc (~833 km), ~50-51 min half-orbit separated from NOAA-20.",
-      "requires": "free FIRMS MAP_KEY",
-      "recommended_tier": "tier_1_primary",
-      "official_challenge_resource_verified": false
+      "requires": "free FIRMS MAP_KEY"
     },
     {
       "id": "firms_viirs_noaa21_nrt",
@@ -126,11 +102,9 @@
       "source_code": "VIIRS_NOAA21_NRT",
       "temporal_coverage": "Recent tail after VIIRS_NOAA21_SP max_date to present (operational)",
       "spatial_resolution": "375 m nominal",
-      "role": "live 2026 operational VIIRS tail (post-SP cutoff)",
+      "role": "operational VIIRS tail (post-SP cutoff)",
       "schema_notes": "14 CSV columns in Area API (type column omitted).",
-      "requires": "free FIRMS MAP_KEY",
-      "recommended_tier": "tier_1_recent_tail",
-      "official_challenge_resource_verified": false
+      "requires": "free FIRMS MAP_KEY"
     },
     {
       "id": "firms_archive_download",
@@ -138,9 +112,7 @@
       "url": "https://firms.modaps.eosdis.nasa.gov/download/",
       "temporal_coverage": "2000-11-01 to present across MODIS C6.1, VIIRS S-NPP, NOAA-20, NOAA-21",
       "role": "zero-API-quota bulk historical CSV acquisition",
-      "requires": "Earthdata Login",
-      "recommended_tier": "tier_1_bulk_accelerator",
-      "official_challenge_resource_verified": false
+      "requires": "Earthdata Login"
     },
     {
       "id": "cmr_granule_metadata_api",
@@ -149,10 +121,8 @@
       "umm_url": "https://cmr.earthdata.nasa.gov/search/granules.umm_json",
       "temporal_coverage": "2000-present across MOD14, MYD14, VNP14IMG, VJ114IMG, VJ214IMG, MOD35_L2, MYD35_L2",
       "role": "millisecond unauthenticated overpass footprint polygons, UTC times, day/night flag, and MOD35/MYD35 daytime swath cloud percentages",
-      "schema_notes": "Verified live 159-399 ms latency without authentication. Note: L2 fire products (MOD14/VNP14IMG) return CloudCover=null; query MOD35_L2/MYD35_L2 UMM-JSON AdditionalAttributes (CloudCoverPct250m, ClearPct250m) for daytime granule cloud summary.",
-      "requires": "public unauthenticated HTTPS GET",
-      "recommended_tier": "tier_1_exposure_primary",
-      "official_challenge_resource_verified": false
+      "schema_notes": "L2 fire products (MOD14/VNP14IMG) return CloudCover=null; query MOD35_L2/MYD35_L2 UMM-JSON AdditionalAttributes (CloudCoverPct250m, ClearPct250m) for daytime granule cloud summary.",
+      "requires": "public unauthenticated HTTPS GET"
     },
     {
       "id": "lpcloud_l3_firemask_tiles",
@@ -170,10 +140,8 @@
       "temporal_coverage": "2000-present (MODIS C6.1) and 2012-present (VIIRS C2)",
       "spatial_resolution": "1000 m Sinusoidal grid (10 deg x 10 deg tiles, e.g., h08v05)",
       "role": "sub-megabyte pixel-exact cloud mask (class 4) and verified clear-sky non-fire negative (class 5) grids",
-      "schema_notes": "Verified CMR sizes: 0.15-0.20 MB/day (VIIRS) and 0.73-0.78 MB/8-days (MODIS), reducing storage >1,000x compared to raw VNP03IMG + MOD35_L2 swaths.",
-      "requires": "Earthdata Login (via earthaccess / LPCLOUD HTTPS)",
-      "recommended_tier": "tier_2_pixel_exposure_and_cloud",
-      "official_challenge_resource_verified": false
+      "schema_notes": "Typical CMR granule sizes: 0.15-0.20 MB/day (VIIRS) and 0.73-0.78 MB/8-days (MODIS), reducing storage >1,000x compared to raw VNP03IMG + MOD35_L2 swaths.",
+      "requires": "Earthdata Login (via earthaccess / LPCLOUD HTTPS)"
     },
     {
       "id": "viirs_750m_mband_fire",
@@ -185,9 +153,7 @@
       },
       "spatial_resolution": "750 m nominal (M13 dual-gain primary detection)",
       "role": "optional spatial-scale bridge isolating 375 m I-band vs 750 m M-band sensitivity on identical orbits",
-      "requires": "Earthdata Login for granule files (CMR metadata is public)",
-      "recommended_tier": "tier_2_optional_ablation",
-      "official_challenge_resource_verified": false
+      "requires": "Earthdata Login for granule files (CMR metadata is public)"
     },
     {
       "id": "firms_landsat_nrt",
@@ -196,10 +162,8 @@
       "source_code": "LANDSAT_NRT",
       "temporal_coverage": "2022-06-20 to present (US and Canada only)",
       "spatial_resolution": "30 m",
-      "role": "high-resolution partial independent check for AOI-1 (California) and AOI-3 (Alberta)",
-      "requires": "free FIRMS MAP_KEY",
-      "recommended_tier": "tier_2_validation",
-      "official_challenge_resource_verified": false
+      "role": "high-resolution 30 m independent active-fire cross-check (US and Canada)",
+      "requires": "free FIRMS MAP_KEY"
     },
     {
       "id": "gibs_wmts",
@@ -215,9 +179,7 @@
         "MODIS_Aqua_Cloud_Fraction_Day"
       ],
       "role": "interactive map browse tiles for visual context and cloud-obscuration inspection (never training truth)",
-      "requires": "public unauthenticated WMTS",
-      "recommended_tier": "tier_3_visualization_context",
-      "official_challenge_resource_verified": false
+      "requires": "public unauthenticated WMTS"
     },
     {
       "id": "umd_cmg_gfed5nrt",
@@ -225,87 +187,16 @@
       "url": "https://essd.copernicus.org/articles/18/7535/2026/",
       "spatial_resolution": "0.25 deg to 1.0 deg monthly/8-day grids",
       "role": "external macro-trend sanity check on harmonized seasonal curves",
-      "schema_notes": "Audit catch: MOD14CMG/MYD14CMG/VNP14CMG return 0 hits in NASA CMR (hosted on UMD sftp://fuoco.geog.umd.edu). Do not build blocking CMR ingestion on CMG short names.",
-      "requires": "UMD SFTP / open scientific publication datasets",
-      "recommended_tier": "tier_3_macro_reference",
-      "official_challenge_resource_verified": false
+      "schema_notes": "MOD14CMG/MYD14CMG/VNP14CMG return 0 hits in NASA CMR (hosted on UMD sftp://fuoco.geog.umd.edu), so they cannot be fetched through CMR.",
+      "requires": "UMD SFTP / open scientific publication datasets"
     },
     {
       "id": "frp_oop",
-      "name": "FMI FRP Observation Operator Reference Paper & Code (Sofiev & Kouznetsov, Oct 2026)",
+      "name": "FMI FRP Observation Operator Reference Paper & Code (Sofiev & Kouznetsov, 2026)",
       "url": "https://gmd.copernicus.org/articles/19/10123/2026/",
       "repo_url": "https://github.com/fmidev/FRP_OOp",
       "role": "published physical observation-operator baseline",
-      "requires": "Clean-room mathematical implementation from CC BY 4.0 paper recommended; repo code is GPL-3.0 with Fortran/f2py/SILAM dependencies.",
-      "recommended_tier": "tier_1_science_baseline",
-      "official_challenge_resource_verified": false
-    },
-    {
-      "id": "deprecated_raw_swath_geoloc_cloud",
-      "name": "DEPRECATED FOR BULK INGEST: Raw VNP03IMG Geolocation & Bulk MOD35_L2/CLDMSK_L2 Swath Downloads",
-      "url": "https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VNP03IMG/",
-      "role": "demoted due to multi-terabyte volume (~45.6 MB per 6-min VIIRS granule = 1.5-2.5 TB for multi-year AOI)",
-      "replacement": "Use cmr_granule_metadata_api + analytical scan/track/swath geometry (Tier 1) and lpcloud_l3_firemask_tiles (Tier 2).",
-      "requires": "Earthdata Login (restrict to single-scene spot checks only)",
-      "recommended_tier": "demoted_infeasible_bulk",
-      "official_challenge_resource_verified": false
-    }
-  ],
-  "candidate_benchmark_aois": [
-    {
-      "id": "aoi_1_norcal_corridor",
-      "name": "Northern California Wildland-Ag-Refinery Corridor, USA",
-      "bbox_west_south_east_north": [-123.8, 37.8, -119.8, 39.95],
-      "sinusoidal_tiles": ["h08v05"],
-      "priority": "primary_development_and_demo",
-      "regimes": [
-        "forest megafires (2018 Camp/Mendocino, 2020 August/LNU, 2021 Caldor, 2024 Park)",
-        "small agricultural rice-stubble and orchard prescribed burns in Sacramento Valley",
-        "persistent type=2 industrial oil refinery flares (Carquinez Strait / Richmond / Martinez) and geothermal",
-        "coastal marine stratus vs clear interior cloud gradient",
-        "US LANDSAT_NRT 30 m independent cross-check"
-      ],
-      "firms_26yr_budget": {
-        "total_5day_calls": 4142,
-        "total_transactions": 25852,
-        "throttled_minutes": 57.4,
-        "fast_start_2022_2024_transactions": 5060,
-        "fast_start_minutes": 11.2
-      }
-    },
-    {
-      "id": "aoi_2_mato_grosso_xingu",
-      "name": "Southern Amazon & Xingu Basin, Mato Grosso, Brazil",
-      "bbox_west_south_east_north": [-56.0, -14.5, -51.5, -10.2],
-      "sinusoidal_tiles": ["h12v10", "h13v10"],
-      "priority": "cloud_obscuration_and_saa_stress_test",
-      "regimes": [
-        "extreme wet-season cloud obscuration (>80% Nov-Apr) vs intense Jul-Oct dry-season burning",
-        "small understory and pasture/agricultural burns driving strong unharmonized 2012 VIIRS jump",
-        "South Atlantic Anomaly (SAA) nighttime VIIRS low-confidence cosmic-ray false-alarm test"
-      ],
-      "firms_26yr_budget": {
-        "total_5day_calls": 3820,
-        "total_transactions": 24886,
-        "throttled_minutes": 55.3
-      }
-    },
-    {
-      "id": "aoi_3_athabasca_boreal_oilsands",
-      "name": "Athabasca Oil Sands & Boreal Corridor, Alberta, Canada",
-      "bbox_west_south_east_north": [-114.0, 55.5, -110.0, 58.5],
-      "sinusoidal_tiles": ["h11v03", "h12v03"],
-      "priority": "high_latitude_swath_overlap_and_industrial_flare_benchmark",
-      "regimes": [
-        "massive persistent type=2 industrial upgrader flares adjacent to 2016 Horse River and 2023-2024 boreal megafires",
-        "high-latitude (57 deg N) polar swath convergence (2x-3x daily overpasses across 0-55 deg view zenith)",
-        "Canada LANDSAT_NRT 30 m independent cross-check"
-      ],
-      "firms_26yr_budget": {
-        "total_5day_calls": 4142,
-        "total_transactions": 25852,
-        "throttled_minutes": 57.4
-      }
+      "requires": "Mathematical implementation from CC BY 4.0 paper; upstream repository code is GPL-3.0 with Fortran/f2py/SILAM dependencies."
     }
   ]
 }
