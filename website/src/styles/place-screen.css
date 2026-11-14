@@ -1,0 +1,179 @@
+/* Choose a place (beats/calendar/PlaceScreen.tsx): the map is the screen. Sizes, inks and shapes from system.css. */
+
+.place-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--sys-night);
+  color: var(--sys-ink);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.place-screen__map {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.place-screen__map[data-drawing='true'] {
+  cursor: crosshair;
+}
+
+.place-screen__map svg {
+  display: block;
+}
+
+.place-screen__land {
+  fill: #11151d;
+  stroke: #2b303a;
+  stroke-width: 0.6;
+}
+
+.place-screen__land--cached {
+  fill: #232b38;
+  stroke: #4a5262;
+}
+
+.place-screen__box {
+  fill: none;
+  stroke: var(--sys-ink);
+  stroke-width: 1;
+}
+
+.place-screen__drawn {
+  fill: rgba(243, 244, 246, 0.06);
+  stroke: var(--sys-ink);
+  stroke-width: 1.5;
+}
+
+.place-screen__drawn--bad {
+  stroke: var(--sys-fail);
+  stroke-dasharray: 4 3;
+}
+
+.place-screen__leaders {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.place-screen__leaders line {
+  stroke: var(--sys-ink-2);
+  stroke-width: 1;
+}
+
+.place-screen__leaders rect {
+  fill: var(--sys-ink);
+}
+
+.place-screen__plate {
+  position: absolute;
+  display: grid;
+  padding: var(--sys-s2);
+  box-sizing: border-box;
+}
+
+.place-screen__plate > .sys-label {
+  padding: 0 var(--sys-s2) var(--sys-s1);
+}
+
+.place-screen__fire {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--sys-s4);
+  align-items: baseline;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  padding: 4px var(--sys-s2);
+  margin: 2px 0;
+}
+
+.place-screen__fire:hover .place-screen__period {
+  color: var(--sys-ink);
+}
+
+.place-screen__size {
+  text-align: right;
+}
+
+.place-screen__about {
+  grid-column: 1 / -1;
+}
+
+.place-screen__period {
+  color: var(--sys-ink-2);
+}
+
+.place-screen__head {
+  position: absolute;
+  left: var(--sys-gutter);
+  top: 76px;
+  width: 420px;
+  display: grid;
+  gap: var(--sys-s2);
+  padding: var(--sys-s4);
+}
+
+.place-screen__search {
+  margin: var(--sys-s1) 0 0;
+}
+
+.place-screen__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--sys-s2) var(--sys-s3);
+  border: 1px solid var(--sys-edge);
+  border-radius: 0;
+  background: transparent;
+  color: var(--sys-ink);
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+}
+
+.place-screen__input::placeholder {
+  color: var(--sys-ink-3);
+}
+
+.place-screen__input:focus-visible {
+  outline: 1px solid var(--sys-focus);
+  outline-offset: 2px;
+}
+
+.place-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sys-s2) var(--sys-s4);
+}
+
+.place-screen__actions .sys-ctl {
+  padding-left: 0;
+}
+
+.place-screen__note {
+  color: var(--sys-fail);
+}
+
+.place-screen__zoom {
+  position: absolute;
+  right: var(--sys-gutter);
+  bottom: 56px;
+  display: grid;
+}
+
+.place-screen__zoom .sys-ctl {
+  justify-content: center;
+  width: 36px;
+  border: 1px solid var(--sys-edge);
+  background: var(--sys-plate);
+}
+
+.place-screen__caption {
+  position: absolute;
+  left: var(--sys-gutter);
+  bottom: 14px;
+}

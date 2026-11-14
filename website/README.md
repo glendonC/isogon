@@ -45,7 +45,7 @@ Without a backend the site still opens and the stage draws `plumas_ca` from the 
 
 | Part | Key | What it does |
 | --- | --- | --- |
-| Calendar | `0` | The fire record of the place; pick a month to replay |
+| Calendar | `0` | Choose a place on a map (a featured fire, a name or coordinates, or a box you draw; `P` opens it), then its fire record as the whole screen: every month since November 2000 on one log ramp, the mean of each year, the median of each month, how wrong the method is on years left out, and this month against its median. A month with a real run opens in World model |
 | 1 World model | `1` | The run pass by pass; hide VIIRS, see the estimate from MODIS alone, reveal VIIRS and the score |
 | 2 Test world | `2` | Play one round of the next-look environment |
 | 3 Agent | `3` | Not open yet: watching an agent play the same round |
@@ -72,6 +72,8 @@ One surface reads a stand-in file in `src/content/demo/` instead of a route and 
 | --- | --- |
 | `src/main.tsx`, `src/App.tsx` | The entry point and the application's state: region, run, step, time, open sheet, requests and keys |
 | `src/ui/` | The landing page, the mark, the split headline, and small hooks (`useCalendar`, `useSensorModel`, `useDialogFocus`) |
+| `src/beats/` | One folder per part: `calendar/` (the place screen, the Calendar and their reader `record.ts`), `world-model/`, `test-world/`, `agent/`; they read `app/store.tsx` |
+| `src/app/` | The part names (`names.ts`), the places registry (`places.ts`), the shared store (`store.tsx`) |
 | `src/components/` | The workspace: `WorkspaceBar`, `BurningCalendar`, `PassTrack`, `Debrief` and `BlindScoreTable`, `NextLookRound`, and the sheets (`ReadingSheet`, `MethodSheet`, `SourcesSheet`, `EvidenceSheet`, `AreaSheet`, `CommandAskPalette`) |
 | `src/content/` | Readers of the backend's answers and the page's texts: `calendar.ts`, `realRuns.ts`, `nextLookEnv.ts`, `passTrack.ts`, `partsStatus.ts`, `sources.ts`, `theaters.ts`; stand-in data in `demo/` |
 | `src/stage/` | The stage component (`EarthCutawayStage.tsx`), its shaders and types, and the camera (`orbitalDirector.ts`) |

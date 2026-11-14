@@ -6,6 +6,8 @@ import type { BlindTest, IntensityLegend, ModelStatus } from '../content/realRun
 import type { RoundState } from '../components/NextLookRound';
 import type { NextLookEnd, NextLookStart } from '../content/demo/nextLook';
 import type { Step } from '../components/WorkspaceBar';
+import type { Box, FeaturedFire, Place, Places } from './places';
+import type { FireRecord, RecordPlace } from '../beats/calendar/record';
 
 /**
  * The workspace's shared state, read by every beat: the place, the run on the terrain, the time on show, and the
@@ -13,6 +15,10 @@ import type { Step } from '../components/WorkspaceBar';
  * reads it with `useWorkspace()` and renders its own panel. A beat never fetches the run itself.
  */
 export interface WorkspaceStore {
+  /** The places registry (`GET /api/regions`). */
+  places: Places;
+  /** The featured fire of the run on the terrain, if it is one. */
+  currentFire: string | null;
   place: {
     /** The region whose record and runs are open. */
     regionId: string;
@@ -20,6 +26,17 @@ export interface WorkspaceStore {
     area: CalendarArea;
   };
   calendar: {
+    /** The place or box whose record the Calendar shows. */
+    place: RecordPlace;
+    /** The place screen is open over the Calendar. */
+    placesOpen: boolean;
+    openPlaces: () => void;
+    closePlaces: () => void;
+    chooseFire: (place: Place, fire: FeaturedFire) => void;
+    chooseBox: (box: Box) => void;
+    /** A month of the record that opens a real run, and opening it in World model. */
+    canOpen: (ym: string, rec: FireRecord) => boolean;
+    openMonth: (ym: string, rec: FireRecord) => void;
     state: CalendarState;
     selectedMonth: string | null;
     /** The month of the run on the terrain ("2012-08"). */

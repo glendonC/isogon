@@ -1,0 +1,151 @@
+/* The Calendar as a full screen (beats/calendar/CalendarScreen.tsx). Sizes, inks and shapes from system.css. */
+
+.cal-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  column-gap: var(--sys-s6);
+  row-gap: var(--sys-s5);
+  padding: 84px var(--sys-gutter) var(--sys-s5);
+  background: rgba(8, 11, 17, 0.88);
+  color: var(--sys-ink);
+  pointer-events: auto;
+}
+
+.cal-screen__head {
+  display: grid;
+  gap: var(--sys-s2);
+  align-content: start;
+  justify-items: start;
+}
+
+.cal-screen__head .sys-title,
+.cal-screen__head .sys-body {
+  margin: 0;
+}
+
+.cal-screen__place {
+  padding-left: 0;
+}
+
+.cal-screen__readouts {
+  display: grid;
+  gap: var(--sys-s3);
+  align-content: start;
+}
+
+.cal-screen__plot {
+  position: relative;
+  grid-column: 1 / -1;
+  min-height: 0;
+  padding-right: 404px;
+}
+
+.cal-screen__svg {
+  display: block;
+  overflow: visible;
+}
+
+.cal-screen__svg:focus-visible {
+  outline: 1px solid var(--sys-focus);
+  outline-offset: 4px;
+}
+
+.cal-screen__cell {
+  cursor: pointer;
+}
+
+.cal-screen__axis {
+  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-font);
+  fill: var(--sys-ink-3);
+}
+
+.cal-screen__value {
+  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
+  fill: var(--sys-ink-2);
+}
+
+.cal-screen__mark path {
+  fill: none;
+  stroke: var(--sys-ink);
+  stroke-width: var(--sys-bracket-w);
+}
+
+.cal-screen__mark line {
+  stroke: var(--sys-ink-2);
+  stroke-width: 1;
+}
+
+.cal-screen__median {
+  fill: var(--sys-ink-3);
+}
+
+.cal-screen__year {
+  fill: var(--sys-ink-3);
+}
+
+.cal-screen__year--partial {
+  fill: none;
+  stroke: var(--sys-edge);
+}
+
+.cal-screen__card {
+  position: absolute;
+  right: 0;
+  width: 380px;
+  max-width: none;
+}
+
+.cal-screen__strong {
+  color: var(--sys-ink);
+}
+
+.cal-screen__act {
+  justify-self: start;
+  padding-left: 0;
+  text-decoration: none;
+}
+
+.cal-screen__caveats {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding-left: 0;
+}
+
+.cal-screen__caveat-list {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-left: var(--sys-s4);
+  display: grid;
+  gap: var(--sys-s1);
+  max-width: 340px;
+}
+
+.cal-screen__plain {
+  margin: 0;
+}
+
+.cal-screen__foot {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--sys-s3);
+}
+
+.cal-screen__ramp {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.cal-screen__ramp > span {
+  width: 18px;
+  height: 10px;
+}
+
+/* The workspace dock steps aside while the Calendar fills the screen. */
+.iso-ws__dock[hidden] {
+  display: none;
+}

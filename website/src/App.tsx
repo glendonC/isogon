@@ -34,7 +34,9 @@ import { useSensorModel } from './ui/useSensorModel';
 import { LandingComposition } from './ui/LandingComposition';
 import { imageryCredit } from './ui/attribution';
 import { useCalendar } from './ui/useCalendar';
-import { openingStart, usePlaces } from './app/places';
+import { fireOfStart, openingStart, usePlaces, type Box, type FeaturedFire, type Place } from './app/places';
+import type { FireRecord, RecordPlace } from './beats/calendar/record';
+import { boxWords } from './beats/calendar/PlaceScreen';
 import { usePassList } from './ui/usePassList';
 import {
   isRealRun,
@@ -320,6 +322,11 @@ export function App() {
   /** Any area's record. A month picked there opens its region and month here. */
   const [areaOpen, setAreaOpen] = useState(false);
   const [monthAsk, setMonthAsk] = useState<{ region: string; ym: string } | null>(null);
+  /** The place screen over the Calendar, and a box drawn on it (its record replaces the place's). */
+  const [placesOpen, setPlacesOpen] = useState(false);
+  const [recordBox, setRecordBox] = useState<{ box: Box; name: string } | null>(null);
+  /** A featured fire chosen on the place screen: its start replaces the place's opening start once. */
+  const fireStartRef = useRef<{ region: string; start: string } | null>(null);
   const [liveTelemetry, setLiveTelemetry] = useState<LiveObserverTelemetry | null>(null);
 
   const handleTelemetry = useCallback((t: EarthStageTelemetry) => {
@@ -574,8 +581,12 @@ export function App() {
     if (handledAskRef.current === key) return;
     if (calendar.regionId !== regionAsk.id || calendar.state === 'loading' || placesState.state === 'loading') return;
     handledAskRef.current = key;
+    const chosen = fireStartRef.current && fireStartRef.current.region === regionAsk.id ? fireStartRef.current.start : null;
+    fireStartRef.current = null;
     const opening =
-      calendar.cal && !calendar.cal.simulated ? openingStart(placesState.places, regionAsk.id) ?? calendar.cal.defaultStart : null;
+      calendar.cal && !calendar.cal.simulated
+        ? chosen ?? openingStart(placesState.places, regionAsk.id) ?? calendar.cal.defaultStart
+        : null;
     if (opening) {
       if (isRealRun(activeRun) && activeRun?.region.id === regionAsk.id && realStart === opening) return;
       void executeWorldModel({
@@ -959,6 +970,19 @@ export function App() {
 
       if (askOpen || reading !== null || evidenceOpen || areaOpen) return;
 
+      if (inWorkspace && placesOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setPlacesOpen(false);
+        }
+        return;
+      }
+      if (inWorkspace && step === 'record' && e.key.toLowerCase() === 'p' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setPlacesOpen(true);
+        return;
+      }
+
       if (round && inWorkspace) {
         if (e.key === 'Escape') {
           e.preventDefault();
@@ -1073,6 +1097,7 @@ export function App() {
     nextLook,
     startRound,
     activeRun,
+    placesOpen,
   ]);
 
   const isCustomRegion = Boolean(activeRun && !isKnownTheaterId(activeRun.region.id));
@@ -1281,9 +1306,49 @@ export function App() {
   );
 
   // The workspace's shared state for the beats (app/store.tsx). The shell owns the state and the requests.
+  const recordPlace: RecordPlace = recordBox
+    ? { kind: 'box', box: recordBox.box, name: recordBox.name }
+    : { kind: 'region', regionId: calendarRegionId, name: regionTitle };
+  const chooseFire = (place: Place, fire: FeaturedFire) => {
+    setRecordBox(null);
+    setPlacesOpen(false);
+    setSelectedMonth(fire.months[0] ?? null);
+    if (!fire.default_start) return;
+    if (place.id === calendarRegionId) {
+      if (realStart === fire.default_start) return;
+      void executeWorldModel({
+        regionId: place.id,
+        holdoutViirs: false,
+        cloudOverride: null,
+        enterWorkspace: false,
+        source: 'firms',
+        start: fire.default_start,
+      });
+    } else if (isKnownTheaterId(place.id)) {
+      fireStartRef.current = { region: place.id, start: fire.default_start };
+      slewToTheater(place.id);
+    }
+  };
   const store: WorkspaceStore = {
+    places: placesState.places,
+    currentFire: activeRun && realStart ? fireOfStart(placesState.places, activeRun.region.id, realStart)?.id ?? null : null,
     place: { regionId: calendarRegionId, title: regionTitle, area: calendarArea },
     calendar: {
+      place: recordPlace,
+      placesOpen,
+      openPlaces: () => setPlacesOpen(true),
+      closePlaces: () => setPlacesOpen(false),
+      chooseFire,
+      chooseBox: (box: Box) => {
+        setRecordBox({ box, name: boxWords(box) });
+        setPlacesOpen(false);
+      },
+      canOpen: (ym: string, rec: FireRecord) => rec.place.kind === 'region' && rec.runStarts.some((st) => st.start.startsWith(ym)),
+      openMonth: (ym: string, rec: FireRecord) => {
+        if (rec.place.kind !== 'region') return;
+        handleSelectMonth(ym);
+        goStep('fire');
+      },
       state: calendar,
       selectedMonth,
       stageMonth,
@@ -1323,8 +1388,7 @@ export function App() {
     goStep,
     blocked: stepBlocked,
   };
-  const beatPanel =
-    step === 'record' ? <CalendarBeat /> : step === 'look' ? <TestWorldBeat /> : <WorldModelBeat>{finding}</WorldModelBeat>;
+  const beatPanel = step === 'look' ? <TestWorldBeat /> : <WorldModelBeat>{finding}</WorldModelBeat>;
 
   return (
     <WorkspaceProvider value={store}>
@@ -1338,7 +1402,11 @@ export function App() {
           onOpenSearch={() => setAskOpen(true)}
           onOpenSensor={() => setReading('sensors')}
           onOpenMethod={() => setReading('method')}
-          onEnter={() => enterWorkspace('cutaway')}
+          onEnter={() => {
+            enterWorkspace('cutaway');
+            setStep('record');
+            setPlacesOpen(true);
+          }}
         />
       )}
 
@@ -1360,7 +1428,10 @@ export function App() {
               place={regionTitle}
               placeDetail={[regionSetting, `${regionLat} ${regionLon}`, elevRangeText].filter(Boolean).join(', ')}
               placeDates={span}
-              onPlace={() => setAskOpen(true)}
+              onPlace={() => {
+                goStep('record');
+                setPlacesOpen(true);
+              }}
               beat={beatOfStep(step)}
               onBeat={goBeat}
               beatBlocked={beatBlocked}
@@ -1370,7 +1441,8 @@ export function App() {
             />
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
-            <div className="iso-ws__dock">
+            {step === 'record' && <CalendarBeat />}
+            <div className="iso-ws__dock" hidden={step === 'record'}>
               {debriefOpen && blindTest ? (
                 <Debrief
                   score={blindTest}

@@ -23,8 +23,9 @@ export interface FeaturedFire {
   name_source?: string | null;
   /** One of the three recorded test fires. */
   blind_test_fire: boolean;
-  /** What the fire is to each part of the model; null until the model lane serves it. */
-  to_the_model: Record<string, string> | null;
+  /** What the fire is to the world model and to the learned agent ("never seen", "fitted on", ...); null until served. */
+  to_the_world_model: string | null;
+  to_the_learned_agent: string | null;
   default_start: string | null;
   default_start_rule?: string;
 }
