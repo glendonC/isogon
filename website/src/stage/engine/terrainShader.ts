@@ -399,6 +399,13 @@ float revealCore(float field) {
 const float BELIEF_DECLARED = 0.5;   // a cell at this probability or more is declared burning
 const float BELIEF_MAY_BURN = 0.02;  // the dotted line runs where the smoothed probability crosses this
 const float BELIEF_CELL_FILL = 0.58; // side of a certain cell's square, as a share of the cell
+// By day the estimate's white ink and a detection's light lie on sunlit ground. Two display
+// choices keep them readable there, and neither marks ground the data does not: the ground
+// inside the dotted line is drawn this much darker (the same ground the line already encloses),
+// and the ground right under a light is drawn darker by up to this share (the light's own
+// extent, inside the detection's pixel). Neither says the ground is burned.
+const float BELIEF_DAY_SHADE = 0.30;
+const float DAY_LIGHT_UNDER = 0.72;
 const float BELIEF_INK_FAR = 1.35;       // how much stronger the ink is drawn on such small cells
 const float BELIEF_CELL_FILL_FAR = 0.88; // the same when the cell is only a few pixels wide on screen
 const float BELIEF_FRAME_HALF = 0.40; // half side of the open frame of a declared cell on a held-out pass
@@ -435,7 +442,8 @@ float beliefSmooth(vec2 uv) {
 
 // Ink over the ground: (coverage of the marks, coverage of the dark edge that holds the lines on
 // bright ground by day, strength of the ink)
-vec3 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
+// (the fourth value: 1 on ground inside the dotted line, 0 outside)
+vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   vec2 g = uv * uBeliefGrid;
   vec2 id = floor(g);
   vec2 fc = g - id - 0.5;
@@ -500,7 +508,8 @@ vec3 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   lineEdge *= dots;
 
   float strength = mix(0.70, 1.0, heatOf(be.y)) * mix(1.0, BELIEF_INK_FAR, tiny);
-  return vec3(max(cells, line * 0.9), lineEdge * 0.7, mix(strength, mix(1.0, BELIEF_INK_FAR, tiny), line));
+  float within = smoothstep(-1.0, 1.0, (ps - BELIEF_MAY_BURN) / grad) * reach;
+  return vec4(max(cells, line * 0.9), lineEdge * 0.7, mix(strength, mix(1.0, BELIEF_INK_FAR, tiny), line), within);
 }
 
 // --- The board of tiles ------------------------------------------------------------------------
@@ -585,7 +594,7 @@ void main() {
     castShare = 0.30 * uAfterglow * uLightGain;
   }
   // The model's belief as ink marks (worked out here, outside any branch, for its derivatives)
-  vec3 marks = vec3(0.0);
+  vec4 marks = vec4(0.0);
   // (only inside the box that holds any belief: most of the ground has none and skips the work)
   if (uBeliefGrid.x > 0.5 && vUv.x > uBeliefBox.x && vUv.x < uBeliefBox.z && vUv.y > uBeliefBox.y && vUv.y < uBeliefBox.w) {
     marks = beliefMarks(vUv, pKm, kmPerPx, uHeldOut * scanned);
@@ -810,6 +819,7 @@ void main() {
         // The belief, in ink (see beliefMarks). By day a dark edge holds the ink on bright ground.
         vec3 ink = mix(vec3(1.30, 1.32, 1.36), vec3(0.40, 0.46, 0.56), uNight) * marks.z;
         postRgb = litEarth * (1.0 - 0.55 * marks.y * (1.0 - uNight) * hazeTrans.g);
+        postRgb *= 1.0 - BELIEF_DAY_SHADE * marks.w * (1.0 - uNight) * hazeTrans.g;
         // (while the landing fades from one pass to the next the ink dips with the lights, so the
         // belief's change of time does not pop)
         postRgb = mix(postRgb, ink, marks.x * mix(0.84, 0.48, uBeliefQuiet) * mix(0.4, 1.0, uLightGain) * hazeTrans.g);
@@ -831,6 +841,7 @@ void main() {
       // Eased toward a ceiling: a few very strong detections light their ridge, they do not flood it
       castLight /= 1.0 + FIRE_CAST_EASE * dot(castLight, vec3(0.3, 0.5, 0.2));
       postRgb += (satRgb + vec3(0.012)) * castLight * mix(0.3, 1.0, uNight) * (1.0 - 0.6 * waterMask) * hazeTrans * uFootMix.x * scanned * castShare;
+      postRgb *= 1.0 - DAY_LIGHT_UNDER * clamp(lit.a, 0.0, 1.0) * (1.0 - uNight) * hazeTrans.g;
       postRgb += lit.rgb * hazeTrans.g;
       // The instrument's pixel around each light, when asked for: a faint warm hairline, so a
       // coarse pixel reads as coarse beside the model's finer cells

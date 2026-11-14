@@ -326,7 +326,12 @@ const SCALE_BAR_INSET = 0.08;
 const SCALE_VIIRS_KM = 0.375;
 const SCALE_MODIS_KM = 1.0;
 
-/** How much brighter the moonlit ground is drawn when the whole block is seen from far than in a close view. */
+/**
+ * How much brighter the moonlit ground is drawn in the workspace than on the landing: in a close
+ * view, where the relief has to read around a fire that may show no light at all (a hidden
+ * pass), and when the whole block is seen from far.
+ */
+const MOON_LIFT_CLOSE = 1.3;
 const MOON_LIFT_FAR = 1.9;
 
 /** Where the smoke drifts, in region uv (east, north): the same for every place, since no payload holds a wind. */
@@ -974,6 +979,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let tourRested = false;
     // The pass on show, for the page's words
     let passOnShowNow: EarthStageTelemetry['passOnShow'];
+    // The scale bar's path and label as last written to the page
+    let scaleBarPath = '';
+    let scaleBarLabel = '';
+    let scaleBarShown = false;
     // How far the eye is from the block, 0 in a close view and 1 when the whole block is in view
     const uFarView = { value: 0.0 };
     // By night the ground is drawn brighter when the whole block is seen from far (see NIGHT_GLSL)
@@ -1292,6 +1301,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uContextMix: terrainUniforms.uContextMix,
       uContextOrtho: terrainUniforms.uContextOrtho,
       uNight,
+      uMoonLift,
     });
     scene.add(contextTerrain.mesh);
     let contextMix = 0.0;
@@ -3246,7 +3256,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         dampFast,
       );
       uFarView.value = landingWorld ? 0.0 : THREE.MathUtils.smoothstep(orbitCurrent.distance, 8.5, 15.0);
-      uMoonLift.value = THREE.MathUtils.lerp(1.0, MOON_LIFT_FAR, uFarView.value);
+      uMoonLift.value = THREE.MathUtils.lerp(
+        uMoonLift.value,
+        landingWorld ? 1.0 : THREE.MathUtils.lerp(MOON_LIFT_CLOSE, MOON_LIFT_FAR, uFarView.value),
+        dampMed,
+      );
       passOnShowNow =
         realRun && rawPasses[0]
           ? {
@@ -3678,22 +3692,33 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
               const seg = (q: [number, number], h: number) =>
                 `M${q[0].toFixed(1)},${q[1].toFixed(1)} L${(q[0] + tx * h).toFixed(1)},${(q[1] + ty * h).toFixed(1)}`;
               const cellsFit = Math.hypot(cellM[0] - cellV[0], cellM[1] - cellV[1]) >= 7;
-              scaleBarRef.current?.setAttribute(
-                'd',
+              const barPath =
                 `${seg(a, 7)} M${a[0].toFixed(1)},${a[1].toFixed(1)} L${b[0].toFixed(1)},${b[1].toFixed(1)} ${seg(b, 7)}` +
-                  (cellsFit ? ` ${seg(cellV, 4)} ${seg(cellM, 4)}` : ''),
-              );
+                (cellsFit ? ` ${seg(cellV, 4)} ${seg(cellM, 4)}` : '');
+              // (written only when it changes: a still camera then costs the page no layout)
+              if (barPath !== scaleBarPath) {
+                scaleBarPath = barPath;
+                scaleBarRef.current?.setAttribute('d', barPath);
+              }
               const text = scaleTextRef.current;
-              if (text) {
-                text.textContent = cellsFit ? `${barKm} km, ticks at 375 m and 1 km` : `${barKm} km`;
-                text.setAttribute('x', (b[0] + 8).toFixed(1));
-                text.setAttribute('y', (b[1] + 4).toFixed(1));
+              const barLabel =
+                (cellsFit ? `${barKm} km, ticks at 375 m and 1 km` : `${barKm} km`) +
+                `|${(b[0] + 8).toFixed(1)}|${(b[1] + 4).toFixed(1)}`;
+              if (text && barLabel !== scaleBarLabel) {
+                scaleBarLabel = barLabel;
+                const [words, x, y] = barLabel.split('|');
+                text.textContent = words;
+                text.setAttribute('x', x);
+                text.setAttribute('y', y);
               }
               shown = true;
             }
           }
         }
-        scaleGroup.style.opacity = shown ? '1' : '0';
+        if (shown !== scaleBarShown) {
+          scaleBarShown = shown;
+          scaleGroup.style.opacity = shown ? '1' : '0';
+        }
       }
 
       const showCallouts = p.inWorkspace && !p.cleanHud && !p.cinemaActive;

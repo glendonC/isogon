@@ -283,6 +283,8 @@ export interface ContextSharedUniforms {
   uContextMix: THREE.IUniform;
   uContextOrtho: THREE.IUniform;
   uNight: THREE.IUniform;
+  /** The block's own lift of the moonlit ground, so the land around it is drawn as bright as the block. */
+  uMoonLift: THREE.IUniform;
 }
 
 /** Grid cells per side of the context mesh. The context DEM has 1024 posts; this draws every 1.6th. */
