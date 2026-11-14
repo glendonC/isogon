@@ -87,6 +87,9 @@ export interface WorkspaceStore {
      * does not redraw for it.
      */
     subscribeAnchor: (fn: (anchor: StageFireAnchor | null) => void) => () => void;
+    /** After the reveal: one fire three ways in the stage's place (compare/ThreeWaysPlane.tsx), and its toggle. */
+    threeWays: boolean;
+    toggleThreeWays: () => void;
     /** On a hidden pass: the earlier pass whose detections the stage draws as an afterglow (`telemetry.lastSeen`). */
     lastSeen: EarthStageTelemetry['lastSeen'] | null;
     /** The evidence route's answer, for the record beside a window's own count. */

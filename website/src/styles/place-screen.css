@@ -177,3 +177,17 @@
   left: var(--sys-gutter);
   bottom: 14px;
 }
+
+/* The featured fires as cut-outs (compare/FeaturedFiresPlane.tsx): low right, clear of the zoom and of the labels. */
+.place-screen__plane {
+  position: absolute;
+  right: calc(var(--sys-gutter) + 56px);
+  bottom: 40px;
+  width: min(46vw, 680px);
+  height: 270px;
+  pointer-events: none;
+}
+
+.place-screen__plane > * {
+  pointer-events: auto;
+}

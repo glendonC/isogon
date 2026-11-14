@@ -3,6 +3,7 @@ import { feature } from 'topojson-client';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 import countries from 'world-atlas/countries-50m.json';
 import { fireNameWords, type Box, type FeaturedFire, type Places, type Place } from '../../app/places';
+import { FeaturedFires } from '../../compare/FeaturedFiresPlane';
 import '../../styles/place-screen.css';
 
 /** Plate carree with longitude shortened by the cosine of 45 degrees, so the middle latitudes keep their shape. */
@@ -296,8 +297,10 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
         })()}
       </div>
 
-      {/* Reserved for the plane of featured fires as cut-outs (the compare component), mounted when it lands. */}
-      <div className="place-screen__plane" data-slot="featured-fires" aria-hidden="true" />
+      {/* The featured fires as cut-outs on one plane at one scale (the compare lane's component); a pick opens the fire. */}
+      <div className="place-screen__plane" data-slot="featured-fires">
+        <FeaturedFires standing={standingOf} />
+      </div>
 
       <div className="place-screen__head sys-plate">
         <span className="sys-title">Choose a place</span>

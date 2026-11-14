@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../app/store';
+import { ThreeWaysPlane } from '../../compare/ThreeWaysPlane';
 import { fireNameWords, fireOfStart } from '../../app/places';
 import { utcDay } from '../../content/realRuns';
 import { beatOf } from '../../app/names';
@@ -123,6 +124,9 @@ export function WorldModelScene() {
         )}
         {record && <span className="sys-fine wm-wrap">{record}</span>}
         <span className="wm-actions">
+          <button type="button" className="sys-ctl" onClick={model.toggleThreeWays}>
+            <span className="sys-key">T</span> One fire three ways
+          </button>
           <button type="button" className="sys-ctl" onClick={test.openScore}>
             <span className="sys-key">Enter</span> The seven scores
           </button>
@@ -251,6 +255,20 @@ export function WorldModelScene() {
       <div className={`sys-pin__plate sys-plate${hidden ? ' sys-hidden' : ''}`}>{plate}</div>
     </div>
   );
+
+  // After the reveal, one fire three ways takes the stage's place until Esc or T.
+  if (scene === 'revealed' && model.threeWays) {
+    return (
+      <div className="wm-scene" data-scene="three-ways">
+        <div className="wm-three">
+          <ThreeWaysPlane />
+        </div>
+        <button type="button" className="sys-ctl sys-plate wm-act" onClick={model.toggleThreeWays}>
+          <span className="sys-key">Esc</span> Back to the terrain
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="wm-scene" data-scene={scene}>

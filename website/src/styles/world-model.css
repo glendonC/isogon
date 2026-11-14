@@ -69,7 +69,8 @@
 
 .wm-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  row-gap: var(--sys-s1);
   gap: var(--sys-s4);
   margin-top: var(--sys-s2);
 }
@@ -153,4 +154,20 @@
   padding: var(--sys-s3) var(--sys-s4);
   transform: translateY(-50%);
   pointer-events: auto;
+}
+
+/* One fire three ways in the stage's place, above the track (compare/ThreeWaysPlane.tsx fills it). */
+.wm-three {
+  position: absolute;
+  top: 96px;
+  left: var(--sys-gutter);
+  right: var(--sys-gutter);
+  bottom: 200px;
+  background: var(--sys-night);
+  pointer-events: auto;
+}
+
+.wm-three > * {
+  width: 100%;
+  height: 100%;
 }

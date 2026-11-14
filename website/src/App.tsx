@@ -275,6 +275,11 @@ export function App() {
   const [revealed, setRevealed] = useState(false);
   /** The reveal's request is in flight. */
   const [revealing, setRevealing] = useState(false);
+  /** After the reveal: one fire three ways in the stage's place. */
+  const [threeWays, setThreeWays] = useState(false);
+  useEffect(() => {
+    if (!revealed) setThreeWays(false);
+  }, [revealed]);
   /** Terra's morning pass estimated from VIIRS alone, shown beside the blind test's score (demo data, experimental). */
   const [terraOpen, setTerraOpen] = useState(false);
   /**
@@ -947,6 +952,8 @@ export function App() {
           e.preventDefault();
           if (debriefOpen) {
             setDebriefOpen(false);
+          } else if (threeWays) {
+            setThreeWays(false);
           } else if (cinemaActive) {
             setCinemaActive(false);
           } else if (cleanHud) {
@@ -982,6 +989,9 @@ export function App() {
         } else if (lower === 'h' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setCleanHud((h) => !h);
+        } else if (lower === 't' && revealed && (step === 'fire' || step === 'test') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault();
+          setThreeWays((t) => !t);
         } else if (lower === 'e' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setEvidenceOpen(true);
@@ -1025,6 +1035,8 @@ export function App() {
     startRound,
     activeRun,
     placesOpen,
+    threeWays,
+    revealed,
   ]);
 
   const isCustomRegion = Boolean(activeRun && !isKnownTheaterId(activeRun.region.id));
@@ -1324,6 +1336,8 @@ export function App() {
       canHide: !stepBlocked.test,
       grid: stageTelemetry?.regionGrid,
       subscribeAnchor,
+      threeWays,
+      toggleThreeWays: () => setThreeWays((t) => !t),
       lastSeen: stageTelemetry?.lastSeen ?? null,
       evidence: evidenceLive,
       openEvidence: () => setEvidenceOpen(true),
