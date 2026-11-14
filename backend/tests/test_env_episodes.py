@@ -47,13 +47,17 @@ def _catalogue(rows, year, **kw):
 
 
 class CatalogueTests(unittest.TestCase):
-    def test_windows_are_consecutive_runs_of_24_and_thresholds_decide_what_is_an_episode(self) -> None:
+    def test_windows_are_consecutive_runs_of_12_modis_overpasses_and_thresholds_decide_what_is_an_episode(self) -> None:
         every = _catalogue(ROWS_2099, 2099, keep_all_windows=True)
-        self.assertEqual(len(every), 1)                       # the synthetic fire has exactly 24 overpasses in one tile
+        self.assertEqual(len(every), 1)                       # the synthetic fire has exactly 12 MODIS overpasses in one tile
         ep = every[0]
         self.assertEqual((ep.tile, ep.split, ep.region_id), ((2, 2), "fit", "plumas_ca"))
-        self.assertEqual(len(ep.window.passes), 24)
+        self.assertEqual((len(ep.window.passes), ep.window.n_modis, ep.window.n_viirs), (12, 12, 0))
+        self.assertIn("VIIRS is hidden", ep.window.chosen_from)
         self.assertEqual(ep.window.modis_pixels_in_box, 44)
+        # the same windows with every VIIRS row gone: an episode is chosen from MODIS alone
+        bare = _catalogue([r for r in ROWS_2099 if r["instrument"] != "VIIRS"], 2099, keep_all_windows=True)
+        self.assertEqual([e.window.as_dict() for e in bare], [e.window.as_dict() for e in every])
         self.assertFalse(E.qualifies(ep.window))              # 44 MODIS pixels is under the threshold of 60
         self.assertTrue(E.qualifies(ep.window, min_modis_pixels=40))
         self.assertEqual(_catalogue(ROWS_2099, 2099), [])
@@ -70,7 +74,10 @@ class CatalogueTests(unittest.TestCase):
     def test_threshold_data_and_tile_share_are_reported(self) -> None:
         every = _catalogue(ROWS_2099, 2099, keep_all_windows=True)
         stats = E.window_stats(every)
-        self.assertEqual(stats["windows_of_24_overpasses"], 1)
+        self.assertEqual(stats["windows"], 1)
+        self.assertIn("12 MODIS overpasses", stats["tiling"])
+        # VIIRS pixels between the first and the last MODIS overpass of the window (the pass after the last one is outside)
+        self.assertEqual(stats["by_threshold"][2]["median_viirs_pixels_in_fit_episodes"], 196.0)
         self.assertEqual(stats["threshold_chosen"], E.MIN_MODIS_PIXELS)
         by = {row["min_modis_pixels"]: row["episodes"] for row in stats["by_threshold"]}
         self.assertEqual((by[40], by[60]), (1, 0))
@@ -82,9 +89,11 @@ class CatalogueTests(unittest.TestCase):
 class ReferenceTableTests(unittest.TestCase):
     def test_table_has_every_agent_with_final_score_gain_and_share_of_the_oracle(self) -> None:
         eps = _catalogue(ROWS_2099, 2099, min_modis_pixels=40)
-        ref = reference_table(eps, OccupancyParams(), settings=((2, 2),), seeds=3, workers=1, log=lambda m: None)
+        # four looks: with fewer, an evenly spread budget lands only on slots of the made-up NOAA-21, which has no row
+        # behind it; such a look is unknown and nobody gains from it
+        ref = reference_table(eps, OccupancyParams(), settings=((2, 4),), seeds=3, workers=1, log=lambda m: None)
         row = ref["settings"][0]
-        self.assertEqual((row["tiles"], row["budget"], row["episodes"]), ("2x2", 2, 1))
+        self.assertEqual((row["tiles"], row["budget"], row["episodes"]), ("2x2", 4, 1))
         self.assertEqual(set(row["agents"]), set(AGENTS))
         for name in AGENTS:
             a = row["agents"][name]
@@ -95,7 +104,7 @@ class ReferenceTableTests(unittest.TestCase):
         self.assertIsNone(row["agents"]["least_sure"]["sd_of_mean_gain_across_seeds"])     # no seed in it
         self.assertEqual(len(ref["per_episode"][0]["random"]["returns"]), 3)
         self.assertIn("oracle", format_table(ref))
-        self.assertIn("cloud is unknown", KNOWN_LIMITS)
+        self.assertIn("no cloud mask", KNOWN_LIMITS)
 
 
 if __name__ == "__main__":

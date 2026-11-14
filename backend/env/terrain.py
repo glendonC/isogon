@@ -1,4 +1,4 @@
-"""Elevation on an episode's 375 m grid, read from the region's context terrain (terrain-assets, contract 1b).
+"""Elevation on an episode's 375 m grid, read from the region's context terrain DEM.
 
 The context DEM covers the region's context box with 1024 by 1024 samples, row 0 north and column 0 west, like every
 raster of the project. When the file is not in the cache the answer is None and the terrain feature stays zero.

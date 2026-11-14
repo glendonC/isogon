@@ -1,4 +1,4 @@
-"""Unit M7: let a look teach the model about the tiles it did not look at, then fit one small policy.
+"""Let a look teach the model about the tiles it did not look at, then fit one small policy.
 
   uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.env.learn
 
@@ -6,8 +6,8 @@ Everything is decided on fit episodes. Episodes of 2012 to 2023 train, episodes 
 22 test episodes (the three 2021 fires) are played once at the end with whatever validation chose. The result,
 with its evidence and the known limits, is written to backend/env/fitted/next_look.json.
 
-Part A, the model. A revealed tile corrects the estimate inside that tile; nothing told the model that its count
-of burning cells was off everywhere else at that overpass. With `learn_from_looks` the ratio between what the look
+Part A, the model. A revealed tile corrects the estimate inside that tile; by itself it tells the model nothing
+about its count of burning cells elsewhere at that overpass. With `learn_from_looks` the ratio between what the look
 found and what the MODIS-only model expected in the looked-at tiles (by day and by night, shrunk toward one by
 `prior_cells` cells of prior evidence) rescales the probabilities of every cell not looked at. `prior_cells` is
 chosen on a training subset by the oracle's gain; validation decides whether the change is used at all.
@@ -272,7 +272,7 @@ def main(argv: list[str]) -> int:
     log(f"learned minus least sure: {learned_vs_least['mean_difference']:+.4f} [{learned_vs_least['p05']:+.4f}, {learned_vs_least['p95']:+.4f}]: {sentence}")
 
     doc = {
-        "what": "next-look environment: the model change and the learned policy of unit M7",
+        "what": "next-look environment: the model change and the learned policy",
         "known_limits": KNOWN_LIMITS,
         "setting": {"tiles": f"{TILES}x{TILES}", "budget": BUDGET, "score": "csi", "reward_target": "still_hidden",
                     "spending": "every agent spends the budget on the same looks, spread evenly; only the tile differs"},

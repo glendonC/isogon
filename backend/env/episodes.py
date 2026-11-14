@@ -1,9 +1,11 @@
-"""The episode catalogue of the next-look environment: every 24 overpass window since 2012 that holds enough fire.
+"""The episode catalogue of the next-look environment: every window of MODIS overpasses since 2012 with enough fire.
 
-A region's context box is split into 25 tiles the size of its test box. In each tile and year the overpasses with a
-detection in the tile are cut into consecutive, non-overlapping runs of 24 (no window is picked by how it scores).
-A run is an episode when it passes the thresholds below, which are stated with the data that set them in
-`window_stats`.
+A region's context box is split into 25 tiles the size of its test box. In each tile and year the MODIS overpasses
+with a detection in the tile are cut into consecutive, non-overlapping runs of `EPISODE_OVERPASSES` (no window is
+picked by how it scores). A run is an episode when it passes the thresholds below.
+
+An episode is chosen from MODIS rows alone: VIIRS, the instrument the environment hides, is dropped before the
+overpasses are counted, so no episode exists, starts or ends because of a hidden row.
 
 Split. `test`: the windows of the three 2021 test fires (the test box of each region inside its exclusion dates,
 `backend/model/training.py`). They are test only. `fit`: every other window, with the rows of the test fires
@@ -18,19 +20,20 @@ from typing import Any, Callable
 
 import numpy as np
 
+from backend.eval.holdout import visible_rows
 from backend.eval.rows import Detections, detections_from_rows
 from backend.model.episodes import tiles
-from backend.model.real_blind import FRAMES, Window, _window_from, in_box_overpasses
+from backend.model.real_blind import EPISODE_OVERPASSES, Window, _chosen_from, _window_from, in_box_overpasses
 from backend.model.training import EXCLUSIONS, REGIONS, excluded_mask
 
 YEARS: tuple[int, ...] = tuple(range(2012, 2026))     # Suomi NPP's VIIRS record starts in January 2012
 PAD_S: float = 2.0 * 86400.0
-# Thresholds for "enough detections to matter" (see window_stats for the data behind them).
-MIN_MODIS_PIXELS: int = 60        # MODIS pixels in the tile over the 24 overpasses
-MIN_VIIRS_OVERPASSES: int = 6     # decisions an agent gets
-MIN_MODIS_OVERPASSES: int = 4
+# Thresholds for "enough detections to matter", both read from MODIS rows only.
+MIN_MODIS_PIXELS: int = 60        # MODIS pixels in the tile over the run
 MAX_SPAN_H: float = 120.0         # longer than five days is scattered hot spots, not one fire episode
-TILING_RULE: str = "consecutive, non-overlapping runs of 24 overpasses with a detection in the tile, per tile and year"
+TILING_RULE: str = (
+    f"consecutive, non-overlapping runs of {EPISODE_OVERPASSES} MODIS overpasses with a detection in the tile, per tile and year"
+)
 
 
 @dataclass(frozen=True)
@@ -62,22 +65,20 @@ def _day_s(d: str) -> float:
     return float(calendar.timegm((y, m, dd, 0, 0, 0, 0, 0, 0)))
 
 
-def tile_windows(det: Detections, box: tuple[float, float, float, float], t0: float, t1: float) -> list[Window]:
-    """Every consecutive, non-overlapping run of 24 in-box overpasses that starts in [t0, t1). No filtering."""
-    items = [(o, k) for o, k in in_box_overpasses(det, box) if o.time_s >= t0]
+def tile_windows(det: Detections, box: tuple[float, float, float, float], t0: float, t1: float, hidden: str = "VIIRS") -> list[Window]:
+    """Every consecutive, non-overlapping run of in-box overpasses of the visible rows that starts in [t0, t1).
+    Rows of the hidden instrument are dropped first. No filtering."""
+    items = [(o, k) for o, k in in_box_overpasses(visible_rows(det, hidden), box) if o.time_s >= t0]
     out: list[Window] = []
     i = 0
-    while i + FRAMES <= len(items) and items[i][0].time_s < t1:
-        out.append(_window_from(items, i, TILING_RULE))
-        i += FRAMES
+    while i + EPISODE_OVERPASSES <= len(items) and items[i][0].time_s < t1:
+        out.append(_window_from(items, i, TILING_RULE, EPISODE_OVERPASSES, _chosen_from(hidden)))
+        i += EPISODE_OVERPASSES
     return out
 
 
 def qualifies(w: Window, min_modis_pixels: int = MIN_MODIS_PIXELS) -> bool:
-    return (
-        w.modis_pixels_in_box >= min_modis_pixels and w.n_viirs >= MIN_VIIRS_OVERPASSES and w.n_modis >= MIN_MODIS_OVERPASSES
-        and (w.end_s - w.start_s) / 3600.0 <= MAX_SPAN_H
-    )
+    return w.modis_pixels_in_box >= min_modis_pixels and (w.end_s - w.start_s) / 3600.0 <= MAX_SPAN_H
 
 
 def catalogue(
@@ -118,38 +119,41 @@ def catalogue(
     return out
 
 
+def _hidden_pixels(ep: EnvEpisode) -> int:
+    d = ep.det
+    return int((d.is_viirs & d.in_box(ep.box) & (d.time_s >= ep.window.start_s) & (d.time_s < ep.window.end_s)).sum())
+
+
 def window_stats(all_windows: list[EnvEpisode]) -> dict[str, Any]:
-    """The data behind the threshold: how many 24 overpass windows exist and how much fire they hold."""
-    usable = [e for e in all_windows if e.window.n_viirs >= MIN_VIIRS_OVERPASSES and e.window.n_modis >= MIN_MODIS_OVERPASSES
-              and (e.window.end_s - e.window.start_s) / 3600.0 <= MAX_SPAN_H]
+    """The data behind the threshold: how many windows exist and how much fire they hold. The VIIRS figures are
+    counted on fit windows only and are a description; no window is chosen with them."""
+    usable = [e for e in all_windows if (e.window.end_s - e.window.start_s) / 3600.0 <= MAX_SPAN_H]
     m = np.array([e.window.modis_pixels_in_box for e in usable], dtype=np.float64)
-    v = np.array([e.window.viirs_pixels_in_box for e in usable], dtype=np.float64)
     table = []
     for thr in (10, 20, 40, 60, 100, 200):
-        sel = m >= thr
+        sel = [e for e in usable if e.window.modis_pixels_in_box >= thr]
+        v = np.array([_hidden_pixels(e) for e in sel if e.split == "fit"], dtype=np.float64)
         table.append({
             "min_modis_pixels": thr,
-            "episodes": int(sel.sum()),
-            "fit": int(sum(1 for e, s in zip(usable, sel) if s and e.split == "fit")),
-            "test": int(sum(1 for e, s in zip(usable, sel) if s and e.split == "test")),
-            "median_viirs_pixels": float(np.median(v[sel])) if sel.any() else None,
-            "smallest_viirs_pixels": float(v[sel].min()) if sel.any() else None,
+            "episodes": len(sel),
+            "fit": int(sum(1 for e in sel if e.split == "fit")),
+            "test": int(sum(1 for e in sel if e.split == "test")),
+            "median_viirs_pixels_in_fit_episodes": float(np.median(v)) if v.size else None,
+            "smallest_viirs_pixels_in_fit_episodes": float(v.min()) if v.size else None,
         })
     return {
         "tiling": TILING_RULE,
-        "windows_of_24_overpasses": len(all_windows),
+        "windows": len(all_windows),
         "of_those_one_episode_long": len(usable),
-        "one_episode_long_means": (
-            f"at most {MAX_SPAN_H:.0f} h from first to last overpass, at least {MIN_VIIRS_OVERPASSES} VIIRS and "
-            f"{MIN_MODIS_OVERPASSES} MODIS overpasses"
-        ),
+        "one_episode_long_means": f"at most {MAX_SPAN_H:.0f} h from first to last MODIS overpass",
         "modis_pixels_quantiles": {q: float(np.percentile(m, q)) for q in (10, 25, 50, 75, 90)} if m.size else {},
         "by_threshold": table,
         "threshold_chosen": MIN_MODIS_PIXELS,
         "why": (
             f"with {MIN_MODIS_PIXELS} MODIS pixels a window holds several hundred hidden VIIRS pixels (see "
-            "median_viirs_pixels), enough for a score on 375 m cells to move by more than a few cells' worth when one "
-            "tile is revealed; below it most windows are a handful of pixels and the score is noise"
+            "median_viirs_pixels_in_fit_episodes), enough for a score on 375 m cells to move by more than a few "
+            "cells' worth when one tile is revealed; below it most windows are a handful of pixels and the score is "
+            "noise."
         ),
     }
 
@@ -157,7 +161,7 @@ def window_stats(all_windows: list[EnvEpisode]) -> dict[str, Any]:
 def top_tile_share(episodes: list[EnvEpisode], splits: tuple[int, ...] = (2, 3, 4, 6, 8), min_pixels: int = 20) -> dict[str, Any]:
     """How much of a fire one tile holds: for every VIIRS overpass with at least `min_pixels` pixels in the box, the
     share of them in the busiest tile, for several tile splits. Median, and the share of overpasses where one tile
-    holds everything."""
+    holds everything. A description of hidden rows: give it fit episodes only."""
     from backend.eval.overpass import group_overpasses
 
     shares: dict[int, list[float]] = {n: [] for n in splits}

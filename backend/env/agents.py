@@ -78,7 +78,8 @@ class OracleAgent:
 
 
 def run_episode(env: NextLookEnv, agent: Agent, seed: int | None = None) -> dict[str, Any]:
-    """Play one episode. The return is the final score minus the score with no look at all."""
+    """Play one episode. The return is the sum of the rewards; `score_end` is the score on what is still hidden at
+    the end (with reward target "all" the return equals `score_end` minus `score_start`)."""
     obs = env.reset(seed)
     start = env.score_start
     total = 0.0

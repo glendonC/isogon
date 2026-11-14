@@ -1,16 +1,17 @@
-"""An agent's observation must not move with hidden rows it has not been shown (unit M8), on SYNTHETIC rows.
+"""An agent's observation must not move with hidden rows it has not been shown, on SYNTHETIC rows.
 
-These are the cases of the outside audit (JOB-H, part 4). One fixed sequence of actions is played twice: on the
-rows as they are, and on rows in which hidden detections outside the revealed (look, tile) pairs were altered.
+One fixed sequence of actions is played twice: on the rows as they are, and on rows in which hidden detections
+outside the revealed (look, tile) pairs are altered.
 Every observation must be the same, `looks_left` included; the rewards must not be, or nothing was altered.
 
-  4A  delete part of the unrevealed rows, leaving at least three in every overpass
-  4B  change only the pixel sizes and the FRP of unrevealed rows
-  4C  delete every row of one overpass no tile of which was looked at
-  4D  move unrevealed rows about, keeping them out of the revealed tiles
+  A  delete part of the unrevealed rows, leaving at least three in every overpass
+  B  change only the pixel sizes and the FRP of unrevealed rows
+  C  delete every row of one overpass no tile of which was looked at
+  D  move unrevealed rows about, keeping them out of the revealed tiles
   and every unrevealed row deleted at once
 
-Only calls that existed before the fix are used, so the file can be run against the earlier code, where it fails.
+Every case is played on both schedules: the nominal half-day slots, which are the default, and looks
+taken from a made-up pass list, where a pass that flagged nothing is a look as well.
 """
 
 from __future__ import annotations
@@ -56,8 +57,8 @@ WINDOW_OF = _det()
 WINDOW: tuple[float, float] = (float(WINDOW_OF.time_s.min()), float(WINDOW_OF.time_s.max()) + 1.0)
 
 
-def _play(det: Detections) -> tuple[NextLookEnv, list[Observation], list[float]]:
-    env = NextLookEnv(det, fx.TEST_BOX, WINDOW, tiles=(4, 4), budget=3)
+def _play(det: Detections, schedule: str = "nominal", read_passes=None) -> tuple[NextLookEnv, list[Observation], list[float]]:
+    env = NextLookEnv(det, fx.TEST_BOX, WINDOW, tiles=(4, 4), budget=3, schedule=schedule, read_passes=read_passes)
     ob = env.reset(seed=0)
     obs = [ob]
     rewards: list[float] = []
@@ -83,10 +84,13 @@ def _differences(a: Observation, b: Observation) -> list[str]:
 
 
 class ObservationIgnoresUnrevealedRowsTests(unittest.TestCase):
+    SCHEDULE = "nominal"
+    READ_PASSES = None
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.det = _det()
-        cls.env, cls.obs, cls.rewards = _play(cls.det)
+        cls.env, cls.obs, cls.rewards = _play(cls.det, cls.SCHEDULE, cls.READ_PASSES)
         d = cls.det
         # the rows the looks handed over, read back from what the agent was shown (lon, lat, time, platform code)
         shown = {(round(float(r[0]), 6), round(float(r[1]), 6), float(r[5]), int(r[6])) for r in cls.obs[-1].viirs_revealed}
@@ -102,7 +106,7 @@ class ObservationIgnoresUnrevealedRowsTests(unittest.TestCase):
         cls.tile = np.where(inside, cls.env.tile_of_cell[np.clip(r, 0, g.ny - 1), np.clip(c, 0, g.nx - 1)], -1)
 
     def _check(self, altered: Detections, name: str, rewards_must_differ: bool = True) -> None:
-        env, obs, rewards = _play(altered)
+        env, obs, rewards = _play(altered, self.SCHEDULE, self.READ_PASSES)
         self.assertEqual(env.n_looks, self.env.n_looks, f"{name}: the number of looks changed")
         self.assertEqual(len(obs), len(self.obs), f"{name}: the number of observations changed")
         for i, (a, b) in enumerate(zip(self.obs, obs)):
@@ -116,7 +120,7 @@ class ObservationIgnoresUnrevealedRowsTests(unittest.TestCase):
         self.assertGreater(int(self.unrevealed.sum()), 100)
         self.assertEqual(len(self.obs[-1].revealed_tiles), 3)
 
-    def test_4a_deleting_part_of_the_unrevealed_rows(self) -> None:
+    def test_a_deleting_part_of_the_unrevealed_rows(self) -> None:
         d = self.det
         keep = np.ones(len(d), dtype=bool)
         viirs_pos = np.flatnonzero(d.is_viirs)
@@ -126,15 +130,15 @@ class ObservationIgnoresUnrevealedRowsTests(unittest.TestCase):
                 if j % 3 != 0:
                     keep[i] = False
         self.assertGreater(int((~keep).sum()), 50)
-        self._check(d.select(keep), "4A")
+        self._check(d.select(keep), "A")
 
-    def test_4b_changing_only_pixel_sizes_and_frp_of_unrevealed_rows(self) -> None:
+    def test_b_changing_only_pixel_sizes_and_frp_of_unrevealed_rows(self) -> None:
         d, u = self.det, self.unrevealed
         altered = replace(d, scan_km=np.where(u, 0.80, d.scan_km), track_km=np.where(u, 1.60, d.track_km),
                           frp_mw=np.where(u, d.frp_mw * 4.0, d.frp_mw))
-        self._check(altered, "4B")
+        self._check(altered, "B")
 
-    def test_4c_deleting_a_whole_overpass_that_was_never_looked_at(self) -> None:
+    def test_c_deleting_a_whole_overpass_that_was_never_looked_at(self) -> None:
         d = self.det
         viirs_pos = np.flatnonzero(d.is_viirs)
         passes = group_overpasses(d.select(d.is_viirs))
@@ -143,11 +147,11 @@ class ObservationIgnoresUnrevealedRowsTests(unittest.TestCase):
         for op in (untouched[0], untouched[len(untouched) // 2]):
             keep = np.ones(len(d), dtype=bool)
             keep[viirs_pos[op.index]] = False
-            env, obs, _ = _play(d.select(keep))
-            self.assertEqual(obs[0].looks_left, self.obs[0].looks_left, "4C: looks_left changed at reset")
-            self._check(d.select(keep), "4C")
+            env, obs, _ = _play(d.select(keep), self.SCHEDULE, self.READ_PASSES)
+            self.assertEqual(obs[0].looks_left, self.obs[0].looks_left, "C: looks_left changed at reset")
+            self._check(d.select(keep), "C")
 
-    def test_4d_moving_unrevealed_rows_about_outside_the_revealed_tiles(self) -> None:
+    def test_d_moving_unrevealed_rows_about_outside_the_revealed_tiles(self) -> None:
         d = self.det
         rng = np.random.default_rng(7)
         lat = np.where(self.unrevealed, d.lat + rng.uniform(-0.02, 0.02, len(d)), d.lat)
@@ -171,7 +175,7 @@ class ObservationIgnoresUnrevealedRowsTests(unittest.TestCase):
         self.assertGreater(int(move.sum()), 100)
         altered = replace(d, lat=np.where(move, lat, d.lat), lon=np.where(move, lon, d.lon),
                           frp_mw=np.where(self.unrevealed, d.frp_mw * 11.0, d.frp_mw))
-        self._check(altered, "4D")
+        self._check(altered, "D")
 
     def test_every_unrevealed_row_deleted_at_once(self) -> None:
         d = self.det
@@ -179,11 +183,34 @@ class ObservationIgnoresUnrevealedRowsTests(unittest.TestCase):
 
     def test_looks_do_not_depend_on_the_hidden_rows_at_all(self) -> None:
         d = self.det
-        bare = NextLookEnv(d.select(d.is_modis), fx.TEST_BOX, WINDOW, tiles=(4, 4), budget=3)
+        bare = NextLookEnv(d.select(d.is_modis), fx.TEST_BOX, WINDOW, tiles=(4, 4), budget=3, schedule=self.SCHEDULE,
+                           read_passes=self.READ_PASSES)
         self.assertEqual(bare.n_looks, self.env.n_looks)
         first = bare.reset(seed=0)
         self.assertEqual(_differences(first, self.obs[0]), [])
         self.assertEqual([bare.look_time(k) for k in range(bare.n_looks)], [self.env.look_time(k) for k in range(self.env.n_looks)])
+        self.assertEqual(bare.describe()["looks"]["source"], self.SCHEDULE)
+
+
+class ObservationIgnoresUnrevealedRowsOnThePassListTests(ObservationIgnoresUnrevealedRowsTests):
+    """The same cases with the looks taken from a pass list."""
+
+    SCHEDULE = "cmr"
+    READ_PASSES = staticmethod(fx.fixture_pass_reader())
+
+    def test_a_pass_that_flagged_nothing_is_a_look_and_is_scored(self) -> None:
+        looks = self.env.describe()["looks"]
+        self.assertEqual(looks["source"], "cmr")
+        self.assertEqual(looks["partly_in_swath"], 4)                     # one a day; the window reaches a fourth day
+        platforms = [self.env._looks[k].platform for k in range(self.env.n_looks)]
+        self.assertIn("VIIRS_NOAA21", platforms)                         # the fixture holds no NOAA-21 row at all
+        self.assertEqual(looks["real_overpasses_scored"], self.env.n_looks)
+        nominal = NextLookEnv(self.det, fx.TEST_BOX, WINDOW, tiles=(4, 4), budget=3)
+        self.assertLess(nominal.describe()["looks"]["real_overpasses_scored"], looks["real_overpasses_scored"])
+        # the pixel size an agent's model assumes for a look is the pass's own, from where the box lay in its swath
+        first = self.env._looks[0]
+        self.assertAlmostEqual(first.scan_km, 0.4237, places=3)
+        self.assertEqual(first.slot.source, "cmr")
 
 
 if __name__ == "__main__":

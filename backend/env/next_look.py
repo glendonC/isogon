@@ -1,8 +1,39 @@
-"""NextLookEnv: reset() and step(action) over one real run, in plain Python with numpy."""
+"""NextLookEnv: reset() and step(action) over one real run, in plain Python with numpy.
+
+Hidden rows. The environment is given rows of both instruments and parts them at once
+(`backend.eval.holdout.seal`). Everything an agent is shown is built from the visible rows and from the rows of
+the tiles it has looked at, and from nothing else:
+
+  decisions     the looks are the scheduled slots of the hidden platforms (`backend.eval.schedule`: platform and
+                calendar, no detection), so their number, times and platforms do not depend on a hidden row
+  a look        reveals the hidden rows of that slot inside one tile; their own times and pixel sizes come with them
+  the model     assimilates the visible passes and the revealed rows; the pixel size it assumes for the rest of a
+                looked-at tile is the slot's own, never a figure taken over the whole hidden pass
+
+A look owns the rows of its own pass. Nominal slots are laid out two hours beyond either end of the window, and
+every row belongs to the slot of its platform nearest in time, in the window or not. If a look kept only the rows
+inside the window, a look at a slot just before the window, whose real pass flagged hundreds of pixels minutes
+earlier, would hand over nothing and the model would take that for a clear look. The score is taken over the
+hidden overpasses inside the window.
+
+What an empty look means. On the nominal schedule nothing says that the platform flew that half day or
+that its swath held the box, so a look that hands over no detection is unknown and teaches the model nothing. On
+the pass list a look exists only where a granule's swath held the whole box, so an empty look is a pass that
+covered the tile and flagged nothing there; cloud is not known and the model's `clear_sky` stands for it.
+
+Two schedules. `schedule="nominal"`, the default, is the half-day slots of each hidden platform: the tracked tables
+of protocol version 2 are measured on them (the policy's weights are fitted under version 1 and not refitted).
+`schedule="cmr"` (or "auto") takes the looks from NASA's pass list: one
+look per pass of a hidden platform whose swath held the box, at its real time and pixel size, and a pass that
+flagged nothing is a look that is scored like any other. No tracked result is measured on it.
+
+The environment opens the sealed rows for two things only: to hand over the rows of a tile an agent looks at, and
+to pay the reward. It is one of the two modules allowed to (`backend.eval.holdout.SCORERS`).
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -10,42 +41,82 @@ from numpy.typing import NDArray
 
 from backend.env import KNOWN_LIMITS
 from backend.eval import metrics as M
-from backend.eval.grid import EvalGrid, Painted, paint
-from backend.eval.overpass import Overpass, group_overpasses
-from backend.eval.rows import Detections
+# PROTOCOL is the protocol the environment plays under by default (sealed hidden rows, looks on the nominal
+# schedule); it is named here so that the round routes can read the environment's protocol from the environment
+from backend.eval.blind_test import PROTOCOL, SLOT_MARGIN_S  # noqa: F401
+from backend.eval.grid import EvalGrid, Painted, footprint_cells, paint
+from backend.eval.holdout import seal
+from backend.eval.overpass import OVERPASS_GAP_S, group_overpasses
+from backend.eval.rows import Detections, local_solar_time_hr
+from backend.eval.schedule import NOTES, SOURCE_CMR, SOURCE_NOMINAL, PassReader, Slot, rows_of_slot, schedule_for
 from backend.model.occupancy import (
     OccupancyParams,
     OccupancyReconstruction,
     PassPixels,
     build_pass_pixels,
     expected_count_cells,
+    look_count_factor,
+    rescale_probability,
 )
-from backend.model.platforms import PLATFORMS
+from backend.model.platforms import PLATFORM_CODES, PLATFORMS, scan_axis_deg
 
 NO_LOOK: int = -1
 SCORES: tuple[str, ...] = ("csi", "csi_one_cell", "brier_skill")
+# What a reward is measured against. "still_hidden": only the detections the agent has not been shown, so a look is
+# paid for what it teaches about everything else, never for the answer it hands over. "all": every VIIRS detection
+# of the episode, revealed or not.
+REWARD_TARGETS: tuple[str, ...] = ("still_hidden", "all")
 
 
 @dataclass(frozen=True)
 class Observation:
     """Everything the agent may know, and nothing more."""
 
-    decision: int                           # index of the VIIRS overpass about to be decided
-    time_s: float                           # its time, UTC seconds
+    decision: int                           # index of the scheduled look about to be decided
+    time_s: float                           # its time, UTC seconds: the pass's own from the pass list, else nominal
     sensor: str                             # its platform
     is_day: bool
     budget_left: int
-    looks_left: int                         # VIIRS overpasses still to come, this one included
+    looks_left: int                         # scheduled looks still to come, this one included
     tiles_shape: tuple[int, int]            # (rows, columns) of the tile split; tile t is row t // columns, column t % columns
     tile_of_cell: NDArray[np.int64]         # (ny, nx) tile index of every 375 m cell
-    tile_covered: NDArray[np.bool_]         # (tiles,) tiles this pass covered (assumed from orbit geometry: all)
-    modis: NDArray[np.float64]              # (n, 7) MODIS detections so far: lon, lat, scan_km, track_km, frp_mw, time_s, platform code
-    viirs_revealed: NDArray[np.float64]     # (m, 7) VIIRS detections revealed so far, same columns
+    tile_covered: NDArray[np.bool_]         # (tiles,) tiles this look covers (assumed from swath width: all)
+    modis: NDArray[np.float64]              # (n, 7) visible detections so far: lon, lat, scan_km, track_km, frp_mw, time_s, platform code
+    viirs_revealed: NDArray[np.float64]     # (m, 7) hidden detections revealed so far, same columns
     revealed_tiles: tuple[tuple[int, int], ...]   # (decision, tile) of every look taken so far
     p_burning: NDArray[np.float64]          # (ny, nx) the model's current probability that each cell burns
     frp_mw: NDArray[np.float64]             # (ny, nx) its expected FRP per cell
     sigma_mw: NDArray[np.float64]           # (ny, nx) its standard deviation
     terrain_m: NDArray[np.float64] | None   # (ny, nx) elevation, when the caller supplied it
+
+
+@dataclass(frozen=True)
+class Look:
+    """A scheduled look as the environment holds it. The slot is what an agent is told. `index` is the
+    environment's own: positions, in the hidden rows, of every row that belongs to this look inside the window."""
+
+    slot: Slot
+    index: NDArray[np.int64]
+
+    @property
+    def platform(self) -> str:
+        return self.slot.platform
+
+    @property
+    def time_s(self) -> float:
+        return self.slot.time_s
+
+    @property
+    def is_day(self) -> bool:
+        return self.slot.is_day
+
+    @property
+    def scan_km(self) -> float:
+        return self.slot.scan_km
+
+    @property
+    def track_km(self) -> float:
+        return self.slot.track_km
 
 
 def _rows(det: Detections) -> NDArray[np.float64]:
@@ -55,7 +126,7 @@ def _rows(det: Detections) -> NDArray[np.float64]:
 
 
 class NextLookEnv:
-    """One real run. `det` holds MODIS and VIIRS rows of the context box; VIIRS rows are hidden from the agent."""
+    """One real run. `det` holds rows of both instruments from the context box; the hidden one is sealed at once."""
 
     def __init__(
         self,
@@ -67,9 +138,22 @@ class NextLookEnv:
         params: OccupancyParams | None = None,
         score: str = "csi",
         terrain_m: NDArray[np.float64] | None = None,
+        reward_target: str = "still_hidden",
+        learn_from_looks: bool = False,
+        prior_cells: float = 40.0,
+        hidden: str = "VIIRS",
+        schedule: str = SOURCE_NOMINAL,
+        read_passes: PassReader | None = None,
     ) -> None:
         if score not in SCORES:
             raise ValueError(f"score must be one of {SCORES}")
+        if reward_target not in REWARD_TARGETS:
+            raise ValueError(f"reward_target must be one of {REWARD_TARGETS}")
+        self.reward_target = reward_target
+        # When on, every look also corrects the model's count level in the tiles it did not look at (see _teach).
+        self.learn_from_looks = bool(learn_from_looks)
+        self.prior_cells = float(prior_cells)
+        self._preds0: list[NDArray[np.float64]] | None = None
         if budget < 0 or tiles[0] < 1 or tiles[1] < 1:
             raise ValueError("budget must be 0 or more and the tile split at least 1 by 1")
         self.grid = EvalGrid.from_bbox(box)
@@ -81,30 +165,54 @@ class NextLookEnv:
         self.params = params or OccupancyParams()
         self.score_name = score
         self.terrain_m = terrain_m
+        self.hidden = hidden
         g = self.grid
         rr, cc = np.meshgrid(np.arange(g.ny), np.arange(g.nx), indexing="ij")
         self.tile_of_cell = (np.minimum(rr * self.tiles[0] // g.ny, self.tiles[0] - 1) * self.tiles[1]
                              + np.minimum(cc * self.tiles[1] // g.nx, self.tiles[1] - 1)).astype(np.int64)
 
-        self._modis = det.select(det.is_modis)
+        # The rows part ways here. `_modis` is every visible row; `_sealed` is opened only where marked below.
+        self._modis, self._sealed = seal(det, hidden)
+        del det
         self._modis_passes: list[PassPixels] = build_pass_pixels(g, self._modis, group_overpasses(self._modis))
-        viirs = det.select(det.is_viirs)
-        self._viirs = viirs
-        self._looks: list[Overpass] = [p for p in group_overpasses(viirs) if window[0] <= p.time_s < window[1]]
-        inb = viirs.in_box(box)
-        self._truth: list[Painted] = []
-        self._look_pixels: list[PassPixels] = []       # every pixel of the look that lies in the box
-        self._pixel_tile: list[NDArray[np.int64]] = []  # tile of each of those pixels (by pixel centre)
-        self._look_rows: list[NDArray[np.int64]] = []   # their positions in the VIIRS rows
-        for op in self._looks:
-            own = op.index[inb[op.index]]
-            sub = viirs.select(own)
-            self._truth.append(paint(g, sub))
-            pp = build_pass_pixels(g, viirs, [replace(op, index=own)])[0]
-            self._look_pixels.append(pp)
-            r, c = g.row_col(sub.lon, sub.lat)
-            self._pixel_tile.append(self.tile_of_cell[np.clip(r, 0, g.ny - 1), np.clip(c, 0, g.nx - 1)])
+        # nominal slots are laid out a margin beyond the window (a real pass lies up to 100 minutes from its slot);
+        # the pass list gives the passes whose scan crossed the box inside the window
+        self._slots: list[Slot]
+        self._slots, self.schedule_source, self._schedule_info = schedule_for(
+            hidden, None, window[0], window[1], box, source=schedule, read_passes=read_passes, nominal_margin_s=SLOT_MARGIN_S
+        )
+        from_list = self.schedule_source == SOURCE_CMR
+
+        # ---- the sealed rows, for revealing a tile and for the reward; nothing above has read them --------------
+        hid = self._sealed.open_for_scoring()
+        self._viirs = hid
+        slot_of_row = self._slot_of_rows(hid)
+        # A look owns the rows of its own pass, in the window or not: the rows inside its granules' time span on the
+        # pass list, the rows nearest its slot on the nominal schedule. The score keeps to the window.
+        owned = slot_of_row >= 0
+        in_time = owned if from_list else ((hid.time_s >= window[0]) & (hid.time_s < window[1]))
+        # whether a look that hands over nothing is a pass that covered the tile (pass list) or simply unknown
+        self.empty_look_is_a_pass = from_list
+        inb = hid.in_box(box)
+        self._looks: list[Look] = [Look(s, np.flatnonzero(owned & (slot_of_row == s.index))) for s in self._slots]
+        self._truth: list[list[Painted]] = [[] for _ in self._looks]     # per look: one painting per real overpass
+        if from_list:
+            # every pass is scored, and one that left no hidden detection is a look that flagged nothing
+            for k, look in enumerate(self._looks):
+                self._truth[k].append(paint(g, hid.select(look.index[inb[look.index]])))
+        else:
+            for op in group_overpasses(hid.select(in_time)):
+                rows = np.flatnonzero(in_time)[op.index]
+                k = int(slot_of_row[rows[0]])
+                if k >= 0:
+                    self._truth[k].append(paint(g, hid.select(rows[inb[rows]])))
+        self._look_rows: list[NDArray[np.int64]] = []   # per look: positions of its rows inside the box
+        self._pixel_tile: list[NDArray[np.int64]] = []  # tile of each of those rows (by pixel centre)
+        for k in range(len(self._looks)):
+            own = np.flatnonzero(owned & inb & (slot_of_row == k))
+            r, c = g.row_col(hid.lon[own], hid.lat[own])
             self._look_rows.append(own)
+            self._pixel_tile.append(self.tile_of_cell[np.clip(r, 0, g.ny - 1), np.clip(c, 0, g.nx - 1)])
         self._k = 0
         self._budget_left = self.budget
         self._revealed: list[tuple[int, int]] = []
@@ -112,48 +220,165 @@ class NextLookEnv:
         self._started = False
         self.rng = np.random.default_rng(0)
 
+    def _slot_of_rows(self, hid: Detections) -> NDArray[np.int64]:
+        """For every hidden row the look it belongs to (-1 for none): with the pass list the pass whose granules
+        hold its time, otherwise the slot of its platform nearest in time within six and a half hours. A row's
+        look depends on its own platform and time only."""
+        out = np.full(len(hid), -1, dtype=np.int64)
+        if self.schedule_source == SOURCE_CMR:
+            for s in self._slots:
+                out[rows_of_slot(hid.time_s, hid.platform_code, s)] = s.index
+            return out
+        for name in sorted({s.platform for s in self._slots}):
+            idx = np.array([s.index for s in self._slots if s.platform == name], dtype=np.int64)
+            times = np.array([self._slots[i].time_s for i in idx])
+            rows = np.flatnonzero(hid.platform_code == PLATFORM_CODES[name])
+            if rows.size == 0:
+                continue
+            gap = np.abs(hid.time_s[rows][:, None] - times[None, :])
+            j = np.argmin(gap, axis=1)
+            ok = gap[np.arange(rows.size), j] <= 6.5 * 3600.0
+            out[rows[ok]] = idx[j[ok]]
+        return out
+
     # ---- the model, given what has been revealed -----------------------------------------------------------------
 
-    def _revealed_passes(self, revealed: list[tuple[int, int]], upto_s: float | None = None) -> list[PassPixels]:
+    def _revealed_rows(self, k: int, tiles: list[int]) -> NDArray[np.int64]:
+        """Positions of the hidden rows of look `k` inside the given tiles: the rows that look handed over."""
+        return self._look_rows[k][np.isin(self._pixel_tile[k], tiles)]
+
+    def _revealed_passes(self, revealed: list[tuple[int, int]]) -> list[PassPixels]:
+        """The looks taken, as passes the model can assimilate, built from the revealed rows alone.
+
+        A slot can hold two real overpasses (consecutive orbits). The revealed rows are split where their times lie
+        more than an overpass gap apart, and each part is a pass at the median time of its own rows. A look that
+        found nothing is, on the pass list, a pass at the slot's time that covered the tile and saw no fire in it;
+        on the nominal schedule it is unknown (the platform may not have flown, the swath may have missed the box)
+        and nothing is assimilated. The pixel area used to judge what a pass could have missed is the slot's.
+        """
         by_look: dict[int, list[int]] = {}
         for k, t in revealed:
             by_look.setdefault(k, []).append(t)
+        g, hid = self.grid, self._viirs
         out: list[PassPixels] = []
         for k, tiles in by_look.items():
-            pp = self._look_pixels[k]
-            if upto_s is not None and pp.time_s > upto_s:
+            slot = self._looks[k]
+            looked = np.isin(self.tile_of_cell, tiles)
+            area = float(slot.scan_km * slot.track_km)
+            rows = self._revealed_rows(k, tiles)
+            if rows.size == 0 and not self.empty_look_is_a_pass:
                 continue
-            keep = np.flatnonzero(np.isin(self._pixel_tile[k], tiles))
-            out.append(replace(
-                pp,
-                cells=tuple(pp.cells[i] for i in keep),
-                frp_mw=tuple(pp.frp_mw[i] for i in keep),
-                min_side_km=tuple(pp.min_side_km[i] for i in keep),
-                track_km=tuple(pp.track_km[i] for i in keep),
-                looked=np.isin(self.tile_of_cell, tiles),
-            ))
+            if rows.size == 0:
+                out.append(PassPixels(
+                    time_s=slot.time_s, platform=slot.platform, is_day=slot.is_day,
+                    lst_hr=float(local_solar_time_hr(slot.time_s, 0.5 * (self.box[0] + self.box[2]))),
+                    pixel_area_km2=area, cells=(), frp_mw=(), min_side_km=(), n_context=0, track_km=(), looked=looked,
+                ))
+                continue
+            rows = rows[np.argsort(hid.time_s[rows], kind="stable")]
+            for part in np.split(rows, np.flatnonzero(np.diff(hid.time_s[rows]) > OVERPASS_GAP_S) + 1):
+                cells, frp, side, track = [], [], [], []
+                for i in part:
+                    axis = scan_axis_deg(PLATFORMS[int(hid.platform_code[i])], bool(hid.is_day[i]), float(hid.lat[i]))
+                    rr, cc = footprint_cells(g, float(hid.lon[i]), float(hid.lat[i]), float(hid.scan_km[i]), float(hid.track_km[i]), axis)
+                    if rr.size == 0:
+                        continue
+                    cells.append((rr, cc))
+                    frp.append(float(hid.frp_mw[i]))
+                    side.append(float(min(hid.scan_km[i], hid.track_km[i])))
+                    track.append(float(hid.track_km[i]))
+                t = float(np.median(hid.time_s[part]))
+                out.append(PassPixels(
+                    time_s=t, platform=slot.platform, is_day=slot.is_day,
+                    lst_hr=float(local_solar_time_hr(t, float(np.mean(hid.lon[part])))),
+                    pixel_area_km2=area, cells=tuple(cells), frp_mw=tuple(frp), min_side_km=tuple(side),
+                    n_context=int(part.size), track_km=tuple(track), looked=looked,
+                ))
         return out
 
     def _reconstruction(self, revealed: list[tuple[int, int]], upto_s: float | None = None) -> OccupancyReconstruction:
+        """From the visible passes (those at or before `upto_s` when given) and every look taken so far."""
         modis = self._modis_passes if upto_s is None else [p for p in self._modis_passes if p.time_s <= upto_s]
-        return OccupancyReconstruction(self.grid, None, self.params, passes=modis + self._revealed_passes(revealed, upto_s))
+        return OccupancyReconstruction(self.grid, None, self.params, passes=modis + self._revealed_passes(revealed))
 
-    def score_of(self, revealed: list[tuple[int, int]]) -> dict[str, float]:
-        """The blind-test score of the reconstruction built from all MODIS passes and the looks given, against every
-        VIIRS detection of the episode (revealed or not: the target never changes, so agents are comparable)."""
+    def _predictions(self, revealed: list[tuple[int, int]]) -> list[NDArray[np.float64]]:
+        """What the reconstruction built from all visible passes and the looks given expects the hidden instrument
+        to flag at every scheduled look."""
         recon = self._reconstruction(revealed)
+        fam = self.hidden
+        preds = [
+            recon.predict_hidden(s.time_s, fam, s.is_day, float(s.scan_km * s.track_km), track_km=s.track_km,
+                                 scan_km=s.scan_km if fam == "MODIS" else None)["p_detect"]
+            for s in self._looks
+        ]
+        if not revealed:
+            self._preds0 = preds
+        return self._teach(preds, revealed) if (self.learn_from_looks and revealed) else preds
+
+    def look_factors(self, revealed: list[tuple[int, int]]) -> dict[str, float]:
+        """How far the visible-only model's count was off in the tiles looked at, by day and by night.
+
+        For every look taken: the cells its revealed rows flag in the tile against the cells the visible-only
+        model expected there. The pooled ratio (with `prior_cells` cells of prior evidence at a ratio of one) is
+        the prior for the day ratio and for the night ratio. Only revealed rows are read.
+        """
+        if self._preds0 is None:
+            self._preds0 = self._predictions([])
+        t = {True: 0.0, False: 0.0}
+        p = {True: 0.0, False: 0.0}
+        for k, tile in revealed:
+            inside = self.tile_of_cell == tile
+            day = bool(self._looks[k].is_day)
+            if self._revealed_rows(k, [tile]).size == 0 and not self.empty_look_is_a_pass:
+                continue                                   # unknown, not a count of zero
+            t[day] += float(paint(self.grid, self._viirs.select(self._revealed_rows(k, [tile]))).mask[inside].sum())
+            p[day] += float(self._preds0[k][inside].sum())
+        pooled = look_count_factor(t[True] + t[False], p[True] + p[False], self.prior_cells)
+        return {
+            "all": pooled,
+            "day": look_count_factor(t[True], p[True], self.prior_cells, pooled),
+            "night": look_count_factor(t[False], p[False], self.prior_cells, pooled),
+        }
+
+    def _teach(self, preds: list[NDArray[np.float64]], revealed: list[tuple[int, int]]) -> list[NDArray[np.float64]]:
+        """Carry what the looks showed into the cells not looked at: rescale their probabilities by the look factor
+        of their slot (day or night). Cells of a revealed tile keep what the look itself put there."""
+        f = self.look_factors(revealed)
+        seen: dict[int, list[int]] = {}
+        for k, tile in revealed:
+            seen.setdefault(k, []).append(tile)
+        out = []
+        for k, p in enumerate(preds):
+            scaled = rescale_probability(p, f["day"] if self._looks[k].is_day else f["night"])
+            out.append(np.where(np.isin(self.tile_of_cell, seen[k]), p, scaled) if k in seen else scaled)
+        return out
+
+    def _score_predictions(self, preds: list[NDArray[np.float64]], exclude: list[tuple[int, int]]) -> dict[str, float]:
+        """The blind-test score of `preds`, leaving out the cells of the (look, tile) pairs in `exclude`. Every real
+        overpass of the hidden instrument is scored against the prediction of the look it belongs to."""
+        gone: dict[int, list[int]] = {}
+        for k, t in exclude:
+            gone.setdefault(k, []).append(t)
         counts = M.Counts(0, 0, 0, 0)
         tol = M.Counts(0, 0, 0, 0)
         brier = 0.0
         base = 0.0
-        for op, truth in zip(self._looks, self._truth):
-            out = recon.predict_hidden(op.time_s, "VIIRS", op.is_day, float(op.scan_km * op.track_km), track_km=op.track_km)
-            cells = expected_count_cells(out["p_detect"])
-            counts = counts + M.contingency(cells, truth.mask)
-            tol = tol + M.contingency_tolerant(cells, truth.mask, 1)
-            brier += M.brier(out["p_detect"], truth.mask)
-            base += float(truth.mask.mean())                 # Brier score of predicting no fire anywhere
-        n = max(len(self._looks), 1)
+        n = 0
+        for k, (p, truths) in enumerate(zip(preds, self._truth)):
+            if not truths:
+                continue
+            keep = ~np.isin(self.tile_of_cell, gone[k]) if k in gone else np.ones(self.grid.shape, dtype=bool)
+            p_k = np.where(keep, p, 0.0)
+            cells = expected_count_cells(p_k)
+            n_keep = max(int(keep.sum()), 1)
+            for truth in truths:
+                t_k = truth.mask & keep
+                counts = counts + M.contingency(cells, t_k)
+                tol = tol + M.contingency_tolerant(cells, t_k, 1)
+                brier += float(((np.clip(p_k, 0.0, 1.0) - t_k) ** 2)[keep].sum()) / n_keep
+                base += float(t_k.sum()) / n_keep                # Brier score of predicting no fire anywhere
+                n += 1
+        n = max(n, 1)
         return {
             "csi": M.scores(counts)["csi"] or 0.0,
             "csi_one_cell": M.scores(tol)["csi"] or 0.0,
@@ -162,18 +387,40 @@ class NextLookEnv:
             "false_alarm_ratio": M.scores(counts)["false_alarm_ratio"] or 0.0,
         }
 
+    def score_of(self, revealed: list[tuple[int, int]], exclude: list[tuple[int, int]] | None = None) -> dict[str, float]:
+        """The blind-test score of the reconstruction built from all visible passes and the looks in `revealed`,
+        against the real hidden detections of the episode outside the (look, tile) pairs in `exclude`."""
+        return self._score_predictions(self._predictions(revealed), exclude or [])
+
+    def _target(self, revealed: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        return list(revealed) if self.reward_target == "still_hidden" else []
+
+    def _gain(self, revealed_after: list[tuple[int, int]]) -> tuple[float, dict[str, float], list[NDArray[np.float64]]]:
+        """Reward of moving from the current looks to `revealed_after`: both scored on the same target, the one
+        that is still hidden after the new look."""
+        target = self._target(revealed_after)
+        before = self._score_predictions(self._preds, target)
+        preds_after = self._predictions(revealed_after)
+        after = self._score_predictions(preds_after, target)
+        return after[self.score_name] - before[self.score_name], after, preds_after
+
     # ---- the interface -------------------------------------------------------------------------------------------
 
     @property
     def n_looks(self) -> int:
         return len(self._looks)
 
+    def look_time(self, k: int) -> float:
+        """UTC seconds of look `k` (from the schedule, not from a detection)."""
+        return float(self._looks[k].time_s)
+
     def reset(self, seed: int | None = None) -> Observation:
         self.rng = np.random.default_rng(seed)
         self._k = 0
         self._budget_left = self.budget
         self._revealed = []
-        self._detail = self.score_of([])
+        self._preds = self._predictions([])
+        self._detail = self._score_predictions(self._preds, [])
         self._score = self._detail[self.score_name]
         self.score_start = self._score
         self._started = True
@@ -181,19 +428,19 @@ class NextLookEnv:
 
     def _observe(self) -> Observation:
         k = min(self._k, self.n_looks - 1)
-        op = self._looks[k]
-        recon = self._reconstruction(self._revealed, upto_s=op.time_s)
-        est = recon.estimate(op.time_s)
+        slot = self._looks[k]
+        recon = self._reconstruction(self._revealed, upto_s=slot.time_s)
+        est = recon.estimate(slot.time_s)
         from backend.model.real_run import _sigma_mw
 
-        seen_modis = self._modis.select(self._modis.time_s <= op.time_s)
-        rows = [self._look_rows[kk][np.isin(self._pixel_tile[kk], [t])] for kk, t in self._revealed]
+        seen_modis = self._modis.select(self._modis.time_s <= slot.time_s)
+        rows = [self._revealed_rows(kk, [t]) for kk, t in self._revealed]
         shown = self._viirs.select(np.concatenate(rows)) if rows else self._viirs.select(np.zeros(len(self._viirs), dtype=bool))
         return Observation(
             decision=self._k,
-            time_s=op.time_s,
-            sensor=op.platform,
-            is_day=op.is_day,
+            time_s=slot.time_s,
+            sensor=slot.platform,
+            is_day=slot.is_day,
             budget_left=self._budget_left,
             looks_left=self.n_looks - self._k,
             tiles_shape=self.tiles,
@@ -218,7 +465,7 @@ class NextLookEnv:
     def peek(self, action: int) -> float:
         """The reward `action` would give now, without taking it (used only by the oracle)."""
         revealed, spent = self._apply(action)
-        return (self.score_of(revealed)[self.score_name] - self._score) if spent else 0.0
+        return self._gain(revealed)[0] if spent else 0.0
 
     def step(self, action: int) -> tuple[Observation | None, float, bool, dict[str, Any]]:
         if not self._started:
@@ -229,10 +476,9 @@ class NextLookEnv:
         wasted = int(action) != NO_LOOK and not spent
         reward = 0.0
         if spent:
+            reward, self._detail, self._preds = self._gain(revealed)
             self._revealed = revealed
             self._budget_left -= 1
-            self._detail = self.score_of(revealed)
-            reward = self._detail[self.score_name] - self._score
             self._score = self._detail[self.score_name]
         look = self._looks[self._k]
         info = {
@@ -242,6 +488,8 @@ class NextLookEnv:
             "no_budget_left": wasted,
             "score": self._score,
             "score_name": self.score_name,
+            "reward_target": self.reward_target,
+            "look_factors": self.look_factors(self._revealed) if (self.learn_from_looks and self._revealed) else None,
             "score_detail": dict(self._detail),
             "revealed_pixels": int(np.isin(self._pixel_tile[self._k], [int(action)]).sum()) if spent else 0,
             "known_limits": KNOWN_LIMITS,
@@ -253,7 +501,7 @@ class NextLookEnv:
     # ---- for the oracle and for reports only ---------------------------------------------------------------------
 
     def hidden_pixels_per_tile(self) -> NDArray[np.int64]:
-        """Hidden VIIRS pixels of the current look in each tile. Not part of the observation."""
+        """Hidden pixels of the current look in each tile. Not part of the observation."""
         return np.bincount(self._pixel_tile[min(self._k, self.n_looks - 1)], minlength=self.n_tiles)
 
     def describe(self) -> dict[str, Any]:
@@ -263,10 +511,25 @@ class NextLookEnv:
             "tiles": list(self.tiles),
             "budget": self.budget,
             "viirs_looks": self.n_looks,
+            "looks": {"source": self.schedule_source, "note": NOTES[self.schedule_source],
+                      "real_overpasses_scored": int(sum(len(t) for t in self._truth)),
+                      "a_look_owns": "the rows of its own pass, in the window or not; the score is taken inside the window",
+                      "an_empty_look_means": (
+                          "a pass that covered the tile and flagged nothing there (cloud is not known)" if self.empty_look_is_a_pass
+                          else "unknown: nothing says the platform flew or that its swath held the box, so the model learns nothing from it"
+                      ),
+                      **{k: v for k, v in self._schedule_info.items() if k != "platforms"}},
+            "learn_from_looks": self.learn_from_looks,
+            "prior_cells": self.prior_cells if self.learn_from_looks else None,
             "viirs_platforms": sorted({p.platform for p in self._looks}),
             "modis_overpasses": len(self._modis_passes),
             "score": self.score_name,
-            "reward": "gain in the blind-test score of the reconstruction against every VIIRS detection of the episode",
+            "reward": (
+                "gain in the blind-test score of the reconstruction, measured before and after the look on the same "
+                + ("target: the real hidden detections still hidden after the look" if self.reward_target == "still_hidden"
+                   else "target: every real hidden detection of the episode")
+            ),
+            "reward_target": self.reward_target,
             "known_limits": KNOWN_LIMITS,
             "platform_codes": {str(i): n for i, n in enumerate(PLATFORMS)},
         }

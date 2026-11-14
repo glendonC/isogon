@@ -194,6 +194,22 @@ class TrackedResultTests(unittest.TestCase):
         else:
             self.assertIn("does not differ", said)
 
+    def test_the_table_measured_again_under_the_fixed_protocol_is_kept_beside_the_first(self) -> None:
+        d = self.doc
+        self.assertEqual(d["protocol"]["fitted_under"], 1)                  # the weights were not refitted
+        t = d["test_protocol_2"]
+        self.assertIn("protocol correction", t["note"])
+        self.assertIn("nominal half-day slots", t["known_limits"])
+        self.assertEqual(set(t["agents"]), {"random", "latest_modis", "least_sure", "linear", "oracle"})
+        self.assertEqual(t["catalogue"]["fit"] + t["catalogue"]["test"], t["catalogue"]["episodes"])
+        b, said = t["learned_minus_least_sure"], t["plainly"]
+        if b["p05"] > 0:
+            self.assertIn("beats least sure", said)
+        elif b["p95"] < 0:
+            self.assertIn("behind least sure", said)
+        else:
+            self.assertIn("does not differ", said)
+
     def test_the_model_change_is_used_only_if_validation_adopted_it(self) -> None:
         from backend.env.policy import env_settings, load_policy
 
