@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { NormalizedSensorDiagnostics } from '../stage/types';
 import { plainText } from './plainText';
+import { getJson, publicUrl } from '../lib/api';
 
-const API_BASE: string = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8788';
 
 export type SensorModelSource = NormalizedSensorDiagnostics['source'];
 
@@ -77,17 +77,22 @@ export function useSensorModel(runId: string | null | undefined): SensorModelPay
 
   useEffect(() => {
     const controller = new AbortController();
-    const query = runId ? `?run_id=${encodeURIComponent(runId)}` : '';
-    const endpoints: Array<{ url: string; source: SensorModelSource }> = [
-      { url: `${API_BASE}/api/sensor-model${query}`, source: 'api' },
-      { url: '/generated/fields/sensor_model_diagnostics.json', source: 'static_artifact' },
+    // The route through the page's client (live or recorded), then the file the site ships, from its base path.
+    const endpoints: Array<{ load: () => Promise<unknown>; source: SensorModelSource }> = [
+      { load: () => getJson<unknown>('/api/sensor-model', runId ? { run_id: runId } : undefined, { signal: controller.signal }), source: 'api' },
+      {
+        load: async () => {
+          const res = await fetch(publicUrl('generated/fields/sensor_model_diagnostics.json'), { signal: controller.signal });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        },
+        source: 'static_artifact',
+      },
     ];
     void (async () => {
       for (const ep of endpoints) {
         try {
-          const res = await fetch(ep.url, { signal: controller.signal });
-          if (!res.ok) continue;
-          const raw: unknown = await res.json();
+          const raw: unknown = await ep.load();
           if (controller.signal.aborted) return;
           const id = (raw as Record<string, unknown> | null)?.benchmark_gates_run_id;
           setPayload({ raw, source: ep.source, gatesRunId: typeof id === 'string' ? id : null });

@@ -1,3 +1,4 @@
+import { getJson, HttpError, NotRecorded } from '../lib/api';
 import { parseRunStarts, type RealRunStart } from './realRuns';
 
 /**
@@ -315,12 +316,12 @@ export function ordinal(n: number): string {
 }
 
 /** Real calendar: the server exports the FIRMS rows behind a selection. End is exclusive. */
-export function rowsCsvUrl(apiBase: string, regionId: string, yms: readonly string[]): string | null {
+export function rowsCsvPath(regionId: string, yms: readonly string[]): string | null {
   if (yms.length === 0) return null;
   const sorted = [...yms].sort();
   const [y1, m1] = sorted[sorted.length - 1].split('-').map(Number);
   const end = m1 === 12 ? `${y1 + 1}-01-01` : `${y1}-${pad(m1 + 1)}-01`;
-  return `${apiBase}/api/calendar/rows.csv?region_id=${encodeURIComponent(regionId)}&start=${sorted[0]}-01&end=${end}`;
+  return `/api/calendar/rows.csv?region_id=${encodeURIComponent(regionId)}&start=${sorted[0]}-01&end=${end}`;
 }
 
 /** Simulated calendar: CSV of the selected months' calendar fields, marked simulated on every row. */
@@ -344,9 +345,14 @@ export function toCsv(cal: Calendar, yms: readonly string[]): string {
  * calendar is never shown: it is one invented place, so for any other region it would show simulated numbers for
  * somewhere else.
  */
-export async function fetchCalendar(apiBase: string, regionId: string, signal: AbortSignal): Promise<Calendar | null> {
-  const r = await fetch(`${apiBase}/api/calendar?region_id=${encodeURIComponent(regionId)}&source=firms`, { signal });
-  if (!r.ok) return null;
-  const cal = parseCalendar(await r.json());
+export async function fetchCalendar(regionId: string, signal: AbortSignal): Promise<Calendar | null> {
+  let body: unknown;
+  try {
+    body = await getJson<unknown>('/api/calendar', { region_id: regionId, source: 'firms' }, { signal });
+  } catch (err) {
+    if (err instanceof HttpError || err instanceof NotRecorded) return null;
+    throw err;
+  }
+  const cal = parseCalendar(body);
   return cal && !cal.simulated ? cal : null;
 }

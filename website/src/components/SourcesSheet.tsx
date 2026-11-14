@@ -372,7 +372,7 @@ export function SourcesSheet({ open, onClose, apiBase, regionId, regionName, ima
     if (!open) return;
     const controller = new AbortController();
     setHealth({ key: healthKey, state: 'loading' });
-    fetchHealthCounts(healthKey, controller.signal).then(
+    fetchHealthCounts(controller.signal).then(
       (data) => {
         if (!controller.signal.aborted) setHealth({ key: healthKey, state: 'ready', data });
       },
@@ -387,7 +387,7 @@ export function SourcesSheet({ open, onClose, apiBase, regionId, regionName, ima
     if (!open) return;
     const controller = new AbortController();
     setCalendar({ key: calendarKey, state: 'loading' });
-    fetchCalendarSources(apiBase, regionId, controller.signal).then(
+    fetchCalendarSources(regionId, controller.signal).then(
       (data) => {
         if (controller.signal.aborted) return;
         setCalendar(data ? { key: calendarKey, state: 'ready', data } : { key: calendarKey, state: 'missing' });

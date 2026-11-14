@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { LIPARI_32 } from '../../lib/colormaps';
-import { API_BASE, NOT_RECORDED_LINE, TRANSPORT, NotRecorded } from '../../lib/api';
+import { NOT_RECORDED_LINE, NotRecorded } from '../../lib/api';
+import { RouteLink } from '../../lib/RouteLink';
 import { beatOf } from '../../app/names';
 import {
   fetchCurrent,
@@ -155,13 +156,14 @@ export function CalendarScreen({ place, stageMonth, canOpen, onOpenMonth, onChoo
     if (rec.months.has(ym)) setSelected(ym);
   };
 
-  const csvHref =
-    rec && focus && TRANSPORT === 'live'
+  // The month's rows as CSV, through the page's client: the route live, the recorded file on the public page.
+  const csvPath =
+    rec && focus
       ? (() => {
           const [y, m] = focus.split('-').map(Number);
           const end = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
           const where = place.kind === 'region' ? `region_id=${encodeURIComponent(place.regionId)}` : `box=${encodeURIComponent(place.box.join(','))}`;
-          return `${API_BASE}/api/calendar/rows.csv?${where}&start=${focus}-01&end=${end}`;
+          return `/api/calendar/rows.csv?${where}&start=${focus}-01&end=${end}`;
         })()
       : null;
 
@@ -356,10 +358,10 @@ export function CalendarScreen({ place, stageMonth, canOpen, onOpenMonth, onChoo
                   : 'No run opens here: fewer passes with fire than a run needs.'}
               </span>
             )}
-            {csvHref && (
-              <a className="sys-ctl cal-screen__act" href={csvHref} download>
+            {csvPath && (
+              <RouteLink className="sys-ctl cal-screen__act" path={csvPath}>
                 <span className="sys-key">C</span> This month's rows as CSV
-              </a>
+              </RouteLink>
             )}
           </div>
         )}

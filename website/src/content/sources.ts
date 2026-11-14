@@ -4,6 +4,7 @@
  * out and why, outage days, regime markers). The product names, routes and the two gaps shorter than a day are fixed
  * facts, typed here; docs/data.md describes the data and docs/sources.md the sources and their credits.
  */
+import { getJson, HttpError } from '../lib/api';
 
 /** Platforms in the order the record grew. Platforms the backend adds later sort after these. */
 export const PLATFORM_ORDER: readonly string[] = ['Terra', 'Aqua', 'Suomi NPP', 'NOAA-20', 'NOAA-21'];
@@ -270,26 +271,22 @@ export function parseCalendarSources(raw: unknown): CalendarSources | null {
   };
 }
 
-export async function fetchHealthCounts(apiBase: string, signal: AbortSignal): Promise<HealthCounts> {
-  const r = await fetch(`${apiBase}/api/health`, { signal });
-  if (!r.ok) throw new Error(`/api/health answered ${r.status}`);
-  const counts = parseHealthCounts(await r.json());
+export async function fetchHealthCounts(signal: AbortSignal): Promise<HealthCounts> {
+  const counts = parseHealthCounts(await getJson<unknown>('/api/health', undefined, { signal }));
   if (!counts) throw new Error('/api/health sent no FIRMS counts');
   return counts;
 }
 
 /** The region's real calendar sources; null when the backend has no real calendar for it (404). */
-export async function fetchCalendarSources(
-  apiBase: string,
-  regionId: string,
-  signal: AbortSignal,
-): Promise<CalendarSources | null> {
-  const r = await fetch(`${apiBase}/api/calendar?region_id=${encodeURIComponent(regionId)}&source=firms`, {
-    signal,
-  });
-  if (r.status === 404) return null;
-  if (!r.ok) throw new Error(`/api/calendar answered ${r.status}`);
-  const sources = parseCalendarSources(await r.json());
+export async function fetchCalendarSources(regionId: string, signal: AbortSignal): Promise<CalendarSources | null> {
+  let body: unknown;
+  try {
+    body = await getJson<unknown>('/api/calendar', { region_id: regionId, source: 'firms' }, { signal });
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 404) return null;
+    throw err;
+  }
+  const sources = parseCalendarSources(body);
   if (!sources) throw new Error('/api/calendar sent no real calendar');
   return sources;
 }

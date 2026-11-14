@@ -5,7 +5,7 @@ import {
   classesFor,
   formatValue,
   ordinal,
-  rowsCsvUrl,
+  rowsCsvPath,
   statsFor,
   toCsv,
   valueOf,
@@ -13,6 +13,7 @@ import {
 } from '../content/calendar';
 import type { CalendarState } from '../ui/useCalendar';
 import { startBeforeSharp, startForMonth } from '../content/realRuns';
+import { RouteLink } from '../lib/RouteLink';
 
 /**
  * The burning calendar as the workspace's time control: months down, years across, one cell per month,
@@ -69,7 +70,6 @@ export interface CalendarRunState {
 }
 
 interface BurningCalendarProps {
-  apiBase: string;
   regionId: string;
   area: CalendarArea;
   calendar: CalendarState;
@@ -88,7 +88,6 @@ interface BurningCalendarProps {
 }
 
 export function BurningCalendar({
-  apiBase,
   regionId,
   area,
   calendar,
@@ -209,7 +208,7 @@ export function BurningCalendar({
     if (allMonths.includes(next)) select(next, e.shiftKey);
   };
 
-  const csvUrl = cal.simulated ? null : rowsCsvUrl(apiBase, cal.regionId || regionId, selection);
+  const csvPath = cal.simulated ? null : rowsCsvPath(cal.regionId || regionId, selection);
   const download = () => {
     const blob = new Blob([toCsv(cal, selection)], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -381,16 +380,15 @@ export function BurningCalendar({
             {standIn ? 'Demo data' : cal.simulated ? 'Simulated' : 'NASA FIRMS'}
           </span>
           {selection.length > 0 && !standIn &&
-            (csvUrl ? (
-              <a
+            (csvPath ? (
+              <RouteLink
                 className="iso-key iso-cal__csv"
-                href={csvUrl}
-                download
+                path={csvPath}
                 title="The NASA FIRMS detections behind the selection, every source column"
               >
                 <kbd>CSV</kbd>
                 <span>{selection.length === 1 ? monthLabel(selection[0]) : `${selection.length} months`}</span>
-              </a>
+              </RouteLink>
             ) : (
               <button type="button" className="iso-key iso-cal__csv" onClick={download}>
                 <kbd>CSV</kbd>

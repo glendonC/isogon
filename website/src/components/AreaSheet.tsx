@@ -4,6 +4,7 @@ import { CONTEXT_BOXES, STAND_IN_REGION, contextBoxOf } from '../content/demo/an
 import { useCalendar } from '../ui/useCalendar';
 import { useDialogFocus } from '../ui/useDialogFocus';
 import { formatLat, formatLon } from '../content/theaters';
+import { publicUrl } from '../lib/api';
 import '../styles/area.css';
 
 /** Degrees of longitude across the map; the map is twice as wide as tall, as the equirectangular image is. */
@@ -164,7 +165,7 @@ export function AreaSheet({ open, onClose, apiBase, centre, onOpenMonth }: AreaS
           >
             <img
               className="iso-area__img"
-              src="/generated/terrain/earth_day.jpg"
+              src={publicUrl('generated/terrain/earth_day.jpg')}
               alt=""
               draggable={false}
               style={{ width: `${imgW}%`, left: `${imgLeft}%`, top: `${imgTop}%` }}
@@ -223,7 +224,6 @@ export function AreaSheet({ open, onClose, apiBase, centre, onOpenMonth }: AreaS
                 : `Demo data: no record is served for this box yet. Standing in, so you can see what its record will look like: the real Feather River record, which is somewhere else.`}
             </p>
             <BurningCalendar
-              apiBase={apiBase}
               regionId={calendarRegion}
               area={{ name: `the box at ${formatLat(askedCentre.lat)} ${formatLon(askedCentre.lon)}`, lat: askedCentre.lat, lon: askedCentre.lon }}
               calendar={calendar}

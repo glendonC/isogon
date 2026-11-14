@@ -60,7 +60,8 @@ import type {
   WorkspaceMode,
 } from './stage/types';
 
-import { API_BASE, getJson, postJson } from './lib/api';
+import { API_BASE, assetUrlNow, getJson, postJson, runRequestBody } from './lib/api';
+import { useAssetUrl } from './lib/useAssetUrl';
 
 /**
  * Landing world view: `landingSubjectFrame` names the rectangle the stage keeps calm (sky or haze) for the type.
@@ -411,22 +412,15 @@ export function App() {
       }
 
       try {
-        const body: Record<string, unknown> = {
-          holdout_viirs: params.holdoutViirs,
-          // A synthetic cloud deck is a simulation knob; the real path keeps the clouds the satellites saw.
-          cloud_override: realStartParam ? null : params.cloudOverride,
-        };
-        if (realStartParam) {
-          body.source = 'firms';
-          body.start = realStartParam;
-          if (params.holdoutViirs) body.holdout = 'viirs';
-          if (params.reveal) body.reveal = true;
-        }
-        if (params.regionId) {
-          body.region_id = params.regionId;
-        }
-        if (params.queryText) {
-          body.query_text = params.queryText;
+        // A real run's body comes from the one builder in the client (contract item 20), so a recorded page finds it.
+        // A simulated run keeps its own keys: a synthetic cloud deck, a searched place.
+        let body: Record<string, unknown>;
+        if (realStartParam && params.regionId) {
+          body = { ...runRequestBody(params.regionId, realStartParam, params.holdoutViirs ? 'VIIRS' : null, Boolean(params.reveal)) };
+        } else {
+          body = { holdout_viirs: params.holdoutViirs, cloud_override: params.cloudOverride };
+          if (params.regionId) body.region_id = params.regionId;
+          if (params.queryText) body.query_text = params.queryText;
         }
         const runData = await postJson<DynamicRegionRun>('/api/reconstruct', body, { signal: controller.signal });
         if (stale()) return false;
@@ -822,11 +816,12 @@ export function App() {
     if (!inWorkspace) return;
     const controller = new AbortController();
     const minFrp = Math.round(sensitivityThreshold * 38 * 10) / 10;
-    const runParam = activeRun?.run_id ? `&run_id=${encodeURIComponent(activeRun.run_id)}` : '';
-    const url = `${API_BASE}/api/observer?frame=${activeEpoch}&sensor=${observerFilter}&min_frp=${minFrp}${runParam}`;
-    fetch(url, { signal: controller.signal })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: Record<string, unknown> | null) => {
+    getJson<Record<string, unknown> | null>(
+      '/api/observer',
+      { frame: activeEpoch, sensor: observerFilter, min_frp: minFrp, run_id: activeRun?.run_id ?? undefined },
+      { signal: controller.signal },
+    )
+      .then((d) => {
         if (!d) return;
         const diag = d.sensitivity_diagnostics as Record<string, unknown> | undefined;
         if (!diag) return;
@@ -1074,15 +1069,9 @@ export function App() {
     pipelineStages.reduce((acc, st) => acc + (st.duration_ms || 0), 0),
   );
 
-  const rawGeoJsonUrl =
-    activeRun?.assets.export_geojson_url ?? `${API_BASE}/api/runs/default/export.geojson`;
-  const exportGeoJsonUrl = rawGeoJsonUrl.startsWith('http')
-    ? rawGeoJsonUrl
-    : `${API_BASE}${rawGeoJsonUrl}`;
-
-  const rawCsvUrl =
-    activeRun?.assets.export_csv_url ?? `${API_BASE}/api/runs/default/export.csv`;
-  const exportCsvUrl = rawCsvUrl.startsWith('http') ? rawCsvUrl : `${API_BASE}${rawCsvUrl}`;
+  // The run's exports through the page's client: the route live, the recorded file on the public page, else no link.
+  const exportGeoJsonUrl = useAssetUrl(activeRun?.assets.export_geojson_url ?? null);
+  const exportCsvUrl = useAssetUrl(activeRun?.assets.export_csv_url ?? null);
 
   const stageFps = stageTelemetry?.fps ? Math.round(stageTelemetry.fps) : 60;
   const orthoShort = stageTelemetry?.orthoResolution || 'Maxar 2K';
@@ -1214,8 +1203,12 @@ export function App() {
             Footprints: {liveTelemetry.retainedFootprints} of {liveTelemetry.poolFootprints}, {liveTelemetry.observableFluxPct}% of flux
           </p>
         )}
-        <MenuItem label="Export GeoJSON" href={exportGeoJsonUrl} download={`${activeRun?.region.id ?? activeTheaterId}_${sourceSlug}_harmonized.geojson`} />
-        <MenuItem label="Export CSV" href={exportCsvUrl} download={`${activeRun?.region.id ?? activeTheaterId}_${sourceSlug}_harmonized.csv`} />
+        {exportGeoJsonUrl && (
+          <MenuItem label="Export GeoJSON" href={exportGeoJsonUrl} download={`${activeRun?.region.id ?? activeTheaterId}_${sourceSlug}_harmonized.geojson`} />
+        )}
+        {exportCsvUrl && (
+          <MenuItem label="Export CSV" href={exportCsvUrl} download={`${activeRun?.region.id ?? activeTheaterId}_${sourceSlug}_harmonized.csv`} />
+        )}
       </MenuGroup>
       <MenuGroup title="Keys">
         <p className="iso-menu__keys">
@@ -1478,6 +1471,7 @@ export function App() {
       <div className="iso-stage-clip" data-workspace={inWorkspace ? 'true' : 'false'}>
         <EarthCutawayStage
           apiBase={API_BASE}
+          resolveAsset={assetUrlNow}
           inWorkspace={inWorkspace}
           mode={round ? 'reconstruction' : effectiveMode}
           activeTheaterId={activeTheaterId}

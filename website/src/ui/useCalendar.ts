@@ -23,7 +23,7 @@ export function useCalendar(apiBase: string, regionId: string): CalendarState {
     if (!regionId) return;
     const controller = new AbortController();
     setResult({ regionId, cal: null, state: 'loading', runStarts: [] });
-    fetchCalendar(apiBase, regionId, controller.signal)
+    fetchCalendar(regionId, controller.signal)
       .then((cal) => {
         if (controller.signal.aborted) return;
         setResult(
