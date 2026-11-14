@@ -1,10 +1,10 @@
 {
   "schema_version": "1.0.0",
-  "model_version": "0.9.0-preevent-cleanroom",
-  "provenance": "Analytical / Physics-Informed Pre-Event Simulation · Zero Downloaded NASA FIRMS Rows",
+  "model_version": "0.9.0",
+  "provenance": "Analytical, physics-informed simulation. No downloaded NASA FIRMS rows",
   "downloaded_firms_rows": 0,
   "region_id": "norcal_feather_plumas",
-  "region_name": "Northern California · Feather River / Plumas Corridor",
+  "region_name": "Northern California, Feather River / Plumas Corridor",
   "bbox": [
     -121.6,
     39.75,

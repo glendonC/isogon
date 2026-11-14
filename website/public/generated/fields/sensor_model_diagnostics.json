@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "provenance": "Analytical Clean-Room Sensor Forward Operator · Sofiev & Kouznetsov (2026 GMD) + Wolfe et al. (2013)",
+  "provenance": "Analytical sensor forward operator. Sofiev & Kouznetsov (2026 GMD) + Wolfe et al. (2013)",
   "downloaded_firms_rows": 0,
   "geometry_metadata": {
     "modis_altitude_km": 705.0,
@@ -14,9 +14,9 @@
       44.86
     ],
     "viirs_zone_labels": [
-      "Zone 1 (0-31.72 deg · 3x1 agg · 0 rows deleted)",
-      "Zone 2 (31.72-44.86 deg · 2x1 agg · 4/32 rows deleted)",
-      "Zone 3 (44.86-56.28 deg · 1x1 native · 8/32 rows deleted)"
+      "Zone 1 (0-31.72 deg, 3x1 agg, 0 rows deleted)",
+      "Zone 2 (31.72-44.86 deg, 2x1 agg, 4/32 rows deleted)",
+      "Zone 3 (44.86-56.28 deg, 1x1 native, 8/32 rows deleted)"
     ]
   },
   "thresholds_50pct_mw": {
@@ -2790,7 +2790,8 @@
     "raw_overall_rmse_dex": 0.1203,
     "harmonized_overall_bias_dex": -0.0042,
     "harmonized_overall_rmse_dex": 0.0894,
-    "conformal_90pct_empirical_coverage": 0.906,
+    "n_pairs": 96,
+    "conformal_90pct_empirical_coverage": 1.0,
     "vza_bin_summary": [
       {
         "vza_bin_label": "0-15 deg",
@@ -3805,32 +3806,56 @@
     {
       "gate_id": "G1_2012_CONTINUITY",
       "title": "2012 S-NPP Step-Jump Removal",
-      "status": "PASSED",
-      "metric": "step_ratio = 1.02 (raw unharmonized = 3.81x)"
+      "kind": "computed",
+      "criterion": "harmonized step ratio within [0.90, 1.10]",
+      "source": "reconstruct run metrics step_2012_harmonized_ratio and step_2012_raw_ratio",
+      "status": "NOT_EVALUATED",
+      "metric": "evaluated per reconstruct run (GET /api/sensor-model?run_id=...)",
+      "inputs": {}
     },
     {
       "gate_id": "G2_BOWTIE_FLUX_CONSERVATION",
       "title": "Sum-Before-Threshold Footprint Flux Conservation",
-      "status": "PASSED",
-      "metric": "cluster_flux_error = 1.4% (pixel-before-sum bug = -48.2%)"
+      "kind": "design_target",
+      "status": "NOT_EVALUATED",
+      "criterion": "cluster flux error under 5% with sum-before-threshold aggregation",
+      "metric": "design target, not computed by this build",
+      "source": "none yet",
+      "inputs": {}
     },
     {
-      "gate_id": "G3_PHYSICS_VS_NAIVE",
-      "title": "Clean-Room Operator vs Naive Spatial Binning",
+      "gate_id": "G3_PAIRED_RESIDUAL",
+      "title": "Harmonized vs Raw Paired Residual (Modelled Self-Check)",
+      "kind": "computed",
       "status": "PASSED",
-      "metric": "paired_rmse = 0.082 dex vs 0.274 dex"
+      "criterion": "harmonized paired RMSE below raw paired RMSE",
+      "metric": "paired RMSE 0.0894 dex harmonized vs 0.1203 dex raw on 96 simulated pairs",
+      "source": "paired_1330_calibration (simulated Aqua MODIS and NOAA-20 VIIRS cluster pairs)",
+      "inputs": {
+        "raw_rmse_dex": 0.1203,
+        "harmonized_rmse_dex": 0.0894,
+        "n_pairs": 96
+      }
     },
     {
       "gate_id": "G4_SPATIOTEMPORAL_ASSIMILATION",
       "title": "Terrain-Coupled State-Space vs Single-Epoch Inversion",
-      "status": "PASSED",
-      "metric": "cloud_holdout_mae_reduction = -31.8%"
+      "kind": "design_target",
+      "status": "NOT_EVALUATED",
+      "criterion": "lower cloud-holdout MAE than a single-epoch inversion",
+      "metric": "design target, not computed by this build",
+      "source": "none yet",
+      "inputs": {}
     },
     {
       "gate_id": "G5_CONFORMAL_COVERAGE",
       "title": "90% Epistemic Interval Calibration [85%, 95%]",
-      "status": "PASSED",
-      "metric": "empirical_coverage = 90.6%"
+      "kind": "computed",
+      "criterion": "empirical coverage within [85%, 95%]",
+      "source": "reconstruct run metrics empirical_90_coverage_pct (split conformal, spatial folds)",
+      "status": "NOT_EVALUATED",
+      "metric": "evaluated per reconstruct run (GET /api/sensor-model?run_id=...)",
+      "inputs": {}
     }
   ]
 }

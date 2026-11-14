@@ -1,14 +1,14 @@
 {
   "schema_version": "1.0.0",
-  "model_version": "0.9.0-preevent-cleanroom",
-  "provenance_note": "Analytical / Physics-Informed Pre-Event Simulation · Zero Downloaded NASA FIRMS Rows",
+  "model_version": "0.9.0",
+  "provenance_note": "Analytical, physics-informed simulation. No downloaded NASA FIRMS rows",
   "data_provenance_distinction": {
     "terrain_elevation": "Real downloaded DEM raster loaded from website/public/generated/terrain/ca_dem_f32.bin",
-    "fire_activity_and_hotspots": "Modeled physics-informed spatiotemporal fire-activity reconstruction and clean-room MODIS/VIIRS forward-operator simulation. Zero NASA FIRMS rows downloaded.",
+    "fire_activity_and_hotspots": "Modeled physics-informed spatiotemporal fire-activity reconstruction and MODIS/VIIRS forward-operator simulation. Zero NASA FIRMS rows downloaded.",
     "downloaded_firms_rows": 0
   },
   "terrain_source": "real_downloaded_dem_ca_dem_f32",
-  "dem_path_used": "/Users/glendonchin/dev/Technology/isogon-test/website/public/generated/terrain/ca_dem_f32.bin",
+  "dem_path_used": "website/public/generated/terrain/ca_dem_f32.bin",
   "grid": {
     "west": -121.6,
     "south": 39.75,
@@ -33,7 +33,7 @@
       4
     ],
     "byte_length": 6291456,
-    "sha256": "ab29bd1772d082c988ae5035e761f859a982b59e62c87f9227190982d5619bcb",
+    "sha256": "a0b866114f8e67bf41c3011c54865c18126a2b3babb8648b44be92af01e2d7d1",
     "epoch_cadence_hours": 12,
     "channels": [
       {
@@ -84,9 +84,9 @@
   },
   "artifacts": {
     "reconstruction_u8_bytes": 6291456,
-    "observer_passes_bytes": 129552,
-    "calendar_2000_2026_bytes": 139562,
-    "sensor_model_diagnostics_bytes": 109604
+    "observer_passes_bytes": 126047,
+    "calendar_2000_2026_bytes": 139526,
+    "sensor_model_diagnostics_bytes": 110762
   },
   "verification": {
     "tensor_shape": [
@@ -97,14 +97,14 @@
     ],
     "tensor_bytes": 6291456,
     "terrain_source": "real_downloaded_dem_ca_dem_f32",
-    "total_footprints_24_frames": 2396,
-    "frame_3_modis_gap_mean_sigma": 19.527,
+    "total_footprints_24_frames": 2310,
+    "frame_3_modis_gap_mean_sigma": 19.525,
     "frame_4_clear_coobs_mean_sigma": 0.982,
-    "frame_8_cloudy_mean_sigma": 9.985,
+    "frame_8_cloudy_mean_sigma": 9.98,
     "frame_10_clear_coobs_mean_sigma": 1.115,
     "frame_12_footprint_count": 126,
     "calendar_records": 324,
     "viirs_to_modis_step_ratio": 3.81,
-    "compute_seconds": 1.699
+    "compute_seconds": 3.982
   }
 }
