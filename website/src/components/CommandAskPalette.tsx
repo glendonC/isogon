@@ -10,6 +10,7 @@ import {
 } from '../content/theaters';
 import type { DynamicRegionRun, PipelineStageRecord } from '../stage/types';
 import { Locator } from '../ui/Locator';
+import { beforeSharpSatellite, isRealRun } from '../content/realRuns';
 import { plainText } from '../ui/plainText';
 import { useDialogFocus } from '../ui/useDialogFocus';
 
@@ -385,28 +386,34 @@ export function CommandAskPalette({
             )}
 
             <div className="iso-finder__options" role="group" aria-label="Validation">
-              <button
-                type="button"
-                className="iso-check"
-                data-active={holdoutViirs ? 'true' : 'false'}
-                aria-pressed={holdoutViirs}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={onToggleHoldoutViirs}
-              >
-                <span className="iso-check__box" aria-hidden="true" />
-                <span>Blind test, hide VIIRS</span>
-              </button>
-              <button
-                type="button"
-                className="iso-check"
-                data-active={cloudOverride !== null ? 'true' : 'false'}
-                aria-pressed={cloudOverride !== null}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={onToggleCloudOverride}
-              >
-                <span className="iso-check__box" aria-hidden="true" />
-                <span>55% cloud</span>
-              </button>
+              {/* Before 2012 no VIIRS flew, so there is nothing to hide. */}
+              {!beforeSharpSatellite(activeRun) && (
+                <button
+                  type="button"
+                  className="iso-check"
+                  data-active={holdoutViirs ? 'true' : 'false'}
+                  aria-pressed={holdoutViirs}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={onToggleHoldoutViirs}
+                >
+                  <span className="iso-check__box" aria-hidden="true" />
+                  <span>Blind test, hide VIIRS</span>
+                </button>
+              )}
+              {/* A synthetic cloud deck is a simulation setting: a real run keeps the clouds the satellites saw. */}
+              {!isRealRun(activeRun) && (
+                <button
+                  type="button"
+                  className="iso-check"
+                  data-active={cloudOverride !== null ? 'true' : 'false'}
+                  aria-pressed={cloudOverride !== null}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={onToggleCloudOverride}
+                >
+                  <span className="iso-check__box" aria-hidden="true" />
+                  <span>55% cloud</span>
+                </button>
+              )}
             </div>
           </aside>
         </div>

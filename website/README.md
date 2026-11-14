@@ -45,7 +45,7 @@ Without a backend the site still opens and the stage draws `plumas_ca` from the 
 | Test | `3` | Hide VIIRS, see the estimate from MODIS alone, reveal VIIRS and the score |
 | Look | `4` | Play one round of the next-look environment |
 
-Other keys: Enter takes the step's forward action, Space plays or pauses, the left and right arrows step through the passes, `V` hides or reveals VIIRS, `L` starts a round, `/` or Ctrl+K (Cmd+K) opens the search palette, `M` opens the sensor reading, `U` toggles the uncertainty layer, `H` hides the interface, `C` starts the camera tour, `N` goes to the next region, and Esc goes back.
+Other keys: Enter takes the step's forward action, Space plays or pauses, the left and right arrows step through the passes, `V` hides or reveals VIIRS, `L` starts a round, `/` or Ctrl+K (Cmd+K) opens the search palette, `M` opens the sensor reading, `U` toggles the uncertainty layer on a simulated run, `H` hides the interface, `C` starts the camera tour, `N` goes to the next region, and Esc goes back.
 
 A real run and a simulated run are kept apart. When the site asks for a real run and the answer is not one, it is refused, so modelled numbers are never shown as observations.
 

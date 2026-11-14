@@ -1032,7 +1032,8 @@ export function App() {
         } else if (lower === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           cycleNextTheaterSlew();
-        } else if (lower === 'u' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        } else if (lower === 'u' && !e.metaKey && !e.ctrlKey && !e.altKey && !isRealRun(activeRun)) {
+          // The stage draws the uncertainty layer on simulated runs only.
           e.preventDefault();
           setShowUncertainty((u) => !u);
         } else if (/^[1-4]$/.test(e.key)) {
@@ -1063,6 +1064,7 @@ export function App() {
     leaveRound,
     nextLook,
     startRound,
+    activeRun,
   ]);
 
   const isCustomRegion = Boolean(activeRun && !isKnownTheaterId(activeRun.region.id));
@@ -1179,7 +1181,10 @@ export function App() {
       <MenuGroup title="Show">
         <MenuItem label="Hide the interface" hint="H" active={cleanHud} onClick={() => setCleanHud((h) => !h)} />
         <MenuItem label="Cinema" hint="C" active={cinemaActive} onClick={() => setCinemaActive((c) => !c)} />
-        <MenuItem label="Uncertainty" hint="U" active={showUncertainty} onClick={() => setShowUncertainty((u) => !u)} />
+        {/* The stage draws the uncertainty layer and filters by fire power on simulated runs only. */}
+        {!runIsReal && (
+          <MenuItem label="Uncertainty" hint="U" active={showUncertainty} onClick={() => setShowUncertainty((u) => !u)} />
+        )}
       </MenuGroup>
       <MenuGroup title="View">
         {WORKSPACE_VIEWS.map((v) => (
@@ -1199,12 +1204,14 @@ export function App() {
             {OBSERVER_FILTERS.map((f) => (
               <MenuItem key={f.id} label={`Sensor: ${f.label}`} active={observerFilter === f.id} onClick={() => setObserverFilter(f.id)} />
             ))}
-            <VernierScrubber
-              label="Minimum fire power"
-              valueText={`${Math.round(sensitivityThreshold * 38)} MW`}
-              fraction={(sensitivityThreshold - 0.04) / 0.78}
-              onChangeFraction={(u) => setSensitivityThreshold(0.04 + u * 0.78)}
-            />
+            {!runIsReal && (
+              <VernierScrubber
+                label="Minimum fire power"
+                valueText={`${Math.round(sensitivityThreshold * 38)} MW`}
+                fraction={(sensitivityThreshold - 0.04) / 0.78}
+                onChangeFraction={(u) => setSensitivityThreshold(0.04 + u * 0.78)}
+              />
+            )}
           </>
         )}
       </MenuGroup>
@@ -1226,7 +1233,7 @@ export function App() {
         <p className="iso-menu__fact">
           Pipeline: {activeRun ? `${completedStages} of ${pipelineStageCount} stages, ${totalPipelineMs.toLocaleString()} ms` : 'pending'}
         </p>
-        {workspaceMode === 'observer' && liveTelemetry && (
+        {workspaceMode === 'observer' && liveTelemetry && !runIsReal && (
           <p className="iso-menu__fact">
             Footprints: {liveTelemetry.retainedFootprints} of {liveTelemetry.poolFootprints}, {liveTelemetry.observableFluxPct}% of flux
           </p>
