@@ -40,3 +40,4 @@ data/cache/
 
 # Private internal notes
 .private/
+.lead/
