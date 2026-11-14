@@ -1095,14 +1095,15 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
             if origin and not origin_allowed(origin):
                 self._send_json_obj(HTTPStatus.FORBIDDEN, {"error": "requests are accepted from local pages only"})
                 return
-            if route in ("/api/env/next_look/reset", "/api/env/next_look/step"):
+            if route in ("/api/env/next_look/reset", "/api/env/next_look/step", "/api/env/next_look/play"):
                 length = int(self.headers.get("Content-Length", "0"))
                 if length > 65_536:
                     self._send_json_obj(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "Request body too large"})
                     return
                 body = parse_request_json(self.rfile.read(length) if length > 0 else b"{}")
                 rounds = store.next_look
-                result = rounds.reset(body) if route.endswith("/reset") else rounds.step(body)
+                action = {"reset": rounds.reset, "step": rounds.step, "play": rounds.play}[route.rsplit("/", 1)[1]]
+                result = action(body)
                 self._send_json_obj(HTTPStatus.OK, result)
                 return
 
@@ -1254,6 +1255,13 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                     self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc)})
                     return
                 self._send_json_bytes(HTTPStatus.OK, body)
+                return
+
+            if route == "/api/env/next_look/players":
+                try:
+                    self._send_json_obj(HTTPStatus.OK, store.next_look.players())
+                except RoundNotFound as exc:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc)})
                 return
 
             if route == "/api/env/next_look/state":

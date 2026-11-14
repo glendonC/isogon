@@ -44,6 +44,8 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 | `POST /api/env/next_look/reset` | Start a next-look round |
 | `POST /api/env/next_look/step` | Decide one look of a round |
 | `GET /api/env/next_look/state` | A round's state |
+| `POST /api/env/next_look/play` | One reference player's play of an episode, step by step |
+| `GET /api/env/next_look/players` | The reference players a play can be asked for |
 
 ## `GET /api/health`
 
@@ -1063,6 +1065,43 @@ Answers with `round_id`, `episode`, `looks`, `score_start`, `decision` (the inde
 ```
 
 Errors: `400` without `round_id`; `404` for an unknown round.
+
+### `POST /api/env/next_look/play`
+
+One reference player's play of one episode, step by step, from `backend.env.play.play_steps`: at each scheduled look what the player knew per tile, the score it gave each tile, the tile it chose and why, what the look revealed, the reward and the score. Until `backend/env/play.py` is in the build the route answers `404` and says so.
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `region_id`, `episode` or `start`, `tiles`, `budget`, `seed` | as for reset | The episode, as a round would play it. |
+| `player` | string | Required. An id of `GET /api/env/next_look/players`; the constant tile is asked as `constant_<tile>`. |
+| `ceiling` | boolean | `true` to ask for a player that reads the hidden rows (the oracle). Without it the oracle is refused with `400`. |
+| `fields` | boolean | `true` adds the estimate on the 375 m grid at every step (about 36 kB a step). |
+| `round_id` | string | Optional. A person's round on the same episode that is not over gives `409`. |
+
+```json
+{
+  "play_id": "play-3f2a9c1b7d4e",
+  "data": "firms",
+  "source": {"play": "backend/env/play.py", "routes": "backend/server_next_look.py"},
+  "rule": "a round of its own: it holds the hidden rows its own looks revealed and scores computed against the hidden rows ...",
+  "episode": {"...": "as in reset's episode"},
+  "play": {"player": {"id": "least_sure", "label": "Least sure", "...": "..."}, "steps": [{"decision": 4, "chosen_tile": 6, "why": "the tile with the highest score", "...": "..."}], "score_start": 0.2566, "score_end": 0.3028, "gain": 0.0462, "computed_against_hidden_rows": ["score_start", "steps[].reward", "..."]},
+  "play_cache": {"from": "computed for this request", "computed_utc": "...", "compute_s": 3.2},
+  "known_limits": "...",
+  "protocol": {"...": "..."}
+}
+```
+
+Shortened; the shape of `play` is the model's (`backend/env/play.py`), with one step shown. Values from the model lane's example on a 2024 episode.
+
+- A play is a round of its own: it holds the hidden rows its own looks revealed and scores computed against the hidden rows (`play.computed_against_hidden_rows` names them). Ask for it apart from a person's round on the same episode, or after that round.
+- Plays are cached in memory and under `data/cache/next_look_reference/plays/`, keyed like the reference players plus the player, the seed, `ceiling` and `fields`. `play_cache.from` is `computed for this request` or `cache`.
+
+Errors: `400` for a bad field, a missing `player`, or the oracle without `ceiling: true`; `404` for an unknown player, region or episode, or when the play is not in the build; `409` while the given round on the same episode is not over.
+
+### `GET /api/env/next_look/players`
+
+The reference players a play can be asked for: `players` with `id`, `label`, `does` and `reads` (`nothing`, `the observation` or `the hidden rows`), read from `backend/env/play.py`. `404` while that module is not in the build.
 
 ## Values described from the code only
 

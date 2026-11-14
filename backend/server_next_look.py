@@ -4,6 +4,16 @@
   POST /api/env/next_look/reset   {region_id, episode | start, tiles, budget, seed}
   POST /api/env/next_look/step    {round_id, decision, action}
   GET  /api/env/next_look/state?round_id=<id>
+  POST /api/env/next_look/play    {region_id, episode | start, tiles, budget, seed, player, ceiling, fields, round_id}
+  GET  /api/env/next_look/players
+
+A play is one reference player's play of one episode, step by step (`backend/env/play.py`): what it knew at each
+look, how it scored the tiles, what it chose and why, what the look revealed and the score. It is a round of its
+own: it holds the hidden rows its own looks revealed and scores computed against the hidden rows, so it is asked for
+apart from a person's round, or after it; given the `round_id` of a person's round on the same episode that is not
+over, the route answers 409. The oracle reads the hidden rows and is served only when asked as the ceiling
+(`ceiling: true`). Plays are cached like the reference players, under the same kind of key plus the player, the
+seed and the options.
 
 A round is one episode of the environment. The MODIS detections of a real run are shown and VIIRS is hidden; at each
 scheduled VIIRS look a person may spend one unit of a budget to reveal the VIIRS detections of that look inside one
@@ -53,6 +63,7 @@ import numpy as np
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
 REFERENCE_CACHE_DIR: Path = REPO_ROOT / "data" / "cache" / "next_look_reference"
 REFERENCE_CACHE_VERSION: int = 1        # raised when the shape of a cached result changes
+PLAY_CACHE_VERSION: int = 1
 REFERENCE_MEMORY: int = 64              # results kept in memory, the least recently used dropped first
 # Every file whose content can change the reference players' results (see the module docstring).
 REFERENCE_INPUTS: tuple[Path, ...] = (
@@ -330,6 +341,8 @@ class NextLookRounds:
         self.reference_cache_dir: Path | None = Path(reference_cache_dir) if reference_cache_dir is not None else None
         self.reference_inputs = tuple(reference_inputs)
         self.reference_computations = 0      # how many times the reference players were played (for the tests)
+        self.play_computations = 0
+        self._plays: dict[str, dict[str, Any]] = {}
         self._rounds: dict[str, Round] = {}
         self._lock = threading.Lock()
         self._catalogues: dict[tuple[str, int], list[Any]] = {}
@@ -504,23 +517,33 @@ class NextLookRounds:
         }
         return hashlib.sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()
 
-    def _cache_path(self, key: str) -> Path | None:
-        return self.reference_cache_dir / f"{key}.json" if self.reference_cache_dir is not None else None
+    def play_key(self, ep: Any, terrain: np.ndarray | None, tiles: tuple[int, int], budget: int, player: str,
+                 seed: int, ceiling: bool, fields: bool) -> str:
+        """The cache key of one player's play: what decides the episode's environment, and the play's own options."""
+        parts = {"kind": "play", "version": PLAY_CACHE_VERSION, "episode": self.reference_key(ep, terrain, tiles, budget),
+                 "player": player, "seed": int(seed), "ceiling": bool(ceiling), "fields": bool(fields)}
+        return hashlib.sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()
 
-    def _read_cached(self, key: str) -> dict[str, Any] | None:
-        path = self._cache_path(key)
+    def _cache_path(self, key: str, sub: str = "") -> Path | None:
+        if self.reference_cache_dir is None:
+            return None
+        return (self.reference_cache_dir / sub if sub else self.reference_cache_dir) / f"{key}.json"
+
+    def _read_cached(self, key: str, sub: str = "") -> dict[str, Any] | None:
+        path = self._cache_path(key, sub)
         if path is None or not path.is_file():
             return None
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
-        if not isinstance(doc, dict) or doc.get("key") != key or not isinstance(doc.get("reference"), dict):
+        body = "play" if sub == "plays" else "reference"
+        if not isinstance(doc, dict) or doc.get("key") != key or not isinstance(doc.get(body), dict):
             return None
         return doc
 
-    def _write_cached(self, doc: dict[str, Any]) -> None:
-        path = self._cache_path(doc["key"])
+    def _write_cached(self, doc: dict[str, Any], sub: str = "") -> None:
+        path = self._cache_path(doc["key"], sub)
         if path is None:
             return
         try:
@@ -808,6 +831,94 @@ class NextLookRounds:
             "rows": rows,
             "pixels": len(rows),
         }
+
+
+    # ---- one player's play, step by step --------------------------------------------------------------------------
+
+    def players(self) -> dict[str, Any]:
+        play = _play_module()
+        out = [{"id": pid, "label": v[0], "does": v[1], "reads": v[2]} for pid, v in getattr(play, "PLAYERS", {}).items()]
+        return {"players": out,
+                "ids": ("an id as listed; the constant tile is asked as constant_<tile>, a tile index; the oracle "
+                        "only with ceiling: true"),
+                "route": "POST /api/env/next_look/play"}
+
+    def play(self, body: dict[str, Any]) -> dict[str, Any]:
+        region_id = _text(body, "region_id")
+        if not region_id:
+            raise ValueError("region_id is required")
+        episode_key, start = _text(body, "episode"), _text(body, "start")
+        if (episode_key is None) == (start is None):
+            raise ValueError("give either episode (a catalogue key) or start (a UTC date), not both")
+        player = _text(body, "player")
+        if not player:
+            raise ValueError("player is required (GET /api/env/next_look/players lists them)")
+        tiles = _tiles(body.get("tiles"))
+        budget = int(_whole(body, "budget", DEFAULT_BUDGET, 0, MAX_BUDGET))
+        seed = int(_whole(body, "seed", 0, 0, 2**31 - 1))
+        flags = {}
+        for k in ("ceiling", "fields"):
+            v = body.get(k, False)
+            if not isinstance(v, bool):
+                raise ValueError(f"{k} must be true or false")
+            flags[k] = v
+        if player == "oracle" and not flags["ceiling"]:
+            raise ValueError("the oracle reads the hidden rows; ask for it with ceiling: true, after the round")
+        play_mod = _play_module()
+        ep, origin = self._episode(region_id, episode_key, start)
+        rid = _text(body, "round_id")
+        if rid is not None:
+            with self._lock:
+                rnd = self._rounds.get(rid)
+            if rnd is not None and not rnd.done and rnd.episode.key == ep.key:
+                raise RoundConflict("that round on the same episode is not over; a play holds hidden rows its looks "
+                                    "revealed, so it is served after the round")
+        terrain = self._terrain(ep)
+        key = self.play_key(ep, terrain, tiles, budget, player, seed, flags["ceiling"], flags["fields"])
+        origin_cache = "cache"
+        with self._lock:
+            doc = self._plays.get(key)
+        if doc is None:
+            doc = self._read_cached(key, sub="plays")
+        if doc is None:
+            t0 = time.perf_counter()
+            env = self._make_env(ep, tiles, budget, terrain)
+            try:
+                agent = play_mod.reference_player(player, seed=seed)
+            except LookupError as exc:
+                raise RoundNotFound(str(exc)) from exc
+            with self._lock:
+                self.play_computations += 1
+            played = play_mod.play_steps(env, agent, seed=seed, ceiling=flags["ceiling"], fields=flags["fields"])
+            doc = {"key": key, "version": PLAY_CACHE_VERSION, "episode": self._episode_json(ep, env, origin, tiles, budget),
+                   "play": played, "computed_utc": _iso(time.time()), "compute_s": round(time.perf_counter() - t0, 2)}
+            self._write_cached(doc, sub="plays")
+            origin_cache = "computed for this request"
+        with self._lock:
+            self._plays[key] = doc
+            while len(self._plays) > REFERENCE_MEMORY:
+                self._plays.pop(next(iter(self._plays)))
+        return {
+            "play_id": "play-" + key[:12],
+            "data": self.source_label,
+            "source": {"play": "backend/env/play.py", "routes": "backend/server_next_look.py"},
+            "rule": ("a round of its own: it holds the hidden rows its own looks revealed and scores computed against "
+                     "the hidden rows (play.computed_against_hidden_rows); ask for it apart from a person's round on "
+                     "the same episode, or after it"),
+            "episode": doc["episode"],
+            "play": doc["play"],
+            "play_cache": {"from": origin_cache, "computed_utc": doc.get("computed_utc"), "compute_s": doc.get("compute_s")},
+            "known_limits": _known_limits(),
+            "protocol": _protocol(),
+        }
+
+
+def _play_module() -> Any:
+    try:
+        from backend.env import play
+    except ImportError as exc:
+        raise RoundNotFound("the step by step play (backend/env/play.py) is not in this build") from exc
+    return play
 
 
 # ---- the tracked results and texts the page shows beside a round -----------------------------------------------------
