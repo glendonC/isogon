@@ -1,20 +1,158 @@
-export type WorkspaceMode = 'earth' | 'world' | 'reconstruction' | 'observer';
+export type WorkspaceMode = 'cutaway' | 'reconstruction' | 'observer' | 'world' | 'earth';
 
 export type ObserverFilter = 'all' | 'modis' | 'viirs';
 
 export type SensorFamily = 'modis' | 'viirs';
 
-export type CameraPresetId = 'overview' | 'canyon' | 'almanor' | 'nadir';
+export type CameraPresetId = 'overview' | 'canyon' | 'ridge' | 'almanor' | 'nadir';
 
-export interface WorldTwinCanvasProps {
-  mode: WorkspaceMode;
-  onSelectRegion?: () => void;
-  timeProgress?: number;
-  observerFilter?: ObserverFilter;
-  showUncertainty?: boolean;
-  sensitivityThreshold?: number;
-  landingPreview?: boolean;
-  className?: string;
+export type TerrainFindingKind = 'front' | 'subpixel' | 'uncertainty';
+
+export interface TerrainFindingCallout {
+  id: string;
+  kind: TerrainFindingKind;
+  title: string;
+  subtitle: string;
+  valueText: string;
+  lat: number;
+  lon: number;
+  elevM: number;
+}
+
+export interface PipelineStageRecord {
+  stage_id: string;
+  label: string;
+  model_name: string;
+  duration_ms: number;
+  status: 'pending' | 'running' | 'completed';
+  detail: string;
+}
+
+export interface RunMetrics {
+  holdout_viirs: boolean;
+  cloud_override: number | null;
+  total_reconstructed_frp_peak_mw: number;
+  raw_modis_rmse_mw_km2: number;
+  reconstructed_rmse_mw_km2: number;
+  rmse_reduction_pct: number;
+  empirical_90_coverage_pct: number;
+  conformal_q90_radius_mw_km2: number;
+  subpixel_viirs_fires_recovered_pct: number;
+  step_2012_raw_ratio: number;
+  step_2012_harmonized_ratio: number;
+}
+
+export interface EpochSummary {
+  frame: number;
+  timestamp_utc: string;
+  lst_hr: number;
+  regime: string;
+  primary_sensor: string;
+  cloud_fraction: number;
+  reconstructed_total_mw: number;
+  raw_modis_total_mw: number;
+  raw_viirs_total_mw: number;
+  mean_sigma_mw_km2: number;
+}
+
+export interface DynamicRegionInfo {
+  id: string;
+  name: string;
+  subtitle: string;
+  biome: string;
+  bbox: [number, number, number, number]; // [west, south, east, north]
+  center_lat: number;
+  center_lon: number;
+  width_km: number;
+  depth_km: number;
+  min_elev_m: number;
+  max_elev_m: number;
+  mean_elev_m: number;
+  terrain_source: string;
+}
+
+export interface DynamicRegionRun {
+  run_id: string;
+  provenance: string;
+  region: DynamicRegionInfo;
+  assets: {
+    dem_f32_url: string;
+    dem_hires_f32_url?: string;
+    satellite_url: string;
+    reconstruction_u8_url: string;
+    export_geojson_url: string;
+    export_csv_url: string;
+    /** Terrain pack v1 manifest. Validated by the stage before use. */
+    terrain_pack?: unknown;
+  };
+  pipeline_stages: PipelineStageRecord[];
+  metrics: RunMetrics;
+  epoch_summaries: EpochSummary[];
+  observer_passes?: unknown;
+  /** How the field bytes map to MW/km2 (real runs). Read through parseFieldIntensityScale. */
+  encoding?: unknown;
+}
+
+/**
+ * How a field byte (v = byte / 255) maps to fire radiative power density.
+ *   linear   mw = v * maxMwKm2                                   (simulated runs, 0 to 80 MW/km2)
+ *   log10    byte 0 is no fire; byte 1 to 255 is
+ *            minMwKm2 * (maxMwKm2 / minMwKm2) ** ((byte - 1) / 254)   (real runs)
+ */
+export interface FieldIntensityScale {
+  kind: 'linear' | 'log10';
+  maxMwKm2: number;
+  minMwKm2: number;
+  /** Legend ticks named by the payload: position on the scale (byte / 255) and its value. */
+  ticks?: Array<{ at: number; mwPerKm2: number }>;
+}
+
+export const DEFAULT_FIELD_INTENSITY_SCALE: FieldIntensityScale = { kind: 'linear', maxMwKm2: 80, minMwKm2: 0 };
+
+/**
+ * Reads the intensity scale of a run from its `encoding` block. A block with `scale: "log10"`,
+ * `min_mw_km2` and `max_mw_km2` is the logarithmic byte scale; its `legend_ticks` (`mw_km2`,
+ * `byte`) are kept for the legend. Any other block is read as linear with `z_hat_max_mw_km2` at
+ * the top. Without a block the simulated runs' scale applies: linear, 0 to 80 MW/km2.
+ */
+export function parseFieldIntensityScale(raw: unknown): FieldIntensityScale {
+  if (!isRecord(raw)) return DEFAULT_FIELD_INTENSITY_SCALE;
+  const min = Number(raw.min_mw_km2);
+  const max = Number(raw.max_mw_km2);
+  if (raw.scale === 'log10' && Number.isFinite(min) && Number.isFinite(max) && min > 0 && max > min) {
+    const ticks: Array<{ at: number; mwPerKm2: number }> = [];
+    if (Array.isArray(raw.legend_ticks)) {
+      for (const item of raw.legend_ticks) {
+        if (!isRecord(item)) continue;
+        const mw = Number(item.mw_km2);
+        const byte = Number(item.byte);
+        if (Number.isFinite(mw) && Number.isFinite(byte)) ticks.push({ at: byte / 255, mwPerKm2: mw });
+      }
+    }
+    return { kind: 'log10', maxMwKm2: max, minMwKm2: min, ticks: ticks.length > 0 ? ticks : undefined };
+  }
+  const top = Number(raw.z_hat_max_mw_km2);
+  return {
+    kind: 'linear',
+    maxMwKm2: Number.isFinite(top) && top > 0 ? top : DEFAULT_FIELD_INTENSITY_SCALE.maxMwKm2,
+    minMwKm2: 0,
+  };
+}
+
+/** Fire radiative power density (MW/km2) at a position v (0..1, byte / 255) of the intensity scale. */
+export function fieldScaleValue(scale: FieldIntensityScale, v: number): number {
+  const c = Math.min(1, Math.max(0, v));
+  if (scale.kind === 'linear') return c * scale.maxMwKm2;
+  const byte = c * 255;
+  return byte < 0.5 ? 0 : scale.minMwKm2 * (scale.maxMwKm2 / scale.minMwKm2) ** ((byte - 1) / 254);
+}
+
+/** Position (0..1, byte / 255) of a fire radiative power density on the intensity scale. */
+export function fieldScalePosition(scale: FieldIntensityScale, mwPerKm2: number): number {
+  if (scale.kind === 'linear') return Math.min(1, Math.max(0, mwPerKm2 / scale.maxMwKm2));
+  if (mwPerKm2 < scale.minMwKm2) return 0;
+  const byte = 1 + (254 * Math.log(mwPerKm2 / scale.minMwKm2)) / Math.log(scale.maxMwKm2 / scale.minMwKm2);
+  return Math.min(1, byte / 255);
 }
 
 export interface SensorDiagnosticModalProps {
@@ -61,10 +199,38 @@ export interface NormalizedSatellitePass {
   skyPosition: [number, number, number];
   cloudFraction: number;
   footprints: NormalizedFootprint[];
+  /**
+   * Equator-crossing node of this pass, from the backend's platform and day or night rule. Absent
+   * in the procedural fallback and in a payload that carries no `orbit_node`.
+   */
+  orbitNode?: 'ascending' | 'descending';
+  /**
+   * Real runs with a hold-out: this pass's detections were kept from the estimate and are in the
+   * payload only to score it (`epistemic_regime` of the frame ends in `held_out`). The stage draws
+   * nothing of a hidden pass.
+   */
+  hidden?: boolean;
+  /**
+   * A pass laid onto the run after scoring: the hidden instrument of a blind run once it is
+   * revealed (`revealed_after_scoring`), or what a look of the next-look round uncovered
+   * (`revealed_by_a_look`). The estimate was made without it, so the stage draws it as the
+   * instrument's pixels in outline and never as the warm light of an assimilated detection.
+   */
+  revealed?: boolean;
+  /** Revealed by a look, before the blind run itself is revealed: it makes no smoke yet. */
+  revealedByLook?: boolean;
+  /** Real runs: whether the overpass was by day, and when (UTC, ISO 8601). */
+  isDay?: boolean;
+  timeUtc?: string;
 }
 
 export interface NormalizedObserverDataset {
   source: 'fetched' | 'procedural_fallback';
+  /**
+   * 'firms' when the run is built from real NASA FIRMS detections. Each footprint
+   * is then one real detection with its own pixel size. Absent for simulated runs.
+   */
+  dataSource?: 'firms';
   provenanceNote: string;
   frames: NormalizedSatellitePass[][];
 }
@@ -95,11 +261,20 @@ export interface PairedScatterSample {
   harmonizedLogRatio: number;
 }
 
+/** Status of a gate nobody evaluated: the backend's own word for it. */
+export const GATE_NOT_EVALUATED = 'NOT_EVALUATED';
+
 export interface BenchmarkGateRecord {
   gateId: string;
   title: string;
+  /**
+   * As computed by the backend, or GATE_NOT_EVALUATED. Nothing defaults to passed: a gate carries
+   * a result only when the backend marks it `computed` and sends a status.
+   */
   status: string;
   metric: string;
+  /** `computed`: metric and status derived in code. `design_target`: a target, never a result. */
+  kind?: 'computed' | 'design_target';
 }
 
 export interface NormalizedSensorDiagnostics {
@@ -177,9 +352,23 @@ export function computeViirsFootprintKm(scanAngleDeg: number): {
   return { acrossKm, alongKm, areaKm2, minFrpMw };
 }
 
-export function lonLatToWorldXZ(lon: number, lat: number): [number, number] {
-  const u = (lon - CA_DOMAIN.lonMin) / (CA_DOMAIN.lonMax - CA_DOMAIN.lonMin);
-  const v = (lat - CA_DOMAIN.latMin) / (CA_DOMAIN.latMax - CA_DOMAIN.latMin);
+export const DEFAULT_DOMAIN_BBOX: [number, number, number, number] = [
+  CA_DOMAIN.lonMin,
+  CA_DOMAIN.latMin,
+  CA_DOMAIN.lonMax,
+  CA_DOMAIN.latMax,
+];
+
+export function lonLatToWorldXZ(
+  lon: number,
+  lat: number,
+  domainBbox: [number, number, number, number] = DEFAULT_DOMAIN_BBOX,
+): [number, number] {
+  const [lonMin, latMin, lonMax, latMax] = domainBbox;
+  const lonSpan = Math.max(1e-5, lonMax - lonMin);
+  const latSpan = Math.max(1e-5, latMax - latMin);
+  const u = (lon - lonMin) / lonSpan;
+  const v = (lat - latMin) / latSpan;
   const x = (u - 0.5) * CA_DOMAIN.meshWidth;
   // v = 1 (North, latMax) maps to z = -meshDepth / 2; v = 0 (South, latMin) maps to z = +meshDepth / 2
   const z = (0.5 - v) * CA_DOMAIN.meshDepth;
@@ -231,11 +420,14 @@ function computeSkyPositionFromSubsat(
   azimuthDeg: number,
   family: SensorFamily,
   passOrdinal: number,
+  domainBbox: [number, number, number, number] = DEFAULT_DOMAIN_BBOX,
 ): [number, number, number] {
   const baseY = family === 'viirs' ? 3.85 : 3.35;
+  const centerLon = (domainBbox[0] + domainBbox[2]) * 0.5;
+  const centerLat = (domainBbox[1] + domainBbox[3]) * 0.5;
   if (subsatLon !== null && subsatLat !== null && Number.isFinite(subsatLon) && Number.isFinite(subsatLat)) {
-    const dLon = (subsatLon - CA_DOMAIN.centerLon) * Math.cos((CA_DOMAIN.centerLat * Math.PI) / 180);
-    const dLat = subsatLat - CA_DOMAIN.centerLat;
+    const dLon = (subsatLon - centerLon) * Math.max(0.2, Math.cos((centerLat * Math.PI) / 180));
+    const dLat = subsatLat - centerLat;
     const norm = Math.hypot(dLon, dLat);
     if (norm > 1e-3) {
       const reach = Math.min(3.8, Math.max(0.45, (Math.abs(scanAngleDeg) / 55.0) * 3.6));
@@ -256,10 +448,17 @@ function computeSkyPositionFromSubsat(
 
 /**
  * Generates deterministic, physically grounded 24-epoch overpass geometry & footprints
- * over Plumas National Forest / Feather River Canyon as a seamless fallback while static
- * assets load, clearly marked as modeled reconstruction geometry.
+ * over any active regional bounding box [west, south, east, north] as a seamless fallback while static
+ * or dynamic run assets load, clearly marked as modeled reconstruction geometry.
  */
-export function createFallbackObserverDataset(): NormalizedObserverDataset {
+export function createFallbackObserverDataset(
+  domainBbox: [number, number, number, number] = DEFAULT_DOMAIN_BBOX,
+): NormalizedObserverDataset {
+  const [lonMin, latMin, lonMax, latMax] = domainBbox;
+  const lonSpan = Math.max(0.08, lonMax - lonMin);
+  const latSpan = Math.max(0.08, latMax - latMin);
+  const padLon = lonSpan * 0.04;
+  const padLat = latSpan * 0.05;
   const frames: NormalizedSatellitePass[][] = Array.from({ length: CA_DOMAIN.frameCount }, () => []);
 
   for (let f = 0; f < CA_DOMAIN.frameCount; f++) {
@@ -268,8 +467,8 @@ export function createFallbackObserverDataset(): NormalizedObserverDataset {
     const cloudFrac = f === 7 || f === 8 ? 0.65 : 0.08 + 0.05 * Math.sin(f * 0.9);
     const isSwathEdge = f === 6 || f === 13 || f === 18;
 
-    const frontLon = -121.4 + progress * 0.34;
-    const frontLat = 39.88 + progress * 0.28;
+    const frontLon = lonMin + lonSpan * (0.235 + progress * 0.4);
+    const frontLat = latMin + latSpan * (0.217 + progress * 0.467);
 
     const passSpecs: Array<{
       sensorLabel: string;
@@ -311,11 +510,11 @@ export function createFallbackObserverDataset(): NormalizedObserverDataset {
 
       for (let i = 0; i < count; i++) {
         const angle = (i / count) * Math.PI * 2 + f * 0.19 + pIdx * 0.7;
-        const ring = i % 3 === 0 ? 0.035 : i % 3 === 1 ? 0.082 : 0.13;
-        const dLon = Math.cos(angle) * ring * 1.22 + (i / count - 0.5) * 0.12;
-        const dLat = Math.sin(angle) * ring * 0.72 + (i / count - 0.5) * 0.09;
-        const lon = Math.min(CA_DOMAIN.lonMax - 0.03, Math.max(CA_DOMAIN.lonMin + 0.03, frontLon + dLon));
-        const lat = Math.min(CA_DOMAIN.latMax - 0.03, Math.max(CA_DOMAIN.latMin + 0.03, frontLat + dLat));
+        const ring = i % 3 === 0 ? 0.042 : i % 3 === 1 ? 0.096 : 0.153;
+        const dLon = (Math.cos(angle) * ring * 1.22 + (i / count - 0.5) * 0.14) * lonSpan;
+        const dLat = (Math.sin(angle) * ring * 1.2 + (i / count - 0.5) * 0.15) * latSpan;
+        const lon = Math.min(lonMax - padLon, Math.max(lonMin + padLon, frontLon + dLon));
+        const lat = Math.min(latMax - padLat, Math.max(latMin + padLat, frontLat + dLat));
 
         const rawFrp =
           i < count * 0.42
@@ -353,6 +552,7 @@ export function createFallbackObserverDataset(): NormalizedObserverDataset {
           spec.azimuthDeg,
           spec.family,
           pIdx + f,
+          domainBbox,
         ),
         cloudFraction: cloudFrac,
         footprints,
@@ -465,10 +665,13 @@ function parseFootprintItems(
 }
 
 /**
- * Schema-adaptive normalizer for `/generated/fields/observer_passes.json`.
+ * Schema-adaptive normalizer for `/generated/fields/observer_passes.json` and dynamic region runs.
  */
-export function normalizeObserverDataset(raw: unknown): NormalizedObserverDataset {
-  const fallback = createFallbackObserverDataset();
+export function normalizeObserverDataset(
+  raw: unknown,
+  domainBbox: [number, number, number, number] = DEFAULT_DOMAIN_BBOX,
+): NormalizedObserverDataset {
+  const fallback = createFallbackObserverDataset(domainBbox);
   if (!isRecord(raw) && !Array.isArray(raw)) return fallback;
 
   const sensorCodeMap: Record<number, string> = {
@@ -540,6 +743,7 @@ export function normalizeObserverDataset(raw: unknown): NormalizedObserverDatase
         azimuthDeg,
         family,
         pIdx + fIdx,
+        domainBbox,
       );
 
       // Match footprints either from pass-level footprints or frame-level pooled footprints by sensor_code / family
@@ -558,6 +762,7 @@ export function normalizeObserverDataset(raw: unknown): NormalizedObserverDatase
               pCode !== null && fp.sensorCode !== null ? fp.sensorCode === pCode : fp.family === family,
             );
 
+      const nodeRaw = readStr(pItem, ['orbit_node', 'orbitNode'], '');
       frames[fIdx].push({
         id: `pass-${fIdx}-${pIdx}-${sensorLabel}`,
         frameIndex: fIdx,
@@ -569,6 +774,15 @@ export function normalizeObserverDataset(raw: unknown): NormalizedObserverDatase
         skyPosition,
         cloudFraction: frameCloud,
         footprints: matched,
+        orbitNode: nodeRaw === 'ascending' || nodeRaw === 'descending' ? nodeRaw : undefined,
+        hidden: readStr(frameEntry, ['epistemic_regime'], '').includes('held_out') || undefined,
+        revealed:
+          (pItem as Record<string, unknown>).revealed_after_scoring === true ||
+          (pItem as Record<string, unknown>).revealed_by_a_look === true ||
+          undefined,
+        revealedByLook: (pItem as Record<string, unknown>).revealed_by_a_look === true || undefined,
+        isDay: typeof frameEntry.is_day === 'boolean' ? frameEntry.is_day : undefined,
+        timeUtc: readStr(frameEntry, ['timestamp_utc'], '') || undefined,
       });
       parsedPassCount += 1;
     });
@@ -588,6 +802,7 @@ export function normalizeObserverDataset(raw: unknown): NormalizedObserverDatase
 
   return {
     source: 'fetched',
+    dataSource: isRecord(raw) && raw.source === 'firms' ? 'firms' : undefined,
     provenanceNote,
     frames,
   };
@@ -621,32 +836,14 @@ export function createAnalyticalSensorDiagnostics(
     { scanAngleDeg: 60.0, rawResidual: -0.21, harmonizedResidual: -0.024, ci90HalfWidth: 0.105, pairCount: 15 },
   ];
 
-  const benchmarkGates: BenchmarkGateRecord[] = [
-    {
-      gateId: 'G1_2012_CONTINUITY',
-      title: '2012 S-NPP Step-Jump Removal',
-      status: 'PASSED',
-      metric: 'step_ratio = 1.02 (raw = 3.81x)',
-    },
-    {
-      gateId: 'G2_BOWTIE_FLUX_CONSERVATION',
-      title: 'Sum-Before-Threshold Flux Conservation',
-      status: 'PASSED',
-      metric: 'cluster_flux_error = 1.4%',
-    },
-    {
-      gateId: 'G5_CONFORMAL_COVERAGE',
-      title: '90% Epistemic Interval Calibration',
-      status: 'PASSED',
-      metric: 'empirical_coverage = 90.6%',
-    },
-  ];
+  // No gates without the backend: a gate is a computed result, and this baseline computes none
+  const benchmarkGates: BenchmarkGateRecord[] = [];
 
   return {
     source,
-    referenceLabel: 'VIIRS_NADIR_EQUIV · 13:30 LST Paired Aqua / NOAA-20 Benchmark',
+    referenceLabel: 'VIIRS_NADIR_EQUIV, 13:30 LST Paired Aqua / NOAA-20 Benchmark',
     provenanceNote:
-      'Analytical Clean-Room Sensor Forward Operator (Sofiev & Kouznetsov 2026 GMD; Wolfe et al. 2013) · Zero Downloaded NASA FIRMS Rows.',
+      'Analytical sensor forward operator (Sofiev & Kouznetsov 2026 GMD; Wolfe et al. 2013). No downloaded NASA FIRMS rows.',
     curves,
     residuals,
     pairedSamples: [],
@@ -801,11 +998,15 @@ export function normalizeSensorDiagnostics(
   if (Array.isArray(raw.benchmark_gates)) {
     for (const g of raw.benchmark_gates) {
       if (!isRecord(g)) continue;
+      const kindRaw = readStr(g, ['kind'], '');
+      const kind = kindRaw === 'computed' || kindRaw === 'design_target' ? kindRaw : undefined;
       benchmarkGates.push({
         gateId: readStr(g, ['gate_id', 'id'], 'GATE'),
         title: readStr(g, ['title', 'name'], 'Benchmark Gate'),
-        status: readStr(g, ['status'], 'PASSED'),
+        // A missing status means not evaluated, and only a computed gate carries a result
+        status: kind === 'computed' ? readStr(g, ['status'], GATE_NOT_EVALUATED) : GATE_NOT_EVALUATED,
         metric: readStr(g, ['metric', 'summary'], ''),
+        kind,
       });
     }
   }

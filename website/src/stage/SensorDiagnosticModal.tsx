@@ -3,1141 +3,624 @@ import {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { useDialogFocus } from '../ui/useDialogFocus';
+import type { SensorModelPayload } from '../ui/useSensorModel';
+import type { OverlapEvidence } from '../content/calendar';
 import {
   createAnalyticalSensorDiagnostics,
   normalizeSensorDiagnostics,
   type NormalizedSensorDiagnostics,
+  type SensorCurveSample,
   type SensorDiagnosticModalProps,
 } from './types';
 
 export type { SensorDiagnosticModalProps } from './types';
 
-const MODAL_STYLES = `
-.isogon-diag-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  padding: 16px;
-  background: rgba(6, 9, 12, 0.66);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  display: flex;
-  justify-content: flex-end;
-  align-items: stretch;
-  animation: isogonDiagFade 160ms ease;
-}
-@keyframes isogonDiagFade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-.isogon-diag-drawer {
-  --diag-r: 6px;
-  width: min(700px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
-  border-radius: var(--diag-r);
-  background: rgba(9, 12, 18, 0.94);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(245, 246, 250, 0.18);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.54);
-  color: #F5F6FA;
-  padding: 22px 26px 28px;
-  overflow-y: auto;
-  user-select: text;
-  animation: isogonDiagSlide 220ms cubic-bezier(0.22, 1, 0.36, 1);
-  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-@keyframes isogonDiagSlide {
-  from { transform: translateX(20px); opacity: 0.68; }
-  to { transform: translateX(0); opacity: 1; }
-}
-.isogon-diag-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  margin-bottom: 18px;
-}
-.isogon-diag-kicker {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  color: rgba(235, 240, 241, 0.62);
-  text-transform: uppercase;
-}
-.isogon-diag-source-tag {
-  padding: 2px 7px;
-  border-radius: 3px;
-  border: 1px solid rgba(245, 246, 250, 0.16);
-  background: rgba(245, 246, 250, 0.08);
-  color: #F5F6FA;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.isogon-diag-close {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 30px;
-  padding: 0 11px;
-  border-radius: 4px;
-  border: 1px solid rgba(245, 246, 250, 0.16);
-  background: transparent;
-  color: rgba(245, 246, 250, 0.88);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 450;
-  cursor: pointer;
-  transition: background-color 140ms ease, border-color 140ms ease;
-}
-.isogon-diag-close:hover {
-  background: rgba(245, 246, 250, 0.10);
-  border-color: rgba(245, 246, 250, 0.34);
-}
-.isogon-diag-esc-keycap {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 2px;
-  border: 1px solid rgba(245, 246, 250, 0.28);
-  background: transparent;
-  color: #F5F6FA;
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  font-weight: 500;
-}
-.isogon-diag-title {
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.18;
-  font-weight: 500;
-  letter-spacing: -0.025em;
-  color: #F5F6FA;
-}
-.isogon-diag-lead {
-  margin: 9px 0 0;
-  font-size: 13.5px;
-  line-height: 1.54;
-  color: rgba(245, 246, 250, 0.68);
-}
-.isogon-diag-probe-card {
-  margin-top: 18px;
-  padding: 14px 16px;
-  border-radius: 4px;
-  background: rgba(245, 246, 250, 0.03);
-  border: 1px solid rgba(245, 246, 250, 0.12);
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 16px;
-  align-items: center;
-}
-.isogon-diag-probe-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-.isogon-diag-probe-label {
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(235, 240, 241, 0.66);
-}
-.isogon-diag-probe-angle {
-  padding: 2px 7px;
-  border-radius: 3px;
-  border: 1px solid rgba(245, 246, 250, 0.16);
-  background: rgba(245, 246, 250, 0.08);
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: #F5F6FA;
-  font-variant-numeric: tabular-nums;
-}
-.isogon-diag-scrubber {
-  position: relative;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  cursor: ew-resize;
-  touch-action: none;
-  user-select: none;
-  outline: none;
-}
-.isogon-diag-scrubber:focus-visible {
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.42);
-  border-radius: 3px;
-}
-.isogon-diag-scrubber-rail {
-  position: relative;
-  width: 100%;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.16);
-}
-.isogon-diag-scrubber-fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 1px;
-  background: #E07A5F;
-}
-.isogon-diag-scrubber-tick {
-  position: absolute;
-  top: -3px;
-  width: 1px;
-  height: 7px;
-  background: rgba(255, 255, 255, 0.18);
-  transform: translateX(-0.5px);
-}
-.isogon-diag-scrubber-needle {
-  position: absolute;
-  top: 4px;
-  width: 2px;
-  height: 18px;
-  background: #EBF0F1;
-  box-shadow: 0 0 8px rgba(224, 122, 95, 0.65);
-  transform: translateX(-1px);
-  pointer-events: none;
-}
-.isogon-diag-scrubber-needle::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  width: 6px;
-  height: 4px;
-  border-radius: 1px;
-  background: #E07A5F;
-}
-.isogon-diag-metrics-row {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-}
-.isogon-diag-metric {
-  padding: 2px 10px 2px 0;
-}
-.isogon-diag-metric + .isogon-diag-metric {
-  padding-left: 11px;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-}
-.isogon-diag-metric-k {
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: rgba(235, 240, 241, 0.54);
-}
-.isogon-diag-metric-v {
-  margin-top: 3px;
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: #EBF0F1;
-  font-variant-numeric: tabular-nums;
-}
-.isogon-diag-footprint-box {
-  width: 116px;
-  height: 96px;
-  border-radius: 4px;
-  background: rgba(7, 9, 14, 0.88);
-  border: 1px solid rgba(245, 246, 250, 0.11);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-}
-.isogon-diag-footprint-cap {
-  margin-top: 4px;
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: rgba(235, 240, 241, 0.56);
-}
-.isogon-diag-chart-block {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-.isogon-diag-chart-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.isogon-diag-chart-title {
-  margin: 0;
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: #EBF0F1;
-}
-.isogon-diag-legend {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
-  color: rgba(235, 240, 241, 0.66);
-}
-.isogon-diag-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 2px;
-  margin-right: 5px;
-  vertical-align: middle;
-}
-.isogon-diag-svg {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 4px;
-  border: 1px solid rgba(245, 246, 250, 0.11);
-  background: #07090E;
-  cursor: crosshair;
-}
-.isogon-diag-summary-strip {
-  margin-top: 12px;
-  padding: 11px 14px;
-  border-radius: 4px;
-  background: rgba(245, 246, 250, 0.03);
-  border: 1px solid rgba(245, 246, 250, 0.11);
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-}
-.isogon-diag-stat-card {
-  padding: 0 12px 0 0;
-}
-.isogon-diag-stat-card + .isogon-diag-stat-card {
-  padding-left: 14px;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-}
-.isogon-diag-stat-label {
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(235, 240, 241, 0.56);
-}
-.isogon-diag-stat-val {
-  margin-top: 4px;
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  font-weight: 500;
-  color: #EBF0F1;
-  font-variant-numeric: tabular-nums;
-}
-.isogon-diag-gates {
-  margin-top: 12px;
-  border-radius: 4px;
-  background: rgba(245, 246, 250, 0.03);
-  border: 1px solid rgba(245, 246, 250, 0.11);
-  overflow: hidden;
-}
-.isogon-diag-gate-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 13px;
-  font-size: 12px;
-}
-.isogon-diag-gate-row + .isogon-diag-gate-row {
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-.isogon-diag-gate-left {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-}
-.isogon-diag-drawer .isogon-diag-gate-check {
-  width: 10px;
-  height: 10px;
-  border-radius: 1px;
-  border: 1px solid #ffffff;
-  background: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.isogon-diag-gate-title {
-  font-weight: 500;
-  color: #EBF0F1;
-}
-.isogon-diag-gate-metric {
-  padding: 2px 7px;
-  border-radius: 3px;
-  border: 1px solid rgba(245, 246, 250, 0.14);
-  background: rgba(245, 246, 250, 0.06);
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
-  color: rgba(243, 244, 247, 0.88);
-  font-variant-numeric: tabular-nums;
-}
-.isogon-diag-prov {
-  margin-top: 16px;
-  padding: 11px 14px;
-  border-radius: 4px;
-  background: rgba(245, 246, 250, 0.03);
-  border: 1px solid rgba(245, 246, 250, 0.11);
-  font-size: 12px;
-  line-height: 1.5;
-  color: rgba(235, 240, 241, 0.64);
-}
-.isogon-diag-prov strong {
-  color: #EBF0F1;
-}
-.isogon-diag-prov code {
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.88);
-}
-@media (max-width: 640px) {
-  .isogon-diag-backdrop {
-    padding: 8px;
-  }
-  .isogon-diag-drawer {
-    width: calc(100vw - 16px);
-    max-height: calc(100dvh - 16px);
-    padding: 18px 16px 26px;
-  }
-  .isogon-diag-probe-card {
-    grid-template-columns: 1fr;
-  }
-  .isogon-diag-metrics-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-  .isogon-diag-metric + .isogon-diag-metric {
-    padding-left: 0;
-    border-left: none;
-  }
-  .isogon-diag-summary-strip {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-  .isogon-diag-stat-card + .isogon-diag-stat-card {
-    padding-left: 0;
-    padding-top: 8px;
-    border-left: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  .isogon-diag-gate-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-`;
+/** Shared with the continuity record: MODIS grey-blue, VIIRS fire orange, harmonized white. */
+const INK_MODIS = '#b4c3d6';
+const INK_VIIRS = '#f08a45';
+const INK_HARM = '#f3f4f6';
+const INK_GRID = 'rgba(243, 244, 246, 0.1)';
+const INK_AXIS = 'rgba(243, 244, 246, 0.62)';
+const INK_CURTAIN = '#d6f1ff';
 
-const CHART_W = 580;
-const CHART_H = 166;
-const PAD_L = 48;
-const PAD_R = 18;
-const PAD_T = 16;
-const PAD_B = 28;
-const PLOT_W = CHART_W - PAD_L - PAD_R;
-const PLOT_H = CHART_H - PAD_T - PAD_B;
+const PAGES = [
+  { key: 'size', label: 'Pixel size' },
+  { key: 'detect', label: 'Smallest fire' },
+  { key: 'calibrate', label: 'One record' },
+] as const;
 
-export function SensorDiagnosticModal({ open, isOpen, onClose }: SensorDiagnosticModalProps) {
+const ANGLE_PRESETS = [
+  { deg: 0, label: 'Nadir' },
+  { deg: 30, label: 'Mid swath' },
+  { deg: 55, label: 'Swath edge' },
+] as const;
+
+const W = 640;
+const H = 400;
+
+function nearestSample(curves: readonly SensorCurveSample[], deg: number): SensorCurveSample {
+  let best = curves[0];
+  let bestDiff = Math.abs(best.scanAngleDeg - deg);
+  for (const c of curves) {
+    const d = Math.abs(c.scanAngleDeg - deg);
+    if (d < bestDiff) {
+      best = c;
+      bestDiff = d;
+    }
+  }
+  return best;
+}
+
+function fmt(n: number, digits = 1): string {
+  return n.toFixed(digits);
+}
+
+/** Page 1: the satellite looking down at the scan angle, and both pixels drawn to scale. */
+function PixelSizeVisual({ angle, sample }: { angle: number; sample: SensorCurveSample }) {
+  const satX = W / 2;
+  const satY = 46;
+  const groundY = 214;
+  const h = groundY - satY;
+  const rad = (angle * Math.PI) / 180;
+  const hitX = satX + Math.tan(rad) * h;
+  const edgeX = Math.tan((55 * Math.PI) / 180) * h;
+  const arcR = 46;
+  const s = 22; // px per km on the ground plan
+  const mW = sample.modisAcrossKm * s;
+  const mH = sample.modisAlongKm * s;
+  const vW = Math.max(3, sample.viirsAcrossKm * s);
+  const vH = Math.max(3, sample.viirsAlongKm * s);
+  const planY = 300;
+  const mX = 210;
+  const vX = 470;
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="iso-brief__svg"
+      role="img"
+      aria-label={`At ${Math.round(angle)} degrees off nadir, a MODIS pixel covers ${fmt(sample.modisAreaKm2, 2)} square kilometres and a VIIRS pixel ${fmt(sample.viirsAreaKm2, 2)}.`}
+    >
+      <path
+        d={`M${satX},${satY} L${satX - edgeX},${groundY} L${satX + edgeX},${groundY} Z`}
+        fill="rgba(214, 241, 255, 0.05)"
+        stroke="rgba(214, 241, 255, 0.18)"
+      />
+      <line x1={satX} y1={satY} x2={satX} y2={groundY} stroke={INK_GRID} strokeDasharray="3 4" />
+      <line x1={20} y1={groundY} x2={W - 20} y2={groundY} stroke="rgba(243, 244, 246, 0.35)" />
+      <text x={24} y={groundY - 8} className="iso-brief__axis">
+        ground
+      </text>
+      <text x={satX + edgeX - 4} y={groundY + 18} textAnchor="end" className="iso-brief__axis">
+        swath edge, 55°
+      </text>
+      <line x1={satX} y1={satY} x2={hitX} y2={groundY} stroke={INK_CURTAIN} strokeWidth={1.5} />
+      {angle > 0.5 && (
+        <path
+          d={`M${satX},${satY + arcR} A${arcR},${arcR} 0 0 0 ${(satX + Math.sin(rad) * arcR).toFixed(1)},${(
+            satY +
+            Math.cos(rad) * arcR
+          ).toFixed(1)}`}
+          fill="none"
+          stroke={INK_CURTAIN}
+        />
+      )}
+      <text x={satX + 12} y={satY + arcR + 24} className="iso-brief__value">
+        {Math.round(angle)}°
+      </text>
+      <rect x={hitX - 5} y={groundY - 5} width={10} height={10} fill={INK_CURTAIN} />
+      <rect x={satX - 7} y={satY - 7} width={14} height={14} fill={INK_HARM} />
+      <line x1={satX - 34} y1={satY} x2={satX + 34} y2={satY} stroke={INK_HARM} strokeWidth={3} />
+      <text x={satX + 44} y={satY + 4} className="iso-brief__axis">
+        satellite, 705 km up
+      </text>
+
+      <text x={24} y={planY - 48} className="iso-brief__axis">
+        one pixel on the ground, to scale
+      </text>
+      <rect
+        x={mX - mW / 2}
+        y={planY - mH / 2}
+        width={mW}
+        height={mH}
+        fill="rgba(180, 195, 214, 0.2)"
+        stroke={INK_MODIS}
+        strokeWidth={1.5}
+      />
+      <text
+        x={mX}
+        y={planY + Math.max(mH / 2, 14) + 24}
+        textAnchor="middle"
+        className="iso-brief__label"
+        fill={INK_MODIS}
+      >
+        MODIS {fmt(sample.modisAcrossKm)} x {fmt(sample.modisAlongKm)} km
+      </text>
+      <rect
+        x={vX - vW / 2}
+        y={planY - vH / 2}
+        width={vW}
+        height={vH}
+        fill="rgba(240, 138, 69, 0.35)"
+        stroke={INK_VIIRS}
+        strokeWidth={1.5}
+      />
+      <text
+        x={vX}
+        y={planY + Math.max(mH / 2, 14) + 24}
+        textAnchor="middle"
+        className="iso-brief__label"
+        fill={INK_VIIRS}
+      >
+        VIIRS {fmt(sample.viirsAcrossKm, 2)} x {fmt(sample.viirsAlongKm, 2)} km
+      </text>
+      <line x1={W - 20 - s} y1={H - 18} x2={W - 20} y2={H - 18} stroke={INK_AXIS} />
+      <line x1={W - 20 - s} y1={H - 22} x2={W - 20 - s} y2={H - 14} stroke={INK_AXIS} />
+      <line x1={W - 20} y1={H - 22} x2={W - 20} y2={H - 14} stroke={INK_AXIS} />
+      <text x={W - 26 - s} y={H - 14} textAnchor="end" className="iso-brief__axis">
+        1 km
+      </text>
+    </svg>
+  );
+}
+
+/** Page 2: the smallest fire each sensor detects half the time, across the scan. */
+function DetectionVisual({
+  angle,
+  curves,
+  sample,
+}: {
+  angle: number;
+  curves: readonly SensorCurveSample[];
+  sample: SensorCurveSample;
+}) {
+  const L = 56;
+  const R = 88;
+  const T = 34;
+  const B = 48;
+  const maxDeg = 55;
+  const pts = curves.filter((c) => c.scanAngleDeg <= maxDeg);
+  const maxMw = Math.max(10, Math.ceil(Math.max(...pts.map((c) => c.modisMinFrpMw)) / 10) * 10);
+  const x = (d: number) => L + (Math.min(maxDeg, Math.max(0, d)) / maxDeg) * (W - L - R);
+  const y = (mw: number) => H - B - (Math.min(maxMw, Math.max(0, mw)) / maxMw) * (H - T - B);
+  const line = (get: (c: SensorCurveSample) => number) =>
+    pts
+      .map((c, i) => `${i === 0 ? 'M' : 'L'}${x(c.scanAngleDeg).toFixed(1)},${y(get(c)).toFixed(1)}`)
+      .join(' ');
+  const band = `${line((c) => c.modisMinFrpMw)} ${[...pts]
+    .reverse()
+    .map((c) => `L${x(c.scanAngleDeg).toFixed(1)},${y(c.viirsMinFrpMw).toFixed(1)}`)
+    .join(' ')} Z`;
+  const last = pts[pts.length - 1];
+  const mid = nearestSample(pts, 30);
+  const bandMidY = (y(mid.modisMinFrpMw) + y(mid.viirsMinFrpMw)) / 2;
+  const ticksY = Array.from({ length: maxMw / 10 + 1 }, (_, i) => i * 10);
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="iso-brief__svg"
+      role="img"
+      aria-label={`At ${Math.round(angle)} degrees, MODIS detects fires of ${fmt(sample.modisMinFrpMw)} megawatts half the time and VIIRS ${fmt(sample.viirsMinFrpMw)}.`}
+    >
+      {ticksY.map((t) => (
+        <g key={t}>
+          <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke={INK_GRID} />
+          <text x={L - 10} y={y(t) + 4} textAnchor="end" className="iso-brief__axis">
+            {t}
+          </text>
+        </g>
+      ))}
+      <text x={L} y={T - 14} className="iso-brief__axis">
+        fire power, MW
+      </text>
+      {[0, 15, 30, 45, 55].map((d) => (
+        <text key={d} x={x(d)} y={H - B + 22} textAnchor="middle" className="iso-brief__axis">
+          {d}°
+        </text>
+      ))}
+      <text x={(L + W - R) / 2} y={H - 6} textAnchor="middle" className="iso-brief__axis">
+        scan angle off nadir
+      </text>
+
+      <path d={band} fill="rgba(180, 195, 214, 0.13)" />
+      <line
+        x1={x(mid.scanAngleDeg)}
+        x2={x(mid.scanAngleDeg)}
+        y1={y(maxMw * 0.42) + 30}
+        y2={bandMidY}
+        stroke="rgba(243, 244, 246, 0.55)"
+      />
+      <rect x={x(mid.scanAngleDeg) - 3} y={bandMidY - 3} width={6} height={6} fill={INK_HARM} />
+      <text x={x(mid.scanAngleDeg)} y={y(maxMw * 0.42)} textAnchor="middle" className="iso-brief__label" fill={INK_HARM}>
+        <tspan x={x(mid.scanAngleDeg)}>VIIRS sees these fires,</tspan>
+        <tspan x={x(mid.scanAngleDeg)} dy={18}>
+          MODIS misses them
+        </tspan>
+      </text>
+      <path d={line((c) => c.modisMinFrpMw)} fill="none" stroke={INK_MODIS} strokeWidth={2.2} />
+      <path d={line((c) => c.viirsMinFrpMw)} fill="none" stroke={INK_VIIRS} strokeWidth={2.2} />
+      <text x={x(last.scanAngleDeg) + 8} y={y(last.modisMinFrpMw) + 5} className="iso-brief__label" fill={INK_MODIS}>
+        MODIS
+      </text>
+      <text x={x(last.scanAngleDeg) + 8} y={y(last.viirsMinFrpMw) + 5} className="iso-brief__label" fill={INK_VIIRS}>
+        VIIRS
+      </text>
+
+      <line x1={x(angle)} x2={x(angle)} y1={T} y2={H - B} stroke={INK_CURTAIN} strokeWidth={1} />
+      <rect x={x(angle) - 4} y={y(sample.modisMinFrpMw) - 4} width={8} height={8} fill={INK_MODIS} />
+      <rect x={x(angle) - 4} y={y(sample.viirsMinFrpMw) - 4} width={8} height={8} fill={INK_VIIRS} />
+      <text
+        x={x(angle) - 10}
+        y={y(sample.modisMinFrpMw) - 10}
+        textAnchor="end"
+        className="iso-brief__value-sm"
+        fill={INK_MODIS}
+      >
+        {fmt(sample.modisMinFrpMw)} MW
+      </text>
+      <text x={x(angle) + 10} y={y(sample.viirsMinFrpMw) + 22} className="iso-brief__value-sm" fill={INK_VIIRS}>
+        {fmt(sample.viirsMinFrpMw)} MW
+      </text>
+    </svg>
+  );
+}
+
+/**
+ * Page 3, on real data only (a simulated run has no independent reference to score against). The error of a
+ * held-out year's detection total, with the overlap ratio and without it, from the real calendar's
+ * leave-one-year-out check.
+ */
+function OneRecordVisual({ overlap }: { overlap: OverlapEvidence }) {
+  const L = 40;
+  const R = 40;
+  const rows = [
+    { label: 'Raw counts added up', value: overlap.withoutError, ink: INK_MODIS },
+    { label: 'With the overlap ratio', value: overlap.heldOutError, ink: INK_HARM },
+  ];
+  const max = Math.max(0.01, ...rows.map((r) => r.value ?? 0));
+  const x = (v: number) => L + (v / max) * (W - L - R);
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="iso-brief__svg"
+      role="img"
+      aria-label="Error of a held-out year's detection total, with and without the overlap ratio."
+    >
+      <text x={L} y={70} className="iso-brief__axis">
+        Error of a held-out year&apos;s total, median
+      </text>
+      {rows.map((r, i) => {
+        const y = 130 + i * 110;
+        return (
+          <g key={r.label}>
+            <text x={L} y={y - 14} className="iso-brief__axis">
+              {r.label}
+            </text>
+            {r.value !== null && <rect x={L} y={y} width={Math.max(2, x(r.value) - L)} height={26} fill={r.ink} />}
+            <text x={r.value !== null ? x(r.value) + 10 : L} y={y + 19} className="iso-brief__value-sm" fill={r.ink}>
+              {r.value !== null ? `${Math.round(r.value * 100)}%` : 'not sent'}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+export function SensorDiagnosticModal({
+  open,
+  isOpen,
+  onClose,
+  model,
+  overlap,
+  overlapPlace,
+  embedded = false,
+}: SensorDiagnosticModalProps & {
+  /** Drawn inside the reading sheet, without its own backdrop, frame or close button. */
+  embedded?: boolean;
+  /** The sensor model for the run on screen (ui/useSensorModel.ts); null until it loads or without a backend. */
+  model?: SensorModelPayload | null;
+  /** The real calendar's overlap ratio and its leave-one-year-out check, and the place it was measured for. */
+  overlap?: OverlapEvidence | null;
+  overlapPlace?: string | null;
+}) {
   const visible = open ?? isOpen ?? true;
-
   const [diagnostics, setDiagnostics] = useState<NormalizedSensorDiagnostics>(() =>
     createAnalyticalSensorDiagnostics('analytical_baseline'),
   );
-  const [probeAngle, setProbeAngle] = useState<number>(42);
-  const scrubberRef = useRef<HTMLDivElement | null>(null);
-  const draggingScrubberRef = useRef<boolean>(false);
+  const [page, setPage] = useState(0);
+  const [angle, setAngle] = useState<number>(42);
+  const scrubRef = useRef<HTMLDivElement | null>(null);
+  const draggingRef = useRef(false);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  useDialogFocus(visible && !embedded, drawerRef, closeRef);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || embedded) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key === 'ArrowRight') {
+        setPage((p) => Math.min(PAGES.length - 1, p + 1));
+      } else if (e.key === 'ArrowLeft') {
+        setPage((p) => Math.max(0, p - 1));
+      } else if (/^[1-3]$/.test(e.key)) {
+        setPage(Number(e.key) - 1);
+      } else if (e.key === ']') {
+        setAngle((a) => Math.min(55, a + 5));
+      } else if (e.key === '[') {
+        setAngle((a) => Math.max(0, a - 5));
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [visible, onClose]);
+  }, [visible, embedded, onClose]);
 
   useEffect(() => {
-    if (!visible) return;
-    const controller = new AbortController();
+    if (!model) return;
+    setDiagnostics(normalizeSensorDiagnostics(model.raw, model.source));
+  }, [model]);
 
-    const loadDiagnostics = async () => {
-      const endpoints: Array<{ url: string; source: NormalizedSensorDiagnostics['source'] }> = [
-        { url: '/api/sensor-model', source: 'api' },
-        { url: 'http://127.0.0.1:8788/api/sensor-model', source: 'api' },
-        { url: '/generated/fields/sensor_model_diagnostics.json', source: 'static_artifact' },
-      ];
-
-      for (const ep of endpoints) {
-        try {
-          const res = await fetch(ep.url, { signal: controller.signal });
-          if (!res.ok) continue;
-          const raw: unknown = await res.json();
-          if (!controller.signal.aborted) {
-            setDiagnostics(normalizeSensorDiagnostics(raw, ep.source));
-          }
-          return;
-        } catch {
-          // Proceed to next fallback endpoint
-        }
-      }
-    };
-
-    void loadDiagnostics();
-    return () => controller.abort();
-  }, [visible]);
-
-  const probedSample = useMemo(() => {
-    const list = diagnostics.curves;
-    if (list.length === 0) return createAnalyticalSensorDiagnostics().curves[42];
-    let best = list[0];
-    let bestDiff = Math.abs(best.scanAngleDeg - probeAngle);
-    for (let i = 1; i < list.length; i++) {
-      const d = Math.abs(list[i].scanAngleDeg - probeAngle);
-      if (d < bestDiff) {
-        best = list[i];
-        bestDiff = d;
-      }
-    }
-    return best;
-  }, [diagnostics.curves, probeAngle]);
+  const curves = useMemo(
+    () => (diagnostics.curves.length > 0 ? diagnostics.curves : createAnalyticalSensorDiagnostics().curves),
+    [diagnostics.curves],
+  );
+  const sample = useMemo(() => nearestSample(curves, angle), [curves, angle]);
 
   if (!visible) return null;
 
-  const maxScanAngle = Math.max(56, diagnostics.curves[diagnostics.curves.length - 1]?.scanAngleDeg ?? 56);
-  const xForScan = (deg: number) => PAD_L + (Math.min(maxScanAngle, Math.max(0, deg)) / maxScanAngle) * PLOT_W;
-
-  const updateAngleFromClientX = (clientX: number) => {
-    const el = scrubberRef.current;
+  const setAngleFromX = (clientX: number) => {
+    const el = scrubRef.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    const frac = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    setProbeAngle(Math.round(frac * maxScanAngle));
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0) return;
+    setAngle(Math.round(Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * 55));
   };
 
-  const onScrubberPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    draggingScrubberRef.current = true;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    updateAngleFromClientX(e.clientX);
-  };
-
-  const onScrubberPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!draggingScrubberRef.current) return;
-    updateAngleFromClientX(e.clientX);
-  };
-
-  const onScrubberPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!draggingScrubberRef.current) return;
-    draggingScrubberRef.current = false;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-  };
-
-  const onScrubberKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    const maxDeg = Math.round(maxScanAngle);
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      setProbeAngle((prev) => Math.max(0, prev - 1));
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      setProbeAngle((prev) => Math.min(maxDeg, prev + 1));
-    } else if (e.key === 'PageDown') {
-      e.preventDefault();
-      setProbeAngle((prev) => Math.max(0, prev - 5));
-    } else if (e.key === 'PageUp') {
-      e.preventDefault();
-      setProbeAngle((prev) => Math.min(maxDeg, prev + 5));
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      setProbeAngle(0);
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      setProbeAngle(maxDeg);
-    }
-  };
-
-  const updateAngleFromScanSvg = (e: MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    const svgX = ((e.clientX - rect.left) / rect.width) * CHART_W;
-    const frac = Math.min(1, Math.max(0, (svgX - PAD_L) / PLOT_W));
-    setProbeAngle(Math.round(frac * maxScanAngle));
-  };
-
-  // --- Chart 1: Pixel Area Growth (km^2 vs Scan Angle) ---
-  const maxArea = Math.max(10.2, ...diagnostics.curves.map((c) => c.modisAreaKm2 * 1.05));
-  const yArea = (km2: number) => PAD_T + PLOT_H - (Math.min(maxArea, Math.max(0, km2)) / maxArea) * PLOT_H;
-
-  const modisAreaPath = diagnostics.curves
-    .map((c, i) => `${i === 0 ? 'M' : 'L'}${xForScan(c.scanAngleDeg).toFixed(1)},${yArea(c.modisAreaKm2).toFixed(1)}`)
-    .join(' ');
-  const modisAreaFill = `${modisAreaPath} L${xForScan(diagnostics.curves[diagnostics.curves.length - 1].scanAngleDeg).toFixed(1)},${(PAD_T + PLOT_H).toFixed(1)} L${PAD_L},${(PAD_T + PLOT_H).toFixed(1)} Z`;
-
-  const viirsAreaPath = diagnostics.curves
-    .map((c, i) => `${i === 0 ? 'M' : 'L'}${xForScan(c.scanAngleDeg).toFixed(1)},${yArea(c.viirsAreaKm2).toFixed(1)}`)
-    .join(' ');
-
-  // --- Chart 2: Minimum Detectable FRP (MW vs Scan Angle) ---
-  const maxFrp = Math.max(46, ...diagnostics.curves.map((c) => c.modisMinFrpMw * 1.08));
-  const yFrp = (mw: number) => PAD_T + PLOT_H - (Math.min(maxFrp, Math.max(0, mw)) / maxFrp) * PLOT_H;
-
-  const modisFrpPath = diagnostics.curves
-    .map((c, i) => `${i === 0 ? 'M' : 'L'}${xForScan(c.scanAngleDeg).toFixed(1)},${yFrp(c.modisMinFrpMw).toFixed(1)}`)
-    .join(' ');
-  const viirsFrpPath = diagnostics.curves
-    .map((c, i) => `${i === 0 ? 'M' : 'L'}${xForScan(c.scanAngleDeg).toFixed(1)},${yFrp(c.viirsMinFrpMw).toFixed(1)}`)
-    .join(' ');
-
-  const reversedViirsFrp = [...diagnostics.curves]
-    .reverse()
-    .map((c) => `L${xForScan(c.scanAngleDeg).toFixed(1)},${yFrp(c.viirsMinFrpMw).toFixed(1)}`)
-    .join(' ');
-  const censoredPolygonPath = `${modisFrpPath} ${reversedViirsFrp} Z`;
-
-  // --- Chart 3: Paired 13:30 LST Overpass Residuals ---
-  const maxVzaAngle = Math.max(
-    65,
-    ...diagnostics.residuals.map((r) => r.scanAngleDeg),
-    ...diagnostics.pairedSamples.map((s) => s.angleDeg),
-  );
-  const xForVza = (deg: number) => PAD_L + (Math.min(maxVzaAngle, Math.max(0, deg)) / maxVzaAngle) * PLOT_W;
-
-  const rawResPeak = Math.max(
-    0.26,
-    ...diagnostics.residuals.map((r) => Math.max(Math.abs(r.rawResidual), Math.abs(r.harmonizedResidual) + r.ci90HalfWidth)),
-    ...diagnostics.pairedSamples.map((s) => Math.min(0.45, Math.max(Math.abs(s.rawLogRatio), Math.abs(s.harmonizedLogRatio)))),
-  );
-  const maxAbsRes = rawResPeak * 1.15;
-  const yRes = (val: number) =>
-    PAD_T + PLOT_H * 0.5 - (Math.max(-maxAbsRes, Math.min(maxAbsRes, val)) / maxAbsRes) * (PLOT_H * 0.46);
-  const resTickStep = maxAbsRes <= 0.6 ? 0.2 : 0.5;
-  const resTicks = [-2 * resTickStep, -resTickStep, 0, resTickStep, 2 * resTickStep].filter(
-    (t) => Math.abs(t) <= maxAbsRes * 1.02,
-  );
-
-  const rawResPath = diagnostics.residuals
-    .map((r, i) => `${i === 0 ? 'M' : 'L'}${xForVza(r.scanAngleDeg).toFixed(1)},${yRes(r.rawResidual).toFixed(1)}`)
-    .join(' ');
-  const harmResPath = diagnostics.residuals
-    .map((r, i) => `${i === 0 ? 'M' : 'L'}${xForVza(r.scanAngleDeg).toFixed(1)},${yRes(r.harmonizedResidual).toFixed(1)}`)
-    .join(' ');
-
-  const ciUpper = diagnostics.residuals
-    .map((r, i) => `${i === 0 ? 'M' : 'L'}${xForVza(r.scanAngleDeg).toFixed(1)},${yRes(r.harmonizedResidual + r.ci90HalfWidth).toFixed(1)}`)
-    .join(' ');
-  const ciLower = [...diagnostics.residuals]
-    .reverse()
-    .map((r) => `L${xForVza(r.scanAngleDeg).toFixed(1)},${yRes(r.harmonizedResidual - r.ci90HalfWidth).toFixed(1)}`)
-    .join(' ');
-  const ciBandPath = `${ciUpper} ${ciLower} Z`;
-
-  const probeScanX = xForScan(probeAngle);
-  const probeFracPct = Math.min(100, Math.max(0, (probeAngle / maxScanAngle) * 100));
-  const rmseReductionPct = Math.round(
-    (1 - diagnostics.summary.harmonizedRmse / Math.max(1e-4, diagnostics.summary.rawRmse)) * 100,
-  );
-
-  const sourceBadge =
+  const ratio = sample.modisAreaKm2 / Math.max(1e-3, sample.viirsAreaKm2);
+  const sourceLine =
     diagnostics.source === 'api'
-      ? 'Live /api/sensor-model'
+      ? 'Live sensor model from the backend'
       : diagnostics.source === 'static_artifact'
-        ? 'Static Diagnostic Artifact'
-        : 'Clean-Room Analytical Physics';
+        ? 'Generated diagnostics file in this build'
+        : 'Analytical sensor model, computed in the browser';
+  const showAngle = page < 2;
+
+  const content = (
+    <>
+        <header className="iso-brief__head">
+          <h2 id="iso-brief-title" className="iso-brief__title">
+            Why MODIS and VIIRS disagree
+          </h2>
+          <nav className="iso-brief__pages" aria-label="Pages">
+            {PAGES.map((p, i) => (
+              <button
+                key={p.key}
+                type="button"
+                className="iso-brief__page"
+                data-active={page === i ? 'true' : 'false'}
+                aria-current={page === i ? 'step' : undefined}
+                onClick={() => setPage(i)}
+              >
+                <span className="iso-brief__page-num">[{i + 1}]</span>
+                {p.label}
+              </button>
+            ))}
+          </nav>
+          {!embedded && (
+            <button ref={closeRef} type="button" className="iso-finder__action" onClick={onClose}>
+              Close <kbd>Esc</kbd>
+            </button>
+          )}
+        </header>
+
+        <div className="iso-brief__body" key={page}>
+          <div className="iso-brief__visual">
+            {page === 0 && <PixelSizeVisual angle={angle} sample={sample} />}
+            {page === 1 && <DetectionVisual angle={angle} curves={curves} sample={sample} />}
+            {page === 2 && overlap && <OneRecordVisual overlap={overlap} />}
+          </div>
+
+          <div className="iso-brief__text">
+            {page === 0 && (
+              <>
+                <p className="iso-brief__lead">
+                  The further a satellite looks from straight down, the more ground one pixel covers.
+                  MODIS pixels stretch a lot; VIIRS pixels barely change.
+                </p>
+                <div className="iso-brief__stats">
+                  <div>
+                    <span className="iso-brief__big" style={{ color: INK_MODIS }}>
+                      {fmt(sample.modisAreaKm2, 2)}
+                    </span>
+                    <span className="iso-brief__unit">km² per MODIS pixel</span>
+                  </div>
+                  <div>
+                    <span className="iso-brief__big" style={{ color: INK_VIIRS }}>
+                      {fmt(sample.viirsAreaKm2, 2)}
+                    </span>
+                    <span className="iso-brief__unit">km² per VIIRS pixel</span>
+                  </div>
+                </div>
+                <p className="iso-brief__take">
+                  At {Math.round(angle)}° one MODIS pixel covers {fmt(ratio)} times the ground of a VIIRS
+                  pixel. A small fire fills less of a big pixel, so the same fire looks weaker to MODIS.
+                </p>
+              </>
+            )}
+            {page === 1 && (
+              <>
+                <p className="iso-brief__lead">
+                  A fire has to give off more power before MODIS notices it, and more still at the edge
+                  of the swath.
+                </p>
+                <div className="iso-brief__stats">
+                  <div>
+                    <span className="iso-brief__big" style={{ color: INK_MODIS }}>
+                      {fmt(sample.modisMinFrpMw)}
+                    </span>
+                    <span className="iso-brief__unit">MW for MODIS</span>
+                  </div>
+                  <div>
+                    <span className="iso-brief__big" style={{ color: INK_VIIRS }}>
+                      {fmt(sample.viirsMinFrpMw)}
+                    </span>
+                    <span className="iso-brief__unit">MW for VIIRS</span>
+                  </div>
+                </div>
+                <p className="iso-brief__take">
+                  These are the fire powers each sensor detects half the time at {Math.round(angle)}°.
+                  Fires in between are in the VIIRS record and missing from the MODIS one, which is why
+                  raw counts jump when VIIRS joins in 2012.
+                </p>
+              </>
+            )}
+            {page === 2 &&
+              (overlap ? (
+                <>
+                  <p className="iso-brief__lead">
+                    Where both sensors fly, 2012 to 2025, VIIRS on Suomi NPP flags {overlap.ratio.toFixed(2)} times
+                    as many pixels as MODIS on Terra and Aqua over {overlapPlace ?? 'this box'}. Isogon scales the
+                    MODIS years by that ratio so the record is one series.
+                  </p>
+                  <div className="iso-brief__stats">
+                    <div>
+                      <span className="iso-brief__big">{overlap.ratio.toFixed(2)}</span>
+                      <span className="iso-brief__unit">
+                        overlap ratio
+                        {overlap.p10 !== null && overlap.p90 !== null
+                          ? `, ${overlap.p10.toFixed(2)} to ${overlap.p90.toFixed(2)} across years`
+                          : ''}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="iso-brief__take">
+                    NASA FIRMS rows, each year held out in turn and predicted from the others
+                    {overlap.heldYears !== null
+                      ? `. The year-to-year range held the truth in ${Math.round(overlap.heldYears * 100)}% of held-out years.`
+                      : '.'}
+                  </p>
+                </>
+              ) : (
+                <p className="iso-brief__lead">
+                  This page shows the overlap of MODIS and VIIRS on real NASA FIRMS rows, for regions that have
+                  them: Feather River, Lytton and Evia. A simulated run has no such check, because a simulation
+                  can only be scored against its own answer.
+                </p>
+              ))}
+
+            {showAngle && (
+              <div className="iso-brief__angle">
+                <div className="iso-brief__angle-head">
+                  <span>Scan angle</span>
+                  <span className="iso-brief__angle-val">{Math.round(angle)}°</span>
+                </div>
+                <div
+                  ref={scrubRef}
+                  className="iso-vernier__hit"
+                  role="slider"
+                  tabIndex={0}
+                  aria-label="Scan angle off nadir, in degrees"
+                  aria-valuemin={0}
+                  aria-valuemax={55}
+                  aria-valuenow={Math.round(angle)}
+                  onPointerDown={(e: ReactPointerEvent<HTMLDivElement>) => {
+                    draggingRef.current = true;
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    setAngleFromX(e.clientX);
+                  }}
+                  onPointerMove={(e) => {
+                    if (draggingRef.current) setAngleFromX(e.clientX);
+                  }}
+                  onPointerUp={(e) => {
+                    draggingRef.current = false;
+                    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                      e.currentTarget.releasePointerCapture(e.pointerId);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setAngle((a) => Math.min(55, a + 1));
+                    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setAngle((a) => Math.max(0, a - 1));
+                    }
+                  }}
+                >
+                  <div className="iso-vernier__rail">
+                    <div className="iso-vernier__fill" style={{ width: `${(angle / 55) * 100}%` }} />
+                    {[0, 15, 30, 45, 55].map((d) => (
+                      <span
+                        key={d}
+                        className="iso-vernier__tick iso-vernier__tick--major"
+                        style={{ left: `${(d / 55) * 100}%` }}
+                      />
+                    ))}
+                  </div>
+                  <div className="iso-vernier__needle" style={{ left: `${(angle / 55) * 100}%` }} />
+                </div>
+                <div className="iso-choice" role="group" aria-label="Angle presets">
+                  {ANGLE_PRESETS.map((p) => (
+                    <button
+                      key={p.deg}
+                      type="button"
+                      className="iso-choice__opt"
+                      data-active={Math.round(angle) === p.deg ? 'true' : 'false'}
+                      onClick={() => setAngle(p.deg)}
+                    >
+                      {p.label} {p.deg}°
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <footer className="iso-brief__legend">
+          <span className="iso-finder__legend-lead">
+            Page <kbd>&larr;</kbd>
+            <kbd>&rarr;</kbd>
+          </span>
+          {showAngle && (
+            <span className="iso-finder__legend-lead">
+              Angle <kbd>[</kbd>
+              <kbd>]</kbd>
+            </span>
+          )}
+          <span className="iso-brief__source">
+            {sourceLine}.
+          </span>
+        </footer>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div ref={drawerRef} className="iso-brief iso-brief--embedded">
+        {content}
+      </div>
+    );
+  }
 
   return (
-    <div className="isogon-diag-backdrop" onClick={onClose} role="presentation">
-      <style>{MODAL_STYLES}</style>
-      <aside
-        className="isogon-diag-drawer"
+    <div className="iso-backdrop iso-backdrop--center iso-backdrop--soft" onClick={onClose} role="presentation">
+      <div
+        ref={drawerRef}
+        className="iso-glass iso-brief"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="isogon-sensor-diag-title"
+        aria-labelledby="iso-brief-title"
       >
-        <div className="isogon-diag-topbar">
-          <div className="isogon-diag-kicker">
-            <span>Research · Sensor Forward Model</span>
-            <span className="isogon-diag-source-tag">{sourceBadge}</span>
-          </div>
-          <button type="button" className="isogon-diag-close" onClick={onClose}>
-            <span>Close</span>
-            <kbd className="isogon-diag-esc-keycap" aria-hidden="true">
-              Esc
-            </kbd>
-          </button>
-        </div>
-
-        <h2 id="isogon-sensor-diag-title" className="isogon-diag-title">
-          MODIS vs VIIRS Scan Geometry &amp; 13:30 Overpass Calibration
-        </h2>
-        <p className="isogon-diag-lead">
-          Why raw multi-sensor fire counts jump at 2012 and diverge at swath edges: MODIS 1 km pixels
-          expand nearly tenfold into 4.8 x 2.0 km bow-tie ellipses at 55 deg scan angle, elevating the
-          minimum detectable radiative threshold while VIIRS onboard three-zone aggregation preserves
-          sub-kilometer acuity.
-        </p>
-
-        {/* Synchronized Scan-Angle Hairline Scrubber + 1:1 Footprint Comparison Inset */}
-        <div className="isogon-diag-probe-card">
-          <div>
-            <div className="isogon-diag-probe-header">
-              <span className="isogon-diag-probe-label">Scan-Angle Probe · Hover Charts or Drag Needle</span>
-              <span className="isogon-diag-probe-angle">theta = {probeAngle.toFixed(0)}° off-nadir</span>
-            </div>
-
-            <div
-              ref={scrubberRef}
-              className="isogon-diag-scrubber"
-              role="slider"
-              tabIndex={0}
-              aria-label="Probe off-nadir scan angle in degrees"
-              aria-valuemin={0}
-              aria-valuemax={Math.round(maxScanAngle)}
-              aria-valuenow={probeAngle}
-              onPointerDown={onScrubberPointerDown}
-              onPointerMove={onScrubberPointerMove}
-              onPointerUp={onScrubberPointerUp}
-              onPointerCancel={onScrubberPointerUp}
-              onKeyDown={onScrubberKeyDown}
-            >
-              <div className="isogon-diag-scrubber-rail">
-                <div className="isogon-diag-scrubber-fill" style={{ width: `${probeFracPct.toFixed(2)}%` }} />
-                {[0, 15, 31.72, 44.86, maxScanAngle].map((deg) => (
-                  <span
-                    key={deg}
-                    className="isogon-diag-scrubber-tick"
-                    style={{ left: `${((deg / maxScanAngle) * 100).toFixed(2)}%` }}
-                  />
-                ))}
-              </div>
-              <div className="isogon-diag-scrubber-needle" style={{ left: `${probeFracPct.toFixed(2)}%` }} />
-            </div>
-
-            <div className="isogon-diag-metrics-row">
-              <div className="isogon-diag-metric">
-                <div className="isogon-diag-metric-k">MODIS Area</div>
-                <div className="isogon-diag-metric-v">{probedSample.modisAreaKm2.toFixed(2)} km²</div>
-              </div>
-              <div className="isogon-diag-metric">
-                <div className="isogon-diag-metric-k">VIIRS Area</div>
-                <div className="isogon-diag-metric-v">{probedSample.viirsAreaKm2.toFixed(2)} km²</div>
-              </div>
-              <div className="isogon-diag-metric">
-                <div className="isogon-diag-metric-k">MODIS D_50 FRP</div>
-                <div className="isogon-diag-metric-v">{probedSample.modisMinFrpMw.toFixed(1)} MW</div>
-              </div>
-              <div className="isogon-diag-metric">
-                <div className="isogon-diag-metric-k">VIIRS D_50 FRP</div>
-                <div className="isogon-diag-metric-v">{probedSample.viirsMinFrpMw.toFixed(1)} MW</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="isogon-diag-footprint-box" aria-hidden="true">
-            <svg width="98" height="64" viewBox="-49 -32 98 64">
-              <line x1="-45" y1="0" x2="45" y2="0" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
-              <line x1="0" y1="-28" x2="0" y2="28" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
-              <ellipse
-                cx="0"
-                cy="0"
-                rx={Math.min(44, probedSample.modisAcrossKm * 8.2)}
-                ry={Math.min(25, probedSample.modisAlongKm * 8.2)}
-                fill="rgba(224, 122, 95, 0.22)"
-                stroke="#E07A5F"
-                strokeWidth="1.4"
-              />
-              <polygon
-                points={`0,-${(probedSample.viirsAlongKm * 8.8).toFixed(1)} ${(probedSample.viirsAcrossKm * 8.8).toFixed(1)},0 0,${(probedSample.viirsAlongKm * 8.8).toFixed(1)} -${(probedSample.viirsAcrossKm * 8.8).toFixed(1)},0`}
-                fill="rgba(86, 180, 233, 0.48)"
-                stroke="#56B4E9"
-                strokeWidth="1.2"
-              />
-            </svg>
-            <div className="isogon-diag-footprint-cap">1:1 Ground Scale</div>
-          </div>
-        </div>
-
-        {/* Chart 1: Pixel Area Growth */}
-        <div className="isogon-diag-chart-block">
-          <div className="isogon-diag-chart-head">
-            <h3 className="isogon-diag-chart-title">1. Ground Pixel Footprint Growth (Scan Angle vs km²)</h3>
-            <div className="isogon-diag-legend">
-              <span>
-                <i className="isogon-diag-swatch" style={{ background: '#E07A5F' }} />
-                MODIS 1 km
-              </span>
-              <span>
-                <i className="isogon-diag-swatch" style={{ background: '#56B4E9' }} />
-                VIIRS 375 m (3-Zone)
-              </span>
-            </div>
-          </div>
-          <svg
-            viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-            className="isogon-diag-svg"
-            onMouseMove={updateAngleFromScanSvg}
-            onClick={updateAngleFromScanSvg}
-            aria-label="MODIS versus VIIRS ground pixel area in square kilometers across scan angle"
-          >
-            {[0, 2.5, 5.0, 7.5, 10.0].map((tick) => (
-              <g key={tick}>
-                <line
-                  x1={PAD_L}
-                  y1={yArea(tick)}
-                  x2={CHART_W - PAD_R}
-                  y2={yArea(tick)}
-                  stroke="rgba(235, 240, 241, 0.08)"
-                  strokeWidth="1"
-                />
-                <text
-                  x={PAD_L - 7}
-                  y={yArea(tick) + 3.5}
-                  textAnchor="end"
-                  fontSize="9.5"
-                  fill="rgba(235, 240, 241, 0.56)"
-                  fontFamily="IBM Plex Mono, monospace"
-                >
-                  {tick.toFixed(1)}
-                </text>
-              </g>
-            ))}
-
-            {[31.72, 44.86].map((zDeg) => (
-              <g key={zDeg}>
-                <line
-                  x1={xForScan(zDeg)}
-                  y1={PAD_T}
-                  x2={xForScan(zDeg)}
-                  y2={PAD_T + PLOT_H}
-                  stroke="rgba(86, 180, 233, 0.34)"
-                  strokeDasharray="3 3"
-                  strokeWidth="1"
-                />
-                <text
-                  x={xForScan(zDeg) + 5}
-                  y={PAD_T + 10}
-                  textAnchor="start"
-                  fontSize="8.5"
-                  fill="rgba(235, 240, 241, 0.66)"
-                  fontFamily="IBM Plex Mono, monospace"
-                >
-                  {zDeg.toFixed(1)}° agg
-                </text>
-              </g>
-            ))}
-
-            <path d={modisAreaFill} fill="rgba(224, 122, 95, 0.14)" />
-            <path d={modisAreaPath} fill="none" stroke="#E07A5F" strokeWidth="2.0" />
-            <path d={viirsAreaPath} fill="none" stroke="#56B4E9" strokeWidth="2.0" />
-
-            <line
-              x1={probeScanX}
-              y1={PAD_T}
-              x2={probeScanX}
-              y2={PAD_T + PLOT_H}
-              stroke="rgba(235, 240, 241, 0.78)"
-              strokeWidth="1"
-              strokeDasharray="2 2"
-            />
-            <circle cx={probeScanX} cy={yArea(probedSample.modisAreaKm2)} r="3.6" fill="#E07A5F" />
-            <circle cx={probeScanX} cy={yArea(probedSample.viirsAreaKm2)} r="3.6" fill="#56B4E9" />
-
-            {[0, 15, 30, 45, 55].map((deg) => (
-              <text
-                key={deg}
-                x={xForScan(deg)}
-                y={CHART_H - 8}
-                textAnchor="middle"
-                fontSize="9.5"
-                fill="rgba(235, 240, 241, 0.56)"
-                fontFamily="IBM Plex Mono, monospace"
-              >
-                {deg}°
-              </text>
-            ))}
-            <text
-              x={PAD_L + 4}
-              y={PAD_T + 10}
-              fontSize="9.5"
-              fill="rgba(235, 240, 241, 0.56)"
-              fontFamily="IBM Plex Mono, monospace"
-            >
-              km²
-            </text>
-          </svg>
-        </div>
-
-        {/* Chart 2: Minimum Detectable FRP Curves */}
-        <div className="isogon-diag-chart-block">
-          <div className="isogon-diag-chart-head">
-            <h3 className="isogon-diag-chart-title">2. Minimum Detectable Fire Radiative Power D_50 (MW)</h3>
-            <div className="isogon-diag-legend">
-              <span>
-                <i className="isogon-diag-swatch" style={{ background: '#E07A5F' }} />
-                MODIS Day D_50
-              </span>
-              <span>
-                <i className="isogon-diag-swatch" style={{ background: '#56B4E9' }} />
-                VIIRS Day D_50
-              </span>
-            </div>
-          </div>
-          <svg
-            viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-            className="isogon-diag-svg"
-            onMouseMove={updateAngleFromScanSvg}
-            onClick={updateAngleFromScanSvg}
-            aria-label="Minimum detectable Fire Radiative Power in Megawatts across scan angle"
-          >
-            {[0, 10, 20, 30, 40].map((mw) => (
-              <g key={mw}>
-                <line
-                  x1={PAD_L}
-                  y1={yFrp(mw)}
-                  x2={CHART_W - PAD_R}
-                  y2={yFrp(mw)}
-                  stroke="rgba(235, 240, 241, 0.08)"
-                  strokeWidth="1"
-                />
-                <text
-                  x={PAD_L - 7}
-                  y={yFrp(mw) + 3.5}
-                  textAnchor="end"
-                  fontSize="9.5"
-                  fill="rgba(235, 240, 241, 0.56)"
-                  fontFamily="IBM Plex Mono, monospace"
-                >
-                  {mw}
-                </text>
-              </g>
-            ))}
-
-            <path d={censoredPolygonPath} fill="rgba(224, 122, 95, 0.14)" />
-            <text
-              x={xForScan(24)}
-              y={yFrp(17)}
-              textAnchor="middle"
-              fontSize="9.5"
-              fill="rgba(224, 122, 95, 0.92)"
-              fontFamily="IBM Plex Mono, monospace"
-            >
-              MODIS left-truncated blind zone
-            </text>
-
-            <path d={modisFrpPath} fill="none" stroke="#E07A5F" strokeWidth="2.0" />
-            <path d={viirsFrpPath} fill="none" stroke="#56B4E9" strokeWidth="2.0" />
-
-            <line
-              x1={probeScanX}
-              y1={PAD_T}
-              x2={probeScanX}
-              y2={PAD_T + PLOT_H}
-              stroke="rgba(235, 240, 241, 0.78)"
-              strokeWidth="1"
-              strokeDasharray="2 2"
-            />
-            <circle cx={probeScanX} cy={yFrp(probedSample.modisMinFrpMw)} r="3.6" fill="#E07A5F" />
-            <circle cx={probeScanX} cy={yFrp(probedSample.viirsMinFrpMw)} r="3.6" fill="#56B4E9" />
-
-            {[0, 15, 30, 45, 55].map((deg) => (
-              <text
-                key={deg}
-                x={xForScan(deg)}
-                y={CHART_H - 8}
-                textAnchor="middle"
-                fontSize="9.5"
-                fill="rgba(235, 240, 241, 0.56)"
-                fontFamily="IBM Plex Mono, monospace"
-              >
-                {deg}°
-              </text>
-            ))}
-            <text
-              x={PAD_L + 4}
-              y={PAD_T + 10}
-              fontSize="9.5"
-              fill="rgba(235, 240, 241, 0.56)"
-              fontFamily="IBM Plex Mono, monospace"
-            >
-              MW
-            </text>
-          </svg>
-        </div>
-
-        {/* Chart 3: Paired 13:30 Overpass Residuals */}
-        <div className="isogon-diag-chart-block">
-          <div className="isogon-diag-chart-head">
-            <h3 className="isogon-diag-chart-title">3. Paired 13:30 LST Overpass Residuals (log10 FRP Ratio vs VZA)</h3>
-            <div className="isogon-diag-legend">
-              <span>
-                <i className="isogon-diag-swatch" style={{ background: '#E07A5F' }} />
-                Raw Bias
-              </span>
-              <span>
-                <i className="isogon-diag-swatch" style={{ background: '#EBF0F1' }} />
-                Harmonized
-              </span>
-            </div>
-          </div>
-          <svg
-            viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-            className="isogon-diag-svg"
-            aria-label="Paired 13:30 afternoon overpass residuals before and after sensor harmonization"
-          >
-            {resTicks.map((rv) => (
-              <g key={rv}>
-                <line
-                  x1={PAD_L}
-                  y1={yRes(rv)}
-                  x2={CHART_W - PAD_R}
-                  y2={yRes(rv)}
-                  stroke={rv === 0 ? 'rgba(235, 240, 241, 0.28)' : 'rgba(235, 240, 241, 0.08)'}
-                  strokeDasharray={rv === 0 ? '4 3' : undefined}
-                  strokeWidth="1"
-                />
-                <text
-                  x={PAD_L - 7}
-                  y={yRes(rv) + 3.5}
-                  textAnchor="end"
-                  fontSize="9.5"
-                  fill="rgba(235, 240, 241, 0.56)"
-                  fontFamily="IBM Plex Mono, monospace"
-                >
-                  {rv > 0 ? `+${rv.toFixed(2)}` : rv.toFixed(2)}
-                </text>
-              </g>
-            ))}
-
-            {diagnostics.pairedSamples.map((s, idx) => (
-              <g key={idx}>
-                <circle
-                  cx={xForVza(s.angleDeg)}
-                  cy={yRes(s.rawLogRatio)}
-                  r="1.9"
-                  fill="rgba(224, 122, 95, 0.34)"
-                />
-                <circle
-                  cx={xForVza(s.angleDeg)}
-                  cy={yRes(s.harmonizedLogRatio)}
-                  r="1.9"
-                  fill="rgba(86, 180, 233, 0.42)"
-                />
-              </g>
-            ))}
-
-            <path d={ciBandPath} fill="rgba(86, 180, 233, 0.14)" />
-            <path
-              d={rawResPath}
-              fill="none"
-              stroke="#E07A5F"
-              strokeWidth="2.0"
-              strokeDasharray="4 3"
-            />
-            <path d={harmResPath} fill="none" stroke="#EBF0F1" strokeWidth="2.1" />
-
-            {diagnostics.residuals.map((r) => (
-              <g key={r.scanAngleDeg}>
-                <circle cx={xForVza(r.scanAngleDeg)} cy={yRes(r.rawResidual)} r="3.0" fill="#E07A5F" />
-                <circle cx={xForVza(r.scanAngleDeg)} cy={yRes(r.harmonizedResidual)} r="3.1" fill="#EBF0F1" />
-              </g>
-            ))}
-
-            {[0, 15, 30, 45, 60].map((deg) => (
-              <text
-                key={deg}
-                x={xForVza(deg)}
-                y={CHART_H - 8}
-                textAnchor="middle"
-                fontSize="9.5"
-                fill="rgba(235, 240, 241, 0.56)"
-                fontFamily="IBM Plex Mono, monospace"
-              >
-                {deg}° VZA
-              </text>
-            ))}
-          </svg>
-
-          <div className="isogon-diag-summary-strip">
-            <div className="isogon-diag-stat-card">
-              <div className="isogon-diag-stat-label">MODIS Edge Expansion</div>
-              <div className="isogon-diag-stat-val">
-                {diagnostics.summary.edgeAreaRatioModis.toFixed(1)}x nadir area
-              </div>
-            </div>
-            <div className="isogon-diag-stat-card">
-              <div className="isogon-diag-stat-label">Paired Overpass RMSE</div>
-              <div className="isogon-diag-stat-val">
-                {diagnostics.summary.rawRmse.toFixed(3)} to {diagnostics.summary.harmonizedRmse.toFixed(3)} (-{rmseReductionPct}%)
-              </div>
-            </div>
-            <div className="isogon-diag-stat-card">
-              <div className="isogon-diag-stat-label">90% Interval Coverage</div>
-              <div className="isogon-diag-stat-val">
-                {diagnostics.summary.conformalCoveragePct.toFixed(1)}% ({diagnostics.summary.totalPairedPasses} pairs)
-              </div>
-            </div>
-          </div>
-
-          {diagnostics.benchmarkGates.length > 0 && (
-            <div className="isogon-diag-gates" aria-label="Scientific benchmark gates">
-              {diagnostics.benchmarkGates.map((g) => (
-                <div key={g.gateId} className="isogon-diag-gate-row">
-                  <span className="isogon-diag-gate-left">
-                    <span className="isogon-diag-gate-check" aria-hidden="true">
-                      <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                        <path
-                          d="M1.5 4.2L3.2 5.8L6.5 2.2"
-                          stroke="#090D10"
-                          strokeWidth="1.4"
-                          strokeLinecap="square"
-                        />
-                      </svg>
-                    </span>
-                    <span className="isogon-diag-gate-title">{g.title}</span>
-                  </span>
-                  <span className="isogon-diag-gate-metric">
-                    {g.metric} · {g.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="isogon-diag-prov">
-          <strong>Provenance &amp; Calibration Basis:</strong> {diagnostics.provenanceNote} Reference:{' '}
-          <code>{diagnostics.referenceLabel}</code>.
-        </div>
-      </aside>
+        {content}
+      </div>
     </div>
   );
 }

@@ -1,32 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
-  ATMOSPHERE_DOME_FRAGMENT_SHADER,
-  ATMOSPHERE_DOME_VERTEX_SHADER,
   CLIFF_BASE_Y,
   CURTAIN_FRAGMENT_SHADER,
   CURTAIN_VERTEX_SHADER,
   FIELD_FRAME_COUNT,
   FIELD_GRID_SIZE,
-  MAX_RELIEF_WORLD_Y,
   PEDESTAL_FRAGMENT_SHADER,
   PEDESTAL_VERTEX_SHADER,
-  PLUME_FRAGMENT_SHADER,
-  PLUME_VERTEX_SHADER,
   SIGMA_MAX_MW_KM2,
   SKIRT_FRAGMENT_SHADER,
   SKIRT_VERTEX_SHADER,
-  SLAB_D,
   SLAB_SEGMENTS,
-  SLAB_W,
-  TERRAIN_FRAGMENT_SHADER,
-  TERRAIN_VERTEX_SHADER,
   THEATER_ORDER,
   THEATER_PROFILES,
   Z_MAX_MW_KM2,
   alignReconstructionTensor,
-  bindPlumeParticlesToTensor,
-  buildConvectivePlumeGeometry,
   buildOpticalScanCurtainGeometry,
   buildProceduralSatelliteTexture,
   buildProceduralTheaterDem,
@@ -38,6 +27,8 @@ import {
 import type {
   EarthCutawayStageProps,
   EarthStageTelemetry,
+  LandingStandpointCheck,
+  InspectorCameraPreset,
   TheaterId,
 } from './earthCutawayTypes';
 import {
@@ -48,24 +39,181 @@ import {
   decomposePoseToOrbit,
   easeSubOrbitalMorph,
   resolvePresetForContext,
+  type CameraPresetSpec,
   type OrbitSphericalState,
 } from './orbitalDirector';
 import {
+  DEFAULT_FIELD_INTENSITY_SCALE,
   createFallbackObserverDataset,
+  fieldScalePosition,
+  fieldScaleValue,
   normalizeObserverDataset,
+  parseFieldIntensityScale,
   type DynamicRegionRun,
+  type FieldIntensityScale,
+  type NormalizedFootprint,
   type NormalizedObserverDataset,
   type NormalizedSatellitePass,
   type TerrainFindingCallout,
 } from './types';
+import {
+  HAZE_STRENGTH,
+  SKY_DOME_FRAGMENT_SHADER,
+  SKY_DOME_VERTEX_SHADER,
+  SKY_EXPOSURE_CLEAN,
+  SKY_EXPOSURE_INTERFACE,
+  SkyAtmosphere,
+  sunLightColor,
+  sunTransmittance,
+} from './engine/atmosphere';
+import {
+  ContextTerrain,
+  contextDropKm,
+  loadTerrainContext,
+  parseTerrainContext,
+  sampleContextElevation,
+  type LoadedTerrainContext,
+} from './engine/contextTerrain';
+import { FIRE_THRESHOLD_NORM, buildFireHistory, type FireHistory } from './engine/fireField';
+import { FootprintField, LIGHT_TEX_SIZE, buildDetectionSource } from './engine/footprintField';
+import { HdrPipeline, resolveStagePixelRatio } from './engine/hdrPipeline';
+import {
+  MODIS_SCAN,
+  NO_SCAN_PASS,
+  VIIRS_SCAN,
+  resolveScanPass,
+  type ScanPassUniform,
+} from './engine/scanGeometry';
+import { SunShadowBaker } from './engine/shadowBake';
+import { SpacecraftFleet, buildOrbitEnvironment, type FleetPass } from './engine/spacecraft';
+import { SmokePass, buildSmokeHeightTexture } from './engine/smokeVolume';
+import {
+  VERTICAL_EXAGGERATION,
+  computeSlabFrame,
+  elevationToWorldY,
+  type SlabFrame,
+} from './engine/slabFrame';
+import {
+  loadPackImage,
+  loadTerrainPack,
+  parseTerrainPackManifest,
+  scaleSunToStage,
+  sunDirectionFromAngles,
+  type LoadedTerrainPack,
+  type TerrainPackManifest,
+} from './engine/terrainPack';
+import { TERRAIN_DEPTH_FRAGMENT_SHADER, TERRAIN_FRAGMENT_SHADER, TERRAIN_VERTEX_SHADER } from './engine/terrainShader';
+import {
+  applyViewWindow,
+  calmRow,
+  fitSkylineToFrame,
+  fitSubjectToFrame,
+  planeUnderRow,
+  sanitizeSubjectFrame,
+  subjectFramesEqual,
+  type SubjectFrame,
+  type ViewWindow,
+} from './engine/landingFrame';
 
-// Direction points toward -U (West / screen-left from SE hero view) so:
-// - Left of curtain (scanCoord > 0) = Raw MODIS 1 km smeared sensor blocks
-// - Right of curtain (scanCoord < 0) = Harmonized 375 m fire front + 90% CI + convective smoke
-const CUTAWAY_DIR_VEC = new THREE.Vector2(-0.94, 0.31).normalize();
+// The sensor curtain is a vertical plane. Its ground trace (the seam) runs along the horizontal
+// view direction of the landing and overview cameras, so it reads as a near vertical line on
+// screen. The cut direction points to the raw MODIS side (scanCoord > 0), which is screen-left
+// from those cameras; the harmonized 375 m record is on the other side.
+const CURTAIN_AZIMUTH = LANDING_HERO_POSE.azimuth;
 const MAX_PLANE_OFFSET = 0.47;
-const MAX_FOOTPRINT_INSTANCES = 96;
+/** Close presets: largest angle between the view axis and the sensor curtain, radians. */
+const CLOSE_VIEW_CURTAIN_LIMIT = 0.62;
+/**
+ * Landing world view: lens, and how far the camera swings either way while it idles. The lens is
+ * longer than the stage's 39 degrees so ridges stack behind one another.
+ */
+const LANDING_WORLD_FOV = 30.0;
+const LANDING_WORLD_DRIFT = 0.055;
+/** Standpoints tried: ground distance from the fire (world units), and height of the eye above the ground under it (metres). */
+const LANDING_WORLD_DISTANCES = [3.6, 5.0, 6.5, 8.0] as const;
+const LANDING_WORLD_LIFTS_M = [90, 180, 300, 450, 650, 900] as const;
+/**
+ * Ground nearer than the imagery can carry is kept out of the frame: at the nearest ground in view
+ * one imagery texel may cover at most this many screen pixels (on a 1920 px wide 16:9 frame).
+ */
+const LANDING_WORLD_MAX_MAGNIFICATION = 2.0;
+/** The carry distance is never asked to be larger than this, world units (regions without a pack). */
+const LANDING_WORLD_CARRY_CAP = 2.5;
+/** Share of the frame the fire on show should cover; the score rises up to this and no further. */
+const LANDING_WORLD_FIRE_FRAME_SHARE = 0.05;
+/**
+ * A real fire sits in the middle distance of the landing, with terrain in front of it and the
+ * horizon behind: no lower in the frame than this share of the way from the skyline to the bottom
+ * edge (0.6 is about row 0.76 of the frame).
+ */
+const LANDING_WORLD_FIRE_LOWEST = 0.6;
+/** Sight lines are followed this far in steps of this length, world units. */
+const LANDING_WORLD_SIGHT_STEP = 0.14;
+const LANDING_WORLD_SIGHT_STEPS = 150;
+/** Clearance kept between the eye and the ground under it: the workspace, and the landing world view. */
+const CAMERA_CLEARANCE = 0.3;
+const CAMERA_CLEARANCE_WORLD = 0.03;
+/** Screen columns checked for a standpoint, across the widest viewport (16:9) and the drift. */
+const LANDING_WORLD_COLUMNS = 19;
+/** Smoke nearer to the camera than this is not drawn, world units. */
+const SMOKE_CLEAR_RADIUS = 1.7;
+/** Sky exposure of the landing world view: daylight, a little deeper than clean feed so type holds. */
+const SKY_EXPOSURE_LANDING = 0.6;
+/** Calm rectangle used when the page names none: the upper third of the viewport. */
+const DEFAULT_CALM_FRAME: SubjectFrame = { left: 0, top: 0, right: 1, bottom: 0.34 };
+/** Grid of terrain samples for the skyline of the landing world view. */
+/** Runs whose bundles are kept for an instant return (each holds 25 to 40 MB on the GPU). */
+const RUN_CACHE_LIMIT = 4;
+const SKYLINE_GRID = 33;
+/** Samples per side of the context terrain for the same fit. */
+const CONTEXT_SKYLINE_GRID = 48;
+/** Close views in picture mode: air path over the floor, as a multiple of the physical one. */
+const CLOSE_VIEW_FLOOR_HAZE = 3.2;
+/** Close presets: preferred angle between the view axis and the sun azimuth (side light). */
+const CLOSE_VIEW_SUN_ANGLE = 1.15;
+// Landing only: keeps the projected seam within about 25 degrees of vertical
+/**
+ * The landing has no sensor curtain, no seam and no MODIS side. The curtain's
+ * plane is parked this far out on the raw side, beyond the far terrain, so every point of the
+ * landing lies on the calibrated side. The workspace brings it back.
+ */
+const LANDING_NO_CURTAIN_PLANE = 6.0;
+
+/** Cut direction in slab uv (unit length) for a seam aligned with a camera azimuth. */
+function cutDirectionForAzimuth(
+  azimuth: number,
+  slabWidth: number,
+  slabDepth: number,
+  out: THREE.Vector2,
+): THREE.Vector2 {
+  // Screen-right of a camera at this azimuth is (cos a, -sin a) on the ground (x, z)
+  return out.set(-slabWidth * Math.cos(azimuth), -slabDepth * Math.sin(azimuth)).normalize();
+}
 const MAX_ORBITAL_RIGS = 4;
+/**
+ * Directional light on the spacecraft. A white diffuse surface facing the sun comes out at about
+ * 1.4 in scene-linear units, a little above the terrain's 1.3 because there is no air in the way.
+ */
+const SPACECRAFT_SUN_INTENSITY = 4.4;
+/** Volume above the slab that holds every spacecraft position the fleet can take. */
+const FLEET_SKY_TOP = 4.6;
+const FLEET_SKY_SHOULDER = 3.5;
+const FLEET_SKY_RADIUS = 3.2;
+const KM_PER_DEG_LAT = 111.32;
+
+/** North-south ground extent of a bbox, for bundles that carry no explicit depth. */
+function bboxDepthKm(bbox: [number, number, number, number]): number {
+  return Math.max(1.0, (bbox[3] - bbox[1]) * KM_PER_DEG_LAT);
+}
+
+// Landing composition. Without a subject frame the image is shifted down by 11% of the viewport
+// height. With one, the slab is fitted inside the given rectangle.
+const LEGACY_LANDING_OFFSET_Y = -0.11;
+const LANDING_DRIFT_AZIMUTH = 0.065;
+const SUBJECT_GRID = 13;
+const SUBJECT_SKY_POINTS = 5;
+const SUBJECT_POINT_COUNT = SUBJECT_GRID * SUBJECT_GRID + 4 + SUBJECT_SKY_POINTS;
+const SUBJECT_REFIT_INTERVAL_FRAMES = 24;
 
 interface CachedTheaterBundle {
   key: string;
@@ -83,25 +231,157 @@ interface CachedTheaterBundle {
   frameCount: number;
   bbox: [number, number, number, number];
   widthKm: number;
-  modisAzimuthRad: number;
-  modisStretch: number;
+  depthKm: number;
   windDirUv: [number, number];
   hasSeaCoast: boolean;
   observerDataset: NormalizedObserverDataset;
   findings: TerrainFindingCallout[];
+  /** Arrival, extinction, peak and burned mask derived from `tensor`. Built on first activation. */
+  fireHistory: FireHistory | null;
+  /** Map frame: slab size with the region's aspect ratio and the fixed vertical exaggeration. */
+  frame: SlabFrame;
+  /** Sun direction in stage space, toward the sun. */
+  sunDir: THREE.Vector3;
+  /** The same sun at true scale (x east, y up, z south), for the atmosphere. */
+  sunTrue: THREE.Vector3;
+  /** Ground size of one imagery texel, km. */
+  orthoTexelKm: number;
+  /** 1 for low-resolution imagery that benefits from sharpening, 0 for the pack ortho. */
+  sharpen: number;
+  /** Sun shadow baked for this DEM and sun. Built on first activation. */
+  shadow: THREE.WebGLRenderTarget | null;
+  /** Terrain pack manifest from the run, when the backend provides one. */
+  packManifest: TerrainPackManifest | null;
+  packState: 'none' | 'loading' | 'failed';
+  /** Set on the bundle that owns loaded pack textures; `lite` is the bundle it upgrades. */
+  pack: LoadedTerrainPack | null;
+  lite: CachedTheaterBundle | null;
+  /** Context terrain surrounding the pack. Loaded after the pack and owned by the pack bundle. */
+  context: LoadedTerrainContext | null;
+  contextState: 'none' | 'loading' | 'failed';
+  auxTex: THREE.Texture | null;
+  detailTex: THREE.Texture | null;
+  detailRect: [number, number, number, number];
+  detailTexelKm: number;
+  attribution: string;
+  /** Terrain height and upslope direction for the smoke march. Built on first activation. */
+  smokeHeight?: THREE.DataTexture | null;
+  /** Real runs: where the satellites detected fire, per frame (see buildDetectionSource). */
+  detectionSource?: Uint8Array | null;
+  /** How the field bytes map to MW/km2, from the run's payload. Absent: the simulated scale. */
+  fieldScale?: FieldIntensityScale;
+  /** Real runs: the overpass the landing shows (see landingFrameOf). Worked out once. */
+  landingFrame?: number | null;
 }
 
-interface SpacecraftRig {
-  group: THREE.Group;
-  craftRoot: THREE.Group;
-  solarWingMat: THREE.MeshStandardMaterial;
-  busMat: THREE.MeshStandardMaterial;
-  orbitArc: THREE.Line;
-  orbitArcGeom: THREE.BufferGeometry;
-  orbitArcMat: THREE.LineBasicMaterial;
-  swathMesh: THREE.Mesh;
-  swathGeom: THREE.BufferGeometry;
-  swathMat: THREE.MeshBasicMaterial;
+/**
+ * A pass of which nothing is drawn: no footprint, no scan cell, no spacecraft. Either the run says
+ * so (a real hold-out run marks its hidden passes), or the page has VIIRS switched off.
+ */
+function passIsHidden(pass: NormalizedSatellitePass, holdoutViirs: boolean): boolean {
+  return pass.hidden === true || (holdoutViirs && pass.family === 'viirs');
+}
+
+/**
+ * Callouts on the terrain. They are written for the simulated scenario (its named findings and
+ * their values), so a real run shows none. The findings themselves stay on the bundle: the landing
+ * standpoint still looks at the strongest fire.
+ */
+const NO_CALLOUTS: TerrainFindingCallout[] = [];
+function calloutsFor(bundle: CachedTheaterBundle): TerrainFindingCallout[] {
+  return bundle.observerDataset.dataSource === 'firms' ? NO_CALLOUTS : bundle.findings;
+}
+
+/** What the intensity scale of a bundle shows along its length, for the page's legend. */
+function intensityLegendOf(bundle: CachedTheaterBundle): NonNullable<EarthStageTelemetry['intensityLegend']> {
+  const scale = bundle.fieldScale ?? DEFAULT_FIELD_INTENSITY_SCALE;
+  return {
+    scale: scale.kind === 'linear' ? 'linear' : 'log',
+    ticks: scale.ticks ?? [0, 0.25, 0.5, 0.75, 1].map((at) => ({ at, mwPerKm2: fieldScaleValue(scale, at) })),
+  };
+}
+
+/** The estimate's glow on a real run starts at this fire radiative power density, MW/km2. It is strongest at the top of the run's scale. */
+const HEAT_FROM_MW_KM2 = 1;
+/** Where the estimate's glow starts and where it is strongest, as positions on the run's intensity scale. */
+function heatRangeOf(scale: FieldIntensityScale, out: THREE.Vector2): THREE.Vector2 {
+  if (scale.kind === 'linear') return out.set(0.02, 1.0);
+  return out.set(fieldScalePosition(scale, HEAT_FROM_MW_KM2), 1.0);
+}
+
+/**
+ * A detection's light is dimmest at the first fire radiative power density and brightest at the
+ * second, MW per km2 of its footprint. In the Dixie run a night VIIRS overpass has its median
+ * detection near 26, a tenth above 118 and its strongest near 840; a day overpass runs to 2,800.
+ */
+const LIGHT_FROM_MW_KM2 = 4;
+const LIGHT_FULL_MW_KM2 = 2500;
+/** The same two as positions on the run's intensity scale. */
+function lightRangeOf(scale: FieldIntensityScale, out: THREE.Vector2): THREE.Vector2 {
+  if (scale.kind === 'linear') return out.set(0.02, 1.0);
+  return out.set(fieldScalePosition(scale, LIGHT_FROM_MW_KM2), fieldScalePosition(scale, LIGHT_FULL_MW_KM2));
+}
+
+/**
+ * A fire wider than this share of the region's shorter side cannot stand whole in the landing
+ * frame from a standpoint inside the region (the lens is 30 degrees and the fire is to sit in the
+ * middle distance). Measured between the 5th and 95th percentile of the detections, each way.
+ */
+const LANDING_FIRE_MAX_SPAN = 0.45;
+
+/**
+ * The overpass a real run shows on the landing: a night VIIRS overpass (about two thirds of the
+ * VIIRS detections of these fires were made at night, and a fire at night is light on dark
+ * ground), the one with the most detections among those whose fire fits the frame whole. When
+ * none fits, the night VIIRS overpass with the most detections; when the run has no night VIIRS
+ * overpass, the overpass with the most detections. Hidden passes are never chosen. Null for a
+ * simulated run, which follows the page's time.
+ */
+function landingFrameOf(
+  dataset: NormalizedObserverDataset,
+  bbox: readonly [number, number, number, number],
+  widthKm: number,
+  depthKm: number,
+): number | null {
+  if (dataset.dataSource !== 'firms') return null;
+  const [lonMin, latMin, lonMax, latMax] = bbox;
+  const limitKm = LANDING_FIRE_MAX_SPAN * Math.min(widthKm, depthKm);
+  let best = -1;
+  let bestScore = -1;
+  dataset.frames.forEach((passes, f) => {
+    let count = 0;
+    let nightViirs = false;
+    const east: number[] = [];
+    const north: number[] = [];
+    for (const sp of passes) {
+      if (sp.hidden) continue;
+      count += sp.footprints.length;
+      if (sp.family === 'viirs' && sp.isDay === false) nightViirs = true;
+      for (const fp of sp.footprints) {
+        east.push(((fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin)) * widthKm);
+        north.push(((fp.lat - latMin) / Math.max(1e-9, latMax - latMin)) * depthKm);
+      }
+    }
+    if (count === 0) return;
+    east.sort((a, b) => a - b);
+    north.sort((a, b) => a - b);
+    const lo = Math.floor(0.05 * (count - 1));
+    const hi = Math.ceil(0.95 * (count - 1));
+    const spanKm = Math.hypot(east[hi] - east[lo], north[hi] - north[lo]);
+    const score = count + (nightViirs ? 1e6 : 0) + (nightViirs && spanKm <= limitKm ? 1e7 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = f;
+    }
+  });
+  return best >= 0 ? best : null;
+}
+
+/** Imagery credit of a bundle: the pack's, plus the context imagery's where that names another source. */
+function creditWithContext(bundle: CachedTheaterBundle): string {
+  const own = bundle.attribution;
+  const around = bundle.context?.manifest.ortho.attribution ?? '';
+  return around && around !== own ? (own ? `${own}; ${around}` : around) : own;
 }
 
 function isKnownTheater(id: string): id is TheaterId {
@@ -141,10 +421,105 @@ function sampleAlignedDemBilinear(
   return h0 + (h1 - h0) * fy;
 }
 
-function elevToWorldY(elevM: number, minElevM: number, maxElevM: number): number {
-  const span = Math.max(350.0, maxElevM - minElevM);
-  const norm = Math.min(1.15, Math.max(0.0, (elevM - minElevM) / span));
-  return norm * MAX_RELIEF_WORLD_Y;
+// Floor around the slab in clean feed and cinema: distant ground instead of the dark studio floor
+const FLOOR_COLOR_PICTURE = new THREE.Vector3(0.075, 0.098, 0.135);
+
+// Sun used when a region has no terrain pack (stage space, toward the sun).
+const DEFAULT_SUN_DIR = new THREE.Vector3(-0.56, 0.64, 0.52).normalize();
+
+/**
+ * Map frame, sun and pack manifest for a region. With a terrain pack the extent and the sun come
+ * from the pack (the sun is fitted to the shading already present in the imagery).
+ */
+function resolveRegionShading(
+  widthKm: number,
+  depthKm: number,
+  rawManifest: unknown,
+): {
+  widthKm: number;
+  depthKm: number;
+  frame: SlabFrame;
+  sunDir: THREE.Vector3;
+  sunTrue: THREE.Vector3;
+  packManifest: TerrainPackManifest | null;
+} {
+  const packManifest = parseTerrainPackManifest(rawManifest);
+  const w = packManifest ? packManifest.extent_km[0] : widthKm;
+  const d = packManifest ? packManifest.extent_km[1] : depthKm;
+  const frame = computeSlabFrame(w, d);
+  const sunDir = DEFAULT_SUN_DIR.clone();
+  const [ux, uy, uz] = frame.unitsPerMetre;
+  // Without a pack the default stage sun is used; its true-scale direction follows from the frame
+  const sunTrue = new THREE.Vector3(sunDir.x / ux, sunDir.y / uy, sunDir.z / uz).normalize();
+  if (packManifest) {
+    sunDirectionFromAngles(packManifest.sun.azimuth_deg, packManifest.sun.elevation_deg, sunTrue);
+    scaleSunToStage(sunTrue, new THREE.Vector3(ux, uy, uz), sunDir);
+  }
+  return { widthKm: w, depthKm: d, frame, sunDir, sunTrue, packManifest };
+}
+
+// Credit for the 2K fallback imagery, which comes from the same source as the pack ortho but
+// carries no attribution field of its own.
+const FALLBACK_IMAGERY_ATTRIBUTION = 'Esri, Vantor, Earthstar Geographics, and the GIS User Community';
+
+type BundleShadingFields = Pick<
+  CachedTheaterBundle,
+  | 'widthKm'
+  | 'depthKm'
+  | 'frame'
+  | 'sunDir'
+  | 'sunTrue'
+  | 'orthoTexelKm'
+  | 'sharpen'
+  | 'shadow'
+  | 'packManifest'
+  | 'packState'
+  | 'pack'
+  | 'lite'
+  | 'context'
+  | 'contextState'
+  | 'auxTex'
+  | 'detailTex'
+  | 'detailRect'
+  | 'detailTexelKm'
+  | 'attribution'
+>;
+
+/** Shading fields of a bundle that has no loaded pack textures (512 DEM, 2K or procedural image). */
+function liteShadingFields(
+  widthKm: number,
+  depthKm: number,
+  rawManifest: unknown,
+  orthoPixels: number,
+  attribution: string,
+): BundleShadingFields {
+  const s = resolveRegionShading(widthKm, depthKm, rawManifest);
+  const texelKm = s.widthKm / Math.max(64, orthoPixels);
+  return {
+    widthKm: s.widthKm,
+    depthKm: s.depthKm,
+    frame: s.frame,
+    sunDir: s.sunDir,
+    sunTrue: s.sunTrue,
+    orthoTexelKm: texelKm,
+    sharpen: 1,
+    shadow: null,
+    packManifest: s.packManifest,
+    packState: 'none',
+    pack: null,
+    lite: null,
+    context: null,
+    contextState: 'none',
+    auxTex: null,
+    detailTex: null,
+    detailRect: [0, 0, 1, 1],
+    detailTexelKm: texelKm,
+    attribution,
+  };
+}
+
+function bundleWorldY(elevM: number, b: CachedTheaterBundle): number {
+  return elevationToWorldY(elevM, b.minElevM, b.maxElevM, b.frame);
 }
 
 function extractTerrainFindings(
@@ -256,7 +631,7 @@ function extractTerrainFindings(
       subpixelCell.gy,
       'Missed Canyon Fire Recovered',
       'Sub-canopy 375 m gorge detection',
-      `${Math.max(11.0, subpixelCell.zMw).toFixed(1)} MW/km² · MODIS ${subpixelCell.modisMw.toFixed(1)}`,
+      `${Math.max(11.0, subpixelCell.zMw).toFixed(1)} MW/km², MODIS ${subpixelCell.modisMw.toFixed(1)}`,
     ),
     makeFinding(
       'conformal-ci',
@@ -270,107 +645,11 @@ function extractTerrainFindings(
   ];
 }
 
-function buildSpacecraftRig(): SpacecraftRig {
-  const group = new THREE.Group();
-  const craftRoot = new THREE.Group();
-
-  const busMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#d8dde6'),
-    metalness: 0.72,
-    roughness: 0.28,
-    transparent: true,
-    opacity: 0.95,
-  });
-  const foilMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#d9a441'),
-    metalness: 0.78,
-    roughness: 0.26,
-    transparent: true,
-    opacity: 0.95,
-  });
-  const solarWingMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#2a629a'),
-    emissive: new THREE.Color('#102946'),
-    metalness: 0.65,
-    roughness: 0.22,
-    transparent: true,
-    opacity: 0.92,
-  });
-
-  const busMesh = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.11, 0.24), busMat);
-  const goldDeck = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.045, 0.14), foilMat);
-  goldDeck.position.set(0, -0.05, 0.02);
-
-  const opticsBarrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.036, 0.048, 0.085, 12),
-    busMat,
-  );
-  opticsBarrel.position.set(0, -0.08, -0.02);
-
-  const wingGeom = new THREE.BoxGeometry(0.76, 0.012, 0.17);
-  const solarWing = new THREE.Mesh(wingGeom, solarWingMat);
-  solarWing.position.set(0, 0.01, 0);
-
-  craftRoot.add(busMesh, goldDeck, opticsBarrel, solarWing);
-  group.add(craftRoot);
-
-  // Orbital trajectory pass arc (96 vertices)
-  const arcPts = new Float32Array(96 * 3);
-  const orbitArcGeom = new THREE.BufferGeometry();
-  orbitArcGeom.setAttribute('position', new THREE.BufferAttribute(arcPts, 3));
-  const orbitArcMat = new THREE.LineBasicMaterial({
-    color: new THREE.Color('#5cd6ff'),
-    transparent: true,
-    opacity: 0.45,
-    depthWrite: false,
-  });
-  const orbitArc = new THREE.Line(orbitArcGeom, orbitArcMat);
-  orbitArc.frustumCulled = false;
-  group.add(orbitArc);
-
-  // Volumetric nadir scan swath triangle fan (apex at satellite + 25 ground chord samples)
-  const chordSamples = 25;
-  const swathPositions = new Float32Array((1 + chordSamples) * 3);
-  const swathIndices: number[] = [];
-  for (let i = 0; i < chordSamples - 1; i++) {
-    swathIndices.push(0, 1 + i, 2 + i);
-  }
-  const swathGeom = new THREE.BufferGeometry();
-  swathGeom.setAttribute('position', new THREE.BufferAttribute(swathPositions, 3));
-  swathGeom.setIndex(swathIndices);
-
-  const swathMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color('#5cd6ff'),
-    transparent: true,
-    opacity: 0.08,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
-  const swathMesh = new THREE.Mesh(swathGeom, swathMat);
-  swathMesh.frustumCulled = false;
-  group.add(swathMesh);
-
-  return {
-    group,
-    craftRoot,
-    solarWingMat,
-    busMat,
-    orbitArc,
-    orbitArcGeom,
-    orbitArcMat,
-    swathMesh,
-    swathGeom,
-    swathMat,
-  };
-}
-
 export function EarthCutawayStage(props: EarthCutawayStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgLinesRef = useRef<(SVGPolylineElement | null)[]>([null, null, null]);
   const pinCrossRefs = useRef<(HTMLDivElement | null)[]>([null, null, null]);
   const calloutCardRefs = useRef<(HTMLButtonElement | null)[]>([null, null, null]);
-  const curtainPillRef = useRef<HTMLButtonElement | null>(null);
 
   const [renderedFindings, setRenderedFindings] = useState<TerrainFindingCallout[]>([]);
   const [curtainHovered, setCurtainHovered] = useState(false);
@@ -384,7 +663,12 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     activateBundle: (bundle: CachedTheaterBundle, animateMorph: boolean) => void;
     upgradeBundleInPlace: (bundle: CachedTheaterBundle) => void;
     bundleCache: Map<string, CachedTheaterBundle>;
-    runCache: Map<string, CachedTheaterBundle>;
+    /** The bundle of a run that is still held, marked as just used; undefined when it is not. */
+    takeRunBundle: (runId: string) => CachedTheaterBundle | undefined;
+    /** Region of the terrain on screen (a custom search region keeps the page's theater id). */
+    onScreenRegionId: () => string;
+    /** Stores the bundle of a newly loaded run as its region's current one. */
+    storeRunBundle: (regionId: string, runId: string, bundle: CachedTheaterBundle) => void;
     maxAnisotropy: number;
     texLoader: THREE.TextureLoader;
     triggerSlew: (targetTheaterId: TheaterId) => void;
@@ -398,16 +682,17 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
     let disposed = false;
 
-    // 1. WebGL2 Renderer with hardware MSAA for razor-sharp cutaway bevels & 1px datum lines
+    // 1. WebGL2 renderer. The scene is drawn into a half-float HDR buffer owned by the composer
+    // (MSAA there), so the default framebuffer needs no multisampling, depth or stencil.
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: false,
       alpha: false,
+      depth: false,
       powerPreference: 'high-performance',
       stencil: false,
     });
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let dpr = resolveStagePixelRatio();
     renderer.setPixelRatio(dpr);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setClearColor(new THREE.Color('#080b11'), 1.0);
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
@@ -421,12 +706,40 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(39.0, 16 / 9, 0.12, 140.0);
 
-    // Subtle directional lighting for 3D NASA spacecraft buses & solar wings
-    const sunDir = new THREE.Vector3(-0.56, 0.64, 0.52).normalize();
-    const keyLight = new THREE.DirectionalLight(0xfff4e4, 1.8);
+    // HDR pipeline: scene-linear half-float buffers, mipmap bloom above 1.0, then one ACES Filmic
+    // tone curve and one sRGB encode in the final pass.
+    const pipeline = new HdrPipeline(renderer, scene, camera);
+
+    // Volumetric smoke: raymarched against the scene depth in a pass between the scene render
+    // and bloom, so it is tone mapped with everything else.
+    const smokePass = new SmokePass();
+    pipeline.insertScenePass(smokePass);
+    const smokeHeightTextures = new Set<THREE.DataTexture>();
+    const ensureSmokeHeight = (bundle: CachedTheaterBundle): THREE.DataTexture => {
+      if (!bundle.smokeHeight) {
+        bundle.smokeHeight = buildSmokeHeightTexture(
+          bundle.alignedDem,
+          bundle.demGridRes,
+          (elevM) => bundleWorldY(elevM, bundle),
+          bundle.frame.width,
+          bundle.frame.depth,
+        );
+        smokeHeightTextures.add(bundle.smokeHeight);
+      }
+      return bundle.smokeHeight;
+    };
+    let smokeOpacity = 1.0;
+    let pictureMix = 0.0;
+
+    // One sun direction for terrain, shadows, spacecraft, smoke and sky. It follows the active region.
+    // The directional light and the environment reach only the spacecraft (the only standard
+    // materials in the scene): unfiltered sunlight, and Earth shine from below with black space above.
+    const sunDir = DEFAULT_SUN_DIR.clone();
+    const keyLight = new THREE.DirectionalLight(0xfffaf2, SPACECRAFT_SUN_INTENSITY);
     keyLight.position.copy(sunDir).multiplyScalar(20);
-    const hemiLight = new THREE.HemisphereLight(0x8bb4e8, 0x1a2230, 0.9);
-    scene.add(keyLight, hemiLight);
+    scene.add(keyLight);
+    const orbitEnvironment = buildOrbitEnvironment(renderer);
+    scene.environment = orbitEnvironment.texture;
 
     // 2. Seed synchronous zero-latency theater bundles for all 4 wildfire theaters
     const bundleCache = new Map<string, CachedTheaterBundle>();
@@ -468,20 +781,117 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         tensor: procTensor,
         frameCount: FIELD_FRAME_COUNT,
         bbox: [...prof.bbox] as [number, number, number, number],
-        widthKm: prof.widthKm,
-        modisAzimuthRad: (prof.modisAzimuthDeg * Math.PI) / 180,
-        modisStretch: prof.modisStretch,
         windDirUv: [...prof.windDirUv] as [number, number],
         hasSeaCoast: prof.hasSeaCoast,
         observerDataset: createFallbackObserverDataset(prof.bbox),
         findings,
+        fireHistory: null,
+        ...liteShadingFields(prof.widthKm, bboxDepthKm(prof.bbox), null, 512, ''),
       });
     }
+
+    // Fire history (arrival level set, burned area) is derived once per tensor, on first use.
+    const floatLinearSupported = renderer.extensions.has('OES_texture_float_linear');
+    const ensureFireHistory = (bundle: CachedTheaterBundle): FireHistory => {
+      if (!bundle.fireHistory) {
+        bundle.fireHistory = buildFireHistory(bundle.tensor, bundle.frameCount, floatLinearSupported);
+      }
+      return bundle.fireHistory;
+    };
 
     const initialTheater = propsRef.current.activeTheaterId;
     let prevBundle = bundleCache.get(initialTheater) ?? bundleCache.get('plumas_ca')!;
     let nextBundle = prevBundle;
-    setRenderedFindings(nextBundle.findings);
+
+    // ---------------------------------------------------------------------------------------
+    // Bundles that left both caches. A bundle holds 25 to 40 MB on the GPU (elevation, imagery,
+    // fire history, baked shadow, smoke height), so one that nothing refers to any more is
+    // released, but only once it is off screen, and only what no other bundle shares with it.
+    // ---------------------------------------------------------------------------------------
+    const retiredBundles: CachedTheaterBundle[] = [];
+    const retireBundle = (bundle: CachedTheaterBundle | undefined) => {
+      if (bundle && !retiredBundles.includes(bundle)) retiredBundles.push(bundle);
+    };
+    const heldBundles = (): Set<CachedTheaterBundle> => {
+      const held = new Set<CachedTheaterBundle>();
+      const add = (b: CachedTheaterBundle | null | undefined) => {
+        if (!b) return;
+        held.add(b);
+        if (b.lite) held.add(b.lite);
+      };
+      add(prevBundle);
+      add(nextBundle);
+      for (const b of bundleCache.values()) add(b);
+      for (const b of runCache.values()) add(b);
+      for (const b of packBundles.values()) add(b);
+      return held;
+    };
+    const sweepRetiredBundles = () => {
+      if (retiredBundles.length === 0) return;
+      const held = heldBundles();
+      const inUse = new Set<unknown>();
+      for (const b of held) {
+        inUse.add(b.demTex);
+        inUse.add(b.satTex);
+        inUse.add(b.fireHistory?.texture);
+        inUse.add(b.shadow);
+        inUse.add(b.smokeHeight);
+      }
+      const release = (resource: { dispose: () => void } | null | undefined) => {
+        if (!resource || inUse.has(resource)) return;
+        inUse.add(resource);
+        resource.dispose();
+      };
+      for (const b of retiredBundles) {
+        // Back in a cache, or still on screen: it is not this sweep's to release
+        if (held.has(b)) continue;
+        release(b.demTex);
+        release(b.satTex);
+        release(b.fireHistory?.texture);
+        release(b.shadow);
+        if (b.smokeHeight) {
+          smokeHeightTextures.delete(b.smokeHeight);
+          release(b.smokeHeight);
+        }
+        b.fireHistory = null;
+        b.shadow = null;
+        b.smokeHeight = null;
+        b.detectionSource = null;
+      }
+      // What is still on screen stays on the list for a later sweep
+      for (let i = retiredBundles.length - 1; i >= 0; i--) {
+        const b = retiredBundles[i];
+        const onScreen = b === prevBundle || b === nextBundle || b === prevBundle.lite || b === nextBundle.lite;
+        if (!onScreen) retiredBundles.splice(i, 1);
+      }
+    };
+    /** Makes `bundle` the current one of its region; the one it replaces is retired unless a run still holds it. */
+    const setRegionBundle = (regionId: string, bundle: CachedTheaterBundle) => {
+      const old = bundleCache.get(regionId);
+      bundleCache.set(regionId, bundle);
+      if (old && old !== bundle) retireBundle(old);
+    };
+    const takeRunBundle = (runId: string): CachedTheaterBundle | undefined => {
+      const bundle = runCache.get(runId);
+      if (bundle) {
+        // Most recently used last
+        runCache.delete(runId);
+        runCache.set(runId, bundle);
+      }
+      return bundle;
+    };
+    const storeRunBundle = (regionId: string, runId: string, bundle: CachedTheaterBundle) => {
+      setRegionBundle(regionId, bundle);
+      runCache.set(runId, bundle);
+      // Every calendar date, hold-out switch and cloud setting is its own run: keep the last few
+      while (runCache.size > RUN_CACHE_LIMIT) {
+        const oldest = runCache.keys().next().value as string;
+        const dropped = runCache.get(oldest);
+        runCache.delete(oldest);
+        retireBundle(dropped);
+      }
+    };
+    setRenderedFindings(calloutsFor(nextBundle));
 
     // Persistent 256x256 RGBA epoch pair textures (zero per-frame allocation)
     const fieldBuf0 = new Uint8Array(FIELD_GRID_SIZE * FIELD_GRID_SIZE * 4);
@@ -494,8 +904,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         THREE.RGBAFormat,
         THREE.UnsignedByteType,
       );
-      t.minFilter = THREE.LinearFilter;
+      // Mipmapped: the blurred levels are the light source for fire bounce light and, later, the
+      // smoke source. Exact per-cell reads use textureLod(.., 0.0) in the shaders.
+      t.minFilter = THREE.LinearMipmapLinearFilter;
       t.magFilter = THREE.LinearFilter;
+      t.generateMipmaps = true;
       t.wrapS = THREE.ClampToEdgeWrapping;
       t.wrapT = THREE.ClampToEdgeWrapping;
       t.flipY = false;
@@ -509,6 +922,69 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let uploadedFrame0 = -1;
     let uploadedFrame1 = -1;
     let uploadedTensorRef: Uint8Array | null = null;
+
+    // Real runs: the detections of the two epochs, as the smoke source (red, one byte per cell)
+    const detectionCells = FIELD_GRID_SIZE * FIELD_GRID_SIZE;
+    const makeDetectionTex = (): THREE.DataTexture => {
+      const tex = new THREE.DataTexture(
+        new Uint8Array(detectionCells),
+        FIELD_GRID_SIZE,
+        FIELD_GRID_SIZE,
+        THREE.RedFormat,
+        THREE.UnsignedByteType,
+      );
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = false;
+      tex.flipY = false;
+      tex.needsUpdate = true;
+      return tex;
+    };
+    const detectionTex0 = makeDetectionTex();
+    const detectionTex1 = makeDetectionTex();
+    let detectionKey0 = '';
+    let detectionKey1 = '';
+    const syncDetectionTextures = (bundle: CachedTheaterBundle, f0: number, f1: number): void => {
+      const source = (bundle.detectionSource ??= buildDetectionSource(
+        bundle.observerDataset.frames,
+        bundle.frameCount,
+        bundle.bbox,
+        [bundle.widthKm, bundle.depthKm],
+        FIELD_GRID_SIZE,
+      ));
+      const key0 = `${bundle.key}:${f0}`;
+      if (key0 !== detectionKey0) {
+        (detectionTex0.image.data as Uint8Array).set(source.subarray(f0 * detectionCells, (f0 + 1) * detectionCells));
+        detectionTex0.needsUpdate = true;
+        detectionKey0 = key0;
+      }
+      const key1 = `${bundle.key}:${f1}`;
+      if (key1 !== detectionKey1) {
+        (detectionTex1.image.data as Uint8Array).set(source.subarray(f1 * detectionCells, (f1 + 1) * detectionCells));
+        detectionTex1.needsUpdate = true;
+        detectionKey1 = key1;
+      }
+    };
+
+    // Real runs: the footprints of the overpass on show, drawn on the ground by the terrain shader
+    const footprintField = new FootprintField();
+    const uFootMix = new THREE.Vector2(0, 0);
+    const uFieldScale = new THREE.Vector3(0, DEFAULT_FIELD_INTENSITY_SCALE.maxMwKm2, DEFAULT_FIELD_INTENSITY_SCALE.minMwKm2);
+    const uHeatRange = new THREE.Vector2(0.02, 1.0);
+    const lightRange = new THREE.Vector2(0.02, 1.0);
+    const uLightModis = { value: 0.0 };
+    const uRevealed = new THREE.Vector2(0, 0);
+    // Real runs: 1 on a night overpass (see NIGHT_GLSL). Shared by every surface that is not emitted light.
+    const uNight = { value: 0.0 };
+    // Real runs: the overpass on show, for the page's legend
+    let realPassNow: EarthStageTelemetry['realPass'];
+    let realPassKey = '';
+    // Where the detections of the pass on show lie in the region (u east, v north, 0..1), and
+    // whether MODIS made any of them. The workspace's auto sweep of the curtain reads it. It is
+    // kept through a pass that shows nothing (a held-out one), so the curtain does not jump.
+    const passFireBox = { run: '', u0: 0, u1: 0, v0: 0, v1: 0, modis: false };
+    const footprintList: NormalizedFootprint[] = [];
+    const revealedList: NormalizedFootprint[] = [];
 
     const syncEpochTextures = (tensor: Uint8Array, frameCount: number, timeProg: number): number => {
       const clampedT = Math.min(1, Math.max(0, timeProg));
@@ -539,11 +1015,38 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     );
 
     // 3. Build Scene Hierarchy
-    // 3a. Orbital Horizon Atmosphere Dome
-    const domeGeom = new THREE.SphereGeometry(62.0, 32, 20);
+    // 3a. Sky dome: Rayleigh and Mie sky above the horizon, the studio floor below it. The same
+    // sun that lights the terrain drives it.
+    const atmosphere = new SkyAtmosphere();
+    const uSunTrue = nextBundle.sunTrue.clone();
+    const uSunColor = new THREE.Vector3(1.4, 1.29, 1.17);
+    const uSunTransmittance = new THREE.Vector3(0.9, 0.8, 0.66);
+    // Sunlight color and the transmittance toward the sun at the region's mean elevation
+    const syncSunLight = (bundle: CachedTheaterBundle) => {
+      const meanElevKm = (bundle.minElevM + bundle.maxElevM) * 0.0005;
+      uSunTrue.copy(bundle.sunTrue);
+      sunLightColor(meanElevKm, bundle.sunTrue.y, uSunColor);
+      uSunTransmittance.fromArray(sunTransmittance(meanElevKm, bundle.sunTrue.y));
+    };
+    syncSunLight(nextBundle);
+    // The dome is built before the terrain uniforms; the terrain's night value is copied into this
+    const domeNight = { value: 0.0 };
+    const domeUniforms = {
+      uNight: domeNight,
+      uSkyView: { value: atmosphere.skyView.texture },
+      uTransmittanceLut: { value: atmosphere.transmittance },
+      uSunTrue: { value: uSunTrue },
+      uCamAltKm: { value: 8.0 },
+      uVerticalExaggeration: { value: VERTICAL_EXAGGERATION },
+      uFloorColor: { value: new THREE.Vector3(0.044, 0.06, 0.094) },
+      uFloorHaze: { value: 0.3 },
+      uSkyExposure: { value: SKY_EXPOSURE_INTERFACE },
+    };
+    const domeGeom = new THREE.SphereGeometry(62.0, 48, 32);
     const domeMat = new THREE.ShaderMaterial({
-      vertexShader: ATMOSPHERE_DOME_VERTEX_SHADER,
-      fragmentShader: ATMOSPHERE_DOME_FRAGMENT_SHADER,
+      vertexShader: SKY_DOME_VERTEX_SHADER,
+      fragmentShader: SKY_DOME_FRAGMENT_SHADER,
+      uniforms: domeUniforms,
       side: THREE.BackSide,
       depthWrite: false,
     });
@@ -551,12 +1054,20 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     domeMesh.renderOrder = -10;
     scene.add(domeMesh);
 
+    // Map frame uniforms shared by every material that places things on the slab
+    const uSlabSize = new THREE.Vector2(nextBundle.frame.width, nextBundle.frame.depth);
+    const uReliefScale = new THREE.Vector2(
+      prevBundle.frame.unitsPerMetre[1],
+      nextBundle.frame.unitsPerMetre[1],
+    );
+
     // 3b. Grounded Contact-Shadow & Radial Geodetic Graticule Pedestal
     const pedestalGeom = new THREE.PlaneGeometry(34.0, 34.0, 1, 1);
     pedestalGeom.rotateX(-Math.PI / 2);
     const pedestalMat = new THREE.ShaderMaterial({
       vertexShader: PEDESTAL_VERTEX_SHADER,
       fragmentShader: PEDESTAL_FRAGMENT_SHADER,
+      uniforms: { uSlabSize: { value: uSlabSize }, uShadowMix: { value: 1.0 } },
       transparent: true,
       depthWrite: false,
     });
@@ -565,17 +1076,76 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     pedestalMesh.renderOrder = -2;
     scene.add(pedestalMesh);
 
+    // Live cut direction of the sensor curtain (shared by every material that uses the split)
+    const cutDir = cutDirectionForAzimuth(
+      CURTAIN_AZIMUTH,
+      nextBundle.frame.width,
+      nextBundle.frame.depth,
+      new THREE.Vector2(),
+    );
+    let cutAzimuth = CURTAIN_AZIMUTH;
+
     // 3c. Shared Heightfield Uniform Values
     const uDemRes = new THREE.Vector2(prevBundle.demGridRes, nextBundle.demGridRes);
     const uElevPrevRange = new THREE.Vector2(prevBundle.minElevM, prevBundle.maxElevM);
     const uElevNextRange = new THREE.Vector2(nextBundle.minElevM, nextBundle.maxElevM);
-    const uModisBowtie = new THREE.Vector2(nextBundle.modisAzimuthRad, nextBundle.modisStretch);
+    const uExtentKm = new THREE.Vector2(nextBundle.widthKm, nextBundle.depthKm);
+    // Scan geometry of the overpass shown for the current epoch: (axis east, axis north, nadir km, valid)
+    const uModisPass = new THREE.Vector4(1, 0, 0, 0);
+    const uViirsPass = new THREE.Vector4(1, 0, 0, 0);
+    // Scan strip under each spacecraft: (MODIS along-track km, strength, VIIRS along-track km, strength)
+    const uScanStrip = new THREE.Vector4(0, 0, 0, 0);
+    const modisPassState: ScanPassUniform = { ...NO_SCAN_PASS };
+    const viirsPassState: ScanPassUniform = { ...NO_SCAN_PASS };
     const uWindDirUv = new THREE.Vector2(nextBundle.windDirUv[0], nextBundle.windDirUv[1]);
+    const uUnitsPerMetre = new THREE.Vector3(...nextBundle.frame.unitsPerMetre);
+    const uDetailRect = new THREE.Vector4(0, 0, 1, 1);
 
-    // 3d. 512 x 512 Stratigraphic Earth Surface Mesh (522,242 triangles)
-    const terrainGeom = new THREE.PlaneGeometry(SLAB_W, SLAB_D, SLAB_SEGMENTS, SLAB_SEGMENTS);
-    terrainGeom.rotateX(-Math.PI / 2);
-    terrainGeom.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.0, 0), 15.0);
+    // Neutral stand-ins for the optional terrain pack textures
+    const makeSolidTex = (r: number, g: number, b: number, a: number): THREE.DataTexture => {
+      const tex = new THREE.DataTexture(
+        new Uint8Array([r, g, b, a]),
+        1,
+        1,
+        THREE.RGBAFormat,
+        THREE.UnsignedByteType,
+      );
+      tex.needsUpdate = true;
+      return tex;
+    };
+    const neutralAuxTex = makeSolidTex(128, 128, 255, 0);
+    const whiteTex = makeSolidTex(255, 255, 255, 255);
+
+    // Sun shadow of the terrain on itself, baked once per bundle (DEM and sun never change)
+    const shadowBaker = new SunShadowBaker(renderer);
+    const ensureShadow = (bundle: CachedTheaterBundle): THREE.Texture => {
+      if (!bundle.shadow) {
+        bundle.shadow = shadowBaker.bake(
+          bundle.demTex,
+          bundle.demGridRes,
+          bundle.minElevM,
+          bundle.maxElevM,
+          bundle.frame.unitsPerMetre[1],
+          bundle.frame.width,
+          bundle.frame.depth,
+          bundle.sunDir,
+          bundle.demGridRes >= 1024 ? 2048 : 1024,
+        );
+      }
+      return bundle.shadow.texture;
+    };
+
+    // 3d. Terrain surface mesh. The plane is unit-parameterised; the shader sizes it from the
+    // map frame. 512 x 512 vertices by default, 1024 x 1024 once a terrain pack is active.
+    const buildTerrainGeometry = (segments: number): THREE.PlaneGeometry => {
+      const geom = new THREE.PlaneGeometry(1, 1, segments, segments);
+      geom.rotateX(-Math.PI / 2);
+      geom.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.0, 0), 15.0);
+      return geom;
+    };
+    const terrainGeom = buildTerrainGeometry(SLAB_SEGMENTS);
+    let hiResTerrainGeom: THREE.PlaneGeometry | null = null;
+    let hiResSkirtGeom: THREE.BufferGeometry | null = null;
 
     const terrainUniforms = {
       uDemPrev: { value: prevBundle.demTex },
@@ -594,7 +1164,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uTime: { value: 0.0 },
       uCutawayMix: { value: 1.0 },
       uCutawayPlane: { value: 0.0 },
-      uCutawayDir: { value: CUTAWAY_DIR_VEC },
+      uCutawayDir: { value: cutDir },
       uReconMix: { value: 0.0 },
       uObserverMix: { value: 0.0 },
       uModisWeight: { value: 1.0 },
@@ -602,9 +1172,51 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uUncertaintyMix: { value: propsRef.current.showUncertainty ? 1.0 : 0.0 },
       uHoldoutBoost: { value: propsRef.current.holdoutViirs ? 1.0 : 0.0 },
       uSensitivity: { value: propsRef.current.sensitivityThreshold },
-      uModisBowtie: { value: uModisBowtie },
-      uDomainWidthKm: { value: nextBundle.widthKm },
+      uExtentKm: { value: uExtentKm },
+      uModisPass: { value: uModisPass },
+      uViirsPass: { value: uViirsPass },
+      uScanStrip: { value: uScanStrip },
+      uLatticeMix: { value: 1.0 },
       uHasSeaCoast: { value: nextBundle.hasSeaCoast ? 1.0 : 0.0 },
+      uFireHist: { value: ensureFireHistory(nextBundle).texture },
+      uFireTime: { value: 0.0 },
+      uWindDirUv: { value: uWindDirUv },
+      uReliefScale: { value: uReliefScale },
+      uSlabSize: { value: uSlabSize },
+      uAuxTex: { value: (nextBundle.auxTex ?? neutralAuxTex) as THREE.Texture },
+      uAuxMix: { value: 0.0 },
+      uShadowTex: { value: ensureShadow(nextBundle) },
+      uUnitsPerMetre: { value: uUnitsPerMetre },
+      uOrthoTexelKm: { value: nextBundle.orthoTexelKm },
+      uSatSharpen: { value: nextBundle.sharpen },
+      uDetailTex: { value: whiteTex as THREE.Texture },
+      uDetailRect: { value: uDetailRect },
+      uDetailMix: { value: 0.0 },
+      uDetailTexelKm: { value: nextBundle.detailTexelKm },
+      uSmokeShadowTex: { value: smokePass.shadowTarget.texture },
+      uSunTrue: { value: uSunTrue },
+      uSunColor: { value: uSunColor },
+      uSunTransmittance: { value: uSunTransmittance },
+      uHazeStrength: { value: HAZE_STRENGTH },
+      uSkyView: { value: atmosphere.skyView.texture },
+      uSkyExposure: { value: SKY_EXPOSURE_INTERFACE },
+      uEdgeFade: { value: 0.0 },
+      uContextDem: { value: null as THREE.Texture | null },
+      uContextRes: { value: 1024.0 },
+      uContextScale: { value: 5.0 },
+      uContextMix: { value: 0.0 },
+      uContextOrtho: { value: null as THREE.Texture | null },
+      uFloorColor: domeUniforms.uFloorColor,
+      uFloorHaze: domeUniforms.uFloorHaze,
+      uSmokeShadowMix: { value: 0.0 },
+      uFootTex: { value: footprintField.texture as THREE.Texture },
+      uFootMix: { value: uFootMix },
+      uFieldScale: { value: uFieldScale },
+      uHeatRange: { value: uHeatRange },
+      uLightModis,
+      uLightTexels: { value: LIGHT_TEX_SIZE },
+      uRevealed: { value: uRevealed },
+      uNight,
     };
 
     const terrainMat = new THREE.ShaderMaterial({
@@ -616,6 +1228,49 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     terrainMesh.frustumCulled = false;
     scene.add(terrainMesh);
 
+    // The terrain's depth is laid down first. Seen from inside the landscape many ridges overlap
+    // in every pixel, and without this the surface shader runs for each hidden one. The offset
+    // keeps this pass a hair behind the surface, so the surface always passes the depth test.
+    const terrainDepthMat = new THREE.ShaderMaterial({
+      vertexShader: TERRAIN_VERTEX_SHADER,
+      fragmentShader: TERRAIN_DEPTH_FRAGMENT_SHADER,
+      uniforms: terrainUniforms,
+      colorWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 2,
+    });
+    const terrainDepthMesh = new THREE.Mesh(terrainGeom, terrainDepthMat);
+    terrainDepthMesh.frustumCulled = false;
+    terrainDepthMesh.renderOrder = -10;
+    scene.add(terrainDepthMesh);
+
+    // 3d. Context terrain: land and sea around the pack, out to the horizon. Drawn in
+    // the landing world view and the close presets; the block views keep the block.
+    const contextTerrain = new ContextTerrain({
+      uSlabSize: terrainUniforms.uSlabSize,
+      uElevNextRange: terrainUniforms.uElevNextRange,
+      uReliefScale: terrainUniforms.uReliefScale,
+      uUnitsPerMetre: terrainUniforms.uUnitsPerMetre,
+      uSunDir: terrainUniforms.uSunDir,
+      uSunTrue: terrainUniforms.uSunTrue,
+      uSunColor: terrainUniforms.uSunColor,
+      uSunTransmittance: terrainUniforms.uSunTransmittance,
+      uHazeStrength: terrainUniforms.uHazeStrength,
+      uSkyView: terrainUniforms.uSkyView,
+      uSkyExposure: terrainUniforms.uSkyExposure,
+      uFloorColor: terrainUniforms.uFloorColor,
+      uFloorHaze: terrainUniforms.uFloorHaze,
+      uContextDem: terrainUniforms.uContextDem,
+      uContextRes: terrainUniforms.uContextRes,
+      uContextScale: terrainUniforms.uContextScale,
+      uContextMix: terrainUniforms.uContextMix,
+      uContextOrtho: terrainUniforms.uContextOrtho,
+      uNight,
+    });
+    scene.add(contextTerrain.mesh);
+    let contextMix = 0.0;
+
     // 3e. 3D Geological Cutaway Cliff Skirt (4 perimeter basalt-slate walls with 500 m datum lines)
     const skirtGeom = buildStratigraphicSkirtGeometry();
     const skirtUniforms = {
@@ -624,11 +1279,19 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uDemRes: terrainUniforms.uDemRes,
       uElevPrevRange: terrainUniforms.uElevPrevRange,
       uElevNextRange: terrainUniforms.uElevNextRange,
+      uReliefScale: terrainUniforms.uReliefScale,
+      uSlabSize: terrainUniforms.uSlabSize,
       uMorph: terrainUniforms.uMorph,
       uSunDir: terrainUniforms.uSunDir,
       uCutawayMix: terrainUniforms.uCutawayMix,
       uCutawayPlane: terrainUniforms.uCutawayPlane,
       uCutawayDir: terrainUniforms.uCutawayDir,
+      uEdgeFade: terrainUniforms.uEdgeFade,
+      uContextDem: terrainUniforms.uContextDem,
+      uContextRes: terrainUniforms.uContextRes,
+      uContextScale: terrainUniforms.uContextScale,
+      uContextMix: terrainUniforms.uContextMix,
+      uNight,
     };
     const skirtMat = new THREE.ShaderMaterial({
       vertexShader: SKIRT_VERTEX_SHADER,
@@ -642,17 +1305,34 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
     // 3f. 3D Translucent Optical Scan Curtain Ribbon
     const curtainGeom = buildOpticalScanCurtainGeometry(256);
+    // Landing world view: plane that smoke and the curtain stay under (see planeUnderRow)
+    const smokeLid = new THREE.Vector4(0, 1, 0, -1e4);
+    // (the terrain's night value is copied into this each frame; the terrain uniforms are built later)
+    const curtainNight = { value: 0.0 };
     const curtainUniforms = {
       uDemPrev: terrainUniforms.uDemPrev,
       uDemNext: terrainUniforms.uDemNext,
       uDemRes: terrainUniforms.uDemRes,
       uElevPrevRange: terrainUniforms.uElevPrevRange,
       uElevNextRange: terrainUniforms.uElevNextRange,
+      uReliefScale: terrainUniforms.uReliefScale,
+      uSlabSize: terrainUniforms.uSlabSize,
       uMorph: terrainUniforms.uMorph,
       uCutawayPlane: terrainUniforms.uCutawayPlane,
       uCutawayDir: terrainUniforms.uCutawayDir,
       uCutawayMix: terrainUniforms.uCutawayMix,
       uCurtainHover: { value: 0.0 },
+      uNight: curtainNight,
+      uHasSeaCoast: terrainUniforms.uHasSeaCoast,
+      uEdgeFade: terrainUniforms.uEdgeFade,
+      uContextDem: terrainUniforms.uContextDem,
+      uContextRes: terrainUniforms.uContextRes,
+      uContextScale: terrainUniforms.uContextScale,
+      uContextMix: terrainUniforms.uContextMix,
+      uCurtainTopY: { value: 2.2 },
+      uCurtainRail: { value: 1.0 },
+      uLid: { value: smokeLid },
+      uLidAmount: { value: 0.0 },
       uTime: terrainUniforms.uTime,
     };
     const curtainMat = new THREE.ShaderMaterial({
@@ -669,78 +1349,14 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     curtainMesh.renderOrder = 4;
     scene.add(curtainMesh);
 
-    // 3g. GPU-Animated 2,400 Convective Smoke & Glowing Ember Plume Particles
-    const plumePack = buildConvectivePlumeGeometry();
-    bindPlumeParticlesToTensor(nextBundle.tensor, nextBundle.frameCount, plumePack.uvAttr);
-
-    const plumeUniforms = {
-      uDemPrev: terrainUniforms.uDemPrev,
-      uDemNext: terrainUniforms.uDemNext,
-      uDemRes: terrainUniforms.uDemRes,
-      uElevPrevRange: terrainUniforms.uElevPrevRange,
-      uElevNextRange: terrainUniforms.uElevNextRange,
-      uMorph: terrainUniforms.uMorph,
-      uFieldTex0: terrainUniforms.uFieldTex0,
-      uFieldTex1: terrainUniforms.uFieldTex1,
-      uFrameMix: terrainUniforms.uFrameMix,
-      uTime: terrainUniforms.uTime,
-      uPlumeOpacity: { value: 1.0 },
-      uCutawayMix: terrainUniforms.uCutawayMix,
-      uCutawayPlane: terrainUniforms.uCutawayPlane,
-      uCutawayDir: terrainUniforms.uCutawayDir,
-      uWindDirUv: { value: uWindDirUv },
-      uViewportHeightPx: { value: 900.0 },
-      uSunDir: terrainUniforms.uSunDir,
-    };
-    const plumeMat = new THREE.ShaderMaterial({
-      vertexShader: PLUME_VERTEX_SHADER,
-      fragmentShader: PLUME_FRAGMENT_SHADER,
-      uniforms: plumeUniforms,
-      transparent: true,
-      depthWrite: false,
-    });
-    const plumePoints = new THREE.Points(plumePack.geometry, plumeMat);
-    plumePoints.frustumCulled = false;
-    plumePoints.renderOrder = 3;
-    scene.add(plumePoints);
-
-    // 3h. 3D Orbiting NASA Satellites (Terra, Aqua, Suomi NPP, NOAA-20) + Ground Footprint Ellipses
-    const observerGroup = new THREE.Group();
-    scene.add(observerGroup);
-
-    const spacecraftRigs: SpacecraftRig[] = [];
-    for (let i = 0; i < MAX_ORBITAL_RIGS; i++) {
-      const rig = buildSpacecraftRig();
-      rig.group.visible = false;
-      observerGroup.add(rig.group);
-      spacecraftRigs.push(rig);
-    }
-
-    const footprintGeom = new THREE.RingGeometry(0.76, 1.0, 28);
-    footprintGeom.rotateX(-Math.PI / 2);
-    const footprintMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.72,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    const footprintInstanced = new THREE.InstancedMesh(
-      footprintGeom,
-      footprintMat,
-      MAX_FOOTPRINT_INSTANCES,
-    );
-    footprintInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    footprintInstanced.count = 0;
-    footprintInstanced.frustumCulled = false;
-    footprintInstanced.renderOrder = 2;
-    observerGroup.add(footprintInstanced);
-
-    const fpDummy = new THREE.Object3D();
-    const fpColor = new THREE.Color();
-    const colModis = new THREE.Color('#f06a38');
-    const colViirs = new THREE.Color('#5cd6ff');
+    // 3h. 3D Orbiting NASA Satellites (Terra, Aqua, Suomi NPP, NOAA-20). Ground footprints are not
+    // meshes: the terrain shader draws the scan cells of each pass directly on the surface.
+    const fleet = new SpacecraftFleet(MAX_ORBITAL_RIGS);
+    scene.add(fleet.group);
+    // The models (about 5.5 MB) are fetched on entering the workspace, not on the landing page
+    let fleetModelsRequested = false;
+    const fleetPasses: FleetPass[] = [];
+    let fleetSkyMix = 0.0;
 
     // 4. Camera Framing, Damped Orbit, GPU Morph & Cinema Director State
     const orbitTarget: OrbitSphericalState = {
@@ -766,15 +1382,27 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let morphDuration = SUB_ORBITAL_MORPH_DURATION_SEC;
     let morphValue = 1.0;
 
+    // Current slab size in world units. It blends between regions during a morph because each
+    // region has its own aspect ratio.
+    const slabNow = { width: nextBundle.frame.width, depth: nextBundle.frame.depth };
+    const updateSlabNow = () => {
+      slabNow.width = THREE.MathUtils.lerp(prevBundle.frame.width, nextBundle.frame.width, morphValue);
+      slabNow.depth = THREE.MathUtils.lerp(prevBundle.frame.depth, nextBundle.frame.depth, morphValue);
+      uSlabSize.set(slabNow.width, slabNow.depth);
+    };
+    const worldX = (u: number): number => (u - 0.5) * slabNow.width;
+    const worldZ = (v: number): number => (0.5 - v) * slabNow.depth;
+    const slabU = (x: number): number => x / slabNow.width + 0.5;
+    const slabV = (z: number): number => 0.5 - z / slabNow.depth;
+
     const sampleCpuTerrainY = (u: number, v: number): number => {
-      const ePrev = sampleAlignedDemBilinear(prevBundle.alignedDem, prevBundle.demGridRes, u, v);
-      const yPrev = elevToWorldY(ePrev, prevBundle.minElevM, prevBundle.maxElevM);
-      if (morphValue >= 0.999 || prevBundle === nextBundle) {
-        const eNext = sampleAlignedDemBilinear(nextBundle.alignedDem, nextBundle.demGridRes, u, v);
-        return elevToWorldY(eNext, nextBundle.minElevM, nextBundle.maxElevM);
-      }
       const eNext = sampleAlignedDemBilinear(nextBundle.alignedDem, nextBundle.demGridRes, u, v);
-      const yNext = elevToWorldY(eNext, nextBundle.minElevM, nextBundle.maxElevM);
+      const yNext = bundleWorldY(eNext, nextBundle);
+      if (morphValue >= 0.999 || prevBundle === nextBundle) {
+        return yNext;
+      }
+      const ePrev = sampleAlignedDemBilinear(prevBundle.alignedDem, prevBundle.demGridRes, u, v);
+      const yPrev = bundleWorldY(ePrev, prevBundle);
       return yPrev + (yNext - yPrev) * morphValue;
     };
 
@@ -786,20 +1414,237 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uElevNextRange.set(nextBundle.minElevM, nextBundle.maxElevM);
       terrainUniforms.uSatPrev.value = prevBundle.satTex;
       terrainUniforms.uSatNext.value = nextBundle.satTex;
-      uModisBowtie.set(nextBundle.modisAzimuthRad, nextBundle.modisStretch);
-      terrainUniforms.uDomainWidthKm.value = nextBundle.widthKm;
+      uExtentKm.set(nextBundle.widthKm, nextBundle.depthKm);
       terrainUniforms.uHasSeaCoast.value = nextBundle.hasSeaCoast ? 1.0 : 0.0;
       uWindDirUv.set(nextBundle.windDirUv[0], nextBundle.windDirUv[1]);
+      terrainUniforms.uFireHist.value = ensureFireHistory(nextBundle).texture;
+
+      // Map frame, sun and terrain pack shading inputs
+      uReliefScale.set(prevBundle.frame.unitsPerMetre[1], nextBundle.frame.unitsPerMetre[1]);
+      uUnitsPerMetre.set(...nextBundle.frame.unitsPerMetre);
+      updateSlabNow();
+      sunDir.copy(nextBundle.sunDir);
+      syncSunLight(nextBundle);
+      keyLight.position.copy(sunDir).multiplyScalar(20);
+      terrainUniforms.uShadowTex.value = ensureShadow(nextBundle);
+      terrainUniforms.uAuxTex.value = nextBundle.auxTex ?? neutralAuxTex;
+      terrainUniforms.uOrthoTexelKm.value = nextBundle.orthoTexelKm;
+      terrainUniforms.uSatSharpen.value = nextBundle.sharpen;
+      terrainUniforms.uDetailTex.value = nextBundle.detailTex ?? whiteTex;
+      uDetailRect.set(...nextBundle.detailRect);
+      terrainUniforms.uDetailTexelKm.value = nextBundle.detailTexelKm;
+      if (!nextBundle.auxTex) terrainUniforms.uAuxMix.value = 0.0;
+      if (!nextBundle.detailTex) terrainUniforms.uDetailMix.value = 0.0;
+
+      const context = nextBundle.context;
+      terrainUniforms.uContextDem.value = context?.demTexture ?? null;
+      terrainUniforms.uContextOrtho.value = context?.orthoTexture ?? null;
+      terrainUniforms.uContextRes.value = context?.gridRes ?? 1024;
+      terrainUniforms.uContextScale.value = context?.scale ?? 5;
+      contextTerrain.setContext(context);
+      if (!context) {
+        contextMix = 0.0;
+        terrainUniforms.uContextMix.value = 0.0;
+      }
     };
 
-    const activateBundle = (bundle: CachedTheaterBundle, animateMorph: boolean) => {
+    // ---------------------------------------------------------------------------------------
+    // Terrain packs. An 8192 ortho is about 340 MB on the GPU with mipmaps, so only the pack of
+    // the region on screen is kept. Other packs are released and loaded again on demand (the
+    // browser HTTP cache makes that a decode, not a download).
+    // ---------------------------------------------------------------------------------------
+    const packBundles = new Map<string, CachedTheaterBundle>();
+    const fullResPack =
+      renderer.capabilities.maxTextureSize >= 8192 &&
+      ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) >= 8;
+
+    const ensureHiResGeometry = () => {
+      if (hiResTerrainGeom) return;
+      hiResTerrainGeom = buildTerrainGeometry(1023);
+      hiResSkirtGeom = buildStratigraphicSkirtGeometry(1023);
+      terrainMesh.geometry = hiResTerrainGeom;
+      terrainDepthMesh.geometry = hiResTerrainGeom;
+      skirtMesh.geometry = hiResSkirtGeom;
+    };
+
+    const composePackBundle = (
+      lite: CachedTheaterBundle,
+      pack: LoadedTerrainPack,
+      donor: CachedTheaterBundle | null,
+    ): CachedTheaterBundle => {
+      const texelKm = pack.manifest.extent_km[0] / pack.orthoSize;
+      return {
+        ...lite,
+        key: `pack-${lite.key}`,
+        demTex: pack.demTexture,
+        alignedDem: pack.alignedDem,
+        demGridRes: pack.demGridRes,
+        minElevM: pack.minElevM,
+        maxElevM: pack.maxElevM,
+        satTex: pack.orthoTexture,
+        orthoLabel: pack.orthoSize >= 8192 ? 'Esri 8K' : 'Esri 4K',
+        demLabel: `${pack.demGridRes}²`,
+        orthoTexelKm: texelKm,
+        sharpen: 0,
+        shadow: donor?.shadow ?? null,
+        pack,
+        lite,
+        auxTex: pack.auxTexture,
+        detailTex: donor?.detailTex ?? null,
+        detailRect: donor?.detailRect ?? [0, 0, 1, 1],
+        detailTexelKm: donor?.detailTexelKm ?? texelKm,
+        context: donor?.context ?? null,
+        contextState: donor?.contextState ?? 'none',
+        attribution: pack.attribution || lite.attribution,
+      };
+    };
+
+    const releasePack = (packed: CachedTheaterBundle) => {
+      packed.pack?.dispose();
+      packed.detailTex?.dispose();
+      packed.shadow?.dispose();
+      packed.context?.dispose();
+      // Built for the pack's own grid while it was on screen (the ones it took over from the
+      // bundle it upgrades stay with that bundle)
+      if (packed.fireHistory && packed.fireHistory !== packed.lite?.fireHistory) {
+        packed.fireHistory.texture.dispose();
+      }
+      if (packed.smokeHeight && packed.smokeHeight !== packed.lite?.smokeHeight) {
+        smokeHeightTextures.delete(packed.smokeHeight);
+        packed.smokeHeight.dispose();
+      }
+      packed.fireHistory = null;
+      packed.smokeHeight = null;
+      packed.detectionSource = null;
+      packed.context = null;
+      packed.pack = null;
+      packed.detailTex = null;
+      packed.shadow = null;
+    };
+
+    const evictPacksExcept = (keepRegionId: string) => {
+      for (const [regionId, packed] of packBundles) {
+        if (regionId === keepRegionId || packed === prevBundle || packed === nextBundle) continue;
+        releasePack(packed);
+        packBundles.delete(regionId);
+      }
+    };
+
+    // Returns the pack bundle for a lite bundle when its textures are already on the GPU. A new
+    // run of the same region (blind test, cloud override) reuses the loaded textures.
+    const resolveLoadedPack = (bundle: CachedTheaterBundle): CachedTheaterBundle => {
+      if (bundle.pack || !bundle.packManifest) return bundle;
+      const packed = packBundles.get(bundle.regionId);
+      if (!packed?.pack) return bundle;
+      if (packed.lite === bundle) return packed;
+      const rebased = composePackBundle(bundle, packed.pack, packed);
+      packBundles.set(bundle.regionId, rebased);
+      // The pack textures, shadow, inset and context moved on to the new bundle. What was built
+      // for the old one alone (its fire history, its smoke height) goes once it is off screen.
+      retireBundle(packed);
+      return rebased;
+    };
+
+    const loadDetailInset = (packed: CachedTheaterBundle) => {
+      const pack = packed.pack;
+      const inset = pack?.manifest.ortho_detail?.[0];
+      if (!pack || !inset || !fullResPack || inset.size > renderer.capabilities.maxTextureSize) return;
+      const rect = inset.uv_rect;
+      if (!Array.isArray(rect) || rect.length !== 4 || !(rect[2] > rect[0]) || !(rect[3] > rect[1])) return;
+      const apiBase = propsRef.current.apiBase;
+      void loadPackImage(resolveAssetUrl(apiBase, inset.url), maxAnisotropy).then((tex) => {
+        if (!tex) return;
+        const owner = packBundles.get(packed.regionId);
+        if (disposed || !owner || owner.pack !== pack) {
+          tex.dispose();
+          return;
+        }
+        owner.detailTex = tex;
+        owner.detailRect = [rect[0], rect[1], rect[2], rect[3]];
+        owner.detailTexelKm = (pack.manifest.extent_km[0] * (rect[2] - rect[0])) / inset.size;
+        if (nextBundle === owner) syncUniformsFromBundles();
+      });
+    };
+
+    // The terrain around the pack arrives after the pack itself: the region is on screen first,
+    // then the world around it comes in. A region without one keeps the far-edge dissolve.
+    const loadContext = (packed: CachedTheaterBundle) => {
+      const pack = packed.pack;
+      const manifest = parseTerrainContext(pack?.manifest.context);
+      if (!pack || !manifest || packed.context || packed.contextState !== 'none') return;
+      packed.contextState = 'loading';
+      const apiBase = propsRef.current.apiBase;
+      void loadTerrainContext(manifest, {
+        resolveUrl: (raw) => resolveAssetUrl(apiBase, raw),
+        maxTextureSize: renderer.capabilities.maxTextureSize,
+        maxAnisotropy,
+        isCancelled: () => disposed,
+      }).then((context) => {
+        const owner = packBundles.get(packed.regionId);
+        if (disposed || !owner || owner.pack !== pack) {
+          context?.dispose();
+          return;
+        }
+        owner.contextState = context ? 'none' : 'failed';
+        if (!context) return;
+        owner.context = context;
+        if (nextBundle === owner) syncUniformsFromBundles();
+      });
+    };
+
+    const requestPack = (lite: CachedTheaterBundle) => {
+      const manifest = lite.packManifest;
+      if (!manifest || lite.pack || lite.packState !== 'none') return;
+      lite.packState = 'loading';
+      const apiBase = propsRef.current.apiBase;
+      void loadTerrainPack(manifest, {
+        resolveUrl: (raw) => resolveAssetUrl(apiBase, raw),
+        maxTextureSize: fullResPack ? renderer.capabilities.maxTextureSize : 4096,
+        maxAnisotropy,
+        isCancelled: () => disposed,
+      }).then((pack) => {
+        if (disposed) {
+          pack?.dispose();
+          return;
+        }
+        if (!pack) {
+          lite.packState = 'failed';
+          return;
+        }
+        lite.packState = 'none';
+        if (nextBundle !== lite) {
+          // The view moved on while this was loading: do not hold memory for an off-screen region
+          pack.dispose();
+          return;
+        }
+        evictPacksExcept(lite.regionId);
+        const packed = composePackBundle(lite, pack, null);
+        packBundles.set(lite.regionId, packed);
+        activateBundle(packed, true);
+        morphDuration = 0.62;
+        loadDetailInset(packed);
+        loadContext(packed);
+      });
+    };
+
+    const activateBundle = (requested: CachedTheaterBundle, animateMorph: boolean) => {
       if (disposed) return;
+      const bundle = resolveLoadedPack(requested);
+      if (bundle === nextBundle && animateMorph) {
+        // Already on screen (for example the lite bundle of a region whose pack is active)
+        return;
+      }
+      if (bundle.demGridRes >= 1024) ensureHiResGeometry();
+      const crossRegion = nextBundle.regionId !== bundle.regionId;
+
       if (!animateMorph) {
         prevBundle = bundle;
         nextBundle = bundle;
         morphActive = false;
         morphValue = 1.0;
         terrainUniforms.uMorph.value = 1.0;
+        evictPacksExcept(bundle.regionId);
+        sweepRetiredBundles();
       } else {
         // Snapshot visually dominant bundle as previous so rapid switching never jumps
         prevBundle = morphValue < 0.5 ? prevBundle : nextBundle;
@@ -810,44 +1655,598 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         morphValue = 0.0;
         terrainUniforms.uMorph.value = 0.0;
       }
+      // Baked normals belong to the incoming terrain: hold them back until it is mostly in place
+      if (crossRegion && animateMorph) terrainUniforms.uAuxMix.value = 0.0;
       syncUniformsFromBundles();
       uploadedTensorRef = null;
-      bindPlumeParticlesToTensor(bundle.tensor, bundle.frameCount, plumePack.uvAttr);
-      setRenderedFindings(bundle.findings);
+      setRenderedFindings(calloutsFor(bundle));
+      presetDirty = true;
+      if (!bundle.pack) requestPack(bundle);
     };
 
     const upgradeBundleInPlace = (bundle: CachedTheaterBundle) => {
       if (disposed) return;
       if (nextBundle.regionId === bundle.regionId) {
-        // Smooth 620ms micro-sculpt from procedural/256 fallback into real 512 DEM + 2K Maxar ortho
+        // Smooth 620ms micro-sculpt from the procedural fallback into the real DEM and imagery
         activateBundle(bundle, true);
         morphDuration = 0.62;
       }
     };
 
-    const triggerSlew = (targetTheaterId: TheaterId) => {
-      const p = propsRef.current;
-      const dest = resolvePresetForContext(p.cameraPreset, p.inWorkspace, p.mode, targetTheaterId);
-      slewController.trigger(orbitCurrent, dest, 2.15, SUB_ORBITAL_MORPH_DURATION_SEC);
-      const cached = bundleCache.get(targetTheaterId);
-      if (cached && cached !== nextBundle) {
-        activateBundle(cached, true);
+    // The close presets look at the fire itself: Canyon centers on the fire the 1 km sensor
+    // missed, Ridge on the strongest front. Both anchors come from the solver field of the active
+    // region, so every region gets a meaningful close oblique.
+    const resolveLivePreset = (
+      preset: InspectorCameraPreset,
+      inWorkspace: boolean,
+      mode: EarthCutawayStageProps['mode'],
+      theaterId: TheaterId,
+    ): CameraPresetSpec => {
+      const dest = resolvePresetForContext(preset, inWorkspace, mode, theaterId);
+      if (!inWorkspace || (preset !== 'canyon' && preset !== 'ridge')) return dest;
+      const wantedKind = preset === 'canyon' ? 'subpixel' : 'front';
+      const anchor = nextBundle.findings.find((f) => f.kind === wantedKind);
+      if (!anchor) return dest;
+      const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
+      // Keep the anchor away from the cut faces of the slab
+      const u = THREE.MathUtils.clamp((anchor.lon - lonMin) / Math.max(1e-4, lonMax - lonMin), 0.2, 0.8);
+      const v = THREE.MathUtils.clamp((anchor.lat - latMin) / Math.max(1e-4, latMax - latMin), 0.2, 0.8);
+      const ax = worldX(u);
+      const az = worldZ(v);
+      // Where to stand. Three wishes, scored over the compass:
+      //   light      the sun about 65 degrees off the view axis, so slopes are side-lit and cast
+      //              shadows show (every hero region has the sun in the south, and a camera
+      //              that looks north sees only front-lit slopes)
+      //   curtain    the view runs within about 35 degrees of the sensor curtain, so the split
+      //              is a line into the distance with the calibrated side filling the frame
+      //   backdrop   near an edge of the slab, look toward its middle and not at the cut wall
+      const offCenter = Math.hypot(ax, az);
+      const inward = Math.atan2(-ax, -az);
+      const inwardWeight = THREE.MathUtils.smoothstep(offCenter, 0.8, 3.2);
+      const sunAz = Math.atan2(nextBundle.sunDir.x, nextBundle.sunDir.z);
+      let bestAz = dest.azimuth;
+      let bestScore = -1e9;
+      for (let k = 0; k < 72; k++) {
+        const cand = (k / 72) * Math.PI * 2 - Math.PI;
+        let alongCurtain = cand - CURTAIN_AZIMUTH;
+        while (alongCurtain > Math.PI / 2) alongCurtain -= Math.PI;
+        while (alongCurtain < -Math.PI / 2) alongCurtain += Math.PI;
+        if (Math.abs(alongCurtain) > CLOSE_VIEW_CURTAIN_LIMIT) continue;
+        let offSun = Math.abs(cand - sunAz) % (Math.PI * 2);
+        if (offSun > Math.PI) offSun = Math.PI * 2 - offSun;
+        const light = 1.0 - Math.min(1.0, Math.abs(offSun - CLOSE_VIEW_SUN_ANGLE) / CLOSE_VIEW_SUN_ANGLE);
+        const score =
+          light +
+          0.9 * inwardWeight * Math.cos(cand - inward) +
+          0.2 * Math.cos(cand - dest.azimuth);
+        if (score > bestScore) {
+          bestScore = score;
+          bestAz = cand;
+        }
       }
+      return {
+        ...dest,
+        azimuth: bestAz,
+        target: [ax, sampleCpuTerrainY(u, v) + 0.1, az],
+      };
     };
 
-    const applyCameraPreset = () => {
-      const p = propsRef.current;
-      const dest = resolvePresetForContext(
-        p.cameraPreset,
-        p.inWorkspace,
-        p.mode,
-        p.activeTheaterId,
+    // Landing world view: where the camera stands. It stands low inside the landscape and looks at
+    // the fire front, so that ground forms the skyline in every column of the frame and ridges
+    // stand behind the fire. Standpoints are tried around the fire (four distances, 48 bearings,
+    // six eye heights) and scored on the heightfield:
+    //   skyline    in every screen column the ground must rise to eye level before the slab ends,
+    //              so no column shows the backdrop below the horizon; the far edge of the slab is
+    //              then hidden behind nearer ridges and nothing has to dissolve or sink
+    //   frame      the fire sits in the upper two thirds of the ground, and the nearest ground in
+    //              the frame is far enough away that the imagery still holds
+    //   depth      ridge lines that come into view behind the fire (the more the better, up to 3)
+    //   sight      the fire is in view (the point looked at, and as much of the burning ground of
+    //              the moment on show as possible), on a slope that faces the camera
+    //   light      the sun about 65 degrees off the view axis (side light)
+    //   smoke      not downwind of the fire
+    const resolveLandingWorldPose = (timeProg: number): CameraPresetSpec => {
+      const bundle = nextBundle;
+      const [lonMin, latMin, lonMax, latMax] = bundle.bbox;
+      const anchor =
+        bundle.findings.find((f) => f.kind === 'front') ??
+        bundle.findings.find((f) => f.kind === 'subpixel') ??
+        bundle.findings[0];
+      let u = 0.5;
+      let v = 0.5;
+      if (anchor) {
+        u = THREE.MathUtils.clamp((anchor.lon - lonMin) / Math.max(1e-4, lonMax - lonMin), 0.25, 0.75);
+        v = THREE.MathUtils.clamp((anchor.lat - latMin) / Math.max(1e-4, latMax - latMin), 0.25, 0.75);
+      }
+      // A real run looks at the fire the overpass detected: the centre of its detections, weighted
+      // by their radiative power (kept within the middle 70 percent of the region, so there is
+      // room to stand back from it)
+      const realFire = bundle.observerDataset.dataSource === 'firms';
+      if (realFire) {
+        const shown = Math.min(
+          bundle.frameCount - 1,
+          Math.max(0, Math.round(THREE.MathUtils.clamp(timeProg, 0, 1) * (bundle.frameCount - 1))),
+        );
+        let weight = 0;
+        let sumU = 0;
+        let sumV = 0;
+        for (const sp of bundle.observerDataset.frames[shown] ?? []) {
+          if (sp.hidden) continue;
+          for (const fp of sp.footprints) {
+            weight += fp.frpMw;
+            sumU += (fp.frpMw * (fp.lon - lonMin)) / Math.max(1e-4, lonMax - lonMin);
+            sumV += (fp.frpMw * (fp.lat - latMin)) / Math.max(1e-4, latMax - latMin);
+          }
+        }
+        if (weight > 0) {
+          u = THREE.MathUtils.clamp(sumU / weight, 0.15, 0.85);
+          v = THREE.MathUtils.clamp(sumV / weight, 0.15, 0.85);
+        }
+      }
+      // The terrain of this bundle as it will stand, not the morph toward it that is on screen now
+      const slabW = bundle.frame.width;
+      const slabD = bundle.frame.depth;
+      const halfW = slabW * 0.5;
+      const halfD = slabD * 0.5;
+      const ground = (x: number, z: number): number =>
+        bundleWorldY(
+          sampleAlignedDemBilinear(bundle.alignedDem, bundle.demGridRes, x / slabW + 0.5, 0.5 - z / slabD),
+          bundle,
+        );
+      // A region whose run announces context terrain has land or sea beyond the pack in every
+      // direction, so a sight line that stays under eye level ends at a horizon, not at a floor.
+      // The search still reads the pack relief only: the standpoint is settled before the context
+      // files arrive and does not move when they do.
+      const openHorizon =
+        parseTerrainContext(bundle.packManifest?.context) !== null && bundle.contextState !== 'failed';
+      const tx = (u - 0.5) * slabW;
+      const tz = (0.5 - v) * slabD;
+      const ty = ground(tx, tz) + 0.05;
+      // Burning ground at the moment on show (a sample of the solver field cells above threshold)
+      const fieldFrame = Math.min(
+        bundle.frameCount - 1,
+        Math.max(0, Math.round(THREE.MathUtils.clamp(timeProg, 0, 1) * (bundle.frameCount - 1))),
       );
-      slewController.cancel();
+      const fieldBase = fieldFrame * FIELD_GRID_SIZE * FIELD_GRID_SIZE * 4;
+      // Burning ground on show. A real run: what the overpass detected (a sample of its footprint
+      // centres). A simulated run: the solver field cells above the fire threshold. Per entry:
+      // position, the slope of the ground there (east, south), and the ground area it stands for.
+      const fires: number[] = [];
+      const pushFire = (fx: number, fz: number, area: number) => {
+        fires.push(
+          fx,
+          ground(fx, fz) + 0.03,
+          fz,
+          (ground(fx - 0.1, fz) - ground(fx + 0.1, fz)) / 0.2,
+          (ground(fx, fz - 0.1) - ground(fx, fz + 0.1)) / 0.2,
+          area,
+        );
+      };
+      if (bundle.observerDataset.dataSource === 'firms') {
+        const seen: NormalizedFootprint[] = [];
+        for (const sp of bundle.observerDataset.frames[fieldFrame] ?? []) {
+          if (!sp.hidden) for (const fp of sp.footprints) seen.push(fp);
+        }
+        const every = Math.max(1, Math.ceil(seen.length / 320));
+        const perKm2 = bundle.frame.unitsPerMetre[0] * bundle.frame.unitsPerMetre[2] * 1e6;
+        for (let i = 0; i < seen.length; i += every) {
+          const fp = seen[i];
+          const fx = ((fp.lon - lonMin) / Math.max(1e-4, lonMax - lonMin) - 0.5) * slabW;
+          const fz = (0.5 - (fp.lat - latMin) / Math.max(1e-4, latMax - latMin)) * slabD;
+          if (Math.abs(fx) > halfW || Math.abs(fz) > halfD) continue;
+          pushFire(fx, fz, fp.acrossTrackKm * fp.alongTrackKm * perKm2 * every);
+        }
+      } else {
+        // Every third cell each way
+        const cellArea = ((3 * slabW) / (FIELD_GRID_SIZE - 1)) * ((3 * slabD) / (FIELD_GRID_SIZE - 1));
+        for (let row = 2; row < FIELD_GRID_SIZE - 2; row += 3) {
+          for (let col = 2; col < FIELD_GRID_SIZE - 2; col += 3) {
+            if (bundle.tensor[fieldBase + (row * FIELD_GRID_SIZE + col) * 4] / 255 <= FIRE_THRESHOLD_NORM) continue;
+            pushFire(
+              (col / (FIELD_GRID_SIZE - 1) - 0.5) * slabW,
+              (0.5 - row / (FIELD_GRID_SIZE - 1)) * slabD,
+              cellArea,
+            );
+          }
+        }
+      }
+      const fireCount = fires.length / 6;
+      // Area of the frame at unit distance (16:10), for the share of the frame a patch of ground covers
+      const tanHalfLens = Math.tan((LANDING_WORLD_FOV * Math.PI) / 360);
+      const frameAreaAtUnit = 4 * tanHalfLens * tanHalfLens * 1.6;
+      // Nearest ground the imagery can carry: one texel on at most LANDING_WORLD_MAX_MAGNIFICATION
+      // pixels of a 1920 px wide 16:9 frame
+      const pixelAngle = (2 * Math.atan(tanHalfLens * (16 / 9))) / 1920;
+      const carry = Math.min(
+        LANDING_WORLD_CARRY_CAP,
+        (bundle.orthoTexelKm * 1000 * bundle.frame.unitsPerMetre[0]) / (LANDING_WORLD_MAX_MAGNIFICATION * pixelAngle),
+      );
+      // Slope at the fire: the horizontal direction the ground faces
+      const faceX = ground(tx - 0.12, tz) - ground(tx + 0.12, tz);
+      const faceZ = ground(tx, tz - 0.12) - ground(tx, tz + 0.12);
+      const faceLen = Math.hypot(faceX, faceZ) || 1;
+      const sunAz = Math.atan2(bundle.sunDir.x, bundle.sunDir.z);
+      const windLen = Math.hypot(bundle.windDirUv[0] * slabW, bundle.windDirUv[1] * slabD) || 1;
+      const windX = (bundle.windDirUv[0] * slabW) / windLen;
+      const windZ = (-bundle.windDirUv[1] * slabD) / windLen;
+      const halfSpan =
+        Math.atan(Math.tan((LANDING_WORLD_FOV * Math.PI) / 360) * (16 / 9)) + LANDING_WORLD_DRIFT;
+
+      let best: CameraPresetSpec = { ...LANDING_HERO_POSE, target: [tx, ty, tz] };
+      let bestScore = -1e9;
+      const stats: LandingStandpointCheck = {
+        floorShare: 1,
+        seaShare: 0,
+        ridgeLines: 0,
+        ridgeLinesMost: 0,
+        fireShare: 0,
+        fireFrameShare: 0,
+        carryDistance: 0,
+        skylineDeg: 0,
+        eyeAboveGroundM: 0,
+        nearGround: 0,
+      };
+      const upmY = bundle.frame.unitsPerMetre[1];
+      for (const horiz of LANDING_WORLD_DISTANCES) {
+        for (let k = 0; k < 48; k++) {
+          const az = (k / 48) * Math.PI * 2 - Math.PI;
+          const cx = tx + horiz * Math.sin(az);
+          const cz = tz + horiz * Math.cos(az);
+          if (halfW - Math.abs(cx) < 0.35 || halfD - Math.abs(cz) < 0.35) continue;
+          // The eye stands over the highest ground under its drift, so the swing never lifts it
+          let standY = ground(cx, cz);
+          for (const side of [-1, 1]) {
+            const azSide = az + side * LANDING_WORLD_DRIFT;
+            standY = Math.max(standY, ground(tx + horiz * Math.sin(azSide), tz + horiz * Math.cos(azSide)));
+          }
+          let offSun = Math.abs(az - sunAz) % (Math.PI * 2);
+          if (offSun > Math.PI) offSun = Math.PI * 2 - offSun;
+          const light = 1.0 - Math.min(1.0, Math.abs(offSun - CLOSE_VIEW_SUN_ANGLE) / CLOSE_VIEW_SUN_ANGLE);
+          const alongWind = Math.sin(az) * windX + Math.cos(az) * windZ;
+          const downwind = Math.max(0, alongWind);
+          // With an open horizon nothing ties the camera to a bowl: a nearer fire is a larger fire,
+          // and from upwind the smoke drifts away behind it instead of across the view
+          // A real fire is tens of kilometres across and is drawn one light per detection: from
+          // far back the lights are small and the front reads as a line
+          const openGain = openHorizon
+            ? 0.45 * Math.max(0, -alongWind) + (realFire ? 0.16 : -0.12) * horiz
+            : 0;
+          const facing = (faceX * Math.sin(az) + faceZ * Math.cos(az)) / faceLen;
+          // Ground heights along the sight line of every screen column, once per place
+          for (let c = 0; c < LANDING_WORLD_COLUMNS; c++) {
+            const phi = -halfSpan + (2 * halfSpan * c) / (LANDING_WORLD_COLUMNS - 1);
+            const dirAz = az + Math.PI - phi;
+            const dx = Math.sin(dirAz);
+            const dz = Math.cos(dirAz);
+            let n = 0;
+            for (; n < LANDING_WORLD_SIGHT_STEPS; n++) {
+              const d = 0.3 + n * LANDING_WORLD_SIGHT_STEP;
+              const px = cx + dx * d;
+              const pz = cz + dz * d;
+              if (Math.abs(px) > halfW || Math.abs(pz) > halfD) break;
+              sightHeights[c * LANDING_WORLD_SIGHT_STEPS + n] = ground(px, pz);
+            }
+            sightCounts[c] = n;
+          }
+          for (const liftM of LANDING_WORLD_LIFTS_M) {
+            const cy = standY + liftM * upmY;
+            // The fire must be in view: nothing between the eye and it
+            let sight = 1e6;
+            for (let s = 1; s < 10; s++) {
+              const f = s / 10;
+              sight = Math.min(sight, cy + (ty - cy) * f - ground(cx + (tx - cx) * f, cz + (tz - cz) * f));
+            }
+            if (sight < 0.03) continue;
+            // Skyline per column: tangent of the highest ground seen before the slab ends
+            let floorColumns = 0;
+            let seaColumns = 0;
+            let skySum = 0;
+            let skyMax = -1e6;
+            let ridgeSum = 0;
+            let ridgeMost = 0;
+            let ridgeColumns = 0;
+            for (let c = 0; c < LANDING_WORLD_COLUMNS; c++) {
+              const phi = -halfSpan + (2 * halfSpan * c) / (LANDING_WORLD_COLUMNS - 1);
+              const count = sightCounts[c];
+              let top = -1e6;
+              // A ridge line behind the fire: ground beyond the fire that comes into view again
+              // after a stretch that was hidden behind nearer ground
+              let hiddenRun = 0;
+              let ridges = 0;
+              for (let n = 0; n < count; n++) {
+                const d = 0.3 + n * LANDING_WORLD_SIGHT_STEP;
+                const tan = (sightHeights[c * LANDING_WORLD_SIGHT_STEPS + n] - cy) / d;
+                if (tan > top) {
+                  if (hiddenRun >= 2 && d > horiz) ridges++;
+                  top = tan;
+                  hiddenRun = 0;
+                } else if (tan < top - 0.004) {
+                  hiddenRun++;
+                }
+              }
+              if (top < 0) {
+                // Open water that runs to the edge of the data reads as a sea horizon, not as a
+                // floor. With context terrain every column runs on to the horizon, land or sea.
+                const last = count > 0 ? sightHeights[c * LANDING_WORLD_SIGHT_STEPS + count - 1] : 1;
+                if (openHorizon || (bundle.hasSeaCoast && last < 0.004)) seaColumns++;
+                else floorColumns++;
+              }
+              skySum += Math.max(top, -0.2);
+              skyMax = Math.max(skyMax, top);
+              if (Math.abs(phi) < halfSpan * 0.55) {
+                ridgeSum += ridges;
+                ridgeMost = Math.max(ridgeMost, ridges);
+                ridgeColumns++;
+              }
+            }
+            // The highest point of the skyline is put just under the calm rectangle, so everything
+            // else follows from it: where the fire sits in the frame, and how near the nearest
+            // ground in the frame is (near ground shows the imagery far beyond its resolution)
+            // (the terrain top is fitted to about row 0.41, so 0.59 of the frame height lies below it)
+            const bottomTan = skyMax - 0.59 * 2.0 * tanHalfLens;
+            let nearGround = 1e6;
+            for (let c = 0; c < LANDING_WORLD_COLUMNS; c++) {
+              const count = sightCounts[c];
+              for (let n = 0; n < count; n++) {
+                const d = 0.3 + n * LANDING_WORLD_SIGHT_STEP;
+                if (d >= nearGround) break;
+                const g = sightHeights[c * LANDING_WORLD_SIGHT_STEPS + n];
+                // Water has no detail to lose
+                if (g > 0.004 && (g - cy) / d > bottomTan) {
+                  nearGround = d;
+                  break;
+                }
+              }
+            }
+            const fireDrop = skyMax - (ty - cy) / horiz;
+            // Share of the burning ground that is in the frame with nothing in front of it
+            let firesSeen = 0;
+            let firesLow = 0;
+            let fireFrame = 0;
+            const lowTan = skyMax - LANDING_WORLD_FIRE_LOWEST * (skyMax - bottomTan);
+            for (let f = 0; f < fireCount; f++) {
+              const fx = fires[f * 6];
+              const fy = fires[f * 6 + 1];
+              const fz = fires[f * 6 + 2];
+              const fd = Math.hypot(fx - cx, fz - cz);
+              if (fd < 0.5) continue;
+              let off = Math.atan2(fx - cx, fz - cz) - (az + Math.PI);
+              off -= Math.round(off / (Math.PI * 2)) * Math.PI * 2;
+              if (Math.abs(off) > halfSpan * 0.8) continue;
+              const fTan = (fy - cy) / fd;
+              // Low in the frame, or under its bottom edge: the fire is in the foreground
+              if (fTan < lowTan) firesLow++;
+              if (fTan < bottomTan || fTan > skyMax) continue;
+              let clear = true;
+              for (let s = 1; s < 8 && clear; s++) {
+                const k = s / 8;
+                if (cy + (fy - cy) * k < ground(cx + (fx - cx) * k, cz + (fz - cz) * k) - 0.01) clear = false;
+              }
+              if (clear) {
+                firesSeen++;
+                // Share of the frame this patch of burning ground covers: its area, turned by how
+                // squarely it faces the eye, over the area of the frame at its distance
+                const nx = fires[f * 6 + 3];
+                const nz = fires[f * 6 + 4];
+                const ex = cx - fx;
+                const ey = cy - fy;
+                const ez = cz - fz;
+                const dist2 = ex * ex + ey * ey + ez * ez;
+                const facing3 = Math.max(0, (nx * ex + ey + nz * ez) / (Math.hypot(nx, 1, nz) * Math.sqrt(dist2)));
+                fireFrame += (fires[f * 6 + 5] * Math.hypot(nx, 1, nz) * facing3) / (dist2 * frameAreaAtUnit);
+              }
+            }
+            const fireShare = fireCount > 0 ? firesSeen / fireCount : 0;
+            const floorShare = floorColumns / LANDING_WORLD_COLUMNS;
+            const seaShare = seaColumns / LANDING_WORLD_COLUMNS;
+            const ridgeLines = ridgeSum / Math.max(1, ridgeColumns);
+            const sky = skySum / LANDING_WORLD_COLUMNS;
+            const score =
+              -9.0 * floorShare -
+              (floorColumns > 0 ? 3.0 : 0.0) -
+              0.6 * seaShare +
+              1.1 * Math.min(ridgeLines, 2.0) +
+              0.3 * Math.min(Math.max(ridgeLines - 2.0, 0.0), 1.0) +
+              0.8 * light +
+              0.5 * THREE.MathUtils.clamp(facing * 2.0, -1, 1) +
+              // A real fire is in the frame whole: every part of it that an edge cuts off, or
+              // that a ridge hides, counts against the standpoint
+              (realFire ? 4.0 * fireShare : 2.4 * Math.min(fireShare, 0.5)) +
+              // The fire on show covers a real share of the frame
+              2.5 * Math.min(1, fireFrame / LANDING_WORLD_FIRE_FRAME_SHARE) -
+              // A real fire is in the middle distance, with terrain in front of it
+              (realFire && fireCount > 0 ? (7.0 * firesLow) / fireCount : 0.0) -
+              0.5 * downwind +
+              openGain -
+              // Ground nearer than the imagery can carry is out of the frame: such a standpoint is
+              // taken only when there is no other
+              (nearGround < carry ? 5.0 + 4.0 * (1 - nearGround / carry) : 0.0) -
+              // The fire stays in the upper two thirds of the ground, under an even skyline
+              8.0 * Math.max(0, fireDrop - 0.2) -
+              // Not a skyline that only just clears eye level
+              4.0 * Math.max(0, 0.04 - sky);
+            if (score > bestScore) {
+              bestScore = score;
+              const dist3 = Math.hypot(horiz, cy - ty);
+              best = {
+                azimuth: az,
+                polar: Math.acos(THREE.MathUtils.clamp((cy - ty) / dist3, -1, 1)),
+                distance: dist3,
+                target: [tx, ty, tz],
+              };
+              stats.floorShare = floorShare;
+              stats.seaShare = seaShare;
+              stats.ridgeLines = ridgeLines;
+              stats.ridgeLinesMost = ridgeMost;
+              stats.fireShare = fireShare;
+              stats.fireFrameShare = fireFrame;
+              stats.carryDistance = carry;
+              stats.skylineDeg = (Math.atan(sky) * 180) / Math.PI;
+              stats.eyeAboveGroundM = liftM;
+              stats.nearGround = nearGround;
+            }
+          }
+        }
+      }
+      landingWorldStats = stats;
+      return best;
+    };
+    let landingWorldPose: CameraPresetSpec | null = null;
+    let landingWorldPoseKey = '';
+    let landingWorldSeated = false;
+    // The region's box as a grid of points on the terrain, projected to the viewport (CSS px)
+    const regionGridOf = (bundle: CachedTheaterBundle, divisions: number): EarthStageTelemetry['regionGrid'] => {
+      const count = Math.min(32, Math.max(1, Math.round(divisions)));
+      const points: Array<[number, number] | null> = [];
+      camera.updateMatrixWorld();
+      for (let row = 0; row <= count; row++) {
+        for (let col = 0; col <= count; col++) {
+          const u = col / count;
+          const v = 1 - row / count;
+          const y = bundleWorldY(sampleAlignedDemBilinear(bundle.alignedDem, bundle.demGridRes, u, v), bundle);
+          gridVec.set((u - 0.5) * slabNow.width, y, (0.5 - v) * slabNow.depth).project(camera);
+          points.push(
+            gridVec.z > 1 || gridVec.z < -1
+              ? null
+              : [(gridVec.x * 0.5 + 0.5) * viewportW, (0.5 - gridVec.y * 0.5) * viewportH],
+          );
+        }
+      }
+      return { divisions: count, points };
+    };
+    const gridVec = new THREE.Vector3();
+    const landingFrameFor = (bundle: CachedTheaterBundle): number | null =>
+      bundle.landingFrame === undefined
+        ? (bundle.landingFrame = landingFrameOf(bundle.observerDataset, bundle.bbox, bundle.widthKm, bundle.depthKm))
+        : bundle.landingFrame;
+    /** The landing standpoint of the bundle on screen, worked out again when the bundle changed. */
+    const ensureLandingWorldPose = (): CameraPresetSpec => {
+      const poseKey = nextBundle.contextState === 'failed' ? `${nextBundle.key}!` : nextBundle.key;
+      if (!landingWorldPose || landingWorldPoseKey !== poseKey) {
+        const chosen = landingFrameFor(nextBundle);
+        landingWorldPose = resolveLandingWorldPose(
+          chosen !== null ? chosen / Math.max(1, nextBundle.frameCount - 1) : propsRef.current.timeProgress,
+        );
+        landingWorldPoseKey = poseKey;
+        landingFitAge = SUBJECT_REFIT_INTERVAL_FRAMES;
+      }
+      return landingWorldPose;
+    };
+    // What the search found at the standpoint in use (also reported through telemetry)
+    let landingWorldStats: LandingStandpointCheck = {
+      floorShare: 1,
+      seaShare: 0,
+      ridgeLines: 0,
+      ridgeLinesMost: 0,
+      fireShare: 0,
+      fireFrameShare: 0,
+      carryDistance: 0,
+      skylineDeg: 0,
+      eyeAboveGroundM: 0,
+      nearGround: 0,
+    };
+    const sightHeights = new Float32Array(LANDING_WORLD_COLUMNS * LANDING_WORLD_SIGHT_STEPS);
+    const sightCounts = new Int32Array(LANDING_WORLD_COLUMNS);
+
+    // World height of the context surface at a point outside the pack, as the context mesh draws it
+    // (0 when the bundle has no context)
+    const contextWorldY = (bundle: CachedTheaterBundle, x: number, z: number): number => {
+      const context = bundle.context;
+      if (!context) return 0;
+      const frame = bundle.frame;
+      const [upmX, upmUp, upmZ] = frame.unitsPerMetre;
+      const outKm = Math.hypot(
+        Math.max(Math.abs(x) - frame.width * 0.5, 0) / (upmX * 1000),
+        Math.max(Math.abs(z) - frame.depth * 0.5, 0) / (upmZ * 1000),
+      );
+      const halfKm = 0.25 * (frame.width / upmX + frame.depth / upmZ) * 0.001;
+      const elevM = sampleContextElevation(
+        context,
+        x / (frame.width * context.scale) + 0.5,
+        0.5 - z / (frame.depth * context.scale),
+      );
+      return (elevM - bundle.minElevM - contextDropKm(outKm, halfKm) * 1000) * upmUp;
+    };
+
+    // Terrain samples for the skyline of the landing world view
+    const skylinePoints = new Float32Array(
+      (SKYLINE_GRID * SKYLINE_GRID + CONTEXT_SKYLINE_GRID * CONTEXT_SKYLINE_GRID) * 3,
+    );
+    const collectSkylinePoints = (): number => {
+      let n = 0;
+      for (let gy = 0; gy < SKYLINE_GRID; gy++) {
+        const v = gy / (SKYLINE_GRID - 1);
+        for (let gx = 0; gx < SKYLINE_GRID; gx++) {
+          const u = gx / (SKYLINE_GRID - 1);
+          skylinePoints[n * 3] = worldX(u);
+          skylinePoints[n * 3 + 1] = sampleCpuTerrainY(u, v);
+          skylinePoints[n * 3 + 2] = worldZ(v);
+          n++;
+        }
+      }
+      const context = nextBundle.context;
+      if (context && contextMix > 0.5) {
+        const frame = nextBundle.frame;
+        for (let gy = 0; gy < CONTEXT_SKYLINE_GRID; gy++) {
+          const cv = gy / (CONTEXT_SKYLINE_GRID - 1);
+          for (let gx = 0; gx < CONTEXT_SKYLINE_GRID; gx++) {
+            const cu = gx / (CONTEXT_SKYLINE_GRID - 1);
+            const x = (cu - 0.5) * frame.width * context.scale;
+            const z = (0.5 - cv) * frame.depth * context.scale;
+            // The pack is sampled above
+            if (Math.abs(x) <= frame.width * 0.5 && Math.abs(z) <= frame.depth * 0.5) continue;
+            skylinePoints[n * 3] = x;
+            skylinePoints[n * 3 + 1] = contextWorldY(nextBundle, x, z);
+            skylinePoints[n * 3 + 2] = z;
+            n++;
+          }
+        }
+      }
+      return n;
+    };
+
+    // True once the user has orbited, panned or zoomed since the last preset was applied
+    let cameraTouched = false;
+    // Set when the terrain under the camera changed, so the preset target is resolved again
+    let presetDirty = false;
+
+    const setOrbitTargetFromPreset = (dest: CameraPresetSpec) => {
       orbitTarget.azimuth = dest.azimuth;
       orbitTarget.polar = dest.polar;
       orbitTarget.distance = dest.distance;
       orbitTarget.target.set(dest.target[0], dest.target[1], dest.target[2]);
+    };
+
+    const triggerSlew = (targetTheaterId: TheaterId) => {
+      const p = propsRef.current;
+      const cached = bundleCache.get(targetTheaterId);
+      if (cached && cached !== nextBundle) {
+        activateBundle(cached, true);
+      }
+      const dest = resolveLivePreset(p.cameraPreset, p.inWorkspace, p.mode, targetTheaterId);
+      slewController.trigger(orbitCurrent, dest, 2.15, SUB_ORBITAL_MORPH_DURATION_SEC);
+      cameraTouched = false;
+      presetDirty = false;
+    };
+
+    const applyCameraPreset = () => {
+      const p = propsRef.current;
+      slewController.cancel();
+      if (!p.inWorkspace && p.landingView !== 'slab') {
+        // Back on the landing in the world view: the camera starts from where it is, and the
+        // landing's idle motion eases it to the standpoint of the region now on screen (which may
+        // have changed in the workspace). Sent to the block view's pose first, it would fly up and
+        // away over a block whose sides are already hidden, and only then come down.
+        ensureLandingWorldPose();
+        orbitTarget.azimuth = orbitCurrent.azimuth;
+        orbitTarget.polar = orbitCurrent.polar;
+        orbitTarget.distance = orbitCurrent.distance;
+        orbitTarget.target.copy(orbitCurrent.target);
+      } else {
+        setOrbitTargetFromPreset(resolveLivePreset(p.cameraPreset, p.inWorkspace, p.mode, p.activeTheaterId));
+      }
+      cameraTouched = false;
+      presetDirty = false;
     };
 
     const syncCinemaStart = (active: boolean) => {
@@ -872,7 +2271,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       activateBundle,
       upgradeBundleInPlace,
       bundleCache,
-      runCache,
+      takeRunBundle,
+      storeRunBundle,
+      onScreenRegionId: () => nextBundle.regionId,
       maxAnisotropy,
       texLoader,
       triggerSlew,
@@ -946,6 +2347,14 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
         const staticBundle: CachedTheaterBundle = {
           ...existing,
+          ...liteShadingFields(
+            prof.widthKm,
+            bboxDepthKm(prof.bbox),
+            null,
+            1024,
+            satLoaded ? FALLBACK_IMAGERY_ATTRIBUTION : '',
+          ),
+          fireHistory: null,
           key: 'static-plumas_ca',
           demTex: demPack.texture,
           alignedDem: demPack.aligned,
@@ -961,7 +2370,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           findings,
         };
 
-        bundleCache.set('plumas_ca', staticBundle);
+        setRegionBundle('plumas_ca', staticBundle);
         upgradeBundleInPlace(staticBundle);
       } catch {
         // Procedural fallback remains active seamlessly
@@ -971,18 +2380,37 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     // 6. Pointer & Wheel Interaction Handlers (Pointer-steered curtain on Landing + Damped Orbit/Pan/Zoom)
     let viewportW = Math.max(1, host.clientWidth);
     let viewportH = Math.max(1, host.clientHeight);
+    let canvasLeft = 0;
+    let canvasTop = 0;
     const updateSize = () => {
       if (!host) return;
+      const hostRect = host.getBoundingClientRect();
+      canvasLeft = hostRect.left;
+      canvasTop = hostRect.top;
       viewportW = Math.max(1, host.clientWidth);
       viewportH = Math.max(1, host.clientHeight);
-      renderer.setSize(viewportW, viewportH, false);
+      dpr = resolveStagePixelRatio();
+      pipeline.setSize(viewportW, viewportH, dpr);
       camera.aspect = viewportW / viewportH;
-      plumeUniforms.uViewportHeightPx.value = viewportH * dpr;
     };
     updateSize();
 
     const resizeObs = new ResizeObserver(updateSize);
     resizeObs.observe(host);
+
+    // Device pixel ratio changes (window dragged to another display, browser zoom) do not resize the
+    // host element, so they need their own listener. The query is re-armed for each new ratio.
+    let dprQuery: MediaQueryList | null = null;
+    const onDprChange = () => {
+      updateSize();
+      armDprQuery();
+    };
+    const armDprQuery = () => {
+      dprQuery?.removeEventListener('change', onDprChange);
+      dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+      dprQuery.addEventListener('change', onDprChange);
+    };
+    armDprQuery();
 
     let pointerDown = false;
     let pointerButton = 0;
@@ -993,15 +2421,15 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let dragTravelPx = 0;
     let draggingCurtainDirectly = false;
 
-    let landingPointerActive = false;
-    let landingPointerSplit = 0.0; // [-1 .. +1]
+    let seamReported = false;
     let directWorkspaceSplit: number | null = null;
-    let currentCurtainPlane = 0.0;
+    let currentCurtainPlane = propsRef.current.inWorkspace ? 0.0 : LANDING_NO_CURTAIN_PLANE;
     let curtainHoverTarget = 0.0;
 
     const raycaster = new THREE.Raycaster();
     const pointerNdc = new THREE.Vector2();
     const groundIntersectPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.65);
+    const scratchTargetVec = new THREE.Vector3();
     const hitWorldPt = new THREE.Vector3();
 
     const computeRayCurtainProximity = (clientX: number, clientY: number): {
@@ -1018,10 +2446,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       const hit = raycaster.ray.intersectPlane(groundIntersectPlane, hitWorldPt);
       if (!hit) return { nearCurtain: false, planeCoord: 0 };
 
-      const u = hitWorldPt.x / SLAB_W + 0.5;
-      const v = 0.5 - hitWorldPt.z / SLAB_D;
+      const u = slabU(hitWorldPt.x);
+      const v = slabV(hitWorldPt.z);
       const inSlab = u >= -0.05 && u <= 1.05 && v >= -0.05 && v <= 1.05;
-      const planeCoord = (u - 0.5) * CUTAWAY_DIR_VEC.x + (v - 0.5) * CUTAWAY_DIR_VEC.y;
+      const planeCoord = (u - 0.5) * cutDir.x + (v - 0.5) * cutDir.y;
       const nearCurtain =
         inSlab && Math.abs(planeCoord - currentCurtainPlane) < 0.055;
       return {
@@ -1056,16 +2484,6 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
     const onPointerMove = (e: PointerEvent) => {
       const p = propsRef.current;
-      const rect = renderer.domElement.getBoundingClientRect();
-
-      if (!p.inWorkspace && rect.width > 0) {
-        // Map horizontal cursor across the inset stage window [-1 .. +1]
-        const padPx = Math.min(72, Math.max(24, rect.width * 0.05));
-        const innerW = Math.max(120, rect.width - padPx * 2);
-        const normX = THREE.MathUtils.clamp((e.clientX - rect.left - padPx) / innerW, 0, 1);
-        landingPointerActive = true;
-        landingPointerSplit = (normX * 2 - 1) * 0.88;
-      }
 
       if (!pointerDown) {
         if (p.mode === 'cutaway' && !p.cinemaActive) {
@@ -1095,21 +2513,23 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
       if (pointerButton === 2 || e.shiftKey) {
         // Right-drag / Shift-drag: damped horizontal target pan across the mountain slab
+        cameraTouched = true;
         const panScale = orbitCurrent.distance * 0.0011;
         const cosA = Math.cos(orbitCurrent.azimuth);
         const sinA = Math.sin(orbitCurrent.azimuth);
         orbitTarget.target.x = THREE.MathUtils.clamp(
           orbitTarget.target.x - (dx * cosA - dy * sinA) * panScale,
-          -SLAB_W * 0.42,
-          SLAB_W * 0.42,
+          -slabNow.width * 0.42,
+          slabNow.width * 0.42,
         );
         orbitTarget.target.z = THREE.MathUtils.clamp(
           orbitTarget.target.z - (-dx * sinA - dy * cosA) * panScale,
-          -SLAB_D * 0.42,
-          SLAB_D * 0.42,
+          -slabNow.depth * 0.42,
+          slabNow.depth * 0.42,
         );
       } else {
         // Left-drag: smooth damped 3D orbit
+        cameraTouched = true;
         const rotScale = p.inWorkspace ? 0.0046 : 0.0028;
         orbitTarget.azimuth -= dx * rotScale;
         const minPolar = p.inWorkspace ? 0.12 : 0.72;
@@ -1132,19 +2552,15 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
       // Clicking inside the Landing 3D stage window without dragging enters Workspace
       const p = propsRef.current;
+      // The page layout belongs to the caller: any click that reached the canvas counts
       if (!p.inWorkspace && dragTravelPx < 5 && e.button === 0) {
-        const topSafe = 274;
-        const botSafe = window.innerHeight - 52;
-        if (e.clientY >= topSafe && e.clientY <= botSafe) {
-          p.onEnterWorkspace?.();
-        }
+        p.onEnterWorkspace?.();
       }
       void pointerStartX;
       void pointerStartY;
     };
 
     const onPointerLeave = () => {
-      landingPointerActive = false;
       curtainHoverTarget = 0.0;
       setCurtainHovered(false);
     };
@@ -1153,6 +2569,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       const p = propsRef.current;
       if (!p.inWorkspace || p.cinemaActive) return;
       e.preventDefault();
+      cameraTouched = true;
       slewController.cancel();
       const zoomFactor = 1.0 + THREE.MathUtils.clamp(e.deltaY, -120, 120) * 0.0011;
       orbitTarget.distance = THREE.MathUtils.clamp(
@@ -1177,12 +2594,77 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     dom.addEventListener('contextmenu', onContextMenu);
 
     // 7. Main 60fps Animation, Physics, Orbital Constellation & Diegetic Projection Loop
+    // The landing drift and the curtain sweep stop when the visitor asks for reduced motion
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let reducedMotion = motionQuery.matches;
+    const onMotionChange = () => {
+      reducedMotion = motionQuery.matches;
+    };
+    motionQuery.addEventListener('change', onMotionChange);
+    let worldMix = 0.0;
+
     let rafId = 0;
     let prevTimeMs = performance.now();
     let elapsedSec = 0.0;
 
-    let currentViewOffsetRatio = propsRef.current.inWorkspace ? 0.0 : -0.11;
-    let observerVisibilityMix = 0.35;
+    const viewWindowCurrent: ViewWindow = { scale: 1, offsetX: 0, offsetY: 0 };
+    const viewWindowTarget: ViewWindow = { scale: 1, offsetX: 0, offsetY: 0 };
+    const landingFit: ViewWindow = { scale: 1, offsetX: 0, offsetY: LEGACY_LANDING_OFFSET_Y };
+    const subjectPoints = new Float32Array(SUBJECT_POINT_COUNT * 3);
+    let viewWindowReady = false;
+    let landingFitFrame: SubjectFrame | null = null;
+    let landingFitAspect = 0;
+    let landingFitAge = SUBJECT_REFIT_INTERVAL_FRAMES;
+    let activeSubjectFrame: SubjectFrame | null = null;
+    let workspaceFrame: SubjectFrame | null = null;
+    const workspaceFit: ViewWindow = { scale: 1, offsetX: 0, offsetY: 0 };
+    let workspaceFitAge = SUBJECT_REFIT_INTERVAL_FRAMES;
+    let workspaceFitPreset: InspectorCameraPreset | null = null;
+    let workspaceFitSky = false;
+
+    // Samples the slab (live terrain surface plus the four base corners) and fits its projected
+    // bounds into the frame for the nominal landing pose, including the idle azimuth drift.
+    // `withSky` adds the fixed volume above the slab where the spacecraft of Satellite passes fly,
+    // so they stay inside the frame without the framing changing from pass to pass.
+    const refitSubject = (
+      frame: SubjectFrame,
+      pose: CameraPresetSpec,
+      azimuthSwing: number,
+      out: ViewWindow,
+      withSky = false,
+    ) => {
+      let n = 0;
+      for (let gy = 0; gy < SUBJECT_GRID; gy++) {
+        const v = gy / (SUBJECT_GRID - 1);
+        for (let gx = 0; gx < SUBJECT_GRID; gx++) {
+          const u = gx / (SUBJECT_GRID - 1);
+          subjectPoints[n * 3] = worldX(u);
+          subjectPoints[n * 3 + 1] = sampleCpuTerrainY(u, v);
+          subjectPoints[n * 3 + 2] = worldZ(v);
+          n++;
+        }
+      }
+      for (let c = 0; c < 4; c++) {
+        subjectPoints[n * 3] = (c % 2 === 0 ? -0.5 : 0.5) * slabNow.width;
+        subjectPoints[n * 3 + 1] = CLIFF_BASE_Y;
+        subjectPoints[n * 3 + 2] = (c < 2 ? -0.5 : 0.5) * slabNow.depth;
+        n++;
+      }
+      if (withSky) {
+        const baseY = sampleCpuTerrainY(0.5, 0.5);
+        for (let c = 0; c < SUBJECT_SKY_POINTS; c++) {
+          const ring = c === 0 ? 0 : FLEET_SKY_RADIUS;
+          const a = (c - 1) * Math.PI * 0.5;
+          subjectPoints[n * 3] = Math.cos(a) * ring;
+          subjectPoints[n * 3 + 1] = baseY + (c === 0 ? FLEET_SKY_TOP : FLEET_SKY_SHOULDER);
+          subjectPoints[n * 3 + 2] = Math.sin(a) * ring;
+          n++;
+        }
+      }
+      fitSubjectToFrame(subjectPoints, n, pose, azimuthSwing, 39.0, viewportW / viewportH, frame, out);
+    };
+
+    let observerVisibilityMix = 0.0;
     let lastCutawaySplitProp: number | null = propsRef.current.cutawaySplit;
 
     let fpsFrames = 0;
@@ -1191,15 +2673,6 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let lastTelemetryEmitSec = 0;
 
     const projVec = new THREE.Vector3();
-    const orbitArcCurvePts = [
-      new THREE.Vector3(),
-      new THREE.Vector3(),
-      new THREE.Vector3(),
-      new THREE.Vector3(),
-      new THREE.Vector3(),
-    ];
-    const orbitArcSpline = new THREE.CatmullRomCurve3(orbitArcCurvePts, false, 'catmullrom', 0.5);
-    const tmpArcSample = new THREE.Vector3();
 
     const animate = (nowMs: number) => {
       if (disposed) return;
@@ -1212,6 +2685,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       const p = propsRef.current;
       const dampFast = 1.0 - Math.exp(-dtSec * 8.5);
       const dampMed = 1.0 - Math.exp(-dtSec * 5.8);
+      // Landing world view (the default landing): camera inside the landscape, no block on a floor
+      const landingWorld = !p.inWorkspace && p.landingView !== 'slab';
+      if (landingWorld) ensureLandingWorldPose();
 
       // Reset direct curtain drag override whenever Vernier scrubber changes or resets
       if (p.cutawaySplit !== lastCutawaySplitProp) {
@@ -1225,37 +2701,161 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         const rawM = Math.min(1.0, morphElapsed / morphDuration);
         morphValue = easeSubOrbitalMorph(rawM);
         terrainUniforms.uMorph.value = morphValue;
+        updateSlabNow();
         if (rawM >= 1.0) {
           morphActive = false;
           morphValue = 1.0;
           prevBundle = nextBundle;
           syncUniformsFromBundles();
           terrainUniforms.uMorph.value = 1.0;
+          // The transition has settled: only the pack of the region on screen stays on the GPU.
+          // (Evicting only when another pack finishes loading would leave a pack behind when the
+          // new region has none, and when the new pack arrives before the morph ends.)
+          evictPacksExcept(nextBundle.regionId);
+          sweepRetiredBundles();
         }
       }
 
-      // B. Smooth camera.setViewOffset framing (-0.11 * H on Landing -> 0.0 in Workspace, zero canvas resize)
-      const targetViewOffsetRatio = p.inWorkspace ? 0.0 : -0.11;
-      currentViewOffsetRatio = THREE.MathUtils.lerp(
-        currentViewOffsetRatio,
-        targetViewOffsetRatio,
-        dampFast,
+      // Baked pack normals and the detail inset ease in once the incoming terrain is in place
+      const auxTarget = nextBundle.auxTex
+        ? morphActive && prevBundle.regionId !== nextBundle.regionId
+          ? THREE.MathUtils.smoothstep(morphValue, 0.55, 1.0)
+          : 1.0
+        : 0.0;
+      terrainUniforms.uAuxMix.value = THREE.MathUtils.lerp(
+        terrainUniforms.uAuxMix.value,
+        auxTarget,
+        dampMed,
       );
-      if (Math.abs(currentViewOffsetRatio) > 0.0004) {
-        camera.setViewOffset(
-          viewportW,
-          viewportH,
-          0,
-          currentViewOffsetRatio * viewportH,
-          viewportW,
-          viewportH,
-        );
+      terrainUniforms.uDetailMix.value = THREE.MathUtils.lerp(
+        terrainUniforms.uDetailMix.value,
+        nextBundle.detailTex ? 1.0 : 0.0,
+        dampMed,
+      );
+
+      // B. Camera view window (zero canvas resize). Landing without a subject frame: the
+      // 11% downward shift. Landing with one: the slab fitted inside that rectangle. Workspace with
+      // a subject frame: the Overview and Nadir presets are fitted inside it, the close presets
+      // keep their size and look at the middle of it (no frame, clean feed or cinema: full image).
+      activeSubjectFrame = p.inWorkspace ? null : sanitizeSubjectFrame(p.landingSubjectFrame);
+      workspaceFrame =
+        p.inWorkspace && !p.cleanHud && !p.cinemaActive
+          ? sanitizeSubjectFrame(p.workspaceSubjectFrame)
+          : null;
+      if (p.inWorkspace && workspaceFrame) {
+        const frameCx = (workspaceFrame.left + workspaceFrame.right) * 0.5;
+        const frameCy = (workspaceFrame.top + workspaceFrame.bottom) * 0.5;
+        if (p.cameraPreset === 'overview' || p.cameraPreset === 'nadir') {
+          // Whole-slab views: fit the slab of that preset inside the frame, never magnified
+          workspaceFitAge += 1;
+          const fitSky = p.mode === 'observer' && p.cameraPreset === 'overview';
+          if (
+            workspaceFitAge >= SUBJECT_REFIT_INTERVAL_FRAMES ||
+            workspaceFitPreset !== p.cameraPreset ||
+            workspaceFitSky !== fitSky
+          ) {
+            refitSubject(
+              workspaceFrame,
+              resolvePresetForContext(p.cameraPreset, true, p.mode, p.activeTheaterId),
+              0,
+              workspaceFit,
+              fitSky,
+            );
+            workspaceFitAge = 0;
+            workspaceFitPreset = p.cameraPreset;
+            workspaceFitSky = fitSky;
+          }
+          const s = THREE.MathUtils.clamp(workspaceFit.scale, 0.4, 1.0);
+          const fitScale = Math.max(1e-3, workspaceFit.scale);
+          viewWindowTarget.scale = s;
+          viewWindowTarget.offsetX = ((workspaceFit.offsetX + frameCx) / fitScale) * s - frameCx;
+          viewWindowTarget.offsetY = ((workspaceFit.offsetY + frameCy) / fitScale) * s - frameCy;
+        } else {
+          // Close obliques: full size, with the point the camera looks at in the middle of the frame
+          workspaceFitPreset = null;
+          viewWindowTarget.scale = 1;
+          viewWindowTarget.offsetX = 0.5 - frameCx;
+          viewWindowTarget.offsetY = 0.5 - frameCy;
+        }
+      } else if (p.inWorkspace) {
+        workspaceFitPreset = null;
+        viewWindowTarget.scale = 1;
+        viewWindowTarget.offsetX = 0;
+        viewWindowTarget.offsetY = 0;
+      } else if (landingWorld && landingWorldPose) {
+        // World view: the image is shifted up or down so the calm rectangle holds sky and haze
+        const calm = activeSubjectFrame ?? DEFAULT_CALM_FRAME;
+        landingFitAge += 1;
+        const aspectNow = viewportW / viewportH;
+        if (
+          landingFitAge >= SUBJECT_REFIT_INTERVAL_FRAMES ||
+          !subjectFramesEqual(landingFitFrame, calm) ||
+          Math.abs(landingFitAspect - aspectNow) > 1e-4
+        ) {
+          const count = collectSkylinePoints();
+          fitSkylineToFrame(
+            skylinePoints,
+            count,
+            landingWorldPose,
+            reducedMotion ? 0 : LANDING_WORLD_DRIFT,
+            LANDING_WORLD_FOV,
+            aspectNow,
+            calm,
+            landingFit,
+          );
+          landingFitFrame = calm;
+          landingFitAspect = aspectNow;
+          landingFitAge = 0;
+        }
+        viewWindowTarget.scale = 1;
+        viewWindowTarget.offsetX = 0;
+        viewWindowTarget.offsetY = landingFit.offsetY;
+      } else if (!activeSubjectFrame) {
+        viewWindowTarget.scale = 1;
+        viewWindowTarget.offsetX = 0;
+        viewWindowTarget.offsetY = LEGACY_LANDING_OFFSET_Y;
+        landingFitFrame = null;
       } else {
-        camera.clearViewOffset();
+        landingFitAge += 1;
+        const aspectNow = viewportW / viewportH;
+        if (
+          landingFitAge >= SUBJECT_REFIT_INTERVAL_FRAMES ||
+          !subjectFramesEqual(landingFitFrame, activeSubjectFrame) ||
+          Math.abs(landingFitAspect - aspectNow) > 1e-4
+        ) {
+          refitSubject(activeSubjectFrame, LANDING_HERO_POSE, LANDING_DRIFT_AZIMUTH, landingFit);
+          landingFitFrame = activeSubjectFrame;
+          landingFitAspect = aspectNow;
+          landingFitAge = 0;
+        }
+        viewWindowTarget.scale = landingFit.scale;
+        viewWindowTarget.offsetX = landingFit.offsetX;
+        viewWindowTarget.offsetY = landingFit.offsetY;
       }
+      const windowDamp = viewWindowReady ? dampFast : 1.0;
+      viewWindowReady = true;
+      viewWindowCurrent.scale = THREE.MathUtils.lerp(
+        viewWindowCurrent.scale,
+        viewWindowTarget.scale,
+        windowDamp,
+      );
+      viewWindowCurrent.offsetX = THREE.MathUtils.lerp(
+        viewWindowCurrent.offsetX,
+        viewWindowTarget.offsetX,
+        windowDamp,
+      );
+      viewWindowCurrent.offsetY = THREE.MathUtils.lerp(
+        viewWindowCurrent.offsetY,
+        viewWindowTarget.offsetY,
+        windowDamp,
+      );
+      applyViewWindow(camera, viewportW, viewportH, viewWindowCurrent);
 
       // C. Step Camera Controller (Cinema Catmull-Rom Spline vs Sub-Orbital Slew vs Damped Orbit)
       let effectiveTimeProg = p.timeProgress;
+      // The landing of a real run shows the overpass the stage chose for it (see landingFrameOf)
+      const landingFrame = landingWorld ? landingFrameFor(nextBundle) : null;
+      if (landingFrame !== null) effectiveTimeProg = landingFrame / Math.max(1, nextBundle.frameCount - 1);
       let cinemaProgress = 0.0;
       let slewActive = false;
 
@@ -1264,6 +2864,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           dtSec,
           sampleCpuTerrainY,
           p.onCinemaStepTheater,
+          slabNow.width,
+          slabNow.depth,
         );
         camera.fov = pose.fov;
         camera.updateProjectionMatrix();
@@ -1279,30 +2881,61 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         effectiveTimeProg = pose.syntheticTimeProgress;
         cinemaProgress = pose.cycleProgress;
       } else {
-        if (Math.abs(camera.fov - 39.0) > 0.01) {
-          camera.fov = THREE.MathUtils.lerp(camera.fov, 39.0, dampFast);
+        const lens = landingWorld && landingWorldPose ? LANDING_WORLD_FOV : 39.0;
+        if (Math.abs(camera.fov - lens) > 0.01) {
+          camera.fov = landingWorldSeated || !landingWorld ? THREE.MathUtils.lerp(camera.fov, lens, dampFast) : lens;
         }
         camera.updateProjectionMatrix();
         camera.up.set(0, 1, 0);
 
         if (!p.inWorkspace && !slewController.isActive() && !pointerDown) {
-          // Gentle orbital drift on Landing when idle
-          orbitTarget.azimuth =
-            LANDING_HERO_POSE.azimuth + Math.sin(elapsedSec * 0.16) * 0.065;
-          orbitTarget.polar = THREE.MathUtils.lerp(
-            orbitTarget.polar,
-            LANDING_HERO_POSE.polar,
-            dtSec * 1.2,
+          // Idle on the landing page: a slow swing around the landing pose, none under reduced motion
+          const worldPose = landingWorld ? landingWorldPose : null;
+          const pose = worldPose ?? LANDING_HERO_POSE;
+          const swing = reducedMotion
+            ? 0.0
+            : worldPose
+              ? Math.sin(elapsedSec * 0.11) * LANDING_WORLD_DRIFT
+              : Math.sin(elapsedSec * 0.16) * 0.065;
+          // The shortest way round to the pose azimuth, so a change of standpoint never spins the view
+          let az = pose.azimuth + swing;
+          while (az - orbitTarget.azimuth > Math.PI) az -= Math.PI * 2;
+          while (az - orbitTarget.azimuth < -Math.PI) az += Math.PI * 2;
+          // Eased like distance and height, so a return from the workspace is one glide. The
+          // drift itself is far slower than this.
+          orbitTarget.azimuth = worldPose
+            ? THREE.MathUtils.lerp(orbitTarget.azimuth, az, Math.min(1, dtSec * 2.0))
+            : az;
+          orbitTarget.polar = THREE.MathUtils.lerp(orbitTarget.polar, pose.polar, dtSec * 1.2);
+          orbitTarget.distance = THREE.MathUtils.lerp(orbitTarget.distance, pose.distance, dtSec * 1.6);
+          scratchTargetVec.set(pose.target[0], pose.target[1], pose.target[2]);
+          orbitTarget.target.lerp(scratchTargetVec, dtSec * 2.2);
+          if (worldPose && !landingWorldSeated) {
+            // First frame of the page: the view opens in place, it does not fly in from the block view
+            orbitTarget.azimuth = az;
+            orbitTarget.polar = pose.polar;
+            orbitTarget.distance = pose.distance;
+            orbitTarget.target.copy(scratchTargetVec);
+            orbitCurrent.azimuth = orbitTarget.azimuth;
+            orbitCurrent.polar = pose.polar;
+            orbitCurrent.distance = pose.distance;
+            orbitCurrent.target.copy(scratchTargetVec);
+            landingWorldSeated = true;
+          }
+        }
+
+        // The terrain changed under an untouched preset (data arrived, pack loaded): re-center it
+        if (
+          presetDirty &&
+          p.inWorkspace &&
+          !cameraTouched &&
+          !pointerDown &&
+          !slewController.isActive()
+        ) {
+          setOrbitTargetFromPreset(
+            resolveLivePreset(p.cameraPreset, true, p.mode, p.activeTheaterId),
           );
-          orbitTarget.distance = THREE.MathUtils.lerp(
-            orbitTarget.distance,
-            LANDING_HERO_POSE.distance,
-            dtSec * 1.6,
-          );
-          orbitTarget.target.lerp(
-            new THREE.Vector3(...LANDING_HERO_POSE.target),
-            dtSec * 2.2,
-          );
+          presetDirty = false;
         }
 
         const slewStep = slewController.step(dtSec, orbitTarget);
@@ -1336,36 +2969,95 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         );
 
         // Keep interactive camera safely above real mountain peaks
-        const camU = camera.position.x / SLAB_W + 0.5;
-        const camV = 0.5 - camera.position.z / SLAB_D;
+        const camU = slabU(camera.position.x);
+        const camV = slabV(camera.position.z);
         if (camU >= 0 && camU <= 1 && camV >= 0 && camV <= 1) {
-          const minCamY = sampleCpuTerrainY(camU, camV) + 0.52;
+          const minCamY =
+            sampleCpuTerrainY(camU, camV) +
+            THREE.MathUtils.lerp(CAMERA_CLEARANCE, CAMERA_CLEARANCE_WORLD, worldMix);
+          if (camera.position.y < minCamY) {
+            camera.position.y = minCamY;
+          }
+        } else if (nextBundle.context && contextMix > 0.5) {
+          // Beyond the pack the camera stays clear of the context terrain in the same way
+          const minCamY = contextWorldY(nextBundle, camera.position.x, camera.position.z) + CAMERA_CLEARANCE;
           if (camera.position.y < minCamY) {
             camera.position.y = minCamY;
           }
         }
         camera.lookAt(orbitCurrent.target);
 
-        // Determine target Sensor Split Curtain plane
-        let desiredSplit = 0.0;
+        // Determine the target plane of the sensor curtain
+        let targetPlane = 0.0;
         if (!p.inWorkspace) {
-          desiredSplit = landingPointerActive
-            ? landingPointerSplit
-            : Math.sin(elapsedSec * 0.44) * 0.28;
-        } else if (directWorkspaceSplit !== null) {
-          desiredSplit = directWorkspaceSplit;
-        } else if (p.cutawaySplit !== null) {
-          desiredSplit = p.cutawaySplit;
+          targetPlane = LANDING_NO_CURTAIN_PLANE;
         } else {
-          desiredSplit = Math.sin(elapsedSec * 0.36) * 0.36;
+          let desiredSplit = 0.0;
+          if (directWorkspaceSplit !== null) {
+            desiredSplit = directWorkspaceSplit;
+          } else if (p.cutawaySplit !== null) {
+            desiredSplit = p.cutawaySplit;
+          } else {
+            desiredSplit = Math.sin(elapsedSec * 0.36) * 0.36;
+          }
+          targetPlane = -THREE.MathUtils.clamp(desiredSplit, -1, 1) * MAX_PLANE_OFFSET;
+          if (directWorkspaceSplit === null && p.cutawaySplit === null) {
+            // Auto sweep: swing around the point the camera looks at, so close views keep both
+            // the raw and the harmonized side in frame
+            const tu = slabU(orbitCurrent.target.x);
+            const tv = slabV(orbitCurrent.target.z);
+            const center = THREE.MathUtils.clamp(
+              (tu - 0.5) * cutDir.x + (tv - 0.5) * cutDir.y,
+              -0.34,
+              0.34,
+            );
+            // Close views: the point the camera looks at (the fire) stays on the calibrated side.
+            // The curtain sweeps between about an eighth and a quarter of the frame width beside it.
+            const closeMix = 1.0 - THREE.MathUtils.smoothstep(orbitCurrent.distance, 8.5, 11.5);
+            const perWorldUnit =
+              1.0 / Math.hypot(slabNow.width * Math.cos(cutAzimuth), slabNow.depth * Math.sin(cutAzimuth));
+            const sweep01 = 0.5 + 0.5 * Math.sin(elapsedSec * 0.36);
+            const beside = (0.13 + 0.13 * sweep01) * 1.13 * orbitCurrent.distance * perWorldUnit;
+            targetPlane = center + THREE.MathUtils.lerp(targetPlane * 0.62, beside, closeMix);
+            // A real run seen from far (Overview, Nadir): the sweep follows the fire and not the
+            // middle of the region, so a small fire is not left under the side that has nothing
+            // to show. On a MODIS overpass both sides show it and the curtain sweeps across it.
+            // On a VIIRS overpass the raw MODIS side holds nothing (FIRMS lists detections, not
+            // where MODIS looked and saw none), so the curtain rests beside the fire, on its raw
+            // side. The raw side keeps at least a fifth of the region.
+            if (passFireBox.run === nextBundle.key && nextBundle.observerDataset.dataSource === 'firms') {
+              let lo = 1e6;
+              let hi = -1e6;
+              for (let corner = 0; corner < 4; corner++) {
+                const plane =
+                  ((corner & 1 ? passFireBox.u1 : passFireBox.u0) - 0.5) * cutDir.x +
+                  ((corner & 2 ? passFireBox.v1 : passFireBox.v0) - 0.5) * cutDir.y;
+                lo = Math.min(lo, plane);
+                hi = Math.max(hi, plane);
+              }
+              const swing = Math.sin(elapsedSec * 0.36);
+              const farPlane = passFireBox.modis
+                ? 0.5 * (lo + hi) + swing * (0.5 * (hi - lo) + 0.03)
+                : hi + 0.035 + 0.02 * (0.5 + 0.5 * swing);
+              targetPlane = THREE.MathUtils.lerp(THREE.MathUtils.clamp(farPlane, -0.3, 0.3), targetPlane, closeMix);
+            }
+          }
         }
-        const targetPlane = -THREE.MathUtils.clamp(desiredSplit, -1, 1) * MAX_PLANE_OFFSET;
         currentCurtainPlane = THREE.MathUtils.lerp(
           currentCurtainPlane,
           targetPlane,
           dampFast,
         );
       }
+
+      // On the landing page the seam stays aligned with the camera (so it stays near vertical on
+      // screen through the idle drift); in the workspace it is fixed on the ground.
+      cutAzimuth = THREE.MathUtils.lerp(
+        cutAzimuth,
+        p.inWorkspace ? CURTAIN_AZIMUTH : orbitCurrent.azimuth,
+        dampFast,
+      );
+      cutDirectionForAzimuth(cutAzimuth, slabNow.width, slabNow.depth, cutDir);
 
       // D. Update Mode Mixes & Dynamic Solver Uniforms
       const effectiveMode = !p.inWorkspace || p.cinemaActive ? 'cutaway' : p.mode;
@@ -1434,14 +3126,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         curtainHoverTarget,
         dampFast,
       );
-      curtainMesh.visible = terrainUniforms.uCutawayMix.value > 0.008;
+      curtainMesh.visible = terrainUniforms.uCutawayMix.value > 0.008 && currentCurtainPlane < 1.5;
 
-      plumeUniforms.uPlumeOpacity.value = THREE.MathUtils.lerp(
-        plumeUniforms.uPlumeOpacity.value,
-        targetPlumeOpacity,
-        dampMed,
-      );
-      plumePoints.visible = plumeUniforms.uPlumeOpacity.value > 0.01;
+      // By night smoke is not lit by anything the data holds, and it would hide the lights
+      smokeOpacity = THREE.MathUtils.lerp(smokeOpacity, targetPlumeOpacity * (1.0 - uNight.value), dampMed);
 
       const fMix = syncEpochTextures(
         nextBundle.tensor,
@@ -1449,211 +3137,402 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         effectiveTimeProg,
       );
       terrainUniforms.uFrameMix.value = fMix;
+      // Fractional epoch: the fire front is the arrival-time level set at this value
+      terrainUniforms.uFireTime.value =
+        THREE.MathUtils.clamp(effectiveTimeProg, 0, 1) * Math.max(1, nextBundle.frameCount - 1);
 
-      // E. Update 3D Orbiting NASA Satellites (Prominent 100% in observer, 1 subtle 35% pass in cutaway)
-      const targetConstellationAlpha =
-        effectiveMode === 'observer'
-          ? 1.0
-          : effectiveMode === 'cutaway'
-            ? 0.35
-            : 0.0;
-      observerVisibilityMix = THREE.MathUtils.lerp(
-        observerVisibilityMix,
-        targetConstellationAlpha,
-        dampMed,
+      // Scan geometry of the overpasses at the nearest epoch drives the ground cell lattice. An
+      // overpass is a discrete observation, so its geometry is never blended between epochs.
+      const obsFrames = nextBundle.observerDataset.frames;
+      const epochIdx = Math.min(
+        obsFrames.length - 1,
+        Math.max(0, Math.round(effectiveTimeProg * (obsFrames.length - 1))),
+      );
+      const rawPasses = obsFrames[epochIdx] ?? [];
+      // A real run: the detections of this overpass, each with its own footprint, replace the
+      // scan lattice, and the smoke rises from detections
+      const realRun = nextBundle.observerDataset.dataSource === 'firms';
+      if (realRun) {
+        syncDetectionTextures(nextBundle, uploadedFrame0, uploadedFrame1);
+        const key = `${nextBundle.key}:${epochIdx}:${p.holdoutViirs ? 1 : 0}:${landingWorld ? 1 : 0}`;
+        if (key !== realPassKey) {
+          realPassKey = key;
+          // The pass the frame belongs to: one the estimate was made from, before any pass laid on after scoring
+          const shown =
+            rawPasses.find((sp) => !passIsHidden(sp, p.holdoutViirs) && !sp.revealed) ??
+            rawPasses.find((sp) => !passIsHidden(sp, p.holdoutViirs));
+          const hasModis = rawPasses.some(
+            (sp) => sp.family === 'modis' && !passIsHidden(sp, p.holdoutViirs) && !sp.revealed,
+          );
+          realPassNow = shown
+            ? {
+                index: epochIdx,
+                sensor: shown.sensorLabel,
+                timeUtc: shown.timeUtc ?? '',
+                isDay: shown.isDay !== false,
+                detections: shown.footprints.length,
+              }
+            : undefined;
+          footprintList.length = 0;
+          revealedList.length = 0;
+          uRevealed.set(0, 0);
+          for (const sp of rawPasses) {
+            if (passIsHidden(sp, p.holdoutViirs)) continue;
+            if (sp.revealed) {
+              // Laid on after scoring: drawn as outlined pixels, not as light
+              for (const fp of sp.footprints) revealedList.push(fp);
+              if (sp.family === 'modis') uRevealed.x = 1;
+              else uRevealed.y = 1;
+              continue;
+            }
+            for (const fp of sp.footprints) footprintList.push(fp);
+          }
+          if (footprintList.length > 0) {
+            const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
+            let u0 = 1;
+            let u1 = 0;
+            let v0 = 1;
+            let v1 = 0;
+            for (const fp of footprintList) {
+              const u = THREE.MathUtils.clamp((fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin), 0, 1);
+              const v = THREE.MathUtils.clamp((fp.lat - latMin) / Math.max(1e-9, latMax - latMin), 0, 1);
+              u0 = Math.min(u0, u);
+              u1 = Math.max(u1, u);
+              v0 = Math.min(v0, v);
+              v1 = Math.max(v1, v);
+            }
+            passFireBox.run = nextBundle.key;
+            passFireBox.u0 = u0;
+            passFireBox.u1 = u1;
+            passFireBox.v0 = v0;
+            passFireBox.v1 = v1;
+            passFireBox.modis = hasModis;
+          }
+          // How hot each detection is drawn, on the run's own intensity scale
+          const lightScale = nextBundle.fieldScale ?? DEFAULT_FIELD_INTENSITY_SCALE;
+          lightRangeOf(lightScale, lightRange);
+          footprintField.build(
+            footprintList,
+            nextBundle.bbox,
+            [nextBundle.widthKm, nextBundle.depthKm],
+            (mwPerKm2) =>
+              (fieldScalePosition(lightScale, mwPerKm2) - lightRange.x) / Math.max(1e-3, lightRange.y - lightRange.x),
+            revealedList,
+          );
+          uLightModis.value = hasModis ? 1 : 0;
+        }
+      } else {
+        realPassNow = undefined;
+        realPassKey = '';
+      }
+      // On a real run the fire history is not drawn, and its sampler carries the detections' light
+      terrainUniforms.uFireHist.value = realRun ? footprintField.lightTexture : ensureFireHistory(nextBundle).texture;
+      // Time of day comes from the overpass on show: a night overpass is drawn by night
+      const nightTarget = realRun && rawPasses[0]?.isDay === false ? 1.0 : 0.0;
+      uNight.value = THREE.MathUtils.lerp(uNight.value, nightTarget, 1.0 - Math.exp(-dtSec * 2.4));
+      domeNight.value = uNight.value;
+      curtainNight.value = uNight.value;
+      const fieldScale = nextBundle.fieldScale ?? DEFAULT_FIELD_INTENSITY_SCALE;
+      uFieldScale.set(fieldScale.kind === 'linear' ? 0 : 1, fieldScale.maxMwKm2, fieldScale.minMwKm2);
+      heatRangeOf(fieldScale, uHeatRange);
+      uFootMix.set(realRun ? 1 : 0, realRun ? 1 : 0);
+      resolveScanPass(
+        rawPasses.find((sp) => sp.family === 'modis'),
+        MODIS_SCAN,
+        modisPassState,
+      );
+      resolveScanPass(
+        rawPasses.find((sp) => sp.family === 'viirs' && !passIsHidden(sp, p.holdoutViirs)),
+        VIIRS_SCAN,
+        viirsPassState,
+      );
+      uModisPass.set(
+        modisPassState.axisEast,
+        modisPassState.axisNorth,
+        modisPassState.nadirKm,
+        modisPassState.valid ? 1 : 0,
+      );
+      uViirsPass.set(
+        viirsPassState.axisEast,
+        viirsPassState.axisNorth,
+        viirsPassState.nadirKm,
+        viirsPassState.valid ? 1 : 0,
       );
 
-      if (observerVisibilityMix < 0.01) {
-        observerGroup.visible = false;
-      } else {
-        observerGroup.visible = true;
-        const obsFrames = nextBundle.observerDataset.frames;
-        const epochIdx = Math.min(
-          obsFrames.length - 1,
-          Math.max(0, Math.round(effectiveTimeProg * (obsFrames.length - 1))),
-        );
-        const rawPasses = obsFrames[epochIdx] ?? [];
-        const filteredPasses: NormalizedSatellitePass[] = rawPasses.filter((sp) => {
-          if (p.holdoutViirs && sp.family === 'viirs') return false;
-          if (effectiveMode === 'observer') {
-            if (p.observerFilter === 'modis' && sp.family !== 'modis') return false;
-            if (p.observerFilter === 'viirs' && sp.family !== 'viirs') return false;
+      // E. Spacecraft, orbit tracks and scan planes: Satellite passes only. On the landing page
+      // and in the sensor split a spacecraft above the slab would run into the page's type.
+      observerVisibilityMix = THREE.MathUtils.lerp(
+        observerVisibilityMix,
+        effectiveMode === 'observer' ? 1.0 : 0.0,
+        dampMed,
+      );
+      if (!fleetModelsRequested && p.inWorkspace) {
+        fleetModelsRequested = true;
+        void fleet.loadModels(import.meta.env.BASE_URL);
+      }
+      {
+        // In a close view the spacecraft would fill the frame as a prop in front of the terrain,
+        // so everything in the sky leaves when the camera comes in. The scan strip on the ground stays.
+        const wide = THREE.MathUtils.smoothstep(orbitCurrent.distance, 8.5, 11.5);
+        fleetSkyMix = THREE.MathUtils.lerp(fleetSkyMix, effectiveMode === 'observer' ? wide : 0.0, dampMed);
+
+        fleetPasses.length = 0;
+        if (observerVisibilityMix >= 0.01) {
+          let modisStrip = false;
+          let viirsStrip = false;
+          for (const sp of rawPasses) {
+            if (fleetPasses.length >= MAX_ORBITAL_RIGS) break;
+            if (passIsHidden(sp, p.holdoutViirs)) continue;
+            if (p.observerFilter === 'modis' && sp.family !== 'modis') continue;
+            if (p.observerFilter === 'viirs' && sp.family !== 'viirs') continue;
+            // The terrain shader draws the scan cells of the first pass of each family
+            const first = sp.family === 'modis' ? !modisStrip : !viirsStrip;
+            if (sp.family === 'modis') modisStrip = true;
+            else viirsStrip = true;
+            fleetPasses.push({
+              sensorLabel: sp.sensorLabel,
+              family: sp.family,
+              azimuthDeg: sp.azimuthDeg,
+              scanAngleDeg: sp.scanAngleDeg,
+              orbitNode: sp.orbitNode,
+              groundStrip: first,
+            });
           }
-          return true;
+        }
+        fleet.update(fleetPasses, {
+          sky: fleetSkyMix,
+          strip: observerVisibilityMix,
+          dtSec,
+          sampleTerrainY: sampleCpuTerrainY,
+          slabWidth: slabNow.width,
+          slabDepth: slabNow.depth,
+          unitsPerMetre: nextBundle.frame.unitsPerMetre,
         });
-
-        const maxVisiblePasses = effectiveMode === 'observer' ? MAX_ORBITAL_RIGS : 1;
-        const activePasses = filteredPasses.slice(0, maxVisiblePasses);
-
-        for (let rIdx = 0; rIdx < MAX_ORBITAL_RIGS; rIdx++) {
-          const rig = spacecraftRigs[rIdx];
-          const pass = activePasses[rIdx];
-          if (!pass) {
-            rig.group.visible = false;
-            continue;
-          }
-          rig.group.visible = true;
-
-          const isViirs = pass.family === 'viirs';
-          const accentColor = isViirs ? colViirs : colModis;
-          const azRad = (pass.azimuthDeg * Math.PI) / 180;
-          const dirAlongX = -Math.sin(azRad);
-          const dirAlongZ = Math.cos(azRad);
-
-          // Build curved sun-synchronous orbital arc across the sky through skyPosition
-          const [sxBase, syBase, szBase] = pass.skyPosition;
-          const arcSpan = 7.4;
-          for (let k = 0; k < 5; k++) {
-            const s = (k / 4 - 0.5) * 2.0; // [-1 .. +1]
-            orbitArcCurvePts[k].set(
-              sxBase + dirAlongX * arcSpan * s,
-              syBase - s * s * 0.72,
-              szBase + dirAlongZ * arcSpan * s,
-            );
-          }
-          orbitArcSpline.updateArcLengths();
-
-          const arcPosAttr = rig.orbitArcGeom.getAttribute('position') as THREE.BufferAttribute;
-          const arcArr = arcPosAttr.array as Float32Array;
-          for (let i = 0; i < 96; i++) {
-            orbitArcSpline.getPoint(i / 95, tmpArcSample);
-            arcArr[i * 3] = tmpArcSample.x;
-            arcArr[i * 3 + 1] = tmpArcSample.y;
-            arcArr[i * 3 + 2] = tmpArcSample.z;
-          }
-          arcPosAttr.needsUpdate = true;
-
-          // Glide spacecraft smoothly along the central segment of its orbital pass arc
-          const orbitalDrift = 0.5 + 0.22 * Math.sin(elapsedSec * 0.32 + rIdx * 1.7);
-          orbitArcSpline.getPoint(orbitalDrift, rig.craftRoot.position);
-          orbitArcSpline.getPoint(Math.min(0.99, orbitalDrift + 0.02), tmpArcSample);
-          rig.craftRoot.lookAt(tmpArcSample);
-
-          rig.busMat.opacity = 0.95 * observerVisibilityMix;
-          rig.solarWingMat.opacity = 0.92 * observerVisibilityMix;
-          rig.orbitArcMat.color.copy(accentColor);
-          rig.orbitArcMat.opacity = 0.46 * observerVisibilityMix;
-
-          // Update volumetric nadir scan swath fan down onto the mountain surface
-          const swathPosAttr = rig.swathGeom.getAttribute('position') as THREE.BufferAttribute;
-          const sArr = swathPosAttr.array as Float32Array;
-          sArr[0] = rig.craftRoot.position.x;
-          sArr[1] = rig.craftRoot.position.y - 0.06;
-          sArr[2] = rig.craftRoot.position.z;
-
-          const perpU = -CUTAWAY_DIR_VEC.y;
-          const perpV = CUTAWAY_DIR_VEC.x;
-          const planeRef = effectiveMode === 'cutaway' ? currentCurtainPlane : 0.0;
-          const centerU = 0.5 + CUTAWAY_DIR_VEC.x * planeRef;
-          const centerV = 0.5 + CUTAWAY_DIR_VEC.y * planeRef;
-
-          for (let c = 0; c < 25; c++) {
-            const spanT = (c / 24 - 0.5) * 0.86;
-            const gu = THREE.MathUtils.clamp(centerU + perpU * spanT, 0.02, 0.98);
-            const gv = THREE.MathUtils.clamp(centerV + perpV * spanT, 0.02, 0.98);
-            const gy = sampleCpuTerrainY(gu, gv) + 0.02;
-            const gwx = (gu - 0.5) * SLAB_W;
-            const gwz = (0.5 - gv) * SLAB_D;
-            const vOff = (1 + c) * 3;
-            sArr[vOff] = gwx;
-            sArr[vOff + 1] = gy;
-            sArr[vOff + 2] = gwz;
-          }
-          swathPosAttr.needsUpdate = true;
-          rig.swathMat.color.copy(accentColor);
-          rig.swathMat.opacity =
-            (effectiveMode === 'observer' ? 0.085 : 0.065) * observerVisibilityMix;
-        }
-
-        // Update ground sensor footprint ellipses in observer mode
-        if (effectiveMode === 'observer') {
-          const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
-          const lonSpan = Math.max(1e-4, lonMax - lonMin);
-          const latSpan = Math.max(1e-4, latMax - latMin);
-          const worldPerKm = SLAB_W / Math.max(12.0, nextBundle.widthKm);
-          const minGate = p.sensitivityThreshold * 0.58;
-
-          let fpCount = 0;
-          for (const pass of activePasses) {
-            for (const fp of pass.footprints) {
-              if (fpCount >= MAX_FOOTPRINT_INSTANCES) break;
-              if (fp.intensityNorm < minGate) continue;
-
-              const u = (fp.lon - lonMin) / lonSpan;
-              const v = (fp.lat - latMin) / latSpan;
-              if (u < 0.02 || u > 0.98 || v < 0.02 || v > 0.98) continue;
-
-              const wx = (u - 0.5) * SLAB_W;
-              const wz = (0.5 - v) * SLAB_D;
-              const wy = sampleCpuTerrainY(u, v) + 0.032;
-
-              const rx = Math.max(0.065, fp.acrossTrackKm * worldPerKm * 0.5);
-              const rz = Math.max(0.065, fp.alongTrackKm * worldPerKm * 0.5);
-
-              fpDummy.position.set(wx, wy, wz);
-              fpDummy.rotation.set(0, -(fp.azimuthDeg * Math.PI) / 180, 0);
-              fpDummy.scale.set(rx, 1.0, rz);
-              fpDummy.updateMatrix();
-              footprintInstanced.setMatrixAt(fpCount, fpDummy.matrix);
-
-              fpColor.copy(fp.family === 'viirs' ? colViirs : colModis);
-              fpColor.multiplyScalar(0.65 + 0.55 * fp.intensityNorm);
-              footprintInstanced.setColorAt(fpCount, fpColor);
-              fpCount++;
-            }
-          }
-          footprintInstanced.count = fpCount;
-          footprintInstanced.instanceMatrix.needsUpdate = true;
-          if (footprintInstanced.instanceColor) {
-            footprintInstanced.instanceColor.needsUpdate = true;
-          }
-          footprintMat.opacity = 0.78 * observerVisibilityMix;
-          footprintInstanced.visible = fpCount > 0;
-        } else {
-          footprintInstanced.visible = false;
-        }
+        uScanStrip.set(
+          fleet.strips.modis.alongTrackKm,
+          fleet.strips.modis.strength,
+          fleet.strips.viirs.alongTrackKm,
+          fleet.strips.viirs.strength,
+        );
       }
 
-      // F. Render 3D WebGL2 Scene
+      // F. Render the scene through the HDR composer (smoke, bloom, ACES Filmic, sRGB)
       domeMesh.position.copy(camera.position);
-      renderer.render(scene, camera);
+      {
+        // Camera altitude at true scale drives the sky and the horizon
+        const baseElevM = THREE.MathUtils.lerp(prevBundle.minElevM, nextBundle.minElevM, morphValue);
+        const camAltKm = Math.max(
+          0.05,
+          (baseElevM + camera.position.y / nextBundle.frame.unitsPerMetre[1]) * 0.001,
+        );
+        domeUniforms.uCamAltKm.value = camAltKm;
+        // Picture mode (clean feed, cinema): brighter sky, and the floor reads as distant ground
+        pictureMix = THREE.MathUtils.lerp(
+          pictureMix,
+          landingWorld || (p.inWorkspace && (p.cleanHud || p.cinemaActive)) ? 1.0 : 0.0,
+          dampMed,
+        );
+        worldMix = THREE.MathUtils.lerp(worldMix, landingWorld ? 1.0 : 0.0, dampMed);
+        domeUniforms.uSkyExposure.value = THREE.MathUtils.lerp(
+          SKY_EXPOSURE_INTERFACE,
+          THREE.MathUtils.lerp(SKY_EXPOSURE_CLEAN, SKY_EXPOSURE_LANDING, worldMix),
+          pictureMix,
+        );
+        // World view: cells with a detection keep their outline, the lattice of empty cells is not
+        // drawn (over flat ground and sea it reads as a grid on a floor)
+        terrainUniforms.uLatticeMix.value = 1.0 - worldMix;
+        // Context terrain: wherever the world is shown instead of the block (landing world view and
+        // the close presets), once the region's own terrain has settled
+        const worldShown = p.inWorkspace
+          ? 1.0 - THREE.MathUtils.smoothstep(orbitCurrent.distance, 8.5, 11.5)
+          : landingWorld
+            ? 1.0
+            : 0.0;
+        const hasContext = nextBundle.context !== null && !morphActive;
+        contextMix = THREE.MathUtils.lerp(contextMix, hasContext ? worldShown : 0.0, dampMed);
+        terrainUniforms.uContextMix.value = contextMix;
+        contextTerrain.mesh.visible = contextMix > 0.003;
+        // World view: no block sides and no floor mark under the block at all. The same where the
+        // context terrain stands around the pack.
+        skirtMesh.visible = worldMix < 0.5 && contextMix < 0.5;
+        pedestalMesh.visible = worldMix < 0.5 && contextMix < 0.5;
+        terrainUniforms.uSkyExposure.value = domeUniforms.uSkyExposure.value;
+        // Close views lose the cut edge of the slab at the horizon; whole-slab views keep it. With
+        // context terrain around the pack there is no cut edge to lose: nothing dissolves or sinks.
+        terrainUniforms.uEdgeFade.value = THREE.MathUtils.lerp(
+          terrainUniforms.uEdgeFade.value,
+          nextBundle.context
+            ? 0.0
+            : p.inWorkspace
+            ? 1.0 - THREE.MathUtils.smoothstep(orbitCurrent.distance, 8.5, 11.5)
+            : // Landing: nothing is taken away where ground forms the skyline. Open water that runs
+              // to the edge of the data still dissolves there, and so does a column that shows floor.
+              landingWorld && (landingWorldStats.floorShare > 0 || landingWorldStats.seaShare > 0)
+              ? 1.0
+              : 0.0,
+          dampMed,
+        );
+        // How much of a close view this is, whichever way its far edge is handled
+        const closeShare = Math.max(terrainUniforms.uEdgeFade.value, contextMix);
+        curtainUniforms.uCurtainRail.value = 1.0 - Math.max(closeShare, worldMix);
+        pedestalMat.uniforms.uShadowMix.value = 1.0 - closeShare;
+        // Picture mode: the floor reads as distant ground. In a close view it sits just under the
+        // horizon, where real ground is lost in haze, so the air path over it is drawn thicker.
+        domeUniforms.uFloorHaze.value = THREE.MathUtils.lerp(
+          0.3,
+          THREE.MathUtils.lerp(1.0, CLOSE_VIEW_FLOOR_HAZE, closeShare),
+          pictureMix,
+        );
+        domeUniforms.uFloorColor.value.set(0.044, 0.06, 0.094).lerp(FLOOR_COLOR_PICTURE, pictureMix);
+        atmosphere.update(renderer, uSunTrue, camAltKm);
+      }
+      camera.updateMatrixWorld();
+      const reliefTopNow = Math.max(
+        bundleWorldY(prevBundle.maxElevM, prevBundle),
+        bundleWorldY(nextBundle.maxElevM, nextBundle),
+      );
+      curtainUniforms.uCurtainTopY.value = reliefTopNow + 0.28;
+      smokePass.enabled = smokeOpacity > 0.01;
+      // Landing world view: smoke and the curtain stay under the calm rectangle. The limit is a
+      // plane through the eye and the bottom row of that rectangle, so it holds for the whole drift.
+      if (landingWorld) {
+        camera.updateMatrixWorld();
+        planeUnderRow(camera, calmRow(activeSubjectFrame ?? DEFAULT_CALM_FRAME), smokeLid);
+      }
+      curtainUniforms.uLidAmount.value = worldMix;
+      terrainUniforms.uSmokeShadowMix.value = smokePass.enabled ? 1.0 : 0.0;
+      if (smokePass.enabled) {
+        smokePass.update({
+          camera,
+          slabWidth: slabNow.width,
+          slabDepth: slabNow.depth,
+          reliefTop: reliefTopNow,
+          heightPrev: ensureSmokeHeight(prevBundle),
+          heightNext: ensureSmokeHeight(nextBundle),
+          morph: morphValue,
+          field0: fieldTex0,
+          field1: fieldTex1,
+          detection0: nextBundle.observerDataset.dataSource === 'firms' ? detectionTex0 : null,
+          detection1: nextBundle.observerDataset.dataSource === 'firms' ? detectionTex1 : null,
+          frameMix: terrainUniforms.uFrameMix.value,
+          windUv: uWindDirUv,
+          sunDir,
+          sunColor: uSunColor,
+          time: elapsedSec,
+          opacity: smokeOpacity,
+          cutawayMix: terrainUniforms.uCutawayMix.value,
+          cutawayPlane: currentCurtainPlane,
+          cutawayDir: cutDir,
+          lid: smokeLid,
+          lidAmount: worldMix,
+          clearRadius: SMOKE_CLEAR_RADIUS,
+          // A real run by day: thin the smoke over the detections so their light reads (illustrative)
+          thinOverFire: realRun ? 0.82 * (1.0 - uNight.value) : 0.0,
+        });
+      }
+      pipeline.render(dtSec);
 
-      // G. Project Diegetic Curtain Pill (Landing) & Collision-Resolved Ridge Callouts (Workspace)
-      const curtainPillEl = curtainPillRef.current;
-      if (curtainPillEl) {
-        if (!p.inWorkspace && terrainUniforms.uCutawayMix.value > 0.25) {
-          const cu = THREE.MathUtils.clamp(
-            0.5 + CUTAWAY_DIR_VEC.x * currentCurtainPlane,
-            0.08,
-            0.92,
-          );
-          const cv = THREE.MathUtils.clamp(
-            0.5 + CUTAWAY_DIR_VEC.y * currentCurtainPlane,
-            0.08,
-            0.92,
-          );
-          const cy = sampleCpuTerrainY(cu, cv) + 1.48;
-          projVec.set((cu - 0.5) * SLAB_W, cy, (0.5 - cv) * SLAB_D).project(camera);
-          const sx = (projVec.x * 0.5 + 0.5) * viewportW;
-          const sy = (-projVec.y * 0.5 + 0.5) * viewportH;
-          if (projVec.z < 1.0 && sy > 286 && sy < viewportH - 72) {
-            curtainPillEl.style.opacity = '1';
-            curtainPillEl.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0) translate(-50%, -50%)`;
-          } else {
-            curtainPillEl.style.opacity = '0';
+      // G. Report the projected curtain seam to the page (landing), then place the callouts (workspace)
+      const onSeam = p.onCurtainScreen;
+      if (onSeam) {
+        if (!p.inWorkspace) {
+          // Chord of the seam across the slab: uvCenter + perp * s clipped to the unit square
+          const perpU = -cutDir.y;
+          const perpV = cutDir.x;
+          const cu = 0.5 + cutDir.x * currentCurtainPlane;
+          const cv = 0.5 + cutDir.y * currentCurtainPlane;
+          let sMin = -2;
+          let sMax = 2;
+          if (Math.abs(perpU) > 1e-5) {
+            const a = (0 - cu) / perpU;
+            const b = (1 - cu) / perpU;
+            sMin = Math.max(sMin, Math.min(a, b));
+            sMax = Math.min(sMax, Math.max(a, b));
           }
-        } else {
-          curtainPillEl.style.opacity = '0';
+          if (Math.abs(perpV) > 1e-5) {
+            const a = (0 - cv) / perpV;
+            const b = (1 - cv) / perpV;
+            sMin = Math.max(sMin, Math.min(a, b));
+            sMax = Math.min(sMax, Math.max(a, b));
+          }
+          let visible = sMax > sMin && terrainUniforms.uCutawayMix.value > 0.25;
+          const ends: Array<{ x: number; y: number; dist: number }> = [];
+          // Slab view: the two ends of the seam across the slab. World view: the camera stands on
+          // the slab, so the ends are the nearest and the farthest point of the seam on screen.
+          const seamSamples = landingWorld ? 33 : 2;
+          for (let k = 0; k < seamSamples; k++) {
+            const s = sMin + ((sMax - sMin) * k) / (seamSamples - 1);
+            const u = THREE.MathUtils.clamp(cu + perpU * s, 0, 1);
+            const v = THREE.MathUtils.clamp(cv + perpV * s, 0, 1);
+            projVec.set(worldX(u), sampleCpuTerrainY(u, v), worldZ(v));
+            const dist = projVec.distanceTo(camera.position);
+            projVec.project(camera);
+            const inDepth = projVec.z < 1 && projVec.z > -1;
+            if (landingWorld) {
+              if (!inDepth || Math.abs(projVec.x) > 1 || Math.abs(projVec.y) > 1) continue;
+            } else if (!inDepth) {
+              visible = false;
+            }
+            ends.push({
+              x: canvasLeft + (projVec.x * 0.5 + 0.5) * viewportW,
+              y: canvasTop + (-projVec.y * 0.5 + 0.5) * viewportH,
+              dist,
+            });
+          }
+          if (ends.length < 2) {
+            visible = false;
+            ends.push({ x: 0, y: 0, dist: 0 }, { x: 0, y: 0, dist: 1 });
+          }
+          let nearEnd = ends[0];
+          let farEnd = ends[0];
+          for (const e of ends) {
+            if (e.dist < nearEnd.dist) nearEnd = e;
+            if (e.dist > farEnd.dist) farEnd = e;
+          }
+          // A point just inside the raw MODIS side of the seam, to tell left from right on screen
+          const sMid = (sMin + sMax) * 0.5;
+          const mu = THREE.MathUtils.clamp(cu + perpU * sMid + cutDir.x * 0.04, 0, 1);
+          const mv = THREE.MathUtils.clamp(cv + perpV * sMid + cutDir.y * 0.04, 0, 1);
+          projVec.set(worldX(mu), sampleCpuTerrainY(mu, mv), worldZ(mv)).project(camera);
+          const mx = canvasLeft + (projVec.x * 0.5 + 0.5) * viewportW;
+          const my = canvasTop + (-projVec.y * 0.5 + 0.5) * viewportH;
+          const cross =
+            (farEnd.x - nearEnd.x) * (my - nearEnd.y) - (farEnd.y - nearEnd.y) * (mx - nearEnd.x);
+          onSeam({
+            near: { x: nearEnd.x, y: nearEnd.y },
+            far: { x: farEnd.x, y: farEnd.y },
+            modisSide: cross < 0 ? 'left' : 'right',
+            visible,
+          });
+          seamReported = true;
+        } else if (seamReported) {
+          // One closing report so the page stops following a seam that left the landing view
+          onSeam({ near: { x: 0, y: 0 }, far: { x: 0, y: 0 }, modisSide: 'left', visible: false });
+          seamReported = false;
         }
       }
 
       const showCallouts = p.inWorkspace && !p.cleanHud && !p.cinemaActive;
-      const findings = nextBundle.findings;
+      const findings = calloutsFor(nextBundle);
       const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
       const lonSpan = Math.max(1e-4, lonMax - lonMin);
       const latSpan = Math.max(1e-4, latMax - latMin);
 
       const anchors: Array<{ ax: number; ay: number; bx: number; by: number; valid: boolean }> = [];
+      const cardEstW = 232;
+      const minCardLeftX = workspaceFrame ? workspaceFrame.left * viewportW + 12 : 24;
+      const maxCardLeftX = Math.max(
+        minCardLeftX,
+        (workspaceFrame ? workspaceFrame.right * viewportW - 12 : viewportW - 356) - cardEstW,
+      );
+      const minCardTopY = workspaceFrame ? workspaceFrame.top * viewportH + 12 : 68;
+      const maxCardTopY = Math.max(
+        minCardTopY,
+        workspaceFrame ? workspaceFrame.bottom * viewportH - 76 : Math.max(160, viewportH - 134),
+      );
+      const calloutMidX = workspaceFrame
+        ? (workspaceFrame.left + workspaceFrame.right) * 0.5 * viewportW
+        : viewportW * 0.44;
 
       for (let i = 0; i < 3; i++) {
         const f = findings[i];
@@ -1664,7 +3543,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         const u = THREE.MathUtils.clamp((f.lon - lonMin) / lonSpan, 0.04, 0.96);
         const v = THREE.MathUtils.clamp((f.lat - latMin) / latSpan, 0.04, 0.96);
         const wy = sampleCpuTerrainY(u, v) + 0.05;
-        projVec.set((u - 0.5) * SLAB_W, wy, (0.5 - v) * SLAB_D).project(camera);
+        projVec.set(worldX(u), wy, worldZ(v)).project(camera);
 
         if (projVec.z >= 1.0 || projVec.z <= -1.0) {
           anchors.push({ ax: 0, ay: 0, bx: 0, by: 0, valid: false });
@@ -1673,22 +3552,16 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         const ax = (projVec.x * 0.5 + 0.5) * viewportW;
         const ay = (-projVec.y * 0.5 + 0.5) * viewportH;
 
-        // Initial radial leader offsets keeping clear of the right telemetry rail (320px + 24px margin)
-        const cardEstW = 212;
-        const maxCardLeftX = Math.max(220, viewportW - 356 - cardEstW);
-        const dirSide = i === 1 ? -1 : ax + 108 > maxCardLeftX || ax > viewportW * 0.44 ? -1 : 1;
+        // Initial radial leader offsets, kept inside the workspace subject frame when one is set
+        const dirSide = i === 1 ? -1 : ax + 108 > maxCardLeftX || ax > calloutMidX ? -1 : 1;
         const rawBx = dirSide > 0 ? ax + 56 : ax - 56 - cardEstW;
-        const bx = THREE.MathUtils.clamp(rawBx, 24, maxCardLeftX);
-        const by = THREE.MathUtils.clamp(
-          ay - (i === 0 ? 64 : i === 1 ? 48 : -44),
-          68,
-          Math.max(160, viewportH - 134),
-        );
+        const bx = THREE.MathUtils.clamp(rawBx, minCardLeftX, maxCardLeftX);
+        const by = THREE.MathUtils.clamp(ay - (i === 0 ? 64 : i === 1 ? 48 : -44), minCardTopY, maxCardTopY);
         anchors.push({ ax, ay, bx, by, valid: true });
       }
 
       // 2-pass pairwise screen-space collision resolution between the 3 callout cards
-      const minW = 198;
+      const minW = 240;
       const minH = 62;
       for (let pass = 0; pass < 2; pass++) {
         for (let i = 0; i < anchors.length; i++) {
@@ -1699,16 +3572,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             const dy = anchors[j].by - anchors[i].by;
             if (Math.abs(dx) < minW && Math.abs(dy) < minH) {
               const pushY = (minH - Math.abs(dy)) * 0.55 * (dy >= 0 ? 1 : -1);
-              anchors[i].by = THREE.MathUtils.clamp(
-                anchors[i].by - pushY,
-                68,
-                Math.max(160, viewportH - 134),
-              );
-              anchors[j].by = THREE.MathUtils.clamp(
-                anchors[j].by + pushY,
-                68,
-                Math.max(160, viewportH - 134),
-              );
+              anchors[i].by = THREE.MathUtils.clamp(anchors[i].by - pushY, minCardTopY, maxCardTopY);
+              anchors[j].by = THREE.MathUtils.clamp(anchors[j].by + pushY, minCardTopY, maxCardTopY);
             }
           }
         }
@@ -1725,6 +3590,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           if (cardEl) {
             cardEl.style.opacity = '0';
             cardEl.style.pointerEvents = 'none';
+            // Hidden cards leave the tab order and the accessibility tree
+            cardEl.style.visibility = 'hidden';
           }
           if (lineEl) lineEl.style.opacity = '0';
           continue;
@@ -1737,12 +3604,13 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         if (cardEl) {
           cardEl.style.opacity = '1';
           cardEl.style.pointerEvents = 'auto';
+          cardEl.style.visibility = 'visible';
           cardEl.style.transform = `translate3d(${a.bx.toFixed(1)}px, ${a.by.toFixed(1)}px, 0)`;
         }
         if (lineEl) {
           const elbowX = a.ax + (a.bx - a.ax) * 0.42;
           const elbowY = a.by + 22;
-          const attachX = a.bx > a.ax ? a.bx : Math.min(viewportW - 350, a.bx + 178);
+          const attachX = a.bx > a.ax ? a.bx : a.bx + (cardEl ? cardEl.offsetWidth : cardEstW);
           lineEl.setAttribute(
             'points',
             `${a.ax.toFixed(1)},${a.ay.toFixed(1)} ${elbowX.toFixed(1)},${elbowY.toFixed(1)} ${attachX.toFixed(1)},${elbowY.toFixed(1)}`,
@@ -1769,13 +3637,21 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           );
           const telemetry: EarthStageTelemetry = {
             fps: Math.round(smoothedFps),
-            vertexCount: 266754,
+            vertexCount:
+              terrainMesh.geometry.getAttribute('position').count +
+              skirtMesh.geometry.getAttribute('position').count,
             orthoResolution: nextBundle.orthoLabel,
             demResolution: nextBundle.demLabel,
             activeTheaterId: p.activeTheaterId,
             slewActive: slewActive || morphActive,
             cinemaProgress,
             wavePosition: wavePos,
+            imageryAttribution: creditWithContext(nextBundle),
+            verticalExaggeration: VERTICAL_EXAGGERATION,
+            landingStandpoint: landingWorld && landingWorldPose ? landingWorldStats : undefined,
+            intensityLegend: intensityLegendOf(nextBundle),
+            realPass: realPassNow,
+            regionGrid: p.regionGridDivisions ? regionGridOf(nextBundle, p.regionGridDivisions) : undefined,
           };
           p.onTelemetry?.(telemetry);
         }
@@ -1788,52 +3664,69 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       disposed = true;
       cancelAnimationFrame(rafId);
       resizeObs.disconnect();
+      dprQuery?.removeEventListener('change', onDprChange);
       dom.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       dom.removeEventListener('pointerleave', onPointerLeave);
       dom.removeEventListener('wheel', onWheel);
+      motionQuery.removeEventListener('change', onMotionChange);
       dom.removeEventListener('contextmenu', onContextMenu);
 
       domeGeom.dispose();
       domeMat.dispose();
+      atmosphere.dispose();
       pedestalGeom.dispose();
       pedestalMat.dispose();
       terrainGeom.dispose();
       terrainMat.dispose();
+      terrainDepthMat.dispose();
       skirtGeom.dispose();
       skirtMat.dispose();
       curtainGeom.dispose();
       curtainMat.dispose();
-      plumePack.geometry.dispose();
-      plumeMat.dispose();
-      footprintGeom.dispose();
-      footprintMat.dispose();
+      for (const tex of smokeHeightTextures) {
+        tex.dispose();
+      }
       fieldTex0.dispose();
       fieldTex1.dispose();
+      detectionTex0.dispose();
+      detectionTex1.dispose();
+      footprintField.dispose();
       lipariTex.dispose();
+      hiResTerrainGeom?.dispose();
+      hiResSkirtGeom?.dispose();
+      shadowBaker.dispose();
+      neutralAuxTex.dispose();
+      whiteTex.dispose();
+      for (const packed of packBundles.values()) {
+        releasePack(packed);
+      }
+      packBundles.clear();
+      contextTerrain.dispose();
 
-      for (const rig of spacecraftRigs) {
-        rig.orbitArcGeom.dispose();
-        rig.orbitArcMat.dispose();
-        rig.swathGeom.dispose();
-        rig.swathMat.dispose();
-        rig.busMat.dispose();
-        rig.solarWingMat.dispose();
+      fleet.dispose();
+      scene.environment = null;
+      orbitEnvironment.dispose();
+
+      // Every bundle, whichever cache holds it (the theater cache or the run cache), each resource once
+      const disposedResources = new Set<unknown>();
+      const disposeOnce = (resource: { dispose: () => void } | null | undefined) => {
+        if (!resource || disposedResources.has(resource)) return;
+        disposedResources.add(resource);
+        resource.dispose();
+      };
+      for (const b of new Set([...bundleCache.values(), ...runCache.values(), ...retiredBundles, prevBundle, nextBundle])) {
+        // Pack textures were released with the packs above
+        if (!b.pack && b.lite === null) {
+          disposeOnce(b.demTex);
+          disposeOnce(b.satTex);
+        }
+        disposeOnce(b.fireHistory?.texture);
+        disposeOnce(b.shadow);
       }
 
-      const disposedTextures = new Set<THREE.Texture>();
-      for (const b of bundleCache.values()) {
-        if (!disposedTextures.has(b.demTex)) {
-          b.demTex.dispose();
-          disposedTextures.add(b.demTex);
-        }
-        if (!disposedTextures.has(b.satTex)) {
-          b.satTex.dispose();
-          disposedTextures.add(b.satTex);
-        }
-      }
-
+      pipeline.dispose();
       renderer.dispose();
       if (dom.parentElement === host) {
         host.removeChild(dom);
@@ -1881,9 +3774,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     if (!run || !bridge) return;
 
     let cancelled = false;
-    const cachedByRun = bridge.runCache.get(run.run_id);
+    const cachedByRun = bridge.takeRunBundle(run.run_id);
     if (cachedByRun) {
-      bridge.activateBundle(cachedByRun, cachedByRun.regionId !== lastTheaterRef.current);
+      // Morph when the terrain on screen is another region's. The page's theater id does not say
+      // so after a custom search, which keeps the id of the theater it started from.
+      bridge.activateBundle(cachedByRun, cachedByRun.regionId !== bridge.onScreenRegionId());
       return;
     }
 
@@ -2010,17 +3905,22 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           tensor: tensorPack.buffer,
           frameCount: tensorPack.frames,
           bbox,
-          widthKm: Math.max(18.0, run.region.width_km || knownProf?.widthKm || 60.0),
-          modisAzimuthRad: ((knownProf?.modisAzimuthDeg ?? -12.4) * Math.PI) / 180,
-          modisStretch: knownProf?.modisStretch ?? 2.6,
           windDirUv: knownProf ? [...knownProf.windDirUv] : [0.64, 0.76],
           hasSeaCoast,
           observerDataset,
           findings,
+          fieldScale: parseFieldIntensityScale(run.encoding),
+          fireHistory: null,
+          ...liteShadingFields(
+            Math.max(18.0, run.region.width_km || knownProf?.widthKm || 60.0),
+            Math.max(12.0, run.region.depth_km || bboxDepthKm(bbox)),
+            run.assets.terrain_pack,
+            imgW,
+            satTexLoaded ? FALLBACK_IMAGERY_ATTRIBUTION : (prevRegionBundle?.attribution ?? ''),
+          ),
         };
 
-        bridge.bundleCache.set(run.region.id, hydratedBundle);
-        bridge.runCache.set(run.run_id, hydratedBundle);
+        bridge.storeRunBundle(run.region.id, run.run_id, hydratedBundle);
 
         // Activate if this run matches the currently viewed theater or is a custom coordinate query
         const currentTarget = propsRef.current.activeTheaterId;
@@ -2063,38 +3963,6 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
               : 'pointer',
       }}
     >
-      {/* Diegetic Optical Scan Curtain Handle on Landing */}
-      <button
-        ref={curtainPillRef}
-        type="button"
-        data-stage-ui="true"
-        onClick={() => props.onEnterWorkspace?.()}
-        title="Enter 3D Terrain Workspace"
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          opacity: 0,
-          pointerEvents: props.inWorkspace ? 'none' : 'auto',
-          zIndex: 4,
-          padding: '4px 8px',
-          borderRadius: '3px',
-          border: '1px solid rgba(155, 227, 255, 0.42)',
-          background: 'rgba(8, 12, 20, 0.82)',
-          backdropFilter: 'blur(8px)',
-          color: '#e8f6ff',
-          fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
-          fontSize: '10px',
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          whiteSpace: 'nowrap',
-          cursor: 'pointer',
-          willChange: 'transform, opacity',
-        }}
-      >
-        1 km MODIS | 375 m Fused · Inspect
-      </button>
-
       {/* Diegetic Collision-Resolved Ridge Callouts Overlay (Workspace only, hidden in Clean HUD & Cinema) */}
       <div
         aria-hidden={!props.inWorkspace || props.cleanHud || props.cinemaActive}
@@ -2186,21 +4054,19 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
                   position: 'absolute',
                   top: 0,
                   left: 0,
-                  minWidth: '178px',
-                  maxWidth: '226px',
-                  padding: '6px 9px',
+                  minWidth: '188px',
+                  maxWidth: '248px',
+                  padding: '7px 10px',
                   textAlign: 'left',
-                  borderRadius: '3px',
+                  borderRadius: 0,
                   border: isSelected
                     ? `1px solid ${accentColor}`
-                    : '1px solid rgba(245, 246, 250, 0.20)',
-                  background: isSelected
-                    ? 'rgba(11, 16, 25, 0.92)'
-                    : 'rgba(8, 11, 17, 0.78)',
-                  backdropFilter: 'blur(10px)',
-                  color: '#f5f6fa',
+                    : '1px solid rgba(243, 244, 246, 0.24)',
+                  background: 'rgba(10, 13, 19, 0.88)',
+                  color: '#f3f4f6',
                   cursor: 'pointer',
                   opacity: 0,
+                  visibility: 'hidden',
                   pointerEvents: 'none',
                   willChange: 'transform, opacity',
                 }}
@@ -2212,10 +4078,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
                     justifyContent: 'space-between',
                     gap: '6px',
                     fontFamily: "'Geist', -apple-system, sans-serif",
-                    fontSize: '11px',
+                    fontSize: '13px',
                     fontWeight: 500,
                     letterSpacing: '-0.01em',
-                    color: '#f5f6fa',
+                    color: '#f3f4f6',
                   }}
                 >
                   <span>{finding?.title ?? ''}</span>
@@ -2223,7 +4089,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
                     style={{
                       width: '6px',
                       height: '6px',
-                      borderRadius: '1px',
+                      borderRadius: 0,
                       backgroundColor: accentColor,
                       flexShrink: 0,
                     }}
@@ -2231,9 +4097,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
                 </div>
                 <div
                   style={{
-                    marginTop: '2px',
+                    marginTop: '3px',
                     fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
-                    fontSize: '10.5px',
+                    fontSize: '12px',
                     fontVariantNumeric: 'tabular-nums',
                     color: accentColor,
                   }}

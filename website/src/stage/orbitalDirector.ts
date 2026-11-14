@@ -17,37 +17,40 @@ export interface CameraPresetSpec {
   target: [number, number, number];
 }
 
+// Presets are tuned for the region-true slab (about 13 x 12.5 units, relief up to about 2 units).
 export const LANDING_HERO_POSE: CameraPresetSpec = {
   azimuth: 0.50,
-  polar: 0.96,
-  distance: 16.1,
-  target: [0.12, 0.56, 0.08],
+  polar: 0.98,
+  distance: 17.2,
+  target: [0.1, 0.3, 0.2],
 };
 
 export const INSPECTOR_CAMERA_PRESETS: Record<InspectorCameraPreset, CameraPresetSpec> = {
   overview: {
     azimuth: 0.48,
-    polar: 0.95,
-    distance: 15.6,
-    target: [0.0, 0.54, 0.0],
+    polar: 0.97,
+    distance: 17.0,
+    target: [-0.6, 0.3, 0.3],
   },
+  // Canyon and ridge are close obliques. The stage re-centers them on the fire found in the
+  // solver field (see EarthCutawayStage), these targets are the fallback.
   canyon: {
     azimuth: -0.34,
-    polar: 1.19,
-    distance: 8.35,
-    target: [-0.42, 0.76, -0.22],
+    polar: 1.24,
+    distance: 5.6,
+    target: [-0.42, 0.45, -0.22],
   },
   ridge: {
     azimuth: 0.86,
-    polar: 1.07,
-    distance: 10.15,
-    target: [0.32, 0.92, -0.14],
+    polar: 1.12,
+    distance: 7.4,
+    target: [0.32, 0.6, -0.14],
   },
   nadir: {
     azimuth: 0.0,
     polar: 0.14,
-    distance: 16.5,
-    target: [0.0, 0.34, 0.0],
+    distance: 18.5,
+    target: [0.0, 0.3, 0.0],
   },
 };
 
@@ -74,8 +77,8 @@ export function resolvePresetForContext(
     return {
       azimuth: base.azimuth + accent * 0.5,
       polar: 0.98,
-      distance: 17.6,
-      target: [0.0, 1.08, 0.0],
+      distance: 18.4,
+      target: [0.0, 0.7, 0.2],
     };
   }
 
@@ -266,6 +269,8 @@ export class CinemaDirector {
     dtSec: number,
     sampleTerrainWorldY: (u: number, v: number) => number,
     onStepTheater?: (nextId: TheaterId) => void,
+    slabWidth: number = SLAB_W,
+    slabDepth: number = SLAB_D,
   ): CinemaFramePose {
     const clampedDt = Math.min(0.08, Math.max(0.0, dtSec));
     this.elapsedSec += clampedDt;
@@ -294,8 +299,8 @@ export class CinemaDirector {
     rig.lookCurve.getPointAt(legProgress, this.tmpLook);
 
     // Terrain clearance guard so low canyon banking skims never clip high mountain ridges
-    const uEye = this.tmpEye.x / SLAB_W + 0.5;
-    const vEye = 0.5 - this.tmpEye.z / SLAB_D;
+    const uEye = this.tmpEye.x / slabWidth + 0.5;
+    const vEye = 0.5 - this.tmpEye.z / slabDepth;
     if (uEye >= -0.02 && uEye <= 1.02 && vEye >= -0.02 && vEye <= 1.02) {
       const groundY = sampleTerrainWorldY(
         Math.min(1, Math.max(0, uEye)),
@@ -307,8 +312,8 @@ export class CinemaDirector {
       }
     }
 
-    const uLook = this.tmpLook.x / SLAB_W + 0.5;
-    const vLook = 0.5 - this.tmpLook.z / SLAB_D;
+    const uLook = this.tmpLook.x / slabWidth + 0.5;
+    const vLook = 0.5 - this.tmpLook.z / slabDepth;
     const lookGroundY = sampleTerrainWorldY(
       Math.min(1, Math.max(0, uLook)),
       Math.min(1, Math.max(0, vLook)),

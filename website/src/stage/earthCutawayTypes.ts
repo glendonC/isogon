@@ -21,6 +21,32 @@ export interface OrbitalSlewRequest {
   eraLabel?: string;
 }
 
+/** What the standpoint search of the landing world view found on the terrain it chose from. */
+export interface LandingStandpointCheck {
+  /** Share of screen columns in which no ground rises to eye level before the terrain data ends. */
+  floorShare: number;
+  /**
+   * Share of screen columns whose ground stays under eye level to the end of the pack: open water
+   * at its edge, or, where context terrain is announced, land or sea that runs on to the horizon.
+   */
+  seaShare: number;
+  /** Ridge lines that come into view behind the fire, over the middle of the frame: mean and most. */
+  ridgeLines: number;
+  ridgeLinesMost: number;
+  /** Share of the burning ground of the moment on show that is in the frame with nothing in front. */
+  fireShare: number;
+  /** Share of the frame that burning ground in view covers (overlap not removed). */
+  fireFrameShare: number;
+  /** Nearest ground the imagery can carry at the chosen lens, world units. */
+  carryDistance: number;
+  /** Mean height of the skyline above eye level, degrees. */
+  skylineDeg: number;
+  /** Height of the eye above the ground under it, metres at true scale. */
+  eyeAboveGroundM: number;
+  /** Distance from the eye to the nearest ground in the frame, world units. */
+  nearGround: number;
+}
+
 export interface EarthStageTelemetry {
   fps: number;
   vertexCount: number;
@@ -34,17 +60,34 @@ export interface EarthStageTelemetry {
   imageryAttribution?: string;
   /** Vertical exaggeration of the relief (one value for every region). */
   verticalExaggeration?: number;
-}
-
-/**
- * Landing explode prototype. One anchor per plate, bottom to top:
- * `elevation`, `imagery`, `modis`, `viirs`, `record`. Viewport CSS px.
- */
-export interface ExplodeAnchor {
-  id: string;
-  x: number;
-  y: number;
-  visible: boolean;
+  /**
+   * The intensity scale of the run on screen, for the page's legend: what the colour scale shows
+   * at its start, a quarter, half, three quarters and its top, in MW/km2. Values above the top are
+   * drawn at the top ("and above").
+   */
+  intensityLegend?: { scale: 'linear' | 'log'; ticks: Array<{ at: number; mwPerKm2: number }> };
+  /**
+   * Real runs: the overpass on show. On the landing the stage chooses it (the night VIIRS overpass
+   * with the most detections) and, when that overpass has no MODIS detections, shows the MODIS
+   * overpass nearest in time on the raw side: `pairedModis`. The legend has to name both times.
+   */
+  realPass?: {
+    index: number;
+    sensor: string;
+    timeUtc: string;
+    isDay: boolean;
+    detections: number;
+    pairedModis?: { index: number; sensor: string; timeUtc: string; detections: number };
+  };
+  /**
+   * Only when `regionGridDivisions` is set: the region's box as a grid of points on the terrain,
+   * projected to the viewport in CSS px. `points` has (divisions + 1) squared entries, row by row
+   * from the north edge to the south edge, each row from west to east. A point behind the camera
+   * is null. Sent with the rest of the telemetry (about three times a second).
+   */
+  regionGrid?: { divisions: number; points: Array<[number, number] | null> };
+  /** Landing world view only: the standpoint check of the region on screen. */
+  landingStandpoint?: LandingStandpointCheck;
 }
 
 export interface CurtainScreenSeam {
@@ -78,19 +121,24 @@ export interface EarthCutawayStageProps {
   onEnterWorkspace?: () => void;
   onCinemaStepTheater?: (nextTheaterId: TheaterId) => void;
   onTelemetry?: (telemetry: EarthStageTelemetry) => void;
-  /** Viewport rectangle (fractions 0..1, origin top-left) where the terrain subject should sit on the landing page. */
+  /**
+   * Landing page view. `world` (the default): the camera stands inside the landscape and the terrain
+   * runs to a haze horizon under the sky, with no slab edge, block side, floor, grid or ring on
+   * screen. `slab`: the view of the whole block on a floor.
+   */
+  landingView?: 'world' | 'slab';
+  /**
+   * Viewport rectangle (fractions 0..1, origin top-left). In the `world` view it is the rectangle
+   * that must stay calm for type: the stage keeps terrain below its bottom edge across its width,
+   * so it holds sky and haze. In the `slab` view it is where the slab should sit.
+   */
   landingSubjectFrame?: { left: number; top: number; right: number; bottom: number };
   /** Landing only. Projected sensor curtain seam in viewport CSS px, called each rendered frame. */
   onCurtainScreen?: (seam: CurtainScreenSeam) => void;
+  /** Asks for `telemetry.regionGrid` with this many cells each way (1 to 32). */
+  regionGridDivisions?: number;
   /** Workspace only. Viewport rectangle (fractions 0..1) the slab should stay inside, so HUD columns stay clear. */
   workspaceSubjectFrame?: { left: number; top: number; right: number; bottom: number };
-  /**
-   * Landing only, prototype, off when absent. 0 is the slab as it is; 1 separates it into five
-   * plates: elevation, imagery, MODIS 1 km detections, VIIRS 375 m detections, calibrated 375 m record.
-   */
-  landingExplode?: number;
-  /** Landing only. One anchor per plate (its leftmost corner on screen), each rendered frame while exploded. */
-  onExplodeAnchors?: (anchors: ExplodeAnchor[]) => void;
 }
 
 export interface StaticTheaterMeta {

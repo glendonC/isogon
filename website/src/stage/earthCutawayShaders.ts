@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { NIGHT_GLSL } from './engine/atmosphere';
 import { LUT_LIPARI_256 } from '../lib/colormaps';
 import type { TheaterId } from './earthCutawayTypes';
 
@@ -12,7 +13,6 @@ export const FIELD_GRID_SIZE = 256;
 export const FIELD_FRAME_COUNT = 24;
 export const Z_MAX_MW_KM2 = 80.0;
 export const SIGMA_MAX_MW_KM2 = 24.0;
-export const PLUME_PARTICLE_COUNT = 2400;
 
 export const THEATER_ORDER: readonly TheaterId[] = [
   'plumas_ca',
@@ -27,8 +27,6 @@ export interface TheaterFallbackProfile {
   widthKm: number;
   minElevM: number;
   maxElevM: number;
-  modisAzimuthDeg: number;
-  modisStretch: number;
   windDirUv: [number, number];
   paletteBase: [number, number, number];
   paletteRidge: [number, number, number];
@@ -42,8 +40,6 @@ export const THEATER_PROFILES: Record<TheaterId, TheaterFallbackProfile> = {
     widthKm: 72.5,
     minElevM: 313.0,
     maxElevM: 2357.0,
-    modisAzimuthDeg: -12.4,
-    modisStretch: 2.6,
     windDirUv: [0.68, 0.73],
     paletteBase: [0.14, 0.21, 0.14],
     paletteRidge: [0.44, 0.43, 0.40],
@@ -55,8 +51,6 @@ export const THEATER_PROFILES: Record<TheaterId, TheaterFallbackProfile> = {
     widthKm: 54.0,
     minElevM: 195.0,
     maxElevM: 2860.0,
-    modisAzimuthDeg: -14.8,
-    modisStretch: 2.75,
     windDirUv: [0.42, 0.91],
     paletteBase: [0.24, 0.22, 0.16],
     paletteRidge: [0.56, 0.54, 0.52],
@@ -68,8 +62,6 @@ export const THEATER_PROFILES: Record<TheaterId, TheaterFallbackProfile> = {
     widthKm: 52.0,
     minElevM: 0.0,
     maxElevM: 1385.0,
-    modisAzimuthDeg: 13.2,
-    modisStretch: 2.95,
     windDirUv: [-0.62, -0.78],
     paletteBase: [0.27, 0.30, 0.20],
     paletteRidge: [0.64, 0.60, 0.52],
@@ -81,8 +73,6 @@ export const THEATER_PROFILES: Record<TheaterId, TheaterFallbackProfile> = {
     widthKm: 66.0,
     minElevM: 68.0,
     maxElevM: 1215.0,
-    modisAzimuthDeg: 11.4,
-    modisStretch: 2.55,
     windDirUv: [0.79, -0.61],
     paletteBase: [0.15, 0.22, 0.17],
     paletteRidge: [0.54, 0.38, 0.27],
@@ -397,15 +387,46 @@ export function buildProceduralTheaterTensor(theaterId: TheaterId): Uint8Array {
 }
 
 // =============================================================================
-// SHARED GLSL HEIGHTFIELD & MODIS 1 KM BOW-TIE QUANTIZATION FUNCTIONS
+// SHARED GLSL HEIGHTFIELD FUNCTIONS
 // =============================================================================
-const COMMON_HEIGHTFIELD_GLSL = /* glsl */ `
+export const COMMON_HEIGHTFIELD_GLSL = /* glsl */ `
 uniform sampler2D uDemPrev;
 uniform sampler2D uDemNext;
 uniform vec2 uDemRes;       // (prevGridRes, nextGridRes)
 uniform vec2 uElevPrevRange; // (minElevM, maxElevM)
 uniform vec2 uElevNextRange; // (minElevM, maxElevM)
+uniform vec2 uReliefScale;   // world units per metre of elevation (prev, next)
+uniform vec2 uSlabSize;      // world size of the slab (east-west, north-south)
 uniform float uMorph;       // [0..1] smooth sub-orbital elevation & ortho morph
+uniform float uEdgeFade;    // 1 in close views: the far edge of the slab is taken away
+
+// Close views: how much of the terrain is taken away at this point (0 none, 1 all). It is a band
+// along the slab's edges, and only where the edge is far from the camera: a near edge is a cut
+// wall, not a horizon. The surface dissolves into the backdrop by this share AND sinks to the base
+// by it, so a ridge that is no longer drawn cannot hide smoke or sky behind it.
+// Ground that stands above the eye's horizon is in front of sky and is kept whole (edgeGoneAt): a
+// far ridge on the skyline is depth, not a model edge. Only ground seen below the horizon goes.
+const float EDGE_BAND = 3.0;   // world units, about 9 km
+const float EDGE_SOLID = 0.67; // gone completely inside the last 2 km
+float edgeGone(vec2 uv) {
+  if (uEdgeFade < 0.003) return 0.0;
+  vec2 e = min(uv, 1.0 - uv) * uSlabSize;
+  float band = 1.0 - smoothstep(EDGE_SOLID, EDGE_BAND, min(e.x, e.y));
+  vec3 at = vec3((uv.x - 0.5) * uSlabSize.x, 0.0, (0.5 - uv.y) * uSlabSize.y);
+  float farSide = smoothstep(0.22, 0.42, distance(at, cameraPosition) / max(uSlabSize.x, uSlabSize.y));
+  return uEdgeFade * band * farSide;
+}
+
+float belowHorizon(vec3 worldPos) {
+  vec3 d = worldPos - cameraPosition;
+  return smoothstep(0.01, -0.05, d.y / max(length(d), 1e-3));
+}
+
+float edgeGoneAt(vec2 uv, float worldY) {
+  float gone = edgeGone(uv);
+  if (gone <= 0.0) return 0.0;
+  return gone * belowHorizon(vec3((uv.x - 0.5) * uSlabSize.x, worldY, (0.5 - uv.y) * uSlabSize.y));
+}
 
 float sampleR32FBilinear(sampler2D demTex, vec2 uv, float res) {
   vec2 clamped = clamp(uv, vec2(0.0), vec2(1.0));
@@ -426,466 +447,66 @@ float sampleR32FBilinear(sampler2D demTex, vec2 uv, float res) {
 float sampleWorldHeightPrev(vec2 uv, out float elevM) {
   elevM = sampleR32FBilinear(uDemPrev, uv, uDemRes.x);
   float span = max(350.0, uElevPrevRange.y - uElevPrevRange.x);
-  return clamp((elevM - uElevPrevRange.x) / span, 0.0, 1.15) * ${MAX_RELIEF_WORLD_Y.toFixed(2)};
+  return clamp(elevM - uElevPrevRange.x, 0.0, span * 1.15) * uReliefScale.x;
 }
 
 float sampleWorldHeightNext(vec2 uv, out float elevM) {
   elevM = sampleR32FBilinear(uDemNext, uv, uDemRes.y);
   float span = max(350.0, uElevNextRange.y - uElevNextRange.x);
-  return clamp((elevM - uElevNextRange.x) / span, 0.0, 1.15) * ${MAX_RELIEF_WORLD_Y.toFixed(2)};
+  return clamp(elevM - uElevNextRange.x, 0.0, span * 1.15) * uReliefScale.y;
+}
+
+// Context terrain (optional): elevation in metres around the pack, uContextScale times
+// its side, same centre and axes. Where it is drawn (uContextMix 1) the pack takes the context
+// surface over the last stretch before its edge, so the two meet without a step and nothing has
+// to dissolve there.
+uniform sampler2D uContextDem;
+uniform float uContextRes;    // posts per side
+uniform float uContextScale;  // context side over pack side
+uniform float uContextMix;
+const float CONTEXT_JOIN = 0.02; // share of the pack's side over which it joins the context
+
+float contextJoin(vec2 uv) {
+  if (uContextMix < 0.003) return 0.0;
+  vec2 e = min(uv, 1.0 - uv);
+  return (1.0 - smoothstep(0.0, CONTEXT_JOIN, min(e.x, e.y))) * uContextMix;
+}
+
+// World height of the context surface at a pack uv (which may lie outside 0..1). Not clamped to
+// the pack's elevation range: ground beyond the pack can be lower than its lowest point.
+float contextWorldY(vec2 uv) {
+  float elevM = sampleR32FBilinear(uContextDem, (uv - 0.5) / uContextScale + 0.5, uContextRes);
+  return (elevM - uElevNextRange.x) * uReliefScale.y;
 }
 
 float evalTerrainWorldY(vec2 uv, out float blendedElevM) {
-  float e0 = 0.0;
   float e1 = 0.0;
-  float y0 = sampleWorldHeightPrev(uv, e0);
-  float y1 = sampleWorldHeightNext(uv, e1);
-  blendedElevM = mix(e0, e1, uMorph);
-  return mix(y0, y1, uMorph);
+  float y = sampleWorldHeightNext(uv, e1);
+  blendedElevM = e1;
+  // Outside a region morph only the current heightfield is read
+  if (uMorph <= 0.999) {
+    float e0 = 0.0;
+    float y0 = sampleWorldHeightPrev(uv, e0);
+    blendedElevM = mix(e0, e1, uMorph);
+    y = mix(y0, y, uMorph);
+  }
+  float join = contextJoin(uv);
+  if (join > 0.0) y = mix(y, contextWorldY(uv), join);
+  return y * (1.0 - edgeGoneAt(uv, y));
 }
 
 float evalTerrainWorldYFast(vec2 uv) {
   float dummy = 0.0;
   return evalTerrainWorldY(uv, dummy);
 }
-
-void computeModisBowtieCell(
-  vec2 uv,
-  vec2 modisBowtie,
-  float domainWidthKm,
-  out vec2 uvQuant,
-  out vec2 cellFracCentered,
-  out float minEdgeDist
-) {
-  float az = modisBowtie.x;
-  float stretch = modisBowtie.y;
-  float cA = cos(az);
-  float sA = sin(az);
-  mat2 rot = mat2(cA, -sA, sA, cA);
-  mat2 invRot = mat2(cA, sA, -sA, cA);
-
-  // Convert centered UV to metric km so 1.0 km x (1.0 * stretch km) cells are physically scaled
-  float depthKm = domainWidthKm * (${SLAB_D.toFixed(2)} / ${SLAB_W.toFixed(2)});
-  vec2 metricKm = (uv - vec2(0.5)) * vec2(domainWidthKm, depthKm);
-  vec2 cellKm = vec2(max(1.15, 1.0 * stretch), 1.05);
-
-  vec2 rotKm = rot * metricKm;
-  vec2 cellCoord = rotKm / cellKm;
-  vec2 cellIdx = floor(cellCoord);
-  vec2 frac = cellCoord - cellIdx;
-  cellFracCentered = frac - vec2(0.5);
-  minEdgeDist = min(min(frac.x, 1.0 - frac.x), min(frac.y, 1.0 - frac.y));
-
-  vec2 snappedKm = (cellIdx + vec2(0.5)) * cellKm;
-  vec2 worldKm = invRot * snappedKm;
-  uvQuant = clamp(worldKm / vec2(domainWidthKm, depthKm) + vec2(0.5), vec2(0.002), vec2(0.998));
-}
 `;
 
-// =============================================================================
-// 1. PHOTOREALISTIC SATELLITE CUTAWAY TERRAIN SHADERS
-// =============================================================================
-export const TERRAIN_VERTEX_SHADER = /* glsl */ `
-${COMMON_HEIGHTFIELD_GLSL}
-
-uniform sampler2D uFieldTex0;
-uniform sampler2D uFieldTex1;
-uniform float uFrameMix;
-uniform float uCutawayMix;
-uniform float uCutawayPlane;
-uniform vec2 uCutawayDir;
-uniform float uSensitivity;
-uniform vec2 uModisBowtie;
-uniform float uDomainWidthKm;
-
-varying vec2 vUv;
-varying vec3 vWorldPos;
-varying float vBaseY;
-varying float vElevM;
-varying float vModisExtrude;
-
-void main() {
-  vUv = uv;
-  float elevM = 0.0;
-  float baseY = evalTerrainWorldY(uv, elevM);
-  float finalY = baseY;
-  float extrudeAmt = 0.0;
-
-  // Extrude stepped flat-topped 1 km rectangular MODIS sensor blocks on the Raw MODIS side
-  if (uCutawayMix > 0.01) {
-    float scanCoord = dot(uv - vec2(0.5), normalize(uCutawayDir)) - uCutawayPlane;
-    float rawSide = smoothstep(-0.005, 0.005, scanCoord) * uCutawayMix;
-    // Keep slab outer border vertices flush with cliff skirt (2 texel guard)
-    float innerGuard = smoothstep(0.0, 0.012, min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)));
-
-    if (rawSide * innerGuard > 0.01) {
-      vec2 uvQuant;
-      vec2 cellFrac;
-      float minEdge;
-      computeModisBowtieCell(uv, uModisBowtie, uDomainWidthKm, uvQuant, cellFrac, minEdge);
-
-      float mC = mix(texture2D(uFieldTex0, uvQuant).b, texture2D(uFieldTex1, uvQuant).b, uFrameMix);
-      float mE = mix(texture2D(uFieldTex0, clamp(uvQuant + vec2(0.0055, 0.0), vec2(0.002), vec2(0.998))).b,
-                     texture2D(uFieldTex1, clamp(uvQuant + vec2(0.0055, 0.0), vec2(0.002), vec2(0.998))).b, uFrameMix);
-      float mW = mix(texture2D(uFieldTex0, clamp(uvQuant - vec2(0.0055, 0.0), vec2(0.002), vec2(0.998))).b,
-                     texture2D(uFieldTex1, clamp(uvQuant - vec2(0.0055, 0.0), vec2(0.002), vec2(0.998))).b, uFrameMix);
-      float modisVal = max(mC, max(mE, mW));
-      float modisScaled = clamp((modisVal - 0.105 * (0.55 + 0.65 * uSensitivity)) / 0.35, 0.0, 1.0);
-      float activeBlock = smoothstep(0.06, 0.28, modisScaled);
-
-      if (activeBlock > 0.01) {
-        float cellCenterY = evalTerrainWorldYFast(uvQuant);
-        float bevel = smoothstep(0.02, 0.14, minEdge);
-        float targetBlockTop = max(baseY, cellCenterY) + (0.065 + 0.085 * modisScaled);
-        extrudeAmt = activeBlock * bevel * rawSide * innerGuard;
-        finalY = mix(baseY, targetBlockTop, extrudeAmt);
-      }
-    }
-  }
-
-  vBaseY = baseY;
-  vElevM = elevM;
-  vModisExtrude = extrudeAmt;
-
-  vec3 displaced = vec3(position.x, finalY, position.z);
-  vec4 worldPos = modelMatrix * vec4(displaced, 1.0);
-  vWorldPos = worldPos.xyz;
-  gl_Position = projectionMatrix * viewMatrix * worldPos;
-}
-`;
-
-export const TERRAIN_FRAGMENT_SHADER = /* glsl */ `
-${COMMON_HEIGHTFIELD_GLSL}
-
-uniform sampler2D uSatPrev;
-uniform sampler2D uSatNext;
-uniform sampler2D uFieldTex0;
-uniform sampler2D uFieldTex1;
-uniform sampler2D uLipariTex;
-
-uniform float uFrameMix;
-uniform vec3 uSunDir;
-uniform float uTime;
-uniform float uCutawayMix;
-uniform float uCutawayPlane;
-uniform vec2 uCutawayDir;
-uniform float uReconMix;
-uniform float uObserverMix;
-uniform float uModisWeight;
-uniform float uViirsWeight;
-uniform float uUncertaintyMix;
-uniform float uHoldoutBoost;
-uniform float uSensitivity;
-uniform vec2 uModisBowtie;
-uniform float uDomainWidthKm;
-uniform float uHasSeaCoast;
-
-varying vec2 vUv;
-varying vec3 vWorldPos;
-varying float vBaseY;
-varying float vElevM;
-varying float vModisExtrude;
-
-vec3 sampleCrispSatellite(vec2 uv) {
-  vec2 texStep = vec2(1.0 / 2048.0);
-  vec3 cPrev = texture2D(uSatPrev, uv).rgb;
-  vec3 cNext = texture2D(uSatNext, uv).rgb;
-  vec3 center = mix(cPrev, cNext, uMorph);
-
-  // Subtle high-frequency unsharp luminance detail boost for granite crags & timberlines
-  vec3 nE = mix(texture2D(uSatPrev, uv + vec2(texStep.x, 0.0)).rgb, texture2D(uSatNext, uv + vec2(texStep.x, 0.0)).rgb, uMorph);
-  vec3 nW = mix(texture2D(uSatPrev, uv - vec2(texStep.x, 0.0)).rgb, texture2D(uSatNext, uv - vec2(texStep.x, 0.0)).rgb, uMorph);
-  vec3 nN = mix(texture2D(uSatPrev, uv + vec2(0.0, texStep.y)).rgb, texture2D(uSatNext, uv + vec2(0.0, texStep.y)).rgb, uMorph);
-  vec3 nS = mix(texture2D(uSatPrev, uv - vec2(0.0, texStep.y)).rgb, texture2D(uSatNext, uv - vec2(0.0, texStep.y)).rgb, uMorph);
-
-  vec3 blur = 0.25 * (nE + nW + nN + nS);
-  float detailLuma = dot(center - blur, vec3(0.299, 0.587, 0.114));
-  return clamp(center + vec3(detailLuma * 0.42), 0.0, 1.0);
-}
-
-vec3 computeTerrainNormal(vec2 uv, out float slopeMag) {
-  float epsU = 1.0 / 512.0;
-  float epsV = 1.0 / 512.0;
-  float hE = evalTerrainWorldYFast(uv + vec2(epsU, 0.0));
-  float hW = evalTerrainWorldYFast(uv - vec2(epsU, 0.0));
-  float hN = evalTerrainWorldYFast(uv + vec2(0.0, epsV));
-  float hS = evalTerrainWorldYFast(uv - vec2(0.0, epsV));
-
-  float dxWorld = 2.0 * epsU * ${SLAB_W.toFixed(2)};
-  float dzWorld = 2.0 * epsV * ${SLAB_D.toFixed(2)};
-  // Note: +v is North (-Z world), so dY/dZ = -(hN - hS) / dzWorld
-  float dydx = (hE - hW) / dxWorld;
-  float dydz = -(hN - hS) / dzWorld;
-  slopeMag = length(vec2(dydx, dydz));
-  return normalize(vec3(-dydx, 1.0, -dydz));
-}
-
-float raymarchSunShadow(vec2 startUv, float startY, vec3 sunDir) {
-  // Convert world sun ray direction into (dU, dY, dV) steps across the heightfield
-  vec2 stepUvDir = vec2(sunDir.x / ${SLAB_W.toFixed(2)}, -sunDir.z / ${SLAB_D.toFixed(2)});
-  float stepLenUv = 0.0115;
-  vec2 dUv = normalize(stepUvDir + vec2(1e-6)) * stepLenUv;
-  float worldHorizDist = length(vec2(dUv.x * ${SLAB_W.toFixed(2)}, dUv.y * ${SLAB_D.toFixed(2)}));
-  float sunSlopeY = sunDir.y / max(0.12, length(sunDir.xz));
-  float dY = worldHorizDist * sunSlopeY;
-
-  float occlusion = 0.0;
-  vec2 curUv = startUv;
-  float rayY = startY + 0.008;
-
-  for (int i = 1; i <= 14; i++) {
-    curUv += dUv;
-    rayY += dY;
-    if (curUv.x < 0.0 || curUv.x > 1.0 || curUv.y < 0.0 || curUv.y > 1.0) {
-      break;
-    }
-    float terrainH = evalTerrainWorldYFast(curUv);
-    float diff = terrainH - rayY;
-    if (diff > 0.0) {
-      float penumbra = clamp(diff * 11.5 / float(i), 0.0, 1.0);
-      occlusion = max(occlusion, penumbra);
-    }
-  }
-  return 1.0 - occlusion * 0.76;
-}
-
-void main() {
-  vec3 sunDir = normalize(uSunDir);
-  vec3 viewDir = normalize(cameraPosition - vWorldPos);
-  vec3 dPosDx = dFdx(vWorldPos);
-  vec3 dPosDy = dFdy(vWorldPos);
-  float uvFootprint = max(length(dFdx(vUv)), length(dFdy(vUv)));
-
-  float slopeMag = 0.0;
-  vec3 N = computeTerrainNormal(vUv, slopeMag);
-  float shadow = raymarchSunShadow(vUv, vBaseY, sunDir);
-
-  vec3 satRgb = sampleCrispSatellite(vUv);
-  float satLuma = dot(satRgb, vec3(0.2126, 0.7152, 0.0722));
-
-  // Solar diffuse + cool sky hemisphere fill + subtle ridge rim
-  float nDotL = max(0.0, dot(N, sunDir));
-  float skyFill = 0.5 + 0.5 * N.y;
-  vec3 sunIrradiance = vec3(1.06, 0.99, 0.92) * (nDotL * shadow * 0.88);
-  vec3 ambientSky = mix(vec3(0.16, 0.20, 0.28), vec3(0.32, 0.37, 0.46), skyFill);
-  vec3 litEarth = satRgb * (ambientSky + sunIrradiance);
-
-  // Physical Water Specular Glint (hydrologically flat lakes, rivers, and Aegean sea coves)
-  float seaMask = uHasSeaCoast * (1.0 - smoothstep(1.2, 4.5, vElevM));
-  float inlandWater = step(satRgb.g * 0.94, satRgb.b)
-                    * step(satRgb.r * 1.45, satRgb.b)
-                    * (1.0 - smoothstep(0.022, 0.042, satLuma))
-                    * (1.0 - smoothstep(0.018, 0.038, slopeMag));
-  float waterMask = clamp(max(seaMask, inlandWater), 0.0, 1.0);
-
-  if (waterMask > 0.02) {
-    float rippleA = sin(vWorldPos.x * 26.0 + uTime * 1.4 + vWorldPos.z * 19.0);
-    float rippleB = cos(vWorldPos.x * 34.0 - uTime * 1.1 + vWorldPos.z * 29.0);
-    vec3 waterN = normalize(N + vec3(rippleA * 0.028, 0.0, rippleB * 0.028) * waterMask);
-    vec3 halfVec = normalize(sunDir + viewDir);
-    float spec = pow(max(0.0, dot(waterN, halfVec)), 96.0) * shadow;
-    float fresnel = pow(1.0 - max(0.0, dot(waterN, viewDir)), 4.0);
-    vec3 deepWaterTint = mix(litEarth, vec3(0.05, 0.13, 0.21), 0.42);
-    litEarth = mix(
-      litEarth,
-      deepWaterTint + vec3(0.22, 0.28, 0.36) * fresnel * 0.45 + vec3(1.0, 0.93, 0.80) * spec * 0.85,
-      waterMask
-    );
-  }
-
-  // Rayleigh Valley Aerial Perspective (cool-silver depth scattering in deep gorges & far corners)
-  float minRange = mix(uElevPrevRange.x, uElevNextRange.x, uMorph);
-  float maxRange = mix(uElevPrevRange.y, uElevNextRange.y, uMorph);
-  float normElev = clamp((vElevM - minRange) / max(350.0, maxRange - minRange), 0.0, 1.0);
-  float camDist = length(cameraPosition - vWorldPos);
-  float valleyMist = (1.0 - smoothstep(0.04, 0.48, normElev)) * 0.14
-                   + smoothstep(9.5, 22.0, camDist) * 0.16;
-  litEarth = mix(litEarth, vec3(0.42, 0.50, 0.62) * (0.45 + 0.45 * shadow), clamp(valleyMist, 0.0, 0.26));
-
-  // Sample 256x256 scientific solver fields
-  vec4 f0 = texture2D(uFieldTex0, vUv);
-  vec4 f1 = texture2D(uFieldTex1, vUv);
-  vec4 field = mix(f0, f1, uFrameMix);
-
-  float sensGate = max(0.015, uSensitivity * 0.42);
-  float zHatNorm  = field.r;
-  float sigmaNorm = clamp(field.g * (1.0 + 0.28 * uHoldoutBoost), 0.0, 1.0);
-  float modisNorm = field.b;
-  float viirsNorm = field.a;
-
-  // Orbital Sensor Split Curtain plane signed distance
-  vec2 cutDir = normalize(uCutawayDir);
-  float scanCoord = dot(vUv - vec2(0.5), cutDir) - uCutawayPlane;
-  float posteriorSide = smoothstep(-0.0045, 0.0045, -scanCoord);
-  float rawSide = 1.0 - posteriorSide;
-
-  float showPosterior = clamp(uReconMix + uCutawayMix * posteriorSide, 0.0, 1.0);
-  float showRawModis  = clamp(uCutawayMix * rawSide, 0.0, 1.0);
-
-  vec3 finalRgb = litEarth;
-
-  // ===========================================================================
-  // A. HARMONIZED 375 M POSTERIOR SIDE (OR FULL RECONSTRUCTION MODE)
-  // ===========================================================================
-  if (showPosterior > 0.005) {
-    // Physical dynamic range: Z_hat burn interior [0.03..0.11], active 375 m canyon firelines [0.11..0.62]
-    float zFloor = 0.105 * (0.55 + 0.65 * uSensitivity);
-    float zScaled = clamp((zHatNorm - zFloor) / 0.44, 0.0, 1.0);
-
-    // 1. Scorched charcoal burn scar + cooling residual embers inside swept perimeter
-    float charZone = smoothstep(0.028, 0.108, zHatNorm) * (1.0 - waterMask);
-    vec3 burnScarRgb = mix(litEarth, vec3(0.016, 0.014, 0.018) * (0.52 + 0.48 * nDotL), charZone * 0.86);
-    float residualSmolder = smoothstep(0.055, 0.125, zHatNorm) * (1.0 - smoothstep(0.14, 0.26, zHatNorm)) * (1.0 - waterMask);
-    burnScarRgb += vec3(0.24, 0.028, 0.004) * residualSmolder;
-
-    // 2. Warm orange radiative bounce-light illuminating adjacent canyon rock faces
-    float fEps = 2.0 / 256.0;
-    float zE = mix(texture2D(uFieldTex0, vUv + vec2(fEps, 0.0)).r, texture2D(uFieldTex1, vUv + vec2(fEps, 0.0)).r, uFrameMix);
-    float zW = mix(texture2D(uFieldTex0, vUv - vec2(fEps, 0.0)).r, texture2D(uFieldTex1, vUv - vec2(fEps, 0.0)).r, uFrameMix);
-    float zN = mix(texture2D(uFieldTex0, vUv + vec2(0.0, fEps)).r, texture2D(uFieldTex1, vUv + vec2(0.0, fEps)).r, uFrameMix);
-    float zS = mix(texture2D(uFieldTex0, vUv - vec2(0.0, fEps)).r, texture2D(uFieldTex1, vUv - vec2(0.0, fEps)).r, uFrameMix);
-    vec3 toFireDir = normalize(vec3(zE - zW, 0.14, -(zN - zS)) + vec3(1e-5));
-    float nearPeak = clamp((max(max(zE, zW), max(zN, zS)) - 0.09) / 0.42, 0.0, 1.0);
-    float fireBounce = (0.32 + 0.68 * max(0.0, dot(N, toFireDir))) * nearPeak * (1.0 - waterMask);
-    burnScarRgb += vec3(0.82, 0.13, 0.012) * fireBounce * 0.48;
-
-    // 3. Linear-light blackbody + Lipari 375 m radiative filaments & incandescent ridge cores
-    float zCurved = pow(zScaled, 0.78);
-    vec3 lipariLinear = texture2D(uLipariTex, vec2(clamp(0.18 + zCurved * 0.78, 0.01, 0.99), 0.5)).rgb;
-    vec3 fireCrimson = vec3(0.58, 0.022, 0.004);
-    vec3 fireOrange  = vec3(1.38, 0.26, 0.014);
-    vec3 fireGold    = vec3(2.05, 1.18, 0.28);
-    vec3 blackbody = mix(
-      mix(fireCrimson, fireOrange, smoothstep(0.0, 0.55, zCurved)),
-      fireGold,
-      smoothstep(0.52, 0.96, zCurved)
-    );
-    vec3 flameLinear = mix(blackbody, lipariLinear * vec3(1.55, 0.72, 0.32), 0.26);
-    float shimmer = 0.94 + 0.06 * sin(uTime * 4.2 + vWorldPos.x * 6.5 + vWorldPos.z * 5.8);
-    float flameAlpha = smoothstep(0.02, 0.26, zScaled) * (1.0 - waterMask * 0.95);
-
-    vec3 postRgb = mix(burnScarRgb, flameLinear * shimmer, clamp(flameAlpha, 0.0, 1.0));
-
-    // 4. Crisp Topographic 90% Conformal Confidence Contours (+-sigma) in linear ice-cyan (#9be3ff)
-    if (uUncertaintyMix > 0.01) {
-      float sEps = 1.0 / 256.0;
-      float sScale = (1.0 + 0.28 * uHoldoutBoost) / 0.135;
-      float sigmaScaled = sigmaNorm * sScale;
-      float sE = mix(texture2D(uFieldTex0, vUv + vec2(sEps, 0.0)).g, texture2D(uFieldTex1, vUv + vec2(sEps, 0.0)).g, uFrameMix) * sScale;
-      float sW = mix(texture2D(uFieldTex0, vUv - vec2(sEps, 0.0)).g, texture2D(uFieldTex1, vUv - vec2(sEps, 0.0)).g, uFrameMix) * sScale;
-      float sN = mix(texture2D(uFieldTex0, vUv + vec2(0.0, sEps)).g, texture2D(uFieldTex1, vUv + vec2(0.0, sEps)).g, uFrameMix) * sScale;
-      float sS = mix(texture2D(uFieldTex0, vUv - vec2(0.0, sEps)).g, texture2D(uFieldTex1, vUv - vec2(0.0, sEps)).g, uFrameMix) * sScale;
-
-      float bands = 3.5;
-      vec2 grad = vec2(sE - sW, sN - sS) * 0.5 * bands;
-      float gradLen = max(length(grad), 0.032);
-      float distIso = abs(fract(sigmaScaled * bands - 0.5) - 0.5) / gradLen;
-      float contour = (1.0 - smoothstep(0.05, 0.46, distIso))
-                    * smoothstep(0.22, 0.48, sigmaScaled)
-                    * (1.0 - flameAlpha * 0.88)
-                    * uUncertaintyMix * (1.0 - waterMask * 0.85);
-
-      vec3 iceCyanLinear = vec3(0.24, 0.70, 1.0);
-      postRgb = mix(postRgb, iceCyanLinear, contour * 0.58);
-    }
-
-    finalRgb = mix(finalRgb, postRgb, showPosterior);
-  }
-
-  // ===========================================================================
-  // B. RAW MODIS 1 KM SIDE (SLATE-IR + ROTATED 1x2.6 KM BOW-TIE PRISMS + BLIND SPOTS)
-  // ===========================================================================
-  if (showRawModis > 0.005) {
-    // 1. High-contrast cool slate-infrared satellite pass (linear RGB)
-    float irContrast = clamp((pow(max(satLuma, 0.0005), 0.45) - 0.24) * 1.42 + 0.34, 0.04, 0.96);
-    float irShade = irContrast * (0.42 + 0.58 * nDotL * shadow);
-    vec3 slateIr = mix(vec3(0.018, 0.028, 0.048), vec3(0.22, 0.30, 0.42), irShade);
-    vec3 rawPassRgb = mix(litEarth, slateIr, 0.82);
-
-    // 2. Rotated 1 km x 2.6 km MODIS bow-tie pixel grid & snapped cell radiance
-    vec2 uvQuant;
-    vec2 cellFrac;
-    float minEdge;
-    computeModisBowtieCell(vUv, uModisBowtie, uDomainWidthKm, uvQuant, cellFrac, minEdge);
-
-    float mC = mix(texture2D(uFieldTex0, uvQuant).b, texture2D(uFieldTex1, uvQuant).b, uFrameMix);
-    float mE = mix(texture2D(uFieldTex0, clamp(uvQuant + vec2(0.0055, 0.0), vec2(0.002), vec2(0.998))).b,
-                   texture2D(uFieldTex1, clamp(uvQuant + vec2(0.0055, 0.0), vec2(0.002), vec2(0.998))).b, uFrameMix);
-    float mW = mix(texture2D(uFieldTex0, clamp(uvQuant - vec2(0.0055, 0.0), vec2(0.002), vec2(0.998))).b,
-                   texture2D(uFieldTex1, clamp(uvQuant - vec2(0.0055, 0.0), vec2(0.002), vec2(0.998))).b, uFrameMix);
-    float modisCellVal = max(mC, max(mE, mW));
-    float modisScaled = clamp((modisCellVal - 0.105 * (0.55 + 0.65 * uSensitivity)) / 0.35, 0.0, 1.0);
-
-    float cellFreq = uDomainWidthKm / 1.05;
-    float gridLineAA = clamp(uvFootprint * cellFreq * 1.45, 0.008, 0.085);
-    float rawModisGridLine = 1.0 - smoothstep(0.0, gridLineAA, minEdge);
-    rawPassRgb = mix(rawPassRgb, vec3(0.16, 0.24, 0.36), rawModisGridLine * 0.42);
-
-    // 3. Diagnostic amber-slate cross-hatch where steep canyon fires are MISSED by MODIS 1 km
-    float missedMask = smoothstep(0.11, 0.24, zHatNorm)
-                     * (1.0 - smoothstep(0.02, 0.14, modisScaled))
-                     * (1.0 - waterMask);
-    if (missedMask > 0.01) {
-      float hatchCoord = (vWorldPos.x + vWorldPos.z) * 28.0;
-      float hatch = 1.0 - smoothstep(0.18, 0.36, abs(fract(hatchCoord) - 0.5));
-      rawPassRgb = mix(rawPassRgb, vec3(0.68, 0.24, 0.045), missedMask * (0.22 + 0.42 * hatch));
-    }
-
-    // 4. Extruded flat-topped 1 km rectangular MODIS sensor blocks (linear NASA FIRMS vermilion #ef5b30)
-    float activeModisBlock = smoothstep(0.06, 0.28, modisScaled);
-    if (activeModisBlock > 0.01) {
-      vec3 geomCross = cross(dPosDx, dPosDy);
-      vec3 blockNormal = normalize(geomCross + vec3(0.0, 1e-6, 0.0));
-      float topFlatness = clamp(abs(blockNormal.y), 0.0, 1.0);
-      vec3 vermilionBase = vec3(0.84, 0.095, 0.020);
-      vec3 vermilionHot  = vec3(1.24, 0.38, 0.055);
-      vec3 blockCol = mix(vermilionBase * 0.52, mix(vermilionBase, vermilionHot, modisScaled), topFlatness);
-      float rimHighlight = (1.0 - smoothstep(0.03, 0.12, minEdge)) * activeModisBlock;
-      blockCol += vec3(0.95, 0.46, 0.12) * rimHighlight * 0.42;
-
-      float blockBlend = clamp(max(vModisExtrude, activeModisBlock * 0.90), 0.0, 1.0);
-      rawPassRgb = mix(rawPassRgb, blockCol, blockBlend);
-    }
-
-    finalRgb = mix(finalRgb, rawPassRgb, showRawModis);
-  }
-
-  // ===========================================================================
-  // C. OBSERVER MODE SURFACE RADIANCE OVERLAY
-  // ===========================================================================
-  if (uObserverMix > 0.005) {
-    float obsModis = smoothstep(sensGate, sensGate + 0.14, modisNorm) * uModisWeight;
-    float obsViirs = smoothstep(sensGate * 0.45, sensGate * 0.45 + 0.12, viirsNorm) * uViirsWeight;
-    vec3 obsRgb = litEarth * 0.82;
-    obsRgb = mix(obsRgb, vec3(0.92, 0.52, 0.30), obsModis * 0.72);
-    obsRgb = mix(obsRgb, vec3(0.45, 0.85, 0.96), obsViirs * 0.80);
-    finalRgb = mix(finalRgb, obsRgb, uObserverMix);
-  }
-
-  // ===========================================================================
-  // D. RAZOR-SHARP OPTICAL LASER LINE WHERE THE 3D GLASS CURTAIN SLICES TERRAIN
-  // ===========================================================================
-  if (uCutawayMix > 0.01) {
-    float scanLine = exp(-abs(scanCoord) * 280.0) * uCutawayMix;
-    float scanHalo = exp(-abs(scanCoord) * 58.0) * uCutawayMix;
-    finalRgb += vec3(0.35, 0.82, 1.0) * scanHalo * 0.28 + vec3(0.92, 0.99, 1.0) * scanLine * 0.95;
-  }
-
-  // Subtle top bevel edge highlight around the 4 outer cut boundaries of the slab
-  float borderDist = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
-  float rimBevel = 1.0 - smoothstep(0.0, 0.0028, borderDist);
-  finalRgb = mix(finalRgb, finalRgb + vec3(0.14, 0.17, 0.22), rimBevel * 0.65);
-
-  gl_FragColor = vec4(finalRgb, 1.0);
-  #include <colorspace_fragment>
-}
-`;
+// The terrain surface shaders live in ./engine/terrainShader.ts.
 
 // =============================================================================
 // 2. 3D GEOLOGICAL CUTAWAY CLIFF SKIRT GEOMETRY & STRATIGRAPHIC SHADERS
 // =============================================================================
-export function buildStratigraphicSkirtGeometry(): THREE.BufferGeometry {
-  const segs = SLAB_SEGMENTS; // 511 segments per wall -> 512 vertices per wall
+export function buildStratigraphicSkirtGeometry(segs: number = SLAB_SEGMENTS): THREE.BufferGeometry {
   const vertsPerSide = (segs + 1) * 2;
   const totalVerts = vertsPerSide * 4;
   const totalIndices = segs * 6 * 4;
@@ -1000,7 +621,7 @@ void main() {
   float surfY = evalTerrainWorldY(edgeUv, surfElevM);
 
   float wy = mix(${CLIFF_BASE_Y.toFixed(2)}, surfY, isTop);
-  vec3 displaced = vec3(position.x, wy, position.z);
+  vec3 displaced = vec3((edgeUv.x - 0.5) * uSlabSize.x, wy, (0.5 - edgeUv.y) * uSlabSize.y);
   vec4 worldPos = modelMatrix * vec4(displaced, 1.0);
 
   vEdgeUv = edgeUv;
@@ -1016,8 +637,10 @@ void main() {
 `;
 
 export const SKIRT_FRAGMENT_SHADER = /* glsl */ `
+${NIGHT_GLSL}
 uniform vec2 uElevPrevRange;
 uniform vec2 uElevNextRange;
+uniform vec2 uReliefScale;
 uniform float uMorph;
 uniform vec3 uSunDir;
 uniform float uCutawayMix;
@@ -1042,7 +665,7 @@ void main() {
   float hFrac = clamp((vWorldY - (${CLIFF_BASE_Y.toFixed(2)})) / wallSpan, 0.0, 1.0);
 
   // Equivalent geological elevation in meters at this vertical cross-section pixel
-  float pixelElevM = minRange + (vWorldY / ${MAX_RELIEF_WORLD_Y.toFixed(2)}) * spanM;
+  float pixelElevM = minRange + vWorldY / max(mix(uReliefScale.x, uReliefScale.y, uMorph), 1e-7);
 
   // Lithospheric basalt-slate gradient (#1d2129 -> #0d1016) with directional facet lighting
   vec3 topSlate = vec3(0.125, 0.145, 0.184);
@@ -1080,8 +703,9 @@ void main() {
     wallCol += vec3(0.55, 0.90, 1.0) * cliffLaser * 0.72;
   }
 
-  gl_FragColor = vec4(wallCol, 1.0);
-  #include <colorspace_fragment>
+  // By night the block's sides are lit a little more than its top, so the block and its edge
+  // read against the dark page (the sides are only seen in the block views)
+  gl_FragColor = vec4(mix(wallCol, wallCol * vec3(0.26, 0.34, 0.52), uNight), 1.0);
 }
 `;
 
@@ -1101,6 +725,8 @@ void main() {
 `;
 
 export const PEDESTAL_FRAGMENT_SHADER = /* glsl */ `
+uniform vec2 uSlabSize;
+uniform float uShadowMix; // 1 = contact shadow drawn; 0 in close views, where it is a dark band past the far edge
 varying vec3 vLocalPos;
 varying vec3 vWorldPos;
 
@@ -1110,45 +736,11 @@ float sdBox2D(vec2 p, vec2 b) {
 }
 
 void main() {
-  vec2 xz = vWorldPos.xz;
-  vec2 halfSlab = vec2(${(SLAB_W * 0.5).toFixed(3)}, ${(SLAB_D * 0.5).toFixed(3)});
-  float boxDist = sdBox2D(xz, halfSlab);
-  float radialDist = length(xz);
-
-  // Grounded ambient-occlusion contact shadow directly beneath and around the cutaway monolith
-  float contactShadow = 1.0 - smoothstep(-0.2, 2.35, boxDist);
-
-  // Delicate orbital geodetic range rings & lat/lon graticule hairlines outside the slab
-  float ringSpacing = 2.4;
-  float ringPhase = radialDist / ringSpacing;
-  float ringDist = abs(fract(ringPhase - 0.5) - 0.5) / max(fwidth(ringPhase), 0.002);
-  float ringLine = (1.0 - smoothstep(0.45, 1.35, ringDist)) * smoothstep(0.05, 0.35, boxDist);
-
-  // Subtle lat/lon Cartesian graticule hairlines
-  vec2 gridPhase = xz / 1.85;
-  vec2 gridAA = max(fwidth(gridPhase), vec2(0.002));
-  vec2 gridDist = abs(fract(gridPhase - 0.5) - 0.5) / gridAA;
-  float graticule = (1.0 - smoothstep(0.45, 1.4, min(gridDist.x, gridDist.y)))
-                  * smoothstep(0.04, 0.25, boxDist);
-
-  // Cardinal N / E / S / W axis hairlines
-  float axisX = (1.0 - smoothstep(0.5, 1.5, abs(xz.x) / max(fwidth(xz.x), 0.002)))
-              * smoothstep(0.1, 0.4, boxDist) * (1.0 - smoothstep(4.5, 10.5, abs(xz.y) - halfSlab.y));
-  float axisZ = (1.0 - smoothstep(0.5, 1.5, abs(xz.y) / max(fwidth(xz.y), 0.002)))
-              * smoothstep(0.1, 0.4, boxDist) * (1.0 - smoothstep(4.5, 10.5, abs(xz.x) - halfSlab.x));
-  float cardinalTicks = max(axisX, axisZ);
-
-  float horizonFade = 1.0 - smoothstep(8.2, 14.5, radialDist);
-
-  vec3 lineRgb = vec3(0.32, 0.41, 0.54);
-  float lineAlpha = (ringLine * 0.16 + graticule * 0.085 + cardinalTicks * 0.26) * horizonFade;
-  float shadowAlpha = contactShadow * 0.68 * horizonFade;
-
-  float outAlpha = clamp(shadowAlpha + lineAlpha, 0.0, 0.85);
-  vec3 outRgb = mix(vec3(0.015, 0.020, 0.030), lineRgb, lineAlpha / max(outAlpha, 1e-4));
-
-  gl_FragColor = vec4(outRgb, outAlpha);
-  #include <colorspace_fragment>
+  // The floor under the block is quiet: one soft contact shadow, no grid, no rings, no axes
+  float boxDist = sdBox2D(vWorldPos.xz, uSlabSize * 0.5);
+  float contactShadow = 1.0 - smoothstep(-0.2, 2.6, boxDist);
+  float reach = 1.0 - smoothstep(8.2, 14.5, length(vWorldPos.xz));
+  gl_FragColor = vec4(vec3(0.015, 0.020, 0.030), contactShadow * contactShadow * 0.62 * reach * uShadowMix);
 }
 `;
 
@@ -1201,13 +793,17 @@ ${COMMON_HEIGHTFIELD_GLSL}
 
 attribute vec2 aCurtainParam; // (sOffset, isTop)
 uniform float uCutawayPlane;
+uniform float uCurtainTopY;
 uniform vec2 uCutawayDir;
+uniform float uHasSeaCoast;
 
+varying float vWater;
 varying float vHeightFrac;
 varying float vSpanCoord;
 varying float vInSlab;
 varying vec3 vWorldPos;
 varying vec3 vCurtainNormal;
+varying float vEdgeKeep;
 
 void main() {
   vec2 dir = normalize(uCutawayDir);
@@ -1245,11 +841,12 @@ void main() {
 
   float terrainY = evalTerrainWorldYFast(uv);
   float isTop = aCurtainParam.y;
-  float curtainRise = 1.55;
-  float wy = terrainY + isTop * curtainRise;
+  // Level top edge just above the highest relief. A top that follows the terrain draws a second
+  // mountain silhouette in the sky on high relief.
+  float wy = mix(terrainY, uCurtainTopY, isTop);
 
-  float wx = (uv.x - 0.5) * ${SLAB_W.toFixed(2)};
-  float wz = (0.5 - uv.y) * ${SLAB_D.toFixed(2)};
+  float wx = (uv.x - 0.5) * uSlabSize.x;
+  float wz = (0.5 - uv.y) * uSlabSize.y;
 
   vec3 worldN = normalize(vec3(dir.x, 0.0, -dir.y));
   vec4 wp = modelMatrix * vec4(wx, wy, wz, 1.0);
@@ -1257,6 +854,9 @@ void main() {
   vHeightFrac = isTop;
   vSpanCoord = tFrac;
   vInSlab = validChord;
+  vEdgeKeep = 1.0 - edgeGoneAt(uv, terrainY);
+  // Sea level on a coast: the foot of the curtain runs flat across open water there
+  vWater = uHasSeaCoast * (1.0 - smoothstep(0.002, 0.012, terrainY));
   vWorldPos = wp.xyz;
   vCurtainNormal = worldN;
 
@@ -1267,13 +867,19 @@ void main() {
 export const CURTAIN_FRAGMENT_SHADER = /* glsl */ `
 uniform float uCutawayMix;
 uniform float uCurtainHover;
+uniform float uCurtainRail;   // 1 in whole-slab views; 0 in close views, where the rail is a line across the sky
 uniform float uTime;
+uniform vec4 uLid;            // landing world view: plane the curtain stays under, dot(xyz, p) + w < 0
+uniform float uLidAmount;
+uniform float uNight;         // 1 on a night overpass of a real run: the curtain is kept quiet
 
 varying float vHeightFrac;
 varying float vSpanCoord;
 varying float vInSlab;
 varying vec3 vWorldPos;
 varying vec3 vCurtainNormal;
+varying float vEdgeKeep;
+varying float vWater;
 
 void main() {
   if (vInSlab < 0.5 || uCutawayMix < 0.005) {
@@ -1282,13 +888,17 @@ void main() {
 
   vec3 viewDir = normalize(cameraPosition - vWorldPos);
   float nDotV = abs(dot(normalize(vCurtainNormal), viewDir));
-  float edgeOnFade = smoothstep(0.03, 0.15, nDotV);
+  // Seen along its own plane the curtain is a glare across the frame; from inside the landscape
+  // (landing world view) that happens at much wider angles than from above
+  float edgeOnFade = smoothstep(mix(0.03, 0.10, uLidAmount), mix(0.15, 0.55, uLidAmount), nDotV);
   float fresnel = 0.55 + 0.45 * pow(1.0 - nDotV, 2.2);
 
   // Razor-sharp bottom ridge-hugging laser + crisp top collector rail + smooth edge taper
-  float bottomLaser = exp(-vHeightFrac * 44.0);
-  float bottomGlow  = exp(-vHeightFrac * 9.5);
-  float topRail     = exp(-(1.0 - vHeightFrac) * 65.0);
+  // Over open water the foot is a straight bright line to the horizon, so it is drawn fainter there
+  float onLand = mix(1.0, 0.22, vWater);
+  float bottomLaser = exp(-vHeightFrac * 44.0) * onLand;
+  float bottomGlow  = exp(-vHeightFrac * 9.5) * onLand;
+  float topRail     = exp(-(1.0 - vHeightFrac) * 65.0) * uCurtainRail;
   float spanTaper   = smoothstep(0.0, 0.045, min(vSpanCoord, 1.0 - vSpanCoord));
 
   float vertScanlines = 0.5 + 0.5 * sin(vSpanCoord * 210.0 - uTime * 1.6);
@@ -1302,272 +912,13 @@ void main() {
   vec3 laserCore = vec3(0.94, 0.99, 1.0);
   vec3 col = mix(glassTint, laserCore, clamp(bottomLaser + topRail * 0.5, 0.0, 1.0));
 
-  gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.92));
-  #include <colorspace_fragment>
+  // Landing world view: the curtain ends under the calm part of the frame
+  float under = -(dot(uLid.xyz, vWorldPos) + uLid.w) / max(distance(vWorldPos, cameraPosition), 1e-3);
+  float lidKeep = mix(1.0, smoothstep(0.0, 0.035, under), uLidAmount);
+
+  // Where the far edge of the slab is taken away in close views, the curtain goes with it
+  gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.92) * vEdgeKeep * lidKeep * mix(1.0, 0.25, uNight));
 }
 `;
 
-// =============================================================================
-// 5. GPU-ANIMATED 3D CONVECTIVE SMOKE & GLOWING EMBER PLUMES (2,400 PARTICLES)
-// =============================================================================
-export function buildConvectivePlumeGeometry(): {
-  geometry: THREE.BufferGeometry;
-  uvAttr: THREE.BufferAttribute;
-  seedAttr: THREE.BufferAttribute;
-} {
-  const dummyPos = new Float32Array(PLUME_PARTICLE_COUNT * 3);
-  const uvArr = new Float32Array(PLUME_PARTICLE_COUNT * 2);
-  const seedArr = new Float32Array(PLUME_PARTICLE_COUNT * 4);
-
-  for (let i = 0; i < PLUME_PARTICLE_COUNT; i++) {
-    // Golden-ratio quasi-random initial seeding before active tensor hotspot binding
-    const g1 = (i * 0.61803398875) % 1.0;
-    const g2 = (i * 0.38196601125 * 1.73205) % 1.0;
-    uvArr[i * 2] = 0.16 + g1 * 0.68;
-    uvArr[i * 2 + 1] = 0.16 + g2 * 0.68;
-
-    const h1 = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
-    const h2 = Math.sin(i * 93.9898 + 17.135) * 24634.6345;
-    const h3 = Math.sin(i * 41.2317 + 53.719) * 19283.4719;
-    seedArr[i * 4] = h1 - Math.floor(h1); // phase offset [0..1]
-    seedArr[i * 4 + 1] = 0.65 + 0.70 * (h2 - Math.floor(h2)); // buoyancy speed
-    seedArr[i * 4 + 2] = (h3 - Math.floor(h3)) * Math.PI * 2.0; // swirl angle
-    seedArr[i * 4 + 3] = i % 5 === 0 ? 1.0 : 0.0; // 20% crisp ember sparks, 80% convective smoke puffs
-  }
-
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.BufferAttribute(dummyPos, 3));
-  const uvAttr = new THREE.BufferAttribute(uvArr, 2);
-  const seedAttr = new THREE.BufferAttribute(seedArr, 4);
-  geom.setAttribute('aHotspotUv', uvAttr);
-  geom.setAttribute('aSeed', seedAttr);
-  geom.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.2, 0), 18.0);
-
-  return { geometry: geom, uvAttr, seedAttr };
-}
-
-/**
- * Re-seeds the 2,400 plume emitters directly onto active Z_hat fire cells across the 24-epoch tensor
- * via importance-weighted cumulative sampling so every particle anchors to real canyon fire filaments.
- */
-export function bindPlumeParticlesToTensor(
-  tensor: Uint8Array,
-  frameCount: number,
-  uvAttr: THREE.BufferAttribute,
-): void {
-  const cellCount = FIELD_GRID_SIZE * FIELD_GRID_SIZE;
-  const maxZPerCell = new Float32Array(cellCount);
-  const frameStride = cellCount * 4;
-
-  for (let f = 0; f < frameCount; f += 2) {
-    const fBase = f * frameStride;
-    for (let idx = 0; idx < cellCount; idx++) {
-      const z = tensor[fBase + idx * 4];
-      if (z > maxZPerCell[idx]) {
-        maxZPerCell[idx] = z;
-      }
-    }
-  }
-
-  const activeIndices: number[] = [];
-  const weights: number[] = [];
-  let weightSum = 0;
-
-  for (let idx = 0; idx < cellCount; idx++) {
-    const z = maxZPerCell[idx];
-    if (z >= 36) {
-      const w = Math.pow((z - 32) / 223.0, 2.1);
-      activeIndices.push(idx);
-      weightSum += w;
-      weights.push(weightSum);
-    }
-  }
-
-  if (activeIndices.length < 8 || weightSum <= 0) return;
-
-  const uvArr = uvAttr.array as Float32Array;
-  for (let i = 0; i < PLUME_PARTICLE_COUNT; i++) {
-    const targetW = ((i + 0.5) / PLUME_PARTICLE_COUNT) * weightSum;
-    // Binary search cumulative distribution
-    let lo = 0;
-    let hi = weights.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (weights[mid] < targetW) lo = mid + 1;
-      else hi = mid;
-    }
-    const chosenIdx = activeIndices[lo];
-    const gx = chosenIdx % FIELD_GRID_SIZE;
-    const gy = Math.floor(chosenIdx / FIELD_GRID_SIZE);
-
-    // Sub-cell jitter so plumes form organic volumetric columns rather than grid dots
-    const jx = ((Math.sin(i * 19.19) * 43758.54) % 1 + 1) % 1 - 0.5;
-    const jy = ((Math.cos(i * 37.73) * 29183.17) % 1 + 1) % 1 - 0.5;
-
-    uvArr[i * 2] = Math.min(0.985, Math.max(0.015, (gx + 0.5 + jx * 0.9) / FIELD_GRID_SIZE));
-    uvArr[i * 2 + 1] = Math.min(0.985, Math.max(0.015, (gy + 0.5 + jy * 0.9) / FIELD_GRID_SIZE));
-  }
-  uvAttr.needsUpdate = true;
-}
-
-export const PLUME_VERTEX_SHADER = /* glsl */ `
-${COMMON_HEIGHTFIELD_GLSL}
-
-attribute vec2 aHotspotUv;
-attribute vec4 aSeed; // (phase, speed, swirlAngle, isEmberSpark)
-
-uniform sampler2D uFieldTex0;
-uniform sampler2D uFieldTex1;
-uniform float uFrameMix;
-uniform float uTime;
-uniform float uPlumeOpacity;
-uniform float uCutawayMix;
-uniform float uCutawayPlane;
-uniform vec2 uCutawayDir;
-uniform vec2 uWindDirUv;
-uniform float uViewportHeightPx;
-
-varying float vAge;
-varying float vIntensity;
-varying float vIsEmber;
-varying float vAlphaGate;
-varying float vSwirl;
-
-void main() {
-  vec2 baseUv = aHotspotUv;
-  float z0 = texture2D(uFieldTex0, baseUv).r;
-  float z1 = texture2D(uFieldTex1, baseUv).r;
-  float zHatNorm = mix(z0, z1, uFrameMix);
-
-  // Hide particles on Raw MODIS side in cutaway mode or when cell is inactive
-  float scanCoord = dot(baseUv - vec2(0.5), normalize(uCutawayDir)) - uCutawayPlane;
-  float posteriorGate = mix(1.0, smoothstep(-0.008, 0.012, -scanCoord), uCutawayMix);
-  float zScaled = clamp((zHatNorm - 0.115) / 0.42, 0.0, 1.0);
-  float fireGate = smoothstep(0.06, 0.42, zScaled) * posteriorGate * uPlumeOpacity;
-
-  if (fireGate <= 0.005) {
-    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-    gl_PointSize = 0.0;
-    vAlphaGate = 0.0;
-    return;
-  }
-
-  float cycle = fract(aSeed.x + uTime * 0.145 * aSeed.y);
-  vAge = cycle;
-  vIntensity = zHatNorm;
-  vIsEmber = aSeed.w;
-  vSwirl = aSeed.z + uTime * (0.55 - 0.35 * cycle);
-
-  // Compute local upslope gradient to advect smoke physically upslope + downwind
-  float dEps = 1.0 / 256.0;
-  float baseY = evalTerrainWorldYFast(baseUv);
-  float yE = evalTerrainWorldYFast(baseUv + vec2(dEps, 0.0));
-  float yN = evalTerrainWorldYFast(baseUv + vec2(0.0, dEps));
-  vec2 upslopeUv = clamp(vec2(yE - baseY, yN - baseY) * 8.0, vec2(-0.04), vec2(0.04));
-
-  vec2 driftUv = (normalize(uWindDirUv + vec2(1e-5)) * 0.055 + upslopeUv * 0.65) * pow(cycle, 1.15);
-  vec2 curUv = clamp(baseUv + driftUv, vec2(0.002), vec2(0.998));
-
-  float wx = (curUv.x - 0.5) * ${SLAB_W.toFixed(2)};
-  float wz = (0.5 - curUv.y) * ${SLAB_D.toFixed(2)};
-
-  // Turbulent helical billows aloft
-  float billowR = (0.02 + 0.16 * cycle) * (1.0 - 0.55 * aSeed.w);
-  wx += cos(vSwirl * 2.2) * billowR;
-  wz += sin(vSwirl * 2.2) * billowR;
-
-  float riseHeight = (0.03 + 1.42 * pow(cycle, 0.84)) * (0.65 + 1.85 * zHatNorm);
-  float wy = baseY + riseHeight;
-
-  vec4 mvPos = modelViewMatrix * vec4(wx, wy, wz, 1.0);
-  gl_Position = projectionMatrix * mvPos;
-
-  float baseRadiusWorld = aSeed.w > 0.5
-    ? mix(0.042, 0.018, cycle)
-    : mix(0.095, 0.44, pow(cycle, 0.78)) * (0.80 + 0.95 * zHatNorm);
-
-  gl_PointSize = clamp((baseRadiusWorld * uViewportHeightPx) / max(0.25, -mvPos.z), 1.5, 96.0);
-
-  // Smooth fade-in at ground ignition and soft dissipation aloft
-  float lifeEnv = smoothstep(0.0, 0.10, cycle) * (1.0 - smoothstep(0.62, 1.0, cycle));
-  vAlphaGate = fireGate * lifeEnv;
-}
-`;
-
-export const PLUME_FRAGMENT_SHADER = /* glsl */ `
-uniform vec3 uSunDir;
-
-varying float vAge;
-varying float vIntensity;
-varying float vIsEmber;
-varying float vAlphaGate;
-varying float vSwirl;
-
-void main() {
-  if (vAlphaGate <= 0.004) discard;
-
-  vec2 p = gl_PointCoord * 2.0 - 1.0;
-  float r2 = dot(p, p);
-  if (r2 > 1.0) discard;
-
-  if (vIsEmber > 0.5) {
-    // Crisp incandescent glowing ember spark rising out of the ridge flame
-    float sparkCore = exp(-r2 * 5.2);
-    float emberLife = 1.0 - smoothstep(0.15, 0.82, vAge);
-    vec3 sparkCol = mix(vec3(0.95, 0.12, 0.01), vec3(1.65, 0.92, 0.25), sparkCore);
-    float alpha = sparkCore * vAlphaGate * emberLife * 0.92;
-    if (alpha < 0.005) discard;
-    gl_FragColor = vec4(sparkCol, alpha);
-  } else {
-    // Soft multi-lobe volumetric smoke puff with sunlit top-rim and warm orange base under-glow (linear RGB)
-    float cS = cos(vSwirl);
-    float sS = sin(vSwirl);
-    vec2 rp = mat2(cS, -sS, sS, cS) * p;
-    float lobe = 0.86 + 0.14 * sin(rp.x * 3.8) * cos(rp.y * 3.4);
-    float radialSoft = pow(max(0.0, 1.0 - r2), 1.75) * lobe;
-
-    // Pseudo-3D spherical puff normal for solar top-lighting + fire base bounce-lighting
-    vec3 puffNormal = normalize(vec3(p.x, -p.y, sqrt(max(0.01, 1.0 - r2))));
-    float sunLit = 0.5 + 0.5 * dot(puffNormal, normalize(vec3(uSunDir.x, uSunDir.y, 0.35)));
-    float underFireLit = clamp(p.y * 0.5 + 0.5, 0.0, 1.0) * (1.0 - smoothstep(0.0, 0.42, vAge)) * clamp(vIntensity * 1.6, 0.0, 1.0);
-
-    vec3 smokeShadow = vec3(0.042, 0.048, 0.062);
-    vec3 smokeSunlit = vec3(0.46, 0.44, 0.42);
-    vec3 smokeCol = mix(smokeShadow, smokeSunlit, sunLit);
-
-    // Transition from glowing ember-lit base plume (vAge < 0.22) to sunlit ash smoke aloft
-    vec3 fireUnderGlow = vec3(0.88, 0.14, 0.012);
-    smokeCol = mix(smokeCol, fireUnderGlow, clamp(underFireLit * 0.72 + (1.0 - smoothstep(0.0, 0.16, vAge)) * 0.42, 0.0, 0.85));
-
-    float smokeAlpha = radialSoft * vAlphaGate * 0.34;
-    if (smokeAlpha < 0.004) discard;
-    gl_FragColor = vec4(smokeCol, smokeAlpha);
-  }
-  #include <colorspace_fragment>
-}
-`;
-
-// =============================================================================
-// 6. SUBTLE ORBITAL HORIZON ATMOSPHERE DOME SHADERS
-// =============================================================================
-export const ATMOSPHERE_DOME_VERTEX_SHADER = /* glsl */ `
-varying vec3 vDir;
-void main() {
-  vDir = normalize(position);
-  vec4 wp = modelMatrix * vec4(position, 1.0);
-  gl_Position = projectionMatrix * viewMatrix * wp;
-}
-`;
-
-export const ATMOSPHERE_DOME_FRAGMENT_SHADER = /* glsl */ `
-varying vec3 vDir;
-void main() {
-  float h = clamp(vDir.y, -0.35, 1.0);
-  vec3 zenith = vec3(0.031, 0.043, 0.067);  // #080b11 deep orbital slate
-  vec3 horizon = vec3(0.072, 0.098, 0.145); // subtle silver-blue horizon rim
-  float band = exp(-pow((h - 0.02) * 5.2, 2.0));
-  vec3 col = mix(zenith, horizon, band * 0.85);
-  gl_FragColor = vec4(col, 1.0);
-  #include <colorspace_fragment>
-}
-`;
+// The sky dome and atmosphere shaders live in ./engine/atmosphere.ts.
