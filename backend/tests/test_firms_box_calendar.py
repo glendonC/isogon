@@ -188,10 +188,25 @@ class PlacesRegistryTests(unittest.TestCase):
         self.assertEqual((got[0]["name"], got[0]["blind_test_fire"], got[0]["default_start"]), ("Dixie Fire", True, "2021-08-03"))
         self.assertEqual((got[1]["name"], got[1]["default_start"], got[1]["size"]["modis_pixels_in_box"]), (None, "2012-08-10", 394))
         self.assertEqual([s["start"] for s in got[1]["run_starts"]], ["2012-08-02", "2012-08-10"])
-        self.assertIsNone(got[1]["to_the_model"])
+        self.assertIsNone(got[1]["to_the_world_model"])
+        self.assertIsNone(got[1]["to_the_learned_agent"])
         out = places_payload(lambda region: starts if region == "plumas_ca" else [])
         self.assertEqual((out["default"]["featured_fire"], out["default"]["start"]), ("plumas_ca:2012-08", "2012-08-10"))
-        self.assertEqual(out["default"]["chosen_by"], "while the model's roles are not served")
+        self.assertEqual(out["default"]["chosen_by"], "while the standings are not served")
+        # with the model's standings served, the default is the largest fire the world model never saw
+        from unittest import mock
+
+        import backend.firms.places as places
+
+        def roles(region, first, last):
+            standing = {"2012": "fitted on", "2020": "never seen", "2021": "recorded test fire"}[first[:4]]
+            return {"world_model": standing, "learned_agent": "fitted on"}
+
+        with mock.patch.object(places, "_model_roles", lambda: roles):
+            out = places_payload(lambda region: starts if region == "plumas_ca" else [])
+        self.assertEqual(out["default"]["featured_fire"], "plumas_ca:2020-09")
+        self.assertEqual(out["default"]["chosen_by"], "the world model's standing")
+        self.assertEqual(out["default"]["to_the_learned_agent"], "fitted on")
 
 
 def _real_cache() -> bool:

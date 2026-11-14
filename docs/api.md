@@ -122,7 +122,8 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
           "named_fire": null,
           "name_source": null,
           "blind_test_fire": false,
-          "to_the_model": null,
+          "to_the_world_model": null,
+          "to_the_learned_agent": null,
           "default_start": "2012-08-10",
           "default_start_rule": "the period's start with the most MODIS pixels in the box (the earliest on a tie)",
           "calendar": "/api/calendar?source=firms&region_id=plumas_ca",
@@ -148,9 +149,9 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
       ]
     }
   ],
-  "default": {"region_id": "plumas_ca", "featured_fire": "plumas_ca:2012-08", "start": "2012-08-10", "rule": "...", "chosen_by": "while the model's roles are not served"},
+  "default": {"region_id": "plumas_ca", "featured_fire": "plumas_ca:2012-08", "start": "2012-08-10", "rule": "...", "chosen_by": "while the standings are not served", "to_the_world_model": null, "to_the_learned_agent": null},
   "featured_fires_rule": "...",
-  "to_the_model": "...",
+  "standing": "...",
   "named_fires_from": "...",
   "box_calendar": {
     "route": "/api/calendar?source=firms&box=<west>,<south>,<east>,<north>",
@@ -169,8 +170,8 @@ Shortened: `places` has five entries, one per preset; one featured fire and one 
 - `years.country_files` is the first and last year of the FIRMS country files cached for the region; `years.area_api_through` the last day its area API rows cover. `starts` names the start list, how many starts it has and the start a run opens on (`default_start` of `GET /api/runs/starts`).
 - Featured fires are chosen by rule from the region's real run starts (`GET /api/runs/starts`, which reads MODIS rows only): the starts the start search marks busiest, grouped into periods less than 31 days apart, largest first by the MODIS pixels in the box at the busiest start. Today they are July and August 2021 (1,749), August 2012 (394) and September 2020 (175) in `plumas_ca`, June and July 2021 (514) and August 2023 (301) in `lytton_bc`, and August 2021 (714) in `evia_greece`. `run_starts` are the region's starts inside the period's months; `default_start` is the period's start with the most MODIS pixels.
 - A featured fire takes its `name` from a named fire whose dates overlap it and whose point lies within 0.5 degrees of the region's box; one without a name is shown by place and month. `blind_test_fire` marks the three 2021 test fires.
-- `to_the_model` is `null` until the model's function is served (`backend.model.fire_roles.fire_roles`); it will say, per part, whether a fire was fitted on, validated on, a recorded test fire or never seen.
-- `default` is chosen by the rule in `rule`: the largest featured fire the model never saw; while `to_the_model` is null everywhere, the largest featured fire that is not a blind test fire. `chosen_by` says which reading chose it.
+- `to_the_world_model` and `to_the_learned_agent` say what the fire is to each part: fitted on, validated on, a recorded test fire, or never seen. Both are `null` until the model's function is served (`backend.model.fire_roles.fire_roles`). The two can differ: the world model was fitted on fires of 2018 to 2023 and validated on 2024 and 2025 (`backend/model/training.py`), the learned agent on episodes of 2012 to 2023 (`backend/env/learn.py`).
+- `default` is chosen by the rule in `rule`: the largest featured fire the world model never saw; while the standings are null, the largest featured fire that is not a blind test fire. `chosen_by` says which reading chose it, and the default carries both standings.
 - Named fires (`backend/firms/places.json`) carry the name, dates, burned area and point a fire agency gives, from the page in `source` (`point_source`, `area_source` or `last_day_source` when that fact comes from another page; [sources.md](sources.md)), a calendar `box` (the point 0.5 degrees each way) and its `calendar`, and the `featured_fire` they name, if any.
 - `country_extents` is where the rows of each cached country file lie; a box calendar counts only rows of those files.
 
