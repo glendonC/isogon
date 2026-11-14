@@ -55,5 +55,28 @@ class StrictJsonTests(unittest.TestCase):
         self.assertEqual(strict_json_bytes({"x": 1.25}), b'{"x": 1.25}')
 
 
+
+class ImageryNamesTests(unittest.TestCase):
+    def test_a_run_names_the_imagery_it_holds(self) -> None:
+        from backend.server import name_imagery
+
+        def run(pack_source):
+            return {"provenance": "Real NASA FIRMS detections (10 rows) on AWS Terrarium 30m DEM + Maxar 2K Ortho. More.",
+                    "region": {"terrain_source": "aws_terrarium_esri_world_imagery"},
+                    "assets": {"satellite_url": "/api/runs/r/satellite.jpg",
+                               "terrain_pack": {"ortho": {"source": pack_source, "attribution": "x"}}}}
+
+        naip = name_imagery(run("usgs_naip"))
+        self.assertEqual(naip["region"]["terrain_source"], "aws_terrarium_usgs_naip")
+        self.assertEqual(naip["region"]["overview_source"], "aws_terrarium_esri_world_imagery")
+        self.assertIn("USGS NAIP", naip["provenance"])
+        self.assertNotIn("Maxar 2K Ortho", naip["provenance"])
+        self.assertEqual((naip["imagery"]["overview"]["source"], naip["imagery"]["terrain_pack"]["source"]),
+                         ("esri_world_imagery", "usgs_naip"))
+        esri = name_imagery(run("esri_world_imagery"))
+        self.assertEqual(esri["region"]["terrain_source"], "aws_terrarium_esri_world_imagery")
+        self.assertIn("Maxar 2K Ortho", esri["provenance"])
+
+
 if __name__ == "__main__":
     unittest.main()

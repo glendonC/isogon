@@ -488,6 +488,8 @@ The id of a simulated run is `<region>_holdout<0|1>_c<none|NN>`, where `NN` is t
 
 A real run answers with the same nine keys, so one reader serves both, and adds its own. Its id is `<region>_firms_<YYYYMMDDTHHMM>_<allsensors|holdoutviirs>`, from the time of its first frame.
 
+Both kinds of run also carry `imagery`, which names the images the answer points at: `overview` (the image of `assets.satellite_url`, drawn when no terrain pack is given: `esri_world_imagery` for real terrain) and `terrain_pack` (the pack's imagery and its attribution). When the pack's imagery is another than the overview's, as with `imagery_source: usgs_naip`, `region.terrain_source` names the pack's (`aws_terrarium_usgs_naip`), `region.overview_source` keeps the overview's, and the provenance sentence says "USGS NAIP (public domain) imagery in the terrain pack (an Esri World Imagery (Maxar) overview is the fallback image)".
+
 ```json
 {
   "run_id": "plumas_ca_firms_20200927T1856_holdoutviirs",

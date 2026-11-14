@@ -321,6 +321,42 @@ def strict_json_bytes(payload: Any) -> bytes:
         return json.dumps(_finite_or_null(payload), ensure_ascii=False, allow_nan=False).encode("utf-8")
 
 
+IMAGERY_NAMES: dict[str, str] = {
+    "esri_world_imagery": "Esri World Imagery (Maxar)",
+    "usgs_naip": "USGS NAIP (public domain)",
+}
+OVERVIEW_IMAGERY: dict[str, str] = {"aws_terrarium_esri_world_imagery": "esri_world_imagery"}
+
+
+def name_imagery(resp: dict[str, Any]) -> dict[str, Any]:
+    """The run answer with the imagery it holds named: `imagery` lists the overview image (`assets.satellite_url`)
+    and the terrain pack's imagery; when the pack's imagery is not the overview's, `region.terrain_source` and the
+    provenance name the pack's, which is what the stage draws, and say that the overview is the fallback."""
+    region = resp.get("region") or {}
+    base = str(region.get("terrain_source", ""))
+    overview = OVERVIEW_IMAGERY.get(base)
+    pack = ((resp.get("assets") or {}).get("terrain_pack") or {}).get("ortho") or {}
+    pack_source = pack.get("source")
+    resp["imagery"] = {
+        "overview": {"asset": "assets.satellite_url", "source": overview,
+                     "credit": IMAGERY_NAMES.get(overview or "", None),
+                     "use": "the image drawn when no terrain pack is given"},
+        "terrain_pack": ({"source": pack_source, "credit": IMAGERY_NAMES.get(pack_source, pack_source),
+                          "attribution": pack.get("attribution")} if pack_source else None),
+    }
+    if pack_source and overview and pack_source != overview and base.startswith("aws_terrarium"):
+        region = dict(region)
+        region["terrain_source"] = f"aws_terrarium_{pack_source}"
+        region["overview_source"] = base
+        resp["region"] = region
+        old_label = "AWS Terrarium 30m DEM + Maxar 2K Ortho"
+        new_label = (f"AWS Terrarium 30m DEM + {IMAGERY_NAMES.get(pack_source, pack_source)} imagery in the terrain "
+                     f"pack (an {IMAGERY_NAMES[overview]} overview is the fallback image)")
+        if isinstance(resp.get("provenance"), str):
+            resp["provenance"] = resp["provenance"].replace(old_label, new_label)
+    return resp
+
+
 def frame_fields(tensor_u8: NDArray[np.uint8], frame_idx: int, encoding: dict[str, Any] | None) -> tuple[NDArray[np.float64], NDArray[np.float64], str]:
     """(FRP density, its standard deviation, the scale read) of one frame, both in MW/km2. A real run writes its
     channels on the logarithmic byte scale its payload's ``encoding`` names (`backend/model/encoding.py`); a
@@ -763,7 +799,7 @@ class IsogonDataStore:
             self._store_run(solved)
 
         rid = solved.run_id
-        return {
+        return name_imagery({
             "run_id": rid,
             "provenance": solved.provenance,
             "downloaded_firms_rows": 0,
@@ -773,7 +809,7 @@ class IsogonDataStore:
             "metrics": solved.metrics,
             "epoch_summaries": solved.epoch_summaries,
             "observer_passes": solved.observer_passes,
-        }
+        })
 
     def execute_real_reconstruct(
         self,
@@ -816,7 +852,7 @@ class IsogonDataStore:
             self._store_run(solved)
             with self._lock:
                 real_ids[key] = solved.run_id
-        resp = real_response(solved, self.run_assets(solved, imagery))
+        resp = name_imagery(real_response(solved, self.run_assets(solved, imagery)))
         if holdout_viirs and not body_bool(body, "reveal"):
             return withhold_scorer_keys(resp)
         return resp
