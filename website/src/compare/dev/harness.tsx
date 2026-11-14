@@ -165,7 +165,7 @@ function AgentHarness() {
   );
 }
 
-/** The featured fires in a box the size of the place screen's slot. This page leaves the recorded test fires out. */
+/** The featured fires in a box the size of the place screen's slot, with the plane's default: no recorded test fire. */
 function FiresHarness() {
   const [places, setPlaces] = useState<Places | null>(null);
   const [current, setCurrent] = useState<string | null>(Q.get('pick'));
@@ -177,7 +177,7 @@ function FiresHarness() {
     <div style={{ position: 'fixed', inset: 0, background: 'var(--sys-night)', display: 'grid', alignContent: 'end' }}>
       <div data-slot="featured-fires" style={{ height: Number(Q.get('h') ?? 340) }}>
         {places && (
-          <FeaturedFiresPlane places={places} currentFire={current} onFire={(_, fire) => setCurrent(fire.id)} include="not-test-fires" standing={standing} />
+          <FeaturedFiresPlane places={places} currentFire={current} onFire={(_, fire) => setCurrent(fire.id)} standing={standing} />
         )}
       </div>
       <span id="events" className="sys-unit" style={{ padding: 'var(--sys-s3) var(--sys-s5)' }}>

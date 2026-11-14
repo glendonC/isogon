@@ -42,7 +42,11 @@ export const signed = (g: number): string => {
   return Number(shown) === 0 ? shown : `${g >= 0 ? '+' : '-'}${shown}`;
 };
 
-/** The ground of a run: its 512 elevation, its 2K image, its box and its size on the ground. */
+/**
+ * The ground of a run: its 512 elevation, its image, its box and its size on the ground. The image is the run's
+ * terrain pack image when the run names one (its smaller copy first), and `satellite.jpg` only when it does not:
+ * a recorded page holds the pack image where its source is free and never `satellite.jpg`.
+ */
 export function groundOfRun(run: unknown): CompareGround | null {
   const assets = obj(obj(run).assets);
   const region = obj(obj(run).region);
@@ -51,7 +55,16 @@ export function groundOfRun(run: unknown): CompareGround | null {
   const widthKm = num(region.width_km);
   const depthKm = num(region.depth_km);
   if (!elevationUrl || !box || !widthKm || !depthKm) return null;
-  return { elevationUrl, imageUrl: str(assets.satellite_url), box, widthKm, depthKm };
+  const pack = obj(assets.terrain_pack);
+  const packImage = str(obj(pack.ortho_fallback).url) ?? str(obj(pack.ortho).url);
+  return {
+    elevationUrl,
+    imageUrl: packImage ?? str(assets.satellite_url),
+    imageCredit: packImage ? str(obj(pack.ortho).attribution) : null,
+    box,
+    widthKm,
+    depthKm,
+  };
 }
 
 /** A run's footprint rows, in the order of its `footprint_schema` (lon, lat, scan km, track km, bearing). */

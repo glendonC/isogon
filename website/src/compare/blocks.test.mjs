@@ -261,3 +261,23 @@ test('a gain carries its sign, and one that rounds to nothing carries none', () 
   assert.equal(signed(-0.0003), '0.000');
   assert.equal(signed(0), '0.000');
 });
+
+test('a block takes the run terrain pack image when the run names one, and satellite.jpg only when it does not', () => {
+  assert.equal(groundOfRun(run).imageUrl, '/api/runs/x/satellite.jpg');
+  assert.equal(groundOfRun(run).imageCredit, null);
+  const packed = {
+    ...run,
+    assets: {
+      ...run.assets,
+      terrain_pack: {
+        ortho: { url: '/api/runs/x/terrain/ortho_8192.jpg', size: 8192, attribution: 'USDA NAIP' },
+        ortho_fallback: { url: '/api/runs/x/terrain/ortho_4096.jpg', size: 4096 },
+      },
+    },
+  };
+  // The smaller copy of the pack image, and the pack's own credit
+  assert.equal(groundOfRun(packed).imageUrl, '/api/runs/x/terrain/ortho_4096.jpg');
+  assert.equal(groundOfRun(packed).imageCredit, 'USDA NAIP');
+  const noSmall = { ...packed, assets: { ...packed.assets, terrain_pack: { ortho: packed.assets.terrain_pack.ortho } } };
+  assert.equal(groundOfRun(noSmall).imageUrl, '/api/runs/x/terrain/ortho_8192.jpg');
+});

@@ -95,6 +95,8 @@ export class PlaneEngine {
   private entries: Entry[] = [];
   private terrains = new Map<string, { terrain: Terrain; uses: number }>();
   private imageTextures = new Map<HTMLImageElement, THREE.Texture>();
+  /** The longest side an image is kept at on the GPU: larger when every block shares one image. */
+  private imageSide = 2048;
   private beliefBytes = new Map<string, Uint8Array | null>();
   private beliefSteps = new Map<string, BeliefStep>();
   private shadowTexture: THREE.CanvasTexture;
@@ -139,6 +141,7 @@ export class PlaneEngine {
   setBlocks(blocks: readonly CompareBlock[], layout: PlaneLayout): void {
     if (this.disposed) return;
     this.layout = layout;
+    this.imageSide = new Set(blocks.map((b) => b.ground.imageUrl)).size <= 1 ? 4096 : 2048;
     const posts = blocks.length <= 4 ? 384 : 256;
     const next: Entry[] = [];
     for (const block of blocks) {
@@ -272,7 +275,17 @@ export class PlaneEngine {
   private imageTexture(img: HTMLImageElement): THREE.Texture {
     let tex = this.imageTextures.get(img);
     if (!tex) {
-      tex = new THREE.Texture(img);
+      // A terrain pack image can be 8K. A block is a few hundred pixels wide, so it is drawn down first
+      const longest = Math.max(img.naturalWidth, img.naturalHeight);
+      if (longest > this.imageSide) {
+        const small = document.createElement('canvas');
+        small.width = Math.max(1, Math.round((img.naturalWidth * this.imageSide) / longest));
+        small.height = Math.max(1, Math.round((img.naturalHeight * this.imageSide) / longest));
+        small.getContext('2d')?.drawImage(img, 0, 0, small.width, small.height);
+        tex = new THREE.CanvasTexture(small);
+      } else {
+        tex = new THREE.Texture(img);
+      }
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = 8;
       tex.needsUpdate = true;

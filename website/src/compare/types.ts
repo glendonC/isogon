@@ -12,8 +12,13 @@ export type Box = [number, number, number, number];
 export interface CompareGround {
   /** Elevation: a square little-endian float32 grid, metres, row 0 north (a run's `assets.dem_hires_f32_url`). */
   elevationUrl: string;
-  /** The image over the same box (a run's `assets.satellite_url`). Null, or an address a recorded page withholds, draws the relief alone. */
+  /**
+   * The image over the same box: the run's terrain pack image when the run names one, else its
+   * `assets.satellite_url`. Null, or an address a recorded page withholds, draws the relief alone.
+   */
   imageUrl: string | null;
+  /** Whose image it is, as the run says, for the page's credit. */
+  imageCredit?: string | null;
   /** The box both cover. */
   box: Box;
   /** Its size on the ground, km. */
