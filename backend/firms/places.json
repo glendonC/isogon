@@ -1,7 +1,11 @@
 {
   "what": "Named fires of each region: the name, dates, burned area and point the page in source gives (point_source, area_source or last_day_source when that fact comes from another page). They name the featured fires, which are chosen by rule from the real run starts, and give a calendar box around each fire; the rows and every figure of a calendar or a run come from NASA FIRMS. last_day is null where no end date is published.",
+  "regions_what": "regions with cached FIRMS rows: the FIRMS country file their rows come from and their terrain tier; the preset list and the boxes are backend/terrain/live_region.py",
+  "warm_region": "plumas_ca",
   "regions": {
     "plumas_ca": {
+      "country": "United_States",
+      "terrain_tier": "hero",
       "named_fires": [
         {
           "id": "dixie_2021",
@@ -94,6 +98,8 @@
       ]
     },
     "lytton_bc": {
+      "country": "Canada",
+      "terrain_tier": "hero",
       "named_fires": [
         {
           "id": "lytton_creek_2021",
@@ -183,6 +189,8 @@
       ]
     },
     "evia_greece": {
+      "country": "Greece",
+      "terrain_tier": "hero",
       "named_fires": [
         {
           "id": "northern_evia_2021",

@@ -56,7 +56,7 @@ from backend.firms.cmr_passes import CmrCacheMissing, pass_files_digest  # noqa:
 from backend.firms.pass_timeline import pass_timeline  # noqa: E402
 from backend.firms.box_index import BoxIndex  # noqa: E402
 from backend.firms.current_month import CurrentMonth  # noqa: E402
-from backend.firms.places import places_payload  # noqa: E402
+from backend.firms.places import load_places, places_payload  # noqa: E402
 from backend.firms.real_calendar import box_calendar, box_text, firms_calendar, parse_box, rows_csv, rows_csv_box  # noqa: E402
 from backend.model import MODEL_VERSION, PROVENANCE_NOTE  # noqa: E402
 from backend.model.calibrator import get_pretrained_calibrator  # noqa: E402
@@ -360,9 +360,10 @@ class IsogonDataStore:
         self.current_month = CurrentMonth()
         self._current_months: dict[tuple[Any, ...], dict[str, Any]] = {}
 
-        # Pre-warm baseline Plumas CA run from hires_regions cache so landing hydration responds in <2 ms
+        # Pre-warm the registry's warm region's simulated baseline from the hires_regions cache, so the landing's first
+        # request answers at once
         try:
-            default_spec = resolve_region_request(region_id="plumas_ca")
+            default_spec = resolve_region_request(region_id=load_places().get("warm_region", PRESET_REGIONS[0].id))
             default_terrain = load_region_terrain(default_spec, allow_network=True)
             default_run = solve_region_reconstruction(
                 region_terrain=default_terrain,

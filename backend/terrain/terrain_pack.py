@@ -84,7 +84,11 @@ from backend.terrain.tile_store import (  # noqa: E402
 
 PACK_VERSION: int = 1
 PACK_TAG: str = f"tpack{PACK_VERSION}"
-HERO_REGION_IDS: tuple[str, ...] = ("plumas_ca", "lytton_bc", "evia_greece")
+# The regions whose packs are built at the hero tier, from the places registry (backend/firms/places.json).
+HERO_REGION_IDS: tuple[str, ...] = tuple(
+    r for r, d in json.loads((Path(__file__).resolve().parents[1] / "firms" / "places.json").read_text(encoding="utf-8"))["regions"].items()
+    if d.get("terrain_tier") == "hero"
+)
 EARTH_CIRCUMFERENCE_M: float = 40075016.686
 EARTH_RADIUS_M: float = 6371008.8
 

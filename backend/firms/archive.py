@@ -74,8 +74,11 @@ PRODUCTS: dict[str, Product] = {
 }
 MODIS_PLATFORMS: dict[str, str] = {"Terra": "Terra", "Aqua": "Aqua", "T": "Terra", "A": "Aqua"}
 
-# The country file that holds each hero region's context box (each box lies inside one country).
-REGION_COUNTRY: dict[str, str] = {"plumas_ca": "United_States", "lytton_bc": "Canada", "evia_greece": "Greece"}
+# The country file that holds each region's context box (each box lies inside one country), from the places registry.
+PLACES_FILE: Path = Path(__file__).resolve().parent / "places.json"
+REGION_COUNTRY: dict[str, str] = {
+    r: d["country"] for r, d in json.loads(PLACES_FILE.read_text(encoding="utf-8"))["regions"].items() if d.get("country")
+}
 
 # Columns every reader row must carry; the rest of the source's columns come along too.
 REQUIRED_COLUMNS: tuple[str, ...] = (
