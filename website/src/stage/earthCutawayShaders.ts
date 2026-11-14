@@ -185,12 +185,7 @@ export function buildProceduralTheaterDem(theaterId: TheaterId, res = 256): Floa
 
       let hNorm = canyonWall * (0.58 + 0.28 * ridgeA * ridgeA + 0.11 * ridgeB + 0.04 * ridgeC);
 
-      if (prof.id === 'blue_mountains_au') {
-        // Stepped plateau sandstone cliffs
-        hNorm = Math.pow(hNorm, 0.65);
-        const step = Math.floor(hNorm * 4.5) / 4.5;
-        hNorm = hNorm * 0.55 + step * 0.45;
-      } else if (prof.hasSeaCoast) {
+      if (prof.hasSeaCoast) {
         // Aegean coastal island: sea coves along SW & NE margins
         const islandMask = 1.0 - Math.max(0, Math.hypot(nx * 0.92, ny * 0.84) - 0.62) * 1.9;
         hNorm = Math.max(0.0, hNorm * islandMask - 0.08);

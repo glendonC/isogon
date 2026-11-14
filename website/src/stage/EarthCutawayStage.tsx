@@ -322,6 +322,9 @@ function intensityLegendOf(bundle: CachedTheaterBundle): NonNullable<EarthStageT
  */
 const SCAN_SECONDS = 2.6;
 
+/** Where the smoke drifts, in region uv (east, north): the same for every place, since no payload holds a wind. */
+const SMOKE_DRIFT_UV: readonly [number, number] = [0.64, 0.76];
+
 /** Seconds the lights of a pass take to fade out and to come up when the page steps the landing's pass. */
 const LIGHT_FADE_OUT_SECONDS = 0.7;
 const LIGHT_FADE_IN_SECONDS = 1.2;
@@ -4222,7 +4225,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           tensorPack.frames,
         );
 
-        const hasSeaCoast = knownProf ? knownProf.hasSeaCoast : run.region.min_elev_m <= 1.5;
+        // The place's look comes from the run: a region whose lowest ground is at sea level has a coast
+        const hasSeaCoast = run.region.min_elev_m <= 1.5;
 
         const hydratedBundle: CachedTheaterBundle = {
           key: `run-${run.run_id}`,
@@ -4243,7 +4247,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           tensor: tensorPack.buffer,
           frameCount: tensorPack.frames,
           bbox,
-          windDirUv: knownProf ? [...knownProf.windDirUv] : [0.64, 0.76],
+          // The smoke's drift is drawing (no payload holds a wind): one direction for every place
+          windDirUv: [...SMOKE_DRIFT_UV],
           hasSeaCoast,
           observerDataset,
           findings: found.anchors,
@@ -4252,7 +4257,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           residenceHours: parseResidenceHours(run.model) ?? undefined,
           fireHistory: null,
           ...liteShadingFields(
-            Math.max(18.0, run.region.width_km || knownProf?.widthKm || 60.0),
+            Math.max(18.0, run.region.width_km || 60.0),
             Math.max(12.0, run.region.depth_km || bboxDepthKm(bbox)),
             run.assets.terrain_pack,
             imgW,

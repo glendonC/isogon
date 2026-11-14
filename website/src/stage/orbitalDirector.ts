@@ -54,13 +54,6 @@ export const INSPECTOR_CAMERA_PRESETS: Record<InspectorCameraPreset, CameraPrese
   },
 };
 
-const THEATER_AZIMUTH_ACCENT: Record<TheaterId, number> = {
-  plumas_ca: 0.0,
-  lytton_bc: -0.14,
-  evia_greece: 0.16,
-  blue_mountains_au: -0.09,
-};
-
 export function resolvePresetForContext(
   preset: InspectorCameraPreset,
   inWorkspace: boolean,
@@ -71,11 +64,12 @@ export function resolvePresetForContext(
     return LANDING_HERO_POSE;
   }
   const base = INSPECTOR_CAMERA_PRESETS[preset] ?? INSPECTOR_CAMERA_PRESETS.overview;
-  const accent = preset === 'nadir' ? 0.0 : THEATER_AZIMUTH_ACCENT[theaterId] ?? 0.0;
+  // Every place gets the same presets: nothing here is keyed on which place it is
+  void theaterId;
 
   if (mode === 'observer' && preset === 'overview') {
     return {
-      azimuth: base.azimuth + accent * 0.5,
+      azimuth: base.azimuth,
       polar: 0.98,
       distance: 18.4,
       target: [0.0, 0.7, 0.2],
@@ -83,7 +77,7 @@ export function resolvePresetForContext(
   }
 
   return {
-    azimuth: base.azimuth + accent,
+    azimuth: base.azimuth,
     polar: base.polar,
     distance: base.distance,
     target: [base.target[0], base.target[1], base.target[2]],

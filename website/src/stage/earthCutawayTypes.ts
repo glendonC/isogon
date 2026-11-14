@@ -5,11 +5,11 @@ import type {
   WorkspaceMode,
 } from './types';
 
-export type TheaterId =
-  | 'plumas_ca'
-  | 'lytton_bc'
-  | 'evia_greece'
-  | 'blue_mountains_au';
+/**
+ * A place's id, as the regions registry gives it. Any id is valid: the stage takes a place's box,
+ * terrain and look from the run it is given and keys nothing on the id's value.
+ */
+export type TheaterId = string;
 
 export type InspectorCameraPreset = 'overview' | 'canyon' | 'ridge' | 'nadir';
 
