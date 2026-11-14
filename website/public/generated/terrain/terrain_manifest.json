@@ -1,6 +1,5 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAtUtc": "2026-11-12T19:20:15Z",
   "region": {
     "id": "northern_california_feather_river_almanor",
     "name": "Northern California Sierra Nevada / Feather River Canyon / Lake Almanor Corridor",
@@ -59,8 +58,7 @@
       "sourceUrlTemplate": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
       "decodingFormula": "elevation_m = (R * 256.0 + G + B / 256.0) - 32768.0",
       "provider": "Mapzen / AWS Open Data Registry Terrain Tiles (USGS 3DEP / SRTM)",
-      "license": "Public Domain (USGS 3DEP in US) / Open Data",
-      "retrievedAtUtc": "2026-11-12T19:20:15Z"
+      "license": "Public Domain (USGS 3DEP in US) / Open Data"
     },
     "ca_normals": {
       "file": "ca_normals.png",
@@ -78,8 +76,7 @@
       "sourceZoom": 11,
       "sourceUrlTemplate": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
       "provider": "Derived via central finite differences from AWS Terrain Tiles (USGS 3DEP)",
-      "license": "Public Domain (USGS 3DEP in US) / Open Data",
-      "retrievedAtUtc": "2026-11-12T19:20:15Z"
+      "license": "Public Domain (USGS 3DEP in US) / Open Data"
     },
     "ca_satellite": {
       "file": "ca_satellite.jpg",
@@ -94,8 +91,7 @@
       "sourceZoom": 12,
       "sourceUrlTemplate": "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg",
       "provider": "Sentinel-2 cloudless 2020 by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2020)",
-      "license": "CC BY 4.0 (https://s2maps.eu)",
-      "retrievedAtUtc": "2026-11-12T19:20:15Z"
+      "license": "CC BY 4.0 (https://s2maps.eu)"
     },
     "earth_day": {
       "file": "earth_day.jpg",
@@ -109,8 +105,7 @@
       "sourceZoom": 2,
       "sourceUrlTemplate": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08-01/500m/{z}/{y}/{x}.jpeg",
       "provider": "NASA Earth Observatory / NASA GIBS Blue Marble Next Generation (Shaded Relief and Bathymetry, August 2004)",
-      "license": "US Government Public Domain (NASA Visible Earth)",
-      "retrievedAtUtc": "2026-11-12T19:20:15Z"
+      "license": "US Government Public Domain (NASA Visible Earth)"
     },
     "earth_bump": {
       "file": "earth_bump.png",
@@ -131,8 +126,7 @@
       "sourceZoom": 3,
       "sourceUrlTemplate": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
       "provider": "Mapzen / AWS Open Data Registry Terrain Tiles (ETOPO1 / SRTM / GMTED2010)",
-      "license": "Open Data / Public Domain",
-      "retrievedAtUtc": "2026-11-12T19:20:15Z"
+      "license": "Open Data / Public Domain"
     }
   }
 }
