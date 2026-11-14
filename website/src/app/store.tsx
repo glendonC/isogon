@@ -96,9 +96,14 @@ export interface WorkspaceStore {
     powerMw: number | null;
   };
   round: {
+    /** The round on the open fire (beats/test-world/useRound.ts); null when none is under way. */
     state: RoundState | null;
-    start: NextLookStart;
+    /** The round's start as the server answered it; null until it has. */
+    start: NextLookStart | null;
     end: NextLookEnd | null;
+    /** Why the round could not start, in the server's words where it gave some. */
+    error: string | null;
+    /** Why the round's held-out run did not load. */
     runError: string | null;
     next: () => void;
   };

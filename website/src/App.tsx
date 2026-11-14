@@ -19,10 +19,8 @@ import { isClosedWindow } from './beats/world-model/fire';
 import { TestWorldBeat } from './beats/test-world/TestWorldBeat';
 import { revealedPassesOf, type TrackState } from './content/passTrack';
 import { partsStatus, type PartId } from './content/partsStatus';
-import { NEW_ROUND, TileOverlay, type RoundState, type ScreenRect } from './components/NextLookRound';
-import { DEMO_NEXT_LOOK_START, type NextLookEnd } from './content/demo/nextLook';
-import { frameNearest, withLooks } from './content/nextLook';
-import { liveNextLookEnv, runWithEndReveal, type NextLookEnv } from './content/nextLookEnv';
+import { useRound, type RoundApi, type RoundFire } from './beats/test-world/useRound';
+import { TileLabels } from './beats/test-world/TileLabels';
 import { EarthCutawayStage } from './stage/EarthCutawayStage';
 import {
   THEATER_CATALOG,
@@ -90,23 +88,6 @@ function roundFrame(width: number) {
   const gutter = Math.min(36, Math.max(20, width * 0.02));
   const right = 1 - (336 + gutter + 32) / width;
   return { left: 0.02, top: 0.09, right: Math.max(0.5, right), bottom: 0.93 };
-}
-
-/**
- * Where the stage puts the region's top face when it looks straight down: fitted into the subject frame, keeping the
- * box's own proportions (measured on the nadir view at 1440 by 900; perspective moves the corners by up to about 3
- * percent). The tiles are drawn there, not on the grid the stage can project (`telemetry.regionGrid`).
- */
-function nadirRect(frame: { left: number; top: number; right: number; bottom: number }, aspect: number): ScreenRect {
-  const W = window.innerWidth;
-  const H = window.innerHeight;
-  const fx = frame.left * W;
-  const fy = frame.top * H;
-  const fw = (frame.right - frame.left) * W;
-  const fh = (frame.bottom - frame.top) * H;
-  const w = Math.min(fw, fh * aspect);
-  const h = w / aspect;
-  return { x: fx + (fw - w) / 2, y: fy + (fh - h) / 2, w, h };
 }
 
 function workspaceFrame(width: number) {
@@ -292,11 +273,6 @@ export function App() {
   const [revealed, setRevealed] = useState(false);
   /** The reveal's request is in flight. */
   const [revealing, setRevealing] = useState(false);
-  /** A round of next look in progress (null: none). */
-  const [round, setRound] = useState<RoundState | null>(null);
-  /** The round's routes (demo: answered in the page from the blind run) and the answer of /end once it is done. */
-  const [roundEnv, setRoundEnv] = useState<NextLookEnv | null>(null);
-  const [roundEnd, setRoundEnd] = useState<NextLookEnd | null>(null);
   /** Terra's morning pass estimated from VIIRS alone, shown beside the blind test's score (demo data, experimental). */
   const [terraOpen, setTerraOpen] = useState(false);
   /**
@@ -336,6 +312,8 @@ export function App() {
   /** A featured fire chosen on the place screen: its start replaces the place's opening start once. */
   const fireStartRef = useRef<{ region: string; start: string } | null>(null);
   const [liveTelemetry, setLiveTelemetry] = useState<LiveObserverTelemetry | null>(null);
+  /** The round of Test world (beats/test-world/useRound.ts), for the callbacks defined before it. */
+  const roundRef = useRef<RoundApi | null>(null);
   // The places registry: the default fire, each place's opening start, and the recorded test fires.
   const placesState = usePlaces();
   /**
@@ -376,7 +354,7 @@ export function App() {
     setCleanHud(false);
     setReading(null);
     setDebriefOpen(false);
-    setRound(null);
+    roundRef.current?.leave();
     setCutawaySplit(null);
     setSelectedFinding(null);
     setInWorkspace(false);
@@ -652,112 +630,36 @@ export function App() {
     [calendarRegionId, slewToTheater],
   );
 
-  // A round of next look on the Dixie fire's blind run. The page knows only what the round's routes answered: a
-  // look's detections, then everything at the end.
-  const roundEpisode = roundEnv?.start ?? DEMO_NEXT_LOOK_START;
-  const roundRun =
-    round && activeRun && isRealRun(activeRun) && activeRun.metrics?.holdout_viirs && activeRun.region.id === roundEpisode.episode.region_id
-      ? activeRun
-      : null;
-  const [roundTiles, roundCols] = roundEpisode.episode.tiles;
-  const roundBusyRef = useRef(false);
-
-  // The round's routes.
-  useEffect(() => {
-    if (!round || roundEnv) return;
-    const controller = new AbortController();
-    liveNextLookEnv(API_BASE, roundEpisode.episode.region_id, controller.signal)
-      .then(setRoundEnv)
-      .catch(() => {});
-    return () => controller.abort();
-  }, [round !== null, roundEnv, roundRun]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const startRound = useCallback(() => {
-    setRound(NEW_ROUND);
-    setRoundEnv(null);
-    setRoundEnd(null);
-    setRevealed(false);
+  // Test world: a round on the fire that is open (its place and start), its state in beats/test-world/useRound.ts.
+  const showFrame = useCallback((frame: number) => {
     setPlaying(false);
-    setCinemaActive(false);
-    setCleanHud(false);
-    setSelectedFinding(null);
-    void executeWorldModel({
-      regionId: roundEpisode.episode.region_id,
-      holdoutViirs: true,
-      cloudOverride: null,
-      enterWorkspace: false,
-      source: 'firms',
-      start: roundEpisode.estimate.start,
-    });
-  }, [executeWorldModel, roundEpisode]);
-
-  const leaveRound = useCallback(() => {
-    setRound(null);
-    setRoundEnv(null);
-    setRoundEnd(null);
-    setCameraPreset('overview');
-    askRegion(roundEpisode.episode.region_id as TheaterId);
-  }, [askRegion, roundEpisode]);
-
-  /** Spend the current look on a tile (or pass with -1); the answer says what it revealed and what comes next. */
-  const answerLook = useCallback(
-    (tile: number) => {
-      if (!round || round.done || !roundEnv || roundBusyRef.current) return;
-      const decision = round.decision;
-      roundBusyRef.current = true;
-      roundEnv
-        .look(decision, tile)
-        .then((res) => {
-          setRound((r) =>
-            r && r.decision === decision
-              ? {
-                  ...r,
-                  picks: [...r.picks, { decision, tile: res.tile >= 0 ? res.tile : null, pixels: res.pixels, revealed: res.revealed, reward: res.reward }],
-                  awaitingNext: res.tile >= 0,
-                  next: res.next_decision,
-                  decision: res.tile >= 0 || res.next_decision === null ? decision : res.next_decision,
-                  done: res.tile < 0 && res.done,
-                }
-              : r,
-          );
-          if (res.tile < 0 && res.done) return roundEnv.end().then(setRoundEnd);
-        })
-        .catch(() => {})
-        .finally(() => {
-          roundBusyRef.current = false;
-        });
+    setTimeProgress(frame);
+  }, []);
+  const requestBlindRun = useCallback(
+    (f: RoundFire) => {
+      setRevealed(false);
+      setPlaying(false);
+      setCinemaActive(false);
+      setCleanHud(false);
+      setSelectedFinding(null);
+      void executeWorldModel({ regionId: f.regionId, holdoutViirs: true, cloudOverride: null, enterWorkspace: false, source: 'firms', start: f.start });
     },
-    [round, roundEnv],
+    [executeWorldModel],
   );
-
-  const pickTile = useCallback(
-    (tile: number) => {
-      if (!round || round.awaitingNext) return;
-      answerLook(tile);
+  const restoreRun = useCallback(
+    (f: RoundFire) => {
+      void executeWorldModel({ regionId: f.regionId, holdoutViirs: false, cloudOverride: null, enterWorkspace: false, source: 'firms', start: f.start });
     },
-    [round, answerLook],
+    [executeWorldModel],
   );
-
-  const nextLook = useCallback(() => {
-    if (!round) return;
-    if (round.done) {
-      // Play again on the same run: a fresh round from the routes.
-      setRound(NEW_ROUND);
-      setRoundEnd(null);
-      setRoundEnv(null);
-      return;
-    }
-    if (!round.awaitingNext) {
-      answerLook(-1);
-      return;
-    }
-    if (round.next === null) {
-      setRound({ ...round, awaitingNext: false, done: true });
-      void roundEnv?.end().then(setRoundEnd).catch(() => {});
-    } else {
-      setRound({ ...round, decision: round.next, awaitingNext: false });
-    }
-  }, [round, roundEnv, answerLook]);
+  const rnd = useRound({ activeRun, activeStart: realStart, requestBlindRun, restoreRun, showFrame });
+  roundRef.current = rnd;
+  const round = rnd.state;
+  const { leave: leaveRound, next: nextLook, begin: beginRound } = rnd;
+  const startRound = useCallback(() => {
+    if (!activeRun || !realStart || !isRealRun(activeRun)) return;
+    beginRound({ regionId: activeRun.region.id, start: realStart });
+  }, [activeRun, realStart, beginRound]);
 
   // The steps. Record and fire show the run with every sensor; the test hides VIIRS and reveals it; the look is
   // a round of next look. Moving between them undoes what the step left behind.
@@ -778,11 +680,10 @@ export function App() {
   const goStep = useCallback(
     (next: Step) => {
       setDebriefOpen(false);
-      // The round's episode on a recorded test fire, or a test on one: not played or run again.
-      if (next === 'look' && hideRefused(roundEpisode.episode.region_id, roundEpisode.estimate.start)) return;
-      if (next === 'test' && step !== 'test' && !holdoutViirs && !revealed) {
-        if (!isRealRun(activeRun) || beforeSharpSatellite(activeRun) || hideRefused(activeRun?.region.id ?? '', realStart)) return;
-      }
+      // A round or a test on a recorded test fire, or where nothing can be hidden: not played or run.
+      const nothingToHide = !isRealRun(activeRun) || beforeSharpSatellite(activeRun) || hideRefused(activeRun?.region.id ?? '', realStart);
+      if (next === 'look' && step !== 'look' && nothingToHide) return;
+      if (next === 'test' && step !== 'test' && !holdoutViirs && !revealed && nothingToHide) return;
       if (next === step && next !== 'look') return;
       if (step === 'look' && next !== 'look' && round) leaveRound();
       if (next === 'record' || next === 'fire') {
@@ -797,7 +698,7 @@ export function App() {
       }
       setStep(next);
     },
-    [step, round, leaveRound, restoreFullRun, holdoutViirs, revealed, toggleHoldoutLive, startRound, hideRefused, roundEpisode, activeRun, realStart],
+    [step, round, leaveRound, restoreFullRun, holdoutViirs, revealed, toggleHoldoutLive, startRound, hideRefused, activeRun, realStart],
   );
 
   /** A part from the bar or its key: the Calendar, the fire and its test, a round. The Agent is not open yet. */
@@ -815,27 +716,6 @@ export function App() {
     [goStep, step, activeRun, realStart, hideRefused],
   );
 
-  // The reference players are computed on the server from the round's start; when the end arrived before them, ask
-  // once more (the ask waits up to two more minutes on the state route) and show them when they come.
-  const referenceTriesRef = useRef(0);
-  useEffect(() => {
-    if (!roundEnv || !roundEnd || roundEnd.reference) {
-      referenceTriesRef.current = 0;
-      return;
-    }
-    if (referenceTriesRef.current >= 3) return;
-    referenceTriesRef.current += 1;
-    let live = true;
-    roundEnv
-      .end()
-      .then((e) => {
-        if (live && e.reference) setRoundEnd(e);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [roundEnv, roundEnd]);
 
   // A part opened from the landing enters the workspace, then takes its step.
   useEffect(() => {
@@ -899,13 +779,6 @@ export function App() {
     toggleHoldoutLive();
   }, [step, revealed, goStep, toggleHoldoutLive]);
 
-  // The round looks straight down on the 375 m field, at the frame nearest the look being decided.
-  useEffect(() => {
-    if (!round || !roundRun) return;
-    setCameraPreset('nadir');
-    const slot = roundEpisode.looks[round.decision];
-    setTimeProgress(frameNearest(roundRun, Date.parse(slot.time_utc) / 1000));
-  }, [round?.decision, round !== null, roundRun, roundEpisode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Continuous 60fps time evolution when playback is active
   useEffect(() => {
@@ -1005,12 +878,20 @@ export function App() {
       }
 
       if (round && inWorkspace) {
+        // The round's keys: Esc leaves, Enter passes or moves on, the arrows move over the tiles, Space looks there.
+        const move: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
         if (e.key === 'Escape') {
           e.preventDefault();
-          leaveRound();
+          goStep('fire');
         } else if (e.key === 'Enter') {
           e.preventDefault();
           nextLook();
+        } else if (move[e.key]) {
+          e.preventDefault();
+          rnd.moveFocus(...move[e.key]);
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          rnd.pickFocused();
         }
         return;
       }
@@ -1117,6 +998,7 @@ export function App() {
     toggleHoldoutLive,
     cycleNextTheaterSlew,
     round,
+    rnd,
     leaveRound,
     nextLook,
     startRound,
@@ -1188,21 +1070,8 @@ export function App() {
   const blindInterval = blindTest?.methods.find((m) => m.id === 'reconstruction') ?? null;
   const sourceSlug = runIsReal ? 'firms' : 'simulated';
   /** What the terrain shows: after a reveal, the blind run with its hidden detections laid on. */
-  const stageRun = useMemo(() => {
-    if (round && roundRun) {
-      if (round.done) return roundEnd ? withReveal(runWithEndReveal(roundRun, roundEnd)) : roundRun;
-      const looked = round.picks.filter((p) => p.tile !== null);
-      const layers = looked.flatMap((p) =>
-        p.revealed.map((o) => ({
-          frame: frameNearest(roundRun, Date.parse(o.time_utc) / 1000),
-          platform: o.platform,
-          footprints: o.footprints,
-        })),
-      );
-      return withLooks(roundRun, layers, `looks_${looked.map((p) => `${p.decision}-${p.tile}`).join('_')}`);
-    }
-    return revealed && activeRun ? withReveal(activeRun) : activeRun;
-  }, [revealed, activeRun, round, roundRun, roundEnd]);
+  const plainStageRun = useMemo(() => (revealed && activeRun ? withReveal(activeRun) : activeRun), [revealed, activeRun]);
+  const stageRun = rnd.stageRun ?? plainStageRun;
   /** Real runs carry their own intensity scale (`encoding`); simulated runs use the fixed linear key. */
   const intensity = runIsReal ? parseIntensityLegend(activeRun) : null;
 
@@ -1219,10 +1088,8 @@ export function App() {
   const trackRevealed = useMemo(() => (revealed ? revealedPassesOf(activeRun) : []), [revealed, activeRun]);
   const passLists = usePassList(activeRun);
   const stageMonth = activeRun?.epoch_summaries?.[0]?.timestamp_utc?.slice(0, 7) ?? null;
-  const lookHere = activeRun?.region.id === roundEpisode.episode.region_id || Boolean(round);
   /** The run on the terrain is a recorded test fire's window: its record shows, and it is not tested again. */
   const closedWindow = Boolean(runIsReal && activeRun && isClosedWindow(placesState.places, activeRun.region.id, realStart));
-  const roundClosed = isClosedWindow(placesState.places, roundEpisode.episode.region_id, roundEpisode.estimate.start);
   const stepBlocked: Partial<Record<Step, string | null>> = {
     test: noSharp
       ? 'No VIIRS flew before 2012, so there is nothing to hide'
@@ -1231,11 +1098,15 @@ export function App() {
         : closedWindow
           ? 'A recorded test fire: its test is on record and is not run again'
           : null,
-    look: roundClosed
-      ? 'Closed: the round here is on a recorded test fire, whose looks are on record'
-      : lookHere
-        ? null
-        : 'A round is ready for the Dixie fire, in Feather River only',
+    look: round
+      ? null
+      : closedWindow
+        ? 'Closed on a recorded test fire: its looks are on record'
+        : noSharp
+          ? 'No VIIRS flew before 2012, so there is no hidden pass to look for'
+          : !runIsReal
+            ? 'A round needs a real NASA FIRMS run'
+            : null,
   };
   const span = runSpan ? utcSpan(runSpan.first, runSpan.last) : null;
   const beatBlocked: Partial<Record<BeatId, string | null>> = {
@@ -1433,9 +1304,10 @@ export function App() {
     time: { pass: activeEpoch, powerMw: currentMw },
     round: {
       state: round,
-      start: roundEpisode,
-      end: roundEnd,
-      runError: realFailed && realFailed.start === roundEpisode.estimate.start ? realFailed.message : null,
+      start: rnd.start,
+      end: rnd.end,
+      error: rnd.error,
+      runError: realFailed && rnd.fire && realFailed.start === rnd.fire.start ? realFailed.message : null,
       next: nextLook,
     },
     step,
@@ -1512,7 +1384,7 @@ export function App() {
                   model={blindModel}
                   place={regionTitle}
                   onBack={() => setDebriefOpen(false)}
-                  onNext={lookHere && !roundClosed ? () => goStep('look') : null}
+                  onNext={stepBlocked.look ? null : () => goStep('look')}
                   onEvidence={() => setEvidenceOpen(true)}
                   terra={null}
                   terraOpen={terraOpen}
@@ -1544,15 +1416,8 @@ export function App() {
             </div>
           </div>
 
-          {round && roundRun && activeRun && (
-            <TileOverlay
-              rect={nadirRect(roundFrame(viewportWidth), activeRun.region.width_km / Math.max(1e-6, activeRun.region.depth_km))}
-              rows={roundTiles}
-              cols={roundCols}
-              round={round}
-              canPick={Boolean(roundEnv) && !round.done && !round.awaitingNext && round.picks.filter((p) => p.tile !== null).length < roundEpisode.episode.budget}
-              onPick={pickTile}
-            />
+          {round && rnd.board && rnd.start && (
+            <TileLabels round={round} cols={rnd.start.episode.tiles[1]} focus={rnd.focus} subscribe={rnd.subscribeAnchors} />
           )}
 
           <button type="button" className="iso-credit" onClick={() => setReading('credits')} title="Imagery credit and sources">
@@ -1589,6 +1454,9 @@ export function App() {
           landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
           workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
           regionGridDivisions={modelScene ? 16 : undefined}
+          tileBoard={rnd.board}
+          onTilePick={rnd.pick}
+          onTileAnchors={rnd.board ? rnd.onAnchors : undefined}
         />
       </div>
 

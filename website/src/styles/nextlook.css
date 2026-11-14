@@ -3,6 +3,8 @@
 
 .iso-round {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 14px;
 }
 
@@ -62,6 +64,14 @@
 .iso-round__scores,
 .iso-round__picks {
   justify-self: stretch;
+  width: 100%;
+  table-layout: fixed;
+}
+
+/* The pass names wrap so the tile and its count stay inside the panel. */
+.iso-round__picks th:first-child {
+  width: 60%;
+  white-space: normal;
 }
 
 .iso-round__scores tr[data-you] th,
@@ -94,42 +104,3 @@
   gap: 16px;
 }
 
-/* The tiles over the terrain. */
-.iso-tiles {
-  position: fixed;
-  z-index: 10;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.iso-tiles__tile {
-  fill: transparent;
-  stroke: rgba(243, 244, 246, 0.42);
-  stroke-width: 1;
-  outline: none;
-}
-
-.iso-tiles[data-can-pick='true'] .iso-tiles__tile {
-  pointer-events: all;
-  cursor: crosshair;
-}
-
-.iso-tiles[data-can-pick='true'] .iso-tiles__tile:hover,
-.iso-tiles__tile:focus-visible {
-  fill: rgba(214, 241, 255, 0.1);
-  stroke: var(--iso-curtain);
-  stroke-width: 1.5;
-}
-
-.iso-tiles__tile[data-looked] {
-  stroke: var(--iso-ink);
-  stroke-width: 1.5;
-}
-
-.iso-tiles__label {
-  font: 500 12px/1 var(--font-mono);
-  fill: var(--iso-ink);
-  paint-order: stroke;
-  stroke: rgba(8, 11, 17, 0.8);
-  stroke-width: 3px;
-}

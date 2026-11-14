@@ -1,6 +1,5 @@
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { NextLookEnd, NextLookRevealed, NextLookStart } from '../content/demo/nextLook';
-import { pixelsPerLookAndTile } from '../content/nextLookEnv';
+import { pixelsPerLookAndTile } from '../beats/test-world/env';
 import { platformWords, tileName } from '../content/nextLook';
 import { utcDay, utcSpan } from '../content/realRuns';
 import '../styles/nextlook.css';
@@ -32,6 +31,8 @@ const time = (iso: string) => `${utcDay(iso)}, ${iso.slice(11, 16)} UTC`;
 const signed = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(4)}`;
 
 interface ReadoutProps {
+  /** The place the round is on, from the registry. */
+  place: string;
   start: NextLookStart;
   /** The answer of /end, once the round is over: the reveal and the reference agents. */
   end: NextLookEnd | null;
@@ -44,9 +45,9 @@ interface ReadoutProps {
 
 /**
  * The round's readout, in the inspector's place: where the round stands, then the reveal and the scores. The
- * interaction itself is on the terrain (TileOverlay).
+ * interaction itself is on the terrain: the stage draws the tiles (`tileBoard`), the page labels them.
  */
-export function RoundReadout({ start, end, round, runError, onNext, onAgain, onLeave }: ReadoutProps) {
+export function RoundReadout({ place, start, end, round, runError, onNext, onAgain, onLeave }: ReadoutProps) {
   const ep = start.episode;
   const cols = ep.tiles[1];
   const slot = start.looks[Math.min(round.decision, start.looks.length - 1)];
@@ -70,7 +71,7 @@ export function RoundReadout({ start, end, round, runError, onNext, onAgain, onL
           : 'Starting the round on the server.'}
       </p>
       <p className="iso-round__episode">
-        Dixie fire, {utcSpan(ep.first_overpass_utc, ep.last_overpass_utc)}. You see {ep.modis_overpasses} MODIS passes;
+        {place}, {utcSpan(ep.first_overpass_utc, ep.last_overpass_utc)}. You see {ep.modis_overpasses} MODIS passes;
         VIIRS is hidden. Spend {ep.budget} looks where you think it matters.
       </p>
 
@@ -98,7 +99,9 @@ export function RoundReadout({ start, end, round, runError, onNext, onAgain, onL
             </p>
           ) : (
             <p className="iso-round__line">
-              {left > 0 ? 'Pick a tile on the terrain to point VIIRS at it, or pass.' : 'No looks left.'}
+              {left > 0
+                ? 'Pick a tile on the terrain to point VIIRS at it (or move with the arrow keys and press Space), or pass.'
+                : 'No looks left.'}
             </p>
           )}
           <button type="button" className="iso-key" onClick={onNext}>
@@ -138,8 +141,7 @@ export function RoundReadout({ start, end, round, runError, onNext, onAgain, onL
               .map((p) => (
                 <tr key={p.decision}>
                   <th scope="row">
-                    {platformWords(start.looks[p.decision].platform)}, {start.looks[p.decision].time_utc.slice(8, 10)}{' '}
-                    July {start.looks[p.decision].time_utc.slice(11, 16)}
+                    {platformWords(start.looks[p.decision].platform)}, {time(start.looks[p.decision].time_utc)}
                   </th>
                   <td>{tileName(p.tile as number, cols)}</td>
                   <td>{p.pixels.toLocaleString('en-US')}</td>
@@ -207,7 +209,7 @@ function RoundEnd({
           </tr>
           <tr>
             <th scope="row">
-              Random, mean of 10 tries
+              Random, mean of {randomGains.length} tries
               {randomGains.length > 0 && (
                 <span className="iso-round__range">
                   {Math.min(...randomGains).toFixed(4)} to {Math.max(...randomGains).toFixed(4)}
@@ -232,83 +234,7 @@ function RoundEnd({
         {signed(t.mean_gain.least_sure)}, latest MODIS {signed(t.mean_gain.latest_modis)}, random{' '}
         {signed(t.mean_gain.random)}.
       </p>
-      <p className="iso-round__note">
-        FIRMS lists detections, not where a satellite looked and saw nothing: a tile with none may have been cloudy.
-        The looks are scheduled half-day slots; a real pass can come up to about 90 minutes from its slot.
-      </p>
+      {start.known_limits && <p className="iso-round__note">{start.known_limits}</p>}
     </>
-  );
-}
-
-export interface ScreenRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-interface OverlayProps {
-  rect: ScreenRect;
-  rows: number;
-  cols: number;
-  round: RoundState;
-  /** Can a tile be picked now. */
-  canPick: boolean;
-  onPick: (tile: number) => void;
-}
-
-/**
- * The 4 by 4 tiles drawn over the terrain, seen from straight above. Hairlines only; the tile under the pointer and
- * the tiles already looked at are outlined, each looked-at tile with its name and what it revealed.
- */
-export function TileOverlay({ rect, rows, cols, round, canPick, onPick }: OverlayProps) {
-  const tw = rect.w / cols;
-  const th = rect.h / rows;
-  const looked = new Map(round.picks.filter((p) => p.tile !== null).map((p) => [p.tile as number, p]));
-  const onKey = (e: ReactKeyboardEvent<SVGRectElement>, t: number) => {
-    if ((e.key === 'Enter' || e.key === ' ') && canPick) {
-      e.preventDefault();
-      e.stopPropagation();
-      onPick(t);
-    }
-  };
-  return (
-    <svg
-      className="iso-tiles"
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
-      viewBox={`0 0 ${rect.w} ${rect.h}`}
-      data-can-pick={canPick ? 'true' : 'false'}
-      aria-label="Tiles of the region, 4 by 4"
-    >
-      {Array.from({ length: rows * cols }, (_, t) => {
-        const x = (t % cols) * tw;
-        const y = Math.floor(t / cols) * th;
-        const pick = looked.get(t);
-        return (
-          <g key={t}>
-            <rect
-              className="iso-tiles__tile"
-              data-looked={pick ? 'true' : undefined}
-              x={x + 0.5}
-              y={y + 0.5}
-              width={tw - 1}
-              height={th - 1}
-              tabIndex={canPick ? 0 : -1}
-              role="button"
-              aria-label={`Tile ${tileName(t, cols)}${pick ? `, looked at, ${pick.pixels} hidden pixels` : ''}`}
-              onClick={() => canPick && onPick(t)}
-              // A click picks without taking focus, so Enter afterwards means the next pass, not this tile again
-              onMouseDown={(e) => e.preventDefault()}
-              onKeyDown={(e) => onKey(e, t)}
-            />
-            {pick && (
-              <text className="iso-tiles__label" x={x + 8} y={y + 18}>
-                {tileName(t, cols)} {pick.pixels.toLocaleString('en-US')}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
   );
 }

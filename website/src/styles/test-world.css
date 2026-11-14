@@ -1,0 +1,21 @@
+/* Test world: the labels at the tiles' corners on the terrain (beats/test-world/TileLabels.tsx). */
+
+.tw-labels {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  pointer-events: none;
+}
+
+.tw-label {
+  position: absolute;
+  display: inline-flex;
+  gap: var(--sys-s2);
+  align-items: baseline;
+  padding: 2px var(--sys-s2);
+  white-space: nowrap;
+}
+
+.tw-label[data-focus='true'] {
+  outline: 1px solid var(--sys-focus);
+}

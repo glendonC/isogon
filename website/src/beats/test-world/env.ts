@@ -1,6 +1,5 @@
-import type { DynamicRegionRun } from '../stage/types';
+import type { DynamicRegionRun } from '../../stage/types';
 import {
-  DEMO_NEXT_LOOK_START,
   FOOTPRINT_SCHEMA,
   type Footprint,
   type NextLookEnd,
@@ -9,13 +8,15 @@ import {
   type NextLookStart,
   type NextLookState,
   type NextLookTaken,
-} from './demo/nextLook';
-import { frameNearest, tileOf } from './nextLook';
+} from '../../content/demo/nextLook';
+import { frameNearest, tileOf } from '../../content/nextLook';
+import { getJson, postJson } from '../../lib/api';
 
 /**
  * A round as the page drives it: its start, a look, its state and its end (shapes in content/demo/nextLook.ts). The
  * page holds what the answers gave it and nothing more: a look returns the detections of one slot inside one tile,
- * and the rest arrive with the end.
+ * and the rest arrive with the end. The round is asked for on the run that is open (its place and its start), with
+ * the environment's own tiles and budget; every request goes through the page's client.
  */
 export interface NextLookEnv {
   start: NextLookStart;
@@ -56,25 +57,12 @@ function passesOf(rows: Rows, extra?: (row: unknown[], col: (k: string) => numbe
   return [...groups.values()];
 }
 
-export async function liveNextLookEnv(apiBase: string, regionId: string, signal?: AbortSignal): Promise<NextLookEnv> {
+const ROUTE = '/api/env/next_look';
+const roundState = (id: string) => getJson<Obj>(`${ROUTE}/state`, { round_id: id });
+
+export async function openRound(regionId: string, startDate: string, signal?: AbortSignal): Promise<NextLookEnv> {
   // The signal guards the reset only: the round outlives the effect that started it.
-  const call = async <T,>(method: 'GET' | 'POST', path: string, body?: unknown, guard?: AbortSignal): Promise<T> => {
-    const r = await fetch(`${apiBase}/api/env/next_look/${path}`, {
-      method,
-      headers: body ? { 'content-type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: guard,
-    });
-    if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
-    return (await r.json()) as T;
-  };
-  const demo = DEMO_NEXT_LOOK_START;
-  const reset = await call<Obj>('POST', 'reset', {
-    region_id: regionId,
-    episode: demo.episode.key,
-    tiles: demo.episode.tiles,
-    budget: demo.episode.budget,
-  }, signal);
+  const reset = await postJson<Obj>(`${ROUTE}/reset`, { region_id: regionId, start: startDate }, { signal });
   const ep = reset.episode as NextLookStart['episode'];
   const looks = (reset.looks as Array<Obj>).map((l) => ({
     index: Number(l.index),
@@ -85,7 +73,7 @@ export async function liveNextLookEnv(apiBase: string, regionId: string, signal?
     share_of_box: null,
     pixel_km: typeof l.scan_km === 'number' && typeof l.track_km === 'number' ? ([l.scan_km, l.track_km] as [number, number]) : null,
   }));
-  const protocol = (reset.protocol as { version: number; note: string } | undefined) ?? demo.protocol;
+  const protocol = (reset.protocol as { version: number; note: string } | undefined) ?? { version: 0, note: '' };
   const start: NextLookStart = {
     round_id: String(reset.round_id),
     data: String(reset.data ?? 'firms'),
@@ -93,7 +81,7 @@ export async function liveNextLookEnv(apiBase: string, regionId: string, signal?
     estimate: { region_id: ep.region_id, start: ep.first_overpass_utc, holdout: 'viirs' },
     looks,
     score_start: Number(reset.score_start),
-    known_limits: typeof reset.known_limits === 'string' ? reset.known_limits : demo.known_limits,
+    known_limits: typeof reset.known_limits === 'string' ? reset.known_limits : '',
     protocol: { version: protocol.version, note: protocol.note.charAt(0).toUpperCase() + protocol.note.slice(1) },
   };
   const testEpisodes = reset.test_episodes as NextLookEnd['test_episodes'];
@@ -102,7 +90,7 @@ export async function liveNextLookEnv(apiBase: string, regionId: string, signal?
   let endBlock: Obj | null = null;
   const taken: NextLookTaken[] = [];
 
-  const step = (decision: number, action: number) => call<Obj>('POST', 'step', { round_id: id, decision, action });
+  const step = (decision: number, action: number) => postJson<Obj>(`${ROUTE}/step`, { round_id: id, decision, action });
 
   return {
     start,
@@ -141,7 +129,7 @@ export async function liveNextLookEnv(apiBase: string, regionId: string, signal?
       };
     },
     async state() {
-      const st = await call<Obj>('GET', `state?round_id=${encodeURIComponent(id)}`);
+      const st = await roundState(id);
       return {
         round_id: id,
         next_decision: typeof st.decision === 'number' ? st.decision : null,
@@ -153,14 +141,14 @@ export async function liveNextLookEnv(apiBase: string, regionId: string, signal?
     },
     async end() {
       if (!endBlock) {
-        const st = await call<Obj>('GET', `state?round_id=${encodeURIComponent(id)}`);
+        const st = await roundState(id);
         endBlock = (st.end ?? null) as Obj | null;
       }
       if (!endBlock) throw new Error('the round is not done');
       // The reference agents are computed in the background from the reset; the state route serves them when ready.
       for (let i = 0; i < 40 && !endBlock.reference; i += 1) {
         await new Promise((r) => window.setTimeout(r, 3000));
-        const st = await call<Obj>('GET', `state?round_id=${encodeURIComponent(id)}`);
+        const st = await roundState(id);
         if (st.end) endBlock = st.end as Obj;
       }
       const reveal = endBlock.reveal as Rows;

@@ -1,5 +1,5 @@
 /**
- * The round of "next look": the shapes the page maps the routes onto, and the episode the page asks for.
+ * The round of "next look": the shapes the page maps the routes onto.
  *
  * The backend serves the round (backend/server_next_look.py) as:
  *
@@ -10,13 +10,9 @@
  *   GET  /api/env/next_look/state?round_id=...
  *
  * No response holds a hidden row before the look that reveals it. The page reads them through
- * `content/nextLookEnv.ts`, which maps the backend's answers onto the page's own types below (NextLookStart,
- * NextLookLook, NextLookEnd).
- *
- * `DEMO_NEXT_LOOK_START` names the episode the page resets (its key, tiles and budget) and stands in for the reset's
- * answer until it arrives: the test episode `plumas_ca:22:2021-07-22T05` of the Dixie fire, its window and its looks
- * from `backend/eval/schedule.py::nominal_slots`. Until the reset answers, the readout shows this record's window and
- * counts; no score of it is shown.
+ * `beats/test-world/env.ts`, which asks for the round on the run that is open (its place and start) and maps the
+ * backend's answers onto the page's own types below (NextLookStart, NextLookLook, NextLookEnd). No episode is typed in
+ * the page.
  */
 
 /** A footprint as the payload writes it: [lon, lat, scan_km, track_km, angle_deg, frp_mw, confidence, sensor_code]. */
@@ -157,49 +153,3 @@ export interface NextLookEnd {
   };
   source?: { unit?: string; commit?: string };
 }
-
-const slot = (index: number, platform: string, time_utc: string, is_day: boolean): NextLookSlot => ({
-  index,
-  platform,
-  time_utc,
-  is_day,
-  schedule: 'nominal',
-  share_of_box: null,
-  pixel_km: null,
-});
-
-export const DEMO_NEXT_LOOK_START: NextLookStart = {
-  round_id: 'demo_plumas_ca_22_2021-07-22T05',
-  episode: {
-    key: 'plumas_ca:22:2021-07-22T05',
-    region_id: 'plumas_ca',
-    box: [-121.44, 39.86, -120.92, 40.24],
-    first_overpass_utc: '2021-07-22T05:52:00Z',
-    last_overpass_utc: '2021-07-24T09:56:00Z',
-    modis_overpasses: 12,
-    modis_pixels_in_box: 1095,
-    tiles: [4, 4],
-    budget: 4,
-    score: 'csi',
-    reward:
-      'gain in the blind-test score of the reconstruction, measured before and after the look on the same target: the real hidden detections still hidden after the look',
-  },
-  estimate: { region_id: 'plumas_ca', start: '2021-07-22T05:52:00Z', holdout: 'viirs' },
-  looks: [
-    slot(0, 'VIIRS_SNPP', '2021-07-22T09:59:17Z', false),
-    slot(1, 'VIIRS_NOAA20', '2021-07-22T10:04:17Z', false),
-    slot(2, 'VIIRS_SNPP', '2021-07-22T21:00:10Z', true),
-    slot(3, 'VIIRS_NOAA20', '2021-07-22T21:05:10Z', true),
-    slot(4, 'VIIRS_SNPP', '2021-07-23T09:59:17Z', false),
-    slot(5, 'VIIRS_NOAA20', '2021-07-23T10:04:17Z', false),
-    slot(6, 'VIIRS_SNPP', '2021-07-23T21:00:10Z', true),
-    slot(7, 'VIIRS_NOAA20', '2021-07-23T21:05:10Z', true),
-  ],
-  score_start: 0.3200562037998656,
-  known_limits:
-    'FIRMS lists detections, not where a satellite looked and saw nothing, and has no cloud mask: a revealed tile with no detection may have been cloudy rather than free of fire. The looks are the nominal half-day slots of each VIIRS platform, taken from the platform and the calendar and not from the hidden detections; the real pass is up to about 90 minutes from a slot\'s time, sometimes comes twice, and its pixel size is not known in advance. A list of real overpass times would remove that approximation.',
-  protocol: {
-    version: 2,
-    note: 'Second look at the three 2021 test fires: a protocol correction. Episodes are chosen from MODIS rows alone; looks are nominal slots.',
-  },
-};
