@@ -138,6 +138,18 @@ class PublishableImageryTests(unittest.TestCase):
         self.assertEqual((got["usgs_naip_ortho_8192.jpg"], got["usgs_naip_context_ortho_4096.jpg"]), (True, False))
 
 
+class PagePlayersTests(unittest.TestCase):
+    def test_the_players_are_the_pages(self) -> None:
+        import re
+
+        from backend.server_recorder import PAGE_PLAYERS, SEES_THE_ANSWER
+
+        src = (REPO_ROOT / "website" / "src" / "compare" / "blocks.ts").read_text(encoding="utf-8")
+        block = src.split("export const PLAYERS", 1)[1].split("];", 1)[0]
+        self.assertEqual(tuple(re.findall(r"key: '([a-z_]+)'", block)), PAGE_PLAYERS)
+        self.assertIn(f"export const SEES_THE_ANSWER = '{SEES_THE_ANSWER}';", src)
+
+
 class RecorderTests(unittest.TestCase):
     def test_the_default_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -186,11 +198,15 @@ class RecorderTests(unittest.TestCase):
             self.assertEqual({f"files/{f.name}" for f in (Path(tmp) / "files").iterdir()}, named)
             text = "".join(p.read_text(errors="replace") for p in (Path(tmp) / "files").iterdir()) + json.dumps(index)
             self.assertNotIn(LIVE_ROUND, text)
-            # every reference player's play: the constant tile once per tile, the oracle only as the ceiling
+            # the play of each player the page shows, with the page's body; only the one that reads the hidden rows
+            # is asked with ceiling; the round is reset with the page's body too
             plays = [b for m, path, b in backend.seen if path == "/api/env/next_look/play"]
-            self.assertEqual(len(plays), 1 + 16 + 1)
+            self.assertEqual([b["player"] for b in plays], ["random", "latest_modis", "least_sure", "learned", "oracle"])
             self.assertEqual([b.get("ceiling") for b in plays if b["player"] == "oracle"], [True])
             self.assertFalse(any(b.get("ceiling") for b in plays if b["player"] != "oracle"))
+            self.assertIn('POST /api/env/next_look/play {"player":"least_sure","region_id":"plumas_ca","start":"2012-08-10"}', entries)
+            self.assertIn('POST /api/env/next_look/play {"ceiling":true,"player":"oracle","region_id":"plumas_ca","start":"2012-08-10"}', entries)
+            self.assertIn('POST /api/env/next_look/reset {"region_id":"plumas_ca","start":"2012-08-10"}', entries)
             self.assertEqual(rec.check("not-in-any-file"), [])
             # a stored file holding the key is flagged
             (Path(tmp) / "files" / "planted.json").write_text('{"u": "x?MAP_KEY=abc"}')

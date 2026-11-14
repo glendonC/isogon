@@ -12,8 +12,10 @@ the page looks answers up in:
 Without `--plan` it builds the demo path's plan from `GET /api/regions`: the regions, the evidence, each region's
 calendar and start list, each named fire's box calendar, and for every featured fire that is not a blind test fire
 its run held out and then revealed, the run's assets, its pass list as a held-out window shows it (`hidden=VIIRS`)
-and in full for the reveal, every reference player's play of that episode step by step (the oracle as the ceiling),
-and one round of next look played with the looks of the reference player `least_sure`, taken from its play. A
+and in full for the reveal, the play of each player the page shows, step by step (the one that reads the hidden rows
+with `ceiling`), and one round of next look played with the looks of the reference player `least_sure`, taken from
+its play. Rounds and plays are asked with the page's own bodies (`{region_id, start}`, the environment's own tiles
+and budget), so the page finds them under the same keys. A
 recorded test fire gets its run with every satellite shown on its recorded window and its full pass list; nothing of
 it is held out, revealed or played. Run bodies are built as the page builds them (`page_run_body`). Only the files
 the index names are kept.
@@ -49,8 +51,10 @@ ESRI_WITHHELD: str = "Esri World Imagery is published for viewing, not for expor
 OTHER_WITHHELD: str = "imagery under a licence that does not allow this copy (docs/sources.md); not stored"
 # The imagery whose licence allows a copy: the same set as backend.terrain.terrain_pack.PUBLISHABLE_IMAGERY.
 PUBLISHABLE_IMAGERY: tuple[str, ...] = ("usgs_naip", "eox_s2cloudless_2016")
-ROUND_TILES: list[int] = [4, 4]
-ROUND_BUDGET: int = 4
+# The players the page shows, in its order, and the one asked with `ceiling` (website/src/compare/blocks.ts, PLAYERS
+# and SEES_THE_ANSWER; a test holds them equal).
+PAGE_PLAYERS: tuple[str, ...] = ("random", "latest_modis", "least_sure", "learned", "oracle")
+SEES_THE_ANSWER: str = "oracle"
 ROUND_PLAYER: str = "least_sure"     # the reference player whose looks the recorded round takes
 RECORDED_WINDOWS_NOTE: str = ("the recorded test fires' runs with every satellite shown are not recorded: such a run "
                               "still runs the scorer on its closed window until the model makes it skip the score "
@@ -263,19 +267,17 @@ class Recorder:
                             "actions_from": actions_from, "steps": steps})
 
     def record_plays(self, episode: dict[str, Any]) -> None:
-        """Every reference player's play of one episode step by step (`POST /api/env/next_look/play`): the constant
-        tile once per tile, the oracle as the ceiling. Skipped, and said so, when the backend has no play yet."""
+        """The play of each player the page shows on one episode, step by step (`POST /api/env/next_look/play`), with
+        the page's body: the episode's own keys and the player, `ceiling` for the one that reads the hidden rows.
+        Skipped, and said so, when the backend has no play yet."""
         listing = self.fetch("GET", "/api/env/next_look/players")
         if not isinstance(listing, dict) or "players" not in listing:
             self.plays_note = "the backend serves no step by step play (GET /api/env/next_look/players did not answer)"
             return
-        n_tiles = int(episode["tiles"][0]) * int(episode["tiles"][1])
-        for p in listing["players"]:
-            ids = [f"constant_{t}" for t in range(n_tiles)] if p["id"] == "constant" else [p["id"]]
-            for pid in ids:
-                body = {**episode, "player": pid, **({"ceiling": True} if p.get("reads") == "the hidden rows" else {})}
-                self.fetch("POST", "/api/env/next_look/play", body=body)
-                self.plays.append({"episode_from": episode, "player": pid})
+        for pid in PAGE_PLAYERS:
+            body = {**episode, "player": pid, **({"ceiling": True} if pid == SEES_THE_ANSWER else {})}
+            self.fetch("POST", "/api/env/next_look/play", body=body)
+            self.plays.append({"episode_from": episode, "player": pid})
 
     # ---- the default plan ----------------------------------------------------------------------------------------
 
@@ -308,7 +310,7 @@ class Recorder:
                 held = self.run_with_assets(page_run_body(rid, start, holdout=True))
                 self.run_with_assets(page_run_body(rid, start, holdout=True, reveal=True))
                 self.record_passes(rid, held, hidden=True)
-                episode = {"region_id": rid, "start": start, "tiles": ROUND_TILES, "budget": ROUND_BUDGET}
+                episode = {"region_id": rid, "start": start}     # the page's reset body: the environment's tiles and budget
                 self.record_plays(episode)
                 actions = self.play_actions(episode, ROUND_PLAYER)
                 if actions is not None:
