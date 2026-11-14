@@ -13,8 +13,10 @@ Without `--plan` it builds the demo path's plan from `GET /api/regions`: the reg
 calendar and start list, each named fire's box calendar, and for every featured fire that is not a blind test fire
 its run held out and then revealed, the run's assets, its pass list as a held-out window shows it (`hidden=VIIRS`)
 and in full for the reveal, every reference player's play of that episode step by step (the oracle as the ceiling),
-and one round of next look played with the looks of the reference player `least_sure`, taken from its play. Nothing
-of a blind test fire is run, held out or played. Only the files the index names are kept.
+and one round of next look played with the looks of the reference player `least_sure`, taken from its play. A
+recorded test fire gets its run with every satellite shown on its recorded window and its full pass list; nothing of
+it is held out, revealed or played. Run bodies are built as the page builds them (`page_run_body`). Only the files
+the index names are kept.
 
 Round ids are random on a live server; each round is renamed `nl-rec-<8 hex>` in every stored answer and key, so the
 recorded round replays with one id. Imagery published for viewing only (Esri World Imagery, and what is derived from
@@ -74,6 +76,20 @@ def _urls(v: Any) -> list[str]:
     if isinstance(v, list):
         return [u for x in v for u in _urls(x)]
     return []
+
+
+def page_run_body(region_id: str, start: str, holdout: bool, reveal: bool = False) -> dict[str, Any]:
+    """The body of `POST /api/reconstruct` exactly as the page's client builds it for a place, a start and what is
+    hidden (the contract's one body for a run request), so a recorded page finds the answer under the same key. Kept
+    equal to the page's builder: `cloud_override` null on the real path, `holdout: "viirs"` beside `holdout_viirs`
+    when VIIRS is hidden, `reveal` only on the reveal, and no `imagery_source` (the page sends none)."""
+    body: dict[str, Any] = {"holdout_viirs": bool(holdout), "cloud_override": None, "source": "firms", "start": start,
+                            "region_id": region_id}
+    if holdout:
+        body["holdout"] = "viirs"
+    if reveal:
+        body["reveal"] = True
+    return body
 
 
 def least_sure(obs: dict[str, Any]) -> int:
@@ -174,6 +190,19 @@ class Recorder:
                 self.fetch("GET", path, query or None)
         return ans
 
+    def record_passes(self, region_id: str, run: Any, hidden: bool) -> None:
+        """The pass list over a run's window: for a held-out run as it may be shown (`hidden=VIIRS`) and in full for
+        its reveal; for a run with every satellite shown, in full only."""
+        window = (run.get("window") or {}) if isinstance(run, dict) else {}
+        first, last = window.get("first_overpass_utc"), window.get("last_overpass_utc")
+        if not (first and last):
+            return
+        end = (_dt.date.fromisoformat(last[:10]) + _dt.timedelta(days=1)).isoformat()
+        q = {"region_id": region_id, "start": first[:10], "end": end}
+        if hidden:
+            self.fetch("GET", "/api/passes", {**q, "hidden": "VIIRS"})
+        self.fetch("GET", "/api/passes", q)
+
     def play_actions(self, episode: dict[str, Any], player: str) -> list[int] | None:
         """The looks a reference player takes on an episode, from its recorded play (None without a play route)."""
         play = self.fetch("POST", "/api/env/next_look/play", body={**episode, "player": player})
@@ -247,22 +276,17 @@ class Recorder:
             for f in place.get("named_fires", []):
                 path, query = split_url(f["calendar"])
                 self.fetch("GET", path, query)
-            us = place.get("country") == "United States"
             for fire in place.get("featured_fires", []):
-                if fire.get("blind_test_fire"):
-                    continue
                 start = fire["default_start"]
-                body = {"region_id": rid, "source": "firms", "start": start, "holdout_viirs": True,
-                        **({"imagery_source": US_IMAGERY} if us else {})}
-                held = self.run_with_assets(body)
-                self.run_with_assets({**body, "reveal": True})
-                window = (held or {}).get("window") or {}
-                first, last = window.get("first_overpass_utc"), window.get("last_overpass_utc")
-                if first and last:
-                    end = (_dt.date.fromisoformat(last[:10]) + _dt.timedelta(days=1)).isoformat()
-                    window = {"region_id": rid, "start": first[:10], "end": end}
-                    self.fetch("GET", "/api/passes", {**window, "hidden": "VIIRS"})   # what the held-out run may show
-                    self.fetch("GET", "/api/passes", window)                          # the reveal's full list
+                if fire.get("blind_test_fire"):
+                    # A recorded test fire: its run with every satellite shown on its recorded window, nothing held
+                    # out, revealed or played (the record itself is GET /api/evidence).
+                    shown = self.run_with_assets(page_run_body(rid, start, holdout=False))
+                    self.record_passes(rid, shown, hidden=False)
+                    continue
+                held = self.run_with_assets(page_run_body(rid, start, holdout=True))
+                self.run_with_assets(page_run_body(rid, start, holdout=True, reveal=True))
+                self.record_passes(rid, held, hidden=True)
                 episode = {"region_id": rid, "start": start, "tiles": ROUND_TILES, "budget": ROUND_BUDGET}
                 self.record_plays(episode)
                 actions = self.play_actions(episode, ROUND_PLAYER)

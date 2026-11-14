@@ -97,15 +97,15 @@ class RecorderTests(unittest.TestCase):
             entries = index["entries"]
             # keys: sorted query, canonical body
             self.assertIn("GET /api/calendar?region_id=plumas_ca&source=firms", entries)
-            held = request_key("POST", "/api/reconstruct", body={"holdout_viirs": True, "imagery_source": "usgs_naip",
-                                                                 "region_id": "plumas_ca", "source": "firms", "start": "2012-08-10"})
+            # run bodies as the page's client builds them (one body for a run request)
+            held = 'POST /api/reconstruct {"cloud_override":null,"holdout":"viirs","holdout_viirs":true,"region_id":"plumas_ca","source":"firms","start":"2012-08-10"}'
             self.assertIn(held, entries)
-            revealed = request_key("POST", "/api/reconstruct", body={"holdout_viirs": True, "imagery_source": "usgs_naip",
-                                                                     "region_id": "plumas_ca", "reveal": True, "source": "firms",
-                                                                     "start": "2012-08-10"})
+            revealed = held.replace('"region_id":"plumas_ca",', '"region_id":"plumas_ca","reveal":true,')
             self.assertIn(revealed, entries)
-            # the blind test fire is never run or played
-            self.assertFalse(any((b or {}).get("start") == "2021-07-20" for _, _, b in backend.seen))
+            # the blind test fire: its run with every satellite shown, and nothing held out, revealed or played
+            closed = [(path, b) for _, path, b in backend.seen if (b or {}).get("start") == "2021-07-20"]
+            self.assertEqual([path for path, _ in closed], ["/api/reconstruct"])
+            self.assertEqual((closed[0][1]["holdout_viirs"], "holdout" in closed[0][1], "reveal" in closed[0][1]), (False, False, False))
             # imagery for viewing only is withheld, elevation is stored
             self.assertIn("withheld", entries["GET /api/runs/run_2012-08-10/satellite.jpg"])
             self.assertIn("withheld", entries["GET /api/runs/run_2012-08-10/terrain/ortho_8192.jpg"])
