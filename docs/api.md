@@ -403,14 +403,12 @@ The start dates from which a real run is worth showing in a region, and the one 
       "span_hours": 132.3,
       "modis_overpasses": 24,
       "modis_pixels_in_box": 344,
-      "viirs_pixels_in_box": 1348,
       "busiest_in_month": false
     }
   ],
   "rule": "a start date is worth showing when the 24 MODIS overpasses after it span at most 192 h, begin within 24 h of the start, and flag at least 100 pixels in the region box",
   "chosen_from": "MODIS rows only; no VIIRS row is read to choose, drop or rank a start",
-  "labels_from_hidden_rows": ["viirs_pixels_in_box"],
-  "hidden_counts": "counted after the list was made, for the reveal only; no start or default is chosen, dropped or ranked by them, and no label prints them",
+  "hidden_counts": "none: the list carries MODIS counts only; what the hidden satellite saw in a window comes with that run's reveal",
   "search": "months from 2012 whose region box holds at least 100 MODIS rows; 60 months searched",
   "from": "backend.model.real_run.real_start_dates",
   "default_start": "2021-07-20",
@@ -420,7 +418,7 @@ The start dates from which a real run is worth showing in a region, and the one 
 
 Shortened: `starts` has 53 entries for this region.
 
-- A start is chosen from MODIS rows alone. `viirs_pixels_in_box` is counted after the list is made; a page that hides VIIRS must not show it before the reveal, which is why `labels_from_hidden_rows` names it.
+- A start is chosen from MODIS rows alone, and the list carries MODIS counts only: no start here, in the calendar's `real_run_starts` or in `GET /api/regions` holds a count from the hidden satellite. What VIIRS saw in a window comes with that run's reveal.
 - `default_start` is the model's default when it is in the list. Otherwise it is the start with the most MODIS pixels, and `default_rule` says why. It is `null` when the list is empty.
 - If the search fails, `starts` is empty and `error` says why.
 

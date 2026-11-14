@@ -143,6 +143,18 @@ START_SEARCH_FIRST_YEAR: int = 2012
 START_SEARCH_MIN_MODIS_ROWS: int = 100
 
 
+HIDDEN_COUNTS_NOTE: str = ("none: the list carries MODIS counts only; what the hidden satellite saw in a window comes "
+                           "with that run's reveal")
+
+
+def without_hidden_counts(value: dict[str, Any]) -> dict[str, Any]:
+    """A start list with no count taken from the hidden instrument (also for a list saved before they were left out)."""
+    out = {k: v for k, v in value.items() if k != "labels_from_hidden_rows"}
+    out["starts"] = [{k: v for k, v in e.items() if not k.startswith("viirs_")} for e in value.get("starts") or []]
+    out["hidden_counts"] = HIDDEN_COUNTS_NOTE
+    return out
+
+
 def with_default_start(value: dict[str, Any], model_default: str | None, model_error: str | None = None) -> dict[str, Any]:
     """``value`` (a start list) with ``default_start``, the start a page opens on, and ``default_rule``, which says
     how it is chosen. The model's default for the region wins when it is in the list; otherwise the start
@@ -573,7 +585,7 @@ class IsogonDataStore:
         try:
             saved = json.loads(disk.read_text(encoding="utf-8"))
             if saved.get("key") == cache_key:
-                return saved["value"]
+                return without_hidden_counts(saved["value"])
         except (OSError, ValueError, AttributeError):
             pass
         spec = PRESET_BY_ID[region_id]
@@ -587,8 +599,8 @@ class IsogonDataStore:
             for e in d["starts"]:
                 if not e.get("worth_showing"):
                     continue
-                # The label shows what chose the start (MODIS). A count from a hidden instrument is kept as a field
-                # only, named in `labels_from_hidden_rows`: it is taken after the list is made.
+                # Only MODIS counts: a count from the hidden instrument would tell each window's hidden total before
+                # any reveal, so none is kept.
                 starts.append({
                     "start": e["start"],
                     "label": (f"{e['start']}: {e['modis_pixels_in_box']:,} MODIS pixels in "
@@ -598,7 +610,6 @@ class IsogonDataStore:
                     "span_hours": e["span_hours"],
                     "modis_overpasses": e.get("modis_overpasses"),
                     "modis_pixels_in_box": e["modis_pixels_in_box"],
-                    "viirs_pixels_in_box": e.get("viirs_pixels_in_box"),
                     "busiest_in_month": e["start"] in busiest,
                 })
         value = {
@@ -607,9 +618,7 @@ class IsogonDataStore:
             "starts": sorted(starts, key=lambda x: x["start"]),
             "rule": d.get("rule"),
             "chosen_from": d.get("chosen_from"),
-            "labels_from_hidden_rows": d.get("labels_from_hidden_rows", ["viirs_pixels_in_box"]),
-            "hidden_counts": ("counted after the list was made, for the reveal only; no start or default is chosen, "
-                              "dropped or ranked by them, and no label prints them"),
+            "hidden_counts": HIDDEN_COUNTS_NOTE,
             "search": (f"months from {START_SEARCH_FIRST_YEAR} whose region box holds at least "
                        f"{START_SEARCH_MIN_MODIS_ROWS} MODIS rows; {len(months)} months searched"),
             "from": "backend.model.real_run.real_start_dates",
@@ -618,7 +627,7 @@ class IsogonDataStore:
         tmp = disk.with_name(f".{disk.name}.{threading.get_ident()}.tmp")
         tmp.write_text(json.dumps({"key": cache_key, "value": value}, ensure_ascii=False), encoding="utf-8")
         tmp.replace(disk)
-        return value
+        return without_hidden_counts(value)
 
     def warm_firms(self) -> None:
         """Build the real calendars and their start lists in the background, so the first page request is fast."""

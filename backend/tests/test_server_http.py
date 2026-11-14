@@ -243,9 +243,12 @@ class RealRunServingTests(unittest.TestCase):
         self.assertEqual(starts["default_start"], real_run_starts(PRESET_BY_ID["plumas_ca"])["default_start"])
         self.assertIn(starts["default_start"], dates)
         self.assertNotEqual(starts["default_start"], dates[0])
-        # No label prints a count from the hidden instrument; the count stays a field, named as taken after the choice.
+        # No start, label or list field carries a count from the hidden instrument, here or in the regions answer.
         self.assertFalse([s["label"] for s in starts["starts"] if "VIIRS" in s["label"]])
-        self.assertEqual(starts["labels_from_hidden_rows"], ["viirs_pixels_in_box"])
+        self.assertFalse([k for s in starts["starts"] for k in s if k.startswith("viirs")])
+        self.assertNotIn("labels_from_hidden_rows", starts)
+        status, _, body = _req("/api/regions")
+        self.assertNotIn("viirs_pixels", body.decode("utf-8"))
         self.assertIn("MODIS", starts["chosen_from"])
 
 
