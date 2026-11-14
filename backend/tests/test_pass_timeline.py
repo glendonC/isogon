@@ -76,6 +76,24 @@ class FixtureTimelineTests(unittest.TestCase):
         self.assertEqual((s["passes"], s["with_detection"], s["without_detection"]), (2, 1, 1))
         self.assertEqual(tl["known_gaps"], [])
 
+    def test_with_viirs_hidden_its_passes_carry_nothing_firms_saw(self) -> None:
+        full = self._timeline()
+        held = self._timeline(hidden="VIIRS")
+        self.assertEqual(held["hidden"], "VIIRS")
+        for p in held["passes"]:
+            if p["platform"].startswith("VIIRS_"):
+                self.assertEqual({k for k in p if k.startswith("firms_")}, {"firms_withheld"})
+        self.assertEqual(held["firms_overpasses_without_a_pass"], [])
+        self.assertEqual(held["summary"]["VIIRS_SNPP"], {"passes": full["summary"]["VIIRS_SNPP"]["passes"], "firms_withheld": True})
+        modis = lambda tl: [p for p in tl["passes"] if p["platform"].startswith("MODIS_")]  # noqa: E731
+        self.assertEqual(modis(held), modis(full))
+        # nothing of it depends on the hidden rows: deleting every VIIRS row leaves the answer as it was
+        bare = self._timeline(hidden="VIIRS", read_firms=lambda box, t0, t1, platforms=None:
+                              [r for r in self.rows if r["instrument"] != "VIIRS"])
+        self.assertEqual(bare, held)
+        with self.assertRaises(ValueError):
+            self._timeline(hidden="SAR")
+
     def test_the_context_box_and_a_platform_filter(self) -> None:
         tl = self._timeline(box="context")
         hit = [p for p in tl["passes"] if p["firms_detection_in_box"]]

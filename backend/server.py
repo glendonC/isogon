@@ -403,18 +403,19 @@ class IsogonDataStore:
                 self._runs.move_to_end(run_id)
             return entry
 
-    def pass_timeline_bytes(self, region_id: str, start: str, end: str, box: str, platforms: list[str] | None) -> bytes:
+    def pass_timeline_bytes(self, region_id: str, start: str, end: str, box: str, platforms: list[str] | None,
+                            hidden: str | None = None) -> bytes:
         """`pass_timeline` as JSON bytes, kept for the 32 latest queries while the FIRMS row count is unchanged."""
         if region_id not in REGION_COUNTRY:
             raise KeyError(f"no pass schedule for region '{region_id}'")
-        key = (region_id, start, end, box, tuple(platforms) if platforms else None, self.region_rows_key(region_id),
+        key = (region_id, start, end, box, tuple(platforms) if platforms else None, hidden, self.region_rows_key(region_id),
                pass_files_digest(region_id))
         with self._lock:
             hit = self._pass_timelines.get(key)
             if hit is not None:
                 self._pass_timelines.move_to_end(key)
                 return hit
-        body = json.dumps(pass_timeline(region_id, start, end, box, platforms), ensure_ascii=False).encode("utf-8")
+        body = json.dumps(pass_timeline(region_id, start, end, box, platforms, hidden=hidden), ensure_ascii=False).encode("utf-8")
         with self._lock:
             self._pass_timelines[key] = body
             while len(self._pass_timelines) > 32:
@@ -1287,7 +1288,8 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                     return
                 plats = [p for p in qs.get("platforms", [""])[0].split(",") if p] or None
                 try:
-                    body = store.pass_timeline_bytes(region_id, start, end, qs.get("box", ["pack"])[0], plats)
+                    body = store.pass_timeline_bytes(region_id, start, end, qs.get("box", ["pack"])[0], plats,
+                                                     qs.get("hidden", [""])[0] or None)
                 except KeyError as exc:
                     self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc.args[0])})
                     return

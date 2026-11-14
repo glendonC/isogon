@@ -7,6 +7,11 @@ A pass is matched to a FIRMS overpass (FIRMS rows grouped as the blind test grou
 granule span. On June to September 2021 every FIRMS overpass with a detection in a hero box matches exactly one pass
 this way. FIRMS overpasses with a detection in the box that no pass matches are listed apart: in 2012 to 2025
 that happens only where a CMR collection is short (`KNOWN_GAPS`).
+
+With `hidden` (an instrument family, "VIIRS") the list is the one a held-out window may show: that family's rows are
+dropped before any matching, so its passes carry the pass itself (time, coverage, granules) and no FIRMS field, its
+summary counts passes only, and no unmatched overpass of it is listed. The full list, without `hidden`, belongs to
+the reveal.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from backend.firms.archive import REGION_COUNTRY, read_firms as _read_firms, reg
 from backend.firms.cmr_passes import CMR_CACHE_DIR, COLLECTIONS, cmr_passes
 
 MAX_SPAN_DAYS: int = 366
+HIDDEN_FAMILIES: tuple[str, ...] = ("VIIRS",)
 MATCH_TOL_S: float = 300.0
 BOXES: tuple[str, ...] = ("pack", "context")
 STATIC_TYPE: int = 2
@@ -68,14 +74,21 @@ def pass_timeline(
     platforms: Iterable[str] | None = None,
     read_firms: Callable[..., list[dict[str, str]]] = _read_firms,
     cache_dir: Path = CMR_CACHE_DIR,
+    hidden: str | None = None,
 ) -> dict[str, Any]:
     """Every pass over the region's `box` ("pack": the region's terrain pack box, the blind test's box; "context")
     in [start, end) UTC. Raises KeyError for an unknown region, ValueError for a bad window, CmrCacheMissing or
     FirmsCacheMissing for what is not cached."""
     from backend.eval.overpass import group_overpasses
     from backend.eval.rows import detections_from_rows
+    from backend.model.platforms import family
     from backend.model.real_run import ROW_SOURCE
     from backend.terrain.live_region import PRESET_BY_ID
+
+    if hidden is not None:
+        hidden = str(hidden).upper()
+        if hidden not in HIDDEN_FAMILIES:
+            raise ValueError(f"hidden must be one of {HIDDEN_FAMILIES}")
 
     if region_id not in REGION_COUNTRY:
         raise KeyError(f"no pass schedule for region '{region_id}'")
@@ -103,6 +116,8 @@ def pass_timeline(
     # FIRMS overpasses with a detection in the box, grouped as the blind test groups them
     pad = _dt.timedelta(seconds=MATCH_TOL_S + 3600.0)
     rows = read_firms(region_box(region_id), t0 - pad, t1 + pad)
+    if hidden is not None:   # the hidden family's rows go before anything is matched or counted
+        rows = [r for r in rows if str(r.get("instrument", "")).upper() != hidden]
     det = detections_from_rows(rows, ROW_SOURCE) if rows else None
     firms: list[dict[str, Any]] = []
     if det is not None and len(det):
@@ -121,11 +136,23 @@ def pass_timeline(
         by_plat.setdefault(f["platform"], []).append(f)
     matched: set[int] = set()
 
+    def is_hidden(platform: str) -> bool:
+        return hidden is not None and family(platform) == hidden
+
     out_passes = []
     for p in passes:
         a, z = _ts(p["time_start"]) - MATCH_TOL_S, _ts(p["time_end"]) + MATCH_TOL_S
         hits = [f for f in by_plat.get(p["platform"], []) if a <= f["time_s"] <= z]
         matched.update(id(f) for f in hits)
+        firms_fields: dict[str, Any] = {
+            "firms_detection_in_box": bool(hits),
+            "firms_pixels_in_box": sum(f["pixels"] for f in hits),
+            "firms_static_pixels_in_box": sum(f["static_pixels"] for f in hits),
+            "firms_frp_mw_in_box": round(sum(f["frp_mw"] for f in hits), 2),
+            "firms_overpass_utc": [_iso(f["time_s"]) for f in hits],
+        }
+        if is_hidden(p["platform"]):
+            firms_fields = {"firms_withheld": True}
         out_passes.append({
             "platform": p["platform"],
             "time_start": p["time_start"],
@@ -136,18 +163,17 @@ def pass_timeline(
             "box_inside": p["box_inside"],
             "cloud_cover_pct": p["cloud_cover_pct"],
             "granules": p["granules"],
-            "firms_detection_in_box": bool(hits),
-            "firms_pixels_in_box": sum(f["pixels"] for f in hits),
-            "firms_static_pixels_in_box": sum(f["static_pixels"] for f in hits),
-            "firms_frp_mw_in_box": round(sum(f["frp_mw"] for f in hits), 2),
-            "firms_overpass_utc": [_iso(f["time_s"]) for f in hits],
+            **firms_fields,
         })
     in_window = [f for f in firms if t0.timestamp() <= f["time_s"] < t1.timestamp()]
     unmatched = [{"platform": f["platform"], "time_utc": _iso(f["time_s"]), "pixels": f["pixels"]}
                  for f in in_window if id(f) not in matched]
 
-    summary: dict[str, dict[str, int]] = {}
+    summary: dict[str, dict[str, Any]] = {}
     for q in out_passes:
+        if q.get("firms_withheld"):
+            summary.setdefault(q["platform"], {"passes": 0, "firms_withheld": True})["passes"] += 1
+            continue
         s = summary.setdefault(q["platform"], {"passes": 0, "with_detection": 0, "without_detection": 0,
                                                "without_detection_whole_box": 0})
         s["passes"] += 1
@@ -158,9 +184,15 @@ def pass_timeline(
             s["without_detection_whole_box"] += int(bool(q["box_inside"]))
     gaps = [g for g in KNOWN_GAPS if (want is None or g["platform"] in want)
             and _utc(g["from"]) < t1 and _utc(g["until"]) > t0]
+    out_hidden = ({"hidden": hidden,
+                   "withheld": (f"what FIRMS detected on the {hidden} passes: their detection, pixel, static pixel and "
+                                f"power fields, their summary counts and their unmatched overpasses; the {hidden} rows "
+                                "were dropped before matching"),
+                   "reveal_with": "the same request without hidden"} if hidden else {"hidden": None})
     return {
         "region_id": region_id,
         "source": "firms",
+        **out_hidden,
         "box": box,
         "box_wsen": [round(float(v), 6) for v in wsen],
         "start": t0.strftime("%Y-%m-%dT%H:%M:%SZ"),

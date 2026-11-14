@@ -802,11 +802,13 @@ Every satellite pass over a region's box in a window, fire or no fire, from the 
 | `start`, `end` | required | UTC dates or date-times. The window is `[start, end)`, at most 366 days. |
 | `box` | `pack` | `pack`: the region box, the box of the blind test. `context`: the context box, five times the span. |
 | `platforms` | all | Comma separated: `MODIS_TERRA`, `MODIS_AQUA`, `VIIRS_SNPP`, `VIIRS_NOAA20`, `VIIRS_NOAA21`. |
+| `hidden` | none | `VIIRS`: the list a held-out window may show. The VIIRS rows are dropped before matching, so each VIIRS pass carries its time, coverage and granules and `"firms_withheld": true` in place of every `firms_` field, its summary counts passes only, and no unmatched VIIRS overpass is listed. The answer names what was withheld. The full list, without `hidden`, belongs to the reveal. |
 
 ```json
 {
   "region_id": "plumas_ca",
   "source": "firms",
+  "hidden": null,
   "box": "pack",
   "box_wsen": [-121.44, 39.86, -120.92, 40.24],
   "start": "2021-07-22T00:00:00Z",
