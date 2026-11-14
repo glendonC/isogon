@@ -39,7 +39,7 @@ if str(_REPO_ROOT) not in sys.path:
 import numpy as np  # noqa: E402
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
-from backend.firms import cmr_passes as cmr  # noqa: E402  (the data lane's reader of the CMR pass files)
+from backend.firms import cmr_passes as cmr  # noqa: E402  (the reader of the CMR pass files)
 from backend.openspace import geo  # noqa: E402
 
 TEMPLATE_ASSET: Path = _REPO_ROOT / "openspace" / "scene" / "scene.asset"
@@ -725,7 +725,7 @@ def export_scene(backend: Backend, region_id: str, out_dir: Path, *, start: str 
                                                                "width": raster.width, "height": raster.height}},
         "derived": [
             "Footprint shapes: centre, scan_km and track_km from the FIRMS row; the orientation angle_deg is "
-            "derived by the model lane from pixel sizes and times (FIRMS does not publish it).",
+            "derived by the model from pixel sizes and times (FIRMS does not publish it).",
             "No spacecraft and no pass marker are drawn: the swaths are NASA CMR granule polygons, edges along "
             "great circles.",
         ],

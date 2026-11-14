@@ -417,7 +417,7 @@ class RevealBoundaryTests(unittest.TestCase):
                     fp[5] *= 3
             m1, _, _ = _export(tmp, "b", q)
 
-            r = _payloads()        # the first response withholds them, as after the data lane's D10
+            r = _payloads()        # the first response withholds them
             second = copy.deepcopy(r["first"])
             del r["first"]["blind_test"]
             del r["first"]["metrics"]["raw_modis_rmse_mw_km2"]

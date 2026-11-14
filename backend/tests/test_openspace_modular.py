@@ -2,7 +2,7 @@
 
 Nothing outside ``backend/openspace/``, the top-level ``openspace/`` folder and these ``test_openspace_*`` files
 imports or names it, and every other backend module imports with the package made unimportable. So deleting the
-two folders and these tests leaves the project as it was.
+two folders and these tests leaves the rest of the project working.
 """
 
 from __future__ import annotations
