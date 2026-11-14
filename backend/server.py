@@ -55,7 +55,7 @@ from backend.firms.pass_timeline import pass_timeline  # noqa: E402
 from backend.firms.box_index import BoxIndex  # noqa: E402
 from backend.firms.current_month import CurrentMonth  # noqa: E402
 from backend.firms.places import places_payload  # noqa: E402
-from backend.firms.real_calendar import box_calendar, firms_calendar, parse_box, rows_csv, rows_csv_box  # noqa: E402
+from backend.firms.real_calendar import box_calendar, box_text, firms_calendar, parse_box, rows_csv, rows_csv_box  # noqa: E402
 from backend.model import MODEL_VERSION, PROVENANCE_NOTE  # noqa: E402
 from backend.model.calibrator import get_pretrained_calibrator  # noqa: E402
 from backend.model.gates import build_benchmark_gates  # noqa: E402
@@ -1154,7 +1154,7 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                         raise ValueError("end must be after start")
                     if box is not None:
                         body, n = rows_csv_box(box, start, end, plats, store.box_index)
-                        region_id = "box_" + "_".join(f"{v:g}" for v in box)
+                        region_id = "box_" + box_text(box).replace(",", "_")
                     else:
                         body, n = rows_csv(region_id, start, end, plats)
                 except KeyError as exc:

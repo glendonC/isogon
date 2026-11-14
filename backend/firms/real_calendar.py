@@ -379,6 +379,11 @@ def parse_box(text: str) -> tuple[float, float, float, float]:
     return (round(w, 4), round(s, 4), round(e, 4), round(n, 4))
 
 
+def box_text(box: tuple[float, float, float, float] | list[float]) -> str:
+    """'w,s,e,n' with up to four decimals, as `parse_box` reads it back."""
+    return ",".join(f"{float(v):.4f}".rstrip("0").rstrip(".") for v in box)
+
+
 def box_label(box: tuple[float, float, float, float]) -> str:
     w, s, e, n = box
 
@@ -421,7 +426,7 @@ def box_calendar(box: tuple[float, float, float, float], index: Any = None, cach
         ignored=[],
     )
     out["place"] = {"kind": "box", "box": list(box), "countries": countries, "label": label}
-    out["current_month"] = {"route": "/api/calendar/current?source=firms&box=" + ",".join(f"{v:g}" for v in box)}
+    out["current_month"] = {"route": "/api/calendar/current?source=firms&box=" + box_text(box)}
     return out
 
 

@@ -13,6 +13,37 @@ from pathlib import Path
 from typing import Any, Callable
 
 PLACES_FILE: Path = Path(__file__).resolve().parent / "places.json"
+FIRE_BOX_HALF_DEG: float = 0.5        # a featured fire's calendar box: its point, this far each way
+NO_END_RUN_START_DAYS: int = 90       # run starts are looked for this long after the first day when no end is published
+
+
+def fire_box(point: list[float]) -> list[float]:
+    lon, lat = float(point[0]), float(point[1])
+    h = FIRE_BOX_HALF_DEG
+    return [round(lon - h, 4), round(lat - h, 4), round(lon + h, 4), round(lat + h, 4)]
+
+
+def fire_entry(f: dict[str, Any], starts: list[dict[str, Any]]) -> dict[str, Any]:
+    """A featured fire as served: the registry's fields, a calendar box around its point, and the region's run starts
+    inside its dates (from the first day to the last, or NO_END_RUN_START_DAYS after the first when no end is
+    published)."""
+    import datetime as _dt
+
+    from backend.firms.real_calendar import box_text
+
+    last = f.get("last_day")
+    until = last or (_dt.date.fromisoformat(f["first_day"]) + _dt.timedelta(days=NO_END_RUN_START_DAYS)).isoformat()
+    box = fire_box(f["point"])
+    return {
+        **f,
+        "box": box,
+        "calendar": "/api/calendar?source=firms&box=" + box_text(box),
+        "run_starts_until": until,
+        "run_starts_rule": ("the region's real run starts from first_day to last_day" if last else
+                            f"the region's real run starts from first_day to {NO_END_RUN_START_DAYS} days after it "
+                            "(no end date is published)"),
+        "run_starts": [s for s in starts if f["first_day"] <= str(s.get("start", ""))[:10] <= until],
+    }
 
 
 def load_places(path: Path = PLACES_FILE) -> dict[str, Any]:
@@ -39,9 +70,7 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
         fires = []
         if real:
             starts = starts_of(spec.id)
-            for f in doc.get("regions", {}).get(spec.id, {}).get("featured_fires", []):
-                inside = [s for s in starts if f["first_day"] <= str(s.get("start", ""))[:10] <= f["last_day"]]
-                fires.append({**f, "run_starts": inside})
+            fires = [fire_entry(f, starts) for f in doc.get("regions", {}).get(spec.id, {}).get("featured_fires", [])]
         out.append({
             "id": spec.id,
             "name": spec.name,

@@ -30,6 +30,18 @@ Related work that the code does not use:
 | Common Metadata Repository granule search, for `MOD14`, `MYD14`, `VNP14IMG`, `VJ114IMG` and `VJ214IMG` | NASA EOSDIS (`https://cmr.earthdata.nasa.gov/search/granules.json`) | Public metadata, no login. Two recorded answers are kept for the tests in `backend/tests/fixtures/cmr_recorded/`. |
 | GIBS `BlueMarble_ShadedRelief_Bathymetry` | NASA EOSDIS Global Imagery Browse Services (`https://gibs.earthdata.nasa.gov/`) | United States Government work in the public domain. One image, `website/public/generated/terrain/earth_day.jpg`. |
 
+## Featured fires
+
+The names, dates, burned areas and points of the featured fires in `backend/firms/places.json` come from the fire agencies and the Copernicus Emergency Management Service; each entry names its page. Only the facts are used; no text or image is copied.
+
+| Region | Fires | Pages |
+| --- | --- | --- |
+| `plumas_ca` | Dixie (2021), North Complex (2020), Camp (2018), Park (2024) | CAL FIRE incident pages (`https://www.fire.ca.gov/incidents/`), the NIFC Wildland Fire Incident Locations service (`https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations/FeatureServer/0`), CAL FIRE's list of the largest California wildfires |
+| `lytton_bc` | Lytton Creek (2021), Elephant Hill (2017) | BC Wildfire Service historical fire incidents, BC Data Catalogue (`https://openmaps.gov.bc.ca/geo/pub/wfs`, layer `PROT_HISTORICAL_INCIDENTS_SP`) |
+| `evia_greece` | Northern Evia (2021), Mati and eastern Attica (2018), Varnavas (2024) | Copernicus EMS rapid mapping activations EMSR527, EMSR300 and EMSR746 (`https://mapping.emergency.copernicus.eu/activations/`), the European Forest Fire Information System burnt areas (`https://api.effis.emergency.copernicus.eu/rest/2/burntareas/current/`) |
+
+Where two sources give different areas (the Northern Evia fire: 50,909 ha in the Copernicus activation as of 11 August 2021, 51,881 ha in EFFIS; the Mati fire: 1,275.9 ha for the Rafina area in Copernicus, 1,362 ha in EFFIS), the entry names the one it gives in `area_source`.
+
 ## Elevation and imagery
 
 The credit strings are the ones `backend/terrain/tile_store.py` holds; a run carries the credit of its imagery in `assets.terrain_pack.ortho.attribution` and the site shows it.

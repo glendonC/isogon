@@ -106,7 +106,25 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
       "context_box": [-122.48, 39.1, -119.88, 41.0],
       "rows": "firms",
       "calendar": "/api/calendar?source=firms&region_id=plumas_ca",
-      "featured_fires": [{"id": "...", "name": "...", "first_day": "...", "last_day": "...", "point": [-121.0, 40.0], "blind_test_fire": false, "source": "https://...", "run_starts": [{"start": "...", "label": "..."}]}]
+      "featured_fires": [
+        {
+          "id": "north_complex_2020",
+          "name": "North Complex Fire",
+          "first_day": "2020-08-17",
+          "last_day": "2020-12-03",
+          "burned_area": {"value": 318935, "unit": "acres"},
+          "point": [-121.0537, 39.81113],
+          "point_kind": "origin of the Bear Fire, the complex's run of 8 and 9 September 2020",
+          "blind_test_fire": false,
+          "source": "https://services3.arcgis.com/...",
+          "area_source": "https://...",
+          "box": [-121.5537, 39.3111, -120.5537, 40.3111],
+          "calendar": "/api/calendar?source=firms&box=-121.5537,39.3111,-120.5537,40.3111",
+          "run_starts_until": "2020-12-03",
+          "run_starts_rule": "the region's real run starts from first_day to last_day",
+          "run_starts": [{"start": "2020-09-24", "label": "...", "...": "..."}]
+        }
+      ]
     }
   ],
   "featured_fires_from": "...",
@@ -124,7 +142,7 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
 Shortened: `places` has five entries, one per preset; `featured_fires` and `country_extents` are cut.
 
 - `rows` is `firms` for a region with cached FIRMS rows and `simulated` for one without; a simulated place has `country` and `calendar` `null` and no featured fires.
-- A featured fire's name, dates and point come from the page in its `source` (`backend/firms/places.json`). `blind_test_fire` marks the three 2021 test fires. `run_starts` are the region's real run starts (`GET /api/runs/starts`) inside the fire's dates.
+- A featured fire's name, dates, burned area and point come from the page in its `source` (`backend/firms/places.json`; `point_source`, `area_source` or `last_day_source` when one of them comes from another page; [sources.md](sources.md)). `blind_test_fire` marks the three 2021 test fires. `box` is the fire's point 0.5 degrees each way, and `calendar` that box's calendar. `run_starts` are the region's real run starts (`GET /api/runs/starts`, inside the region's terrain box) from `first_day` to `last_day`, or to 90 days after `first_day` when no end date is published; a fire outside the terrain box has none.
 - `country_extents` is where the rows of each cached country file lie; a box calendar counts only rows of those files.
 
 Shortened to one preset. `bbox` is `[west, south, east, north]` everywhere in this API.

@@ -145,6 +145,37 @@ class CurrentMonthTests(unittest.TestCase):
             self.assertEqual(seen, [])
 
 
+class PlacesRegistryTests(unittest.TestCase):
+    def test_every_featured_fire_is_sourced_dated_and_inside_its_region(self) -> None:
+        import datetime as dt
+
+        from backend.firms.places import fire_entry, load_places
+
+        doc = load_places()
+        blind = []
+        for region, r in doc["regions"].items():
+            w, s, e, n = fa.region_box(region)
+            for f in r["featured_fires"]:
+                with self.subTest(fire=f["id"]):
+                    lon, lat = f["point"]
+                    self.assertTrue(w <= lon <= e and s <= lat <= n)
+                    first = dt.date.fromisoformat(f["first_day"])
+                    if f["last_day"] is not None:
+                        self.assertLessEqual(first, dt.date.fromisoformat(f["last_day"]))
+                    for k in ("source", "point_source", "area_source", "last_day_source"):
+                        if k in f:
+                            self.assertTrue(f[k].startswith("https://"))
+                    self.assertIn(f["burned_area"]["unit"], ("acres", "hectares"))
+                    if f["blind_test_fire"]:
+                        blind.append((region, first.year))
+                    elif region in ("plumas_ca", "lytton_bc", "evia_greece"):
+                        self.assertNotEqual(first.year, 2021)   # no other 2021 fire of a test region is offered
+                    entry = fire_entry(f, [{"start": f["first_day"]}, {"start": "1999-01-01"}])
+                    self.assertEqual([x["start"] for x in entry["run_starts"]], [f["first_day"]])
+                    self.assertEqual(list(parse_box(entry["calendar"].split("box=")[1])), entry["box"])
+        self.assertEqual(sorted(blind), [("evia_greece", 2021), ("lytton_bc", 2021), ("plumas_ca", 2021)])
+
+
 def _real_cache() -> bool:
     return (fa.FIRMS_CACHE_DIR / "raw" / "modis").is_dir() and (fa.FIRMS_CACHE_DIR / "extract" / "plumas_ca").is_dir()
 

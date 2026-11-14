@@ -1,8 +1,176 @@
 {
-  "what": "Featured fires of each region: the name and dates the fire agency gives on the page in source, and one point (longitude, latitude) of the fire. They choose what the entry offers; the rows and every figure come from NASA FIRMS.",
+  "what": "Featured fires of each region: the name, dates, burned area and point the page in source gives (point_source when the point comes from another page). They choose what the entry offers; the rows and every figure of a calendar or a run come from NASA FIRMS. last_day is null where no end date is published.",
   "regions": {
-    "plumas_ca": {"featured_fires": []},
-    "lytton_bc": {"featured_fires": []},
-    "evia_greece": {"featured_fires": []}
+    "plumas_ca": {
+      "featured_fires": [
+        {
+          "id": "dixie_2021",
+          "name": "Dixie Fire",
+          "first_day": "2021-07-13",
+          "last_day": "2021-10-25",
+          "burned_area": {
+            "value": 963309,
+            "unit": "acres"
+          },
+          "point": [
+            -121.389439,
+            39.871306
+          ],
+          "point_kind": "origin",
+          "blind_test_fire": true,
+          "source": "https://www.fire.ca.gov/incidents/2021/7/13/dixie-fire"
+        },
+        {
+          "id": "north_complex_2020",
+          "name": "North Complex Fire",
+          "first_day": "2020-08-17",
+          "last_day": "2020-12-03",
+          "burned_area": {
+            "value": 318935,
+            "unit": "acres"
+          },
+          "point": [
+            -121.0537,
+            39.81113
+          ],
+          "point_kind": "origin of the Bear Fire, the complex's run of 8 and 9 September 2020",
+          "blind_test_fire": false,
+          "source": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations/FeatureServer/0/query?where=UniqueFireIdentifier+IN+('2021-CABTU-009205','2020-CAPNF-001308','2020-CAPNF-001302','2020-CAPNF-001316','2018-CABTU-016737','2024-CABTU-013761','2021-CAPNF-001046','2021-CAPNF-001064')&outFields=IncidentName,UniqueFireIdentifier,FireDiscoveryDateTime,ContainmentDateTime,IncidentSize,InitialLatitude,InitialLongitude&f=json",
+          "area_source": "https://34c031f8-c9fd-4018-8c5a-4159cdff6b0d-cdn-endpoint.azureedge.net/-/media/calfire-website/our-impact/fire-statistics/top-20-largest-ca-wildfires.pdf"
+        },
+        {
+          "id": "camp_2018",
+          "name": "Camp Fire",
+          "first_day": "2018-11-08",
+          "last_day": "2018-11-25",
+          "burned_area": {
+            "value": 153336,
+            "unit": "acres"
+          },
+          "point": [
+            -121.4347,
+            39.8134
+          ],
+          "point_kind": "origin",
+          "blind_test_fire": false,
+          "source": "https://www.fire.ca.gov/incidents/2018/11/8/camp-fire"
+        },
+        {
+          "id": "park_2024",
+          "name": "Park Fire",
+          "first_day": "2024-07-24",
+          "last_day": "2024-09-26",
+          "burned_area": {
+            "value": 429603,
+            "unit": "acres"
+          },
+          "point": [
+            -121.76168,
+            39.7789
+          ],
+          "point_kind": "origin",
+          "blind_test_fire": false,
+          "source": "https://www.fire.ca.gov/incidents/2024/7/24/park-fire",
+          "last_day_source": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations/FeatureServer/0/query?where=UniqueFireIdentifier+IN+('2021-CABTU-009205','2020-CAPNF-001308','2020-CAPNF-001302','2020-CAPNF-001316','2018-CABTU-016737','2024-CABTU-013761','2021-CAPNF-001046','2021-CAPNF-001064')&outFields=IncidentName,UniqueFireIdentifier,FireDiscoveryDateTime,ContainmentDateTime,IncidentSize,InitialLatitude,InitialLongitude&f=json"
+        }
+      ]
+    },
+    "lytton_bc": {
+      "featured_fires": [
+        {
+          "id": "lytton_creek_2021",
+          "name": "Lytton Creek fire (K71086)",
+          "first_day": "2021-06-30",
+          "last_day": "2021-11-18",
+          "burned_area": {
+            "value": 83671.3,
+            "unit": "hectares"
+          },
+          "point": [
+            -121.5832,
+            50.2261
+          ],
+          "point_kind": "origin",
+          "blind_test_fire": true,
+          "source": "https://openmaps.gov.bc.ca/geo/pub/wfs?service=WFS&version=2.0.0&request=GetFeature&typeName=WHSE_LAND_AND_NATURAL_RESOURCE.PROT_HISTORICAL_INCIDENTS_SP&outputFormat=json&srsName=EPSG:4326&CQL_FILTER=FIRE_YEAR%3E%3D2012%20AND%20CURRENT_SIZE%3E50000"
+        },
+        {
+          "id": "elephant_hill_2017",
+          "name": "Elephant Hill fire (K20637)",
+          "first_day": "2017-07-06",
+          "last_day": null,
+          "burned_area": {
+            "value": 191865,
+            "unit": "hectares"
+          },
+          "point": [
+            -121.2976,
+            50.6998
+          ],
+          "point_kind": "origin",
+          "blind_test_fire": false,
+          "source": "https://openmaps.gov.bc.ca/geo/pub/wfs?service=WFS&version=2.0.0&request=GetFeature&typeName=WHSE_LAND_AND_NATURAL_RESOURCE.PROT_HISTORICAL_INCIDENTS_SP&outputFormat=json&srsName=EPSG:4326&CQL_FILTER=FIRE_YEAR%3E%3D2012%20AND%20CURRENT_SIZE%3E50000"
+        }
+      ]
+    },
+    "evia_greece": {
+      "featured_fires": [
+        {
+          "id": "northern_evia_2021",
+          "name": "Northern Evia fire (EMSR527)",
+          "first_day": "2021-08-03",
+          "last_day": null,
+          "burned_area": {
+            "value": 51881,
+            "unit": "hectares"
+          },
+          "point": [
+            23.3199,
+            38.8834
+          ],
+          "point_kind": "centre of the burned area",
+          "blind_test_fire": true,
+          "source": "https://mapping.emergency.copernicus.eu/activations/EMSR527/",
+          "point_source": "https://api.effis.emergency.copernicus.eu/rest/2/burntareas/current/?country=EL&area_ha__gte=10000&limit=100",
+          "area_source": "https://api.effis.emergency.copernicus.eu/rest/2/burntareas/current/?country=EL&area_ha__gte=10000&limit=100"
+        },
+        {
+          "id": "mati_2018",
+          "name": "Mati and eastern Attica fire (EMSR300)",
+          "first_day": "2018-07-23",
+          "last_day": null,
+          "burned_area": {
+            "value": 1362,
+            "unit": "hectares"
+          },
+          "point": [
+            23.9779,
+            38.0405
+          ],
+          "point_kind": "centre of the burned area",
+          "blind_test_fire": false,
+          "source": "https://mapping.emergency.copernicus.eu/activations/EMSR300",
+          "point_source": "https://api.effis.emergency.copernicus.eu/rest/2/burntareas/current/?country=EL&firedate__gte=2018-07-22&firedate__lte=2018-07-25&limit=50",
+          "area_source": "https://api.effis.emergency.copernicus.eu/rest/2/burntareas/current/?country=EL&firedate__gte=2018-07-22&firedate__lte=2018-07-25&limit=50"
+        },
+        {
+          "id": "varnavas_2024",
+          "name": "Varnavas fire, northeastern Attica (EMSR746)",
+          "first_day": "2024-08-11",
+          "last_day": null,
+          "burned_area": {
+            "value": 10413.8,
+            "unit": "hectares"
+          },
+          "point": [
+            23.945885,
+            38.171965
+          ],
+          "point_kind": "centre of the Copernicus activation",
+          "blind_test_fire": false,
+          "source": "https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations/?code=EMSR746"
+        }
+      ]
+    }
   }
 }
