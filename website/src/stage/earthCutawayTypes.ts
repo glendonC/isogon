@@ -11,7 +11,13 @@ import type {
  */
 export type TheaterId = string;
 
-export type InspectorCameraPreset = 'overview' | 'canyon' | 'ridge' | 'nadir';
+/**
+ * Camera presets of the workspace. `overview` and `nadir` show the place's box as a block on a
+ * floor; `canyon` and `ridge` are close views with the land running to a horizon; `region` is
+ * the whole box seen from higher with the land around it and no block edge or floor (where the
+ * place has no land around its box to show, it falls back to the block).
+ */
+export type InspectorCameraPreset = 'overview' | 'canyon' | 'ridge' | 'nadir' | 'region';
 
 export type RecordEraJumpId = '2006_modis' | '2012_snpp' | '2026_fused';
 

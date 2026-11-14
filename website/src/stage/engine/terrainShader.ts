@@ -1109,10 +1109,11 @@ void main() {
   float gone = edgeGone(vUv) * belowHorizon(vWorldPos);
   finalRgb = mix(finalRgb, nightGrade(backdrop), gone);
 
-  // Subtle top bevel edge highlight around the 4 outer cut boundaries of the slab
+  // Subtle top bevel edge highlight around the 4 outer cut boundaries of the slab. Where the land
+  // around the box is drawn there is no cut boundary, and no line
   float borderDist = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
   float rimBevel = 1.0 - smoothstep(0.0, 0.0028, borderDist);
-  finalRgb = mix(finalRgb, finalRgb + vec3(0.14, 0.17, 0.22), rimBevel * 0.65 * (1.0 - gone));
+  finalRgb = mix(finalRgb, finalRgb + vec3(0.14, 0.17, 0.22), rimBevel * 0.65 * (1.0 - gone) * (1.0 - uContextMix));
 
   gl_FragColor = vec4(finalRgb, 1.0);
 }

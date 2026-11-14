@@ -2786,7 +2786,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       if (p.inWorkspace && workspaceFrame) {
         const frameCx = (workspaceFrame.left + workspaceFrame.right) * 0.5;
         const frameCy = (workspaceFrame.top + workspaceFrame.bottom) * 0.5;
-        if (p.cameraPreset === 'overview' || p.cameraPreset === 'nadir') {
+        if (p.cameraPreset === 'overview' || p.cameraPreset === 'nadir' || p.cameraPreset === 'region') {
           // Whole-slab views: fit the slab of that preset inside the frame, never magnified
           workspaceFitAge += 1;
           const fitSky = p.mode === 'observer' && p.cameraPreset === 'overview';
@@ -3451,8 +3451,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         terrainUniforms.uLatticeMix.value = 1.0 - worldMix;
         // Context terrain: wherever the world is shown instead of the block (landing world view and
         // the close presets), once the region's own terrain has settled
+        // (and in the preset that shows the whole box with its land, from any distance)
         const worldShown = p.inWorkspace
-          ? 1.0 - THREE.MathUtils.smoothstep(orbitCurrent.distance, 8.5, 11.5)
+          ? p.cameraPreset === 'region'
+            ? 1.0
+            : 1.0 - THREE.MathUtils.smoothstep(orbitCurrent.distance, 8.5, 11.5)
           : landingWorld
             ? 1.0
             : 0.0;
