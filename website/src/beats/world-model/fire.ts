@@ -80,6 +80,56 @@ export function onScreen(
   return { x, y };
 }
 
+export interface ScreenBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/**
+ * The fire's extent on screen over the window: every detection the run shows, and the hidden ones once revealed, put
+ * on screen through the stage's grid. The outer twentieth on each side is left out so one stray detection does not
+ * stretch it. Null when fewer than three detections are on screen. The stage's `onFireAnchor` box replaces it.
+ */
+export function fireExtent(
+  run: DynamicRegionRun | null,
+  box: [number, number, number, number] | null,
+  grid: { divisions: number; points: Array<[number, number] | null> } | undefined,
+): ScreenBox | null {
+  if (!run || !box || !grid) return null;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const add = (footprints: unknown) => {
+    if (!Array.isArray(footprints)) return;
+    for (const f of footprints) {
+      if (!Array.isArray(f)) continue;
+      const lon = num(f[0]);
+      const lat = num(f[1]);
+      if (lon === null || lat === null) continue;
+      const p = onScreen(lon, lat, box, grid);
+      if (p) {
+        xs.push(p.x);
+        ys.push(p.y);
+      }
+    }
+  };
+  for (const f of framesOf(run)) add(f.footprints);
+  const overs = obj(obj(obj(run as unknown as Obj)?.blind_test)?.reveal)?.overpasses;
+  if (Array.isArray(overs)) for (const o of overs) add(obj(o)?.footprints);
+  if (xs.length < 3) return null;
+  const cut = (v: number[]) => {
+    const a = [...v].sort((p, q) => p - q);
+    const k = Math.floor(a.length * 0.05);
+    return [a[k], a[a.length - 1 - k]];
+  };
+  const [left, right] = cut(xs);
+  const [top, bottom] = cut(ys);
+  // A detection is drawn as light around its point: the box clears that glow.
+  const m = 14;
+  return { left: left - m, top: top - m, right: right + m, bottom: bottom + m };
+}
+
 const PLATFORMS: Record<string, string> = {
   VIIRS_SNPP: 'Suomi NPP VIIRS',
   VIIRS_NOAA20: 'NOAA-20 VIIRS',

@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../app/store';
 import { beatOf } from '../../app/names';
-import { fireAt, looksOf, onScreen, passFacts, recordLine, runBox, windowCounts } from './fire';
+import { fireAt, fireExtent, looksOf, onScreen, passFacts, recordLine, runBox, windowCounts } from './fire';
 import '../../styles/world-model.css';
 
 const list = (xs: number[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : String(xs[0] ?? ''));
 
+const PLATE_W = 440;
+const GAP = 40;
+const EDGE = 24;
+
 /**
  * World model on a real run, in place on the terrain: the part's name as a banner when it opens, one label on the fire
- * (the pass on show while VIIRS is hidden; the verdict after the reveal; the record on a recorded test fire), the
- * pass count low left, and the one action above the track. Nothing is stacked in a column.
+ * for the pass on show while VIIRS is hidden, the verdict after the reveal (or the record on a recorded test fire)
+ * beside the fire's extent with a leader to it, what was hidden low left, and the one action above the track. Nothing
+ * is stacked in a column, and nothing repeats what the track says.
  */
 export function WorldModelScene() {
   const ws = useWorkspace();
@@ -112,7 +117,70 @@ export function WorldModelScene() {
     );
   }
 
+  // Low left: what was hidden and, after the reveal, what it held. The pass and its count are the track's.
+  let readout: React.ReactNode = null;
+  if (scene === 'blind' && counts) {
+    readout = (
+      <>
+        <span className="sys-display">{counts.hiddenPasses}</span>
+        <span className="sys-readout__label">
+          VIIRS passes hidden. The estimate has {counts.modisPasses} MODIS passes, {counts.modisDetections.toLocaleString('en-US')}{' '}
+          detections.
+        </span>
+      </>
+    );
+  } else if (scene === 'revealed' && facts?.held) {
+    readout = (
+      <>
+        <span className="sys-readout__delta">
+          {facts.satellite}, {facts.utc}
+        </span>
+        <span className="sys-display">{(model.revealedHere ?? 0).toLocaleString('en-US')}</span>
+        <span className="sys-readout__label">
+          hidden detections on this pass, now shown
+          {model.revealedTotal
+            ? `. ${model.revealedTotal.detections.toLocaleString('en-US')} over the ${counts?.hiddenPasses ?? model.revealedTotal.passes} hidden passes.`
+            : ''}
+        </span>
+      </>
+    );
+  } else if (scene === 'revealed' && model.revealedTotal) {
+    readout = (
+      <>
+        <span className="sys-display">{model.revealedTotal.detections.toLocaleString('en-US')}</span>
+        <span className="sys-readout__label">
+          hidden detections over the {counts?.hiddenPasses ?? model.revealedTotal.passes} hidden passes, now shown
+        </span>
+      </>
+    );
+  }
+
   // The plate hangs below an anchor near the top and opens to the left of one near the right edge.
+  // The verdict and the record are about the whole window: beside the fire's extent, never over it.
+  const ext = scene === 'revealed' || scene === 'record' ? fireExtent(run.active, box, model.grid) : null;
+  let beside: React.ReactNode = null;
+  if (ext && plate) {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const roomRight = W - EDGE - (ext.right + GAP);
+    const roomLeft = ext.left - GAP - EDGE;
+    const right = roomRight >= PLATE_W || (roomLeft < PLATE_W && roomRight >= roomLeft);
+    const plateLeft = right ? Math.min(ext.right + GAP, W - EDGE - PLATE_W) : Math.max(EDGE, ext.left - GAP - PLATE_W);
+    const cy = Math.max(190, Math.min(H - 330, (ext.top + ext.bottom) / 2));
+    const leadY = Math.max(ext.top, Math.min(ext.bottom, cy));
+    const leadFrom = right ? ext.right : plateLeft + PLATE_W;
+    const leadTo = right ? plateLeft : ext.left;
+    beside = (
+      <>
+        <span className="wm-extent" style={{ left: ext.left, top: ext.top, width: ext.right - ext.left, height: ext.bottom - ext.top }} />
+        {leadTo - leadFrom > 4 && <span className="wm-beside__leader" style={{ left: leadFrom, top: leadY, width: leadTo - leadFrom }} />}
+        <div className={`wm-beside sys-plate${hidden ? ' sys-hidden' : ''}`} style={{ left: plateLeft, top: cy, width: PLATE_W }}>
+          {plate}
+        </div>
+      </>
+    );
+  }
+
   const hang = at && at.y < 300 ? 'below' : 'above';
   const side = at && at.x > window.innerWidth - 460 ? 'left' : 'right';
   const label = plate && (
@@ -137,39 +205,9 @@ export function WorldModelScene() {
         </div>
       )}
 
-      {at ? label : plate && <div className="wm-corner sys-plate">{plate}</div>}
+      {beside ?? (at ? label : plate && <div className="wm-corner sys-plate">{plate}</div>)}
 
-      {facts && (
-        <div className="wm-readout sys-readout sys-plate">
-          {scene === 'revealed' && facts.held ? (
-            <>
-              <span className="sys-readout__delta">
-                {facts.satellite}, {facts.utc}
-              </span>
-              <span className="sys-display">{(model.revealedHere ?? 0).toLocaleString('en-US')}</span>
-              <span className="sys-readout__label">
-                hidden detections on this pass, now shown
-                {model.revealedTotal
-                  ? `. ${model.revealedTotal.detections.toLocaleString('en-US')} over the ${counts?.hiddenPasses ?? model.revealedTotal.passes} hidden passes.`
-                  : ''}
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="sys-readout__delta">{facts.gap ? `${facts.gap} after the pass before` : 'the first pass'}</span>
-              <span className="sys-display">
-                {facts.index + 1}/{facts.count}
-              </span>
-              <span className="sys-readout__label">
-                passes
-                {counts && (scene === 'blind' || scene === 'revealed')
-                  ? `. The estimate has ${counts.modisPasses} MODIS passes, ${counts.modisDetections.toLocaleString('en-US')} detections. ${counts.hiddenPasses} VIIRS passes are hidden.`
-                  : ''}
-              </span>
-            </>
-          )}
-        </div>
-      )}
+      {readout && <div className="wm-readout sys-readout sys-plate">{readout}</div>}
 
       {scene === 'blind' && (
         <button type="button" className="sys-ctl sys-plate wm-act" onClick={test.act} disabled={test.revealing}>

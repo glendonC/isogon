@@ -294,6 +294,9 @@ export function App() {
   const [evidenceFocus, setEvidenceFocus] = useState<'next_look' | null>(null);
   /** The step of the story the workspace is on, and the blind test's debrief screen. */
   const [step, setStep] = useState<Step>('fire');
+  /** The step as the run requests see it when their answer arrives. */
+  const stepRef = useRef<Step>('fire');
+  stepRef.current = step;
   const [debriefOpen, setDebriefOpen] = useState(false);
   const telemetryRef = useRef<EarthStageTelemetry | null>(null);
   /** How a selected item is marked, from the address (?sel=chip|square|box); chip unless it says otherwise. */
@@ -425,7 +428,8 @@ export function App() {
         setRealStart(realStartParam);
         if (realStartParam) setRealFailed(null);
         setSelectedFinding(null);
-        if (!params.reveal) setCameraPreset('overview');
+        // World model looks at its fire from close by; elsewhere a new run opens on the overview. A reveal keeps the camera.
+        if (!params.reveal) setCameraPreset(stepRef.current === 'fire' || stepRef.current === 'test' ? 'canyon' : 'overview');
         const reported = runData.metrics?.holdout_viirs;
         const nextHoldout = params.reveal ? false : typeof reported === 'boolean' ? reported : params.holdoutViirs;
         setHoldoutViirs(nextHoldout);
@@ -707,8 +711,9 @@ export function App() {
       if (b === 'calendar') goStep('record');
       else if (b === 'model') {
         if (step === 'fire' || step === 'test') return setDebriefOpen(false);
-        // World model opens with VIIRS hidden where it can be hidden, and on the estimate's own view.
+        // World model opens with VIIRS hidden where it can be hidden, on the estimate's own view, close to its fire.
         setWorkspaceMode('reconstruction');
+        setCameraPreset('canyon');
         const blind = isRealRun(activeRun) && !beforeSharpSatellite(activeRun) && !hideRefused(activeRun?.region.id ?? '', realStart);
         goStep(blind ? 'test' : 'fire');
       } else if (b === 'world') goStep('look');
@@ -760,7 +765,10 @@ export function App() {
       }
       pendingStepRef.current = id === 'model' ? 'test' : 'look';
       enterWorkspace('cutaway');
-      if (id === 'model') setWorkspaceMode('reconstruction');
+      if (id === 'model') {
+        setWorkspaceMode('reconstruction');
+        setCameraPreset('canyon');
+      }
     },
     [enterWorkspace],
   );
@@ -1253,6 +1261,7 @@ export function App() {
         handleSelectMonth(ym);
         setDebriefOpen(false);
         setWorkspaceMode('reconstruction');
+        setCameraPreset('canyon');
         // World model opens blind on the month's run once it is in, unless nothing can be hidden there.
         if (Number(ym.slice(0, 4)) < 2012 || hideRefused(rec.place.regionId, ym)) {
           pendingHideRef.current = false;
