@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import hashlib
 import json
 import sys
@@ -280,7 +279,8 @@ def build_all(output_dir: Path | None = None) -> Path:
     target_dir = output_dir or (REPO_ROOT / "website" / "public" / "generated" / "terrain")
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    retrieved_at_utc = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # No build or download time is written: the manifest records what the files are (source, licence, sha256),
+    # so a rebuild of the same tiles gives the same manifest.
     width_m, height_m = wgs84_bbox_dimensions_m(CA_BBOX)
 
     dem_info = build_california_dem_and_normals(target_dir)
@@ -295,7 +295,6 @@ def build_all(output_dir: Path | None = None) -> Path:
 
     manifest: dict[str, Any] = {
         "schemaVersion": "1.0.0",
-        "generatedAtUtc": retrieved_at_utc,
         "region": {
             "id": "northern_california_feather_river_almanor",
             "name": "Northern California Sierra Nevada / Feather River Canyon / Lake Almanor Corridor",
@@ -364,7 +363,6 @@ def build_all(output_dir: Path | None = None) -> Path:
                 "decodingFormula": "elevation_m = (R * 256.0 + G + B / 256.0) - 32768.0",
                 "provider": "Mapzen / AWS Open Data Registry Terrain Tiles (USGS 3DEP / SRTM)",
                 "license": "Public Domain (USGS 3DEP in US) / Open Data",
-                "retrievedAtUtc": retrieved_at_utc,
             },
             "ca_normals": {
                 "file": normals_path.name,
@@ -383,7 +381,6 @@ def build_all(output_dir: Path | None = None) -> Path:
                 "sourceUrlTemplate": AWS_TERRARIUM_URL,
                 "provider": "Derived via central finite differences from AWS Terrain Tiles (USGS 3DEP)",
                 "license": "Public Domain (USGS 3DEP in US) / Open Data",
-                "retrievedAtUtc": retrieved_at_utc,
             },
             "ca_satellite": {
                 "file": sat_path.name,
@@ -399,7 +396,6 @@ def build_all(output_dir: Path | None = None) -> Path:
                 "sourceUrlTemplate": EOX_S2_2020_URL,
                 "provider": "Sentinel-2 cloudless 2020 by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2020)",
                 "license": "CC BY 4.0 (https://s2maps.eu)",
-                "retrievedAtUtc": retrieved_at_utc,
             },
             "earth_day": {
                 "file": earth_day_path.name,
@@ -414,7 +410,6 @@ def build_all(output_dir: Path | None = None) -> Path:
                 "sourceUrlTemplate": NASA_GIBS_BLUEMARBLE_URL,
                 "provider": "NASA Earth Observatory / NASA GIBS Blue Marble Next Generation (Shaded Relief and Bathymetry, August 2004)",
                 "license": "US Government Public Domain (NASA Visible Earth)",
-                "retrievedAtUtc": retrieved_at_utc,
             },
             "earth_bump": {
                 "file": bump_path.name,
@@ -436,7 +431,6 @@ def build_all(output_dir: Path | None = None) -> Path:
                 "sourceUrlTemplate": AWS_TERRARIUM_URL,
                 "provider": "Mapzen / AWS Open Data Registry Terrain Tiles (ETOPO1 / SRTM / GMTED2010)",
                 "license": "Open Data / Public Domain",
-                "retrievedAtUtc": retrieved_at_utc,
             },
         },
     }
