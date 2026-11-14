@@ -1,0 +1,69 @@
+{
+ "feed": {
+  "updated": "2026-11-14T08:00:44.982Z",
+  "id": "https://cmr.earthdata.nasa.gov:443/search/granules.json?collection_concept_id=C2271754179-LPCLOUD&bounding_box=-122.48,39.1,-119.88,41.0&temporal=2021-08-01T00:00:00Z,2021-08-01T23:59:59Z&page_size=50&sort_key=start_date",
+  "title": "ECHO granule metadata",
+  "entry": [
+   {
+    "producer_granule_id": "MOD14.A2021213.0625.061.2021213154132",
+    "time_start": "2021-08-01T06:25:00.000Z",
+    "cloud_cover": "5.0",
+    "updated": "2021-08-01T14:48:23.551Z",
+    "orbit_calculated_spatial_domains": [
+     {
+      "equator_crossing_date_time": "2021-08-01T07:07:29.320Z",
+      "equator_crossing_longitude": "49.9068687714017",
+      "orbit_number": "114999"
+     }
+    ],
+    "dataset_id": "MODIS/Terra Thermal Anomalies/Fire 5-Min L2 Swath 1km V061",
+    "data_center": "LPCLOUD",
+    "title": "MOD14.A2021213.0625.061.2021213154132",
+    "coordinate_system": "GEODETIC",
+    "day_night_flag": "NIGHT",
+    "time_end": "2021-08-01T06:30:00.000Z",
+    "id": "G2278867334-LPCLOUD",
+    "original_format": "ECHO10",
+    "granule_size": "0.20713",
+    "browse_flag": true,
+    "polygons": [
+     [
+      "44.4057588 -114.0228863 40.1443519 -141.9988332 22.9016669 -134.4515418 26.1466537 -111.5512184 44.4057588 -114.0228863"
+     ]
+    ],
+    "collection_concept_id": "C2271754179-LPCLOUD",
+    "online_access_flag": true
+   },
+   {
+    "producer_granule_id": "MOD14.A2021213.1825.061.2021214033246",
+    "time_start": "2021-08-01T18:25:00.000Z",
+    "cloud_cover": "31.0",
+    "updated": "2021-08-02T02:37:43.433Z",
+    "orbit_calculated_spatial_domains": [
+     {
+      "equator_crossing_date_time": "2021-08-01T18:39:40.313Z",
+      "equator_crossing_longitude": "-123.142760184998",
+      "orbit_number": "115006"
+     }
+    ],
+    "dataset_id": "MODIS/Terra Thermal Anomalies/Fire 5-Min L2 Swath 1km V061",
+    "data_center": "LPCLOUD",
+    "title": "MOD14.A2021213.1825.061.2021214033246",
+    "coordinate_system": "GEODETIC",
+    "day_night_flag": "DAY",
+    "time_end": "2021-08-01T18:30:00.000Z",
+    "id": "G2278875523-LPCLOUD",
+    "original_format": "ECHO10",
+    "granule_size": "0.455991",
+    "browse_flag": true,
+    "polygons": [
+     [
+      "35.7808394 -127.8398344 32.3631666 -102.416221 49.2654939 -92.932534 54.0728825 -126.6527989 35.7808394 -127.8398344"
+     ]
+    ],
+    "collection_concept_id": "C2271754179-LPCLOUD",
+    "online_access_flag": true
+   }
+  ]
+ }
+}

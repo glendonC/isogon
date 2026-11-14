@@ -1,0 +1,155 @@
+"""D8: the pass timeline, GET /api/passes (CONTRACT 12 S3 and 13).
+
+The first tests use the recorded CMR replies of `fixtures/cmr_recorded` and a few FIRMS rows written here (no
+network, no FIRMS cache). The last class reads the real caches over HTTP and skips without them.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from backend.firms import cmr_passes as cp  # noqa: E402
+from backend.firms.cmr_passes import CmrCacheMissing  # noqa: E402
+from backend.firms.pass_timeline import pass_timeline  # noqa: E402
+from backend.tests.test_cmr_passes import RecordedCmr  # noqa: E402
+
+PACK = (-121.44, 39.86, -120.92, 40.24)      # plumas_ca's pack box
+
+
+def _row(lat: float, lon: float, when: dt.datetime, satellite: str, instrument: str, typ: str = "0") -> dict[str, str]:
+    """A FIRMS row as the archive reader returns it (written for this test; not a NASA record)."""
+    return {"latitude": f"{lat}", "longitude": f"{lon}", "acq_date": when.strftime("%Y-%m-%d"),
+            "acq_time": when.strftime("%H%M"), "satellite": satellite, "instrument": instrument, "frp": "12.5",
+            "scan": "1.0", "track": "1.0", "daynight": "D", "confidence": "80", "type": typ, "version": "TEST"}
+
+
+class FixtureTimelineTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.cache = Path(cls.tmp.name)
+        cp.fetch("2021-08", "2021-08", ["plumas_ca"], cache_dir=cls.cache, opener=RecordedCmr(), log=lambda _m: None, pause_s=0)
+        passes = cp.cmr_passes(PACK, "2021-08-01", "2021-08-02", cache_dir=cls.cache)
+        cls.terra = next(p for p in passes if p["platform"] == "MODIS_TERRA" and p["day_night"] == "DAY")
+        mid = dt.datetime.fromisoformat(cls.terra["time_mid"].replace("Z", "+00:00"))
+        cls.rows = [
+            _row(40.00, -121.20, mid, "Terra", "MODIS"),
+            _row(40.01, -121.21, mid, "Terra", "MODIS", typ="2"),           # a static land source, counted apart
+            _row(40.90, -120.10, mid, "Terra", "MODIS"),                    # in the context box, not the pack box
+            _row(40.02, -121.22, dt.datetime(2021, 8, 1, 14, 0, tzinfo=dt.timezone.utc), "N", "VIIRS"),  # no pass then
+        ]
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.tmp.cleanup()
+
+    def _timeline(self, **kw: object) -> dict:
+        args = {"region_id": "plumas_ca", "start": "2021-08-01", "end": "2021-08-02", "cache_dir": self.cache,
+                "read_firms": lambda box, t0, t1, platforms=None: list(self.rows)}
+        args.update(kw)
+        return pass_timeline(**args)
+
+    def test_every_pass_with_what_firms_saw_on_it(self) -> None:
+        tl = self._timeline()
+        self.assertEqual({p["platform"] for p in tl["passes"]}, {"MODIS_TERRA", "VIIRS_SNPP"})
+        hit = [p for p in tl["passes"] if p["firms_detection_in_box"]]
+        self.assertEqual(len(hit), 1)
+        p = hit[0]
+        self.assertEqual((p["time_start"], p["platform"]), (self.terra["time_start"], "MODIS_TERRA"))
+        self.assertEqual((p["firms_pixels_in_box"], p["firms_static_pixels_in_box"]), (2, 1))
+        self.assertEqual(p["cloud_cover_pct"], self.terra["cloud_cover_pct"])
+        for q in tl["passes"]:
+            self.assertGreater(q["box_share"], 0.0)
+            self.assertIn(q["day_night"], ("DAY", "NIGHT", "BOTH"))
+        self.assertTrue(all(q["cloud_cover_pct"] is None for q in tl["passes"] if q["platform"] == "VIIRS_SNPP"))
+        self.assertEqual(tl["firms_overpasses_without_a_pass"], [{"platform": "VIIRS_SNPP", "time_utc": "2021-08-01T14:00:00Z", "pixels": 1}])
+        s = tl["summary"]["MODIS_TERRA"]
+        self.assertEqual((s["passes"], s["with_detection"], s["without_detection"]), (2, 1, 1))
+        self.assertEqual(tl["known_gaps"], [])
+
+    def test_the_context_box_and_a_platform_filter(self) -> None:
+        tl = self._timeline(box="context")
+        hit = [p for p in tl["passes"] if p["firms_detection_in_box"]]
+        self.assertEqual(hit[0]["firms_pixels_in_box"], 3)              # the row outside the pack box counts here
+        only = self._timeline(platforms=["VIIRS_SNPP"])
+        self.assertEqual({p["platform"] for p in only["passes"]}, {"VIIRS_SNPP"})
+        self.assertEqual(set(only["collections"]), {"VIIRS_SNPP"})
+
+    def test_requests_are_checked(self) -> None:
+        with self.assertRaises(KeyError):
+            self._timeline(region_id="blue_mountains_au")
+        for bad in ({"end": "2021-08-01"}, {"start": "2021-01-01", "end": "2022-02-01"}, {"box": "tile"},
+                    {"platforms": ["GOES"]}, {"start": "first of August"}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                self._timeline(**bad)
+        with self.assertRaises(CmrCacheMissing):
+            self._timeline(start="2021-09-01", end="2021-09-03")
+
+    def test_a_known_gap_is_named_in_its_window(self) -> None:
+        from backend.firms import pass_timeline as pt
+
+        gaps = [g for g in pt.KNOWN_GAPS if g["platform"] == "VIIRS_NOAA20"]
+        self.assertEqual(gaps[0]["until"], "2018-07-01")
+
+
+def _cached() -> bool:
+    from backend.firms import archive as fa
+
+    return fa.extract_path("plumas_ca", "viirs-snpp", 2021).is_file() and cp.pass_file("plumas_ca", "VIIRS_SNPP", 2021).is_file()
+
+
+class RealTimelineTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        if not _cached():
+            raise unittest.SkipTest("FIRMS rows or CMR passes for plumas_ca 2021 are not cached on this machine")
+        from backend.tests import test_server_d5 as d5
+
+        cls.req = staticmethod(d5._req)
+
+    def _get(self, q: str) -> tuple[int, dict]:
+        status, _, raw = self.req("/api/passes?" + q)
+        return status, json.loads(raw)
+
+    def test_the_dixie_window_over_http(self) -> None:
+        status, tl = self._get("region_id=plumas_ca&start=2021-07-22&end=2021-07-25")
+        self.assertEqual(status, 200, tl)
+        self.assertGreater(len(tl["passes"]), 30)
+        self.assertEqual(tl["firms_overpasses_without_a_pass"], [])   # every FIRMS overpass of 2021 has its pass (D6)
+        self.assertTrue(all(p["firms_detection_in_box"] for p in tl["passes"]))    # the Dixie fire: every pass saw it
+        self.assertEqual(set(tl["summary"]), {"MODIS_TERRA", "MODIS_AQUA", "VIIRS_SNPP", "VIIRS_NOAA20"})
+        status, quiet = self._get("region_id=plumas_ca&start=2021-06-01&end=2021-06-04")
+        self.assertEqual(status, 200)
+        self.assertFalse(any(p["firms_detection_in_box"] for p in quiet["passes"]))  # before it, none did
+        self.assertGreater(sum(1 for p in quiet["passes"] if p["box_inside"]), 30)
+
+    def test_the_season_agrees_with_the_d6_cross_check(self) -> None:
+        status, tl = self._get("region_id=plumas_ca&start=2021-06-01&end=2021-10-01")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(tl["passes"]), 1319)
+        self.assertEqual(sum(1 for p in tl["passes"] if p["firms_detection_in_box"]), 413)
+
+    def test_a_short_collection_is_named_and_its_firms_overpasses_listed(self) -> None:
+        status, tl = self._get("region_id=plumas_ca&start=2018-04-01&end=2018-06-01&box=context&platforms=VIIRS_NOAA20")
+        self.assertEqual(status, 200, tl)
+        self.assertEqual([g["platform"] for g in tl["known_gaps"]], ["VIIRS_NOAA20"])
+        self.assertGreater(len(tl["firms_overpasses_without_a_pass"]), 30)
+
+    def test_errors(self) -> None:
+        self.assertEqual(self._get("region_id=plumas_ca&start=2026-01-01&end=2026-01-05")[0], 404)   # CMR not fetched
+        self.assertEqual(self._get("region_id=blue_mountains_au&start=2021-07-22&end=2021-07-25")[0], 404)
+        self.assertEqual(self._get("region_id=plumas_ca&start=2021-07-25&end=2021-07-22")[0], 400)
+        self.assertEqual(self._get("region_id=plumas_ca&start=2021-07-22")[0], 400)
+
+
+if __name__ == "__main__":
+    unittest.main()
