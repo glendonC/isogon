@@ -9,7 +9,8 @@ is built from the visible rows and from the rows of the tiles already looked at.
 environment computes against the hidden detections by design, named in `computed_against_hidden_rows`: the reward,
 the score after the step, and `revealed`, the rows this very look handed over inside its tile. So no step holds a
 hidden row before the look that reveals it, and a row no look revealed is in no step at all. The oracle is the
-exception and is refused unless asked for as the ceiling: its tile scores are true rewards, read from hidden rows.
+exception and is refused unless asked for as what it is, the player that sees the answer: its tile scores are
+true rewards, read from hidden rows.
 """
 
 from __future__ import annotations
@@ -51,10 +52,11 @@ PLAYERS: dict[str, tuple[str, str, str]] = {
     "expected_new": ("Most expected new detections", "the tile where the model expects the most hidden detections its map does not already hold", "the observation"),
     "least_sure_at_night": ("Least sure, at night", "the tile where the model is least sure, on night passes", "the observation"),
     "least_sure_when_unsure": ("Least sure, when most unsure", "the tile where the model is least sure, in each stretch at the look where it is most unsure", "the observation"),
-    "least_sure_when_sharp": ("Least sure, at the sharpest pass", "the tile where the model is least sure, in each stretch at the pass with the smallest pixels", "the observation"),
+    "least_sure_when_sharp": ("Least sure, at a sharp pass", "the tile where the model is least sure; one look in each stretch of the episode, at the first pass sharper than the passes seen so far in that stretch, by a bar that eases as the stretch runs out, and at the stretch's last pass if none is", "the observation"),
     "learned": ("Learned", "the tile with the highest learned score", "the observation"),
     "learned_tiles_only": ("Learned, tiles only", "the tile with the highest learned score, on the evenly spread looks", "the observation"),
-    "oracle": ("Oracle", "tries every tile against the hidden data and takes the best: a ceiling, not a player", "the hidden rows"),
+    "oracle": ("Sees the answer", "reads the hidden data and takes the tile with the largest reward at each of the evenly spread "
+               "looks; it chooses where, not when, so a player that also chooses when can gain more", "the hidden rows"),
 }
 COMPUTED_AGAINST_HIDDEN_ROWS: tuple[str, ...] = (
     "score_start", "steps[].reward", "steps[].score", "steps[].revealed", "score_end", "gain", "taught_elsewhere",
@@ -165,19 +167,21 @@ def _b64(a: np.ndarray) -> str:
     return base64.b64encode(np.ascontiguousarray(a, dtype=np.uint8).tobytes()).decode("ascii")
 
 
-def play_steps(env: NextLookEnv, agent: Any, seed: int = 0, ceiling: bool = False, fields: bool = False) -> dict[str, Any]:
+def play_steps(env: NextLookEnv, agent: Any, seed: int = 0, ceiling: bool = False, fields: bool = False,
+               sees_the_answer: bool = False) -> dict[str, Any]:
     """Play one episode with `agent` and return it step by step (see the module's note on hidden rows).
 
-    A player that reads the hidden rows is refused unless `ceiling` is true; its play belongs after a round, as
-    the ceiling it is, and its `tile_scores` are then named as computed against the hidden rows.
+    A player that reads the hidden rows is refused unless `sees_the_answer` is true; its play belongs after a
+    round, and its `tile_scores` are then named as computed against the hidden rows. `ceiling` is the older name
+    of the same switch and still works; the word is wrong for this player, which chooses where and not when.
 
     With `fields`, every step also carries the estimate the player was shown on the 375 m grid, one byte per cell
     (`knew.estimate`), and the episode carries the tile of every cell, so a page can draw the estimate changing
     as looks are taken. It is the observation's own field, so the rule on hidden rows holds for it as well.
     """
     hidden_reader = reads_hidden_rows(agent)
-    if hidden_reader and not ceiling:
-        raise ValueError(f"{agent.name} reads the hidden rows; ask for it with ceiling=True, after the round")
+    if hidden_reader and not (sees_the_answer or ceiling):
+        raise ValueError(f"{agent.name} reads the hidden rows; ask for it with sees_the_answer=True, after the round")
     obs = env.reset(seed)
     start = float(env.score_start)
     d = env.describe()

@@ -11,8 +11,8 @@ kinds:
                    players gain is the geometry of the framing, and a player has skill only beyond it.
   observation      `latest_modis`, `least_sure`, `expected_new` and the learned policy of `backend/env/policy.py`.
                    They decide from the observation alone and are given no environment to ask.
-  hidden rows      `oracle`. It tries every tile against the hidden data and takes the best one at each look. It is
-                   reported only as the ceiling.
+  hidden rows      `oracle`. It tries every tile against the hidden data and takes the best one at each of the
+                   evenly spread looks. It sees the answer and is reported as that: it chooses where, not when.
 """
 
 from __future__ import annotations
@@ -224,7 +224,9 @@ class FreeWhenUnsureAgent(LeastSureAgent):
 class SharpLeastSureAgent(LeastSureAgent):
     """Least sure, with one look per stretch of the episode taken at a sharp pass: the stretch rule (`StretchClock`)
     on one signal, the look's pixel area from the schedule, smaller being better. A pass that crosses nearly
-    overhead has the smallest pixels. A timing rule with nothing fitted."""
+    overhead has the smallest pixels. The rule sees a pass's pixel size only when the pass comes, so it takes the
+    first pass that is sharp against the passes seen so far in the stretch; a later pass of the stretch may be
+    sharper still. A timing rule with nothing fitted."""
 
     name = "least_sure_when_sharp"
 
@@ -274,7 +276,8 @@ class ExpectedNewAgent:
 
 
 class OracleAgent:
-    """Sees the hidden data: tries every tile and takes the one with the largest true reward. Ceiling only (greedy)."""
+    """Sees the hidden data: tries every tile and takes the one with the largest true reward at each of the evenly
+    spread looks. Greedy, and it chooses where and not when, so it is no upper bound for a player that chooses when."""
 
     name = "oracle"
     reads_hidden_rows = True

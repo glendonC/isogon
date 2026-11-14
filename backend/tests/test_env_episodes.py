@@ -129,10 +129,10 @@ class ReferenceTableTests(unittest.TestCase):
         for name, a in row["agents"].items():
             # a gain is the final score minus the starting score: the rewards add up
             self.assertAlmostEqual(a["mean_final_score"] - row["mean_start_score"], a["mean_gain"], places=3, msg=name)
-            for key in ("share_of_oracle_gain", "least_and_most_over_episodes", "mean_gain_on_cells_never_shown",
+            for key in ("least_and_most_over_episodes", "mean_gain_on_cells_never_shown",
                         "share_of_looks_that_revealed_nothing", "mean_pixels_revealed"):
                 self.assertIn(key, a)
-        self.assertEqual(row["agents"]["oracle"]["share_of_oracle_gain"], 1.0)
+            self.assertNotIn("share_of_oracle_gain", a)            # no player is measured as a share of another
         self.assertIsNotNone(row["agents"]["random"]["sd_of_mean_gain_across_seeds"])
         self.assertIsNone(row["agents"]["least_sure"]["sd_of_mean_gain_across_seeds"])     # no seed in it
         self.assertEqual(len(row["random_mean_gain_by_seed"]), 3)

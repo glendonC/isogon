@@ -206,10 +206,10 @@ class ShapeTests(unittest.TestCase):
         self.assertEqual(_without_scores(bare), _without_scores(play))
         self.assertNotEqual(bare["score_start"], play["score_start"])
 
-    def test_the_oracle_is_refused_unless_asked_for_as_the_ceiling(self) -> None:
+    def test_the_oracle_is_refused_unless_asked_for_as_the_player_that_sees_the_answer(self) -> None:
         with self.assertRaises(ValueError):
             play_steps(_env(DET, "nominal", budget=2), A.OracleAgent())
-        play = play_steps(_env(DET, "nominal", budget=2), A.OracleAgent(), ceiling=True)
+        play = play_steps(_env(DET, "nominal", budget=2), A.OracleAgent(), sees_the_answer=True)
         self.assertEqual(play["player"]["reads"], "the hidden rows")
         self.assertIn("steps[].tile_scores", play["computed_against_hidden_rows"])
         self.assertIn("hidden rows", play["tile_scores_are"])

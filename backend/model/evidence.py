@@ -105,7 +105,7 @@ AGENTS: tuple[tuple[str, str, str, str, str], ...] = (
     ("latest_modis", "Latest MODIS", "the tile with the most recent MODIS fire power", "latest_modis", "latest_modis"),
     ("least_sure", "Least sure", "the tile where the model is least sure", "least_sure", "least_sure"),
     ("learned", "Learned", "a linear policy with weights fitted under protocol version 1, not refitted", "linear", "learned"),
-    ("oracle", "Oracle", "sees the hidden data and takes the best tile at each look: a greedy ceiling", "oracle", "oracle"),
+    ("oracle", "Sees the answer", "reads the hidden data and takes the best tile at each of the evenly spread looks; it chooses where, not when", "oracle", "oracle"),
 )
 
 # What the first protocol let the hidden rows decide, one line each (the sheet's `audit` block), the change that
@@ -438,10 +438,10 @@ def _on_validation(env: dict[str, Any]) -> dict[str, Any] | None:
         "expected_new": ("Most expected new detections", "the tile where the model expects the most hidden detections its map does not already hold"),
         "least_sure_at_night": ("Least sure, at night", "the least sure tile, with the looks spread over the night passes: chooses when by a fixed rule"),
         "least_sure_when_unsure": ("Least sure, when most unsure", "the least sure tile, in each stretch of the episode at the look where the model is most unsure: chooses when by a fixed rule"),
-        "least_sure_when_sharp": ("Least sure, at the sharpest pass", "the least sure tile, in each stretch of the episode at the pass with the smallest pixels: chooses when by a fixed rule"),
+        "least_sure_when_sharp": ("Least sure, at a sharp pass", "the least sure tile, in each stretch of the episode at the first pass sharper than the passes seen so far in that stretch, or the stretch's last pass: chooses when by a fixed rule"),
         "learned_tiles_only": ("Learned, tiles only", "the learned tile score on the evenly spread looks"),
         "learned": ("Learned", "the tracked learned player"),
-        "oracle": ("Oracle", "sees the hidden data and takes the best tile at each look: a greedy ceiling"),
+        "oracle": ("Sees the answer", "reads the hidden data and takes the best tile at each of the evenly spread looks; it chooses where, not when, so a player that also chooses when can gain more"),
     }
     agents = []
     for aid, (label, does) in labels.items():
@@ -450,7 +450,7 @@ def _on_validation(env: dict[str, Any]) -> dict[str, Any] | None:
             continue
         agents.append({
             "id": aid, "label": label, "does": does, "tile": row.get("tile"),
-            **{k: row[k] for k in ("mean_gain", "mean_final_score", "share_of_oracle_gain", "sd_across_episodes",
+            **{k: row[k] for k in ("mean_gain", "mean_final_score", "sd_across_episodes",
                                    "least_and_most_over_episodes", "episodes_with_a_gain", "mean_gain_on_cells_never_shown")},
         })
     policy = env.get("policy") or {}
@@ -503,7 +503,7 @@ def _next_look(env: dict[str, Any]) -> dict[str, Any]:
     if not _beats(new["learned_minus_least_sure"]) and not _beats(old["learned_minus_least_sure"]):
         said.append("the learned policy does not beat least sure")
     if all(gain[s]["oracle"] == max(gain[s].values()) for s in gain):
-        said.append("the oracle is the ceiling")
+        said.append("the player that sees the answer gains most, on looks every player shared")
     return {
         "tiles_per_side": tiles,
         "looks": int(env["setting"]["budget"]),

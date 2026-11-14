@@ -271,7 +271,7 @@ class EvidenceShapeTests(unittest.TestCase):
             self.assertIsNotNone(a["sd_across_episodes"])
             self.assertEqual(a["tile"] is not None, a["id"].startswith("constant_"))
         by = {a["id"]: a for a in v["agents"]}
-        self.assertEqual(by["oracle"]["share_of_oracle_gain"], 1.0)
+        self.assertEqual(by["oracle"]["label"], "Sees the answer")
         # the tile named in hindsight gains at least as much as the one a player could have fielded
         self.assertGreaterEqual(by["constant_best_in_hindsight"]["mean_gain"], by["constant_best_on_training"]["mean_gain"])
         said = " ".join(v["plainly"])

@@ -20,10 +20,11 @@ beyond them.
 
 Where and when. Most players spend the budget on the same evenly spread looks and differ only in the tile. Some
 choose when to look as well: least sure on night passes, least sure when the model is most unsure, least sure at
-the sharpest pass of each stretch, and the learned player when its look score is in use. So that a gain from
-choosing when is not read as a gain from choosing where, the learned player's tile choice is also listed on the
-evenly spread looks, and the three simple rules for when stand beside it. The oracle is a ceiling for the tile on
-the evenly spread looks only.
+a sharp pass of each stretch, and the learned player when its look score is in use. So that a gain from choosing
+when is not read as a gain from choosing where, the learned player's tile choice is also listed on the evenly
+spread looks, and the three simple rules for when stand beside it. The oracle sees the answer and chooses where at
+the evenly spread looks. It does not choose when, so a player that does can gain more than it, and no row of the
+table is given as a share of it.
 """
 
 from __future__ import annotations
@@ -102,7 +103,15 @@ def _play(job: tuple[EnvEpisode, int, int, dict[str, Any], int, str, str, dict[s
     return out
 
 
-def _row(rs: list[dict[str, Any]], name: str, oracle_gain: float | None) -> dict[str, Any]:
+# What a table says of the player that reads the hidden rows.
+SEES_THE_ANSWER: str = (
+    "it sees the answer: at each of the evenly spread looks it takes the tile with the largest true reward. It is "
+    "greedy and it chooses where, not when. A player that also chooses when can gain more than it, so no player is "
+    "measured as a share of it"
+)
+
+
+def _row(rs: list[dict[str, Any]], name: str) -> dict[str, Any]:
     """One table row: the mean over episodes (and seeds), and the spread over episodes."""
     per_ep = np.array([np.mean(r["players"][name]["gains"]) for r in rs])
     per_seed = np.mean(np.array([r["players"][name]["gains"] for r in rs]), axis=0)
@@ -110,7 +119,6 @@ def _row(rs: list[dict[str, Any]], name: str, oracle_gain: float | None) -> dict
     return {
         "mean_gain": round(gain, 4),
         "mean_final_score": round(float(np.mean([np.mean(r["players"][name]["finals"]) for r in rs])), 4),
-        "share_of_oracle_gain": round(gain / oracle_gain, 3) if oracle_gain and oracle_gain > 0 else None,
         "sd_across_episodes": round(float(per_ep.std(ddof=1)), 4) if per_ep.size > 1 else None,
         "least_and_most_over_episodes": [round(float(per_ep.min()), 4), round(float(per_ep.max()), 4)],
         "episodes_with_a_gain": int((per_ep > 0).sum()),
@@ -152,22 +160,21 @@ def reference_table(
     for n, b in settings:
         rs = [r for r in results if r["tiles"] == n and r["budget"] == b and r["looks"] > 0]
         ts = [r for r in train_results if r["tiles"] == n and r["budget"] == b and r["looks"] > 0]
-        oracle_gain = float(np.mean([r["players"]["oracle"]["gains"][0] for r in rs]))
         constants = [f"constant_{t}" for t in range(n * n)]
         by_tile = [round(float(np.mean(_per_episode(rs, c))), 4) for c in constants]
         hindsight = int(np.argmax(by_tile))
         agents: dict[str, Any] = {}
         for name in NAMED:
             if name in rs[0]["players"]:
-                agents[name] = _row(rs, name, oracle_gain)
-        agents["constant_best_in_hindsight"] = {"tile": hindsight, **_row(rs, constants[hindsight], oracle_gain)}
+                agents[name] = _row(rs, name)
+        agents["constant_best_in_hindsight"] = {"tile": hindsight, **_row(rs, constants[hindsight])}
         chosen: int | None = None
         if ts:
             train_by_tile = [float(np.mean(_per_episode(ts, c))) for c in constants]
             chosen = int(np.argmax(train_by_tile))
             agents["constant_best_on_training"] = {
                 "tile": chosen, "training_episodes": len(ts), "mean_gain_on_training": round(train_by_tile[chosen], 4),
-                **_row(rs, constants[chosen], oracle_gain),
+                **_row(rs, constants[chosen]),
             }
         pairs = [("least_sure", "random"), ("least_sure", "centre"), ("least_sure", constants[hindsight]),
                  ("least_sure", "latest_modis"), ("latest_modis", "random"), ("oracle", "least_sure"),
@@ -241,11 +248,11 @@ def plainly(block: dict[str, Any]) -> list[str]:
         verdict("learned_minus_least_sure", "the learned player", "least sure"),
         verdict("learned_tiles_only_minus_least_sure", "the learned tile choice on the evenly spread looks", "least sure"),
         verdict("learned_minus_learned_tiles_only", "the learned player choosing when to look", "the same tile choice on the evenly spread looks"),
-        verdict("least_sure_when_sharp_minus_least_sure", "least sure at the sharpest pass of each stretch", "least sure on the evenly spread looks"),
+        verdict("least_sure_when_sharp_minus_least_sure", "least sure at a sharp pass of each stretch", "least sure on the evenly spread looks"),
         verdict("least_sure_when_unsure_minus_least_sure", "least sure where the model is most unsure in each stretch", "least sure on the evenly spread looks"),
         verdict("least_sure_at_night_minus_least_sure", "least sure on night passes", "least sure on the evenly spread looks"),
-        verdict("learned_minus_least_sure_when_sharp", "the learned player", "least sure at the sharpest pass of each stretch"),
-        verdict("oracle_minus_least_sure", "the oracle on the evenly spread looks", "least sure"),
+        verdict("learned_minus_least_sure_when_sharp", "the learned player", "least sure at a sharp pass of each stretch"),
+        verdict("oracle_minus_least_sure", "the player that sees the answer, on the evenly spread looks,", "least sure"),
         verdict("learned_minus_latest_modis", "the learned player", "latest MODIS"),
         verdict("learned_minus_random", "the learned player", "random"),
         verdict("learned_minus_constant_best_in_hindsight", "the learned player", "the best constant tile in hindsight"),
@@ -258,12 +265,11 @@ def format_table(ref: dict[str, Any]) -> str:
     for block in ref["settings"]:
         lines.append(f"{block['tiles']} tiles, {block['budget']} looks, {block['episodes']} episodes, mean start score "
                      f"{block['mean_start_score']:.4f}, looks per episode {block['looks_per_episode']}")
-        lines.append(f"  {'player':30s}{'gain':>9s}{'final':>9s}{'of oracle':>10s}{'sd over ep':>11s}{'least':>9s}{'most':>9s}{'ep > 0':>7s}{'elsewhere':>10s}{'empty':>7s}")
+        lines.append(f"  {'player':30s}{'gain':>9s}{'final':>9s}{'sd over ep':>11s}{'least':>9s}{'most':>9s}{'ep > 0':>7s}{'elsewhere':>10s}{'empty':>7s}")
         for name, x in block["agents"].items():
             label = name + (f" (tile {x['tile']})" if "tile" in x else "")
-            share = "" if x["share_of_oracle_gain"] is None else f"{x['share_of_oracle_gain']:.3f}"
             sd = "" if x["sd_across_episodes"] is None else f"{x['sd_across_episodes']:.4f}"
-            lines.append(f"  {label:30s}{x['mean_gain']:+9.4f}{x['mean_final_score']:9.4f}{share:>10s}{sd:>11s}"
+            lines.append(f"  {label:30s}{x['mean_gain']:+9.4f}{x['mean_final_score']:9.4f}{sd:>11s}"
                          f"{x['least_and_most_over_episodes'][0]:+9.4f}{x['least_and_most_over_episodes'][1]:+9.4f}{x['episodes_with_a_gain']:7d}"
                          f"{x['mean_gain_on_cells_never_shown']:+10.4f}{x['share_of_looks_that_revealed_nothing']:7.2f}")
         lines.append("  constant tiles, mean gain: " + " ".join(f"{v:+.4f}" for v in block["constant_tiles_mean_gain"]))
@@ -314,10 +320,7 @@ def main(argv: list[str]) -> int:
             "spread evenly over the episode, and only the tile differs. least_sure_at_night, least_sure_when_unsure and "
             "least_sure_when_sharp choose when" + (", and so does learned; learned_tiles_only is its tile choice on the evenly spread looks" if when else "")
         ),
-        "oracle": (
-            "greedy, on the evenly spread looks: at each of them it takes the tile with the largest true reward. A ceiling "
-            "for choosing the tile on those looks, not for a player that also chooses its looks, and not a global optimum"
-        ),
+        "oracle": SEES_THE_ANSWER,
         "learned": None if policy is None else {
             "fitted_with": policy.get("fitted_with") or "the first policy: " + str((tracked.get("protocol") or {}).get("note", "")),
             "chooses_when_to_look": when,
