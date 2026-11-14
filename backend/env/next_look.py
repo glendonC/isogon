@@ -43,6 +43,7 @@ to pay the reward. It is one of the two modules allowed to (`backend.eval.holdou
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
@@ -95,6 +96,11 @@ REWARD: str = (
 # Why a round may not be built with learning from looks. `_teach` counts every look as one that saw its tile, an
 # empty one included, so with it an empty look changes what a later look is paid: the two properties of the reward
 # (rewards that add up, nothing for an empty look) do not both hold.
+# How many looks' worth of what the model expects an environment keeps (`NextLookEnv._expected_at`). One is four
+# fields on the 375 m grid, under half a megabyte for a region box.
+REMEMBER_LOOKS: int = 128
+# A set of looks' predictions is one field per scheduled look, so fewer of those are kept: one for every this many looks.
+PREDICTED_SETS_PER_LOOKS: int = 8
 LEARN_FROM_LOOKS_REFUSED: str = (
     "learning from looks is refused: it was tried under the first reward and not adopted, and under the reward in "
     "use a look that hands over nothing would not be inert with it (it would change what a later look is paid). "
@@ -193,6 +199,7 @@ class NextLookEnv:
         hidden: str = "VIIRS",
         schedule: str = SOURCE_AUTO,
         read_passes: PassReader | None = None,
+        remember: int = REMEMBER_LOOKS,
     ) -> None:
         if score not in SCORES:
             raise ValueError(f"score must be one of {SCORES}")
@@ -214,6 +221,16 @@ class NextLookEnv:
             raise closed_window_error(closed, "no round is played there")
         self.prior_cells = float(prior_cells)
         self._preds0: list[NDArray[np.float64]] | None = None
+        if int(remember) < 0:
+            raise ValueError("remember is the number of looks kept, 0 or more")
+        # What the model expects at a look, kept under the look and the looks that handed over rows (`_expected_at`).
+        self.remember = int(remember)
+        self._expected: OrderedDict[tuple[int, tuple[tuple[int, int], ...]], tuple[NDArray[np.float64], ...]] = OrderedDict()
+        # What a set of looks makes the model predict at every scheduled look, kept under the looks that handed
+        # over rows (`_predictions`); and the score before any look, which is the same at every reset.
+        self._predicted: OrderedDict[tuple[tuple[int, int], ...], list[NDArray[np.float64]]] = OrderedDict()
+        self._detail0: dict[str, float] | None = None
+        self._hands_over: dict[tuple[int, int], bool] = {}
         if budget < 0 or tiles[0] < 1 or tiles[1] < 1:
             raise ValueError("budget must be 0 or more and the tile split at least 1 by 1")
         self.grid = EvalGrid.from_bbox(box)
@@ -354,16 +371,41 @@ class NextLookEnv:
         modis = self._modis_passes if upto_s is None else [p for p in self._modis_passes if p.time_s <= upto_s]
         return OccupancyReconstruction(self.grid, None, self.params, passes=modis + self._revealed_passes(revealed))
 
+    def _taught_by(self, revealed: list[tuple[int, int]]) -> tuple[tuple[int, int], ...]:
+        """The looks among `revealed` that handed over at least one row, in order: all that the model is taught by.
+        A look that handed over nothing teaches it nothing, so two sets of looks with the same answer here give
+        the same reconstruction. Looks are taken in order of time, so this is one-to-one with what was taken."""
+        out = []
+        for kk, t in revealed:
+            key = (int(kk), int(t))
+            if key not in self._hands_over:
+                self._hands_over[key] = bool(self._revealed_rows(kk, [t]).size > 0)
+            if self._hands_over[key]:
+                out.append(key)
+        return tuple(sorted(out))
+
     def _predictions(self, revealed: list[tuple[int, int]]) -> list[NDArray[np.float64]]:
         """What the reconstruction built from all visible passes and the looks given expects the hidden instrument
-        to flag at every scheduled look."""
-        recon = self._reconstruction(revealed)
-        fam = self.hidden
-        preds = [
-            recon.predict_hidden(s.time_s, fam, s.is_day, float(s.scan_km * s.track_km), track_km=s.track_km,
-                                 scan_km=s.scan_km if fam == "MODIS" else None)["p_detect"]
-            for s in self._looks
-        ]
+        to flag at every scheduled look. Kept under the looks that taught the model (`_taught_by`), a few sets at
+        a time: the same looks give the same predictions, in this round or a later one on this environment.
+        Nothing that scores the arrays changes them."""
+        key = self._taught_by(revealed)
+        hit = self._predicted.get(key) if self.remember > 0 else None
+        if hit is not None:
+            self._predicted.move_to_end(key)
+            preds = list(hit)
+        else:
+            recon = self._reconstruction(revealed)
+            fam = self.hidden
+            preds = [
+                recon.predict_hidden(s.time_s, fam, s.is_day, float(s.scan_km * s.track_km), track_km=s.track_km,
+                                     scan_km=s.scan_km if fam == "MODIS" else None)["p_detect"]
+                for s in self._looks
+            ]
+            if self.remember > 0:
+                self._predicted[key] = list(preds)
+                while len(self._predicted) > max(self.remember // PREDICTED_SETS_PER_LOOKS, 1):
+                    self._predicted.popitem(last=False)
         if not revealed:
             self._preds0 = preds
         return self._teach(preds, revealed) if (self.learn_from_looks and revealed) else preds
@@ -484,22 +526,49 @@ class NextLookEnv:
         self._budget_left = self.budget
         self._revealed = []
         self._preds = self._predictions([])
-        self._detail = self._score_predictions(self._preds, [])
+        if self._detail0 is None or self.remember <= 0:        # the score before any look is the same every round
+            self._detail0 = self._score_predictions(self._preds, [])
+        self._detail = dict(self._detail0)
         self._score = self._detail[self.score_name]
         self.score_start = self._score
         self._started = True
         return self._observe()
 
+    def _expected_at(self, k: int) -> tuple[NDArray[np.float64], ...]:
+        """What the model expects at scheduled look `k` after the looks taken so far: the probability that a cell
+        burns, the probability that the hidden instrument flags it at this look, its power and the spread of
+        that power. Built from the visible passes up to the look and the rows of the tiles looked at; no
+        hidden row outside a revealed tile is in it.
+
+        It depends on the look and on the looks that handed over rows, and on nothing else: a look that handed
+        over nothing teaches the model nothing. So it is kept under exactly those two, and a player whose round
+        reaches the same look with the same rows in hand is given a copy without the work being done again.
+        Every player of a round's reference result shares its early looks this way. `remember` is how many
+        are kept, the least recently asked for going first; 0 keeps none."""
+        key = (k, self._taught_by(self._revealed))
+        hit = self._expected.get(key) if self.remember > 0 else None
+        if hit is None:
+            from backend.model.real_run import _sigma_mw
+
+            slot = self._looks[k]
+            recon = self._reconstruction(self._revealed, upto_s=slot.time_s)
+            expects = recon.predict_hidden(slot.time_s, self.hidden, slot.is_day, float(slot.scan_km * slot.track_km),
+                                           track_km=slot.track_km, scan_km=slot.scan_km if self.hidden == "MODIS" else None)
+            est = expects["estimate"]
+            hit = (est.a, np.clip(expects["p_detect"], 0.0, 1.0), est.F, _sigma_mw(est.a, est.F, est.rel_sd_log))
+            if self.remember > 0:
+                self._expected[key] = hit
+                while len(self._expected) > self.remember:
+                    self._expected.popitem(last=False)
+        else:
+            self._expected.move_to_end(key)
+        # a copy each time: what a player does to the arrays it was handed reaches no other observation
+        return tuple(np.array(x, copy=True) for x in hit)
+
     def _observe(self) -> Observation:
         k = min(self._k, self.n_looks - 1)
         slot = self._looks[k]
-        # what the model expects of this look, from the visible passes so far and the looks taken: no hidden row
-        # outside a revealed tile is in it
-        recon = self._reconstruction(self._revealed, upto_s=slot.time_s)
-        expects = recon.predict_hidden(slot.time_s, self.hidden, slot.is_day, float(slot.scan_km * slot.track_km),
-                                       track_km=slot.track_km, scan_km=slot.scan_km if self.hidden == "MODIS" else None)
-        est = expects["estimate"]
-        from backend.model.real_run import _sigma_mw
+        p_burning, p_detect, frp_mw, sigma_mw = self._expected_at(k)
 
         seen_modis = self._modis.select(self._modis.time_s <= slot.time_s)
         r, c = self.grid.row_col(seen_modis.lon, seen_modis.lat)
@@ -521,10 +590,10 @@ class NextLookEnv:
             modis_tile=np.asarray(modis_tile, dtype=np.int64).reshape(-1),
             viirs_revealed=self.revealed_rows(),
             revealed_tiles=tuple(self._revealed),
-            p_burning=est.a,
-            p_detect=np.clip(expects["p_detect"], 0.0, 1.0),
-            frp_mw=est.F,
-            sigma_mw=_sigma_mw(est.a, est.F, est.rel_sd_log),
+            p_burning=p_burning,
+            p_detect=p_detect,
+            frp_mw=frp_mw,
+            sigma_mw=sigma_mw,
             terrain_m=self.terrain_m,
         )
 
@@ -598,6 +667,14 @@ class NextLookEnv:
                       "an_empty_look_means": AN_EMPTY_LOOK[self.schedule_source],
                       **{k: v for k, v in self._schedule_info.items() if k != "platforms"}},
             "learn_from_looks": self.learn_from_looks,
+            "remembers": {
+                "looks": self.remember,
+                "what": (
+                    "what the model expects at a look is kept under the look and the looks that handed over rows, "
+                    "so a round that reaches the same look with the same rows in hand is not worked out twice. It "
+                    "changes nothing a player is shown and nothing it is paid"
+                ),
+            },
             "prior_cells": self.prior_cells if self.learn_from_looks else None,
             "viirs_platforms": sorted({p.platform for p in self._looks}),
             "modis_overpasses": len(self._modis_passes),
