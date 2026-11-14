@@ -1,4 +1,4 @@
-import { defaultRunStart, parseRunStarts, type RealRunStart } from './realRuns';
+import { parseRunStarts, type RealRunStart } from './realRuns';
 
 /**
  * The burning calendar: monthly fire activity for an area, 2000 to 2026, from `/api/calendar`. Four views of the
@@ -57,8 +57,6 @@ export interface Calendar {
   method: string | null;
   /** Start dates of real runs, when the calendar response lists them (`real_run_starts`). */
   runStarts: RealRunStart[];
-  /** The run the region opens on: `default_start`, else the start with the most VIIRS pixels (realRuns.ts). */
-  defaultStart: string | null;
   /** Share of held-out months whose true value fell inside the record's p10 to p90 (real: 15 to 41%). */
   intervalHeldMonths: number | null;
   /** The real calendar's overlap ratio and its held-out check (`summary_metrics`); null on a simulated one. */
@@ -199,7 +197,6 @@ export function parseCalendar(raw: unknown): Calendar | null {
     sharedScale: real,
     method,
     runStarts: real ? parseRunStarts(rec.real_run_starts) : [],
-    defaultStart: real ? defaultRunStart(rec.real_run_starts, parseRunStarts(rec.real_run_starts)) : null,
     intervalHeldMonths: num((rec.summary_metrics as Record<string, unknown> | undefined)?.held_out_monthly_interval_coverage),
     overlap: real ? readOverlap(rec.summary_metrics) : null,
     firstYear: Math.min(...years),

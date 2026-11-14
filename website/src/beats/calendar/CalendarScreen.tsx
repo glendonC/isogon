@@ -71,6 +71,9 @@ export function CalendarScreen({ place, stageMonth, canOpen, onOpenMonth, onChoo
   const [current, setCurrent] = useState<CurrentMonth | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
+  // The card follows the pointer only once the pointer has moved over the grid: a screen that opens under a resting
+  // pointer keeps the chosen month in the card.
+  const pointerMoved = useRef(false);
   const [caveatsOpen, setCaveatsOpen] = useState(false);
   const [plotRef, size] = useSize<HTMLDivElement>();
   const placeKey = place.kind === 'region' ? place.regionId : place.box.join(',');
@@ -225,6 +228,9 @@ export function CalendarScreen({ place, stageMonth, canOpen, onOpenMonth, onChoo
             aria-label={`Monthly fire record, ${rec.firstYear} to ${rec.lastYear}. Arrow keys move between months, Enter opens one.`}
             onKeyDown={move}
             onPointerLeave={() => setHover(null)}
+            onPointerMove={(e) => {
+              if (e.movementX !== 0 || e.movementY !== 0) pointerMoved.current = true;
+            }}
           >
             {[1, 4, 7, 10].map((m) => (
               <text key={m} x={0} y={yOf(m) + ch / 2 + 4} className="cal-screen__axis">
@@ -243,7 +249,8 @@ export function CalendarScreen({ place, stageMonth, canOpen, onOpenMonth, onChoo
                   height={Math.max(1, ch - 2)}
                   fill={k === 0 ? 'transparent' : RAMP[k - 1]}
                   className="cal-screen__cell"
-                  onPointerEnter={() => setHover(m.ym)}
+                  onPointerEnter={() => pointerMoved.current && setHover(m.ym)}
+                  onPointerMove={() => pointerMoved.current && hover !== m.ym && setHover(m.ym)}
                   onClick={() => setSelected(m.ym)}
                 >
                   <title>

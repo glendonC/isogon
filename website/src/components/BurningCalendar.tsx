@@ -149,7 +149,7 @@ export function BurningCalendar({
   const startIn = (ym: string | null) => {
     if (!ym) return null;
     const month = cal.months.find((m) => m.yearMonth === ym);
-    const start = startForMonth(ym, runStarts, cal.defaultStart) ?? (cal.simulated ? null : startBeforeSharp(ym, month?.modis ?? null));
+    const start = startForMonth(ym, runStarts, null) ?? (cal.simulated ? null : startBeforeSharp(ym, month?.modis ?? null));
     return start ? { start } : null;
   };
   // Before 2012 a month's run is the estimate from MODIS alone

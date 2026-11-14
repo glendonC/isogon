@@ -208,9 +208,18 @@ export function isClosedWindow(places: Places, regionId: string, start: string |
 }
 
 /** The looks on record for a test fire of this place, from the evidence route. */
-export function looksOf(doc: EvidenceDoc | null, regionId: string): { name: string; ahead: number[]; judged: number } | null {
+export function looksOf(
+  doc: EvidenceDoc | null,
+  regionId: string,
+): { name: string; ahead: number[]; judged: number; firstUtc: string } | null {
   const fire = doc?.test_fires.fires.find((f) => f.region_id === regionId);
   if (!fire || !doc) return null;
   const looks = fire.looks && fire.looks.length > 0 ? fire.looks : [fire.old, fire.new];
-  return { name: fire.name, ahead: looks.map((l) => l.ahead_of_both_on), judged: doc.test_fires.scores.length };
+  return {
+    name: fire.name,
+    ahead: looks.map((l) => l.ahead_of_both_on),
+    judged: doc.test_fires.scores.length,
+    /** The recorded window's first pass (the final look's). */
+    firstUtc: fire.new.first_overpass_utc,
+  };
 }

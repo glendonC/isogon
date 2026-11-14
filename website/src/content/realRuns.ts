@@ -21,8 +21,6 @@ export function isRealRun(run: DynamicRegionRun | null | undefined): boolean {
 export interface RealRunStart {
   /** As the backend gives it and takes it back as `start`: a UTC date or time ("2021-07-22T20:34:00Z"). */
   start: string;
-  /** VIIRS pixels in the region box over the run's 24 overpasses, when the list says. */
-  viirsPixels: number | null;
   /** The list's own pick for its month (`busiest_in_month`). */
   busiestInMonth: boolean;
 }
@@ -48,40 +46,20 @@ export function parseRunStarts(raw: unknown): RealRunStart[] {
     if (io && io.worth_showing === false) continue;
     const start = str(item) ?? str(io?.start);
     if (!start || !/^\d{4}-\d{2}-\d{2}/.test(start)) continue;
-    out.push({ start, viirsPixels: num(io?.viirs_pixels_in_box), busiestInMonth: io?.busiest_in_month === true });
+    out.push({ start, busiestInMonth: io?.busiest_in_month === true });
   }
   return out;
 }
 
-/** The entry with the most VIIRS pixels in the box; ties keep the earlier entry. */
-function busiest(starts: readonly RealRunStart[]): RealRunStart | null {
-  let best: RealRunStart | null = null;
-  for (const s of starts) if (s.viirsPixels !== null && (best === null || s.viirsPixels > (best.viirsPixels ?? -1))) best = s;
-  return best;
-}
-
 /**
- * The run a region opens on: `default_start` from the list when it names one of its entries,
- * otherwise the entry with the most VIIRS pixels in the box. Never simply the first entry: the list is in date
- * order, and its first entry for Feather River is a small August 2012 fire, not the Dixie fire the product is about.
+ * The run a selected month opens: the registry's start for that month when there is one, else the entry the server
+ * marks `busiest_in_month` (chosen from the MODIS rows), else the month's first entry. No rule here reads a count from
+ * the hidden satellite's rows.
  */
-export function defaultRunStart(raw: unknown, starts: readonly RealRunStart[]): string | null {
-  const named = str(obj(raw)?.default_start);
-  if (named) {
-    const hit = starts.find((s) => s.start === named) ?? starts.find((s) => s.start.slice(0, 10) === named.slice(0, 10));
-    if (hit) return hit.start;
-  }
-  return busiest(starts)?.start ?? null;
-}
-
-/**
- * The run a selected month opens: the default when it falls in that month, else the entry the list marks
- * `busiest_in_month`, else the month's entry with the most VIIRS pixels.
- */
-export function startForMonth(ym: string, starts: readonly RealRunStart[], defaultStart: string | null): string | null {
-  if (defaultStart?.startsWith(ym)) return defaultStart;
+export function startForMonth(ym: string, starts: readonly RealRunStart[], registryStart: string | null): string | null {
+  if (registryStart?.startsWith(ym)) return registryStart;
   const inMonth = starts.filter((s) => s.start.startsWith(ym));
-  return inMonth.find((s) => s.busiestInMonth)?.start ?? busiest(inMonth)?.start ?? inMonth[0]?.start ?? null;
+  return inMonth.find((s) => s.busiestInMonth)?.start ?? inMonth[0]?.start ?? null;
 }
 
 const MONTHS = [

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../app/store';
+import { fireNameWords, fireOfStart } from '../../app/places';
+import { utcDay } from '../../content/realRuns';
 import { beatOf } from '../../app/names';
 import { fireAt, fireExtent, looksOf, onScreen, passFacts, recordLine, runBox, windowCounts } from './fire';
 import '../../styles/world-model.css';
@@ -31,6 +33,10 @@ export function WorldModelScene() {
   const iso = test.score?.methods.find((m) => m.id === 'reconstruction') ?? null;
   const record = recordLine(model.evidence);
   const looks = looksOf(model.evidence, run.active?.region.id ?? '');
+  const registryFire = run.active ? fireOfStart(ws.places, run.active.region.id, run.realStart) : null;
+  const nameWords = registryFire ? fireNameWords(registryFire) : null;
+  // A recorded test fire may open on another window than the one on record: the record says which.
+  const otherWindow = looks && run.realStart && looks.firstUtc.slice(0, 10) !== run.realStart.slice(0, 10) ? looks.firstUtc : null;
   // The banner shows once each time the part opens, when its run is in (not while a run is being asked for).
   const settled = scene !== 'hiding' && !run.pendingStart;
   const [banner, setBanner] = useState(false);
@@ -85,11 +91,17 @@ export function WorldModelScene() {
   } else if (scene === 'record') {
     plate = (
       <>
-        <span className="sys-label sys-strong">Recorded test fire{looks ? `: ${looks.name}` : ''}</span>
+        <span className="sys-label sys-strong">A recorded test fire</span>
+        {nameWords && <span className="sys-fine wm-wrap">{nameWords}.</span>}
         {looks && (
           <span className="sys-label wm-wrap">
             On its {looks.ahead.length} looks, ahead of both simple methods on {list(looks.ahead)} of {looks.judged} scores, by plain
             comparison. It is not hidden or scored again; the terrain shows every satellite.
+          </span>
+        )}
+        {otherWindow && run.realStart && (
+          <span className="sys-fine wm-wrap">
+            The record is of the window from {utcDay(otherWindow)}; the terrain shows the run from {utcDay(run.realStart)}.
           </span>
         )}
         <span className="wm-actions">

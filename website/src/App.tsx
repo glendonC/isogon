@@ -34,7 +34,7 @@ import { useSensorModel } from './ui/useSensorModel';
 import { LandingComposition } from './ui/LandingComposition';
 import { imageryCredit } from './ui/attribution';
 import { useCalendar } from './ui/useCalendar';
-import { fireOfStart, openingStart, usePlaces, type Box, type FeaturedFire, type Place } from './app/places';
+import { fireOfStart, openingStart, registryStartOf, usePlaces, type Box, type FeaturedFire, type Place } from './app/places';
 import type { FireRecord, RecordPlace } from './beats/calendar/record';
 import { boxWords } from './beats/calendar/PlaceScreen';
 import { usePassList } from './ui/usePassList';
@@ -579,7 +579,7 @@ export function App() {
     fireStartRef.current = null;
     const opening =
       calendar.cal && !calendar.cal.simulated
-        ? chosen ?? openingStart(placesState.places, regionAsk.id) ?? calendar.cal.defaultStart
+        ? chosen ?? openingStart(placesState.places, regionAsk.id)
         : null;
     if (opening) {
       if (isRealRun(activeRun) && activeRun?.region.id === regionAsk.id && realStart === opening) return;
@@ -591,7 +591,9 @@ export function App() {
         source: 'firms',
         start: opening,
       });
-    } else if (activeRun?.region.id !== regionAsk.id || isRealRun(activeRun)) {
+    } else if (calendar.cal?.simulated && (activeRun?.region.id !== regionAsk.id || isRealRun(activeRun))) {
+      // Only a place with no real rows opens on a simulated run; a real place without a start from the registry opens
+      // nothing new.
       void executeWorldModel({ regionId: regionAsk.id, holdoutViirs: false, cloudOverride, enterWorkspace: false });
     }
   }, [regionAsk, calendar, placesState, activeRun, realStart, cloudOverride, executeWorldModel]);
@@ -603,7 +605,7 @@ export function App() {
       if (!calendar.cal || calendar.cal.simulated) return;
       const month = calendar.cal.months.find((m) => m.yearMonth === ym);
       const pre = startBeforeSharp(ym, month?.modis ?? null);
-      const start = startForMonth(ym, calendar.runStarts, calendar.cal.defaultStart) ?? pre;
+      const start = startForMonth(ym, calendar.runStarts, registryStartOf(placesState.places, calendarRegionId, ym)) ?? pre;
       if (!start || start === realStart || start === pendingStart) return;
       void executeWorldModel({
         regionId: calendarRegionId,
@@ -615,7 +617,7 @@ export function App() {
         start,
       });
     },
-    [calendar, realStart, pendingStart, calendarRegionId, holdoutViirs, executeWorldModel],
+    [calendar, realStart, pendingStart, calendarRegionId, holdoutViirs, executeWorldModel, placesState],
   );
 
   // A month picked in the any-area sheet waits for its region's calendar, then is selected like a click.

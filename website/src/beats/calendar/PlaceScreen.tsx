@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEven
 import { feature } from 'topojson-client';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 import countries from 'world-atlas/countries-50m.json';
-import type { Box, FeaturedFire, Places, Place } from '../../app/places';
+import { fireNameWords, type Box, type FeaturedFire, type Places, type Place } from '../../app/places';
 import '../../styles/place-screen.css';
 
 /** Plate carree with longitude shortened by the cosine of 45 degrees, so the middle latitudes keep their shape. */
@@ -240,7 +240,8 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
           // Each place's label beside its mark, on the side with room; labels are pushed apart vertically so places
           // close together on screen (two on one coast) never cover each other. Leaders join label and mark.
           const PLATE_W = 330;
-          const rowH = 44;
+          // A fire's row: its period and size, then what its name is (two lines at this width).
+          const rowH = 64;
           const items = firms
             .map((p) => ({
               p,
@@ -284,7 +285,7 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
                       <span className="sys-label place-screen__period">{f.label}</span>
                       <span className="sys-value place-screen__size">{f.size.modis_pixels_in_box?.toLocaleString('en-US') ?? ''}</span>
                       <span className="sys-fine place-screen__about">
-                        {[f.name, standingOf(f)].filter(Boolean).join(', ')}
+                        {[fireNameWords(f), standingOf(f)].filter(Boolean).join('; ')}
                       </span>
                     </button>
                   ))}

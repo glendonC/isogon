@@ -26,8 +26,15 @@ export interface FeaturedFire {
   /** What the fire is to the world model and to the learned agent ("never seen", "fitted on", ...); null until served. */
   to_the_world_model: string | null;
   to_the_learned_agent: string | null;
+  /** The start the fire opens on: its busiest start, or for a recorded test fire its recorded window. */
   default_start: string | null;
   default_start_rule?: string;
+  /** How the fire opens: held out, or (a recorded test fire) with every satellite on its recorded window. */
+  opens?: {
+    holdout_viirs: boolean;
+    what?: string;
+    recorded_window?: { first_overpass_utc: string; last_overpass_utc: string } | null;
+  } | null;
 }
 
 export interface Place {
@@ -39,6 +46,13 @@ export interface Place {
   /** "firms" for a place with real rows, "simulated" otherwise. */
   rows: 'firms' | 'simulated' | string;
   featured_fires: FeaturedFire[];
+  /** The registry's default inside the place, by its rule: the start, the fire and whether VIIRS is held out. */
+  starts?: {
+    default_start?: string | null;
+    default_featured_fire?: string | null;
+    default_holdout_viirs?: boolean | null;
+    default_rule?: string;
+  } | null;
 }
 
 export interface PlacesDefault {
@@ -46,6 +60,7 @@ export interface PlacesDefault {
   featured_fire: string;
   start: string;
   rule: string;
+  holdout_viirs?: boolean;
 }
 
 export interface BoxCalendarLimits {
@@ -109,15 +124,32 @@ export function fireOfStart(places: Places, regionId: string, start: string | nu
 }
 
 /**
- * The start a place opens on: the registry's default for the default place; otherwise the largest featured fire
- * that is not a recorded test fire; otherwise null (the caller falls back to the calendar's own default).
+ * The start a place opens on, from the registry only: its default for the default place; otherwise the registry's
+ * default inside the place (`starts.default_start` with its `default_featured_fire`); otherwise, by the same rule, the
+ * largest featured fire that is not a recorded test fire, then the place's recorded test fire, which World model shows
+ * as its record with every satellite. Never a start-list default, which named a closed window.
  */
 export function openingStart(places: Places, regionId: string): string | null {
   if (places.default && places.default.region_id === regionId) return places.default.start;
   const place = places.places.find((p) => p.id === regionId);
   if (!place) return null;
-  const open = place.featured_fires
-    .filter((f) => !f.blind_test_fire && f.default_start)
-    .sort((a, b) => (b.size.modis_pixels_in_box ?? 0) - (a.size.modis_pixels_in_box ?? 0));
-  return open[0]?.default_start ?? null;
+  if (place.starts?.default_featured_fire && place.starts.default_start) return place.starts.default_start;
+  const bySize = (a: FeaturedFire, b: FeaturedFire) => (b.size.modis_pixels_in_box ?? 0) - (a.size.modis_pixels_in_box ?? 0);
+  const withStart = place.featured_fires.filter((f) => f.default_start);
+  const open = withStart.filter((f) => !f.blind_test_fire).sort(bySize);
+  return open[0]?.default_start ?? [...withStart].sort(bySize)[0]?.default_start ?? null;
+}
+
+/** The registry's start for a month of a place: the featured fire's own start when it falls in that month. */
+export function registryStartOf(places: Places, regionId: string, ym: string): string | null {
+  const fire = places.places.find((p) => p.id === regionId)?.featured_fires.find((f) => f.months.includes(ym));
+  return fire?.default_start?.startsWith(ym) ? fire.default_start : null;
+}
+
+/**
+ * A registry fire's name, said as what it is: the detections of a box and period are not all one named fire, so the
+ * name is one among the fires there. Null where no agency list names one.
+ */
+export function fireNameWords(f: { name: string | null }): string | null {
+  return f.name ? `Fires in this box in this period, among them the ${f.name}` : null;
 }
