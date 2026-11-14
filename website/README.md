@@ -15,6 +15,27 @@ npm run preview   # serve dist/ on http://127.0.0.1:5188
 
 `dev` and `preview` bind to `127.0.0.1:5188` with `--strictPort`: they stop instead of taking another port when 5188 is in use.
 
+## The public page
+
+The public page is the site built to replay recorded answers, with no backend, served under a path (`/isogon/` on
+GitHub Pages). One command builds it: the site with the recorded transport on (`VITE_TRANSPORT=recorded`), the base
+path given as an argument, and a recording made by `backend/server_recorder.py` copied inside as `recorded/` (only
+`index.json` and the files its entries name).
+
+```bash
+node scripts/build-public.mjs --recording <folder written by backend/server_recorder.py> --base /isogon/ --out dist/public
+```
+
+The page lands in `dist/public/isogon/`; that folder is what is published. To try it under the same path, serve the
+folder above it and open `http://127.0.0.1:5589/isogon/`:
+
+```bash
+python3 -m http.server 5589 --bind 127.0.0.1 --directory dist/public
+```
+
+The command prints the size of the recording and of the whole page. It stops when the recording's index names a
+file the folder does not hold. The recording itself is made against a running backend (see `docs/architecture.md`).
+
 ## The backend
 
 The site calls the backend at `http://127.0.0.1:8788` through one client module, `src/lib/api.ts`. Start the backend from the repository root:
