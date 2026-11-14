@@ -1,0 +1,8 @@
+{
+  "what": "Featured fires of each region: the name and dates the fire agency gives on the page in source, and one point (longitude, latitude) of the fire. They choose what the entry offers; the rows and every figure come from NASA FIRMS.",
+  "regions": {
+    "plumas_ca": {"featured_fires": []},
+    "lytton_bc": {"featured_fires": []},
+    "evia_greece": {"featured_fires": []}
+  }
+}

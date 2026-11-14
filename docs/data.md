@@ -108,6 +108,12 @@ A platform has an outage day when it has no row in any cached country file on a 
 
 The calendar ends at the last country file month, December 2025. Rows of 2026 come from the area API for the region box only, so an outage cannot be told from a quiet day, and near real time rows have no `type` column, so static sources cannot be left out.
 
+### Any box
+
+A box anywhere in the cached countries (United States, Canada, Greece) has a calendar too (`GET /api/calendar?source=firms&box=`). Its rows are every row of the country files inside it, read through an index built once from those files (`backend/firms/box_index.py`, `data/cache/firms/index/`: 144 files, 315 MB, 47 seconds on the machine the project was built on). A box leaves out every row of type 1 (active volcano), 2 (static land source) and 3 (offshore), since it has no elevation model to tell an inland type 3 row from one at sea; the region calendars keep their own rule above. On a region's context box the box calendar counts the same rows per platform and month as the region extracts, once those kinds are added back.
+
+This month so far (`GET /api/calendar/current`) is read from the area API, near real time, for the box, over the full UTC days of the month, and set beside the median of the same calendar month over the years of the country files. Its rows have no `type` column, so they count what the calendar leaves out; the answer says so.
+
 ### What the rows cannot say
 
 FIRMS lists detections. A place with no row was either not burning, not passed over, or under cloud or smoke, and the rows alone cannot tell which. The pass schedule below adds the passes that flagged nothing. A cloud mask per pixel is not fetched, so a pass that flagged nothing may have looked at clear ground or at cloud.

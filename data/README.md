@@ -15,6 +15,8 @@ Nothing under `data/cache/` is tracked. A fresh clone has no cache and still run
 | `cache/firms/area/<region>/<SOURCE>/<YYYY-MM-DD>_<n>d.csv` | `backend/firms/area_api.py` | Each area API reply exactly as returned (at most five days) |
 | `cache/firms/extract/<region>/<product>_<year>.csv` | both | The rows inside the region's context box, every original column, duplicates removed. This is what `read_firms` reads. |
 | `cache/firms/derived/` | `backend/server.py` | The start dates worth showing per region, kept until the rows or the rule change |
+| `cache/firms/index/<product>/<year>/<file stem>.npy` | `backend/firms/box_index.py` | Every row of one country file, reduced to latitude, longitude, day, platform and flags, sorted by latitude, with a JSON sidecar holding the file's sha256. A box calendar reads these. Rebuilt when the file changes. |
+| `cache/firms/area_box/<box>/<SOURCE>/<YYYY-MM-DD>_<n>d.csv` | `backend/firms/current_month.py` | Area API replies for this month so far over a box, exactly as returned, with a manifest |
 | `cache/cmr/raw/<region>/<platform>/<YYYY-MM>_p<n>.json.gz` | `backend/firms/cmr_passes.py` | Each NASA CMR reply, compressed |
 | `cache/cmr/passes/<region>/<platform>_<year>.json.gz` | `backend/firms/cmr_passes.py` | The passes of a year, compact and deduplicated. This is what `cmr_passes` reads. |
 | `cache/tiles/<source>/<z>/<x>/<y>.<ext>` | `backend/terrain/tile_store.py` | Elevation and imagery tiles: `terrarium`, `esri_world_imagery`, `usgs_naip`, `eox_s2cloudless_2020` |

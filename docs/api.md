@@ -27,9 +27,10 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 | Method and path | Purpose |
 | --- | --- |
 | `GET /api/health` | Status, versions and row counts of the local cache |
-| `GET /api/regions` | The preset regions |
+| `GET /api/regions` | The preset regions and the places registry |
 | `GET /api/field-meta` | Description of the tracked simulated field |
 | `GET /api/calendar` | The burning calendar, simulated or real |
+| `GET /api/calendar/current` | This month so far against the same month's median |
 | `GET /api/calendar/rows.csv` | The FIRMS rows behind a calendar selection |
 | `GET /api/runs/starts` | The start dates worth showing for a real run |
 | `POST /api/reconstruct` | Build or fetch a run |
@@ -75,11 +76,11 @@ Shortened: `rows_in_region_boxes` has one entry per region, `calibrator` has 15 
 
 ## `GET /api/regions`
 
-No parameters. Always `200`. The five presets: `plumas_ca`, `lytton_bc`, `novo_progresso_br`, `evia_greece`, `blue_mountains_au`.
+No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_progresso_br`, `evia_greece`, `blue_mountains_au`) and the places registry (`backend/firms/places.py`): where each region's rows come from, its featured fires, and the countries in which any box has a calendar.
 
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "presets": [
     {
       "id": "plumas_ca",
@@ -95,9 +96,36 @@ No parameters. Always `200`. The five presets: `plumas_ca`, `lytton_bc`, `novo_p
       "depth_km": 42.19,
       "is_preset": true
     }
-  ]
+  ],
+  "places": [
+    {
+      "id": "plumas_ca",
+      "name": "Feather River & Plumas, CA",
+      "country": "United States",
+      "box": [-121.44, 39.86, -120.92, 40.24],
+      "context_box": [-122.48, 39.1, -119.88, 41.0],
+      "rows": "firms",
+      "calendar": "/api/calendar?source=firms&region_id=plumas_ca",
+      "featured_fires": [{"id": "...", "name": "...", "first_day": "...", "last_day": "...", "point": [-121.0, 40.0], "blind_test_fire": false, "source": "https://...", "run_starts": [{"start": "...", "label": "..."}]}]
+    }
+  ],
+  "featured_fires_from": "...",
+  "box_calendar": {
+    "route": "/api/calendar?source=firms&box=<west>,<south>,<east>,<north>",
+    "countries": ["Canada", "Greece", "United States"],
+    "country_extents": {"Greece": [19.6566, 34.8557, 28.2334, 41.7491]},
+    "max_span_deg": 20.0,
+    "min_span_deg": 0.05,
+    "what": "..."
+  }
 }
 ```
+
+Shortened: `places` has five entries, one per preset; `featured_fires` and `country_extents` are cut.
+
+- `rows` is `firms` for a region with cached FIRMS rows and `simulated` for one without; a simulated place has `country` and `calendar` `null` and no featured fires.
+- A featured fire's name, dates and point come from the page in its `source` (`backend/firms/places.json`). `blind_test_fire` marks the three 2021 test fires. `run_starts` are the region's real run starts (`GET /api/runs/starts`) inside the fire's dates.
+- `country_extents` is where the rows of each cached country file lie; a box calendar counts only rows of those files.
 
 Shortened to one preset. `bbox` is `[west, south, east, north]` everywhere in this API.
 
@@ -152,7 +180,7 @@ Shortened: `summary_metrics` has 5 keys, `regime_markers` 7 entries, `annual_sum
 
 ### Real calendar (`source=firms`)
 
-Built from the cached FIRMS rows of the region's context box by `backend/firms/real_calendar.py`. It has the simulated calendar's keys with real values, and adds `source`, `box_area_km2`, `harmonization_method` and `real_run_starts`.
+`region_id=<id>` gives a region's calendar, built from the cached FIRMS rows of its context box by `backend/firms/real_calendar.py`. `box=<west>,<south>,<east>,<north>` (degrees) gives the calendar of any box instead, counted from every row of the cached FIRMS country files (United States, Canada, Greece) inside it; give one or the other. It has the simulated calendar's keys with real values, and adds `source`, `box_area_km2`, `harmonization_method`, `place`, `month_climatology`, `current_month` and, for a region, `real_run_starts`.
 
 ```json
 {
@@ -212,20 +240,80 @@ Shortened: sentences cut to `...`, lists cut to one entry, `validation` (12 keys
 - Rates are hotspots per 1,000 km2 of the context box per day. `harmonized_mean` is the MODIS rate times the overlap ratio, on the Suomi NPP scale.
 - In `raw_counts`, a platform that delivered no data that month is `null`; one that delivered data and saw nothing in the box has zero counts.
 - `coverage_fraction` and `modis_orbital_drift_factor` are `null`: the real calendar has no coverage product and models no drift.
+- `month_climatology` has one entry per calendar month: the median, 10th and 90th percentile of `harmonized_mean` of that month over every year it is harmonized (`years`, `first_year`, `last_year`). Each record adds `month_median`, `anomaly` (`harmonized_mean` minus `month_median`), `anomaly_ratio` (`harmonized_mean` over `month_median`, `null` when the median is 0), `month_rank` (1 is the most burning of that calendar month over the years) and `month_years`.
+- `current_month` names the route that reads this month so far against its median (`GET /api/calendar/current`).
+- `harmonization_method.fit_rows` is how many MODIS and Suomi NPP rows the ratio was fitted on.
 
+The answer for a box, for example `box=-121.6,39.6,-120.8,40.3` (around the Feather River canyon), differs from a region's here:
+
+```json
+{
+  "downloaded_firms_rows": 108564,
+  "region_id": null,
+  "region_name": "39.60 N to 40.30 N, 121.60 W to 120.80 W",
+  "bbox": [-121.6, 39.6, -120.8, 40.3],
+  "box_area_km2": 5308.0,
+  "place": {"kind": "box", "box": [-121.6, 39.6, -120.8, 40.3], "countries": ["United States"], "label": "39.60 N to 40.30 N, 121.60 W to 120.80 W"},
+  "harmonization_method": {"counted_rows": "every FIRMS row except type 1 (active volcano, ...), type 2 (static land source, ...) and type 3 (offshore, ...); ...", "fit_rows": {"modis": 11742, "viirs": 49677}},
+  "summary_metrics": {"viirs_to_modis_overlap_ratio": 4.2307, "held_out_median_abs_relative_error": 0.1756, "held_out_median_abs_relative_error_without_harmonization": 0.7504, "static_rows_excluded": {"Terra": 19, "Aqua": 13}, "offshore_rows_excluded": {"Suomi NPP": 101, "NOAA-20": 112}, "volcano_rows_excluded": {}},
+  "month_climatology": [{"month": 11, "median": 0.2125, "p10": 0.0133, "p90": 0.4782, "years": 26, "first_year": 2000, "last_year": 2025}],
+  "records": [{"year_month": "2020-09", "harmonized_mean": 70.778, "month_median": 0.0, "anomaly": 70.778, "anomaly_ratio": null, "month_rank": 1, "month_years": 25, "raw_counts": {"Terra": {"day": 477, "night": 731, "total": 1208, "static_excluded": 0, "offshore_excluded": 0, "volcano_excluded": 0, "outage_days": 0}}}],
+  "current_month": {"route": "/api/calendar/current?source=firms&box=-121.6,39.6,-120.8,40.3"}
+}
+```
+
+Shortened to the keys that differ, one month and one record.
+
+- A box leaves out every row of FIRMS type 1 (active volcano), 2 (static land source) and 3 (offshore) and counts them apart. A region keeps type 3 rows on land beside lakes, which its elevation model tells from rows at sea; a box has no such model. On the context box of a region, a box counts every platform's rows of every month exactly as the region does once the left-out kinds are added back (`backend/tests/test_firms_box_calendar.py`).
+- The ratio is fitted on the box's own overlap months, with the same held-out year check; a box with few rows has a wide interval and a larger held-out error, and says so.
+- A box counts only the rows of the cached country files. `GET /api/regions` lists those countries and where their rows lie. Rows of NOAA-21 and of months after the last country file month come from the area API and are not in a box calendar.
+- The first box after a cache change builds an index of the country files (`backend/firms/box_index.py`, about a minute, then about 0.2 seconds per box). Errors: `400` for a box that is not four finite numbers with west below east and south below north, or that spans more than 20 or less than 0.05 degrees; `404` when no cached country file has a row in the box.
+
+## `GET /api/calendar/current`
+
+This month so far against the same calendar month's median. The country files end before this month, so its rows are fetched from the FIRMS area API (near real time) for the box over every full UTC day of the month so far, on the first request of a day, and cached under `data/cache/firms/area_box/`. Needs `FIRMS_MAP_KEY`.
+
+| Parameter | Value |
+| --- | --- |
+| `source` | `firms`. |
+| `region_id` or `box` | A region with FIRMS data (its context box), or a box as for the calendar, at most 5 degrees each way (the area API charges by area). |
+
+```json
+{
+  "place": {"kind": "box", "box": [-121.6, 39.6, -120.8, 40.3], "countries": ["United States"], "label": "..."},
+  "month": "2026-11",
+  "status": "ready",
+  "days": {"first": "2026-11-01", "last": "2026-11-13", "counted": 13, "in_month": 30},
+  "modis": {"rows": 4, "by_platform": {"Terra": 0, "Aqua": 4}, "rate": 0.058},
+  "viirs_rows": {"NOAA-20": 22, "NOAA-21": 19, "Suomi NPP": 1},
+  "harmonized_mean": 0.2452, "harmonized_p10": 0.1879, "harmonized_p90": 0.2751,
+  "month_median": 0.2125, "month_p10": 0.0133, "month_p90": 0.4782, "median_years": [2000, 2025],
+  "anomaly": 0.0327, "anomaly_ratio": 1.1539,
+  "units": "suomi_npp_equivalent_hotspots_per_1000km2_day",
+  "caveats": ["part of a month: ...", "near real time rows ...", "near real time rows have no type column, ...", "Suomi NPP stopped delivering science data on 2 November 2026 ..."],
+  "provenance": {"source": "NASA FIRMS area API, near real time: MODIS_NRT, VIIRS_NOAA20_NRT, VIIRS_NOAA21_NRT, VIIRS_SNPP_NRT", "requests": ["https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_NRT/-121.6,39.6,-120.8,40.3/5/2026-11-01"], "retrieved_utc": ["...", "..."], "cache": "data/cache/firms/area_box/...", "ratio": "...", "median": "..."}
+}
+```
+
+An answer of 14 November 2026, shortened: `requests` has 12 entries and the caveats are cut.
+
+- `harmonized_mean` is the MODIS rate over the days counted (rows per 1,000 km2 of the box per day) times the calendar's Terra and Aqua ratio, so it is on the calendar's scale; `month_median` is that calendar month's median from `month_climatology`. Today's UTC day is left out while its rows still arrive.
+- The caveats are always served: part of a month; near real time rows, not standard processing; no type column, so static sources, volcanoes and offshore rows are counted; Suomi NPP stopped delivering science data on 2 November 2026. When one MODIS platform has no row while the other has 20 or more, nothing is harmonized and a caveat says why.
+- `status` other than `ready`: `no key` (`FIRMS_MAP_KEY` is not set), `box too large`, `busy` (the key has used more than 60 percent of its transactions in the current window), `no full day yet` (the first of a month), `failed` (with `error`). Only a `ready` answer is kept, for the UTC day.
+- Stored request URLs carry `<MAP_KEY>` in place of the key.
 ## `GET /api/calendar/rows.csv`
 
 The FIRMS rows behind a calendar selection, as CSV (`text/csv; charset=utf-8`).
 
 | Parameter | Value |
 | --- | --- |
-| `region_id` | A region with FIRMS data. |
+| `region_id` or `box` | A region with FIRMS data, or a box as for the calendar (rows of the cached country files inside it; at most 400 days). |
 | `start`, `end` | ISO dates, UTC. Rows acquired in `[start, end)`. |
 | `platforms` | Optional, comma separated: `Terra`, `Aqua`, `Suomi NPP`, `NOAA-20`, `NOAA-21`. |
 
-Headers: `X-Row-Count` (the number of rows) and `Content-Disposition` (`isogon_firms_<region>_<start>_<end>.csv`). The columns are `_acq_utc`, `_platform`, `_product`, then the source's own: `latitude`, `longitude`, `acq_date`, `acq_time`, `satellite`, `instrument`, `confidence`, `version`, `frp`, `scan`, `track`, `daynight`, `type`, `brightness`, `bright_t31`, `bright_ti4`, `bright_ti5`. MODIS-only and VIIRS-only columns are empty where a platform has none.
+Headers: `X-Row-Count` (the number of rows) and `Content-Disposition` (`isogon_firms_<region>_<start>_<end>.csv`, or `isogon_firms_box_<w>_<s>_<e>_<n>_<start>_<end>.csv`). The columns are `_acq_utc`, `_platform`, `_product`, then the source's own: `latitude`, `longitude`, `acq_date`, `acq_time`, `satellite`, `instrument`, `confidence`, `version`, `frp`, `scan`, `track`, `daynight`, `type`, `brightness`, `bright_t31`, `bright_ti4`, `bright_ti5`. MODIS-only and VIIRS-only columns are empty where a platform has none.
 
-Errors: `400` when `start` or `end` is not a date, when `end` is not after `start`, or when the selection is over 500,000 rows; `404` for a region with no FIRMS data and for a span the cache does not hold.
+Errors: `400` when `start` or `end` is not a date, when `end` is not after `start`, when the selection is over 500,000 rows, for a bad box, or for a box span over 400 days; `404` for a region with no FIRMS data, a box no cached country file has rows in, and a span the cache does not hold.
 
 ## `GET /api/runs/starts`
 

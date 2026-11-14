@@ -52,7 +52,10 @@ from backend.firms.archive import FIRMS_CACHE_DIR, REGION_COUNTRY, FirmsCacheMis
 from backend.firms.archive import cache_summary as firms_cache_summary  # noqa: E402
 from backend.firms.cmr_passes import CmrCacheMissing, pass_files_digest  # noqa: E402
 from backend.firms.pass_timeline import pass_timeline  # noqa: E402
-from backend.firms.real_calendar import firms_calendar, rows_csv  # noqa: E402
+from backend.firms.box_index import BoxIndex  # noqa: E402
+from backend.firms.current_month import CurrentMonth  # noqa: E402
+from backend.firms.places import places_payload  # noqa: E402
+from backend.firms.real_calendar import box_calendar, firms_calendar, parse_box, rows_csv, rows_csv_box  # noqa: E402
 from backend.model import MODEL_VERSION, PROVENANCE_NOTE  # noqa: E402
 from backend.model.calibrator import get_pretrained_calibrator  # noqa: E402
 from backend.model.gates import build_benchmark_gates  # noqa: E402
@@ -316,6 +319,10 @@ class IsogonDataStore:
         self.terrain_packs = TerrainPackManager()
         self.next_look = NextLookRounds()
         self._pass_timelines: OrderedDict[tuple[Any, ...], bytes] = OrderedDict()
+        self.box_index = BoxIndex()
+        self._box_calendars: OrderedDict[tuple[Any, ...], tuple[dict[str, Any], bytes]] = OrderedDict()
+        self.current_month = CurrentMonth()
+        self._current_months: dict[tuple[Any, ...], dict[str, Any]] = {}
 
         # Pre-warm baseline Plumas CA run from hires_regions cache so landing hydration responds in <2 ms
         try:
@@ -425,6 +432,71 @@ class IsogonDataStore:
 
     def firms_calendar_bytes(self, region_id: str) -> bytes:
         return self.firms_calendar_payload(region_id)[0]
+
+    def box_index_key(self, max_age_s: float = 10.0) -> str:
+        """The digest of the country files the box index reads, re-read at most every ``max_age_s``."""
+        now = time.monotonic()
+        with self._lock:
+            hit = self.__dict__.get("_box_index_key")
+        if hit is not None and now - hit[0] < max_age_s:
+            return hit[1]
+        key = self.box_index.digest()
+        with self._lock:
+            self._box_index_key = (now, key)
+        return key
+
+    def box_calendar_payload(self, box: tuple[float, float, float, float]) -> tuple[dict[str, Any], bytes]:
+        """The calendar of any box (``box_calendar``), kept for the 32 latest boxes while the country files are
+        unchanged."""
+        key = (box, self.box_index_key())
+        with self._lock:
+            hit = self._box_calendars.get(key)
+            if hit is not None:
+                self._box_calendars.move_to_end(key)
+                return hit
+        cal = box_calendar(box, self.box_index)
+        entry = (cal, json.dumps(cal, ensure_ascii=False).encode("utf-8"))
+        with self._lock:
+            self._box_calendars[key] = entry
+            while len(self._box_calendars) > 32:
+                self._box_calendars.popitem(last=False)
+        return entry
+
+    def current_month_payload(self, region_id: str | None, box: tuple[float, float, float, float] | None) -> dict[str, Any]:
+        """This month so far against its median for a region or a box. A ready answer is kept for the UTC day."""
+        if region_id is not None:
+            cal = json.loads(self.firms_calendar_bytes(region_id).decode("utf-8"))
+            cal_key = self.region_rows_key(region_id)
+        else:
+            assert box is not None
+            cal = self.box_calendar_payload(box)[0]
+            cal_key = self.box_index_key()
+        key = (region_id, box, cal_key, self.current_month.clock().isoformat())
+        with self._lock:
+            hit = self._current_months.get(key)
+        if hit is not None:
+            return hit
+        out = self.current_month.read(cal["place"], cal)
+        if out.get("status") == "ready":
+            with self._lock:
+                if len(self._current_months) >= 64:
+                    self._current_months.pop(next(iter(self._current_months)))
+                self._current_months[key] = out
+        return out
+
+    def regions_full_payload(self) -> dict[str, Any]:
+        """`regions_payload` and the places registry (`backend/firms/places.py`)."""
+        out = self.regions_payload()
+        out["schema_version"] = "1.1.0"
+
+        def starts(region_id: str) -> list[dict[str, Any]]:
+            try:
+                return list(self.firms_calendar_payload(region_id)[1].get("starts", []))
+            except Exception:  # noqa: BLE001  (the registry answers without a start list)
+                return []
+
+        out.update(places_payload(starts, self.box_index))
+        return out
 
     def real_run_starts(self, region_id: str, cal: dict[str, Any], rows_key: int) -> dict[str, Any]:
         """Every worth-showing start date of a real run in the region (``real_start_dates``), with
@@ -1029,7 +1101,7 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                 return
 
             if route == "/api/regions":
-                self._send_json_obj(HTTPStatus.OK, store.regions_payload())
+                self._send_json_obj(HTTPStatus.OK, store.regions_full_payload())
                 return
 
             if route == "/api/calendar":
@@ -1040,27 +1112,51 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                 if source != "firms":
                     self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": "source must be 'firms', or omitted for the simulated calendar"})
                     return
-                region_id = qs.get("region_id", [""])[0]
-                if not region_id:
-                    self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": "source=firms needs region_id"})
+                region_id, box_text = qs.get("region_id", [""])[0], qs.get("box", [""])[0]
+                if bool(region_id) == bool(box_text):
+                    self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": "source=firms needs region_id or box (west,south,east,north), not both"})
                     return
                 try:
-                    body = store.firms_calendar_bytes(region_id)
+                    body = store.firms_calendar_bytes(region_id) if region_id else store.box_calendar_payload(parse_box(box_text))[1]
                 except KeyError as exc:
                     self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc.args[0])})
                     return
                 self._send_json_bytes(HTTPStatus.OK, body)
                 return
 
+            if route == "/api/calendar/current":
+                if qs.get("source", [""])[0] != "firms":
+                    self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": "source must be 'firms'"})
+                    return
+                region_id, box_text = qs.get("region_id", [""])[0], qs.get("box", [""])[0]
+                if bool(region_id) == bool(box_text):
+                    self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": "needs region_id or box (west,south,east,north), not both"})
+                    return
+                try:
+                    out = store.current_month_payload(region_id or None, parse_box(box_text) if box_text else None)
+                except KeyError as exc:
+                    self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc.args[0])})
+                    return
+                self._send_json_obj(HTTPStatus.OK, out)
+                return
+
             if route == "/api/calendar/rows.csv":
-                region_id = qs.get("region_id", [""])[0]
+                region_id, box_text = qs.get("region_id", [""])[0], qs.get("box", [""])[0]
                 start, end = qs.get("start", [""])[0], qs.get("end", [""])[0]
                 plats = [p for p in qs.get("platforms", [""])[0].split(",") if p] or None
+                if box_text and region_id:
+                    self._send_json_obj(HTTPStatus.BAD_REQUEST, {"error": "give region_id or box, not both"})
+                    return
                 try:
+                    box = parse_box(box_text) if box_text else None
                     d0, d1 = _dt.date.fromisoformat(start[:10]), _dt.date.fromisoformat(end[:10])
                     if start >= end:
                         raise ValueError("end must be after start")
-                    body, n = rows_csv(region_id, start, end, plats)
+                    if box is not None:
+                        body, n = rows_csv_box(box, start, end, plats, store.box_index)
+                        region_id = "box_" + "_".join(f"{v:g}" for v in box)
+                    else:
+                        body, n = rows_csv(region_id, start, end, plats)
                 except KeyError as exc:
                     self._send_json_obj(HTTPStatus.NOT_FOUND, {"error": str(exc.args[0])})
                     return

@@ -308,21 +308,18 @@ def leave_one_year_out(pairs: list[tuple[int, float, float]]) -> dict[str, Any]:
 
 
 def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, Any]:
-    """The /api/calendar payload for ``source=firms``."""
+    """The /api/calendar payload for ``source=firms`` and a region."""
     from backend.terrain.live_region import PRESET_BY_ID
 
     if region_id not in REGION_COUNTRY:
         raise KeyError(f"no FIRMS rows for region '{region_id}'; regions with rows: {sorted(REGION_COUNTRY)}")
     box = region_box(region_id)
-    area = box_area_km2(box)
     if not (cache_dir / "extract" / region_id).is_dir():
         raise KeyError(f"no FIRMS rows cached for '{region_id}'")
     days = platform_days(cache_dir)
     deliver = {p: {d[:7] for d, n in c.items() if n > 0} for p, c in days.items()}
     if not any(deliver.values()):
         raise KeyError(f"no FIRMS rows cached for '{region_id}'")
-    gaps = outage_days(days)
-    gap_months: dict[str, collections.Counter[str]] = {p: collections.Counter(d[:7] for d in s) for p, s in gaps.items()}
     # NOAA-21 is not in the country files: its delivery comes from the days its area API extracts cover. Its rows
     # are box rows only, so no outage day can be found for it (outage_days is null).
     noaa21 = noaa21_months(region_id, cache_dir)
@@ -330,7 +327,123 @@ def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[st
         deliver["NOAA-21"] = noaa21
     ignored: list[str] = []
     counts, left_out, rows_read = monthly_counts(region_id, cache_dir, ignored)
-    static = left_out["static"]
+    spec = PRESET_BY_ID[region_id]
+    counted_rows = ("every FIRMS row except type 2 (static land source, counted as static_excluded) and type 3 "
+                    "(offshore) rows on sea or within 500 m of it in the region's context DEM (counted as "
+                    "offshore_on_sea_excluded); type 3 rows farther inland, such as fire beside mountain "
+                    "lakes, count"
+                    if left_out["sea_check"] else
+                    "every FIRMS row except type 2 (static land source, counted as static_excluded); no context "
+                    "DEM in the cache, so type 3 (offshore) rows count")
+    out = _calendar_payload(
+        counts, rows_read, box, deliver, outage_days(days),
+        head={"region_id": region_id, "region_name": spec.name},
+        provenance_where="inside the region's context box",
+        counted_rows=counted_rows,
+        excluded={"static": "static_excluded", "offshore": "offshore_on_sea_excluded"},
+        left_out_metrics={"static_rows_excluded": left_out["static"],
+                          "offshore_rows_on_sea_excluded": left_out["offshore_on_sea"]},
+        noaa21_note="counted from 2023-03 in raw_counts, from area API rows of the region box (no outage check "
+                    "possible); not in the fit, for the same reason",
+        not_in_calendar="2026: its rows come from the area API for the region box only (no country-wide count "
+                        "to tell an outage from a quiet day), and its near real time rows have no type column, "
+                        "so static sources cannot be left out; the calendar ends at the last country file "
+                        "month instead",
+        ignored=ignored,
+    )
+    out["place"] = {"kind": "region", "region_id": region_id, "name": spec.name, "box": list(box),
+                    "countries": [REGION_COUNTRY[region_id].replace("_", " ")]}
+    out["current_month"] = {"route": f"/api/calendar/current?source=firms&region_id={region_id}"}
+    return out
+
+
+BOX_MAX_SPAN_DEG: float = 20.0
+BOX_MIN_SPAN_DEG: float = 0.05
+
+
+def parse_box(text: str) -> tuple[float, float, float, float]:
+    """'w,s,e,n' in degrees -> a checked box (ValueError when it is not one)."""
+    try:
+        parts = [float(v) for v in str(text).split(",")]
+    except ValueError as exc:
+        raise ValueError("box must be four numbers: west,south,east,north in degrees") from exc
+    if len(parts) != 4 or not all(math.isfinite(v) for v in parts):
+        raise ValueError("box must be four finite numbers: west,south,east,north in degrees")
+    w, s, e, n = parts
+    if not (-180.0 <= w < e <= 180.0 and -90.0 <= s < n <= 90.0):
+        raise ValueError("box must have west < east inside -180 to 180 and south < north inside -90 to 90")
+    if e - w > BOX_MAX_SPAN_DEG or n - s > BOX_MAX_SPAN_DEG:
+        raise ValueError(f"box spans at most {BOX_MAX_SPAN_DEG:g} degrees each way")
+    if e - w < BOX_MIN_SPAN_DEG or n - s < BOX_MIN_SPAN_DEG:
+        raise ValueError(f"box spans at least {BOX_MIN_SPAN_DEG:g} degrees each way")
+    return (round(w, 4), round(s, 4), round(e, 4), round(n, 4))
+
+
+def box_label(box: tuple[float, float, float, float]) -> str:
+    w, s, e, n = box
+
+    def lat(v: float) -> str:
+        return f"{abs(v):.2f} {'N' if v >= 0 else 'S'}"
+
+    def lon(v: float) -> str:
+        return f"{abs(v):.2f} {'E' if v >= 0 else 'W'}"
+
+    return f"{lat(s)} to {lat(n)}, {lon(w)} to {lon(e)}"
+
+
+def box_calendar(box: tuple[float, float, float, float], index: Any = None, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, Any]:
+    """The /api/calendar payload for ``source=firms`` and any box, counted from the cached country files
+    (`backend/firms/box_index.py`). KeyError when no cached country file has a row in the box."""
+    from backend.firms.box_index import BoxIndex
+
+    index = index or BoxIndex(cache_dir)
+    counts, left_out, rows_read, countries = index.monthly_counts(box)
+    if not rows_read:
+        raise KeyError(f"no cached FIRMS country file has a row in the box {list(box)}; cached countries: "
+                       f"{', '.join(index.countries()) or 'none'}")
+    days = platform_days(cache_dir)
+    deliver = {p: {d[:7] for d, n in c.items() if n > 0} for p, c in days.items()}
+    label = box_label(box)
+    out = _calendar_payload(
+        counts, rows_read, box, deliver, outage_days(days),
+        head={"region_id": None, "region_name": label},
+        provenance_where=f"inside the box, from the country files of {', '.join(countries)}",
+        counted_rows=("every FIRMS row except type 1 (active volcano, counted as volcano_excluded), type 2 (static "
+                      "land source, counted as static_excluded) and type 3 (offshore, counted as offshore_excluded); "
+                      "a box has no elevation model to tell an inland type 3 row from one at sea, so all type 3 "
+                      "rows are left out"),
+        excluded={"static": "static_excluded", "offshore": "offshore_excluded", "volcano": "volcano_excluded"},
+        left_out_metrics={"static_rows_excluded": left_out["static"], "offshore_rows_excluded": left_out["offshore"],
+                          "volcano_rows_excluded": left_out["volcano"]},
+        noaa21_note="not in the country files; a box calendar has no NOAA-21 rows",
+        not_in_calendar="the months after the last country file month: their rows come from the area API (near real "
+                        "time, no type column); this month so far is served by GET /api/calendar/current",
+        ignored=[],
+    )
+    out["place"] = {"kind": "box", "box": list(box), "countries": countries, "label": label}
+    out["current_month"] = {"route": "/api/calendar/current?source=firms&box=" + ",".join(f"{v:g}" for v in box)}
+    return out
+
+
+def _calendar_payload(
+    counts: dict[str, dict[str, dict[str, int]]],
+    rows_read: int,
+    box: tuple[float, float, float, float],
+    deliver: dict[str, set[str]],
+    gaps: dict[str, set[str]],
+    head: dict[str, Any],
+    provenance_where: str,
+    counted_rows: str,
+    excluded: dict[str, str],
+    left_out_metrics: dict[str, Any],
+    noaa21_note: str,
+    not_in_calendar: str,
+    ignored: list[str],
+) -> dict[str, Any]:
+    """The calendar from monthly counts: records, the harmonization and its held-out check, the annual summary, the
+    month medians. ``excluded`` maps each left-out kind of the counts to its raw_counts label."""
+    area = box_area_km2(box)
+    gap_months: dict[str, collections.Counter[str]] = {p: collections.Counter(d[:7] for d in s) for p, s in gaps.items()}
     # The calendar spans the country file months; NOAA-21 (area API rows) is counted inside that span only.
     all_months = sorted(set().union(*(v for k, v in deliver.items() if k != "NOAA-21")))
     months = _months(all_months[0], all_months[-1])
@@ -346,10 +459,11 @@ def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[st
             for mo in months if clean(mo, "Suomi NPP", "Terra", "Aqua")]
     terra = [(int(mo[:4]), _fire(counts, mo, "Suomi NPP"), _fire(counts, mo, "Terra"))
              for mo in months if clean(mo, "Suomi NPP", "Terra")]
-    excluded = [mo for mo in months if on("Suomi NPP", mo) and on("Terra", mo) and on("Aqua", mo)
-                and not clean(mo, "Suomi NPP", "Terra", "Aqua")]
+    excluded_months = [mo for mo in months if on("Suomi NPP", mo) and on("Terra", mo) and on("Aqua", mo)
+                       and not clean(mo, "Suomi NPP", "Terra", "Aqua")]
     fit_both, fit_terra = fit_ratio(both), fit_ratio(terra)
     validation = leave_one_year_out(both)
+    empty = {"day": 0, "night": 0, **{k: 0 for k in excluded}}
 
     def rate(n: float, mo: str) -> float:
         days = _cal.monthrange(int(mo[:4]), int(mo[5:7]))[1]
@@ -361,10 +475,10 @@ def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[st
         raw_counts = {}
         for plat, ok in (("Terra", t_on), ("Aqua", a_on), ("Suomi NPP", s_on), ("NOAA-20", n_on),
                          ("NOAA-21", on("NOAA-21", mo))):
-            c = counts.get(mo, {}).get(plat, {"day": 0, "night": 0, "static": 0, "offshore": 0})
+            c = counts.get(mo, {}).get(plat, empty)
             gap = None if plat == "NOAA-21" else gap_months.get(plat, {}).get(mo, 0)
             raw_counts[plat] = ({"day": c["day"], "night": c["night"], "total": c["day"] + c["night"],
-                                 "static_excluded": c["static"], "offshore_on_sea_excluded": c["offshore"],
+                                 **{label: c.get(kind, 0) for kind, label in excluded.items()},
                                  "outage_days": gap}
                                 if ok else None)
         modis_n = (_fire(counts, mo, "Terra") if t_on else 0) + (_fire(counts, mo, "Aqua") if a_on else 0)
@@ -443,17 +557,30 @@ def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[st
 
     full = [a for a in annual if a["months"] == 12 and a["harmonized_mean"] is not None]
     top = sorted(full, key=lambda a: a["harmonized_mean"], reverse=True)[:4]
-    spec = PRESET_BY_ID[region_id]
+    climatology = month_climatology(records)
+    by_month = {c["month"]: c for c in climatology}
+    same_month: dict[int, list[float]] = collections.defaultdict(list)
+    for r in records:
+        if r["harmonized_mean"] is not None:
+            same_month[r["month"]].append(r["harmonized_mean"])
+    for r in records:
+        med = by_month.get(r["month"], {}).get("median")
+        h = r["harmonized_mean"]
+        r["month_median"] = med
+        r["anomaly"] = round(h - med, 4) if (h is not None and med is not None) else None
+        r["anomaly_ratio"] = round(h / med, 4) if (h is not None and med) else None
+        # 1 is the most burning of this calendar month over the years; ties share the better rank
+        r["month_rank"] = (1 + sum(1 for v in same_month[r["month"]] if v > h)) if h is not None else None
+        r["month_years"] = len(same_month[r["month"]])
     return {
         "schema_version": "1.0.0",
         "source": "firms",
         "model_version": METHOD_ID,
         "provenance": "Real NASA FIRMS standard processing rows (Country Yearly Summary files; MODIS version labels 6.2 "
                       "for 2000 to 2017, 6.03 for 2018 to 2022 and 61.03 for 2023 to 2025; VIIRS version 2), counted "
-                      "inside the region's context box. Not simulated.",
+                      f"{provenance_where}. Not simulated.",
         "downloaded_firms_rows": rows_read,
-        "region_id": region_id,
-        "region_name": spec.name,
+        **head,
         "bbox": list(box),
         "box_area_km2": round(area, 1),
         "reference_frame": "VIIRS_SNPP_375M_EQUIV",
@@ -469,27 +596,18 @@ def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[st
                            "p10 and p90 from the 10th and 90th percentile of the per-year ratios; months before Aqua "
                            "use a Terra-only ratio fitted the same way; overlap months in which Suomi NPP, Terra or "
                            "Aqua has an outage day are left out of the fit and the validation",
-            "counted_rows": ("every FIRMS row except type 2 (static land source, counted as static_excluded) and type 3 "
-                             "(offshore) rows on sea or within 500 m of it in the region's context DEM (counted as "
-                             "offshore_on_sea_excluded); type 3 rows farther inland, such as fire beside mountain "
-                             "lakes, count"
-                             if left_out["sea_check"] else
-                             "every FIRMS row except type 2 (static land source, counted as static_excluded); no context "
-                             "DEM in the cache, so type 3 (offshore) rows count"),
+            "counted_rows": counted_rows,
             "outage_rule": f"a day inside a platform's operating span on which it has no row in any cached country file "
                            f"while the other platforms together have at least {OUTAGE_MIN_OTHER_ROWS}",
-            "overlap_months_excluded_for_outages": excluded,
+            "overlap_months_excluded_for_outages": excluded_months,
             "platforms_in_fit": ["Suomi NPP", "Terra", "Aqua"],
             "platforms_counted_not_fitted": {
                 "NOAA-20": "counted from 2018-04 in raw_counts; the fit stays Suomi NPP over MODIS, one platform pair "
                            "through the whole 2012 to 2025 overlap",
-                "NOAA-21": "counted from 2023-03 in raw_counts, from area API rows of the region box (no outage check "
-                           "possible); not in the fit, for the same reason",
+                "NOAA-21": noaa21_note,
             },
-            "not_in_calendar": "2026: its rows come from the area API for the region box only (no country-wide count "
-                               "to tell an outage from a quiet day), and its near real time rows have no type column, "
-                               "so static sources cannot be left out; the calendar ends at the last country file "
-                               "month instead",
+            "not_in_calendar": not_in_calendar,
+            "fit_rows": {"modis": fit_both["modis_rows"], "viirs": fit_both["viirs_rows"]},
             "ratio_terra_aqua": {k: (round(v, 4) if isinstance(v, float) else v) for k, v in fit_both.items()},
             "ratio_terra_only": {k: (round(v, 4) if isinstance(v, float) else v) for k, v in fit_terra.items()},
             "validation": validation,
@@ -506,17 +624,33 @@ def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[st
             "held_out_median_abs_relative_error_without_harmonization": validation["median_abs_relative_error_without_harmonization"],
             "held_out_annual_interval_coverage": validation["annual_interval_coverage"],
             "held_out_monthly_interval_coverage": validation["monthly_interval_coverage"],
-            "static_rows_excluded": static,
-            "offshore_rows_on_sea_excluded": left_out["offshore_on_sea"],
+            **left_out_metrics,
             "ignored_extracts": ignored,
             "outage_days": {p: len(s) for p, s in sorted(gaps.items())},
             "extreme_fire_years_highlighted": [a["year"] for a in top],
             "coverage_note": "coverage_fraction is null: FIRMS rows are positive-only and no coverage product is fetched yet",
         },
+        "month_climatology": climatology,
         "regime_markers": markers,
         "annual_summary": annual,
         "records": records,
     }
+
+
+def month_climatology(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Per calendar month: the median, 10th and 90th percentile of ``harmonized_mean`` over every year in which that
+    month is harmonized."""
+    out = []
+    for m in range(1, 13):
+        vals = [(r["year"], r["harmonized_mean"]) for r in records if r["month"] == m and r["harmonized_mean"] is not None]
+        if not vals:
+            out.append({"month": m, "median": None, "p10": None, "p90": None, "years": 0, "first_year": None, "last_year": None})
+            continue
+        v = np.array([x for _, x in vals], dtype=np.float64)
+        out.append({"month": m, "median": round(float(np.median(v)), 4), "p10": round(float(np.percentile(v, 10)), 4),
+                    "p90": round(float(np.percentile(v, 90)), 4), "years": len(vals),
+                    "first_year": min(y for y, _ in vals), "last_year": max(y for y, _ in vals)})
+    return out
 
 
 CSV_COLUMNS: tuple[str, ...] = (
@@ -540,4 +674,57 @@ def rows_csv(region_id: str, start: str, end: str, platforms: Iterable[str] | No
     w = csv.DictWriter(buf, fieldnames=list(CSV_COLUMNS) + extra, lineterminator="\n", restval="")
     w.writeheader()
     w.writerows(rows)
+    return buf.getvalue().encode("utf-8"), len(rows)
+
+
+BOX_CSV_MAX_DAYS: int = 400
+
+
+def rows_csv_box(box: tuple[float, float, float, float], start: str, end: str, platforms: Iterable[str] | None = None,
+                 index: Any = None, cache_dir: Path = FIRMS_CACHE_DIR, max_rows: int = CSV_MAX_ROWS) -> tuple[bytes, int]:
+    """CSV of every row of the cached country files inside ``box`` in [start, end) UTC, all columns, in the layout of
+    ``rows_csv``. The span is at most BOX_CSV_MAX_DAYS: a country file is read in full for each year asked."""
+    from backend.firms.archive import _as_utc, _norm_time
+    from backend.firms.box_index import BoxIndex, country_of, raw_files
+
+    import datetime as _dt
+
+    t0, t1 = _as_utc(start), _as_utc(end)
+    if (t1 - t0).days > BOX_CSV_MAX_DAYS:
+        raise ValueError(f"a box export spans at most {BOX_CSV_MAX_DAYS} days")
+    index = index or BoxIndex(cache_dir)
+    countries = {c.replace(" ", "_") for c, e in index.countries().items()
+                 if not (e[0] > box[2] or e[2] < box[0] or e[1] > box[3] or e[3] < box[1])}
+    if not countries:
+        raise KeyError(f"no cached FIRMS country file has a row in the box {list(box)}")
+    want = set(platforms) if platforms is not None else None
+    years = set(range(t0.year, (t1 - _dt.timedelta(microseconds=1)).year + 1))
+    w, s, e, n = box
+    rows: list[dict[str, str]] = []
+    for raw in raw_files(cache_dir):
+        product, year = raw.parent.parent.name, int(raw.parent.name)
+        if year not in years or country_of(raw) not in countries:
+            continue
+        with raw.open(encoding="utf-8", newline="") as fh:
+            for row in csv.DictReader(fh):
+                lat, lon = float(row["latitude"]), float(row["longitude"])
+                if not (w <= lon <= e and s <= lat <= n):
+                    continue
+                hhmm = _norm_time(row["acq_time"])
+                ts = _dt.datetime.fromisoformat(f"{row['acq_date']}T{hhmm[:2]}:{hhmm[2:]}:00+00:00")
+                if not (t0 <= ts < t1):
+                    continue
+                plat = _platform(product, row["satellite"])
+                if want is not None and plat not in want:
+                    continue
+                row["_platform"], row["_product"], row["_acq_utc"] = plat, product, ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+                rows.append(row)
+                if len(rows) > max_rows:
+                    raise ValueError(f"over {max_rows} rows in the selection, the export limit; narrow it")
+    rows.sort(key=lambda d: (d["_acq_utc"], d["_platform"], d["latitude"], d["longitude"]))
+    extra = sorted({k for r in rows for k in r} - set(CSV_COLUMNS))
+    buf = io.StringIO()
+    wr = csv.DictWriter(buf, fieldnames=list(CSV_COLUMNS) + extra, lineterminator="\n", restval="")
+    wr.writeheader()
+    wr.writerows(rows)
     return buf.getvalue().encode("utf-8"), len(rows)
