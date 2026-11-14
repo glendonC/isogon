@@ -288,6 +288,25 @@ def query_number(raw: str, name: str) -> float:
     return f
 
 
+def _finite_or_null(v: Any) -> Any:
+    if isinstance(v, float):
+        return v if math.isfinite(v) else None
+    if isinstance(v, dict):
+        return {k: _finite_or_null(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_finite_or_null(x) for x in v]
+    return v
+
+
+def strict_json_bytes(payload: Any) -> bytes:
+    """JSON (RFC 8259) for an answer: a number that is not finite is written as null, never as NaN or Infinity,
+    which a browser's JSON parser refuses."""
+    try:
+        return json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    except ValueError:
+        return json.dumps(_finite_or_null(payload), ensure_ascii=False, allow_nan=False).encode("utf-8")
+
+
 def frame_fields(tensor_u8: NDArray[np.uint8], frame_idx: int, encoding: dict[str, Any] | None) -> tuple[NDArray[np.float64], NDArray[np.float64], str]:
     """(FRP density, its standard deviation, the scale read) of one frame, both in MW/km2. A real run writes its
     channels on the logarithmic byte scale its payload's ``encoding`` names (`backend/model/encoding.py`); a
@@ -1051,8 +1070,7 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
         self._send_bytes(status, body, "application/json; charset=utf-8")
 
     def _send_json_obj(self, status: int, payload: dict[str, Any]) -> None:
-        encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self._send_json_bytes(status, encoded)
+        self._send_json_bytes(status, strict_json_bytes(payload))
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(HTTPStatus.NO_CONTENT)

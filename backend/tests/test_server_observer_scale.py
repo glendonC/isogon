@@ -1,5 +1,5 @@
 """`GET /api/observer` reads a frame's intensity on the scale the run wrote it: logarithmic bytes for a real run,
-linear bytes for a simulated one. The tensors here are made up in the test."""
+linear bytes for a simulated one; and no answer carries NaN or Infinity. The tensors here are made up in the test."""
 
 from __future__ import annotations
 
@@ -40,6 +40,19 @@ class FrameFieldsTests(unittest.TestCase):
         self.assertEqual(scale, "linear")
         np.testing.assert_allclose(zr[0], [Z_MAX_MW_KM2, 51 / 255 * Z_MAX_MW_KM2])
         np.testing.assert_allclose(sr[0], [SIGMA_MAX_MW_KM2, 0.0])
+
+
+
+class StrictJsonTests(unittest.TestCase):
+    def test_answers_never_carry_nan_or_infinity(self) -> None:
+        import json
+
+        from backend.server import strict_json_bytes
+
+        raw = strict_json_bytes({"a": float("nan"), "b": [1.5, float("inf"), {"c": -float("inf")}], "d": "NaN", "e": 2})
+        parsed = json.loads(raw, parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)))
+        self.assertEqual(parsed, {"a": None, "b": [1.5, None, {"c": None}], "d": "NaN", "e": 2})
+        self.assertEqual(strict_json_bytes({"x": 1.25}), b'{"x": 1.25}')
 
 
 if __name__ == "__main__":

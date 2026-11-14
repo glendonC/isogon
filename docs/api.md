@@ -16,6 +16,7 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 - **Errors** are a JSON object with one string, `{"error": "..."}`. `400` is a bad parameter or body, `404` an unknown route, region, run or round, or data that is not in the local cache, `409` a step that does not fit a round's state, `413` a body that is too large, `500` anything unexpected.
 - **An unknown `GET` path** answers `404` with `error` and `available_endpoints`. An unknown `POST` path answers `404` with `error` only.
 - **Paths** ignore a trailing slash. Every `GET` route also answers `HEAD`, and `OPTIONS` answers `204`.
+- **Answers** written by the server from a value are strict JSON: a number that is not finite is written as `null`, never as `NaN` or `Infinity`.
 - **Request bodies** are JSON objects. `NaN`, `Infinity` and `-Infinity` are refused. Types are not coerced: the string `"false"` is not a boolean. The limit is 262,144 bytes for `/api/reconstruct` and 65,536 bytes for the next-look routes.
 - **Origins.** Only pages served from this machine may call the API from a browser: `Access-Control-Allow-Origin` is sent when `Origin` is `http` or `https` on `localhost`, `127.0.0.1` or `[::1]`. A `POST` with any other `Origin` answers `403`. A request with no `Origin`, such as one from a script, is served.
 - **Caching.** Answers carry `Cache-Control: no-store`, except terrain pack files (below).
@@ -196,7 +197,7 @@ No parameters. Always `200`. Serves `website/public/generated/fields/field_metad
 | `source` | Omitted or `simulated`: the simulated calendar. `firms`: the real calendar of a region. |
 | `region_id` | Needed with `source=firms`. |
 
-Errors: `400` for any other `source`, and for `source=firms` without `region_id`; `404` for a region with no FIRMS data (the error is the region id).
+Errors: `400` for any other `source`, and for `source=firms` with neither or both of `region_id` and `box`; `404` for a region with no FIRMS data (the error is the region id).
 
 ### Simulated calendar
 
@@ -313,7 +314,7 @@ Shortened to the keys that differ, one month and one record.
 - A box leaves out every row of FIRMS type 1 (active volcano), 2 (static land source) and 3 (offshore) and counts them apart. A region keeps type 3 rows on land beside lakes, which its elevation model tells from rows at sea; a box has no such model. On the context box of a region, a box counts every platform's rows of every month exactly as the region does once the left-out kinds are added back (`backend/tests/test_firms_box_calendar.py`).
 - The ratio is fitted on the box's own overlap months, with the same held-out year check; a box with few rows has a wide interval and a larger held-out error, and says so.
 - A box counts only the rows of the cached country files. `GET /api/regions` lists those countries and where their rows lie. Rows of NOAA-21 and of months after the last country file month come from the area API and are not in a box calendar.
-- The first box after a cache change builds an index of the country files (`backend/firms/box_index.py`, about a minute, then about 0.2 seconds per box). Errors: `400` for a box that is not four finite numbers with west below east and south below north, or that spans more than 20 or less than 0.05 degrees; `404` when no cached country file has a row in the box.
+- A box is counted through an index of the country files (`backend/firms/box_index.py`), which the server opens when it starts and builds there the first time (47 seconds on the machine the project was built on); a box asked during that build waits for it. Then a new box takes 0.1 to 0.4 seconds and the same box again about 2 milliseconds. Errors: `400` for a box that is not four finite numbers with west below east and south below north, or that spans more than 20 or less than 0.05 degrees; `404` when no cached country file has a row in the box.
 
 ## `GET /api/calendar/current`
 
