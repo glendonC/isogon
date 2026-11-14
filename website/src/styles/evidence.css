@@ -22,7 +22,7 @@
   min-width: 0;
 }
 
-/* Where the numbers come from, beside the title: "Demo data" or "NASA FIRMS". */
+/* Where the numbers come from, beside the title. */
 .iso-evidence__source {
   font: 400 12px/16px var(--font-mono);
   color: var(--iso-curtain);
@@ -48,6 +48,27 @@
   margin: 0;
   padding: 0 28px;
   max-width: calc(72ch + 56px);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--iso-ink-2);
+}
+
+/* What each look at the test fires was: the look in the sans, what it did in the body text below it. */
+.iso-evidence__looks {
+  margin: 0;
+  padding: 0 28px;
+  display: grid;
+  gap: 8px;
+  max-width: calc(72ch + 56px);
+}
+
+.iso-evidence__looks dt {
+  font: 500 13px/18px var(--font-sans);
+  color: var(--iso-ink);
+}
+
+.iso-evidence__looks dd {
+  margin: 0;
   font-size: 13.5px;
   line-height: 1.55;
   color: var(--iso-ink-2);
@@ -177,6 +198,7 @@
   .iso-evidence .iso-sheet__lede,
   .iso-evidence__heading,
   .iso-evidence__text,
+  .iso-evidence__looks,
   .iso-evidence__choice,
   .iso-evidence__scroll,
   .iso-evidence__limits {

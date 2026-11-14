@@ -5,7 +5,7 @@ import {
 } from './components/CommandAskPalette';
 import { ReadingSheet, type ReadingSection } from './components/ReadingSheet';
 import { EvidenceSheet } from './components/EvidenceSheet';
-import { DEMO_EVIDENCE } from './content/demo/evidence';
+import type { EvidenceDoc, EvidenceState } from './content/evidence';
 import { DEMO_PASSES } from './content/demo/passes';
 import { DEMO_TERRA_MORNING } from './content/demo/terraMorning';
 import { TerraMorningPanel } from './components/TerraMorning';
@@ -313,7 +313,7 @@ export function App() {
     const v = new URLSearchParams(window.location.search).get('sel');
     return v === 'square' || v === 'box' ? v : 'chip';
   }, []);
-  /** The evidence sheet (demo data while `SURFACE_SOURCE.evidence` says so). */
+  /** The evidence sheet, read from GET /api/evidence. */
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   /** Any area's record. A month picked there opens its region and month here. */
   const [areaOpen, setAreaOpen] = useState(false);
@@ -801,18 +801,32 @@ export function App() {
     goStep(next);
   }, [inWorkspace, goStep]);
 
-  // The parts' status lines read the evidence route live; until it answers they show what they do, no figures.
-  const [evidenceLive, setEvidenceLive] = useState<typeof DEMO_EVIDENCE | null>(null);
+  // The parts' status lines and the evidence sheet read the evidence route live; until it answers they show no
+  // figures. A sheet opened after a failed answer asks again.
+  const [evidenceLive, setEvidenceLive] = useState<EvidenceDoc | null>(null);
+  const [evidenceState, setEvidenceState] = useState<EvidenceState>('loading');
+  const [evidenceAsk, setEvidenceAsk] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
+    setEvidenceState('loading');
     fetch(`${API_BASE}/api/evidence`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d && typeof d === 'object') setEvidenceLive(d as typeof DEMO_EVIDENCE);
+        if (d && typeof d === 'object' && (d as Partial<EvidenceDoc>).test_fires) {
+          setEvidenceLive(d as EvidenceDoc);
+          setEvidenceState('ready');
+        } else {
+          setEvidenceState('failed');
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!controller.signal.aborted) setEvidenceState('failed');
+      });
     return () => controller.abort();
-  }, []);
+  }, [evidenceAsk]);
+  useEffect(() => {
+    if (evidenceOpen && evidenceState === 'failed') setEvidenceAsk((n) => n + 1);
+  }, [evidenceOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const landingParts = useMemo(() => partsStatus(evidenceLive), [evidenceLive]);
   const openPart = useCallback(
     (id: PartId) => {
@@ -1560,8 +1574,8 @@ export function App() {
           setEvidenceFocus(null);
         }}
         focus={evidenceFocus}
-        doc={DEMO_EVIDENCE}
-        source={SURFACE_SOURCE.evidence}
+        doc={evidenceLive}
+        state={evidenceState}
       />
 
       <ReadingSheet

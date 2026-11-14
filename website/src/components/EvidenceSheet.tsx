@@ -9,16 +9,17 @@ import type {
   EvidenceMethodId,
   EvidenceNextLook,
   EvidenceScore,
+  EvidenceState,
   EvidenceValidation,
-} from '../content/demo/evidence';
+} from '../content/evidence';
 import '../styles/evidence.css';
 
 export interface EvidenceSheetProps {
   open: boolean;
   onClose: () => void;
-  doc: EvidenceDoc;
-  /** `demo` reads content/demo/evidence.ts; `live` is `GET /api/evidence`. The label beside the title says which. */
-  source: 'demo' | 'live';
+  /** The answer of `GET /api/evidence`; null until it arrives, or when it did not. */
+  doc: EvidenceDoc | null;
+  state: EvidenceState;
   /** Open on a section (the agents' table, from the landing's third part). */
   focus?: 'next_look' | null;
 }
@@ -34,10 +35,36 @@ const METHOD_NAME: Record<EvidenceMethodId, string> = {
   painted_modis: 'painted MODIS',
   overlap_ratio: 'overlap ratio',
 };
-const TESTS = [
-  { key: 'new', label: 'Corrected' },
+/** The agents' table: the settings in use beside the first. */
+const TABLES = [
+  { key: 'new', label: 'In use' },
   { key: 'old', label: 'First' },
 ] as const;
+
+/** One column of a fire's tables: a look on record. */
+interface FireColumn {
+  key: string;
+  label: string;
+  test: EvidenceFireTest;
+  /** The final look reads at full ink; earlier looks one step quieter. */
+  tone: 'new' | 'old';
+}
+
+/** Every look on record, in order; a document without them gives the first and the final look. */
+function columnsOf(fire: EvidenceFire): FireColumn[] {
+  if (Array.isArray(fire.looks) && fire.looks.length > 0) {
+    const last = fire.looks.length - 1;
+    return fire.looks.map((l, i) => ({ key: `look${l.look}`, label: `Look ${l.look}`, test: l, tone: i === last ? 'new' : 'old' }));
+  }
+  return [
+    { key: 'old', label: 'First look', test: fire.old, tone: 'old' },
+    { key: 'new', label: 'Final look', test: fire.new, tone: 'new' },
+  ];
+}
+
+const TIMES = ['no times', 'once', 'twice', 'three times', 'four times', 'five times'];
+
+const judgedOf = (test: EvidenceFireTest, fallback: number) => test.scores_judged ?? fallback;
 const BETTER: Record<EvidenceScore['better'], string> = {
   higher: 'higher is better',
   lower: 'lower is better',
@@ -109,10 +136,11 @@ function intervalVerdict(test: EvidenceFireTest, level: number): string {
 }
 
 function TestFires({ doc }: { doc: EvidenceDoc }) {
-  const { fires, scores, interval_level: level, hidden, note } = doc.test_fires;
+  const { fires, scores, interval_level: level, hidden, note, looks = [] } = doc.test_fires;
   const [fireId, setFireId] = useState<string | null>(null);
   const fire: EvidenceFire | null = fires.find((f) => f.region_id === fireId) ?? fires[0] ?? null;
   const pct = Math.round(level * 100);
+  const columns = fire ? columnsOf(fire) : [];
 
   return (
     <section className="iso-evidence__section" aria-labelledby="iso-evidence-fires">
@@ -121,19 +149,31 @@ function TestFires({ doc }: { doc: EvidenceDoc }) {
       </h3>
       <p className="iso-evidence__text">
         Isogon hides {hidden}, rebuilds each fire from MODIS alone and scores the rebuild against what was hidden,
-        beside two baselines, painted MODIS and the overlap ratio. Each row shows the corrected test (protocol
-        version {fire?.new.protocol_version ?? 2}) above the first (version {fire?.old.protocol_version ?? 1}).
-        These fires were scored once before, so this is {note}.
+        beside two baselines, painted MODIS and the overlap ratio. These fires have been looked at{' '}
+        {looks.length > 0 ? `${TIMES[looks.length] ?? `${looks.length} times`}` : 'more than once'}, and every look is shown. The last is {note}.
       </p>
+      {looks.length > 0 && (
+        <dl className="iso-evidence__looks">
+          {looks.map((l) => (
+            <div key={l.look}>
+              <dt>
+                Look {l.look}, protocol version {l.protocol_version}
+              </dt>
+              <dd>{sentence(l.what)}.</dd>
+            </div>
+          ))}
+        </dl>
+      )}
       {fires.length > 0 && (
         <p className="iso-evidence__text">
-          Under the corrected test Isogon is ahead of both baselines on{' '}
+          On the final look Isogon is ahead of both baselines on{' '}
           {list(
             fires.map(
-              (f, i) => `${f.new.ahead_of_both_on} of ${scores.length}${i === 0 ? ' scores' : ''} on ${f.name}`,
+              (f, i) =>
+                `${f.new.ahead_of_both_on} of ${judgedOf(f.new, scores.length)}${i === 0 ? ' scores' : ''} on ${f.name}`,
             ),
           )}{' '}
-          ({list(fires.map((f) => String(f.old.ahead_of_both_on)))} under the first).
+          ({list(fires.map((f) => String(f.old.ahead_of_both_on)))} on the first).
         </p>
       )}
 
@@ -162,7 +202,7 @@ function TestFires({ doc }: { doc: EvidenceDoc }) {
               <thead>
                 <tr>
                   <th scope="col">{sentence(fire.name)}</th>
-                  {TESTS.map((t) => (
+                  {columns.map((t) => (
                     <th key={t.key} scope="col" className="iso-evidence__val">
                       {t.label}
                     </th>
@@ -172,34 +212,34 @@ function TestFires({ doc }: { doc: EvidenceDoc }) {
               <tbody>
                 <tr>
                   <th scope="row">Window, UTC</th>
-                  {TESTS.map((t) => (
-                    <td key={t.key} className="iso-evidence__val" data-test={t.key}>
-                      <span className="iso-evidence__when">{utc(fire[t.key].first_overpass_utc)} to</span>{' '}
-                      <span className="iso-evidence__when">{utc(fire[t.key].last_overpass_utc)}</span>
+                  {columns.map((t) => (
+                    <td key={t.key} className="iso-evidence__val" data-test={t.tone}>
+                      <span className="iso-evidence__when">{utc(t.test.first_overpass_utc)} to</span>{' '}
+                      <span className="iso-evidence__when">{utc(t.test.last_overpass_utc)}</span>
                     </td>
                   ))}
                 </tr>
                 <tr>
                   <th scope="row">Scored overpasses</th>
-                  {TESTS.map((t) => (
-                    <td key={t.key} className="iso-evidence__val" data-test={t.key}>
-                      {fire[t.key].scored_overpasses}
+                  {columns.map((t) => (
+                    <td key={t.key} className="iso-evidence__val" data-test={t.tone}>
+                      {t.test.scored_overpasses}
                     </td>
                   ))}
                 </tr>
                 <tr>
                   <th scope="row">Hidden pixels</th>
-                  {TESTS.map((t) => (
-                    <td key={t.key} className="iso-evidence__val" data-test={t.key}>
-                      {fire[t.key].hidden_pixels.toLocaleString('en-US')}
+                  {columns.map((t) => (
+                    <td key={t.key} className="iso-evidence__val" data-test={t.tone}>
+                      {t.test.hidden_pixels.toLocaleString('en-US')}
                     </td>
                   ))}
                 </tr>
                 <tr>
                   <th scope="row">Isogon ahead of both</th>
-                  {TESTS.map((t) => (
-                    <td key={t.key} className="iso-evidence__val" data-test={t.key}>
-                      {fire[t.key].ahead_of_both_on} of {scores.length}
+                  {columns.map((t) => (
+                    <td key={t.key} className="iso-evidence__val" data-test={t.tone}>
+                      {t.test.ahead_of_both_on} of {judgedOf(t.test, scores.length)}
                     </td>
                   ))}
                 </tr>
@@ -213,7 +253,7 @@ function TestFires({ doc }: { doc: EvidenceDoc }) {
                 <tr>
                   <th scope="col">Score</th>
                   <th scope="col" className="iso-evidence__test">
-                    Test
+                    Look
                   </th>
                   {METHODS.map((m) => (
                     <th key={m} scope="col" className="iso-evidence__num">
@@ -227,10 +267,10 @@ function TestFires({ doc }: { doc: EvidenceDoc }) {
               </thead>
               {scores.map((s) => (
                 <tbody key={s.id}>
-                  {TESTS.map((t, i) => (
-                    <tr key={t.key} data-test={t.key}>
+                  {columns.map((t, i) => (
+                    <tr key={t.key} data-test={t.tone}>
                       {i === 0 && (
-                        <th scope="rowgroup" rowSpan={TESTS.length}>
+                        <th scope="rowgroup" rowSpan={columns.length}>
                           {s.label}
                           <span className="iso-evidence__hint">{BETTER[s.better]}</span>
                         </th>
@@ -238,19 +278,19 @@ function TestFires({ doc }: { doc: EvidenceDoc }) {
                       <td className="iso-evidence__test">{t.label}</td>
                       {METHODS.map((m) => (
                         <td key={m} className="iso-evidence__num">
-                          {fixed4(value(fire[t.key], m, s))}
+                          {fixed4(value(t.test, m, s))}
                         </td>
                       ))}
-                      <td className="iso-evidence__who">{scoreVerdict(s, fire[t.key])}</td>
+                      <td className="iso-evidence__who">{scoreVerdict(s, t.test)}</td>
                     </tr>
                   ))}
                 </tbody>
               ))}
               <tbody>
-                {TESTS.map((t, i) => (
-                  <tr key={t.key} data-test={t.key}>
+                {columns.map((t, i) => (
+                  <tr key={t.key} data-test={t.tone}>
                     {i === 0 && (
-                      <th scope="rowgroup" rowSpan={TESTS.length}>
+                      <th scope="rowgroup" rowSpan={columns.length}>
                         {pct} percent FRP interval
                         <span className="iso-evidence__hint">overpasses inside it</span>
                       </th>
@@ -258,10 +298,10 @@ function TestFires({ doc }: { doc: EvidenceDoc }) {
                     <td className="iso-evidence__test">{t.label}</td>
                     {METHODS.map((m) => (
                       <td key={m} className="iso-evidence__num">
-                        {count(fire[t.key].frp_interval[m])}
+                        {count(t.test.frp_interval[m])}
                       </td>
                     ))}
-                    <td className="iso-evidence__who">{intervalVerdict(fire[t.key], level)}</td>
+                    <td className="iso-evidence__who">{intervalVerdict(t.test, level)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -294,8 +334,8 @@ function Validation({ v }: { v: EvidenceValidation }) {
       </h3>
       <p className="iso-evidence__text">
         Fires of {list(v.years.map(String))} decide what is switched on. On {v.episodes} episodes with{' '}
-        {v.scored_overpasses} scored overpasses, under the corrected test, Isogon is ahead of both baselines beyond
-        the noise on {v.classes.ahead} scores, tied on {v.classes.tied} and behind on{' '}
+        {v.scored_overpasses} scored overpasses, under protocol version {v.protocol_version}, Isogon is ahead of both
+        baselines beyond the noise on {v.classes.ahead} scores, tied on {v.classes.tied} and behind on{' '}
         {v.classes.behind === 0 ? 'none' : v.classes.behind}.
       </p>
       <table className="iso-table iso-table--sheet iso-evidence__parts">
@@ -334,10 +374,11 @@ function NextLook({ n }: { n: EvidenceNextLook }) {
         Choosing where to look next
       </h3>
       <p className="iso-evidence__text">
-        In the next-look game an agent may uncover the hidden VIIRS {n.looks} times, each time in one tile of a{' '}
+        In the next-look game an agent may uncover the hidden VIIRS {TIMES[n.looks] ?? `${n.looks} times`}, each time in one tile of a{' '}
         {n.tiles_per_side} by {n.tiles_per_side} grid at one scheduled pass, and is scored on the {n.score} of what
-        stays hidden. It is played on {n.test_episodes.new} test episodes ({n.test_episodes.old} under the first
-        test), windows of the three test fires, so this too is a second look.
+        stays hidden{n.reward ? `; a look is rewarded with the ${n.reward}` : ''}. It is played on{' '}
+        {n.test_episodes.new} test episodes ({n.test_episodes.old} in the first table), windows of the three test
+        fires{n.not_the_same_game_twice ? `. This table is a ${n.not_the_same_game_twice.replace(/\.\s*$/, '')}` : ''}.
       </p>
       <div className="iso-evidence__scroll">
         <table className="iso-table iso-table--sheet">
@@ -345,7 +386,7 @@ function NextLook({ n }: { n: EvidenceNextLook }) {
             <tr>
               <th scope="col">Agent</th>
               <th scope="col" className="iso-evidence__test">
-                Test
+                Table
               </th>
               <th scope="col" className="iso-evidence__num">
                 Mean final
@@ -360,10 +401,10 @@ function NextLook({ n }: { n: EvidenceNextLook }) {
           </thead>
           {n.agents.map((a) => (
             <tbody key={a.id}>
-              {TESTS.map((t, i) => (
+              {TABLES.map((t, i) => (
                 <tr key={t.key} data-test={t.key}>
                   {i === 0 && (
-                    <th scope="rowgroup" rowSpan={TESTS.length}>
+                    <th scope="rowgroup" rowSpan={TABLES.length}>
                       {a.label}
                       <span className="iso-evidence__hint">{a.does}</span>
                     </th>
@@ -380,27 +421,27 @@ function NextLook({ n }: { n: EvidenceNextLook }) {
       </div>
       <p className="iso-evidence__text">
         The mean start score, before any look, is {n.mean_start_score.new.toFixed(4)} (
-        {n.mean_start_score.old.toFixed(4)} under the first). {n.holds_in_both}
+        {n.mean_start_score.old.toFixed(4)} in the first). {n.holds_in_both}
       </p>
     </section>
   );
 }
 
 /**
- * The evidence sheet: the blind test on the three 2021 test fires under two versions of the test protocol, what the
- * first version let the hidden instrument decide, the validation verdict per part, the next-look reference table and
- * the limits, all from one `EvidenceDoc` (GET /api/evidence, or its demo stand-in). Escape closes it.
+ * The evidence sheet: every look at the three 2021 test fires, what the first protocol let the hidden instrument
+ * decide, the validation verdict per part, the next-look reference table and the limits, all from one `EvidenceDoc`
+ * (GET /api/evidence). Until the route answers, or when it does not, no figure is shown. Escape closes it.
  */
-export function EvidenceSheet({ open, onClose, doc, source, focus = null }: EvidenceSheetProps) {
+export function EvidenceSheet({ open, onClose, doc, state, focus = null }: EvidenceSheetProps) {
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   useDialogFocus(open, sheetRef, closeRef);
 
   useEffect(() => {
-    if (!open || focus !== 'next_look') return;
+    if (!open || focus !== 'next_look' || !doc) return;
     const t = window.setTimeout(() => document.getElementById('iso-evidence-next')?.scrollIntoView({ block: 'start' }), 60);
     return () => window.clearTimeout(t);
-  }, [open, focus]);
+  }, [open, focus, doc]);
 
   useEffect(() => {
     if (!open) return;
@@ -431,7 +472,7 @@ export function EvidenceSheet({ open, onClose, doc, source, focus = null }: Evid
             <h2 id="iso-evidence-title" className="iso-sheet__title">
               Evidence
             </h2>
-            <span className="iso-evidence__source">{source === 'demo' ? 'Demo data' : 'NASA FIRMS'}</span>
+            {doc && <span className="iso-evidence__source">NASA FIRMS</span>}
           </div>
           <button ref={closeRef} type="button" className="iso-key" onClick={onClose}>
             <kbd>Esc</kbd>
@@ -440,11 +481,22 @@ export function EvidenceSheet({ open, onClose, doc, source, focus = null }: Evid
         </div>
 
         <p className="iso-sheet__lede">
-          {source === 'demo'
-            ? 'Real results under test protocol versions 2 and 1, from a recorded copy shown as a stand-in for the live sheet.'
-            : `Results as the backend reports them, commit ${doc.commit}.`}
+          {!doc
+            ? state === 'failed'
+              ? 'The evidence route did not answer, so no figure is shown.'
+              : 'Waiting for the evidence route.'
+            : `Results as the backend reports them${doc.commit ? `, commit ${doc.commit}` : ''}.`}
         </p>
 
+        {doc && <EvidenceBody doc={doc} />}
+      </div>
+    </div>
+  );
+}
+
+function EvidenceBody({ doc }: { doc: EvidenceDoc }) {
+  return (
+    <>
         <TestFires doc={doc} />
 
         <section className="iso-evidence__section" aria-labelledby="iso-evidence-audit">
@@ -464,7 +516,7 @@ export function EvidenceSheet({ open, onClose, doc, source, focus = null }: Evid
               What is weak
             </h3>
             <ol className="iso-evidence__limits">
-              {doc.limits.slice(0, 5).map((l, i) => (
+              {doc.limits.map((l, i) => (
                 <li key={l}>
                   <span className="iso-evidence__limit-num">{i + 1}</span>
                   <span>{l}</span>
@@ -473,7 +525,6 @@ export function EvidenceSheet({ open, onClose, doc, source, focus = null }: Evid
             </ol>
           </section>
         )}
-      </div>
-    </div>
+    </>
   );
 }
