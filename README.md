@@ -1,27 +1,29 @@
 # Isogon
 
-Isogon is a web application on real NASA FIRMS fire detections. Two instruments have watched the same fires: MODIS at 1 km since 2000 and VIIRS at 375 m since 2012. Isogon puts their record on one scale, rebuilds a real fire from MODIS alone, and grades the result against the VIIRS detections it was not shown. It is for people who study fire from satellites and want every estimate tested against data it has not seen.
+**Turn real-world observations into testable worlds.**
 
-## What it does
+Isogon builds scientific world models that reconstruct physical systems from imperfect measurements, predict what other instruments will see, and learn what to investigate next.
 
-- **A burning calendar.** For a region, fire activity month by year from November 2000 to December 2025, with the MODIS years rescaled onto the VIIRS scale and the method checked on years left out.
-- **A blind test.** A real fire is rebuilt on a 375 m grid from MODIS detections alone. The VIIRS detections are sealed away until every prediction is fixed, then the estimate is scored against them beside two simple baselines. The schedule of the test comes from NASA's list of satellite passes, so a pass that flagged nothing is scored too.
-- **A next-look environment.** With VIIRS hidden, an agent chooses where to take a sharp look, tile by tile, and is scored against the hidden real detections. A person can play a round in the site.
-- **A terrain stage.** The detections, the passes and the estimate are drawn on 3D terrain in the browser, at their real times and pixel sizes.
-- **An OpenSpace export.** One real run can be written as a scene folder for OpenSpace, the open-source planetarium software. The scene has not been verified inside OpenSpace.
+First application: wildfire, across 26 years of NASA satellite observations. Two instruments have watched the same fires, MODIS at 1 km since 2000 and VIIRS at 375 m since 2012, and VIIRS records four to five times more detections. That gap is the test: build the fire from the coarse instrument, hide the sharp one, and check the result against it.
+
+## The three parts
+
+| Part | What it does | Where it stands | File |
+| --- | --- | --- | --- |
+| **1. World model** | Rebuilds a real fire on a 375 m grid from MODIS detections alone, and predicts what VIIRS will see at each of its real passes. The VIIRS rows are sealed away until every prediction is fixed, then the estimate is scored beside two simple baselines. | Experimental. On the three 2021 test fires (Dixie, Lytton Creek, northern Evia) it is ahead of both baselines on 6, 7 and 3 of 7 scores. On 7 validation fires of 2024 and 2025 it is ahead on 2 of 7 scores, tied on 5 and behind on none, which switches no part of it on. The test fires are not scored again. | `backend/model/fitted_values/test_fire_looks.json`, `occupancy_params.json` |
+| **2. Environment** | Real fires with the sharp satellite hidden as the answer key. A player, a person in the site or an agent, chooses where to take a sharp look, tile by tile, and is scored against the hidden real detections. | Built, on 21 test episodes. A round can be played in the site. | `backend/env/fitted/next_look.json` |
+| **3. Agent** | Chooses where to look next. | A simple rule, looking where the model is least sure, gains more than a random look on 20 of 21 test episodes. The learned agent does not beat that simple rule yet. | `backend/env/fitted/next_look.json` |
+
+Every figure comes from a tracked file and is explained in [`docs/method.md`](docs/method.md). The running backend serves them as one document at `GET /api/evidence`.
+
+## What carries them
+
+- **The record.** A burning calendar per region, month by year from November 2000 to December 2025, with the MODIS years rescaled onto the VIIRS scale and the method checked on years left out. It is where a fire is chosen.
+- **The stage.** Detections, passes and the estimate drawn on 3D terrain in the browser, at their real times and pixel sizes.
+- **An OpenSpace export.** One real run written as a scene folder for OpenSpace, the open-source planetarium software. The scene has not been verified inside OpenSpace.
+- **Terra's morning pass from VIIRS.** A second use of the world model, experimental and not in use: ahead on 4 of 7 scores, tied on 2, behind on 1, measured under the first protocol only (`backend/model/fitted_values/terra_morning.json`).
 
 Regions without cached FIRMS rows run as a simulation, labelled as such everywhere: a modelled fire seen by modelled passes, with no real detection in it.
-
-## What the tests found
-
-The figures come from tracked files and are explained in [`docs/method.md`](docs/method.md). The running backend serves them as one document at `GET /api/evidence`.
-
-| Question | Result | File |
-| --- | --- | --- |
-| Does the estimate beat the baselines on fires it was not fitted on? | On 7 validation fires of 2024 and 2025 it is ahead of both baselines on 2 of 7 scores, tied on 5 and behind on none. No part of the estimate is switched on by that result: the model is experimental. | `backend/model/fitted_values/occupancy_params.json` |
-| How does it do on the three 2021 test fires? | On the final recorded look it is ahead of both baselines on 6, 7 and 3 of 7 scores (Dixie, Lytton Creek, northern Evia). The test fires are not scored again. | `backend/model/fitted_values/test_fire_looks.json` |
-| Does choosing where to look help? | A simple rule, looking where the model is least sure, gains more than a random look on 20 of 21 test episodes. The learned agent does not beat that simple rule. | `backend/env/fitted/next_look.json` |
-| Can Terra's morning pass be estimated from VIIRS? | Experimental and not in use: ahead on 4 of 7 scores, tied on 2, behind on 1, measured under the first protocol only. | `backend/model/fitted_values/terra_morning.json` |
 
 ## Quick start
 
