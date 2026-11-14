@@ -35,11 +35,27 @@ from backend.model.episodes import Episode, find_episodes
 from backend.model.fitted import FITTED_DIR, PARAMS_FILE, RATIO_FILE, load_ratio_fit
 from backend.model.occupancy import OccupancyParams
 from backend.model.real_blind import reconstruction_factory
-from backend.model.training import EXCLUSIONS, TRAINING_YEARS, VALIDATION_YEARS, training_detections
+from backend.model.training import (
+    EXCLUSIONS,
+    TRAINING_YEARS,
+    VALIDATION_YEARS,
+    closed_for,
+    closed_window_error,
+    refuse_closed_years,
+    training_detections,
+)
 
+# The years of the fit on record: it also held 2021 windows away from the test fires. No fit scores those again.
 TRAIN_YEARS_ALL: tuple[int, ...] = TRAINING_YEARS + (2021,)
-# The training episodes that may still be scored: those of the fit without the year of the three test fires.
+# The training episodes that may be scored: those of the training years, none of them a year of a test fire.
+# "train" means the same; a fit run now trains on these.
 TRAIN_OPEN: str = "train_open"
+
+
+def years_of(split: str) -> tuple[int, ...]:
+    """The years of a split's episodes: the training years for "train" and `TRAIN_OPEN`, the validation years
+    otherwise. Never a year of a test fire."""
+    return tuple(TRAINING_YEARS if split in ("train", TRAIN_OPEN) else VALIDATION_YEARS)
 
 
 def _stamp() -> str:
@@ -55,13 +71,14 @@ def fit_ratio() -> dict[str, Any]:
     from backend.firms import read_firms, region_box
     from backend.terrain.live_region import PRESET_BY_ID
 
-    det, label = training_detections(read_firms, region_box, PRESET_BY_ID)
+    refuse_closed_years(TRAINING_YEARS)
+    det, label = training_detections(read_firms, region_box, PRESET_BY_ID, years=TRAINING_YEARS)
     fit = fit_overlap_ratio(det, trained_on=label)
     doc = {
         "what": "single VIIRS over MODIS FRP ratio for the overlap-ratio baseline",
         "fit": fit.as_dict(),
         "training_rows": len(det),
-        "training_years": list(TRAIN_YEARS_ALL),
+        "training_years": list(TRAINING_YEARS),
         "exclusions": {k: list(v) for k, v in EXCLUSIONS.items()},
         "outside_reference": (
             "Sofiev and Kouznetsov (GMD 19, 10123, 2026) report 177 TW for VIIRS against 128 TW for MODIS over the "
@@ -86,7 +103,8 @@ def load_episodes(split: str) -> list[Episode]:
         from backend.firms import read_firms, region_box
         from backend.terrain.live_region import PRESET_BY_ID
 
-        years = {"train": TRAIN_YEARS_ALL, TRAIN_OPEN: TRAINING_YEARS}.get(split, VALIDATION_YEARS)
+        years = years_of(split)
+        refuse_closed_years(years)                 # a fit is never handed a year of a recorded test fire
         _EPISODES[split] = find_episodes(years, read_firms, region_box, PRESET_BY_ID)
     return _EPISODES[split]
 
@@ -103,6 +121,10 @@ def _calendar(region_id: str, year: int) -> Any:
 def _run_episode(job: tuple[str, int, dict[str, Any]]) -> dict[str, Any]:
     split, idx, pdict = job
     ep = load_episodes(split)[idx]
+    # the closed rule, asked with the episode's own box and window before anything is scored
+    closed = closed_for(ep.box, ep.window.start_s, ep.window.end_s)
+    if closed is not None:
+        raise closed_window_error(closed, "no episode there is fitted on, validated on or scored")
     params = OccupancyParams(**pdict)
     report = run_blind_test(
         ep.det, ep.box,
@@ -396,8 +418,8 @@ def fit_params(log: Any = print) -> dict[str, Any]:
     iv_frp = _interval(_ratios(reps, "predicted_frp_mw", "hidden_frp_mw"))
     iv_pix = _interval(_ratios(reps, "predicted_pixels", "hidden_pixels_in_test_box"))
     label = (
-        f"{len(train_eps)} real fire episodes of {', '.join(str(y) for y in TRAIN_YEARS_ALL)} in the plumas_ca, lytton_bc "
-        "and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)"
+        f"{len(train_eps)} real fire episodes of {', '.join(str(y) for y in sorted({e.year for e in train_eps}))} in the plumas_ca, lytton_bc "
+        "and evia_greece context boxes; no window of 2021, the year of the three test fires (backend/model/episodes.py)"
     )
     best = OccupancyParams(**{**best.as_dict(),
                               "frp_interval_lo": iv_frp["lo"], "frp_interval_hi": iv_frp["hi"],

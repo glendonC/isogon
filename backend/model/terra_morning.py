@@ -265,12 +265,10 @@ def run_terra_test(
 # ---- the episodes of this direction ---------------------------------------------------------------------------------
 
 def refuse_closed_years(years: tuple[int, ...] | list[int]) -> None:
-    """Raise when a year of a test fire is among `years`: no window of such a year is scored again, for any purpose."""
-    from backend.model.calendar_ratio import years_of_test_fires
+    """Raise when a year of a test fire is among `years` (`training.refuse_closed_years`, the rule every fit asks)."""
+    from backend.model.training import refuse_closed_years as _refuse
 
-    closed = sorted({y for region in REGIONS for y in years_of_test_fires(region)} & set(int(y) for y in years))
-    if closed:
-        raise ValueError(f"{', '.join(str(y) for y in closed)} is the year of the three test fires: its windows are closed and are not fitted or validated on")
+    _refuse(years, REGIONS)
 
 
 def terra_years(split: str) -> tuple[int, ...]:

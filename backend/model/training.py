@@ -51,6 +51,31 @@ TEST_BOX_MARGIN_DEG: float = 0.2
 EVIDENCE_ADDRESS: str = "/api/evidence"
 
 
+class ClosedWindow(ValueError):
+    """Something that scores, holds out or plays was asked for on a window the closed rule covers."""
+
+
+def closed_window_error(closed: dict[str, Any], what: str) -> ClosedWindow:
+    """The refusal for a closed window: which years, which region, what is not done there, and where the recorded
+    looks are served."""
+    years = " and ".join(str(y) for y in closed["years"])
+    return ClosedWindow(
+        f"{years} in {closed['region_id']} holds a recorded test fire and is closed: {what}, so the fire is never "
+        f"scored again. The recorded looks are at {EVIDENCE_ADDRESS}"
+    )
+
+
+def refuse_closed_years(years: Iterable[int], regions: Iterable[str] | None = None) -> None:
+    """Raise when a year of a test fire is among `years`: no window of such a year is fitted on, validated on or
+    scored again, for any purpose. A fit calls this with the years of its episodes before it scores one."""
+    closed = sorted({y for region in (regions or EXCLUSIONS) for y in closed_years(region)} & {int(y) for y in years})
+    if closed:
+        raise ValueError(
+            f"{', '.join(str(y) for y in closed)} is a year of the recorded test fires: its windows are closed and "
+            "are not fitted on, validated on or scored"
+        )
+
+
 def closed_years(region_id: str) -> tuple[int, ...]:
     """Every year the set-aside dates of a region's test fire touch, from the first to the last; none for a
     region without a test fire."""
@@ -83,7 +108,8 @@ def closed_for(
     `box` is (west, south, east, north) in degrees and the window is [start_s, end_s) in UTC seconds. The answer
     is None for an open window. Otherwise it is `{"region_id", "years"}`: the region whose context box the box
     meets, and the years of its fire's set-aside dates that the window holds a moment of. Every year from the
-    first to the last of those dates counts, so a period that crosses New Year is closed on either side.
+    first to the last of those dates counts, so a period that crosses New Year is closed on either side. A box
+    that only touches a context box counts as meeting it: the rule errs toward closing.
     `region_box(region_id)` gives a region's context box; it is `backend.firms.region_box` when not given.
     """
     if region_box is None:

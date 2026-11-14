@@ -79,6 +79,7 @@ from backend.model.occupancy import (
     rescale_probability,
 )
 from backend.model.platforms import PLATFORM_CODES, PLATFORMS, scan_axis_deg
+from backend.model.training import closed_for, closed_window_error
 
 NO_LOOK: int = -1
 SCORES: tuple[str, ...] = ("csi", "csi_one_cell", "brier_skill")
@@ -206,6 +207,11 @@ class NextLookEnv:
         if learn_from_looks:
             raise ValueError(LEARN_FROM_LOOKS_REFUSED)
         self.learn_from_looks = False
+        # The closed rule, asked before the rows are sealed or anything is scored: the environment opens its sealed
+        # rows when it is built and scores from the first reset, so a caller that is not a route is stopped here.
+        closed = closed_for(box, float(window[0]), float(window[1]))
+        if closed is not None:
+            raise closed_window_error(closed, "no round is played there")
         self.prior_cells = float(prior_cells)
         self._preds0: list[NDArray[np.float64]] | None = None
         if budget < 0 or tiles[0] < 1 or tiles[1] < 1:

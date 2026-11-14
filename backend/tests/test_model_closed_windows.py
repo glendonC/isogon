@@ -206,5 +206,127 @@ class RunOnAClosedWindowTests(unittest.TestCase):
         self.assertIsNone(held.extras["not_scored"])
 
 
+class _Opened(AssertionError):
+    """The sealed rows were opened where nothing may open them."""
+
+
+def _tripwire(self):
+    raise _Opened("the sealed rows were opened")
+
+
+class StartListTests(unittest.TestCase):
+    """The list of start days is made from MODIS rows. It used to open the sealed rows afterwards, to count the
+    VIIRS pixels of each window for a label nobody reads, and it did so for closed windows too."""
+
+    def _starts(self, rows, first: str, last: str):
+        from backend.model.real_run import real_start_dates
+
+        return real_start_dates(PRESET_BY_ID["plumas_ca"], first, last, read_firms=_reader(rows), context_box=fx.CONTEXT_BOX,
+                                row_source=fx.SOURCE_LABEL)
+
+    def test_the_start_list_never_opens_the_sealed_rows(self) -> None:
+        from backend.eval.holdout import Sealed
+
+        with mock.patch.object(Sealed, "open_for_scoring", _tripwire):
+            open_days = self._starts(ROWS_2099, "2099-06-30", "2099-07-03")
+            closed_days = self._starts(ROWS_2021, "2021-07-20", "2021-07-23")
+        for out in (open_days, closed_days):
+            self.assertEqual(out["labels_from_hidden_rows"], [])
+            self.assertTrue(any("first_overpass_utc" in e for e in out["starts"]))
+            for e in out["starts"]:
+                self.assertNotIn("viirs_pixels_in_box", e)
+        self.assertIn("MODIS rows only", open_days["chosen_from"])
+
+    def test_the_list_is_the_same_without_the_other_satellite_s_rows(self) -> None:
+        modis_only = [r for r in ROWS_2099 if r["instrument"] != "VIIRS"]
+        self.assertEqual(self._starts(modis_only, "2099-06-30", "2099-07-03"), self._starts(ROWS_2099, "2099-06-30", "2099-07-03"))
+
+    def test_the_region_s_start_list_names_no_count_from_the_hidden_satellite(self) -> None:
+        from backend.eval.holdout import Sealed
+        from backend.model import real_run as RR
+
+        with mock.patch.object(Sealed, "open_for_scoring", _tripwire), \
+                mock.patch.dict(RR.START_PERIODS, {"plumas_ca": ("2099-06-30", "2099-07-06")}):
+            out = RR.real_run_starts(PRESET_BY_ID["plumas_ca"], read_firms=_reader(ROWS_2099), context_box=fx.CONTEXT_BOX)
+        self.assertEqual(RR.START_LABELS_FROM_HIDDEN_ROWS, ())
+        for e in out["starts"]:
+            self.assertNotIn("viirs_pixels_in_box", e)
+
+
+class FitAsksTheRuleTests(unittest.TestCase):
+    """A fit scores its training episodes. No episode of a year of a test fire may be among them."""
+
+    def test_no_split_of_the_fit_holds_a_year_of_a_test_fire(self) -> None:
+        from backend.model import fit_real as F
+
+        self.assertEqual(closed_years("plumas_ca"), (2021,))
+        for split in ("train", F.TRAIN_OPEN, "validation"):
+            self.assertNotIn(2021, F.years_of(split), split)
+        self.assertEqual(F.years_of("train"), F.years_of(F.TRAIN_OPEN))
+        with self.assertRaises(ValueError):
+            TR.refuse_closed_years((2020, 2021))
+        TR.refuse_closed_years((2018, 2019, 2020, 2022, 2023, 2024, 2025))          # the years in use pass
+
+    def test_scoring_an_episode_of_a_closed_window_is_refused_before_anything_is_scored(self) -> None:
+        from backend.model import fit_real as F
+        from backend.model.episodes import Episode
+        from backend.model.real_blind import pick_window
+
+        det = detections_from_rows(ROWS_2021, fx.SOURCE_LABEL)
+        win = pick_window(det, fx.TEST_BOX, 0.0, 1e12, n=6, hidden="VIIRS")
+        closed_ep = Episode("plumas_ca", 2021, (2, 2), fx.TEST_BOX, win, det)
+
+        def boom(*a, **k):
+            raise _Opened("the blind test was run on a closed window")
+
+        with mock.patch.object(F, "load_episodes", lambda split: [closed_ep]), mock.patch.object(F, "run_blind_test", boom):
+            with self.assertRaises(ClosedWindow) as caught:
+                F._run_episode(("train", 0, OccupancyParams().as_dict()))
+        self.assertIn("/api/evidence", str(caught.exception))
+
+    def test_the_full_fit_stops_when_it_is_handed_a_closed_year(self) -> None:
+        from backend.model import fit_real as F
+
+        with mock.patch.object(F, "years_of", lambda split: (2020, 2021)):
+            with self.assertRaises(ValueError) as caught:
+                F.load_episodes("anything")
+        self.assertIn("2021", str(caught.exception))
+
+
+class EnvironmentAsksTheRuleTests(unittest.TestCase):
+    """The environment opens its sealed rows when it is built and scores from the first reset. So it asks the rule
+    itself: a caller that is not a route cannot play a closed window."""
+
+    def test_an_environment_is_not_built_on_a_closed_window(self) -> None:
+        from backend.env.next_look import NextLookEnv
+        from backend.eval.holdout import Sealed
+
+        det = detections_from_rows(ROWS_2021, fx.SOURCE_LABEL)
+        window = (float(det.time_s.min()), float(det.time_s.max()) + 1.0)
+        with mock.patch.object(Sealed, "open_for_scoring", _tripwire):
+            for schedule, reader in (("nominal", None), ("auto", fx.no_pass_list)):
+                with self.assertRaises(ClosedWindow) as caught:
+                    NextLookEnv(det, fx.TEST_BOX, window, tiles=(4, 4), budget=2, schedule=schedule, read_passes=reader)
+                self.assertIn("/api/evidence", str(caught.exception))
+                self.assertIn("2021", str(caught.exception))
+        self.assertIsInstance(caught.exception, ValueError)
+
+    def test_an_open_window_is_played_as_before(self) -> None:
+        from backend.env.agents import LeastSureAgent, run_episode
+        from backend.env.next_look import NextLookEnv
+
+        det = detections_from_rows(ROWS_2099, fx.SOURCE_LABEL)
+        window = (float(det.time_s.min()), float(det.time_s.max()) + 1.0)
+        env = NextLookEnv(det, fx.TEST_BOX, window, tiles=(4, 4), budget=2, read_passes=fx.fixture_pass_reader())
+        out = run_episode(env, LeastSureAgent(), seed=0)
+        self.assertAlmostEqual(out["return"], out["score_end"] - out["score_start"], places=12)
+
+    def test_the_run_and_the_environment_refuse_with_the_same_error(self) -> None:
+        from backend.model import real_run as RR
+
+        self.assertIs(RR.ClosedWindow, TR.ClosedWindow)
+        self.assertTrue(issubclass(TR.ClosedWindow, ValueError))
+
+
 if __name__ == "__main__":
     unittest.main()

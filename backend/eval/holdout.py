@@ -29,7 +29,7 @@ SCORERS: tuple[str, ...] = ("backend/eval/blind_test.py", "backend/env/next_look
 # The functions of the blind test through which a caller outside the scorers may hand the sealed box on. A module
 # that builds a run holds the box and cannot read it; it may only pass it to one of these. A test reads the source
 # and fails when the box goes anywhere else, or when a function not named here opens it.
-SCORER_ENTRY_POINTS: tuple[str, ...] = ("blind_test_sealed", "reveal", "hidden_pixels_in_spans")
+SCORER_ENTRY_POINTS: tuple[str, ...] = ("blind_test_sealed", "reveal")
 # Python cannot lock an attribute: `Sealed._det` can be read by code that means to. The rule is kept by the test
 # that scans every Python file under backend/ for `open_for_scoring`, `pass_times` and `._det`.
 

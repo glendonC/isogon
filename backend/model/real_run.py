@@ -41,7 +41,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from backend.eval.baselines import OverlapRatioFit, overlap_ratio_factory, painted_modis_factory
-from backend.eval.blind_test import blind_test_sealed, hidden_pixels_in_spans, reveal, run_blind_test, verdict
+from backend.eval.blind_test import blind_test_sealed, reveal, run_blind_test, verdict
 from backend.eval.grid import CELL_KM, EvalGrid, paint
 from backend.eval.holdout import seal
 from backend.eval.overpass import group_overpasses
@@ -57,6 +57,7 @@ from backend.model.real_blind import FRAMES, Frame, Window, in_box_overpasses, r
 from backend.model.real_geometry import crossing_offsets, pass_geometry, slot_geometry
 from backend.model.sensor_physics import orbit_node_rule_payload
 from backend.model.solver import SolvedReconstructionRun, build_any_region_grid
+from backend.model.training import ClosedWindow, closed_window_error
 from backend.terrain.live_region import LoadedRegionTerrain
 
 REAL_MODEL_VERSION: str = "1.0.0-real-rows"
@@ -185,10 +186,6 @@ def years_touched(start_s: float, end_s: float, pad_s: float = PAD_S) -> tuple[i
     return tuple(range(first, last + 1))
 
 
-class ClosedWindow(ValueError):
-    """A run with a satellite held out was asked for on a window the closed rule covers."""
-
-
 def _not_scored(closed: dict[str, Any]) -> dict[str, Any]:
     """What a run says in place of a score on a closed window, with where the recorded looks are served."""
     from backend.model.training import EVIDENCE_ADDRESS
@@ -284,7 +281,7 @@ def solve_real_reconstruction(
     # The closed rule, asked with the run's box and its own window, which was found from visible rows alone. A run
     # with a satellite held out stops here, before anything is estimated. A run with every satellite goes on and
     # skips the scoring block below.
-    from backend.model.training import EVIDENCE_ADDRESS, closed_for
+    from backend.model.training import closed_for
 
     def _context(region: str) -> tuple[float, float, float, float]:
         if region == spec.id:
@@ -295,10 +292,7 @@ def solve_real_reconstruction(
 
     closed = closed_for(bbox, win.start_s, win.end_s, region_box=_context)
     if closed is not None and holdout:
-        raise ClosedWindow(
-            f"{' and '.join(str(y) for y in closed['years'])} in {closed['region_id']} holds a recorded test fire and is closed: "
-            f"no run with a satellite held out is made there, so the fire is never scored again. The recorded looks are at {EVIDENCE_ADDRESS}"
-        )
+        raise closed_window_error(closed, "no run with a satellite held out is made there")
     not_scored = None if closed is None else _not_scored(closed)
     keep = (rows_seen.time_s >= win.start_s - PAD_S) & (rows_seen.time_s < win.end_s + PAD_S)
     visible = rows_seen.select(keep)
@@ -725,8 +719,10 @@ START_MIN_MODIS_PIXELS: int = 100
 # No rule asks a start for a number of overpasses of each instrument: counting VIIRS overpasses would let the
 # hidden rows choose the start. The value says the rule asks nothing, and a test holds it at zero.
 START_MIN_PASSES_EACH: int = 0
-# What each start carries that was counted from VIIRS rows: a label for the page, added after the choice is made.
-START_LABELS_FROM_HIDDEN_ROWS: tuple[str, ...] = ("viirs_pixels_in_box",)
+# What each start carries that was counted from VIIRS rows: nothing. The list used to open the sealed rows once it
+# was made, to count the VIIRS pixels of each window as a label; nobody read the count, and it was made for closed
+# windows too. The sealed rows are not opened here.
+START_LABELS_FROM_HIDDEN_ROWS: tuple[str, ...] = ()
 
 
 def real_start_dates(
@@ -741,10 +737,8 @@ def real_start_dates(
     from that day on, and whether the day is worth showing. `spec` is the region (`RegionSpec`); nothing is
     solved. A run started that day begins at the first of those overpasses.
 
-    Every choice here is made from MODIS rows. The VIIRS rows are sealed first and handed to the scorer once the
-    list is complete, for one thing: `viirs_pixels_in_box`, the number of VIIRS pixels between the first and the
-    last of those MODIS overpasses, which the page prints beside a start. No start is added, dropped or ranked
-    by it."""
+    Everything here is made from MODIS rows. The VIIRS rows are sealed first and the sealed box is never opened:
+    nothing about a start is counted from them, on an open window or a closed one."""
     bbox = (spec.bbox.west, spec.bbox.south, spec.bbox.east, spec.bbox.north)
     if read_firms is None or context_box is None:
         from backend.firms import read_firms as _read, region_box as _box
@@ -753,7 +747,7 @@ def real_start_dates(
         context_box = context_box or _box(spec.id)
     t0, t1 = parse_start_s(first), parse_start_s(last)
     rows = read_firms(context_box, _iso(t0)[:-1], _iso(t1 + SEARCH_S)[:-1])
-    det, sealed = seal(detections_from_rows(rows, row_source), "VIIRS")
+    det, _ = seal(detections_from_rows(rows, row_source), "VIIRS")       # the sealed box is dropped unopened
 
     items = in_box_overpasses(det, bbox)
     times = np.array([o.time_s for o, _ in items])
@@ -789,11 +783,6 @@ def real_start_dates(
         day += 86400.0
     good = [e for e in starts if e["worth_showing"]]
     busiest = [e["start"] for e in sorted(good, key=lambda e: -e["modis_pixels_in_box"])[:5]]
-    # the list is complete; only now does the scorer count the VIIRS pixels of each window, for the page's label
-    windowed = [e for e in starts if "first_overpass_utc" in e]
-    spans = [(parse_start_s(e["first_overpass_utc"]), parse_start_s(e["last_overpass_utc"])) for e in windowed]
-    for e, n in zip(windowed, hidden_pixels_in_spans(sealed, bbox, spans)):
-        e["viirs_pixels_in_box"] = n
     return {
         "region_id": spec.id,
         "source": "firms",
@@ -847,8 +836,7 @@ def real_run_starts(
     starts = [
         {"start": e["start"], "label": e["start"], "first_overpass_utc": e["first_overpass_utc"],
          "last_overpass_utc": e["last_overpass_utc"], "span_hours": e["span_hours"],
-         "modis_overpasses": e["modis_overpasses"], "modis_pixels_in_box": e["modis_pixels_in_box"],
-         "viirs_pixels_in_box": e["viirs_pixels_in_box"]}
+         "modis_overpasses": e["modis_overpasses"], "modis_pixels_in_box": e["modis_pixels_in_box"]}
         for e in full["starts"] if e["worth_showing"]
     ]
     default = DEFAULT_STARTS.get(spec.id)

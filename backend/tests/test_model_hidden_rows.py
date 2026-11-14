@@ -382,8 +382,10 @@ class WindowChoiceIgnoresHiddenRowsTests(unittest.TestCase):
         self.assertTrue(any("first_overpass_utc" in e for e in want["starts"]))
         for name, rows in CASES.items():
             self.assertEqual(dates(rows), want, name)
-        # the label does follow the hidden rows, which is all it is for
-        self.assertNotEqual(dates(CASES["every hidden row removed"], labels=True)[1], label)
+        # and the list holds nothing counted from hidden rows: no label, with the hidden rows there or gone
+        self.assertEqual(want.get("labels_from_hidden_rows"), [])
+        self.assertEqual(set(label), {None})
+        self.assertEqual(dates(CASES["every hidden row removed"], labels=True)[1], label)
 
     def test_episodes_are_identical_with_the_hidden_instrument_removed_or_altered(self) -> None:
         from backend.model.episodes import find_episodes

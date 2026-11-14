@@ -576,16 +576,6 @@ class _Seen:
     is_day: bool
 
 
-def hidden_pixels_in_spans(
-    sealed: Sealed, bbox: tuple[float, float, float, float], spans: list[tuple[float, float]]
-) -> list[int]:
-    """How many hidden pixels lie in the box in each UTC span (both ends included). A count for a label a page
-    shows beside a choice that was already made; nothing is chosen with it."""
-    hid = sealed.open_for_scoring()
-    t = np.sort(hid.time_s[hid.in_box(bbox)])
-    return [int(np.searchsorted(t, b, side="right") - np.searchsorted(t, a, side="left")) for a, b in spans]
-
-
 def pool_reports(reports: list[dict[str, Any]]) -> dict[str, Any]:
     """One report from several runs: cell counts are summed and per overpass values are put side by side, so every
     pooled score is the score the same definitions give on all the overpasses together. `verdict` works on it."""

@@ -383,10 +383,10 @@ class StartDateTests(unittest.TestCase):
         self.assertEqual(by["2099-07-01"]["first_overpass_utc"], "2099-07-01T06:35:00Z")
         self.assertEqual(by["2099-07-01"]["modis_overpasses"], 24)
         self.assertNotIn("viirs_overpasses", by["2099-07-01"])
-        # a label for the page, counted by the scorer after the list is made: VIIRS pixels inside the window
-        self.assertEqual(out["labels_from_hidden_rows"], ["viirs_pixels_in_box"])
-        self.assertEqual(by["2099-07-01"]["viirs_pixels_in_box"], 424)
-        self.assertNotIn("viirs_pixels_in_box", by["2099-07-02"])       # no window, so nothing to count
+        # nothing about a start is counted from VIIRS rows: the sealed rows are not opened for the list
+        self.assertEqual(out["labels_from_hidden_rows"], [])
+        for e in out["starts"]:
+            self.assertNotIn("viirs_pixels_in_box", e)
         self.assertFalse(by["2099-07-01"]["worth_showing"])
         self.assertIn("MODIS flags only 88 pixels", by["2099-07-01"]["why_not"])
         self.assertIn("at most 192 h", out["rule"])
