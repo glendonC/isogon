@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "terra",
+      "url": "/models/spacecraft/terra.glb",
+      "bytes": 2150600,
+      "sha256": "8794857595f7a7d416184fe926ecb50e11bf267dbe471d1cf2728a85e8d017fa",
+      "source_url": "https://github.com/nasa/NASA-3D-Resources/blob/master/3D%20Models/Terra/Terra.glb",
+      "license": "NASA 3D Resources, free to use and without copyright (repository README); NASA media is generally not subject to copyright in the United States (https://www.nasa.gov/nasa-brand-center/images-and-media/). The NASA insignia and logotype are not public domain and NASA endorsement must not be implied.",
+      "credit": "NASA",
+      "up_axis": "+Y",
+      "approx_length_m": 26.1,
+      "notes": "Unmodified file. glTF 2.0 written by assimp, no Draco, 22 meshes, about 117k triangles. Model units look like millimetres: bounds 13,622 x 10,276 x 26,054 units (x, y, z), longest along +z with the solar array; scale by the bounds, not by the units. It references two external textures by Windows relative paths ('..\\Terra.fbm\\Side_Panels_TERRA.tga', '..\\Terra.fbm\\solarpanels.tga') that are not in the NASA repository, so GLTFLoader logs two texture load errors and renders the materials' base colours."
+    },
+    {
+      "id": "aqua",
+      "url": "/models/spacecraft/aqua.glb",
+      "bytes": 1104016,
+      "sha256": "f0761181a1d378b6b3e270e8eee8bf20c241b7d577933630369b0cffd4b521e1",
+      "source_url": "https://github.com/nasa/NASA-3D-Resources/blob/master/3D%20Models/Aqua%20(B)/Aqua%20(B).glb",
+      "license": "NASA 3D Resources, free to use and without copyright (repository README); NASA media is generally not subject to copyright in the United States (https://www.nasa.gov/nasa-brand-center/images-and-media/). The NASA insignia and logotype are not public domain and NASA endorsement must not be implied.",
+      "credit": "NASA",
+      "up_axis": "+Y",
+      "approx_length_m": 17.8,
+      "notes": "Unmodified 'Aqua (B)' of three NASA variants (A, B, C). Chosen because it is textured, metre scaled and the lightest (6 meshes, about 49k triangles). Uses KHR_draco_mesh_compression (needs DRACOLoader; three ships the decoder in examples/jsm/libs/draco/) and EXT_texture_webp with PNG fallbacks. Bounds 9.40 x 17.78 x 5.08 m (x, y, z); the solar array runs along -y from the bus."
+    },
+    {
+      "id": "suomi_npp",
+      "url": "/models/spacecraft/suomi_npp.glb",
+      "bytes": 2283576,
+      "sha256": "885278277ed8fa864368803b7da2046292754bff01033055d56fe86e8b951ee4",
+      "source_url": "https://github.com/nasa/NASA-3D-Resources/blob/master/3D%20Models/Suomi%20National%20Polar-orbiting%20Partnership%20(Suomi%20NPP)/Suomi%20National%20Polar-orbiting%20Partnership%20(Suomi%20NPP).glb",
+      "license": "NASA 3D Resources, free to use and without copyright (repository README); NASA media is generally not subject to copyright in the United States (https://www.nasa.gov/nasa-brand-center/images-and-media/). The NASA insignia and logotype are not public domain and NASA endorsement must not be implied.",
+      "credit": "NASA",
+      "up_axis": "+Y",
+      "approx_length_m": 9.0,
+      "notes": "Unmodified file. 6 meshes, about 4k triangles, KHR_draco_mesh_compression (needs DRACOLoader) and EXT_texture_webp with PNG fallbacks. Bounds 2.57 x 4.18 x 8.96 m (x, y, z); the solar array runs along +z. No distinct NOAA-20 (JPSS-1) model exists in NASA 3D Resources, so noaa_20 is left out and the consumer's procedural rig covers it."
+    }
+  ]
+}
