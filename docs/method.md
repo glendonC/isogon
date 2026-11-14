@@ -144,7 +144,7 @@ The model's values were fitted from their priors and validated under protocol ve
 
 The rule: the validation fires are resampled whole 2,000 times. A score is ahead when the 90 percent interval of its improvement over each baseline lies above zero, behind when it lies below zero against either, and a tie otherwise. The fitted values are used when no score is behind and at least one is ahead. A part of the estimate is switched on only when every score of the part is ahead.
 
-- **The fitted values are in use:** ahead on 2 of 7 scores, tied on 5, behind on none.
+- **The fitted values are in use:** ahead on 2 of 7 scores, tied on 5, behind on none, judged with an interval as the rule says.
 - **No part is switched on.** All three parts (where the fire is, how many pixels, total power) are `experimental`, and so is the model's status in every run.
 - **The stated 90 percent interval for total power held on 148 of 153 looks.** It starts at zero: 29 of the 400 training looks flagged nothing, cloud is not known, and an interval that could not hold an empty pass would claim more than the record supports.
 - **6 of the 153 validation looks flagged nothing** and were scored as such.
@@ -161,7 +161,7 @@ The three 2021 fires have been scored as a test three times. Each look is on rec
 | 2 | version 2 | The same values, not refitted, on windows chosen from MODIS alone, predictions published on the nominal schedule |
 | 3 | version 3 | Values refitted from the priors and frozen before the look, on the windows of look 2, every pass of the pass list a scored look |
 
-Scores on which the estimate is ahead of both baselines, of 7:
+Scores on which the estimate is ahead of both baselines, of 7. This is a plain comparison: a score counts when it is strictly better than both baselines' on that fire, with no allowance for noise, because one fire cannot be resampled. It is not the kind of count the validation makes, and the two are not to be set side by side (`count_kinds` in the evidence answer; every count there says which kind it is):
 
 | Fire | Look 1 | Look 2 | Look 3 |
 | --- | --- | --- | --- |
@@ -191,7 +191,7 @@ The record hides nothing else: `test_fires.also_scored` lists every other time r
 
 `backend/model/terra_morning.py` hides MODIS instead and estimates what Terra flags on its morning pass from VIIRS alone. It is experimental and not in use (`backend/model/fitted_values/terra_morning.json`, `adopted: false`).
 
-On 6 validation episodes, 40 Terra overpasses, it is ahead of both baselines on 4 of 7 scores, tied on 2 and behind on 1: the one-cell CSI, 0.4458 against 0.4929. Its 90 percent interval held for 31 of 40 overpasses (0.775). These figures were measured under protocol version 1 and not again, so they are not clean, and the direction stays experimental.
+On 6 validation episodes, 40 Terra overpasses, it is ahead of both baselines on 4 of 7 scores, tied on 2 and behind on 1, judged with an interval: the one-cell CSI, 0.4458 against 0.4929. Its 90 percent interval held for 31 of 40 overpasses (0.775). These figures were measured under protocol version 1 and not again, so they are not clean, and the direction stays experimental.
 
 ## The next-look environment
 

@@ -185,6 +185,12 @@ class BlindTestProtocolTests(unittest.TestCase):
         tie = verdict(self.report, method="painted_modis", baselines=("painted_modis",))
         self.assertEqual(tie["beats_every_baseline_on"], 0)
         self.assertFalse(verdict(self.report, method="absent")["evaluated"])
+        # the count of scores ahead says what kind of count it is: one report, nothing to resample
+        from backend.eval.blind_test import COUNT_KINDS, COUNTED_PLAIN
+
+        self.assertEqual(v["counted_by"], COUNTED_PLAIN)
+        self.assertEqual(COUNTED_PLAIN, "plain comparison")
+        self.assertIn("no allowance for noise", COUNT_KINDS[COUNTED_PLAIN])
 
     def test_pooling_one_report_changes_no_score(self) -> None:
         pooled = pool_reports([self.report])
@@ -211,6 +217,13 @@ class BlindTestProtocolTests(unittest.TestCase):
             self.assertEqual(lead["scores"][key]["class"], "ahead")
         self.assertEqual(lead["classes"]["behind"], 0)
         self.assertEqual(lead["bootstrap"]["resampled"], "whole runs, with replacement")
+        # two counts, two kinds: the classes are judged with an interval, the pooled count is a plain comparison
+        from backend.eval.blind_test import COUNT_KINDS, COUNTED_INTERVAL, COUNTED_PLAIN
+
+        self.assertEqual((lead["classes_counted_by"], lead["counted_by"]), (COUNTED_INTERVAL, COUNTED_PLAIN))
+        self.assertEqual(COUNTED_INTERVAL, "judged with an interval")
+        self.assertIn("resampled", COUNT_KINDS[COUNTED_INTERVAL])
+        self.assertEqual(set(COUNT_KINDS), {COUNTED_PLAIN, COUNTED_INTERVAL})
 
     def test_hiding_one_viirs_platform_keeps_the_other_visible(self) -> None:
         seen: dict[str, Detections] = {}

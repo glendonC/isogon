@@ -658,6 +658,22 @@ def pool_reports(reports: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+# A count of scores on which a method is ahead is one of two kinds, and whoever prints one says which.
+COUNTED_PLAIN: str = "plain comparison"
+COUNTED_INTERVAL: str = "judged with an interval"
+COUNT_KINDS: dict[str, str] = {
+    COUNTED_PLAIN: (
+        "a score counts as ahead when it is strictly better than every baseline's on the looks scored, with no "
+        "allowance for noise; the count of one fire or one run, where there is nothing to resample"
+    ),
+    COUNTED_INTERVAL: (
+        "the fires are resampled whole; a score is ahead when the interval of its improvement over each baseline "
+        "lies above zero, behind when it lies below zero against one of them, and tied otherwise; the count over "
+        "a set of fires"
+    ),
+}
+
+
 def verdict(report: dict[str, Any], method: str = "reconstruction", baselines: tuple[str, ...] = ("painted_modis", "overlap_ratio")) -> dict[str, Any]:
     """Score by score, does `method` beat every baseline? Computed from the report, never typed in.
 
@@ -704,6 +720,7 @@ def verdict(report: dict[str, Any], method: str = "reconstruction", baselines: t
         "scores": rows,
         "beats_every_baseline_on": wins,
         "scores_judged": judged,
+        "counted_by": COUNTED_PLAIN,
         "interval": {"stated_level": iv["stated_level"], "observed_coverage": iv["coverage"], "overpasses": iv["n"]},
         "beats_every_baseline_on_every_score": judged > 0 and wins == judged,
     }
@@ -765,6 +782,7 @@ def bootstrap_verdict(
         **base,
         "scores": out_scores,
         "classes": counts,
+        "classes_counted_by": COUNTED_INTERVAL,
         "bootstrap": {"resampled": "whole runs, with replacement", "runs": n, "resamples": n_boot, "level": level,
                       "improvement": "method minus baseline for higher-is-better scores, baseline minus method otherwise"},
     }

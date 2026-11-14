@@ -106,9 +106,14 @@ class EvidenceShapeTests(unittest.TestCase):
         better = {s["id"]: s["better"] for s in self.doc["test_fires"]["scores"]}
         for fire in self.doc["test_fires"]["fires"]:
             r = fire["region_id"]
-            self.assertEqual(fire["old"], by_look[1]["fires"][r])
-            self.assertEqual(fire["new"], by_look[max(by_look)]["fires"][r])       # the final look
-            self.assertEqual([{k: v for k, v in e.items() if k not in ("look", "unit")} for e in fire["looks"]],
+            # the answer is the record, with the kind of each count said beside it and nothing else added
+            def recorded(t: dict) -> dict:
+                self.assertEqual(t["counted_by"], "plain comparison")
+                return {k: v for k, v in t.items() if k != "counted_by"}
+
+            self.assertEqual(recorded(fire["old"]), by_look[1]["fires"][r])
+            self.assertEqual(recorded(fire["new"]), by_look[max(by_look)]["fires"][r])       # the final look
+            self.assertEqual([recorded({k: v for k, v in e.items() if k not in ("look", "unit")}) for e in fire["looks"]],
                              [by_look[k]["fires"][r] for k in sorted(by_look)])
             for t in [by_look[k]["fires"][r] for k in sorted(by_look)]:
                 # recount, from the scores alone, how many the reconstruction is ahead of both baselines on
@@ -309,6 +314,48 @@ class EvidenceShapeTests(unittest.TestCase):
         for path in self.doc["sources"]["tracked_files"]:
             self.assertTrue((_REPO_ROOT / path).is_file(), path)
         self.assertTrue(self.doc["additions"])
+
+
+class CountKindsTests(unittest.TestCase):
+    """A count of scores ahead is one of two kinds, and the answer says which beside every count: a plain
+    comparison on one fire, or a judgement with an interval over resampled fires."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.doc = E.evidence()
+
+    def _walk(self, x, path=""):
+        if isinstance(x, dict):
+            yield path, x
+            for k, v in x.items():
+                yield from self._walk(v, f"{path}.{k}")
+        elif isinstance(x, list):
+            for i, v in enumerate(x):
+                yield from self._walk(v, f"{path}[{i}]")
+
+    def test_every_count_says_what_kind_it_is(self) -> None:
+        from backend.eval.blind_test import COUNT_KINDS, COUNTED_INTERVAL, COUNTED_PLAIN
+
+        plain = interval = 0
+        for path, d in self._walk(self.doc):
+            if "ahead_of_both_on" in d:
+                self.assertEqual(d.get("counted_by"), COUNTED_PLAIN, path)
+                plain += 1
+            c = d.get("classes")
+            if isinstance(c, dict) and {"ahead", "tied", "behind"} <= set(c):
+                self.assertEqual(d.get("classes_counted_by"), COUNTED_INTERVAL, path)
+                interval += 1
+        self.assertGreater(plain, 20)                      # every fire under every look and every other scoring
+        self.assertGreater(interval, 0)                    # the validation's classes
+        self.assertEqual(self.doc["count_kinds"], COUNT_KINDS)
+        self.assertTrue(any(a.startswith("count_kinds") for a in self.doc["additions"]))
+
+    def test_the_sentences_that_state_a_count_say_its_kind(self) -> None:
+        weakest = next(s for s in self.doc["limits"] if "weakest" in s)
+        self.assertIn("by plain comparison", weakest)
+        for s in self.doc["limits"]:
+            if "scores are ahead of both" in s:
+                self.assertIn("judged with an interval", s)
 
 
 class PlainNamesTests(unittest.TestCase):

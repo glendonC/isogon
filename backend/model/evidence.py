@@ -32,7 +32,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from backend.eval.blind_test import verdict
+from backend.eval.blind_test import COUNT_KINDS, COUNTED_INTERVAL, COUNTED_PLAIN, verdict
 
 FITTED_DIR: Path = Path(__file__).resolve().parent / "fitted_values"
 LOOKS_FILE: str = "test_fire_looks.json"
@@ -596,7 +596,7 @@ def _limits(record: dict[str, Any], params: dict[str, Any], fires: list[dict[str
     elif not any(p["status"] == "on" for p in val["parts"]):
         c = val["classes"]
         narrow = (f" No part of the estimate is switched on there: {c['ahead']} of {sum(c.values())} scores are ahead of both "
-                  f"baselines, {c['tied']} are tied and {c['behind']} are behind.")
+                  f"baselines, {c['tied']} are tied and {c['behind']} are behind, {COUNTED_INTERVAL}.")
     out.append(
         f"Validation rests on {val['episodes']} episodes of {' and '.join(str(y) for y in val['years'])} from "
         f"{len(val['regions'])} of the three regions" + (f" ({', '.join(missing)} has none)" if missing else "") + "." + narrow
@@ -612,9 +612,27 @@ def _limits(record: dict[str, Any], params: dict[str, Any], fires: list[dict[str
     remark = (weakest["new"].get("remarks") or {}).get("csi_strict_375m")
     out.append(
         f"{weakest['name']} is the weakest of the three: ahead of both baselines on {weakest['new']['ahead_of_both_on']} "
-        f"scores of {weakest['new']['scores_judged']}" + (f", and on strict CSI only {remark}" if remark else "") + "."
+        f"scores of {weakest['new']['scores_judged']} by {COUNTED_PLAIN}" + (f", and on strict CSI only {remark}" if remark else "") + "."
     )
     out.append(KNOWN_LIMITS.split(". ")[0] + ".")       # its first sentence; the schedule is the first limit above
+    return out
+
+
+def _say_the_kind(x: Any) -> Any:
+    """A copy of `x` in which every count of scores ahead says what kind of count it is: `counted_by` beside
+    `ahead_of_both_on` (one fire: a plain comparison) and `classes_counted_by` beside `classes` (a set of fires:
+    judged with an interval). The tracked files hold the counts; the kind follows from how each was made."""
+    if isinstance(x, list):
+        return [_say_the_kind(v) for v in x]
+    if not isinstance(x, dict):
+        return x
+    out: dict[str, Any] = {}
+    for k, v in x.items():
+        out[k] = _say_the_kind(v)
+        if k == "ahead_of_both_on":
+            out["counted_by"] = COUNTED_PLAIN
+        elif k == "classes" and isinstance(v, dict) and {"ahead", "tied", "behind"} <= set(v):
+            out["classes_counted_by"] = COUNTED_INTERVAL
     return out
 
 
@@ -641,7 +659,7 @@ def evidence() -> dict[str, Any]:
     findings = [{**f, "found": f["found"].format(**fill)} for f in AUDIT]
     protocol = params.get("protocol") or {}
     refitted = protocol.get("parameters_fitted_under") == protocol.get("validated_under")
-    return {
+    answer = {
         # The page's type has the key. No commit is named: a recording of this answer outlives the checkout that
         # made it, and the tracked files it is read from are listed under sources.
         "commit": None,
@@ -679,6 +697,7 @@ def evidence() -> dict[str, Any]:
             "next_look: reward, differences, not_the_same_game_twice, other_settings, made_with, with_the_earlier_values, before_the_bug_fix",
             "next_look: measured_under, reward_in_use, on_validation: which reward the tables on record were measured under, the reward in use, and the reference players under it on the validation episodes",
             "sources",
+            "count_kinds, and counted_by or classes_counted_by beside every count of scores ahead: which of the two kinds the count is",
         ],
         "sources": {
             "tracked_files": ["backend/model/fitted_values/" + LOOKS_FILE, "backend/model/fitted_values/" + PARAMS_FILE,
@@ -688,7 +707,9 @@ def evidence() -> dict[str, Any]:
             "report_folders": dict(REPORT_FOLDERS),
             "record_built_utc": record["built_utc"],
         },
+        "count_kinds": dict(COUNT_KINDS),
     }
+    return _say_the_kind(answer)
 
 
 def main(argv: list[str]) -> int:
