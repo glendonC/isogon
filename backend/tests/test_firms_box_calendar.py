@@ -209,9 +209,20 @@ class PlacesRegistryTests(unittest.TestCase):
         self.assertIsNone(got[1]["to_the_learned_agent"])
         recorded = {"plumas_ca": {"first_overpass_utc": "2021-07-22T21:13:00Z", "last_overpass_utc": "2021-07-25T06:22:00Z",
                                   "look": 3, "protocol_version": 3}}
-        out = places_payload(lambda region: starts if region == "plumas_ca" else [], recorded=recorded)
+        from unittest import mock
+
+        import backend.firms.places as places
+
+        with mock.patch.object(places, "_model_roles", lambda: None):          # a build without the model's function
+            out = places_payload(lambda region: starts if region == "plumas_ca" else [], recorded=recorded)
         self.assertEqual((out["default"]["featured_fire"], out["default"]["start"]), ("plumas_ca:2012-08", "2012-08-10"))
         self.assertEqual(out["default"]["chosen_by"], "while the standings are not served")
+        # with the model's function: the 2012 fire is the largest the world model never saw
+        real = places_payload(lambda region: starts if region == "plumas_ca" else [], recorded=recorded)
+        self.assertEqual((real["default"]["featured_fire"], real["default"]["chosen_by"]), ("plumas_ca:2012-08", "the world model's standing"))
+        self.assertEqual((real["default"]["to_the_world_model"], real["default"]["to_the_learned_agent"]), ("never seen", "fitted on"))
+        dixie_real = next(p for p in real["places"] if p["id"] == "plumas_ca")["featured_fires"][0]
+        self.assertEqual((dixie_real["to_the_world_model"], dixie_real["closed"]), ("recorded test fire", True))
         self.assertTrue(out["default"]["holdout_viirs"])
         place = next(p for p in out["places"] if p["id"] == "plumas_ca")
         self.assertEqual((place["starts"]["default_start"], place["starts"]["default_holdout_viirs"]), ("2012-08-10", True))
@@ -219,8 +230,9 @@ class PlacesRegistryTests(unittest.TestCase):
         dixie = next(p for p in place["featured_fires"] if p["blind_test_fire"])
         self.assertEqual((dixie["default_start"], dixie["opens"]["holdout_viirs"]), ("2021-07-22T21:13:00Z", False))
         # a place whose only fires are recorded test fires opens on its record
-        only = places_payload(lambda region: [st("2021-07-18", 1700), st("2021-08-03", 1749)] if region == "plumas_ca" else [],
-                              recorded=recorded)
+        with mock.patch.object(places, "_model_roles", lambda: None):
+            only = places_payload(lambda region: [st("2021-07-18", 1700), st("2021-08-03", 1749)] if region == "plumas_ca" else [],
+                                  recorded=recorded)
         p0 = next(p for p in only["places"] if p["id"] == "plumas_ca")
         self.assertEqual((p0["starts"]["default_start"], p0["starts"]["default_holdout_viirs"]), ("2021-07-22T21:13:00Z", False))
         # with the model's standings served, the default is the largest fire the world model never saw
@@ -230,13 +242,21 @@ class PlacesRegistryTests(unittest.TestCase):
 
         def roles(region, first, last):
             standing = {"2012": "fitted on", "2020": "never seen", "2021": "recorded test fire"}[first[:4]]
-            return {"world_model": standing, "learned_agent": "fitted on"}
+            return {"world_model": standing, "learned_agent": "fitted on", "closed": first.startswith("2021")}
 
         with mock.patch.object(places, "_model_roles", lambda: roles):
             out = places_payload(lambda region: starts if region == "plumas_ca" else [])
         self.assertEqual(out["default"]["featured_fire"], "plumas_ca:2020-09")
         self.assertEqual(out["default"]["chosen_by"], "the world model's standing")
         self.assertEqual(out["default"]["to_the_learned_agent"], "fitted on")
+
+        # a fire the world model never saw but that is closed (a 2021 window outside the fire's dates) is never the default
+        def closed_unseen(region, first, last):
+            return {"world_model": "never seen", "learned_agent": "fitted on", "closed": first.startswith("2021")}
+
+        with mock.patch.object(places, "_model_roles", lambda: closed_unseen):
+            out = places_payload(lambda region: starts if region == "plumas_ca" else [])
+        self.assertEqual(out["default"]["featured_fire"], "plumas_ca:2012-08")
 
 
 def _real_cache() -> bool:

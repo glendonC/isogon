@@ -127,6 +127,8 @@ def featured_periods(region_id: str, starts: list[dict[str, Any]], named: list[d
             "name_source": name["source"] if name else None,
             "blind_test_fire": bool(name and name.get("blind_test_fire")),
             **{field: None for field in PARTS.values()},
+            "closed": None,
+            "closed_why": None,
             "default_start": top["start"],
             "default_start_rule": "the period's start with the most MODIS pixels in the box (the earliest on a tie)",
             "calendar": f"/api/calendar?source=firms&region_id={region_id}",
@@ -164,7 +166,9 @@ def choose(periods: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:
     """(the featured fire a place or the whole entry opens on, the reading that chose it)."""
     known = [p for p in periods if p.get(PARTS["world_model"]) is not None]
     if known:
-        pool, reading = [p for p in known if p[PARTS["world_model"]] == NEVER_SEEN], "the world model's standing"
+        # a closed window is never the default, even one the world model never saw (a 2021 window outside a fire's dates)
+        pool = [p for p in known if p[PARTS["world_model"]] == NEVER_SEEN and not p.get("closed")]
+        reading = "the world model's standing"
     else:
         pool, reading = [p for p in periods if not p["blind_test_fire"]], "while the standings are not served"
     if not pool:
@@ -228,6 +232,8 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
                     got = {}
                 for part, field in PARTS.items():
                     p[field] = got.get(part)
+                p["closed"] = got.get("closed")
+                p["closed_why"] = got.get("closed_why")
         for p in featured:
             opening(p, recorded)
         for f in named:
@@ -269,9 +275,10 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
                                 "days apart, largest first by MODIS pixels in the box at the busiest start; named "
                                 f"from places.json when a named fire's dates overlap and its point lies within "
                                 f"{NAME_MATCH_DEG:g} degrees of the region's box"),
-        "standing": ("to_the_world_model and to_the_learned_agent are null until the model's function is served; each "
-                     "will say whether that part was fitted on the fire, validated on it, had it as a recorded test "
-                     "fire, or never saw it"),
+        "standing": ("to_the_world_model and to_the_learned_agent say whether that part was fitted on the fire, "
+                     "validated on it, had it as a recorded test fire, or never saw it, and closed whether a held-out "
+                     "run, round or play of it is refused (backend.model.fire_roles.fire_roles; null in a build "
+                     "without it)"),
         "named_fires_from": doc.get("what"),
         "box_calendar": {
             "route": "/api/calendar?source=firms&box=<west>,<south>,<east>,<north>",
