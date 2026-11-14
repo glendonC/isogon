@@ -115,9 +115,10 @@ from backend.terrain.live_region import (  # noqa: E402
 )
 from backend.terrain.terrain_pack import (  # noqa: E402
     DEFAULT_IMAGERY,
+    ELSEWHERE_IMAGERY,
     IMAGERY_SOURCES,
     TerrainPackManager,
-    imagery_covers,
+    choose_imagery,
     pack_descriptor,
 )
 
@@ -347,6 +348,7 @@ def strict_json_bytes(payload: Any) -> bytes:
 IMAGERY_NAMES: dict[str, str] = {
     "esri_world_imagery": "Esri World Imagery (Maxar)",
     "usgs_naip": "USGS NAIP (public domain)",
+    "eox_s2cloudless_2016": "Sentinel-2 cloudless 2016 by EOX (CC BY 4.0)",
 }
 OVERVIEW_IMAGERY: dict[str, str] = {"aws_terrarium_esri_world_imagery": "esri_world_imagery"}
 
@@ -363,10 +365,12 @@ def iso_utc(t: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(int(t)))
 
 
-def name_imagery(resp: dict[str, Any]) -> dict[str, Any]:
+def name_imagery(resp: dict[str, Any], choice: dict[str, Any] | None = None) -> dict[str, Any]:
     """The run answer with the imagery it holds named: `imagery` lists the overview image (`assets.satellite_url`)
-    and the terrain pack's imagery; when the pack's imagery is not the overview's, `region.terrain_source` and the
-    provenance name the pack's, which is what the stage draws, and say that the overview is the fallback."""
+    and the terrain pack's imagery, and says which source the pack takes and how it was chosen (`chosen`,
+    `chosen_by`: "request" or "coverage", `why`, `asked`); when the pack's imagery is not the overview's,
+    `region.terrain_source` and the provenance name the pack's, which is what the stage draws, and say that the
+    overview is the fallback."""
     region = resp.get("region") or {}
     base = str(region.get("terrain_source", ""))
     overview = OVERVIEW_IMAGERY.get(base)
@@ -379,6 +383,9 @@ def name_imagery(resp: dict[str, Any]) -> dict[str, Any]:
         "terrain_pack": ({"source": pack_source, "credit": IMAGERY_NAMES.get(pack_source, pack_source),
                           "attribution": pack.get("attribution")} if pack_source else None),
     }
+    if choice is not None:
+        resp["imagery"].update({"chosen": choice["source"], "chosen_by": choice["chosen_by"], "why": choice["why"],
+                                "asked": choice["asked"]})
     if pack_source and overview and pack_source != overview and base.startswith("aws_terrarium"):
         region = dict(region)
         region["terrain_source"] = f"aws_terrarium_{pack_source}"
@@ -408,8 +415,13 @@ def frame_fields(tensor_u8: NDArray[np.uint8], frame_idx: int, encoding: dict[st
 class IsogonDataStore:
     """In-memory scientific artifact store, dynamic world-model solver, and query engine."""
 
-    def __init__(self, fields_dir: Path) -> None:
+    def __init__(self, fields_dir: Path, imagery_elsewhere: str = DEFAULT_IMAGERY) -> None:
         self.fields_dir = fields_dir
+        if imagery_elsewhere not in ELSEWHERE_IMAGERY:
+            raise ValueError(f"imagery_elsewhere must be one of: {', '.join(ELSEWHERE_IMAGERY)}")
+        # The terrain pack imagery a run takes where the public-domain source does not cover its box and the request
+        # names none (`choose_imagery`): the default, or a publishable source on a server started for a recording.
+        self.imagery_elsewhere = imagery_elsewhere
         self._ensure_artifacts()
 
         self.calibrator = get_pretrained_calibrator()
@@ -795,10 +807,11 @@ class IsogonDataStore:
         body_bool(body, "reveal")
         body_text(body, "start")
         body_text(body, "source")
-        # Optional terrain pack imagery: "esri_world_imagery" (default) or "usgs_naip" (public domain, conterminous
-        # United States). Outside a source's coverage the default imagery is served; ortho.source says which.
-        imagery = body_text(body, "imagery_source") or DEFAULT_IMAGERY
-        if imagery not in IMAGERY_SOURCES:
+        # Optional terrain pack imagery: "esri_world_imagery", "usgs_naip" (public domain, conterminous United States)
+        # or "eox_s2cloudless_2016" (CC BY 4.0, global). Where the body names none, the server chooses by coverage
+        # (`choose_imagery`); the answer's `imagery` says which and how.
+        imagery = body_text(body, "imagery_source")
+        if imagery is not None and imagery not in IMAGERY_SOURCES:
             raise ValueError(f"Unknown imagery_source '{imagery}'. Expected one of: {', '.join(sorted(IMAGERY_SOURCES))}")
         # "source": "firms" reconstructs real FIRMS overpasses; without it the run is simulated.
         source = str(body.get("source") or "simulated")
@@ -834,17 +847,18 @@ class IsogonDataStore:
             self._store_run(solved)
 
         rid = solved.run_id
+        choice = self.choose_imagery(solved, imagery)
         return name_imagery({
             "run_id": rid,
             "provenance": solved.provenance,
             "downloaded_firms_rows": 0,
             "region": solved.region_terrain.to_region_metadata(),
-            "assets": self.run_assets(solved, imagery),
+            "assets": self.run_assets(solved, choice["source"]),
             "pipeline_stages": solved.pipeline_stages,
             "metrics": solved.metrics,
             "epoch_summaries": solved.epoch_summaries,
             "observer_passes": solved.observer_passes,
-        })
+        }, choice)
 
     def execute_real_reconstruct(
         self,
@@ -852,7 +866,7 @@ class IsogonDataStore:
         spec: Any,
         holdout_viirs: bool,
         cloud_override: float | None,
-        imagery: str,
+        imagery: str | None,
     ) -> dict[str, Any]:
         """A run on real FIRMS overpasses (`backend.model.real_run`), served in the simulated run's shape plus
         its additive keys. ``start`` is a UTC date or date-time; ``holdout_viirs`` hides every VIIRS detection."""
@@ -884,7 +898,8 @@ class IsogonDataStore:
             self._store_run(solved)
             with self._lock:
                 real_ids[key] = solved.run_id
-        resp = name_imagery(real_response(solved, self.run_assets(solved, imagery)))
+        choice = self.choose_imagery(solved, imagery)
+        resp = name_imagery(real_response(solved, self.run_assets(solved, choice["source"])), choice)
         if holdout_viirs and not body_bool(body, "reveal"):
             return withhold_scorer_keys(resp)
         return resp
@@ -925,8 +940,14 @@ class IsogonDataStore:
             memo[key] = window
         return window
 
+    def choose_imagery(self, solved: SolvedReconstructionRun, asked: str | None) -> dict[str, Any]:
+        """The terrain pack imagery of a run on its own box: the named source where it covers the box, else by
+        coverage (`backend.terrain.terrain_pack.choose_imagery`), with this server's imagery elsewhere."""
+        return choose_imagery(solved.region_terrain.spec.bbox, asked, getattr(self, "imagery_elsewhere", DEFAULT_IMAGERY))
+
     def run_assets(self, solved: SolvedReconstructionRun, imagery: str) -> dict[str, Any]:
-        """The ``assets`` object of a run response, the same for simulated and real runs."""
+        """The ``assets`` object of a run response, the same for simulated and real runs. ``imagery`` is the source
+        `choose_imagery` gave, which covers the run's box."""
         rid = solved.run_id
         sat_ext = "png" if "png" in solved.region_terrain.satellite_content_type.lower() else "jpg"
         assets: dict[str, Any] = {
@@ -937,8 +958,6 @@ class IsogonDataStore:
             "export_geojson_url": f"/api/runs/{rid}/export.geojson",
             "export_csv_url": f"/api/runs/{rid}/export.csv",
         }
-        if not imagery_covers(imagery, solved.region_terrain.spec.bbox):
-            imagery = DEFAULT_IMAGERY
         pack_meta = self.terrain_pack_meta(solved, imagery)
         if pack_meta is not None:
             assets["terrain_pack"] = pack_descriptor(pack_meta, rid)
@@ -1596,9 +1615,9 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
         sys.stderr.write(f"[Isogon API] {self.address_string()} - {fmt % args}\n")
 
 
-def run_server(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
+def run_server(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, imagery_elsewhere: str = DEFAULT_IMAGERY) -> None:
     fields_dir = _REPO_ROOT / DEFAULT_FIELDS_REL_DIR
-    store = IsogonDataStore(fields_dir=fields_dir)
+    store = IsogonDataStore(fields_dir=fields_dir, imagery_elsewhere=imagery_elsewhere)
     store.warm_firms()
     httpd = IsogonHTTPServer((host, port), store=store)
     print(
@@ -1618,8 +1637,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run Isogon scientific HTTP API server.")
     parser.add_argument("--host", default=DEFAULT_HOST, help="Bind host (default 127.0.0.1)")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Bind port (default 8788)")
+    parser.add_argument("--imagery-elsewhere", default=DEFAULT_IMAGERY, choices=ELSEWHERE_IMAGERY,
+                        help="terrain pack imagery where the public-domain source does not cover a run's box and the "
+                             f"request names none (default {DEFAULT_IMAGERY}; eox_s2cloudless_2016 for a recording "
+                             "that may be published)")
     args = parser.parse_args()
-    run_server(host=args.host, port=args.port)
+    run_server(host=args.host, port=args.port, imagery_elsewhere=args.imagery_elsewhere)
 
 
 if __name__ == "__main__":

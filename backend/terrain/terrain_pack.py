@@ -24,6 +24,9 @@ Usage:
       build plumas_ca lytton_bc evia_greece
   uv run --no-project --python 3.12 --with numpy --with pillow python3 backend/terrain/terrain_pack.py \
       context plumas_ca lytton_bc evia_greece
+
+Both take `--imagery <source>` for a pack of another imagery source, whose files carry the `<source>_` prefix:
+for example `build --imagery usgs_naip plumas_ca`, then `context --imagery usgs_naip plumas_ca`.
 """
 
 from __future__ import annotations
@@ -73,6 +76,7 @@ from backend.terrain.resample import (  # noqa: E402
     source_step,
 )
 from backend.terrain.tile_store import (  # noqa: E402
+    EOX_S2_CLOUDLESS_2016,
     EOX_S2_CLOUDLESS_2020,
     ESRI_WORLD_IMAGERY,
     SOURCES_BY_KEY,
@@ -136,10 +140,22 @@ def tier_for(spec: RegionSpec) -> TierSpec:
 # Imagery variants. The default pack's file names carry no prefix; any other imagery source builds a
 # complete parallel pack whose served names start with "<source>_", so both can belong to one run.
 DEFAULT_IMAGERY: str = "esri_world_imagery"
-IMAGERY_SOURCES: dict[str, TileSource] = {"esri_world_imagery": ESRI_WORLD_IMAGERY, "usgs_naip": USGS_NAIP}
+IMAGERY_SOURCES: dict[str, TileSource] = {
+    "esri_world_imagery": ESRI_WORLD_IMAGERY,
+    "usgs_naip": USGS_NAIP,
+    "eox_s2cloudless_2016": EOX_S2_CLOUDLESS_2016,
+}
 # Coverage boxes (west, south, east, north); a source without a box covers the globe. USGS Imagery Only
 # carries NAIP for the conterminous United States.
 _IMAGERY_COVERAGE: dict[str, tuple[float, float, float, float]] = {"usgs_naip": (-125.0, 24.4, -66.9, 49.4)}
+# The public-domain source a run takes where it covers the box and the request names no imagery.
+PUBLIC_DOMAIN_IMAGERY: str = "usgs_naip"
+# The sources whose licence allows a copy to be published: USGS NAIP is public domain, the 2016 Sentinel-2
+# cloudless layer is CC BY 4.0. Esri World Imagery may be viewed, not exported (docs/sources.md).
+PUBLISHABLE_IMAGERY: tuple[str, ...] = ("usgs_naip", "eox_s2cloudless_2016")
+# What a run may take where the public-domain source does not cover its box: the default, or a source of global
+# coverage that may be published (a server started for a recording).
+ELSEWHERE_IMAGERY: tuple[str, ...] = (DEFAULT_IMAGERY, "eox_s2cloudless_2016")
 
 
 def imagery_covers(imagery: str, bbox: BoundingBox) -> bool:
@@ -152,8 +168,33 @@ def imagery_covers(imagery: str, bbox: BoundingBox) -> bool:
     return bbox.west >= w and bbox.east <= e and bbox.south >= s and bbox.north <= n
 
 
+def choose_imagery(bbox: BoundingBox, asked: str | None = None, elsewhere: str = DEFAULT_IMAGERY) -> dict[str, Any]:
+    """The imagery of a run's terrain pack. A source the request names is taken where it covers the box. Where the
+    request names none, the choice is by coverage: the public-domain source where it covers the box, ``elsewhere``
+    (the default, unless the server was started with another) where it does not. A named source that does not
+    cover the box is replaced the same way. Returns the source, what was asked, and how it was chosen."""
+    if asked is not None and asked not in IMAGERY_SOURCES:
+        raise ValueError(f"Unknown imagery_source '{asked}'. Expected one of: {', '.join(sorted(IMAGERY_SOURCES))}")
+    if elsewhere not in ELSEWHERE_IMAGERY:
+        raise ValueError(f"the imagery elsewhere must be one of: {', '.join(ELSEWHERE_IMAGERY)}")
+    if asked is not None and imagery_covers(asked, bbox):
+        return {"source": asked, "asked": asked, "chosen_by": "request", "why": "named in the request"}
+    if imagery_covers(PUBLIC_DOMAIN_IMAGERY, bbox):
+        source, why = PUBLIC_DOMAIN_IMAGERY, "the public-domain source covers the box"
+    else:
+        source, why = elsewhere, "the public-domain source does not cover the box"
+    if asked is not None:
+        why = f"{asked} does not cover the box; {why}"
+    return {"source": source, "asked": asked, "chosen_by": "coverage", "why": why}
+
+
 def _name_prefix(imagery: str) -> str:
     return "" if imagery == DEFAULT_IMAGERY else f"{imagery}_"
+
+
+def context_file_names(imagery: str = DEFAULT_IMAGERY) -> tuple[str, ...]:
+    """The context's served names in a pack of ``imagery``: no prefix in the default pack, ``<source>_`` in others."""
+    return tuple(f"{_name_prefix(imagery)}{n}" for n in CONTEXT_FILE_NAMES)
 
 
 def pack_file_names(tier: TierSpec, imagery: str = DEFAULT_IMAGERY) -> tuple[str, ...]:
@@ -203,15 +244,15 @@ def load_pack(
         except (OSError, KeyError, ValueError):
             ok = False
         if not ok:
-            if name in CONTEXT_FILE_NAMES:  # an incomplete context drops the context, never the pack
+            if name in context_file_names(imagery):  # an incomplete context drops the context, never the pack
                 continue
             return None
         files[name] = path
     if not all(n in files for n in pack_file_names(tier_for(spec), imagery)):
         return None
-    if not ("context" in meta and all(n in files for n in CONTEXT_FILE_NAMES)):
+    if not ("context" in meta and all(n in files for n in context_file_names(imagery))):
         meta.pop("context", None)
-        for n in CONTEXT_FILE_NAMES:
+        for n in context_file_names(imagery):
             files.pop(n, None)
     return meta, files
 
@@ -1162,15 +1203,18 @@ def build_context(
     store: TileStore | None = None,
     log: Callable[[str], None] = _log_stderr,
     max_tiles: int = CONTEXT_MAX_TILES,
+    imagery: str = DEFAULT_IMAGERY,
 ) -> dict[str, Any]:
-    """Build the context DEM and ortho around the default imagery pack of ``spec`` and add them to its meta.
+    """Build the context DEM and ortho around the ``imagery`` pack of ``spec`` and add them to its meta.
 
     Same DEM source (AWS Terrarium) and imagery source (the pack's) as the pack, through the same polite
     tile store. The DEM zoom is the lowest whose pixel is a third of the context post spacing or finer.
     """
-    loaded = load_pack(spec, cache_dir)
+    if not imagery_covers(imagery, context_bbox(spec.bbox)):
+        raise ValueError(f"{imagery} does not cover the context of {spec.id}")
+    loaded = load_pack(spec, cache_dir, imagery)
     if loaded is None:
-        raise RuntimeError(f"no complete pack for {spec.id}; build it first")
+        raise RuntimeError(f"no complete {imagery} pack for {spec.id}; build it first")
     meta, files = loaded
     src = SOURCES_BY_KEY.get(meta["ortho"]["source"])
     if src is None or src.key not in IMAGERY_SOURCES:
@@ -1225,7 +1269,7 @@ def build_context(
     timings["imagery_resample_s"] = round(time.perf_counter() - t0, 2)
 
     t0 = time.perf_counter()
-    dem_name, ortho_name = CONTEXT_FILE_NAMES
+    dem_name, ortho_name = context_file_names(imagery)
     _write_atomic(_pack_file_path(spec, dem_name, cache_dir), dem.tobytes(order="C"))
     _save_image_atomic(
         Image.fromarray(_gamma_lut()[ortho]), _pack_file_path(spec, ortho_name, cache_dir),
@@ -1287,10 +1331,10 @@ def build_context(
             "tiles": store.stats.to_dict(),
         },
     }
-    for name in CONTEXT_FILE_NAMES:
+    for name in context_file_names(imagery):
         p = _pack_file_path(spec, name, cache_dir)
         meta["files"][name] = {"bytes": p.stat().st_size, "sha256": _sha256(p)}
-    _write_atomic(pack_meta_path(spec, cache_dir), (json.dumps(meta, indent=2) + "\n").encode("utf-8"))
+    _write_atomic(pack_meta_path(spec, cache_dir, imagery), (json.dumps(meta, indent=2) + "\n").encode("utf-8"))
     log(f"{spec.id}: context written in {timings['total_s']} s; border {checks['border']['median_abs_m']} m median")
     return meta["context"]
 
@@ -1397,6 +1441,7 @@ def _main(argv: list[str] | None = None) -> int:
     ctx_p.add_argument("--rate", type=float, default=16.0, help="max tile requests per second")
     ctx_p.add_argument("--workers", type=int, default=6, help="concurrent tile requests")
     ctx_p.add_argument("--max-tiles", type=int, default=CONTEXT_MAX_TILES, help="refuse a region that needs more tiles")
+    ctx_p.add_argument("--imagery", default=DEFAULT_IMAGERY, choices=sorted(IMAGERY_SOURCES))
     d = sub.add_parser("describe", help="print the terrain_pack JSON a run would carry")
     d.add_argument("region")
     d.add_argument("--run-id", default=None)
@@ -1439,7 +1484,8 @@ def _main(argv: list[str] | None = None) -> int:
     if args.cmd == "context":
         for r in args.regions:
             spec = PRESET_BY_ID.get(r) or resolve_region_request(query_text=r)
-            c = build_context(spec, store=TileStore(max_workers=args.workers, rate_per_s=args.rate), max_tiles=args.max_tiles)
+            c = build_context(spec, store=TileStore(max_workers=args.workers, rate_per_s=args.rate), max_tiles=args.max_tiles,
+                              imagery=args.imagery)
             print(json.dumps({"region": spec.id, "build": c["build"], "checks": c["checks"],
                               "dem": {k: c["dem"][k] for k in ("zoom", "post_spacing_m", "elev_range_m", "sea_share")}}, indent=2))
         return 0

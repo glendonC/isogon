@@ -432,6 +432,56 @@ class UsgsNaipVariantTests(unittest.TestCase):
         self.assertFalse(default & naip)
         self.assertTrue(all(n.startswith("usgs_naip_") for n in naip))
 
+    def test_context_names_follow_the_pack_imagery(self) -> None:
+        self.assertEqual(tp.context_file_names(), tp.CONTEXT_FILE_NAMES)
+        for imagery in ("usgs_naip", "eox_s2cloudless_2016"):
+            names = tp.context_file_names(imagery)
+            self.assertTrue(all(n.startswith(f"{imagery}_context_") for n in names), names)
+            self.assertFalse(set(names) & set(tp.CONTEXT_FILE_NAMES))
+        # NAIP covers the Feather River context box as well as the pack's
+        self.assertTrue(tp.imagery_covers("usgs_naip", tp.context_bbox(PRESET_BY_ID["plumas_ca"].bbox)))
+
+
+class ImageryChoiceTests(unittest.TestCase):
+    def test_the_2016_layer_is_a_source_with_its_own_credit(self) -> None:
+        from backend.terrain.tile_store import SOURCES_BY_KEY
+
+        src = SOURCES_BY_KEY["eox_s2cloudless_2016"]
+        self.assertIn("/s2cloudless_3857/", src.url_template)
+        self.assertEqual(src.attribution, "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH "
+                                          "(Contains modified Copernicus Sentinel data 2016 & 2017)")
+        self.assertIs(tp.IMAGERY_SOURCES["eox_s2cloudless_2016"], src)
+        self.assertTrue(tp.imagery_covers("eox_s2cloudless_2016", PRESET_BY_ID["evia_greece"].bbox))
+        self.assertEqual(set(tp.PUBLISHABLE_IMAGERY), {"usgs_naip", "eox_s2cloudless_2016"})
+        self.assertNotIn(tp.DEFAULT_IMAGERY, tp.PUBLISHABLE_IMAGERY)
+
+    def test_named_none_the_public_domain_source_where_it_covers_the_default_elsewhere(self) -> None:
+        got = tp.choose_imagery(PRESET_BY_ID["plumas_ca"].bbox)
+        self.assertEqual((got["source"], got["asked"], got["chosen_by"]), ("usgs_naip", None, "coverage"))
+        for rid in ("lytton_bc", "evia_greece", "blue_mountains_au", "novo_progresso_br"):
+            got = tp.choose_imagery(PRESET_BY_ID[rid].bbox)
+            self.assertEqual((got["source"], got["chosen_by"]), ("esri_world_imagery", "coverage"), rid)
+            self.assertIn("does not cover", got["why"])
+        # a server started for a recording takes the publishable layer elsewhere, and still NAIP where it covers
+        self.assertEqual(tp.choose_imagery(PRESET_BY_ID["lytton_bc"].bbox, elsewhere="eox_s2cloudless_2016")["source"],
+                         "eox_s2cloudless_2016")
+        self.assertEqual(tp.choose_imagery(PRESET_BY_ID["plumas_ca"].bbox, elsewhere="eox_s2cloudless_2016")["source"],
+                         "usgs_naip")
+        with self.assertRaises(ValueError):
+            tp.choose_imagery(PRESET_BY_ID["plumas_ca"].bbox, elsewhere="usgs_naip")
+
+    def test_a_named_source_is_taken_where_it_covers(self) -> None:
+        got = tp.choose_imagery(PRESET_BY_ID["plumas_ca"].bbox, "esri_world_imagery")
+        self.assertEqual((got["source"], got["asked"], got["chosen_by"]), ("esri_world_imagery", "esri_world_imagery", "request"))
+        got = tp.choose_imagery(PRESET_BY_ID["evia_greece"].bbox, "eox_s2cloudless_2016")
+        self.assertEqual((got["source"], got["chosen_by"]), ("eox_s2cloudless_2016", "request"))
+        # named where it does not cover: replaced by coverage, and the answer says so
+        got = tp.choose_imagery(PRESET_BY_ID["lytton_bc"].bbox, "usgs_naip")
+        self.assertEqual((got["source"], got["asked"], got["chosen_by"]), ("esri_world_imagery", "usgs_naip", "coverage"))
+        self.assertTrue(got["why"].startswith("usgs_naip does not cover the box"))
+        with self.assertRaises(ValueError):
+            tp.choose_imagery(PRESET_BY_ID["plumas_ca"].bbox, "eox_s2cloudless_2020")
+
     def test_plumas_naip_pack_registers_with_the_esri_pack(self) -> None:
         spec = PRESET_BY_ID["plumas_ca"]
         naip = tp.load_pack(spec, HIRES_REGION_CACHE_DIR, "usgs_naip")

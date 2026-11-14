@@ -36,6 +36,7 @@ class ReconstructRouteTests(unittest.TestCase):
             {"region_id": "plumas_ca", "source": "bogus"},
             {"region_id": "plumas_ca", "source": "firms"},
             {"region_id": "plumas_ca", "source": "firms", "start": "2012-08-10", "cloud_override": 0.3},
+            {"region_id": "plumas_ca", "imagery_source": "eox_s2cloudless_2020"},   # not an imagery source
         ):
             with self.subTest(body=body):
                 with self.assertRaises(ValueError):
@@ -51,6 +52,18 @@ class ReconstructRouteTests(unittest.TestCase):
         self.assertNotIn("source", a)
         self.assertEqual(a["downloaded_firms_rows"], 0)
         self.assertEqual(a["run_id"], "plumas_ca_holdout0_cnone")
+
+    def test_the_run_takes_its_imagery_by_coverage_and_says_which(self) -> None:
+        s = _store()
+        a = s.execute_reconstruct({"region_id": "plumas_ca"})
+        self.assertEqual({k: a["imagery"][k] for k in ("chosen", "chosen_by", "asked")},
+                         {"chosen": "usgs_naip", "chosen_by": "coverage", "asked": None})
+        b = s.execute_reconstruct({"region_id": "plumas_ca", "imagery_source": "esri_world_imagery"})
+        self.assertEqual((b["imagery"]["chosen"], b["imagery"]["chosen_by"]), ("esri_world_imagery", "request"))
+        for got in (a, b):
+            pack = got["assets"].get("terrain_pack")
+            if pack is not None:   # a pack on disk is the chosen source's; a missing one is building
+                self.assertEqual(pack["ortho"]["source"], got["imagery"]["chosen"])
 
     def test_real_run_keeps_the_simulated_shape(self) -> None:
         if not _open_run_cached():

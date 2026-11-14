@@ -86,6 +86,58 @@ class StandIn:
                 "estimate": {"per_tile": {"unsure": [0.1, 0.9, 0.2, 0.0]}}}
 
 
+class _PackStandIn:
+    """A backend whose one run holds a terrain pack of the given imagery and a context of the given imagery."""
+
+    def __init__(self, pack_source: str, context_source: str) -> None:
+        self.pack_source, self.context_source = pack_source, context_source
+
+    def __call__(self, req, timeout=None):
+        u = urllib.parse.urlsplit(req.full_url)
+        if u.path == "/api/reconstruct":
+            base = "/api/runs/r/terrain/"
+            p = "" if self.pack_source == "esri_world_imagery" else f"{self.pack_source}_"
+            c = "" if self.pack_source == "esri_world_imagery" else f"{self.pack_source}_"
+            ans = {"run_id": "r", "assets": {
+                "satellite_url": "/api/runs/r/satellite.jpg",
+                "terrain_pack": {"dem": {"url": f"{base}{p}dem_1024_f32.bin"},
+                                 "ortho": {"url": f"{base}{p}ortho_8192.jpg", "source": self.pack_source},
+                                 "aux": {"url": f"{base}{p}aux_2048.png"},
+                                 "context": {"dem": {"url": f"{base}{c}context_dem_1024_f32.bin"},
+                                             "ortho": {"url": f"{base}{c}context_ortho_4096.jpg",
+                                                       "source": self.context_source}}}}}
+            return _Reply(200, "application/json", json.dumps(ans).encode())
+        return _Reply(200, "application/octet-stream", b"\x00\x01")
+
+
+class PublishableImageryTests(unittest.TestCase):
+    def kept(self, pack_source: str, context_source: str) -> dict[str, bool]:
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = Recorder("http://stand-in", Path(tmp), opener=_PackStandIn(pack_source, context_source))
+            rec.run_with_assets({"region_id": "x", "source": "firms", "start": "2012-08-10"})
+            return {k.split("/terrain/")[-1].split("/")[-1]: "file" in e for k, e in rec.entries.items() if k.startswith("GET ")}
+
+    def test_the_set_is_the_pack_modules(self) -> None:
+        from backend.server_recorder import PUBLISHABLE_IMAGERY
+        from backend.terrain.terrain_pack import PUBLISHABLE_IMAGERY as PACK_SET
+
+        self.assertEqual(PUBLISHABLE_IMAGERY, PACK_SET)
+
+    def test_publishable_imagery_is_stored_and_the_rest_withheld(self) -> None:
+        for source in ("usgs_naip", "eox_s2cloudless_2016"):
+            got = self.kept(source, source)
+            self.assertEqual(got, {"satellite.jpg": False, f"{source}_dem_1024_f32.bin": True,
+                                   f"{source}_ortho_8192.jpg": True, f"{source}_aux_2048.png": True,
+                                   f"{source}_context_dem_1024_f32.bin": True, f"{source}_context_ortho_4096.jpg": True},
+                             source)
+        got = self.kept("esri_world_imagery", "esri_world_imagery")
+        self.assertEqual(got, {"satellite.jpg": False, "dem_1024_f32.bin": True, "ortho_8192.jpg": False, "aux_2048.png": False,
+                               "context_dem_1024_f32.bin": True, "context_ortho_4096.jpg": False})
+        # a context of another source than its pack is judged by its own source
+        got = self.kept("usgs_naip", "esri_world_imagery")
+        self.assertEqual((got["usgs_naip_ortho_8192.jpg"], got["usgs_naip_context_ortho_4096.jpg"]), (True, False))
+
+
 class RecorderTests(unittest.TestCase):
     def test_the_default_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

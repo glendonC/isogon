@@ -275,11 +275,26 @@ class NonHeroContextTests(unittest.TestCase):
         if not seen:
             self.skipTest("no standard pack is built in the cache")
 
-    def test_naip_variant_carries_no_context(self) -> None:
-        loaded = tp.load_pack(PRESET_BY_ID["plumas_ca"], HIRES_REGION_CACHE_DIR, "usgs_naip")
-        if loaded is None:
-            self.skipTest("plumas_ca usgs_naip pack not built")
-        self.assertNotIn("context", tp.pack_descriptor(loaded[0], "r"))
+    def test_a_pack_of_another_imagery_carries_only_its_own_context(self) -> None:
+        seen = 0
+        for rid, imagery in (("plumas_ca", "usgs_naip"), ("lytton_bc", "eox_s2cloudless_2016")):
+            loaded = tp.load_pack(PRESET_BY_ID[rid], HIRES_REGION_CACHE_DIR, imagery)
+            if loaded is None:
+                continue
+            seen += 1
+            meta, files = loaded
+            # never the default pack's context, whose imagery is another
+            self.assertFalse(set(files) & set(tp.CONTEXT_FILE_NAMES), rid)
+            ctx = tp.pack_descriptor(meta, "r").get("context")
+            if ctx is None:
+                self.assertFalse(any("context" in n for n in files), rid)
+                continue
+            self.assertEqual(set(n for n in files if "context" in n), set(tp.context_file_names(imagery)))
+            self.assertEqual(ctx["ortho"]["source"], imagery)
+            self.assertTrue(ctx["ortho"]["url"].endswith(f"/{imagery}_context_ortho_{tp.CONTEXT_ORTHO_SIZE}.jpg"))
+            self.assertTrue(ctx["dem"]["url"].endswith(f"/{imagery}_context_dem_{tp.CONTEXT_DEM_SIZE}_f32.bin"))
+        if not seen:
+            self.skipTest("no pack of another imagery is built in the cache")
 
 
 if __name__ == "__main__":

@@ -77,6 +77,19 @@ class ImageryNamesTests(unittest.TestCase):
         self.assertEqual(esri["region"]["terrain_source"], "aws_terrarium_esri_world_imagery")
         self.assertIn("Maxar 2K Ortho", esri["provenance"])
 
+    def test_a_run_says_which_imagery_it_takes_and_how(self) -> None:
+        from backend.server import name_imagery
+        from backend.terrain.live_region import PRESET_BY_ID
+        from backend.terrain.terrain_pack import choose_imagery
+
+        choice = choose_imagery(PRESET_BY_ID["plumas_ca"].bbox)
+        resp = name_imagery({"region": {"terrain_source": "aws_terrarium_esri_world_imagery"},
+                             "assets": {"terrain_pack_status": "building"}}, choice)
+        self.assertEqual({k: resp["imagery"][k] for k in ("chosen", "chosen_by", "asked")},
+                         {"chosen": "usgs_naip", "chosen_by": "coverage", "asked": None})
+        self.assertEqual(resp["imagery"]["why"], "the public-domain source covers the box")
+        self.assertIsNone(resp["imagery"]["terrain_pack"])   # still building: the choice is named all the same
+
 
 if __name__ == "__main__":
     unittest.main()

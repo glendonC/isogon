@@ -19,9 +19,12 @@ it is held out, revealed or played. Run bodies are built as the page builds them
 the index names are kept.
 
 Round ids are random on a live server; each round is renamed `nl-rec-<8 hex>` in every stored answer and key, so the
-recorded round replays with one id. Imagery published for viewing only (Esri World Imagery, and what is derived from
-it) is listed as withheld and not stored; United States places ask for `usgs_naip`. The tool ends with exit 1 when a
-stored file holds the FIRMS key, `MAP_KEY=` or a local path.
+recorded round replays with one id. The run bodies name no imagery, as the page's do; the server chooses the terrain
+pack's imagery by coverage and says which in the answer. Only imagery whose licence allows a copy is stored (USGS NAIP,
+public domain; Sentinel-2 cloudless 2016, CC BY 4.0); the rest (Esri World Imagery, published for viewing only, and
+what is derived from it) is listed as withheld. For imagery outside the United States, record against a server
+started with `--imagery-elsewhere eox_s2cloudless_2016`. The tool ends with exit 1 when a stored file holds the FIRMS
+key, `MAP_KEY=` or a local path.
 """
 
 from __future__ import annotations
@@ -43,7 +46,9 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 ESRI_WITHHELD: str = "Esri World Imagery is published for viewing, not for export (docs/sources.md); not stored"
-US_IMAGERY: str = "usgs_naip"
+OTHER_WITHHELD: str = "imagery under a licence that does not allow this copy (docs/sources.md); not stored"
+# The imagery whose licence allows a copy: the same set as backend.terrain.terrain_pack.PUBLISHABLE_IMAGERY.
+PUBLISHABLE_IMAGERY: tuple[str, ...] = ("usgs_naip", "eox_s2cloudless_2016")
 ROUND_TILES: list[int] = [4, 4]
 ROUND_BUDGET: int = 4
 ROUND_PLAYER: str = "least_sure"     # the reference player whose looks the recorded round takes
@@ -187,13 +192,18 @@ class Recorder:
             return ans
         pack = (ans.get("assets") or {}).get("terrain_pack") or {}
         pack_imagery = ((pack.get("ortho") or {}).get("source")) or "esri_world_imagery"
+        context_imagery = (((pack.get("context") or {}).get("ortho") or {}).get("source")) or "esri_world_imagery"
         for url in sorted(set(_urls(ans))):
             path, query = split_url(url)
             name = path.rsplit("/", 1)[-1]
-            esri = (name.startswith("satellite.")
-                    or ("/terrain/" in path and "dem" not in name and (pack_imagery != US_IMAGERY or "context" in name)))
-            if esri:
-                self.withhold("GET", path, ESRI_WITHHELD)
+            if name.startswith("satellite."):
+                source: str | None = "esri_world_imagery"      # the overview image
+            elif "/terrain/" in path and "dem" not in name:
+                source = context_imagery if "context" in name else pack_imagery
+            else:
+                source = None                                  # elevation, the run's fields, exports
+            if source is not None and source not in PUBLISHABLE_IMAGERY:
+                self.withhold("GET", path, ESRI_WITHHELD if source == "esri_world_imagery" else OTHER_WITHHELD)
             else:
                 self.fetch("GET", path, query or None)
         return ans

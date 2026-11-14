@@ -7,6 +7,9 @@ The routes are in `backend/server.py` and, for the next-look rounds, `backend/se
 ## Conventions
 
 Start the server from the repository root. It listens on `127.0.0.1:8788`; `--host` and `--port` change that.
+`--imagery-elsewhere eox_s2cloudless_2016` makes a run take the 2016 Sentinel-2 layer, which may be published, where
+the public-domain imagery does not cover its box (the default there is `esri_world_imagery`); a server started to be
+recorded for the public page uses it.
 
 ```bash
 uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.server
@@ -446,7 +449,7 @@ Builds a run, or returns it from the run store, and answers with its description
 | `holdout_viirs` | boolean | Hide every VIIRS detection from the estimate. `"holdout": "viirs"` means the same. |
 | `reveal` | boolean | Real runs with `holdout_viirs`: also return what the scorer wrote (below). |
 | `cloud_override` | number | Simulated runs only: a cloud fraction from 0 to 1 for every frame. |
-| `imagery_source` | string | Imagery of the terrain pack: `esri_world_imagery` (default) or `usgs_naip`. Where the chosen source has no cover, the default is served and `ortho.source` says so. |
+| `imagery_source` | string | Imagery of the terrain pack: `esri_world_imagery`, `usgs_naip` (public domain, conterminous United States) or `eox_s2cloudless_2016` (CC BY 4.0, global). Left out (the page leaves it out), the server chooses by coverage: `usgs_naip` where it covers the run's box, elsewhere `esri_world_imagery`, or the source given with `--imagery-elsewhere`. A named source that does not cover the box is replaced the same way. `imagery.chosen` says which. |
 
 ### Answer of a simulated run
 
@@ -491,7 +494,7 @@ The id of a simulated run is `<region>_holdout<0|1>_c<none|NN>`, where `NN` is t
 
 A real run answers with the same nine keys, so one reader serves both, and adds its own. Its id is `<region>_firms_<YYYYMMDDTHHMM>_<allsensors|holdoutviirs>`, from the time of its first frame.
 
-Both kinds of run also carry `imagery`, which names the images the answer points at: `overview` (the image of `assets.satellite_url`, drawn when no terrain pack is given: `esri_world_imagery` for real terrain) and `terrain_pack` (the pack's imagery and its attribution). When the pack's imagery is another than the overview's, as with `imagery_source: usgs_naip`, `region.terrain_source` names the pack's (`aws_terrarium_usgs_naip`), `region.overview_source` keeps the overview's, and the provenance sentence says "USGS NAIP (public domain) imagery in the terrain pack (an Esri World Imagery (Maxar) overview is the fallback image)".
+Both kinds of run also carry `imagery`, which names the images the answer points at: `overview` (the image of `assets.satellite_url`, drawn when no terrain pack is given: `esri_world_imagery` for real terrain) and `terrain_pack` (the pack's imagery and its attribution, or null while the pack is building). It also says which source the pack takes and how: `chosen` (the source), `chosen_by` (`request` when the body named a source that covers the box, `coverage` otherwise), `why` (in words, for example "the public-domain source covers the box") and `asked` (the body's `imagery_source`, or null). When the pack's imagery is another than the overview's, as with `usgs_naip` on `plumas_ca`, `region.terrain_source` names the pack's (`aws_terrarium_usgs_naip`), `region.overview_source` keeps the overview's, and the provenance sentence says "USGS NAIP (public domain) imagery in the terrain pack (an Esri World Imagery (Maxar) overview is the fallback image)".
 
 ```json
 {
@@ -619,7 +622,7 @@ Shortened: `scores` has seven entries and the values are rounded here. This is t
 }
 ```
 
-This is the pack of `plumas_ca`. `ortho_detail` and `context` are present only where they have been built.
+This is the Esri World Imagery pack of `plumas_ca` (`imagery_source: esri_world_imagery`). A pack of another source names its files with the source first, context included (`usgs_naip_ortho_8192.jpg`, `usgs_naip_context_ortho_4096.jpg`), and its `ortho.source` and attribution are that source's. `ortho_detail` and `context` are present only where they have been built.
 
 ### Observer passes
 
