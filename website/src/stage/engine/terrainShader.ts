@@ -168,6 +168,7 @@ uniform vec2 uBeliefGrid;    // cells east-west and north-south; (0, 0) when the
 uniform float uBeliefMix;    // position between the two steps
 uniform vec4 uBeliefBox;     // the part of the region that holds any belief: (u west, v south, u east, v north)
 uniform float uHeldOut;      // 1 on a pass whose detections were kept from the estimate
+uniform float uDeclaredGiven; // 1 when the run says which cells its model declares at the hidden pass on show (the low bit of a cell's intensity byte)
 // A hidden pass: above 0 the light texture holds the last visible pass, drawn as an afterglow at
 // this share of its light. 0: the lights are the detections of the pass on show.
 uniform float uAfterglow;
@@ -405,6 +406,9 @@ const float BELIEF_CELL_FILL = 0.58; // side of a certain cell's square, as a sh
 // and the ground right under a light is drawn darker by up to this share (the light's own
 // extent, inside the detection's pixel). Neither says the ground is burned.
 const float BELIEF_DAY_SHADE = 0.30;
+// A declared cell too small on screen for an open frame is drawn as a square of at least this
+// probability's size (display choice: the list says declared or not, it gives no size)
+const float BELIEF_DECLARED_FAR = 0.4;
 const float DAY_LIGHT_UNDER = 0.72;
 const float BELIEF_INK_FAR = 1.35;       // how much stronger the ink is drawn on such small cells
 const float BELIEF_CELL_FILL_FAR = 0.88; // the same when the cell is only a few pixels wide on screen
@@ -450,8 +454,20 @@ vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   vec2 aa = max(fwidth(g), vec2(1e-5));   // cells per pixel along each axis
   float px = max(aa.x, aa.y);
   float cellPx = 1.0 / px;
-  vec2 be = beliefCell(id);
+  vec4 cellBytes = textureLod(uLipariTex, (id + 0.5) / uBeliefGrid, 0.0);
+  vec2 be = mix(cellBytes.rg, cellBytes.ba, uBeliefMix);
   float p = clamp(be.x, 0.0, 1.0);
+  // A pass kept from the model: which cells the model declares burning there. The run says so
+  // itself, with the list the blind test scores; a run that gives no list (an older recording)
+  // falls back to the cells the belief on show holds at one half or more, which is a reading of
+  // the model and not its own answer.
+  float listed = mod(floor(cellBytes.g * 255.0 + 0.5), 2.0);
+  float declaredCell = mix(step(BELIEF_DECLARED, p), listed, uDeclaredGiven) * heldOut;
+  // (an open frame needs about seven pixels to read as open; a smaller declared cell is drawn as
+  // a square no smaller than BELIEF_DECLARED_FAR stands for, whatever its probability, so the
+  // model's answer is still the shape seen from far, as a field of squares and not a fill)
+  float framed = smoothstep(5.5, 8.0, cellPx);
+  p = max(p, BELIEF_DECLARED_FAR * declaredCell * (1.0 - framed));
   float some = step(0.004, p);
 
   // The cell's square: its area grows with the probability. Even a certain cell leaves ground
@@ -478,8 +494,7 @@ vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   // A pass kept from the model: every cell the model declares burning is an open frame in place
   // of its square, the answer it committed to and has not been shown. The other cells stay as
   // they are.
-  // (an open frame needs about seven pixels to read as open; smaller cells keep their square)
-  float declared = step(BELIEF_DECLARED, p) * heldOut * smoothstep(5.5, 8.0, cellPx);
+  float declared = declaredCell * framed;
   float box = max(abs(fc.x), abs(fc.y));
   float strokeCells = max(1.5 * px, 0.06);
   float ring = (1.0 - smoothstep(BELIEF_FRAME_HALF - 0.5 * px, BELIEF_FRAME_HALF + 0.5 * px, box))

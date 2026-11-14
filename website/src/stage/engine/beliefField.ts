@@ -10,11 +10,58 @@ import type { BeliefFramesInfo } from '../types';
  *   r, g   probability (byte / 255) and expected intensity (the run's intensity byte / 255) at one step
  *   b, a   the same at the next step
  * Row 0 of the texture is the south edge (v runs north), column 0 the west edge.
+ *
+ * A run with a satellite hidden also says which cells its model declares burning at each look of
+ * that satellite (`declared_cells`): the answer the blind test compares with the hidden detections.
+ * When a run gives them, the lowest bit of a cell's first intensity byte says whether the cell is
+ * declared at the hidden pass on show, and the intensity keeps its other seven bits.
  */
 export interface BeliefFrames {
   info: BeliefFramesInfo;
   /** steps x ny x nx x 2 bytes, row 0 north, column 0 west. */
   bytes: Uint8Array;
+  /** The cells the model declares at each hidden pass, when the run gives them on this grid. */
+  declared?: DeclaredCells | null;
+}
+
+/** The cells a run's model declares burning at the looks of the hidden instrument. */
+export interface DeclaredCells {
+  nx: number;
+  ny: number;
+  /** Frame of the run to its declared cells: flat indices, row * nx + column, row 0 north. */
+  byFrame: Map<number, Uint32Array>;
+}
+
+/**
+ * Reads a run's `declared_cells`. Null when the run has none, when its looks are not frames of
+ * the run, or when anything in it is not what the shape says: a picture of the model's answer is
+ * drawn from an exact list or not at all.
+ */
+export function parseDeclaredCells(raw: unknown): DeclaredCells | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const block = raw as { grid?: unknown; looks?: unknown };
+  if (typeof block.grid !== 'object' || block.grid === null || !Array.isArray(block.looks)) return null;
+  const grid = block.grid as { nx?: unknown; ny?: unknown; index?: unknown; rows_run?: unknown };
+  const nx = Number(grid.nx);
+  const ny = Number(grid.ny);
+  if (!Number.isInteger(nx) || !Number.isInteger(ny) || nx < 2 || ny < 2) return null;
+  // The layout this reader knows; a run that names another one is not drawn from
+  if (grid.index !== 'row * nx + column' || grid.rows_run !== 'north to south') return null;
+  const byFrame = new Map<number, Uint32Array>();
+  for (const look of block.looks as unknown[]) {
+    if (typeof look !== 'object' || look === null) return null;
+    const { frame, cells } = look as { frame?: unknown; cells?: unknown };
+    if (frame === null || frame === undefined) continue;
+    if (!Number.isInteger(frame) || (frame as number) < 0 || !Array.isArray(cells)) return null;
+    const list = new Uint32Array(cells.length);
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i];
+      if (!Number.isInteger(cell) || cell < 0 || cell >= nx * ny) return null;
+      list[i] = cell;
+    }
+    byFrame.set(frame as number, list);
+  }
+  return byFrame.size > 0 ? { nx, ny, byFrame } : null;
 }
 
 export class BeliefField {
@@ -33,6 +80,8 @@ export class BeliefField {
   /** The step the texture holds first, for callers that cache what they read from it. */
   stepKey = '';
   private step = 0;
+  /** True while the texture carries the run's declared cells as flags (see the header). */
+  declaredGiven = false;
 
   constructor() {
     this.data = new Uint8Array(4);
@@ -57,13 +106,16 @@ export class BeliefField {
     this.box.set(0, 0, 0, 0);
     this.key = '';
     this.stepKey = '';
+    this.declaredGiven = false;
   }
 
   /**
    * Loads the two steps around a time and returns the position between them (0 at the first).
    * A time before the first step or after the last shows that step alone.
+   * `hiddenFrame` is the hidden pass on show, or the last one shown (null before any): where the
+   * run gives its declared cells on this grid, that frame's cells are flagged.
    */
-  sync(belief: BeliefFrames, runKey: string, timeMs: number): number {
+  sync(belief: BeliefFrames, runKey: string, timeMs: number, hiddenFrame: number | null = null): number {
     const { steps, stepMs, firstTimeMs, nx, ny } = belief.info;
     const exact = Math.min(steps - 1, Math.max(0, (timeMs - firstTimeMs) / stepMs));
     const s0 = Math.min(steps - 1, Math.floor(exact));
@@ -77,10 +129,14 @@ export class BeliefField {
       this.key = '';
     }
     this.grid.set(nx, ny);
-    const key = `${runKey}:${s0}`;
+    const declared = belief.declared && belief.declared.nx === nx && belief.declared.ny === ny ? belief.declared : null;
+    const flagged = declared && hiddenFrame !== null ? (declared.byFrame.get(hiddenFrame) ?? null) : null;
+    this.declaredGiven = declared !== null;
+    const stepKey = `${runKey}:${s0}`;
+    const key = `${stepKey}:${declared ? (hiddenFrame ?? 'none') : 'no list'}`;
     if (key !== this.key) {
       this.key = key;
-      this.stepKey = key;
+      this.stepKey = stepKey;
       this.step = s0;
       const src = belief.bytes;
       const cells = nx * ny;
@@ -98,7 +154,7 @@ export class BeliefField {
           const p0 = src[from0 + col * 2];
           const p1 = src[from1 + col * 2];
           out[to + col * 4] = p0;
-          out[to + col * 4 + 1] = src[from0 + col * 2 + 1];
+          out[to + col * 4 + 1] = declared ? src[from0 + col * 2 + 1] & 0xfe : src[from0 + col * 2 + 1];
           out[to + col * 4 + 2] = p1;
           out[to + col * 4 + 3] = src[from1 + col * 2 + 1];
           if (p0 > 0 || p1 > 0) {
@@ -107,6 +163,19 @@ export class BeliefField {
             if (row < row0) row0 = row;
             if (row > row1) row1 = row;
           }
+        }
+      }
+      if (flagged) {
+        for (let i = 0; i < flagged.length; i++) {
+          const fileRow = Math.floor(flagged[i] / nx);
+          const col = flagged[i] - fileRow * nx;
+          const row = ny - 1 - fileRow;
+          out[(row * nx + col) * 4 + 1] |= 1;
+          // A declared cell is drawn even where the belief on show holds nothing
+          if (col < col0) col0 = col;
+          if (col > col1) col1 = col;
+          if (row < row0) row0 = row;
+          if (row > row1) row1 = row;
         }
       }
       if (col1 < 0) this.box.set(0, 0, 0, 0);

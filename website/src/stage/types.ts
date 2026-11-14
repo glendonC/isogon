@@ -93,6 +93,8 @@ export interface DynamicRegionRun {
   encoding?: unknown;
   /** Real runs: what the model believes between the passes. Read through parseBeliefFrames. */
   belief_frames?: unknown;
+  /** Runs with a satellite hidden: the cells the model declares at each look of it. Read through parseDeclaredCells. */
+  declared_cells?: unknown;
   /** Real runs: the model's own description, with its fitted values. Read through parseResidenceHours. */
   model?: unknown;
 }

@@ -79,7 +79,7 @@ import {
 } from './engine/contextTerrain';
 import { FIRE_THRESHOLD_NORM, buildFireHistory, type FireHistory } from './engine/fireField';
 import { FootprintField, LIGHT_TEX_SIZE, buildDetectionSource } from './engine/footprintField';
-import { BeliefField } from './engine/beliefField';
+import { BeliefField, parseDeclaredCells } from './engine/beliefField';
 import type { BeliefFrames } from './engine/beliefField';
 import { HdrPipeline, resolveStagePixelRatio } from './engine/hdrPipeline';
 import {
@@ -949,6 +949,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const beliefStore = beliefStoreRef.current;
     const uBeliefMix = { value: 0.0 };
     const uHeldOut = { value: 0.0 };
+    const uDeclaredGiven = { value: 0.0 };
+    // The hidden pass on show, or the last one shown, of the run named: its declared cells stay
+    // flagged while the open frames fade out on the pass after it
+    let hiddenFrameShown: number | null = null;
+    let hiddenFrameRun = '';
     // The page's board of tiles (see tileMarks in the terrain shader)
     const uTileGrid = new THREE.Vector2(0, 0);
     const uTileState = Array.from({ length: 64 }, () => new THREE.Vector4(0, 0, 0, 0));
@@ -1242,6 +1247,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uPixelOutline: { value: 0.0 },
       uBeliefMix,
       uHeldOut,
+      uDeclaredGiven,
       uAfterglow,
       uLightGain,
       uFarView,
@@ -3230,7 +3236,14 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           // pass's time was made before that pass was taken in. The belief is therefore shown one
           // step later than the time on show, so a pass on show is already part of it.
           const beliefTimeMs = tA + (tB - tA) * (exactFrame - fA) + beliefNow.info.stepMs;
-          uBeliefMix.value = beliefField.sync(beliefNow, nextBundle.key, beliefTimeMs);
+          if (hiddenFrameRun !== nextBundle.key) {
+            hiddenFrameRun = nextBundle.key;
+            hiddenFrameShown = null;
+          }
+          if (rawPasses.length > 0 && rawPasses.every((sp) => sp.revealed || passIsHidden(sp, p.holdoutViirs))) {
+            hiddenFrameShown = epochIdx;
+          }
+          uBeliefMix.value = beliefField.sync(beliefNow, nextBundle.key, beliefTimeMs, hiddenFrameShown);
         } else {
           beliefField.clear();
         }
@@ -3239,6 +3252,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       }
       // The legend ramp's sampler carries the belief on a real run (the ramp is not drawn there)
       terrainUniforms.uLipariTex.value = beliefField.grid.x > 0 ? beliefField.texture : lipariTex;
+      uDeclaredGiven.value = beliefField.grid.x > 0 && beliefField.declaredGiven ? 1.0 : 0.0;
       // A pass kept from the model: every pass of the frame is hidden, or was laid on after scoring
       const heldOutTarget =
         realRun && rawPasses.length > 0 && rawPasses.every((sp) => sp.revealed || passIsHidden(sp, p.holdoutViirs))
@@ -4143,7 +4157,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             .then((resp) => (resp.ok ? resp.arrayBuffer() : null))
             .then((buf) => {
               if (!buf || buf.byteLength !== beliefInfo.steps * beliefInfo.nx * beliefInfo.ny * 2) return;
-              beliefStore.set(run.run_id, { info: beliefInfo, bytes: new Uint8Array(buf) });
+              beliefStore.set(run.run_id, {
+                info: beliefInfo,
+                bytes: new Uint8Array(buf),
+                declared: parseDeclaredCells(run.declared_cells),
+              });
               while (beliefStore.size > 6) beliefStore.delete(beliefStore.keys().next().value as string);
             })
             .catch(() => undefined);

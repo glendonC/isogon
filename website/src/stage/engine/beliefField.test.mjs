@@ -84,3 +84,74 @@ test('the box holds every cell with any belief at the two steps, with three cell
   assert.ok(Math.abs(x - 9 / 40) < 1e-6 && Math.abs(z - 24 / 40) < 1e-6, `${x} ${z}`);
   assert.ok(Math.abs(y - 12 / 30) < 1e-6 && Math.abs(w - 23 / 30) < 1e-6, `${y} ${w}`);
 });
+
+// The cells a run says its model declared at a hidden pass: read exactly or not at all, and flagged on
+// the texture cell that holds them, so the open frames are the model's own answer.
+const declaredBlock = (looks, grid = {}) => ({
+  grid: { nx: NX, ny: NY, index: 'row * nx + column', rows_run: 'north to south', ...grid },
+  looks,
+});
+
+test('declared cells are read per frame, and anything off the stated shape reads as none', async () => {
+  const { parseDeclaredCells } = await import('./beliefField.ts');
+  const read = parseDeclaredCells(declaredBlock([{ frame: 4, cells: [0, 5] }, { frame: 9, cells: [] }]));
+  assert.deepEqual([read.nx, read.ny], [NX, NY]);
+  assert.deepEqual([...read.byFrame.get(4)], [0, 5]);
+  assert.deepEqual([...read.byFrame.get(9)], []);
+  assert.equal(parseDeclaredCells(null), null);
+  assert.equal(parseDeclaredCells(declaredBlock([{ frame: null, cells: [1] }])), null, 'looks that are not frames');
+  assert.equal(parseDeclaredCells(declaredBlock([{ frame: 4, cells: [NX * NY] }])), null, 'a cell off the grid');
+  assert.equal(parseDeclaredCells(declaredBlock([{ frame: 4, cells: [1.5] }])), null, 'a cell that is no index');
+  assert.equal(parseDeclaredCells(declaredBlock([{ frame: 4, cells: [1] }], { rows_run: 'south to north' })), null);
+  assert.equal(parseDeclaredCells(declaredBlock([{ frame: 4, cells: [1] }], { index: 'column * ny + row' })), null);
+});
+
+test('the declared cells of the hidden pass on show are flagged on their own texture cells and no others', async () => {
+  const { parseDeclaredCells } = await import('./beliefField.ts');
+  // Cell 0 is the north-west cell, cell 5 the south-east one (row 1, column 2)
+  const declared = parseDeclaredCells(declaredBlock([{ frame: 4, cells: [0, 5] }, { frame: 9, cells: [1] }]));
+  const field = new BeliefField();
+  const belief = { info, bytes: payload(), declared };
+  const flagsAt = (frame) => {
+    field.sync(belief, 'run', info.firstTimeMs + info.stepMs, frame);
+    const data = field.texture.image.data;
+    const flags = [];
+    for (let texRow = 0; texRow < NY; texRow++) {
+      for (let col = 0; col < NX; col++) {
+        const g = data[(texRow * NX + col) * 4 + 1];
+        assert.equal(g & 0xfe, 201 & 0xfe, 'the intensity keeps its other seven bits');
+        if (g & 1) flags.push(`${NY - 1 - texRow}:${col}`);
+      }
+    }
+    return flags.sort();
+  };
+  assert.equal(field.declaredGiven, false);
+  assert.deepEqual(flagsAt(4), ['0:0', '1:2']);
+  assert.equal(field.declaredGiven, true);
+  assert.deepEqual(flagsAt(9), ['0:1'], 'another hidden pass, another list');
+  assert.deepEqual(flagsAt(7), [], 'a pass the run lists nothing for');
+  assert.deepEqual(flagsAt(null), [], 'no hidden pass shown yet');
+});
+
+test('a run without declared cells, or with a list on another grid, leaves the intensity byte whole', async () => {
+  const { parseDeclaredCells } = await import('./beliefField.ts');
+  const field = new BeliefField();
+  field.sync({ info, bytes: payload() }, 'run', info.firstTimeMs + info.stepMs, 4);
+  assert.equal(field.declaredGiven, false);
+  assert.equal(field.texture.image.data[1], 201);
+  const other = parseDeclaredCells(declaredBlock([{ frame: 4, cells: [0] }], { nx: NX + 1 }));
+  field.sync({ info, bytes: payload(), declared: other }, 'run2', info.firstTimeMs + info.stepMs, 4);
+  assert.equal(field.declaredGiven, false);
+  assert.equal(field.texture.image.data[1], 201);
+});
+
+test('a declared cell widens the part of the region that is drawn, even where the belief holds nothing', async () => {
+  const { parseDeclaredCells } = await import('./beliefField.ts');
+  const empty = new Uint8Array(STEPS * NY * NX * 2);
+  const declared = parseDeclaredCells(declaredBlock([{ frame: 2, cells: [0] }]));
+  const field = new BeliefField();
+  field.sync({ info, bytes: empty, declared }, 'run', info.firstTimeMs, null);
+  assert.deepEqual([field.box.x, field.box.y, field.box.z, field.box.w], [0, 0, 0, 0]);
+  field.sync({ info, bytes: empty, declared }, 'run', info.firstTimeMs, 2);
+  assert.ok(field.box.z > field.box.x && field.box.w > field.box.y);
+});
