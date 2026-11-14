@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '../../app/store';
 import { ComparePlane } from '../../compare/ComparePlane';
-import { groundOfRun, playBlocks, readPlay, sameLooks, seenRows, shareOfCeiling, signed, type PlaySummary } from '../../compare/blocks';
+import {
+  gainScale,
+  groundOfRun,
+  playBlocks,
+  readPlay,
+  sameLooks,
+  seenRows,
+  SEES_THE_ANSWER,
+  SEES_THE_ANSWER_LINE,
+  signed,
+  twinLine,
+  type PlaySummary,
+} from '../../compare/blocks';
 import type { CompareAnchor } from '../../compare/types';
 import { platformName } from '../../content/realRuns';
 import { usePlays } from './usePlays';
@@ -9,39 +21,36 @@ import './agent.css';
 
 /**
  * The Agent part's picture: the round on the open fire, one block per player. A block says which player, where it
- * looked (its tiles stay lit, numbered in order, with what its looks found) and what it gained against the
- * ceiling. It fills its parent. It reads the place and the run from the workspace and asks for the plays itself;
- * the shell only has to mount it where the stage is.
+ * looked (its tiles stay lit, numbered in order, with what its looks found) and what it gained, on a bar that
+ * shares one scale with the others. No player is the measure of another. It fills its parent. It reads the place
+ * and the run from the workspace and asks for the plays itself; the shell only has to mount it where the stage is.
  */
 
 /** Time between two looks while a play is watched, ms. */
 const LOOK_MS = 1100;
 /** Room kept under the row of blocks: the label, then the picked player's card. Pixels. */
-const UNDER_BLOCKS = 364;
+const UNDER_BLOCKS = 380;
 /** Where the card starts under a block's lowest corner, below the label. Pixels. */
-const CARD_BELOW = 112;
+const CARD_BELOW = 128;
 const CARD_WIDTH = 400;
 
-/** Under a block: the player, its gain, and the gain as a share of the ceiling's on a bar. */
-function PlayerLabel({ play, ceiling, shown, twin }: { play: PlaySummary; ceiling: number | null; shown: number | null; twin: string | undefined }) {
+/** Under a block: the player, its gain, the gain on a bar of the row's one scale, and one line about it. */
+function PlayerLabel({ play, scale, shown, line }: { play: PlaySummary; scale: number | null; shown: number | null; line: string | null }) {
   // While a play is watched, the gain so far: the rewards of the looks on show
   const looks = shown === null ? play.looks : play.looks.slice(0, shown);
   const whole = shown === null || shown >= play.looks.length;
   const gain = whole ? play.gain : looks.every((l) => l.reward !== null) ? looks.reduce((a, l) => a + (l.reward ?? 0), 0) : null;
-  const share = shareOfCeiling(gain, ceiling);
+  const fill = gain !== null && scale !== null ? Math.min(100, Math.max(0, (gain / scale) * 100)) : null;
   return (
     <div className="agent-label sys-plate">
       <div className="sys-title">{play.name}</div>
-      <div className="agent-label__gain">
-        {gain !== null && <span className="sys-value">{signed(gain)}</span>}
-        {share !== null && <span className="sys-label">{share >= 0 ? `${share}% of the Ceiling` : 'below where it started'}</span>}
-      </div>
-      {share !== null && (
-        <div className="sys-readout__bar" style={{ ['--fill' as string]: `${Math.min(100, Math.max(0, share))}%` }}>
+      <div className="agent-label__gain">{gain !== null && <span className="sys-value">{signed(gain)}</span>}</div>
+      {fill !== null && (
+        <div className="sys-readout__bar" style={{ ['--fill' as string]: `${fill}%` }}>
           <span />
         </div>
       )}
-      <div className="sys-fine">{whole && twin ? `the same looks as ${twin}` : '\u00a0'}</div>
+      <div className="sys-fine">{line ?? '\u00a0'}</div>
     </div>
   );
 }
@@ -140,8 +149,15 @@ export function AgentPicture() {
               ? 'This round is on other ground than the run on show, so it cannot be drawn here.'
               : null;
 
-  const ceiling = useMemo(() => (plays.state === 'plays' && plays.ceiling ? readPlay(plays.ceiling) : null), [plays]);
+  const scale = useMemo(() => gainScale(summaries.map((p) => p.gain)), [summaries]);
   const twins = useMemo(() => sameLooks(summaries), [summaries]);
+  // One line under a player: what the one that sees the answer chooses, or the rule a player's looks equal
+  const lineOf = (play: PlaySummary): string | null => {
+    if (play.id === SEES_THE_ANSWER) return SEES_THE_ANSWER_LINE;
+    const twin = twins.get(play.id);
+    return twin && looks === null ? twinLine(play.id, twin) : null;
+  };
+  const listed = plays.state === 'plays' ? plays.listed : null;
   const pickedPlay = summaries.find((p) => p.id === picked);
   const pickedAnchor = anchors.find((a) => a.id === picked);
   const start = summaries[0]?.scoreStart ?? null;
@@ -154,12 +170,13 @@ export function AgentPicture() {
         <ComparePlane
           blocks={blocks}
           labelSpace={UNDER_BLOCKS}
+          perRow={blocks.length}
           ariaLabel="The players of this round"
           onPick={(id) => setPicked((was) => (was === id ? null : id))}
           onAnchors={setAnchors}
           renderLabel={(block) => {
             const play = summaries.find((p) => p.id === block.id);
-            return play ? <PlayerLabel play={play} ceiling={ceiling?.gain ?? null} shown={looks} twin={twins.get(play.id)} /> : null;
+            return play ? <PlayerLabel play={play} scale={scale} shown={looks} line={lineOf(play)} /> : null;
           }}
         />
       )}
@@ -173,9 +190,8 @@ export function AgentPicture() {
           </button>
           <span className="sys-label">
             Lit tiles: where a player looked, in order. Filled marks: the VIIRS detections its looks found. Outlines: the MODIS detections every
-            player could see.
-            {ceiling?.gain != null ? ` The Ceiling sees the answer and gains ${signed(ceiling.gain)}` : ''}
-            {typeof start === 'number' ? `${ceiling?.gain != null ? ',' : ' The round starts'} from a score of ${start.toFixed(3)}.` : ceiling?.gain != null ? '.' : ''}
+            player could see. Bars: each gain on one scale{typeof start === 'number' ? `, from a score of ${start.toFixed(3)}` : ''}.
+            {listed !== null && listed > summaries.length ? ` These are the ${summaries.length} players this page names, of the ${listed} the backend can play.` : ''}
           </span>
         </div>
       )}

@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
-import { HttpError, NOT_RECORDED_LINE, NotRecorded, postJson } from '../../lib/api';
-import { PLAYERS } from '../../compare/blocks';
+import { getJson, HttpError, NOT_RECORDED_LINE, NotRecorded, postJson } from '../../lib/api';
+import { PLAYERS, SEES_THE_ANSWER } from '../../compare/blocks';
 
 /**
  * The players' plays of the round on the open fire, from the play route, one player at a time. Each play is a
  * round of its own and is what a recorded page holds. A play holds detections of the hidden satellite, so the
- * caller holds it back while a person's own round is under way. A player whose play does not answer is left out.
- * The ceiling's play comes with them, as the measure of what could be gained.
+ * caller holds it back while a person's own round is under way.
+ *
+ * Which players: the five the page names (`PLAYERS`), in that order, however many the backend lists. A player
+ * whose play does not answer is left out. The one that reads the hidden detections is asked for as the route
+ * requires, with its flag.
  */
 export type Plays =
   | { state: 'idle' | 'held' | 'loading' }
-  | { state: 'plays'; plays: unknown[]; ceiling: unknown | null }
+  | { state: 'plays'; plays: unknown[]; listed: number | null }
   | { state: 'closed' | 'unserved' | 'failed'; line: string };
 
 const asked = new Map<string, Promise<Plays>>();
@@ -20,22 +23,21 @@ async function ask(regionId: string, start: string): Promise<Plays> {
   let missing: string | null = null;
   // One at a time: a play costs a round's worth of work on the server
   for (const p of PLAYERS) {
-    if (p.key === 'oracle') continue;
     try {
-      plays.push(await postJson<unknown>('/api/env/next_look/play', { region_id: regionId, start, player: p.key }));
+      const body = { region_id: regionId, start, player: p.key, ...(p.key === SEES_THE_ANSWER ? { ceiling: true } : {}) };
+      plays.push(await postJson<unknown>('/api/env/next_look/play', body));
     } catch (e) {
       // A closed window is closed for every player; a play that is not there leaves that player out
       if (e instanceof HttpError && e.status === 409) return { state: 'closed', line: e.message };
       if (e instanceof NotRecorded) missing = NOT_RECORDED_LINE;
-      else if (e instanceof HttpError && e.status === 404) missing = missing ?? e.message;
+      else if (e instanceof HttpError && (e.status === 404 || e.status === 400)) missing = missing ?? e.message;
       else return { state: 'failed', line: e instanceof Error ? e.message : String(e) };
     }
   }
   if (plays.length === 0) return { state: 'unserved', line: missing ?? 'No play of this round is served.' };
-  // The ceiling reads the hidden rows and is asked for as such. It is the measure, not a player; without it the
-  // players are shown with their gains alone.
-  const ceiling = await postJson<unknown>('/api/env/next_look/play', { region_id: regionId, start, player: 'oracle', ceiling: true }).catch(() => null);
-  return { state: 'plays', plays, ceiling };
+  // How many players the backend can play, so the picture can say it shows five of them
+  const listing = await getJson<{ players?: unknown[] }>('/api/env/next_look/players').catch(() => null);
+  return { state: 'plays', plays, listed: Array.isArray(listing?.players) ? listing.players.length : null };
 }
 
 /** `hold` is true while a person's own round on this fire is under way: nothing is asked and nothing is shown. */

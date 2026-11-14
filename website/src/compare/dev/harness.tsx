@@ -4,7 +4,7 @@
  *
  *   ?use=ways     one fire three ways (region, start, frame, cut=0, revealed=1)
  *   ?use=places   the featured fires of the places registry
- *   ?use=players  one block per player of a round (region, start, ceiling=1)
+ *   ?use=players  one block per player of a round (region, start, answer=1)
  *   ?use=agent    the Agent part's picture, inside a stand-in for the workspace (region, start)
  *   ?use=fires    the featured fires as the place screen mounts them, in a box the size of its slot (h, pick)
  *   ?use=reveal   one fire three ways as World model mounts it, inside a stand-in for the workspace (region, start, pass)
@@ -132,7 +132,7 @@ async function playersView(): Promise<View> {
     await new Promise((r) => setTimeout(r, 3000));
     end = (await getJson<Any>('/api/env/next_look/state', { round_id: state.round_id })).end ?? end;
   }
-  const blocks = playerBlocks(groundOfRun(run), state, end, { ceiling: Q.get('ceiling') === '1' });
+  const blocks = playerBlocks(groundOfRun(run), state, end, { seesTheAnswer: Q.get('answer') === '1' });
   return {
     title: run.region.name,
     line: `${day(state.episode.first_overpass_utc)}. The same round, ${state.episode.budget} looks each. Numbers give the order of the looks.`,

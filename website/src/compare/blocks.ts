@@ -15,14 +15,28 @@ export const WORDS = {
   hidden: 'hidden',
 } as const;
 
-/** The players of a round, by the product's names, in the order they are shown. */
+/**
+ * The players a picture shows: the five the page names, in the page's order, whatever else the backend can play.
+ * The last reads the hidden detections; it is named for what it does and is no measure of the others, because a
+ * player that also chooses when to look can stand above it.
+ */
 export const PLAYERS: readonly { key: string; name: string }[] = [
   { key: 'random', name: 'Chance' },
   { key: 'latest_modis', name: 'Latest MODIS' },
   { key: 'least_sure', name: 'Least sure' },
   { key: 'learned', name: 'Learned agent' },
-  { key: 'oracle', name: 'Ceiling' },
+  { key: 'oracle', name: 'Sees the answer' },
 ];
+
+/** The id of the player that reads the hidden detections, and the line that says what it chooses. */
+export const SEES_THE_ANSWER = 'oracle';
+export const SEES_THE_ANSWER_LINE = 'chooses where, at the evenly spread looks';
+
+/**
+ * What a player's block says when its looks equal an earlier player's. The learned agent is said to amount to that
+ * rule on this round; any other player made the same looks.
+ */
+export const twinLine = (id: string, twin: string): string => (id === 'learned' ? `amounts to ${twin} here` : `the same looks as ${twin}`);
 
 type Obj = Record<string, unknown>;
 const obj = (x: unknown): Obj => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Obj) : {});
@@ -343,8 +357,8 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
 // The players of a round
 
 export interface PlayerBlocksOptions {
-  /** Show the Ceiling, which sees the answer. Default false. */
-  ceiling?: boolean;
+  /** Show the player that sees the answer. Default false. */
+  seesTheAnswer?: boolean;
   /** Which of Chance's draws to show. Default the first. */
   draw?: number;
   /** Show only the first looks each player took, for a replay. Default all of them. */
@@ -382,7 +396,7 @@ export function playerBlocks(ground: CompareGround | null, start: unknown, end: 
   // The first player to make each run of looks, so that a later one with the same looks can say so
   const sameLooks = new Map<string, string>();
   for (const player of PLAYERS) {
-    if (player.key === 'oracle' && !opts.ceiling) continue;
+    if (player.key === SEES_THE_ANSWER && !opts.seesTheAnswer) continue;
     const ref = obj(reference[player.key]);
     let actions: unknown[];
     let gain: number | null;
@@ -397,7 +411,7 @@ export function playerBlocks(ground: CompareGround | null, start: unknown, end: 
     } else {
       actions = arr(ref.actions);
       gain = num(ref.gain);
-      if (player.key === 'oracle') note = 'sees the answer';
+      if (player.key === SEES_THE_ANSWER) note = SEES_THE_ANSWER_LINE;
     }
     if (actions.length === 0) continue;
     const every: { tile: number; look: number }[] = [];
@@ -432,7 +446,8 @@ export function playerBlocks(ground: CompareGround | null, start: unknown, end: 
     if (gain !== null && whole) lines.push(`score gain ${signed(gain)}`);
     const looksKey = every.map((t) => `${t.look}:${t.tile}`).join(',');
     const twin = whole ? sameLooks.get(looksKey) : undefined;
-    if (twin) lines.push(`the same looks as ${twin}`);
+    if (note && whole && player.key === SEES_THE_ANSWER) lines.push(note);
+    else if (twin) lines.push(twinLine(player.key, twin));
     else if (note && whole) lines.push(note);
     if (!sameLooks.has(looksKey)) sameLooks.set(looksKey, player.name);
     blocks.push({
@@ -567,8 +582,8 @@ export function playBlocks(ground: CompareGround | null, plays: readonly unknown
     if (gain !== null) lines.push(`score gain ${signed(gain)}`);
     const looksKey = play.looks.map((l) => `${l.decision}:${l.tile}`).join(',');
     const twin = all ? sameLooks.get(looksKey) : undefined;
-    if (twin) lines.push(`the same looks as ${twin}`);
-    else if (play.id === 'oracle') lines.push('sees the answer');
+    if (play.id === SEES_THE_ANSWER) lines.push(SEES_THE_ANSWER_LINE);
+    else if (twin) lines.push(twinLine(play.id, twin));
     if (!sameLooks.has(looksKey)) sameLooks.set(looksKey, play.name);
     const marks: CompareMark[] = [{ kind: 'tiles', rows: rowsN, cols: colsN, looked: shown.map((l) => l.tile), veil: true }];
     if (opts.seen && opts.seen.length > 0) marks.push({ kind: 'detections', instrument: 'modis', rows: opts.seen, weight: 'quiet' });
@@ -610,8 +625,8 @@ export function sameLooks(plays: readonly PlaySummary[]): Map<string, string> {
   return out;
 }
 
-/** A gain as a share of the ceiling's gain, in whole percent; null when there is no ceiling to measure against. */
-export function shareOfCeiling(gain: number | null, ceiling: number | null): number | null {
-  if (gain === null || ceiling === null || !(ceiling > 0)) return null;
-  return Math.round((gain / ceiling) * 100);
+/** The scale of a row of gain bars: the largest gain among them, or null when none is above nothing. */
+export function gainScale(gains: readonly (number | null)[]): number | null {
+  const top = Math.max(0, ...gains.filter((g): g is number => g !== null));
+  return top > 0 ? top : null;
 }

@@ -2,7 +2,7 @@
 // not been shown: no row of the hidden satellite before the reveal, and for a player only what its own looks found.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cutAround, fireBlock, groundOfRun, playBlocks, playerBlocks, readPlay, sameLooks, seenRows, shareOfCeiling, signed, threeWays } from './blocks.ts';
+import { cutAround, fireBlock, gainScale, groundOfRun, playBlocks, playerBlocks, PLAYERS, readPlay, sameLooks, seenRows, signed, threeWays, twinLine } from './blocks.ts';
 import { levelLines } from './marks.ts';
 
 const BOX = [-121, 39, -120, 40];
@@ -155,10 +155,11 @@ test('a player block holds only what that player own looks revealed', () => {
   assert.equal(found(3).length, 1); // tile 0 twice: the second look found nothing there
   assert.equal(blocks[3].pins[0].text, '1 2');
   assert.equal(blocks[2].label.lines[1], 'score gain -0.004');
-  // The Ceiling took the same looks as Latest MODIS in this round, and its block says so
-  const five = playerBlocks(groundOfRun(run), start, end, { ceiling: true });
+  // The fifth is named for what it does and carries the line on what it chooses, whatever its looks equal
+  const five = playerBlocks(groundOfRun(run), start, end, { seesTheAnswer: true });
   assert.equal(five.length, 5);
-  assert.equal(five[4].label.lines[2], 'the same looks as Latest MODIS');
+  assert.equal(five[4].label.title, 'Sees the answer');
+  assert.equal(five[4].label.lines[2], 'chooses where, at the evenly spread looks');
   assert.ok(!five[1].label.lines.some((l) => l.startsWith('the same looks')));
 });
 
@@ -227,7 +228,7 @@ test('a play becomes a block with only the detections its own looks handed over,
 });
 
 test('two plays with the same looks: the second says so, and only once every look stands', () => {
-  const twin = { play: { ...play.play, player: { id: 'learned', label: 'Learned agent' } } };
+  const twin = { play: { ...play.play, player: { id: 'latest_modis', label: 'Latest MODIS' } } };
   const blocks = playBlocks(groundOfRun(run), [play, twin]);
   assert.ok(!blocks[0].label.lines.some((l) => l.startsWith('the same looks')));
   assert.equal(blocks[1].label.lines[2], 'the same looks as Least sure');
@@ -282,13 +283,30 @@ test('a block takes the run terrain pack image when the run names one, and satel
   assert.equal(groundOfRun(noSmall).imageUrl, '/api/runs/x/terrain/ortho_8192.jpg');
 });
 
-test('a gain against the ceiling is a share of the ceiling gain, and nothing without a ceiling', () => {
-  assert.equal(shareOfCeiling(0.1182, 0.1213), 97);
-  assert.equal(shareOfCeiling(0.0069, 0.1213), 6);
-  assert.equal(shareOfCeiling(-0.011, 0.1213), -9);
-  assert.equal(shareOfCeiling(0.1, null), null);
-  assert.equal(shareOfCeiling(0.1, 0), null);
-  assert.equal(shareOfCeiling(null, 0.1), null);
+test('gain bars share one scale, the largest gain among them, and there is none when nothing was gained', () => {
+  assert.equal(gainScale([0.0247, 0.1015, 0.1144, 0.1144, 0.1156]), 0.1156);
+  assert.equal(gainScale([0.02, null, 0.3]), 0.3);
+  assert.equal(gainScale([-0.01, 0, null]), null);
+  assert.equal(gainScale([]), null);
+});
+
+test('no player is called a ceiling, and none is given as a share of another', () => {
+  assert.deepEqual(PLAYERS.map((p) => p.name), ['Chance', 'Latest MODIS', 'Least sure', 'Learned agent', 'Sees the answer']);
+  const answer = { play: { ...play.play, player: { id: 'oracle', label: 'Oracle' } } };
+  const words = JSON.stringify([
+    ...playBlocks(groundOfRun(run), [play, answer]).map((b) => b.label),
+    ...playerBlocks(groundOfRun(run), start, end, { seesTheAnswer: true }).map((b) => b.label),
+  ]);
+  assert.ok(!/ceiling/i.test(words));
+  assert.ok(!words.includes('%'));
+  assert.ok(!/oracle/i.test(words));
+});
+
+test('a learned agent whose looks equal a rule is said to amount to that rule; another player made the same looks', () => {
+  assert.equal(twinLine('learned', 'Least sure'), 'amounts to Least sure here');
+  assert.equal(twinLine('least_sure', 'Latest MODIS'), 'the same looks as Latest MODIS');
+  const learned = { play: { ...play.play, player: { id: 'learned', label: 'Learned' } } };
+  assert.equal(playBlocks(groundOfRun(run), [play, learned])[1].label.lines[2], 'amounts to Least sure here');
 });
 
 test('the player whose looks equal an earlier player is named with that player, the first is not', () => {

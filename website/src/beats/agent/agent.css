@@ -41,15 +41,22 @@
   white-space: nowrap;
 }
 
-/* Under a block: the player, its gain, and the gain against the ceiling on a bar. */
+/* Under a block: the player, its gain, the gain on a bar of the row's one scale, and one line about it. */
 .agent-label {
   display: grid;
+  /* One fixed column, so that every block's bar has the same full length whatever its words */
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 2px;
-  width: 232px;
+  width: 248px;
   padding: var(--sys-s2) var(--sys-s3);
   text-align: center;
   white-space: nowrap;
+}
+
+.agent-label .sys-fine {
+  min-height: calc(2 * var(--sys-lh-fine));
+  white-space: normal;
 }
 
 .agent-label__gain {
