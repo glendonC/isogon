@@ -11,8 +11,9 @@ the page looks answers up in:
 
 Without `--plan` it builds the demo path's plan from `GET /api/regions`: the regions, the evidence, each region's
 calendar and start list, each named fire's box calendar, and for every featured fire that is not a blind test fire
-its run held out and then revealed, the run's assets, its passes, and one round of next look played by the least sure
-rule. Nothing of a blind test fire is run, held out or played.
+its run held out and then revealed, the run's assets, its passes, one round of next look played by the least sure
+rule, and every reference player's play of that episode step by step (the oracle as the ceiling). Nothing of a blind
+test fire is run, held out or played.
 
 Round ids are random on a live server; each round is renamed `nl-rec-<8 hex>` in every stored answer and key, so the
 recorded round replays with one id. Imagery published for viewing only (Esri World Imagery, and what is derived from
@@ -93,6 +94,8 @@ class Recorder:
         self.rounds: list[dict[str, Any]] = []
         self.plan_run: list[dict[str, Any]] = []
         self.round_ids: dict[str, str] = {}          # live id -> recorded id
+        self.plays: list[dict[str, Any]] = []
+        self.plays_note: str | None = None
 
     # ---- HTTP and storage ----------------------------------------------------------------------------------------
 
@@ -202,6 +205,21 @@ class Recorder:
             self.parsed.pop(state_key, None)
         self.rounds.append({"episode_from": reset_body, "round_id": rec_id, "policy": policy_name, "steps": steps})
 
+    def record_plays(self, episode: dict[str, Any]) -> None:
+        """Every reference player's play of one episode step by step (`POST /api/env/next_look/play`): the constant
+        tile once per tile, the oracle as the ceiling. Skipped, and said so, when the backend has no play yet."""
+        listing = self.fetch("GET", "/api/env/next_look/players")
+        if not isinstance(listing, dict) or "players" not in listing:
+            self.plays_note = "the backend serves no step by step play (GET /api/env/next_look/players did not answer)"
+            return
+        n_tiles = int(episode["tiles"][0]) * int(episode["tiles"][1])
+        for p in listing["players"]:
+            ids = [f"constant_{t}" for t in range(n_tiles)] if p["id"] == "constant" else [p["id"]]
+            for pid in ids:
+                body = {**episode, "player": pid, **({"ceiling": True} if p.get("reads") == "the hidden rows" else {})}
+                self.fetch("POST", "/api/env/next_look/play", body=body)
+                self.plays.append({"episode_from": episode, "player": pid})
+
     # ---- the default plan ----------------------------------------------------------------------------------------
 
     def record_default(self, current: bool = False) -> None:
@@ -233,8 +251,9 @@ class Recorder:
                 if first and last:
                     end = (_dt.date.fromisoformat(last[:10]) + _dt.timedelta(days=1)).isoformat()
                     self.fetch("GET", "/api/passes", {"region_id": rid, "start": first[:10], "end": end})
-                self.play_round({"region_id": rid, "start": start, "tiles": ROUND_TILES, "budget": ROUND_BUDGET},
-                                least_sure, "least_sure")
+                episode = {"region_id": rid, "start": start, "tiles": ROUND_TILES, "budget": ROUND_BUDGET}
+                self.play_round(episode, least_sure, "least_sure")
+                self.record_plays(episode)
 
     def record_plan(self, plan: dict[str, Any]) -> None:
         for r in plan.get("requests", []):
@@ -257,6 +276,8 @@ class Recorder:
             "canonical_json": "sort_keys, separators ',' and ':', no ASCII escaping",
             "entries": dict(sorted(self.entries.items())),
             "rounds": self.rounds,
+            "plays": self.plays,
+            **({"plays_note": self.plays_note} if self.plays_note else {}),
             "withheld": self.withheld,
             "plan": self.plan_run,
         }
@@ -295,7 +316,7 @@ def _main(argv: list[str] | None = None) -> int:
     bad = rec.check(_map_key())
     stored = [e for e in rec.entries.values() if "file" in e]
     print(json.dumps({"index": str(index.name), "entries": len(rec.entries), "stored": len(stored),
-                      "withheld": len(rec.withheld), "rounds": len(rec.rounds),
+                      "withheld": len(rec.withheld), "rounds": len(rec.rounds), "plays": len(rec.plays),
                       "bytes": sum(e["bytes"] for e in stored), "seconds": round(time.time() - t0, 1),
                       "not_ok": [k for k, e in rec.entries.items() if e.get("status", 200) != 200],
                       "files_failing_the_check": bad}, indent=1))

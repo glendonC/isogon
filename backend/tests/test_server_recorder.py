@@ -71,6 +71,11 @@ class StandIn:
             done = self.decision >= 2
             return js({"round_id": LIVE_ROUND, "done": done, "observation": None if done else self._obs(),
                        **({"end": {"reference_status": "ready"}} if done else {})})
+        if u.path == "/api/env/next_look/players":
+            return js({"players": [{"id": "least_sure", "reads": "the observation"}, {"id": "constant", "reads": "nothing"},
+                                   {"id": "oracle", "reads": "the hidden rows"}]})
+        if u.path == "/api/env/next_look/play":
+            return js({"play_id": "play-" + body["player"], "play": {"player": {"id": body["player"]}}})
         if u.path == "/api/env/next_look/state":
             return js({"round_id": LIVE_ROUND, "done": self.decision >= 2, "end": {"reference_status": "ready"}})
         return js({"path": u.path})
@@ -110,6 +115,11 @@ class RecorderTests(unittest.TestCase):
             self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": 1, "decision": 0, "round_id": rid}), entries)
             text = "".join(p.read_text(errors="replace") for p in (Path(tmp) / "files").iterdir()) + json.dumps(index)
             self.assertNotIn(LIVE_ROUND, text)
+            # every reference player's play: the constant tile once per tile, the oracle only as the ceiling
+            plays = [b for m, path, b in backend.seen if path == "/api/env/next_look/play"]
+            self.assertEqual(len(plays), 1 + 16 + 1)
+            self.assertEqual([b.get("ceiling") for b in plays if b["player"] == "oracle"], [True])
+            self.assertFalse(any(b.get("ceiling") for b in plays if b["player"] != "oracle"))
             self.assertEqual(rec.check("not-in-any-file"), [])
             # a stored file holding the key is flagged
             (Path(tmp) / "files" / "planted.json").write_text('{"u": "x?MAP_KEY=abc"}')
