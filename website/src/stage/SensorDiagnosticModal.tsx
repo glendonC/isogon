@@ -58,8 +58,35 @@ function fmt(n: number, digits = 1): string {
   return n.toFixed(digits);
 }
 
+/** Each instrument's orbit and scan, as the sensor model states them (`geometry_metadata`). */
+interface Orbit {
+  modisKm: number | null;
+  viirsKm: number | null;
+  modisEdgeDeg: number | null;
+  viirsEdgeDeg: number | null;
+  /** The fire power VIIRS detects half the time at night, straight down (`thresholds_50pct_mw`). */
+  viirsNightNadirMw: number | null;
+}
+
+function orbitOf(raw: unknown): Orbit {
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const g = o.geometry_metadata && typeof o.geometry_metadata === 'object' ? (o.geometry_metadata as Record<string, unknown>) : {};
+  const t = o.thresholds_50pct_mw && typeof o.thresholds_50pct_mw === 'object' ? (o.thresholds_50pct_mw as Record<string, unknown>) : {};
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  return {
+    modisKm: n(g.modis_altitude_km),
+    viirsKm: n(g.viirs_altitude_km),
+    modisEdgeDeg: n(g.modis_max_scan_angle_deg),
+    viirsEdgeDeg: n(g.viirs_max_scan_angle_deg),
+    viirsNightNadirMw: n(t.viirs_night_nadir),
+  };
+}
+
+const km = (v: number) => Math.round(v).toLocaleString('en-US');
+const deg = (v: number) => `${Number.isInteger(v) ? v : v.toFixed(1)}°`;
+
 /** Page 1: the satellite looking down at the scan angle, and both pixels drawn to scale. */
-function PixelSizeVisual({ angle, sample }: { angle: number; sample: SensorCurveSample }) {
+function PixelSizeVisual({ angle, sample, orbit }: { angle: number; sample: SensorCurveSample; orbit: Orbit }) {
   const satX = W / 2;
   const satY = 46;
   const groundY = 214;
@@ -94,7 +121,9 @@ function PixelSizeVisual({ angle, sample }: { angle: number; sample: SensorCurve
         ground
       </text>
       <text x={satX + edgeX - 4} y={groundY + 18} textAnchor="end" className="iso-brief__axis">
-        swath edge, 55°
+        {orbit.modisEdgeDeg !== null && orbit.viirsEdgeDeg !== null
+          ? `swath edge: MODIS ${deg(orbit.modisEdgeDeg)}, VIIRS ${deg(orbit.viirsEdgeDeg)}`
+          : 'swath edge'}
       </text>
       <line x1={satX} y1={satY} x2={hitX} y2={groundY} stroke={INK_CURTAIN} strokeWidth={1.5} />
       {angle > 0.5 && (
@@ -114,7 +143,9 @@ function PixelSizeVisual({ angle, sample }: { angle: number; sample: SensorCurve
       <rect x={satX - 7} y={satY - 7} width={14} height={14} fill={INK_HARM} />
       <line x1={satX - 34} y1={satY} x2={satX + 34} y2={satY} stroke={INK_HARM} strokeWidth={3} />
       <text x={satX + 44} y={satY + 4} className="iso-brief__axis">
-        satellite, 705 km up
+        {orbit.modisKm !== null && orbit.viirsKm !== null
+          ? `MODIS ${km(orbit.modisKm)} km up, VIIRS ${km(orbit.viirsKm)} km`
+          : 'satellite'}
       </text>
 
       <text x={24} y={planY - 48} className="iso-brief__axis">
@@ -338,11 +369,15 @@ export function SensorDiagnosticModal({
   const closeRef = useRef<HTMLButtonElement | null>(null);
   useDialogFocus(visible && !embedded, drawerRef, closeRef);
 
+  // The page and angle keys work in both forms; inside the reading sheet, Escape belongs to the sheet.
   useEffect(() => {
-    if (!visible || embedded) return;
+    if (!visible) return;
     const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'Escape') {
-        onClose();
+        if (!embedded) onClose();
       } else if (e.key === 'ArrowRight') {
         setPage((p) => Math.min(PAGES.length - 1, p + 1));
       } else if (e.key === 'ArrowLeft') {
@@ -369,6 +404,7 @@ export function SensorDiagnosticModal({
     [diagnostics.curves],
   );
   const sample = useMemo(() => nearestSample(curves, angle), [curves, angle]);
+  const orbit = useMemo(() => orbitOf(model?.raw), [model]);
 
   if (!visible) return null;
 
@@ -419,7 +455,7 @@ export function SensorDiagnosticModal({
 
         <div className="iso-brief__body" key={page}>
           <div className="iso-brief__visual">
-            {page === 0 && <PixelSizeVisual angle={angle} sample={sample} />}
+            {page === 0 && <PixelSizeVisual angle={angle} sample={sample} orbit={orbit} />}
             {page === 1 && <DetectionVisual angle={angle} curves={curves} sample={sample} />}
             {page === 2 && overlap && <OneRecordVisual overlap={overlap} />}
           </div>
@@ -462,19 +498,22 @@ export function SensorDiagnosticModal({
                     <span className="iso-brief__big" style={{ color: INK_MODIS }}>
                       {fmt(sample.modisMinFrpMw)}
                     </span>
-                    <span className="iso-brief__unit">MW for MODIS</span>
+                    <span className="iso-brief__unit">MW for MODIS, by day</span>
                   </div>
                   <div>
                     <span className="iso-brief__big" style={{ color: INK_VIIRS }}>
                       {fmt(sample.viirsMinFrpMw)}
                     </span>
-                    <span className="iso-brief__unit">MW for VIIRS</span>
+                    <span className="iso-brief__unit">MW for VIIRS, by day</span>
                   </div>
                 </div>
                 <p className="iso-brief__take">
-                  These are the fire powers each sensor detects half the time at {Math.round(angle)}°.
-                  Fires in between are in the VIIRS record and missing from the MODIS one, which is why
-                  raw counts jump when VIIRS joins in 2012.
+                  By day, these are the fire powers each sensor detects half the time at {Math.round(angle)}°.
+                  {orbit.viirsNightNadirMw !== null
+                    ? ` At night VIIRS sees smaller fires: ${fmt(orbit.viirsNightNadirMw)} MW half the time straight down.`
+                    : ''}{' '}
+                  Fires in between are in the VIIRS record and missing from the MODIS one, which is why raw counts
+                  jump when VIIRS joins in 2012.
                 </p>
               </>
             )}
@@ -483,8 +522,9 @@ export function SensorDiagnosticModal({
                 <>
                   <p className="iso-brief__lead">
                     Where both sensors fly, 2012 to 2025, VIIRS on Suomi NPP flags {overlap.ratio.toFixed(2)} times
-                    as many pixels as MODIS on Terra and Aqua over {overlapPlace ?? 'this box'}. Isogon scales the
-                    MODIS years by that ratio so the record is one series.
+                    as many pixels as MODIS on Terra and Aqua over {overlapPlace ?? 'this box'}. The burning calendar
+                    scales the MODIS months by that ratio so the record is one series. The fire estimate does not use
+                    it: in the blind test the ratio is one of the two baselines the estimate is scored against.
                   </p>
                   <div className="iso-brief__stats">
                     <div>
