@@ -56,6 +56,24 @@
           "source": "https://www.fire.ca.gov/incidents/2018/11/8/camp-fire"
         },
         {
+          "id": "chips_2012",
+          "name": "Chips Fire",
+          "first_day": "2012-07-29",
+          "last_day": "2012-08-31",
+          "burned_area": {
+            "value": 75431,
+            "unit": "acres"
+          },
+          "point": [
+            -121.27139,
+            40.00694
+          ],
+          "point_kind": "origin",
+          "blind_test_fire": false,
+          "source": "https://www.fire.ca.gov/incidents/2012/7/29/chips-fire",
+          "point_source": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_FireOccurrenceAndPerimeter_01/MapServer/9/query?where=firename%3D%27CHIPS%27%20AND%20fireyear%3D2012&outFields=*&f=json"
+        },
+        {
           "id": "park_2024",
           "name": "Park Fire",
           "first_day": "2024-07-24",
@@ -93,6 +111,57 @@
           "point_kind": "origin",
           "blind_test_fire": true,
           "source": "https://openmaps.gov.bc.ca/geo/pub/wfs?service=WFS&version=2.0.0&request=GetFeature&typeName=WHSE_LAND_AND_NATURAL_RESOURCE.PROT_HISTORICAL_INCIDENTS_SP&outputFormat=json&srsName=EPSG:4326&CQL_FILTER=FIRE_YEAR%3E%3D2012%20AND%20CURRENT_SIZE%3E50000"
+        },
+        {
+          "id": "stein_mountain_2023",
+          "name": "Stein Mountain fire (K71634)",
+          "first_day": "2023-07-12",
+          "last_day": "2023-10-20",
+          "burned_area": {
+            "value": 4734.3,
+            "unit": "hectares"
+          },
+          "point": [
+            -121.7151,
+            50.3474
+          ],
+          "point_kind": "origin",
+          "blind_test_fire": false,
+          "source": "https://openmaps.gov.bc.ca/geo/pub/wfs?service=WFS&version=2.0.0&request=GetFeature&typeName=pub:WHSE_LAND_AND_NATURAL_RESOURCE.PROT_HISTORICAL_INCIDENTS_SP&outputFormat=application/json&CQL_FILTER=FIRE_YEAR=2023%20AND%20FIRE_NUMBER%20IN%20('V11337','K71634','K71705')"
+        },
+        {
+          "id": "ponderosa_creek_2023",
+          "name": "Ponderosa Creek fire (K71705)",
+          "first_day": "2023-07-12",
+          "last_day": "2023-10-20",
+          "burned_area": {
+            "value": 5021.6,
+            "unit": "hectares"
+          },
+          "point": [
+            -121.8258,
+            50.3047
+          ],
+          "point_kind": "origin",
+          "blind_test_fire": false,
+          "source": "https://openmaps.gov.bc.ca/geo/pub/wfs?service=WFS&version=2.0.0&request=GetFeature&typeName=pub:WHSE_LAND_AND_NATURAL_RESOURCE.PROT_HISTORICAL_INCIDENTS_SP&outputFormat=application/json&CQL_FILTER=FIRE_YEAR=2023%20AND%20FIRE_NUMBER%20IN%20('V11337','K71634','K71705')"
+        },
+        {
+          "id": "kookipi_creek_2023",
+          "name": "Kookipi Creek fire (V11337)",
+          "first_day": "2023-07-08",
+          "last_day": "2023-12-06",
+          "burned_area": {
+            "value": 17405.9,
+            "unit": "hectares"
+          },
+          "point": [
+            -121.64,
+            49.9815
+          ],
+          "point_kind": "origin, south of the region's box; the burned area reaches into it",
+          "blind_test_fire": false,
+          "source": "https://openmaps.gov.bc.ca/geo/pub/wfs?service=WFS&version=2.0.0&request=GetFeature&typeName=pub:WHSE_LAND_AND_NATURAL_RESOURCE.PROT_HISTORICAL_INCIDENTS_SP&outputFormat=application/json&CQL_FILTER=FIRE_YEAR=2023%20AND%20FIRE_NUMBER%20IN%20('V11337','K71634','K71705')"
         },
         {
           "id": "elephant_hill_2017",

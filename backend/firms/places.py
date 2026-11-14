@@ -70,6 +70,10 @@ def _month_label(months: list[str]) -> str:
     return f"{first} and {last} {months[0][:4]}" if len(months) == 2 else f"{first} to {last} {months[0][:4]}"
 
 
+def _join(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
 def named_fire_entry(f: dict[str, Any]) -> dict[str, Any]:
     from backend.firms.real_calendar import box_text
 
@@ -95,10 +99,11 @@ def featured_periods(region_id: str, starts: list[dict[str, Any]], named: list[d
         y, m = int(months[-1][:4]), int(months[-1][5:7])
         last = _dt.date(y, m, _cal.monthrange(y, m)[1])
         top = max(g, key=lambda s: (int(s.get("modis_pixels_in_box") or 0), -_day(s["start"]).toordinal()))
-        name = next((f for f in named
-                     if _day(f["first_day"]) <= last and _last_day(f) >= first
-                     and w - NAME_MATCH_DEG <= f["point"][0] <= e + NAME_MATCH_DEG
-                     and so - NAME_MATCH_DEG <= f["point"][1] <= n + NAME_MATCH_DEG), None)
+        names = [f for f in named
+                 if _day(f["first_day"]) <= last and _last_day(f) >= first
+                 and w - NAME_MATCH_DEG <= f["point"][0] <= e + NAME_MATCH_DEG
+                 and so - NAME_MATCH_DEG <= f["point"][1] <= n + NAME_MATCH_DEG]
+        name = names[0] if names else None
         out.append({
             "id": f"{region_id}:{months[0]}",
             "region_id": region_id,
@@ -108,8 +113,9 @@ def featured_periods(region_id: str, starts: list[dict[str, Any]], named: list[d
             "last_day": last.isoformat(),
             "size": {"modis_pixels_in_box": int(top.get("modis_pixels_in_box") or 0), "at_start": top["start"],
                      "what": "MODIS pixels inside the region's box at the period's busiest start"},
-            "name": name["name"] if name else None,
+            "name": _join([f["name"] for f in names]) if names else None,
             "named_fire": name["id"] if name else None,
+            "named_fires": [f["id"] for f in names],
             "name_source": name["source"] if name else None,
             "blind_test_fire": bool(name and name.get("blind_test_fire")),
             **{field: None for field in PARTS.values()},
@@ -178,7 +184,7 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
                 for part, field in PARTS.items():
                     p[field] = got.get(part)
         for f in named:
-            f["featured_fire"] = next((p["id"] for p in featured if p["named_fire"] == f["id"]), None)
+            f["featured_fire"] = next((p["id"] for p in featured if f["id"] in p["named_fires"]), None)
         periods += featured
         out.append({
             "id": spec.id,

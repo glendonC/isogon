@@ -36,11 +36,11 @@ The names, dates, burned areas and points of the named fires in `backend/firms/p
 
 | Region | Fires | Pages |
 | --- | --- | --- |
-| `plumas_ca` | Dixie (2021), North Complex (2020), Camp (2018), Park (2024) | CAL FIRE incident pages (`https://www.fire.ca.gov/incidents/`), the NIFC Wildland Fire Incident Locations service (`https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations/FeatureServer/0`), CAL FIRE's list of the largest California wildfires |
-| `lytton_bc` | Lytton Creek (2021), Elephant Hill (2017) | BC Wildfire Service historical fire incidents, BC Data Catalogue (`https://openmaps.gov.bc.ca/geo/pub/wfs`, layer `PROT_HISTORICAL_INCIDENTS_SP`) |
+| `plumas_ca` | Dixie (2021), North Complex (2020), Camp (2018), Chips (2012), Park (2024) | CAL FIRE incident pages (`https://www.fire.ca.gov/incidents/`), the NIFC Wildland Fire Incident Locations service (`https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations/FeatureServer/0`), CAL FIRE's list of the largest California wildfires, the USDA Forest Service fire occurrence layer (`https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_FireOccurrenceAndPerimeter_01/MapServer`) |
+| `lytton_bc` | Lytton Creek (2021), Elephant Hill (2017), Stein Mountain, Ponderosa Creek and Kookipi Creek (2023) | BC Wildfire Service historical fire incidents, BC Data Catalogue (`https://openmaps.gov.bc.ca/geo/pub/wfs`, layer `PROT_HISTORICAL_INCIDENTS_SP`) |
 | `evia_greece` | Northern Evia (2021), Mati and eastern Attica (2018), Varnavas (2024) | Copernicus EMS rapid mapping activations EMSR527, EMSR300 and EMSR746 (`https://mapping.emergency.copernicus.eu/activations/`), the European Forest Fire Information System burnt areas (`https://api.effis.emergency.copernicus.eu/rest/2/burntareas/current/`) |
 
-Where two sources give different areas (the Northern Evia fire: 50,909 ha in the Copernicus activation as of 11 August 2021, 51,881 ha in EFFIS; the Mati fire: 1,275.9 ha for the Rafina area in Copernicus, 1,362 ha in EFFIS), the entry names the one it gives in `area_source`.
+Where two sources give different areas (the Northern Evia fire: 50,909 ha in the Copernicus activation as of 11 August 2021, 51,881 ha in EFFIS; the Mati fire: 1,275.9 ha for the Rafina area in Copernicus, 1,362 ha in EFFIS), the entry names the one it gives in `area_source`. The Chips Fire's entry gives CAL FIRE's 75,431 acres; the NIFC perimeter history gives 76,349.71 and MTBS 79,959. The Ponderosa Creek fire's entry gives the BC Data Catalogue's 12 July 2023; the BC Wildfire Service's incident feed gives 14 July as its discovery date.
 
 ## Elevation and imagery
 
