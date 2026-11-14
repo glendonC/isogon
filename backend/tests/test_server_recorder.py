@@ -90,7 +90,7 @@ class RecorderTests(unittest.TestCase):
     def test_the_default_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             backend = StandIn()
-            rec = Recorder("http://stand.in", Path(tmp), opener=backend)
+            rec = Recorder("http://stand.in", Path(tmp), opener=backend, recorded_windows=True)
             rec.record_default()
             rec.write_index()
             index = json.loads((Path(tmp) / "index.json").read_text())
@@ -122,6 +122,13 @@ class RecorderTests(unittest.TestCase):
             passes = [k for k in entries if k.startswith("GET /api/passes?")]
             self.assertEqual(len(passes), 2)
             self.assertEqual(sum("hidden=VIIRS" in k for k in passes), 1)
+            # without --recorded-windows, nothing of the test fire is asked at all
+            with tempfile.TemporaryDirectory() as tmp2:
+                quiet = StandIn()
+                plain = Recorder("http://stand.in", Path(tmp2), opener=quiet)
+                plain.record_default()
+                self.assertFalse(any((b or {}).get("start") == "2021-07-20" for _, _, b in quiet.seen))
+                self.assertIn("recorded_windows_note", json.loads(Path(plain.write_index()).read_text()))
             # every stored file is one the index names
             named = {e["file"] for e in entries.values() if "file" in e}
             self.assertEqual({f"files/{f.name}" for f in (Path(tmp) / "files").iterdir()}, named)

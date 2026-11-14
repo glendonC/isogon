@@ -47,6 +47,9 @@ US_IMAGERY: str = "usgs_naip"
 ROUND_TILES: list[int] = [4, 4]
 ROUND_BUDGET: int = 4
 ROUND_PLAYER: str = "least_sure"     # the reference player whose looks the recorded round takes
+RECORDED_WINDOWS_NOTE: str = ("the recorded test fires' runs with every satellite shown are not recorded: such a run "
+                              "still runs the scorer on its closed window until the model makes it skip the score "
+                              "there; record them with --recorded-windows once it does")
 EXT: dict[str, str] = {"application/json": "json", "text/csv": "csv", "image/jpeg": "jpg", "image/png": "png"}
 KEPT_HEADERS: tuple[str, ...] = ("X-Row-Count", "Content-Disposition")
 FORBIDDEN: tuple[bytes, ...] = (b"MAP_KEY=", b"/Users/", b"/home/", b"isogon-notes")
@@ -101,7 +104,8 @@ def least_sure(obs: dict[str, Any]) -> int:
 
 
 class Recorder:
-    def __init__(self, base: str, out: Path, opener: Callable[..., Any] | None = None) -> None:
+    def __init__(self, base: str, out: Path, opener: Callable[..., Any] | None = None,
+                 recorded_windows: bool = False) -> None:
         self.base = base.rstrip("/")
         self.out = Path(out)
         (self.out / "files").mkdir(parents=True, exist_ok=True)
@@ -113,6 +117,10 @@ class Recorder:
         self.plan_run: list[dict[str, Any]] = []
         self.round_ids: dict[str, str] = {}          # live id -> recorded id
         self.plays: list[dict[str, Any]] = []
+        # The run with every satellite shown on a recorded test fire's window still runs the scorer on that window
+        # until the model lane makes it skip the score there; it is recorded only when asked (--recorded-windows).
+        self.recorded_windows = bool(recorded_windows)
+        self.recorded_windows_note: str | None = None
         self.plays_note: str | None = None
 
     # ---- HTTP and storage ----------------------------------------------------------------------------------------
@@ -280,7 +288,10 @@ class Recorder:
                 start = fire["default_start"]
                 if fire.get("blind_test_fire"):
                     # A recorded test fire: its run with every satellite shown on its recorded window, nothing held
-                    # out, revealed or played (the record itself is GET /api/evidence).
+                    # out, revealed or played (the record itself is GET /api/evidence). Only when asked for.
+                    if not self.recorded_windows:
+                        self.recorded_windows_note = RECORDED_WINDOWS_NOTE
+                        continue
                     shown = self.run_with_assets(page_run_body(rid, start, holdout=False))
                     self.record_passes(rid, shown, hidden=False)
                     continue
@@ -319,6 +330,7 @@ class Recorder:
             "entries": dict(sorted(self.entries.items())),
             "rounds": self.rounds,
             "plays": self.plays,
+            **({"recorded_windows_note": self.recorded_windows_note} if self.recorded_windows_note else {}),
             **({"plays_note": self.plays_note} if self.plays_note else {}),
             "withheld": self.withheld,
             "plan": self.plan_run,
@@ -350,8 +362,11 @@ def _main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--plan", type=Path, default=None, help="a plan file; without it the demo path's plan is built")
     ap.add_argument("--current", action="store_true", help="also record this month so far (live area API answers)")
+    ap.add_argument("--recorded-windows", action="store_true",
+                    help="also record each recorded test fire's run with every satellite shown (only once that run "
+                         "no longer scores its closed window)")
     args = ap.parse_args(argv)
-    rec = Recorder(args.base, args.out)
+    rec = Recorder(args.base, args.out, recorded_windows=args.recorded_windows)
     t0 = time.time()
     if args.plan is not None:
         rec.record_plan(json.loads(args.plan.read_text(encoding="utf-8")))
