@@ -41,16 +41,16 @@ Without a backend the site still opens and the stage draws `plumas_ca` from the 
 ## What the page is
 
 - **The landing page** (`src/ui/LandingComposition.tsx`): the stage from far away, a headline, one entry into the first application, and below it three parts (world model, environment, agent) whose status lines are read from `GET /api/evidence`.
-- **The workspace**: a top bar with the place and four steps, one panel, a pass track and the stage.
+- **The workspace**: a top bar with the place and the dates on the terrain, the Calendar and the three parts, one panel, a pass track and the stage. The names and their one line each are in `src/app/names.ts`.
 
-| Step | Key | What it does |
+| Part | Key | What it does |
 | --- | --- | --- |
-| Record | `1` | The burning calendar of the region; pick a month to replay |
-| Fire | `2` | The run with every sensor, pass by pass |
-| Test | `3` | Hide VIIRS, see the estimate from MODIS alone, reveal VIIRS and the score |
-| Look | `4` | Play one round of the next-look environment |
+| Calendar | `0` | The fire record of the place; pick a month to replay |
+| 1 World model | `1` | The run pass by pass; hide VIIRS, see the estimate from MODIS alone, reveal VIIRS and the score |
+| 2 Test world | `2` | Play one round of the next-look environment |
+| 3 Agent | `3` | Not open yet: watching an agent play the same round |
 
-Other keys: Enter takes the step's forward action, Space plays or pauses, the left and right arrows step through the passes, `V` hides or reveals VIIRS, `L` starts a round, `/` or Ctrl+K (Cmd+K) opens the search palette, `M` opens the sensor reading, `U` toggles the uncertainty layer on a simulated run, `H` hides the interface, `C` starts the camera tour, `N` goes to the next region, and Esc goes back.
+Other keys: Enter takes the part's forward action, Space plays or pauses, the left and right arrows step through the passes, `V` hides or reveals VIIRS, `L` starts a round, `/` or Ctrl+K (Cmd+K) opens the search palette, `M` opens the sensor reading, `U` toggles the uncertainty layer on a simulated run, `H` hides the interface, `C` starts the camera tour, `N` goes to the next region, and Esc goes back.
 
 A real run and a simulated run are kept apart. When the site asks for a real run and the answer is not one, it is refused, so modelled numbers are never shown as observations.
 

@@ -1,24 +1,24 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { IsogonMark } from '../ui/IsogonMark';
+import { BEATS, READING, type BeatId } from '../app/names';
 
+/** The workspace's inner steps, until each beat holds its own: the Calendar, the fire and its test, a round. */
 export type Step = 'record' | 'fire' | 'test' | 'look';
 
-export const STEPS: ReadonlyArray<{ id: Step; label: string; key: string }> = [
-  { id: 'record', label: 'Record', key: '1' },
-  { id: 'fire', label: 'Fire', key: '2' },
-  { id: 'test', label: 'Test', key: '3' },
-  { id: 'look', label: 'Look', key: '4' },
-];
+/** The part of the product a step belongs to. */
+export const beatOfStep = (s: Step): BeatId => (s === 'record' ? 'calendar' : s === 'look' ? 'world' : 'model');
 
 interface WorkspaceBarProps {
   place: string;
+  /** The dates of the run on the terrain, beside the place. */
+  placeDates?: string | null;
   /** Setting, coordinates and relief, shown beside the place when the pointer is on it. */
   placeDetail?: string;
   onPlace: () => void;
-  step: Step;
-  onStep: (s: Step) => void;
-  /** Why a step cannot be entered here (null: it can). */
-  stepBlocked: Partial<Record<Step, string | null>>;
+  beat: BeatId;
+  onBeat: (b: BeatId) => void;
+  /** Why a part cannot be opened here (null: it can). */
+  beatBlocked: Partial<Record<BeatId, string | null>>;
   onReading: () => void;
   onLanding: () => void;
   /** The quiet control's contents. */
@@ -26,10 +26,10 @@ interface WorkspaceBarProps {
 }
 
 /**
- * The top bar holds only where (the place, by name), the step of the story, and one entry to the reading. Every
- * label is one word of the same kind. View commands and readings live behind the quiet control at the right.
+ * The top bar holds only where (the place and the dates on the terrain), the Calendar and the three parts, and one
+ * entry to the reading. The open part carries the corner brackets. View commands live behind the quiet control.
  */
-export function WorkspaceBar({ place, placeDetail, onPlace, step, onStep, stepBlocked, onReading, onLanding, menu }: WorkspaceBarProps) {
+export function WorkspaceBar({ place, placeDates, placeDetail, onPlace, beat, onBeat, beatBlocked, onReading, onLanding, menu }: WorkspaceBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -60,6 +60,7 @@ export function WorkspaceBar({ place, placeDetail, onPlace, step, onStep, stepBl
         </button>
         <button type="button" className="iso-bar__place" onClick={onPlace} aria-describedby="iso-bar-placecard">
           <span>{place}</span>
+          {placeDates ? <span className="sys-value iso-bar__dates">{placeDates}</span> : null}
           <svg viewBox="0 0 10 10" aria-hidden="true">
             <path d="M2 3.5 5 6.5 8 3.5" />
           </svg>
@@ -70,24 +71,21 @@ export function WorkspaceBar({ place, placeDetail, onPlace, step, onStep, stepBl
         </button>
       </div>
 
-      <nav className="iso-bar__steps" aria-label="Steps">
-        {STEPS.map((s, i) => {
-          const blocked = stepBlocked[s.id] ?? null;
+      <nav className="iso-bar__steps" aria-label="Parts">
+        {BEATS.map((b) => {
+          const blocked = beatBlocked[b.id] ?? null;
           return (
             <button
-              key={s.id}
+              key={b.id}
               type="button"
-              className="iso-sel iso-bar__step"
-              data-active={step === s.id ? 'true' : 'false'}
-              aria-current={step === s.id ? 'step' : undefined}
+              className="sys-ctl sys-sel"
+              data-selected={beat === b.id ? 'true' : 'false'}
+              aria-current={beat === b.id ? 'step' : undefined}
               disabled={Boolean(blocked)}
-              title={blocked ?? `${s.label} (${s.key})`}
-              onClick={() => onStep(s.id)}
+              title={blocked ?? `${b.line} (${b.key})`}
+              onClick={() => onBeat(b.id)}
             >
-              <span className="iso-bar__num" aria-hidden="true">
-                {i + 1}
-              </span>
-              {s.label}
+              {b.name}
             </button>
           );
         })}
@@ -95,7 +93,7 @@ export function WorkspaceBar({ place, placeDetail, onPlace, step, onStep, stepBl
 
       <div className="iso-bar__end">
         <button type="button" className="iso-bar__read" onClick={onReading}>
-          Method
+          {READING}
         </button>
         <div className="iso-bar__menuwrap" ref={menuRef}>
           <button

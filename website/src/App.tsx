@@ -10,7 +10,8 @@ import { AreaSheet } from './components/AreaSheet';
 import { PassTrack } from './components/PassTrack';
 import { BurningCalendar } from './components/BurningCalendar';
 import { Debrief } from './components/Debrief';
-import { WorkspaceBar, MenuGroup, MenuItem, STEPS, type Step } from './components/WorkspaceBar';
+import { WorkspaceBar, MenuGroup, MenuItem, beatOfStep, type Step } from './components/WorkspaceBar';
+import { BEATS, type BeatId } from './app/names';
 import { revealedPassesOf, type TrackState } from './content/passTrack';
 import { partsStatus, type PartId } from './content/partsStatus';
 import { NEW_ROUND, RoundReadout, TileOverlay, type RoundState, type ScreenRect } from './components/NextLookRound';
@@ -768,6 +769,18 @@ export function App() {
     [step, round, leaveRound, restoreFullRun, holdoutViirs, revealed, toggleHoldoutLive, startRound],
   );
 
+  /** A part from the bar or its key: the Calendar, the fire and its test, a round. The Agent is not open yet. */
+  const goBeat = useCallback(
+    (b: BeatId) => {
+      if (b === 'calendar') goStep('record');
+      else if (b === 'model') {
+        if (step !== 'fire' && step !== 'test') goStep('fire');
+        else setDebriefOpen(false);
+      } else if (b === 'world') goStep('look');
+    },
+    [goStep, step],
+  );
+
   // The reference players are computed on the server from the round's start; when the end arrived before them, ask
   // once more (the ask waits up to two more minutes on the state route) and show them when they come.
   const referenceTriesRef = useRef(0);
@@ -1026,8 +1039,9 @@ export function App() {
           // The stage draws the uncertainty layer on simulated runs only.
           e.preventDefault();
           setShowUncertainty((u) => !u);
-        } else if (/^[1-4]$/.test(e.key)) {
-          goStep(STEPS[Number(e.key) - 1].id);
+        } else {
+          const b = BEATS.find((x) => x.key === e.key);
+          if (b) goBeat(b.id);
         }
       }
     };
@@ -1040,6 +1054,7 @@ export function App() {
     debriefOpen,
     step,
     goStep,
+    goBeat,
     testAction,
     evidenceOpen,
     areaOpen,
@@ -1063,8 +1078,10 @@ export function App() {
   const runMatchesRegion = Boolean(
     activeRun && (isCustomRegion || activeRun.region.id === activeTheaterId),
   );
+  // The place's name from the registry; the typed display table only until the registry has answered.
+  const registryName = placesState.places.places.find((p) => p.id === activeTheaterId)?.name ?? null;
   const regionTitle =
-    isCustomRegion && activeRun ? plainText(activeRun.region.name) : activeDisplay.title;
+    isCustomRegion && activeRun ? plainText(activeRun.region.name) : registryName ?? activeDisplay.title;
   const regionSetting = isCustomRegion ? 'Live terrain from search' : activeDisplay.setting;
   const regionLat =
     runMatchesRegion && activeRun ? formatLat(activeRun.region.center_lat) : activeDisplay.lat;
@@ -1160,6 +1177,10 @@ export function App() {
     look: lookHere ? null : 'A round is ready for the Dixie fire, in Feather River only',
   };
   const span = runSpan ? utcSpan(runSpan.first, runSpan.last) : null;
+  const beatBlocked: Partial<Record<BeatId, string | null>> = {
+    world: stepBlocked.look ?? null,
+    agent: 'Watching an agent play opens after a round in Test world',
+  };
   const blindLoading = holdoutViirs && !revealing && (isExecuting || !activeRun?.metrics?.holdout_viirs);
 
   const quietMenu = (
@@ -1229,7 +1250,7 @@ export function App() {
       </MenuGroup>
       <MenuGroup title="Keys">
         <p className="iso-menu__keys">
-          <span><kbd>1</kbd> to <kbd>4</kbd> steps</span>
+          <span><kbd>0</kbd> to <kbd>3</kbd> parts</span>
           <span><kbd>Space</kbd> play</span>
           <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> pass</span>
           <span><kbd>V</kbd> hide, reveal</span>
@@ -1433,10 +1454,11 @@ export function App() {
             <WorkspaceBar
               place={regionTitle}
               placeDetail={[regionSetting, `${regionLat} ${regionLon}`, elevRangeText].filter(Boolean).join(', ')}
+              placeDates={span}
               onPlace={() => setAskOpen(true)}
-              step={step}
-              onStep={goStep}
-              stepBlocked={stepBlocked}
+              beat={beatOfStep(step)}
+              onBeat={goBeat}
+              beatBlocked={beatBlocked}
               onReading={() => setReading('method')}
               onLanding={exitToOverview}
               menu={quietMenu}
