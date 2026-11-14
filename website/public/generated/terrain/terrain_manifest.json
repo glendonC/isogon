@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAtUtc": "2026-11-12T19:20:15Z",
+  "region": {
+    "id": "northern_california_feather_river_almanor",
+    "name": "Northern California Sierra Nevada / Feather River Canyon / Lake Almanor Corridor",
+    "crs": "EPSG:4326",
+    "bbox": {
+      "west": -121.6,
+      "south": 39.75,
+      "east": -120.75,
+      "north": 40.35
+    },
+    "center": {
+      "lon": -121.175,
+      "lat": 40.05
+    },
+    "wgs84DimensionsMeters": {
+      "eastWestWidthM": 72531.81,
+      "northSouthHeightM": 66621.36
+    }
+  },
+  "elevationSummary": {
+    "gridWidth": 256,
+    "gridHeight": 256,
+    "dtype": "float32",
+    "byteOrder": "little-endian",
+    "byteLength": 262144,
+    "gridOrientation": {
+      "row0Lat": 40.35,
+      "row255Lat": 39.75,
+      "col0Lon": -121.6,
+      "col255Lon": -120.75
+    },
+    "minElevationM": 313.431,
+    "maxElevationM": 2356.832,
+    "meanElevationM": 1473.645,
+    "stdElevationM": 313.751,
+    "horizontalSpacingApproxM": {
+      "dxM": 284.44,
+      "dyM": 261.26
+    }
+  },
+  "dataProvenance": {
+    "category": "real_observational_geospatial_terrain_and_imagery",
+    "statement": "All five assets in website/public/generated/terrain/ are derived directly from real downloaded public-domain and open-licensed satellite orthoimagery and digital elevation datasets (USGS 3DEP via AWS Terrain Tiles, Copernicus Sentinel-2 via EOX Cloudless, and NASA Visible Earth / GIBS Blue Marble Next Generation). No fire-activity detections or NASA FIRMS records are claimed in this terrain package; any fire-spread or thermal-plume layers rendered elsewhere in Isogon are separately documented as modeled reconstructions unless backed by an explicit observational manifest."
+  },
+  "assets": {
+    "ca_dem_f32": {
+      "file": "ca_dem_f32.bin",
+      "path": "/generated/terrain/ca_dem_f32.bin",
+      "format": "application/octet-stream (Float32Array <f4)",
+      "width": 256,
+      "height": 256,
+      "bytes": 262144,
+      "sha256": "39658ff1fc52f260df6808fe0ed66b82a3e3ef27c3e1d44bca8f5f498584b8b0",
+      "projection": "EPSG:4326 (reprojected from EPSG:3857)",
+      "sourceZoom": 11,
+      "sourceUrlTemplate": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+      "decodingFormula": "elevation_m = (R * 256.0 + G + B / 256.0) - 32768.0",
+      "provider": "Mapzen / AWS Open Data Registry Terrain Tiles (USGS 3DEP / SRTM)",
+      "license": "Public Domain (USGS 3DEP in US) / Open Data",
+      "retrievedAtUtc": "2026-11-12T19:20:15Z"
+    },
+    "ca_normals": {
+      "file": "ca_normals.png",
+      "path": "/generated/terrain/ca_normals.png",
+      "format": "image/png (RGB 8-bit)",
+      "width": 512,
+      "height": 512,
+      "bytes": 457790,
+      "sha256": "149f10d8f298f9fb05802bafa8fca0bc6f6a7c4b40341d2b81fcac56f1a0c576",
+      "projection": "EPSG:4326",
+      "normalEncoding": {
+        "frame": "+X East, +Y North, +Z Up (WGS84 meters)",
+        "decodeShader": "vec3 n = normalize(tex.rgb * 2.0 - 1.0);"
+      },
+      "sourceZoom": 11,
+      "sourceUrlTemplate": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+      "provider": "Derived via central finite differences from AWS Terrain Tiles (USGS 3DEP)",
+      "license": "Public Domain (USGS 3DEP in US) / Open Data",
+      "retrievedAtUtc": "2026-11-12T19:20:15Z"
+    },
+    "ca_satellite": {
+      "file": "ca_satellite.jpg",
+      "path": "/generated/terrain/ca_satellite.jpg",
+      "format": "image/jpeg (RGB 4:4:4)",
+      "width": 1024,
+      "height": 1024,
+      "bytes": 535251,
+      "sha256": "03e48b34f37575ecee642c4c2f49f317eebe329a09a70dec9bd46d9464af686f",
+      "projection": "EPSG:4326 (sub-pixel 4x4 supersampled from EPSG:3857)",
+      "radiometricGamma": 0.88,
+      "sourceZoom": 12,
+      "sourceUrlTemplate": "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg",
+      "provider": "Sentinel-2 cloudless 2020 by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2020)",
+      "license": "CC BY 4.0 (https://s2maps.eu)",
+      "retrievedAtUtc": "2026-11-12T19:20:15Z"
+    },
+    "earth_day": {
+      "file": "earth_day.jpg",
+      "path": "/generated/terrain/earth_day.jpg",
+      "format": "image/jpeg (RGB 4:4:4)",
+      "width": 2048,
+      "height": 1024,
+      "bytes": 697037,
+      "sha256": "771ab776924665fa8e790cc0fc92cab4d06b7a8ffb4001f9d8c77b61b9948b1d",
+      "projection": "EPSG:4326 (lon -180..+180, lat +90..-90)",
+      "sourceZoom": 2,
+      "sourceUrlTemplate": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08-01/500m/{z}/{y}/{x}.jpeg",
+      "provider": "NASA Earth Observatory / NASA GIBS Blue Marble Next Generation (Shaded Relief and Bathymetry, August 2004)",
+      "license": "US Government Public Domain (NASA Visible Earth)",
+      "retrievedAtUtc": "2026-11-12T19:20:15Z"
+    },
+    "earth_bump": {
+      "file": "earth_bump.png",
+      "path": "/generated/terrain/earth_bump.png",
+      "format": "image/png (Grayscale 8-bit)",
+      "width": 1024,
+      "height": 512,
+      "bytes": 95420,
+      "sha256": "036965676788467d1882e907e8c7ef59e8e43b4573df120e90ef31f23d5f0c35",
+      "projection": "EPSG:4326 (lon -180..+180, lat +90..-90, reprojected from EPSG:3857)",
+      "elevationEncoding": {
+        "seaLevelValue": 0,
+        "maxClampMeters": 6000.0,
+        "gamma": 0.85,
+        "rawGlobalMinM": -9147.54,
+        "rawGlobalMaxM": 5947.19
+      },
+      "sourceZoom": 3,
+      "sourceUrlTemplate": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+      "provider": "Mapzen / AWS Open Data Registry Terrain Tiles (ETOPO1 / SRTM / GMTED2010)",
+      "license": "Open Data / Public Domain",
+      "retrievedAtUtc": "2026-11-12T19:20:15Z"
+    }
+  }
+}
