@@ -29,7 +29,7 @@ from backend.eval.holdout import visible_rows
 from backend.eval.rows import Detections, detections_from_rows
 from backend.model.episodes import tiles
 from backend.model.real_blind import EPISODE_OVERPASSES, Window, _chosen_from, _window_from, in_box_overpasses
-from backend.model.training import EXCLUSIONS, REGIONS, excluded_mask
+from backend.model.training import EXCLUSIONS, REGIONS, closed_for, closed_years, excluded_mask, window_meets_years
 
 YEARS: tuple[int, ...] = tuple(range(2012, 2026))     # Suomi NPP's VIIRS record starts in January 2012
 TRAIN_LAST_YEAR: int = 2023                           # episodes up to this year train; later ones validate
@@ -125,15 +125,25 @@ def catalogue(
     return out
 
 
+# The closed rule itself is `closed_for(box, start_s, end_s)`, stated once in backend/model/training.py beside the
+# set-aside dates it reads, and found here under the name the round and run routes look for.
+__all__ = ["closed_for", "closed_years"]
+
+
 def closed_year(region_id: str) -> int | None:
-    """The year of a region's test fire, or None for a region that has none."""
-    ex = EXCLUSIONS.get(region_id)
-    return None if ex is None else int(ex[0][:4])
+    """The year of a region's test fire, or None for a region that has none (the first, should its set-aside
+    dates touch more than one: `closed_years` gives them all)."""
+    years = closed_years(region_id)
+    return years[0] if years else None
 
 
 def may_be_played(ep: EnvEpisode) -> bool:
-    """False for a test episode and for any window of a test fire's region in the year of its fire."""
-    return ep.split == "fit" and ep.year != closed_year(ep.region_id)
+    """False for a test episode and for any window of a test fire's region in a year of its fire: an episode of
+    such a year, and one of another year whose window runs into it."""
+    years = closed_years(ep.region_id)
+    if ep.split != "fit" or ep.year in years:
+        return False
+    return not window_meets_years(years, ep.window.start_s, ep.window.end_s)
 
 
 def fit_split(episodes: list[EnvEpisode]) -> tuple[list[EnvEpisode], list[EnvEpisode]]:

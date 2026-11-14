@@ -126,6 +126,8 @@ Beside them, the share of looks whose hidden total lies inside the stated 90 per
 
 Nothing that happened in a test box in 2021 is learned from, before or after the fire's own dates, and around each fire a wider area and span is closed as well (`backend/model/training.py`). The counts are `trained_on` and `validated_on` in `backend/model/fitted_values/occupancy_params.json`.
 
+**The test is closed.** The looks at the three fires are on record and those fires are not scored again. The rule is one function, `closed_for(box, start_s, end_s)` in `backend/model/training.py` (the round and run routes find it as `backend.env.episodes.closed_for`): a window is closed when its box meets the context box of a region with a test fire and the window holds a moment of a year of that fire, whether or not it holds the fire itself, so a period across New Year is closed on either side. On a closed window a run with a satellite held out is refused (`ClosedWindow`), and a run with every satellite shown still gives its estimate, frames and terrain and computes no score: no blind test, no baseline, no figure made from VIIRS rows. It says so in `not_scored`, with the address of the recorded looks.
+
 ## Results
 
 ### Validation

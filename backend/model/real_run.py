@@ -185,6 +185,28 @@ def years_touched(start_s: float, end_s: float, pad_s: float = PAD_S) -> tuple[i
     return tuple(range(first, last + 1))
 
 
+class ClosedWindow(ValueError):
+    """A run with a satellite held out was asked for on a window the closed rule covers."""
+
+
+def _not_scored(closed: dict[str, Any]) -> dict[str, Any]:
+    """What a run says in place of a score on a closed window, with where the recorded looks are served."""
+    from backend.model.training import EVIDENCE_ADDRESS
+
+    years = " and ".join(str(y) for y in closed["years"])
+    return {
+        "why": (
+            f"this window lies in {years}, the year of a recorded test fire in this region. The test of that fire "
+            "is closed: its looks are on record and no window of the region in that year is scored again. The "
+            "estimate, the frames and the terrain are served; no blind test, no baseline and no figure made from "
+            "VIIRS rows is computed"
+        ),
+        "evidence": EVIDENCE_ADDRESS,
+        "region_id": closed["region_id"],
+        "years": list(closed["years"]),
+    }
+
+
 def _test_fire_note(region_id: str, start_s: float, end_s: float) -> dict[str, Any] | None:
     """Says so when a window lies on one of the three 2021 test fires (backend/model/training.py)."""
     from backend.model.training import EXCLUSIONS, _day_s
@@ -259,6 +281,25 @@ def solve_real_reconstruction(
     win: Window
     frames, win = run_frames(rows_seen, bbox, start_s, n=FRAMES, hidden="VIIRS" if holdout else None, read_passes=read_passes)
     from_list = frames[0].slot is not None
+    # The closed rule, asked with the run's box and its own window, which was found from visible rows alone. A run
+    # with a satellite held out stops here, before anything is estimated. A run with every satellite goes on and
+    # skips the scoring block below.
+    from backend.model.training import EVIDENCE_ADDRESS, closed_for
+
+    def _context(region: str) -> tuple[float, float, float, float]:
+        if region == spec.id:
+            return tuple(context_box)             # the run's own context box, as it was given
+        from backend.firms import region_box as _real_box
+
+        return _real_box(region)
+
+    closed = closed_for(bbox, win.start_s, win.end_s, region_box=_context)
+    if closed is not None and holdout:
+        raise ClosedWindow(
+            f"{' and '.join(str(y) for y in closed['years'])} in {closed['region_id']} holds a recorded test fire and is closed: "
+            f"no run with a satellite held out is made there, so the fire is never scored again. The recorded looks are at {EVIDENCE_ADDRESS}"
+        )
+    not_scored = None if closed is None else _not_scored(closed)
     keep = (rows_seen.time_s >= win.start_s - PAD_S) & (rows_seen.time_s < win.end_s + PAD_S)
     visible = rows_seen.select(keep)
     t_rows = time.perf_counter()
@@ -377,6 +418,8 @@ def solve_real_reconstruction(
     report: dict[str, Any] | None = None
     declared: dict[str, Any] | None = None       # the cells the reconstruction declares at each scored look
     count_ratio_missing: str | None = None
+    if not_scored is not None:
+        ratio_fit = None                      # a closed window: no baseline is built and nothing below scores
     if ratio_fit is not None and count_ratio is None:
         from backend.model.calendar_ratio import calendar_ratio
 
@@ -437,6 +480,8 @@ def solve_real_reconstruction(
             ]
     elif holdout:
         raise ValueError("a holdout run needs the overlap-ratio baseline's fitted ratio (backend/model/fitted_values/overlap_ratio.json)")
+    if not_scored is not None and report is not None:
+        raise RuntimeError("a closed window was scored")         # cannot happen; kept as a last guard
     t_score = time.perf_counter()
 
     metrics: dict[str, Any] = {
@@ -457,6 +502,10 @@ def solve_real_reconstruction(
     model_side_metrics = {k: v for k, v in metrics.items()
                           if k not in METRICS_FROM_HIDDEN_ROWS and k not in SIMULATED_METRIC_NAMES_NOT_USED
                           and k not in ("from_hidden_rows", "simulated_names_not_used")}
+    if not_scored is not None:
+        # no figure made from VIIRS rows: the names stay, without a number, and say why
+        metrics.update({name: None for name in METRICS_FROM_HIDDEN_ROWS})
+        metrics["not_scored"] = not_scored
     if report is not None:
         rec, raw = report["methods"]["reconstruction"], report["methods"]["painted_modis"]
         r_rmse, m_rmse = rec["cell_rmse_mw_km2"] or 0.0, raw["cell_rmse_mw_km2"] or 0.0
@@ -526,7 +575,8 @@ def solve_real_reconstruction(
         {"stage_id": "conformal_gate", "label": "Blind Test Against Hidden VIIRS" if holdout else "Fit Residuals (no holdout)",
          "model_name": "backend/eval/blind_test.py", "duration_ms": round((t_score - t_frames) * 1000.0, 1),
          "status": "completed" if report is not None else "skipped",
-         "detail": "scored against hidden detections beside two baselines" if holdout else "VIIRS was assimilated: not a test"},
+         "detail": ("not scored: this window lies in the year of a recorded test fire, which is closed" if not_scored is not None else
+                    "scored against hidden detections beside two baselines" if holdout else "VIIRS was assimilated: not a test")},
     ]
 
     # The status of the model is what validation on other fires decided (backend/model/fitted_values), never this
@@ -592,6 +642,7 @@ def solve_real_reconstruction(
 
     extras: dict[str, Any] = {
         "source": "firms",
+        "not_scored": not_scored,
         "start": _iso(start_s),
         "holdout_viirs": holdout,
         "hidden_platforms": hidden_platforms,

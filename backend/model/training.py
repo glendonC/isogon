@@ -47,6 +47,59 @@ def _day_s(d: str) -> float:
 
 TEST_BOX_MARGIN_DEG: float = 0.2
 
+# Where the looks at the test fires are served: what a refusal or a run that is not scored points to.
+EVIDENCE_ADDRESS: str = "/api/evidence"
+
+
+def closed_years(region_id: str) -> tuple[int, ...]:
+    """Every year the set-aside dates of a region's test fire touch, from the first to the last; none for a
+    region without a test fire."""
+    ex = EXCLUSIONS.get(region_id)
+    if ex is None:
+        return ()
+    first = int(ex[0][:4])
+    last = int(str(np.datetime64(int(_day_s(ex[1]) - 1.0), "s"))[:4])
+    return tuple(range(first, last + 1))
+
+
+def window_meets_years(years: Iterable[int], start_s: float, end_s: float) -> list[int]:
+    """The years among `years` that the window [start_s, end_s) holds a moment of. A window of no length is the
+    one moment `start_s`."""
+    out = []
+    for y in sorted(set(int(v) for v in years)):
+        y0, y1 = _day_s(f"{y}-01-01"), _day_s(f"{y + 1}-01-01")
+        if start_s < y1 and (end_s > y0 or start_s >= y0):
+            out.append(y)
+    return out
+
+
+def closed_for(
+    box: tuple[float, float, float, float], start_s: float, end_s: float,
+    region_box: Callable[[str], tuple[float, float, float, float]] | None = None,
+) -> dict[str, Any] | None:
+    """The closed rule. The test of the three test fires is closed: no window of a test fire's region in a year
+    of its fire is held out, revealed, played, fitted on or scored again, whether or not it holds the fire.
+
+    `box` is (west, south, east, north) in degrees and the window is [start_s, end_s) in UTC seconds. The answer
+    is None for an open window. Otherwise it is `{"region_id", "years"}`: the region whose context box the box
+    meets, and the years of its fire's set-aside dates that the window holds a moment of. Every year from the
+    first to the last of those dates counts, so a period that crosses New Year is closed on either side.
+    `region_box(region_id)` gives a region's context box; it is `backend.firms.region_box` when not given.
+    """
+    if region_box is None:
+        from backend.firms import region_box as _region_box
+
+        region_box = _region_box
+    w, s, e, n = (float(v) for v in box)
+    for region in EXCLUSIONS:
+        met = window_meets_years(closed_years(region), float(start_s), float(end_s))
+        if not met:
+            continue
+        cw, cs, ce, cn = region_box(region)
+        if w <= ce and cw <= e and s <= cn and cs <= n:
+            return {"region_id": region, "years": met}
+    return None
+
 
 def excluded_mask(det: Detections, region_id: str, test_box: tuple[float, float, float, float]) -> np.ndarray:
     """True for rows of `region_id`'s context box that may not be learned from: the region's exclusion, and its
