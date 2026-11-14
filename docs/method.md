@@ -146,7 +146,7 @@ The rule: the validation fires are resampled whole 2,000 times. A score is ahead
 
 - **The fitted values are in use:** ahead on 2 of 7 scores, tied on 5, behind on none, judged with an interval as the rule says.
 - **No part is switched on.** All three parts (where the fire is, how many pixels, total power) are `experimental`, and so is the model's status in every run.
-- **The stated 90 percent interval for total power held on 148 of 153 looks.** It starts at zero: 29 of the 400 training looks flagged nothing, cloud is not known, and an interval that could not hold an empty pass would claim more than the record supports.
+- **The stated 90 percent interval for total power held on 143 of 153 looks (0.935).** It is the estimate times two multiples taken from the training looks. It starts at zero: 20 of 322 training looks flagged nothing, cloud is not known, and an interval that could not hold an empty pass would claim more than the record supports. An interval that starts at zero cuts nothing off below, so its upper end is the 90th percentile of the training ratios, 2.18 times the estimate. Until it was set again the upper end was the 95th percentile, 2.62 times, which held 148 of 153 looks (0.967) while stating 90 percent. The ratios were taken again on the 17 training episodes of 2018, 2019, 2020, 2022 and 2023, with every other value unchanged; the training episodes of 2021 were left out, because no window of that year is scored again. No estimate and no score depends on the interval, and none moved. The three recorded looks at the test fires state the interval of their time and keep the figures they were taken with.
 - **6 of the 153 validation looks flagged nothing** and were scored as such.
 - The validation episodes come from two of the three regions; northern Evia's has none.
 - A rule written before the first fit, every cell score strictly above both baselines with no allowance for noise, was not met. It is kept in the file as `first_rule_outcome` so that the change of rule is visible.
@@ -177,7 +177,7 @@ Look 3 in detail (`test_fires.fires[].new` of `evidence()`):
 | Lytton Creek | 15 | 938 | 0.1918, 0.1278 | 0.4845, 0.2419 | 15 of 15 |
 | Northern Evia | 16 | 5,940 | 0.2772, 0.2873 | 0.5232, 0.4276 | 14 of 16 |
 
-Both baselines paint the same cells, so their cell scores are equal.
+Both baselines paint the same cells, so their cell scores are equal. The last column is the interval the look was taken with, zero to 2.62 times the estimate, which held more than the 90 percent it stated; the interval in use is narrower (see the validation above) and these fires are not scored with it.
 
 - On Dixie the one score not ahead is the total power summed over the looks.
 - Northern Evia is the weakest: ahead on the one-cell CSI, the Brier score and the median power error, and behind the painted baseline on strict CSI. One pass there held only part of the box and was not scored (133 hidden pixels).

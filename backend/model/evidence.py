@@ -391,7 +391,24 @@ def _validation(params: dict[str, Any]) -> dict[str, Any]:
             "frp_given_a_detection": intervals["frp"]["given_a_detection"],
             "pixel_multiples_of_the_prediction": [intervals["pixels"]["lo"], intervals["pixels"]["hi"]],
             "pixels_given_a_detection": intervals["pixels"]["given_a_detection"],
+            "one_sided": intervals["frp"].get("one_sided"),
+            "fitted_on": intervals.get("fitted_on"),
+            "before": _interval_before(intervals),
         },
+    }
+
+
+def _interval_before(intervals: dict[str, Any]) -> dict[str, Any] | None:
+    """The interval the values held before it was set again, with what it held on the validation fires."""
+    was = intervals.get("before")
+    if not was:
+        return None
+    held = (was.get("held_on_validation") or {}).get("frp") or {}
+    return {
+        "note": was.get("note"),
+        "frp_multiples_of_the_prediction": [was["frp"]["lo"], was["frp"]["hi"]],
+        "pixel_multiples_of_the_prediction": [was["pixels"]["lo"], was["pixels"]["hi"]],
+        "held_on_validation": {"held": held.get("covered"), "of": held.get("n")},
     }
 
 
@@ -539,12 +556,27 @@ def values_in_use(record: dict[str, Any], params: dict[str, Any]) -> dict[str, A
     latest = max(record["looks"], key=lambda e: e["look"])
     fitted_under = (params.get("protocol") or {}).get("parameters_fitted_under")
     scored = not (fitted_under is not None and fitted_under > latest["protocol_version"])
+    iv = params.get("intervals") or {}
+    was = iv.get("before")
+    interval = None if not was else {
+        "in_use": [iv["frp"]["lo"], iv["frp"]["hi"]],
+        "of_the_recorded_looks": [was["frp"]["lo"], was["frp"]["hi"]],
+        "note": (
+            "The stated interval for total power was set again after the looks on record. It starts at zero, so "
+            f"its upper end is now the 90th percentile of the training ratios, {iv['frp']['hi']:.2f} times the estimate, "
+            f"where it was the 95th, {was['frp']['hi']:.2f} times. The looks on record state the interval of their time; "
+            "their interval figures are as recorded and the fires are not scored again. No estimate and no score "
+            "depends on the interval."
+        ),
+    }
     return {
         "fitted_under_protocol": fitted_under,
         "scored_on_the_test_fires": scored,
         "figures_shown": {"look": latest["look"], "unit": latest["unit"], "protocol_version": latest["protocol_version"]},
+        "interval": interval,
         "note": (
-            "The figures here were made with the fitted values now in use." if scored else
+            ("The figures here were made with the fitted values now in use"
+             + (", but for the stated interval, which was set again afterwards (see interval)." if interval else ".")) if scored else
             f"The values now in use were fitted under protocol version {fitted_under} and have not been scored on the "
             f"three test fires. The figures here are look {latest['look']} ({latest['unit']}, protocol version "
             f"{latest['protocol_version']}), made with the values of that time. One final look is to be taken, once."
@@ -692,7 +724,7 @@ def evidence() -> dict[str, Any]:
             "test_fires.fires[].looks, test_fires.looks, test_fires.also_scored: every look and every other scoring",
             "each fire test: pixel_interval, scores_judged, ahead_on",
             "audit_findings: the audit's findings one line each, with the answer and the guarding test",
-            "test_fires.values_in_use: whether the fitted values now in use are the ones the figures were made with",
+            "test_fires.values_in_use: whether the fitted values now in use are the ones the figures were made with, and the stated interval of the recorded looks beside the one in use",
             "validation: regions, decision, rule, before, history, trained_on, validated_on, empty_looks, intervals, and improvement_interval and interval_holds inside parts",
             "next_look: reward, differences, not_the_same_game_twice, other_settings, made_with, with_the_earlier_values, before_the_bug_fix",
             "next_look: measured_under, reward_in_use, on_validation: which reward the tables on record were measured under, the reward in use, and the reference players under it on the validation episodes",

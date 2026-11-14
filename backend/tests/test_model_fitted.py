@@ -80,11 +80,8 @@ class TrackedFitTests(unittest.TestCase):
         iv = d["intervals"]
         self.assertEqual((prm["frp_interval_lo"], prm["frp_interval_hi"]), (iv["frp"]["lo"], iv["frp"]["hi"]))
         self.assertEqual((prm["pixel_interval_lo"], prm["pixel_interval_hi"]), (iv["pixels"]["lo"], iv["pixels"]["hi"]))
-        empty = d["empty_looks"]["training"]
-        self.assertEqual(iv["frp"]["looks_that_flagged_nothing"], empty["no_hidden_pixel_in_the_box"])
-        self.assertEqual(iv["frp"]["training_looks"], empty["scored_looks"])
         # more than one training look in twenty flagged nothing, so the stated interval starts at zero
-        self.assertGreater(empty["no_hidden_pixel_in_the_box"] / empty["scored_looks"], 0.05)
+        self.assertGreater(iv["frp"]["looks_that_flagged_nothing"] / iv["frp"]["looks"], 0.05)
         self.assertEqual(iv["frp"]["lo"], 0.0)
         self.assertGreater(iv["frp"]["given_a_detection"][0], 0.0)
         # the rule itself, on made-up ratios
@@ -96,6 +93,37 @@ class TrackedFitTests(unittest.TestCase):
         reps = [{"methods": {"reconstruction": {"per_overpass": [{"predicted_frp_mw": 10.0}, {"predicted_frp_mw": 0.0}, {"predicted_frp_mw": 4.0}]}},
                  "targets": [{"hidden_frp_mw": 0.0}, {"hidden_frp_mw": 3.0}, {"hidden_frp_mw": 8.0}]}]
         self.assertEqual(_ratios(reps, "predicted_frp_mw", "hidden_frp_mw").tolist(), [0.0, 2.0])   # no prediction, no ratio
+
+    def test_the_stated_interval_is_one_sided_and_holds_about_what_it_states(self) -> None:
+        """An interval that starts at zero cuts nothing off below, so its upper end is the 90th percentile of the
+        training ratios, not the 95th. The interval it replaces is kept beside it with what it held."""
+        from backend.eval import metrics as M
+
+        d, prm = self.params, self.params["parameters"]
+        iv = d["intervals"]
+        self.assertEqual(iv["rule"], M.STATED_INTERVAL_RULE)
+        for part in ("frp", "pixels"):
+            self.assertEqual(iv[part]["one_sided"], iv[part]["lo"] == 0.0)
+        self.assertTrue(iv["frp"]["one_sided"])
+        # the interval it replaces: the same lower end, a higher upper end, and more held than was stated
+        was = iv["before"]
+        self.assertEqual(was["frp"]["lo"], 0.0)
+        self.assertGreater(was["frp"]["hi"], iv["frp"]["hi"])
+        self.assertIn("95th percentile", was["note"])
+        now = d["evidence"]["validation_fitted"]["methods"]["reconstruction"]["interval"]
+        then = was["held_on_validation"]["frp"]
+        self.assertEqual((now["n"], now["stated_level"]), (then["n"], 0.9))
+        self.assertLess(now["covered"], then["covered"])
+        self.assertLess(abs(now["coverage"] - 0.9), abs(then["coverage"] - 0.9))          # nearer to what is stated
+        self.assertEqual(d["evidence"]["validation_fitted"]["verdict"]["interval"]["observed_coverage"], now["coverage"])
+        # no window of the year of the test fires was scored for it
+        on = iv["fitted_on"]
+        self.assertNotIn(2021, on["years"])
+        self.assertLess(on["episodes"], len(d["evidence"]["training_episodes"]))
+        self.assertIn("2021", on["left_out"])
+        # nothing else moved: every score of the validation is the one the decision was made on
+        self.assertTrue(iv["scores_unchanged"])
+        self.assertEqual(d["parts"]["total fire radiative power and its interval"]["interval_holds"], now["coverage"] >= 0.8)
 
     def test_no_episode_is_a_test_fire(self) -> None:
         ev = self.params["evidence"]

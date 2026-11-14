@@ -316,6 +316,36 @@ class EvidenceShapeTests(unittest.TestCase):
         self.assertTrue(self.doc["additions"])
 
 
+class StatedIntervalTests(unittest.TestCase):
+    """The stated interval was set again after the looks on record. The answer says so where it says which values
+    the figures were made with, shows both intervals, and leaves the looks' own interval figures as recorded."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.doc = E.evidence()
+        cls.params = json.loads((E.FITTED_DIR / E.PARAMS_FILE).read_text(encoding="utf-8"))
+        cls.record = json.loads((E.FITTED_DIR / E.LOOKS_FILE).read_text(encoding="utf-8"))
+
+    def test_the_answer_says_the_interval_was_set_again_after_the_recorded_looks(self) -> None:
+        iv = self.params["intervals"]
+        now = self.doc["test_fires"]["values_in_use"]
+        self.assertEqual(now["interval"]["in_use"], [iv["frp"]["lo"], iv["frp"]["hi"]])
+        self.assertEqual(now["interval"]["of_the_recorded_looks"], [iv["before"]["frp"]["lo"], iv["before"]["frp"]["hi"]])
+        self.assertIn("not scored again", now["interval"]["note"])
+        self.assertIn("but for the stated interval", now["note"])
+        v = self.doc["validation"]["intervals"]
+        self.assertTrue(v["one_sided"])
+        self.assertEqual(v["before"]["frp_multiples_of_the_prediction"], [iv["before"]["frp"]["lo"], iv["before"]["frp"]["hi"]])
+        held = iv["before"]["held_on_validation"]["frp"]
+        self.assertEqual(v["before"]["held_on_validation"], {"held": held["covered"], "of": held["n"]})
+        self.assertLess(self.doc["validation"]["frp_interval"]["held"], held["covered"])
+
+    def test_the_recorded_looks_keep_the_interval_figures_they_were_taken_with(self) -> None:
+        by_look = {e["look"]: e for e in self.record["looks"]}
+        for fire in self.doc["test_fires"]["fires"]:
+            self.assertEqual(fire["new"]["frp_interval"], by_look[max(by_look)]["fires"][fire["region_id"]]["frp_interval"])
+
+
 class CountKindsTests(unittest.TestCase):
     """A count of scores ahead is one of two kinds, and the answer says which beside every count: a plain
     comparison on one fire, or a judgement with an interval over resampled fires."""

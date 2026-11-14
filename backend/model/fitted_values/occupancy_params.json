@@ -22,9 +22,9 @@
   "smolder_frp_mw": 1.0,
   "dedup_overlap": false,
   "frp_interval_lo": 0.0,
-  "frp_interval_hi": 2.62415395943915,
+  "frp_interval_hi": 2.179495242648894,
   "pixel_interval_lo": 0.0,
-  "pixel_interval_hi": 1.9342794986951775,
+  "pixel_interval_hi": 1.6827874390259074,
   "hidden_pixel_scale": 1.0,
   "fitted_on": "22 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)"
  },
@@ -64,27 +64,84 @@
   "note": "fitted and validated under the same protocol"
  },
  "intervals": {
-  "rule": "the 5th and the 95th percentile of hidden over predicted on the training looks, every look with a positive prediction counted. A pass that flagged nothing has a ratio of zero, so when more than one training look in twenty flagged nothing the interval starts at zero: cloud is not known, and an interval that could not hold an empty pass would claim more than the record supports.",
+  "rule": "the interval a prediction states is the prediction times two multiples, taken from the ratios of hidden over predicted on the training looks, every look with a positive prediction counted and a look that flagged nothing counted with a ratio of zero. Two-sided, the multiples are the 5th and the 95th percentile and hold 90 percent between them. When the 5th percentile is zero, which happens as soon as more than one training look in twenty flagged nothing, nothing is cut off below, and the 95th percentile would hold 95 percent: the interval is then one-sided, from zero to the 90th percentile. It starts at zero because cloud is not known, and an interval that could not hold an empty pass would claim more than the record supports.",
   "level": 0.9,
   "frp": {
    "lo": 0.0,
-   "hi": 2.62415395943915,
-   "training_looks": 400,
-   "looks_that_flagged_nothing": 29,
+   "hi": 2.179495242648894,
+   "one_sided": true,
+   "level": 0.9,
+   "looks": 322,
+   "looks_that_flagged_nothing": 20,
    "given_a_detection": [
-    0.19514928236122803,
-    2.6469299501475723
+    0.17651036079658758,
+    2.6861704257920653
    ]
   },
   "pixels": {
    "lo": 0.0,
-   "hi": 1.9342794986951775,
-   "training_looks": 400,
-   "looks_that_flagged_nothing": 29,
+   "hi": 1.6827874390259074,
+   "one_sided": true,
+   "level": 0.9,
+   "looks": 322,
+   "looks_that_flagged_nothing": 20,
    "given_a_detection": [
-    0.2552432992459307,
-    1.9504327590323198
+    0.2488909614316974,
+    1.951436277249127
    ]
+  },
+  "fitted_on": {
+   "episodes": 17,
+   "years": [
+    2018,
+    2019,
+    2020,
+    2022,
+    2023
+   ],
+   "scored_looks": 322,
+   "left_out": "the training episodes of 2021: no window of the year of the three test fires is scored again, so the ratios are taken on the other training episodes of the fit, with the values of the fit unchanged"
+  },
+  "scores_unchanged": true,
+  "before": {
+   "note": "the interval the values held until it was set again: the 5th and the 95th percentile of the training ratios. Its lower end was zero, so it held what lies below the 95th percentile, about 95 percent, while stating 90. The three recorded looks at the test fires were taken with it and state it; they are not scored again",
+   "rule": "the 5th and the 95th percentile of hidden over predicted on the training looks, every look with a positive prediction counted. A pass that flagged nothing has a ratio of zero, so when more than one training look in twenty flagged nothing the interval starts at zero: cloud is not known, and an interval that could not hold an empty pass would claim more than the record supports.",
+   "frp": {
+    "lo": 0.0,
+    "hi": 2.62415395943915,
+    "training_looks": 400,
+    "looks_that_flagged_nothing": 29,
+    "given_a_detection": [
+     0.19514928236122803,
+     2.6469299501475723
+    ]
+   },
+   "pixels": {
+    "lo": 0.0,
+    "hi": 1.9342794986951775,
+    "training_looks": 400,
+    "looks_that_flagged_nothing": 29,
+    "given_a_detection": [
+     0.2552432992459307,
+     1.9504327590323198
+    ]
+   },
+   "held_on_validation": {
+    "frp": {
+     "stated_level": 0.9,
+     "n": 153,
+     "covered": 148,
+     "coverage": 0.9673202614379085,
+     "standard_error": 0.0144
+    },
+    "pixels": {
+     "stated_level": 0.9,
+     "n": 153,
+     "covered": 147,
+     "coverage": 0.9607843137254902,
+     "standard_error": 0.0157
+    }
+   }
   }
  },
  "empty_looks": {
@@ -689,9 +746,10 @@
     },
     "beats_every_baseline_on": 5,
     "scores_judged": 7,
+    "counted_by": "plain comparison",
     "interval": {
      "stated_level": 0.9,
-     "observed_coverage": 0.9673202614379085,
+     "observed_coverage": 0.934640522875817,
      "overpasses": 153
     },
     "beats_every_baseline_on_every_score": false,
@@ -700,6 +758,7 @@
      "tie": 5,
      "behind": 0
     },
+    "classes_counted_by": "judged with an interval",
     "bootstrap": {
      "resampled": "whole runs, with replacement",
      "runs": 7,
@@ -882,9 +941,9 @@
       "interval": {
        "stated_level": 0.9,
        "n": 153,
-       "covered": 147,
-       "coverage": 0.9607843137254902,
-       "standard_error": 0.0157
+       "covered": 143,
+       "coverage": 0.934640522875817,
+       "standard_error": 0.02
       }
      },
      "frp_total": {
@@ -899,9 +958,9 @@
      "interval": {
       "stated_level": 0.9,
       "n": 153,
-      "covered": 148,
-      "coverage": 0.9673202614379085,
-      "standard_error": 0.0144
+      "covered": 143,
+      "coverage": 0.934640522875817,
+      "standard_error": 0.02
      }
     },
     "_scored_overpasses": 153,
@@ -2671,5 +2730,7 @@
   "blind_test_runs": 83,
   "seconds": 89.6
  },
- "generated_utc": "2026-11-14T16:11:28Z"
+ "generated_utc": "2026-11-14T16:11:28Z",
+ "intervals_set_again_utc": "2026-11-14T22:47:39Z",
+ "intervals_set_again_seconds": 10.4
 }

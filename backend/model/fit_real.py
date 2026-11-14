@@ -27,6 +27,7 @@ from typing import Any
 
 import numpy as np
 
+from backend.eval import metrics as M
 from backend.eval import schedule as S
 from backend.eval.baselines import fit_overlap_ratio, overlap_ratio_factory, painted_modis_factory
 from backend.eval.blind_test import PROTOCOL_PASS_LIST as PROTOCOL, bootstrap_verdict, pool_reports, run_blind_test, verdict
@@ -37,6 +38,8 @@ from backend.model.real_blind import reconstruction_factory
 from backend.model.training import EXCLUSIONS, TRAINING_YEARS, VALIDATION_YEARS, training_detections
 
 TRAIN_YEARS_ALL: tuple[int, ...] = TRAINING_YEARS + (2021,)
+# The training episodes that may still be scored: those of the fit without the year of the three test fires.
+TRAIN_OPEN: str = "train_open"
 
 
 def _stamp() -> str:
@@ -83,7 +86,7 @@ def load_episodes(split: str) -> list[Episode]:
         from backend.firms import read_firms, region_box
         from backend.terrain.live_region import PRESET_BY_ID
 
-        years = TRAIN_YEARS_ALL if split == "train" else VALIDATION_YEARS
+        years = {"train": TRAIN_YEARS_ALL, TRAIN_OPEN: TRAINING_YEARS}.get(split, VALIDATION_YEARS)
         _EPISODES[split] = find_episodes(years, read_firms, region_box, PRESET_BY_ID)
     return _EPISODES[split]
 
@@ -167,23 +170,13 @@ def _ratios(reps: list[dict[str, Any]], key_pred: str, key_truth: str) -> np.nda
     return np.array(out)
 
 
-INTERVAL_RULE: str = (
-    "the 5th and the 95th percentile of hidden over predicted on the training looks, every look with a positive "
-    "prediction counted. A pass that flagged nothing has a ratio of zero, so when more than one training look in "
-    "twenty flagged nothing the interval starts at zero: cloud is not known, and an interval that could not hold "
-    "an empty pass would claim more than the record supports."
-)
+INTERVAL_RULE: str = M.STATED_INTERVAL_RULE
 
 
-def _interval(ratios: np.ndarray) -> dict[str, Any]:
-    seen = ratios[ratios > 0]
-    return {
-        "lo": float(np.percentile(ratios, 5)),
-        "hi": float(np.percentile(ratios, 95)),
-        "training_looks": int(ratios.size),
-        "looks_that_flagged_nothing": int((ratios == 0).sum()),
-        "given_a_detection": [float(np.percentile(seen, 5)), float(np.percentile(seen, 95))] if seen.size else None,
-    }
+def _interval(ratios: np.ndarray) -> dict[str, Any] | None:
+    """The stated interval from the training ratios (`metrics.stated_interval`): two-sided when its lower end is
+    above zero, from zero to the 90th percentile when it is not."""
+    return M.stated_interval(ratios, 0.90)
 
 
 def _decision_summary(doc: dict[str, Any], protocol_text: str) -> dict[str, Any]:
@@ -475,6 +468,89 @@ def fit_params(log: Any = print) -> dict[str, Any]:
     return doc
 
 
+def refit_intervals(log: Any = print, write: bool = True) -> dict[str, Any]:
+    """Set the stated intervals again by `metrics.STATED_INTERVAL_RULE`, with every other value as tracked.
+
+    The interval the file held started at zero and ended at the 95th percentile of the training ratios, so it held
+    about 95 percent while stating 90. Here the ratios are taken again with the tracked values, on the training
+    episodes that may still be scored (no window of the year of the test fires), and the rule sets the two ends.
+    The validation is then run again. An interval changes no estimate, so no score may move; that is checked, and
+    the function stops if one does. The interval it replaces and what it held are kept under `intervals.before`.
+    """
+    t0 = time.time()
+    path = FITTED_DIR / PARAMS_FILE
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    known = set(OccupancyParams.__dataclass_fields__)
+    tracked = OccupancyParams(**{k: v for k, v in doc["parameters"].items() if k in known})
+    train = load_episodes(TRAIN_OPEN)
+    fitted_keys = {(e["region_id"], e["year"], tuple(e["tile"])) for e in doc["evidence"]["training_episodes"]}
+    strangers = [e.key for e in train if (e.region_id, e.year, tuple(e.tile)) not in fitted_keys]
+    if strangers:
+        raise RuntimeError(f"episodes that were not in the fit: {strangers}")
+    log(f"training episodes that may be scored: {len(train)} of the {len(fitted_keys)} of the fit (years {', '.join(str(y) for y in TRAINING_YEARS)})")
+    ev = Evaluator()
+    try:
+        _, reps_train = ev.pooled(tracked, TRAIN_OPEN)
+        iv_frp = _interval(_ratios(reps_train, "predicted_frp_mw", "hidden_frp_mw"))
+        iv_pix = _interval(_ratios(reps_train, "predicted_pixels", "hidden_pixels_in_test_box"))
+        if iv_frp is None or iv_pix is None:
+            raise RuntimeError("no training look with a positive prediction")
+        new = OccupancyParams(**{**tracked.as_dict(),
+                                 "frp_interval_lo": iv_frp["lo"], "frp_interval_hi": iv_frp["hi"],
+                                 "pixel_interval_lo": iv_pix["lo"], "pixel_interval_hi": iv_pix["hi"]})
+        pooled_val, reps_val = ev.pooled(new, "validation")
+    finally:
+        ev.close()
+    sources = {r["schedule"]["source"] for r in reps_train + reps_val}
+    if sources != {S.SOURCE_CMR}:
+        raise RuntimeError(f"the looks came from {sorted(sources)}; they must come from the pass list alone")
+    v_fit = bootstrap_verdict(reps_val)
+    was_v = doc["evidence"]["validation_fitted"]["verdict"]
+    moved = [k for k, row in v_fit["scores"].items()
+             if any(row.get(m) != was_v["scores"][k].get(m) for m in ("reconstruction", "painted_modis", "overlap_ratio", "class"))]
+    if moved or v_fit["classes"] != was_v["classes"]:
+        raise RuntimeError(f"scores moved with the interval, which cannot be: {moved}")
+    adopted, decision, parts, strict_rule = decide(v_fit)
+    if (adopted, decision) != (doc["adopted"], doc["decision"]):
+        raise RuntimeError("the decision moved with the interval, which cannot be")
+    was_methods = doc["evidence"]["validation_fitted"]["methods"]["reconstruction"]
+    before = doc["intervals"].get("before") or {
+        "note": (
+            "the interval the values held until it was set again: the 5th and the 95th percentile of the training "
+            "ratios. Its lower end was zero, so it held what lies below the 95th percentile, about 95 percent, while "
+            "stating 90. The three recorded looks at the test fires were taken with it and state it; they are not "
+            "scored again"
+        ),
+        "rule": doc["intervals"].get("rule"),
+        "frp": doc["intervals"]["frp"],
+        "pixels": doc["intervals"]["pixels"],
+        "held_on_validation": {"frp": was_methods["interval"], "pixels": was_methods["pixel_count"].get("interval")},
+    }
+    doc["parameters"] = new.as_dict()
+    doc["intervals"] = {
+        "rule": INTERVAL_RULE, "level": 0.90, "frp": iv_frp, "pixels": iv_pix,
+        "fitted_on": {
+            "episodes": len(train),
+            "years": sorted({int(e.year) for e in train}),
+            "scored_looks": int(sum(r["scored_overpasses"] for r in reps_train)),
+            "left_out": (
+                "the training episodes of 2021: no window of the year of the three test fires is scored again, so the "
+                "ratios are taken on the other training episodes of the fit, with the values of the fit unchanged"
+            ),
+        },
+        "scores_unchanged": True,
+        "before": before,
+    }
+    doc["parts"] = parts
+    doc["evidence"]["validation_fitted"] = {"verdict": v_fit, "methods": _slim(pooled_val)}
+    doc["evidence"]["validation_per_episode"] = _per_episode(reps_val)
+    doc["intervals_set_again_utc"] = _stamp()
+    doc["intervals_set_again_seconds"] = round(time.time() - t0, 1)
+    if write:
+        _write(PARAMS_FILE, doc)
+    return doc
+
+
 def _slim(pooled: dict[str, Any]) -> dict[str, Any]:
     out = {}
     for name, m in pooled["methods"].items():
@@ -514,6 +590,26 @@ def main(argv: list[str]) -> int:
         print(json.dumps({k: doc[k] for k in ("adopted", "decision", "protocol")}, indent=1))
         print("before:", json.dumps(doc["previous_decision"]["parts"]), doc["previous_decision"]["classes"])
         _print_parts(doc)
+        return 0
+    if what == "intervals":
+        doc = refit_intervals(log=lambda m: print(m, flush=True), write="--record" in argv)
+        if len(argv) > 2 and not argv[2].startswith("--"):
+            with open(argv[2], "w", encoding="utf-8") as fh:
+                json.dump(doc, fh, indent=1)
+                fh.write("\n")
+        iv = doc["intervals"]
+        for part in ("frp", "pixels"):
+            was, now = iv["before"][part], iv[part]
+            print(f"{part}: was {was['lo']:.4f} to {was['hi']:.4f}, is {now['lo']:.4f} to {now['hi']:.4f} (one-sided {now['one_sided']}); "
+                  f"{now['looks_that_flagged_nothing']} of {now['looks']} training looks flagged nothing")
+        held, then = doc["evidence"]["validation_fitted"]["methods"]["reconstruction"], iv["before"]["held_on_validation"]
+        print(f"validation, total power: held {then['frp']['covered']} of {then['frp']['n']} before, {held['interval']['covered']} of {held['interval']['n']} now (stated 0.9)")
+        print(f"validation, pixels: held {then['pixels']['covered']} of {then['pixels']['n']} before, {held['pixel_count']['interval']['covered']} of {held['pixel_count']['interval']['n']} now")
+        return 0
+    if what == "record-intervals":
+        with open(argv[2], encoding="utf-8") as fh:
+            _write(PARAMS_FILE, json.load(fh))
+        print(f"recorded as {PARAMS_FILE}")
         return 0
     print(f"unknown fit {what!r}", file=sys.stderr)
     return 2
