@@ -55,15 +55,21 @@ export function parsePassList(body: unknown): PassList | null {
   };
 }
 
-/** The pass list of a window, or null when the route has none for it (not cached, or a region with no schedule). */
+/**
+ * The pass list of a window, or null when the route has none for it (not cached, or a region with no schedule). While
+ * VIIRS is held out the list is asked for with `hidden=VIIRS`: its VIIRS passes keep their time and coverage and carry
+ * nothing of what they saw. The full list belongs to the reveal.
+ */
 export async function fetchPassList(
   regionId: string,
   startIso: string,
   endIso: string,
+  hiddenViirs: boolean,
   signal?: AbortSignal,
 ): Promise<PassList | null> {
   try {
-    return parsePassList(await getJson<unknown>('/api/passes', { region_id: regionId, start: startIso, end: endIso }, { signal }));
+    const query = { region_id: regionId, start: startIso, end: endIso, ...(hiddenViirs ? { hidden: 'VIIRS' } : {}) };
+    return parsePassList(await getJson<unknown>('/api/passes', query, { signal }));
   } catch (err) {
     if (err instanceof HttpError || err instanceof NotRecorded) return null;
     throw err;

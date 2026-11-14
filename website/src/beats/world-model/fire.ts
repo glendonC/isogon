@@ -137,6 +137,12 @@ const PLATFORMS: Record<string, string> = {
   MODIS_TERRA: 'Terra MODIS',
   MODIS_AQUA: 'Aqua MODIS',
 };
+/** A satellite's name from its code ("MODIS_AQUA" as "Aqua MODIS"). */
+export const satelliteName = (code: string) => PLATFORMS[code] ?? code.replace(/_/g, ' ');
+
+/** A gap in hours in words: "40 min", "2.8 h", "14 h". */
+export const hoursWords = (h: number) => (h < 1 ? `${Math.round(h * 60)} min` : `${h < 10 ? h.toFixed(1) : Math.round(h)} h`);
+
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const two = (n: number) => String(n).padStart(2, '0');
 

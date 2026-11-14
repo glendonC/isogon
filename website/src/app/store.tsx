@@ -8,7 +8,7 @@ import type { NextLookEnd, NextLookStart } from '../content/demo/nextLook';
 import type { Step } from '../components/WorkspaceBar';
 import type { Box, FeaturedFire, Place, Places } from './places';
 import type { FireRecord, RecordPlace } from '../beats/calendar/record';
-import type { EarthStageTelemetry } from '../stage/earthCutawayTypes';
+import type { EarthStageTelemetry, StageFireAnchor } from '../stage/earthCutawayTypes';
 import type { EvidenceDoc } from '../content/evidence';
 
 /**
@@ -82,6 +82,13 @@ export interface WorkspaceStore {
     canHide: boolean;
     /** The region's box on screen, as the stage projects it (`telemetry.regionGrid`). */
     grid: EarthStageTelemetry['regionGrid'];
+    /**
+     * Where the fire on show sits on screen, from the stage every frame (`onFireAnchor`): a subscription, so the shell
+     * does not redraw for it.
+     */
+    subscribeAnchor: (fn: (anchor: StageFireAnchor | null) => void) => () => void;
+    /** On a hidden pass: the earlier pass whose detections the stage draws as an afterglow (`telemetry.lastSeen`). */
+    lastSeen: EarthStageTelemetry['lastSeen'] | null;
     /** The evidence route's answer, for the record beside a window's own count. */
     evidence: EvidenceDoc | null;
     openEvidence: () => void;

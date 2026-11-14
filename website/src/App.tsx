@@ -25,6 +25,7 @@ import { EarthCutawayStage } from './stage/EarthCutawayStage';
 import {
   THEATER_CATALOG,
   type EarthStageTelemetry,
+  type StageFireAnchor,
   type InspectorCameraPreset,
   type OrbitalSlewRequest,
   type TheaterId,
@@ -315,6 +316,15 @@ export function App() {
   /** A featured fire chosen on the place screen: its start replaces the place's opening start once. */
   const fireStartRef = useRef<{ region: string; start: string } | null>(null);
   const [liveTelemetry, setLiveTelemetry] = useState<LiveObserverTelemetry | null>(null);
+  /** Where the stage says the fire on show sits, passed on to World model's scene without redrawing the shell. */
+  const anchorListeners = useRef(new Set<(a: StageFireAnchor | null) => void>());
+  const emitAnchor = useCallback((a: StageFireAnchor | null) => anchorListeners.current.forEach((fn) => fn(a)), []);
+  const subscribeAnchor = useCallback((fn: (a: StageFireAnchor | null) => void) => {
+    anchorListeners.current.add(fn);
+    return () => {
+      anchorListeners.current.delete(fn);
+    };
+  }, []);
   /** The round of Test world (beats/test-world/useRound.ts), for the callbacks defined before it. */
   const roundRef = useRef<RoundApi | null>(null);
   // The places registry: the default fire, each place's opening start, and the recorded test fires.
@@ -1096,7 +1106,8 @@ export function App() {
   // What the pass track shows, what each step needs, and the quiet control's contents.
   const trackState: TrackState = !runIsReal ? 'simulated' : holdoutViirs ? 'hidden' : revealed ? 'revealed' : 'normal';
   const trackRevealed = useMemo(() => (revealed ? revealedPassesOf(activeRun) : []), [revealed, activeRun]);
-  const passLists = usePassList(activeRun);
+  // While VIIRS is held out the pass list carries nothing of what it saw; the full list comes with the reveal (D16).
+  const passLists = usePassList(activeRun, Boolean(activeRun?.metrics?.holdout_viirs) && !revealed);
   const stageMonth = activeRun?.epoch_summaries?.[0]?.timestamp_utc?.slice(0, 7) ?? null;
   /** The run on the terrain is a recorded test fire's window: its record shows, and it is not tested again. */
   const closedWindow = Boolean(runIsReal && activeRun && isClosedWindow(placesState.places, activeRun.region.id, realStart));
@@ -1304,6 +1315,8 @@ export function App() {
       closed: closedWindow,
       canHide: !stepBlocked.test,
       grid: stageTelemetry?.regionGrid,
+      subscribeAnchor,
+      lastSeen: stageTelemetry?.lastSeen ?? null,
       evidence: evidenceLive,
       openEvidence: () => setEvidenceOpen(true),
       revealedHere: revealed ? trackRevealed.filter((r) => r.frame === activeEpoch).reduce((a, r) => a + r.pixels, 0) : null,
@@ -1465,6 +1478,7 @@ export function App() {
           landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
           workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
           regionGridDivisions={modelScene ? 16 : undefined}
+          onFireAnchor={modelScene ? emitAnchor : undefined}
           tileBoard={rnd.board}
           onTilePick={rnd.pick}
           onTileAnchors={rnd.board ? rnd.onAnchors : undefined}

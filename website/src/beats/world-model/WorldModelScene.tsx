@@ -3,10 +3,37 @@ import { useWorkspace } from '../../app/store';
 import { fireNameWords, fireOfStart } from '../../app/places';
 import { utcDay } from '../../content/realRuns';
 import { beatOf } from '../../app/names';
-import { fireAt, fireExtent, looksOf, onScreen, passFacts, recordLine, runBox, windowCounts } from './fire';
+import type { StageFireAnchor } from '../../stage/earthCutawayTypes';
+import { fireAt, fireExtent, hoursWords, looksOf, onScreen, passFacts, recordLine, runBox, satelliteName, windowCounts, type ScreenBox } from './fire';
 import '../../styles/world-model.css';
 
 const list = (xs: number[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : String(xs[0] ?? ''));
+
+/** The stage's fire anchor, at most once a frame, without redrawing the shell. */
+function useFireAnchor(subscribe: (fn: (a: StageFireAnchor | null) => void) => () => void): StageFireAnchor | null {
+  const [anchor, setAnchor] = useState<StageFireAnchor | null>(null);
+  useEffect(() => {
+    let latest: StageFireAnchor | null = null;
+    let frame = 0;
+    const off = subscribe((a) => {
+      latest = a;
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        setAnchor((was) =>
+          was && latest && Math.abs(was.x - latest.x) < 0.5 && Math.abs(was.y - latest.y) < 0.5 && was.right === latest.right && was.visible === latest.visible
+            ? was
+            : latest,
+        );
+      });
+    });
+    return () => {
+      off();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [subscribe]);
+  return anchor;
+}
 
 const PLATE_W = 440;
 const GAP = 40;
@@ -18,6 +45,16 @@ const EDGE = 24;
  * beside the fire's extent with a leader to it, what was hidden low left, and the one action above the track. Nothing
  * is stacked in a column, and nothing repeats what the track says.
  */
+/** The stage's box of the fire on show, with a margin for the glow, held inside the screen; null when off screen. */
+function anchorBox(a: StageFireAnchor | null): ScreenBox | null {
+  if (!a || !(a.right > a.left) || !(a.bottom > a.top)) return null;
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const m = 14;
+  const box = { left: Math.max(0, a.left - m), top: Math.max(0, a.top - m), right: Math.min(W, a.right + m), bottom: Math.min(H, a.bottom + m) };
+  return box.right - box.left > 8 && box.bottom - box.top > 8 ? box : null;
+}
+
 export function WorldModelScene() {
   const ws = useWorkspace();
   const { run, test, time, model } = ws;
@@ -26,7 +63,9 @@ export function WorldModelScene() {
   const counts = windowCounts(run.active);
   const box = runBox(run.active);
   const fire = fireAt(run.active, time.pass);
-  const at = fire && box ? onScreen(fire.lon, fire.lat, box, model.grid) : null;
+  // Where the fire is on screen: the stage's own anchor when it has one in view, else the centroid through the grid.
+  const anchor = useFireAnchor(model.subscribeAnchor);
+  const at = anchor?.visible ? { x: anchor.x, y: anchor.y } : fire && box ? onScreen(fire.lon, fire.lat, box, model.grid) : null;
   const scene = model.closed ? 'record' : test.loading ? 'hiding' : test.hidden ? 'blind' : test.revealed ? 'revealed' : 'open';
   const ahead = test.score ? test.score.verdict.filter((v) => v.ahead).length : null;
   const judged = test.score ? test.score.verdict.length : null;
@@ -62,6 +101,11 @@ export function WorldModelScene() {
             ? 'What it saw comes back with the reveal.'
             : `${(facts.detections ?? 0).toLocaleString('en-US')} detections, given to the estimate.`}
         </span>
+        {facts.held && model.lastSeen && (
+          <span className="sys-fine">
+            The glow is the fire as {satelliteName(model.lastSeen.sensor)} last saw it, {hoursWords(model.lastSeen.hoursBefore)} before.
+          </span>
+        )}
       </>
     );
   } else if (scene === 'revealed' && ahead !== null && judged !== null) {
@@ -169,7 +213,7 @@ export function WorldModelScene() {
 
   // The plate hangs below an anchor near the top and opens to the left of one near the right edge.
   // The verdict and the record are about the whole window: beside the fire's extent, never over it.
-  const ext = scene === 'revealed' || scene === 'record' ? fireExtent(run.active, box, model.grid) : null;
+  const ext = scene === 'revealed' || scene === 'record' ? anchorBox(anchor) ?? fireExtent(run.active, box, model.grid) : null;
   let beside: React.ReactNode = null;
   if (ext && plate) {
     const W = window.innerWidth;
