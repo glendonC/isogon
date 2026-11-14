@@ -794,8 +794,8 @@ class NextLookRounds:
             "reference_status": "computed in the background; served when the round ends",
             "test_episodes": test_episodes(),
             "validation_reference": validation_reference(),
-            "known_limits": _known_limits(),
-            "protocol": _protocol(),
+            "known_limits": _known_limits(rnd.env),
+            "protocol": _protocol(rnd.env),
             "rounds": {"held": self.held(), "max": self.max_rounds},
         }
 
@@ -860,7 +860,8 @@ class NextLookRounds:
                 "done": rnd.done,
                 "history": list(rnd.history),
                 "observation": rnd.observation,
-                "known_limits": _known_limits(),
+                "known_limits": _known_limits(rnd.env),
+                "protocol": _protocol(rnd.env),
             }
             if rnd.done:
                 out["end"] = rnd.end
@@ -993,7 +994,8 @@ class NextLookRounds:
                 self.play_computations += 1
             played = play_mod.play_steps(env, agent, seed=seed, ceiling=flags["ceiling"], fields=flags["fields"])
             doc = {"key": key, "version": PLAY_CACHE_VERSION, "episode": self._episode_json(ep, env, origin, tiles, budget),
-                   "play": played, "computed_utc": _iso(time.time()), "compute_s": round(time.perf_counter() - t0, 2)}
+                   "play": played, "computed_utc": _iso(time.time()), "compute_s": round(time.perf_counter() - t0, 2),
+                   "known_limits": _known_limits(env), "protocol": _protocol(env)}
             self._write_cached(doc, sub="plays")
             origin_cache = "computed for this request"
         with self._lock:
@@ -1010,8 +1012,8 @@ class NextLookRounds:
             "episode": doc["episode"],
             "play": doc["play"],
             "play_cache": {"from": origin_cache, "computed_utc": doc.get("computed_utc"), "compute_s": doc.get("compute_s")},
-            "known_limits": _known_limits(),
-            "protocol": _protocol(),
+            "known_limits": doc.get("known_limits") or _known_limits(),
+            "protocol": doc.get("protocol") or _protocol(),
         }
 
 
@@ -1065,19 +1067,25 @@ def validation_reference() -> dict[str, Any] | None:
     return out
 
 
-def _known_limits() -> str:
+def _known_limits(env: Any = None) -> str:
+    """The limits of the schedule the environment played (a round on the pass list and one on nominal looks differ)."""
+    if env is not None and getattr(env, "known_limits", None):
+        return str(env.known_limits)
     from backend.env import KNOWN_LIMITS
 
     return KNOWN_LIMITS
 
 
-def _protocol() -> dict[str, Any]:
+def _protocol(env: Any = None) -> dict[str, Any]:
+    """The protocol the environment played under: version 3 on a window with a cached pass list, 2 on nominal looks."""
     from backend.env.policy import load_fitted
 
-    try:  # the environment's own name for the protocol it plays under
-        from backend.env.next_look import PROTOCOL
-    except ImportError:  # pragma: no cover
-        from backend.eval.blind_test import PROTOCOL
-
-    note =((load_fitted() or {}).get("test_protocol_2") or {}).get("note")
-    return {"version": PROTOCOL["version"], "name": PROTOCOL["name"], "note": note}
+    proto = getattr(env, "protocol", None) if env is not None else None
+    if not proto:
+        try:  # the environment's own name for the protocol it plays under
+            from backend.env.next_look import PROTOCOL as proto
+        except ImportError:  # pragma: no cover
+            from backend.eval.blind_test import PROTOCOL as proto
+    note = ((load_fitted() or {}).get("test_protocol_2") or {}).get("note")
+    return {"version": proto["version"], "name": proto["name"], "note": note,
+            "note_is_about": "the recorded table on the test episodes (test_episodes)"}

@@ -126,8 +126,10 @@ No parameters. Always `200`. The five presets (`plumas_ca`, `lytton_bc`, `novo_p
           "named_fires": [],
           "name_source": null,
           "blind_test_fire": false,
-          "to_the_world_model": null,
-          "to_the_learned_agent": null,
+          "to_the_world_model": "never seen",
+          "to_the_learned_agent": "fitted on",
+          "closed": false,
+          "closed_why": null,
           "default_start": "2012-08-10",
           "default_start_rule": "the period's start with the most MODIS pixels in the box (the earliest on a tie)",
           "opens": {"holdout_viirs": true, "what": "opens held out (holdout_viirs true) at its busiest start; the reveal scores it"},
@@ -176,7 +178,7 @@ Shortened: `places` has five entries, one per preset; one featured fire and one 
 - `opens` says how a featured fire opens. A recorded test fire opens on its recorded window, the last look of `backend/model/fitted_values/test_fire_looks.json` (Dixie from 2021-07-22T21:13Z, Lytton Creek from 2021-06-30T21:52Z, northern Evia from 2021-08-05T20:53Z), with `holdout_viirs` false and `recorded_window`: its blind test is on record at `GET /api/evidence`, and a held-out run of it answers `409`. Every other fire opens held out at its busiest start.
 - Featured fires are chosen by rule from the region's real run starts (`GET /api/runs/starts`, which reads MODIS rows only): the starts the start search marks busiest, grouped into periods less than 31 days apart, largest first by the MODIS pixels in the box at the busiest start. Today they are July and August 2021 (1,749), August 2012 (394) and September 2020 (175) in `plumas_ca`, June and July 2021 (514) and August 2023 (301) in `lytton_bc`, and August 2021 (714) in `evia_greece`. `run_starts` are the region's starts inside the period's months; `default_start` is the period's start with the most MODIS pixels.
 - A featured fire takes its `name` from every named fire whose dates overlap it and whose point lies within 0.5 degrees of the region's box (`named_fires` lists them, `named_fire` and `name_source` give the first); one without a name is shown by place and month. Today: Dixie, Chips (August 2012) and North Complex in `plumas_ca`; Lytton Creek, and Stein Mountain, Ponderosa Creek and Kookipi Creek (August 2023) in `lytton_bc`; Northern Evia in `evia_greece`. `blind_test_fire` marks the three 2021 test fires.
-- `to_the_world_model` and `to_the_learned_agent` say what the fire is to each part: fitted on, validated on, a recorded test fire, or never seen. Both are `null` until the model's function is served (`backend.model.fire_roles.fire_roles`). The two can differ: the world model was fitted on fires of 2018 to 2023 and validated on 2024 and 2025 (`backend/model/training.py`), the learned agent on episodes of 2012 to 2023 (`backend/env/learn.py`).
+- `to_the_world_model` and `to_the_learned_agent` say what the fire is to each part: fitted on, validated on, a recorded test fire, or never seen, from the model's function (`backend.model.fire_roles.fire_roles`; `null` in a build without it). `closed` and `closed_why` say whether a held-out run, round or play of the fire's window is refused, and why; a closed fire is never the default, even one the world model never saw. The two can differ: the world model was fitted on fires of 2018 to 2023 and validated on 2024 and 2025 (`backend/model/training.py`), the learned agent on episodes of 2012 to 2023 (`backend/env/learn.py`).
 - `default` is chosen by the rule in `rule`: the largest featured fire the world model never saw; while the standings are null, the largest featured fire that is not a blind test fire. `chosen_by` says which reading chose it, and the default carries both standings.
 - Named fires (`backend/firms/places.json`) carry the name, dates, burned area and point a fire agency gives, from the page in `source` (`point_source`, `area_source` or `last_day_source` when that fact comes from another page; [sources.md](sources.md)), a calendar `box` (the point 0.5 degrees each way) and its `calendar`, and the `featured_fire` they name, if any.
 - `country_extents` is where the rows of each cached country file lie; a box calendar counts only rows of those files.
@@ -554,6 +556,8 @@ Shortened: the keys shared with a simulated run (`region`, `assets`, `pipeline_s
 With `"holdout_viirs": true` the first answer holds nothing the scorer computed from the hidden rows. The keys named in `hidden_rows.withheld_until_reveal` are absent: `blind_test` and the five scored metrics. Everything that is present is the same, byte for byte, whatever the hidden rows hold.
 
 Sending the same body again with `"reveal": true` returns the full answer: the same run from the store, with `blind_test` and the scored metrics, and `hidden_rows` without `withheld_until_reveal` and `reveal_with`.
+
+`declared_cells` (held-out runs only, null otherwise): the cells the reconstruction declares as burning at each scored look of the hidden instrument, as flat indices on the 375 m grid (`grid.index`, `grid.rows_run`, `grid.centre_of_a_cell`). They are the cells the blind test compares with the hidden detections of that look. They are fixed before the hidden rows are opened, so they are in the first answer; after the reveal, `blind_test.published.reconstruction[i].cells_sha256` equals `declared_cells.looks[i].cells_sha256`. Where the frames come from the pass list, `looks[i].frame` is the held-out frame the look is.
 
 `blind_test` is the report of `backend/eval/blind_test.py`. It has two halves, and names them in `built_without_hidden_rows` and `from_the_scorer`.
 
@@ -997,7 +1001,8 @@ Shortened: `looks` has one entry per scheduled look (10 here), the per-tile list
 - `observation` is what the player may know before deciding, and nothing more. `p_burning_u8` is the model's probability that a cell burns, times 255; `tile_of_cell_u8` is the tile of every cell. Tile `t` is row `t // columns` and column `t % columns`, row 0 northern.
 - `looks` are the scheduled slots of the hidden platforms: platform, time and pixel size. They come from the platform and the calendar, not from a detection.
 - `episode.split` is `test` when the window meets one of the three 2021 test fires, otherwise `fit`.
-- `test_episodes` is the recorded reference table, read from `backend/env/fitted/next_look.json`, with the `reward` it was measured under and what an `empty_look` did then (the first reward). `validation_reference` is the table under the reward in use, on the 13 validation episodes of 2024 and 2025 (`agents`, `differences`, `plainly`, the episodes and where it is read from).
+- `test_episodes` is the recorded reference table, read from `backend/env/fitted/next_look.json`, with the `reward` it was measured under and what an `empty_look` did then (the first reward). `validation_reference` is the table under the reward in use, on the validation episodes of 2024 and 2025, with the pass list as the looks and the learned player in use (`agents`, `differences`, `plainly`, the episodes and where it is read from).
+- The looks of a round are the passes of the cached pass list over the episode's box (protocol version 3); where no pass list is cached they are nominal half-day slots (version 2). `protocol` and `known_limits` (in reset, state and a play) are the environment's own for the schedule it played.
 - `source` names the files behind the environment, these routes and the reference players.
 
 Errors: `400` for a missing `region_id`, both or neither of `episode` and `start`, an `episode` that does not look like a key or names another region, a `start` that is not a date, `tiles`, `budget` or `seed` out of range, or an episode with no scheduled VIIRS look; `404` for a region with no cached FIRMS rows and for an `episode` that is not in the catalogue; `403` and `413` as for every `POST`.

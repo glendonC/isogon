@@ -32,16 +32,17 @@ from backend.eval.rows import Detections, detections_from_rows, read_csv_rows  #
 from backend.model.real_blind import in_box_overpasses, window_from_start  # noqa: E402
 from backend.server_next_look import NextLookRounds, RoundConflict, RoundNotFound  # noqa: E402
 
-PINNED_EPISODE = "plumas_ca:12:2024-07-27T17"     # a validation episode of 2024 (split fit), 15 nominal looks
-# Its figures under the reward in use and the tracked reconstruction values, as the environment computes them (the
-# environment's own measurement, isogon-notes/fire-model/M10.md section 7).
-ROUND_SCORE_START = 0.2580165065620349
-ROUND_GAIN = {"latest_modis": 0.02665910865049309, "least_sure": 0.02665910865049309, "oracle": 0.03108102707025212}
+PINNED_EPISODE = "plumas_ca:12:2024-07-27T17"     # a validation episode of 2024 (split fit), 17 looks of the pass list
+# Its figures under the reward in use, the pass list as the default looks and the tracked values, as the environment
+# computes them on the routes' own code path.
+ROUND_SCORE_START = 0.25657088383494486
+ROUND_GAIN = {"latest_modis": 0.049187081588687065, "least_sure": 0.04623285448281217, "oracle": 0.05376901904994519}
 ROUND_FIRST_LOOKS = [
-    ("VIIRS_SNPP", "2024-07-27T21:02:14Z", True), ("VIIRS_NOAA20", "2024-07-27T21:07:14Z", True),
-    ("VIIRS_NOAA21", "2024-07-27T21:07:14Z", True), ("VIIRS_SNPP", "2024-07-28T10:01:22Z", False),
+    ("VIIRS_NOAA21", "2024-07-27T20:15:30Z", True), ("VIIRS_NOAA20", "2024-07-27T21:04:48Z", True),
+    ("VIIRS_NOAA21", "2024-07-27T21:56:00Z", True), ("VIIRS_NOAA20", "2024-07-28T09:23:29Z", False),
 ]
-LATEST_MODIS_LOOKS = {3: 10, 7: 6, 11: 6, 14: 6}   # the latest MODIS agent's looks on that episode
+LATEST_MODIS_LOOKS = {4: 10, 8: 6, 12: 6, 16: 6}   # the latest MODIS agent's looks on that episode
+ROUND_PROTOCOL = 3                                 # the pass list's protocol (a round on nominal looks is 2)
 LAST_LOOK = max(LATEST_MODIS_LOOKS)
 START_EPISODE = ("2020-09-29T12:00:00Z", "plumas_ca:22:2020-09-29T18")   # a start and the catalogue episode it gives
 CLOSED_EPISODE = "plumas_ca:22:2021-07-22T05"     # a test episode: refused, never played
@@ -265,7 +266,7 @@ class RealRoundTests(unittest.TestCase):
         self.assertAlmostEqual(r["score_start"], ROUND_SCORE_START, places=12)
         self.assertEqual([(x["platform"], x["time_utc"], x["is_day"]) for x in r["looks"][:4]], ROUND_FIRST_LOOKS)
         self.assertEqual((r["episode"]["key"], r["episode"]["split"], r["episode"]["modis_pixels_in_box"]), (PINNED_EPISODE, "fit", 286))
-        self.assertEqual(r["protocol"]["version"], 2)
+        self.assertEqual(r["protocol"]["version"], ROUND_PROTOCOL)
         self.assertEqual(r["test_episodes"]["episodes"], 21)
         rid = r["round_id"]
         st = None
