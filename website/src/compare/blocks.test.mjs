@@ -2,7 +2,7 @@
 // not been shown: no row of the hidden satellite before the reveal, and for a player only what its own looks found.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cutAround, fireBlock, groundOfRun, playerBlocks, threeWays } from './blocks.ts';
+import { cutAround, fireBlock, groundOfRun, playBlocks, playerBlocks, readPlay, seenRows, threeWays } from './blocks.ts';
 import { levelLines } from './marks.ts';
 
 const BOX = [-121, 39, -120, 40];
@@ -152,4 +152,72 @@ test('the dotted line closes around a single cell that may burn', () => {
   // Half way between the middle cell's centre and each neighbour's: on the cell's own edges
   const on = (v) => v >= 1 - 1e-9 && v <= 2 + 1e-9;
   for (let i = 0; i < chain.length; i += 2) assert.ok(on(chain[i]) && on(chain[i + 1]), 'and stays on the middle cell');
+});
+
+// A play as the play route answers it, cut down to what the page reads: two looks taken, one look passed
+const play = {
+  play: {
+    player: { id: 'least_sure', label: 'Least sure' },
+    episode: { box: BOX, tiles: [2, 2], budget: 2 },
+    score_start: 0.25,
+    steps: [
+      { decision: 0, look: { platform: 'VIIRS_SNPP', time_utc: '2020-01-01T10:00:00Z', is_day: true }, chosen_tile: -1, why: 'not one of the looks the budget is spread over', spent: false, revealed: null, reward: 0 },
+      {
+        decision: 1,
+        look: { platform: 'VIIRS_SNPP', time_utc: '2020-01-01T21:00:00Z', is_day: false },
+        chosen_tile: 3,
+        why: 'the tile with the highest score',
+        spent: true,
+        revealed: { pixels: 2, columns: ['lon', 'lat', 'scan_km', 'track_km', 'frp_mw', 'time_utc', 'platform'], rows: [[-120.2, 39.2, 0.4, 0.4, 3, 't', 'V'], [-120.21, 39.2, 0.4, 0.4, 3, 't', 'V']] },
+        reward: 0.01,
+      },
+      {
+        decision: 2,
+        look: { platform: 'VIIRS_NOAA20', time_utc: '2020-01-02T10:00:00Z', is_day: true },
+        chosen_tile: 3,
+        why: 'the tile with the highest score',
+        spent: true,
+        revealed: { pixels: 1, columns: ['lon', 'lat', 'scan_km', 'track_km', 'frp_mw', 'time_utc', 'platform'], rows: [[-120.3, 39.3, 0.4, 0.4, 3, 't', 'V']] },
+        reward: 0.02,
+      },
+    ],
+    score_end: 0.28,
+    gain: 0.03,
+  },
+};
+
+test('a play becomes a block with only the detections its own looks handed over, in order', () => {
+  const read = readPlay(play);
+  assert.deepEqual(read.looks.map((l) => [l.decision, l.tile, l.found.length]), [[1, 3, 2], [2, 3, 1]]);
+  const [block] = playBlocks(groundOfRun(run), [play]);
+  assert.equal(block.id, 'least_sure');
+  assert.deepEqual(block.label, { title: 'Least sure', lines: ['3 detections found in 2 looks', 'score gain +0.030'] });
+  assert.equal(block.pins[0].text, '1 2');
+  // Watched look by look: after the first look only its detections, and the gain so far
+  const [first] = playBlocks(groundOfRun(run), [play], { looks: 1 });
+  assert.equal(first.marks.find((m) => m.kind === 'detections' && m.instrument === 'viirs').rows.length, 2);
+  assert.deepEqual(first.label.lines, ['2 detections found in 1 look', 'score gain +0.010']);
+  const [none] = playBlocks(groundOfRun(run), [play], { looks: 0 });
+  assert.equal(none.marks.find((m) => m.kind === 'detections' && m.instrument === 'viirs').rows.length, 0);
+});
+
+test('a play on other ground than the run gives no block', () => {
+  const elsewhere = { play: { ...play.play, episode: { ...play.play.episode, box: [-122, 39, -121, 40] } } };
+  assert.deepEqual(playBlocks(groundOfRun(run), [elsewhere]), []);
+});
+
+test('what every player could see never holds a row of the sharp satellite, even from a run that shows it', () => {
+  const allSensors = {
+    ...run,
+    observer_passes: {
+      sensor_codes: { 1: 'MODIS_AQUA', 4: 'VIIRS_SNPP' },
+      frames: [
+        { frame: 0, timestamp_utc: '2020-01-01T10:00:00Z', sensor: 'MODIS_AQUA', held_out: false, is_day: true, footprints: [[-120.5, 39.5, 1.1, 1.0, 280, 10, 80, 1]] },
+        { frame: 1, timestamp_utc: '2020-01-01T10:20:00Z', sensor: 'VIIRS_SNPP', held_out: false, is_day: true, footprints: [[-120.4, 39.4, 0.4, 0.4, 280, 3, 0, 4]] },
+      ],
+    },
+  };
+  assert.deepEqual(seenRows(allSensors).map((r) => r.lon), [-120.5]);
+  // The same holds for a featured fire's block
+  assert.equal(fireBlock({ name: 'Somewhere' }, { id: 'f', label: 'January 2020' }, allSensors).marks[0].rows.length, 1);
 });

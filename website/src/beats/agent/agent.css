@@ -1,0 +1,32 @@
+/* The Agent part's picture. Placement only: every size, weight and colour is the design system's. */
+
+.agent-picture {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+}
+
+.agent-picture__line {
+  align-self: center;
+  justify-self: center;
+  max-width: 52ch;
+  margin: 0;
+  padding: var(--sys-s5);
+  text-align: center;
+}
+
+.agent-picture__foot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sys-s5);
+  padding: var(--sys-s3) var(--sys-s5) var(--sys-s4);
+}
+
+/* What a picked player did, look by look, beside its block. */
+.agent-card {
+  position: absolute;
+  z-index: 1;
+  max-width: none;
+}

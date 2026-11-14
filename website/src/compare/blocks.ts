@@ -79,24 +79,28 @@ interface Frame {
   sensor: string;
   heldOut: boolean;
   isDay: boolean;
+  /** The frame's detections of the coarse instrument only, whatever else the run shows. */
   rows: DetectionRow[];
 }
 
+const isCoarse = (sensor: string): boolean => sensor.startsWith('MODIS');
+
 function framesOf(run: unknown): Frame[] {
+  const passes = obj(obj(run).observer_passes);
+  const codes = obj(passes.sensor_codes);
   const out: Frame[] = [];
-  for (const f of arr(obj(obj(run).observer_passes).frames)) {
+  for (const f of arr(passes.frames)) {
     const o = obj(f);
     const frame = num(o.frame);
     const time = str(o.timestamp_utc);
     if (frame === null || !time) continue;
-    out.push({
-      frame,
-      time,
-      sensor: str(o.sensor) ?? '',
-      heldOut: o.held_out === true,
-      isDay: o.is_day === true,
-      rows: detectionRows(o.footprints),
+    const sensor = str(o.sensor) ?? '';
+    // A row names its sensor by a code; without one the frame's own sensor decides
+    const coarse = arr(o.footprints).filter((row) => {
+      const named = str(codes[String(arr(row)[7])]);
+      return isCoarse(named ?? sensor);
     });
+    out.push({ frame, time, sensor, heldOut: o.held_out === true, isDay: o.is_day === true, rows: detectionRows(coarse) });
   }
   return out;
 }
@@ -318,6 +322,8 @@ export interface PlayerBlocksOptions {
   ceiling?: boolean;
   /** Which of Chance's draws to show. Default the first. */
   draw?: number;
+  /** Show only the first looks each player took, for a replay. Default all of them. */
+  looks?: number;
 }
 
 /**
@@ -367,11 +373,13 @@ export function playerBlocks(ground: CompareGround | null, start: unknown, end: 
       if (player.key === 'oracle') note = 'sees the answer';
     }
     if (actions.length === 0) continue;
-    const taken: { tile: number; look: number }[] = [];
+    const every: { tile: number; look: number }[] = [];
     actions.forEach((a, look) => {
       const tile = num(a);
-      if (tile !== null && tile >= 0) taken.push({ tile, look });
+      if (tile !== null && tile >= 0) every.push({ tile, look });
     });
+    const whole = opts.looks === undefined || opts.looks >= every.length;
+    const taken = whole ? every : every.slice(0, Math.max(0, opts.looks ?? 0));
     const found: DetectionRow[] = [];
     for (const r of reveal.rows) {
       const tile = num(r[reveal.at('tile')]);
@@ -393,8 +401,9 @@ export function playerBlocks(ground: CompareGround | null, start: unknown, end: 
       text: looks.join(' '),
     }));
     lines.push(`${count(found.length, 'detection', 'detections')} found in ${count(taken.length, 'look', 'looks')}`);
-    if (gain !== null) lines.push(`score gain ${signed(gain)}`);
-    if (note) lines.push(note);
+    // The end of a round gives a player's gain for the whole round only
+    if (gain !== null && whole) lines.push(`score gain ${signed(gain)}`);
+    if (note && whole) lines.push(note);
     blocks.push({
       id: player.key,
       ground,
@@ -409,4 +418,145 @@ export function playerBlocks(ground: CompareGround | null, start: unknown, end: 
     });
   }
   return blocks;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The players of a round, from their plays
+
+export interface PlayBlocksOptions {
+  /** The MODIS detections every player could see, drawn as quiet outlines. */
+  seen?: DetectionRow[];
+  /** Show only the first looks each player took, for a replay. Default all of them. */
+  looks?: number;
+}
+
+/** One look a player took, as its play holds it. */
+export interface PlayLook {
+  /** The index of the scheduled look. */
+  decision: number;
+  tile: number;
+  timeUtc: string | null;
+  platform: string | null;
+  isDay: boolean | null;
+  /** Why the player chose the tile, in the play's own words. */
+  why: string | null;
+  /** Hidden detections the look handed over inside its tile. */
+  found: DetectionRow[];
+  reward: number | null;
+}
+
+export interface PlaySummary {
+  id: string;
+  name: string;
+  looks: PlayLook[];
+  gain: number | null;
+  scoreStart: number | null;
+  box: Box | null;
+  tiles: [number, number] | null;
+}
+
+/** A play as `POST /api/env/next_look/play` answers it (the answer, or its `play`), read down to what is drawn. */
+export function readPlay(answer: unknown): PlaySummary | null {
+  const a = obj(answer);
+  const p = Object.keys(obj(a.play)).length > 0 ? obj(a.play) : a;
+  const id = str(obj(p.player).id);
+  if (!id) return null;
+  const episode = Object.keys(obj(p.episode)).length > 0 ? obj(p.episode) : obj(a.episode);
+  const tiles = arr(episode.tiles);
+  const looks: PlayLook[] = [];
+  for (const raw of arr(p.steps)) {
+    const step = obj(raw);
+    const tile = num(step.chosen_tile);
+    const decision = num(step.decision);
+    if (step.spent !== true || tile === null || tile < 0 || decision === null) continue;
+    const table = rowsByColumns(step.revealed);
+    const found: DetectionRow[] = [];
+    for (const r of table.rows) {
+      const lon = num(r[table.at('lon')]);
+      const lat = num(r[table.at('lat')]);
+      const scanKm = num(r[table.at('scan_km')]);
+      const trackKm = num(r[table.at('track_km')]);
+      if (lon !== null && lat !== null && scanKm !== null && trackKm !== null) found.push({ lon, lat, scanKm, trackKm });
+    }
+    const look = obj(step.look);
+    looks.push({
+      decision,
+      tile,
+      timeUtc: str(look.time_utc),
+      platform: str(look.platform),
+      isDay: typeof look.is_day === 'boolean' ? look.is_day : null,
+      why: str(step.why),
+      found,
+      reward: num(step.reward),
+    });
+  }
+  const rowsN = num(tiles[0]);
+  const colsN = num(tiles[1]);
+  return {
+    id,
+    name: PLAYERS.find((x) => x.key === id)?.name ?? str(obj(p.player).label) ?? id,
+    looks,
+    gain: num(p.gain),
+    scoreStart: num(p.score_start),
+    box: boxOf(episode.box),
+    tiles: rowsN && colsN ? [rowsN, colsN] : null,
+  };
+}
+
+/**
+ * One block per play, in the order given. Every block carries the tile lines, quiet outlines for the MODIS
+ * detections every player could see, and filled marks only for what that player's own looks handed over.
+ * With `looks` the blocks stop after that many looks, so a play can be watched look by look; the gain shown is
+ * then the sum of the rewards so far.
+ */
+export function playBlocks(ground: CompareGround | null, plays: readonly unknown[], opts: PlayBlocksOptions = {}): CompareBlock[] {
+  if (!ground) return [];
+  const blocks: CompareBlock[] = [];
+  for (const answer of plays) {
+    const play = readPlay(answer);
+    if (!play || !play.box || !play.tiles) continue;
+    const box = play.box;
+    if (box.some((v, i) => Math.abs(v - ground.box[i]) > 1e-6)) continue;
+    const [rowsN, colsN] = play.tiles;
+    const all = opts.looks === undefined || opts.looks >= play.looks.length;
+    const shown = all ? play.looks : play.looks.slice(0, Math.max(0, opts.looks ?? 0));
+    const found = shown.flatMap((l) => l.found);
+    const order = new Map<number, number[]>();
+    shown.forEach((l, i) => order.set(l.tile, [...(order.get(l.tile) ?? []), i + 1]));
+    const pins: ComparePin[] = [...order.entries()].map(([tile, looks]) => ({
+      id: `tile-${tile}`,
+      lon: box[0] + (((tile % colsN) + 0.16) / colsN) * (box[2] - box[0]),
+      lat: box[3] - ((Math.floor(tile / colsN) + 0.16) / rowsN) * (box[3] - box[1]),
+      text: looks.join(' '),
+    }));
+    const rewards = shown.map((l) => l.reward);
+    const gain = all && play.gain !== null ? play.gain : rewards.every((r): r is number => r !== null) ? rewards.reduce((a: number, b) => a + b, 0) : null;
+    const lines = [`${count(found.length, 'detection', 'detections')} found in ${count(shown.length, 'look', 'looks')}`];
+    if (gain !== null) lines.push(`score gain ${signed(gain)}`);
+    if (play.id === 'oracle') lines.push('sees the answer');
+    const marks: CompareMark[] = [{ kind: 'tiles', rows: rowsN, cols: colsN, looked: shown.map((l) => l.tile) }];
+    if (opts.seen && opts.seen.length > 0) marks.push({ kind: 'detections', instrument: 'modis', rows: opts.seen, weight: 'quiet' });
+    marks.push({ kind: 'detections', instrument: 'viirs', rows: found });
+    blocks.push({ id: play.id, ground, night: true, marks, pins, label: { title: play.name, lines } });
+  }
+  return blocks;
+}
+
+/** The MODIS detections of a run's passes that were not held out: what every player of its round could see. */
+export function seenRows(run: unknown): DetectionRow[] {
+  return framesOf(run)
+    .filter((f) => !f.heldOut)
+    .flatMap((f) => f.rows);
+}
+
+/** The most looks any player of a finished round took. */
+export function roundLooks(end: unknown): number {
+  const reference = obj(obj(end).reference);
+  let most = 0;
+  for (const player of PLAYERS) {
+    const ref = obj(reference[player.key]);
+    const actions = player.key === 'random' ? arr(arr(ref.actions)[0]) : arr(ref.actions);
+    most = Math.max(most, actions.filter((a) => (num(a) ?? -1) >= 0).length);
+  }
+  return most;
 }

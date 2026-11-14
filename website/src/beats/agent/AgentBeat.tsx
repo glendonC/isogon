@@ -1,8 +1,9 @@
 import { beatOf } from '../../app/names';
 
 /**
- * Agent: an agent plays the same round, step by step, with what it ranked the tiles by. Not open yet; the bar says
- * why. The first version replays each reference player's looks from a finished round's end.
+ * Agent: the players play the same round on the open fire. This is the part's panel: its name and its line. The
+ * picture, one block per player with its looks in order and what they found, is `AgentPicture` beside this file;
+ * the shell mounts it where the stage is.
  */
 export function AgentBeat() {
   const b = beatOf('agent');

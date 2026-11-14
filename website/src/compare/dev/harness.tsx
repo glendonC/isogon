@@ -5,6 +5,7 @@
  *   ?use=ways     one fire three ways (region, start, frame, cut=0, revealed=1)
  *   ?use=places   the featured fires of the places registry
  *   ?use=players  one block per player of a round (region, start, ceiling=1)
+ *   ?use=agent    the Agent part's picture, inside a stand-in for the workspace (region, start)
  */
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -12,6 +13,8 @@ import { assetUrl, getJson, postJson } from '../../lib/api';
 import { platformName } from '../../content/realRuns';
 import '../../styles/tokens.css';
 import '../../styles/system.css';
+import { WorkspaceProvider, type WorkspaceStore } from '../../app/store';
+import { AgentPicture } from '../../beats/agent/AgentPicture';
 import { ComparePlane } from '../ComparePlane';
 import { fireBlock, groundOfRun, playerBlocks, threeWays } from '../blocks';
 import type { CompareBlock, DetectionRow } from '../types';
@@ -133,6 +136,30 @@ async function playersView(): Promise<View> {
   };
 }
 
+/** The Agent part's picture with just enough of the workspace around it: the place and the run on show. */
+function AgentHarness() {
+  const [store, setStore] = useState<WorkspaceStore | null>(null);
+  useEffect(() => {
+    void defaults().then(async ({ regionId, start }) => {
+      const run = await heldOutRun(regionId, start);
+      setStore({
+        place: { regionId, title: run.region.name },
+        run: { active: run, isReal: true, realStart: start },
+        round: { state: null, end: null },
+      } as unknown as WorkspaceStore);
+    });
+  }, []);
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--sys-night)' }}>
+      {store && (
+        <WorkspaceProvider value={store}>
+          <AgentPicture />
+        </WorkspaceProvider>
+      )}
+    </div>
+  );
+}
+
 function Harness() {
   const [revealed, setRevealed] = useState(Q.get('revealed') === '1');
   const [view, setView] = useState<View | null>(null);
@@ -187,4 +214,4 @@ function Harness() {
 }
 
 const root = document.getElementById('root');
-if (root) ReactDOM.createRoot(root).render(<Harness />);
+if (root) ReactDOM.createRoot(root).render(USE === 'agent' ? <AgentHarness /> : <Harness />);
