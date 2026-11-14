@@ -1,0 +1,135 @@
+/* S1, a round of next look (components/NextLookRound.tsx). The readout takes the inspector's place; the tiles
+   lie over the terrain seen from straight above. Hairlines, no boxes, nothing moves on its own. */
+
+.iso-round {
+  display: grid;
+  gap: 14px;
+}
+
+.iso-round__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.iso-round__source {
+  margin: 0;
+  font: 400 12px/17px var(--font-mono);
+  color: var(--iso-modis-ink);
+}
+
+.iso-round__episode,
+.iso-round__line,
+.iso-round__result {
+  margin: 0;
+  font: 400 13px/19px var(--font-sans);
+  color: var(--iso-ink-2);
+}
+
+.iso-round__result {
+  color: var(--iso-ink);
+}
+
+.iso-round__turn,
+.iso-round__end {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding-top: 14px;
+  border-top: 1px solid var(--iso-hair);
+}
+
+.iso-round__count {
+  margin: 0;
+  font: 400 24px/30px var(--font-sans);
+  color: var(--iso-ink);
+}
+
+.iso-round__slot {
+  margin: 0;
+  font: 400 13px/18px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--iso-ink);
+}
+
+.iso-round__note {
+  margin: 0;
+  font: 400 11.5px/16px var(--font-sans);
+  color: var(--iso-ink-3);
+}
+
+.iso-round__scores,
+.iso-round__picks {
+  justify-self: stretch;
+}
+
+.iso-round__scores tr[data-you] th,
+.iso-round__scores tr[data-you] td {
+  color: var(--iso-ink);
+}
+
+.iso-round__scores th[scope='col'] {
+  white-space: normal;
+}
+
+.iso-round__scores tbody th {
+  white-space: normal;
+}
+
+.iso-round__range {
+  display: block;
+  font: 400 11px/15px var(--font-mono);
+  color: var(--iso-ink-3);
+}
+
+.iso-readout .iso-table.iso-round__scores td:last-child,
+.iso-readout .iso-table.iso-round__picks td:last-child {
+  color: var(--iso-ink);
+  white-space: nowrap;
+}
+
+.iso-round__keys {
+  display: flex;
+  gap: 16px;
+}
+
+/* The tiles over the terrain. */
+.iso-tiles {
+  position: fixed;
+  z-index: 10;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.iso-tiles__tile {
+  fill: transparent;
+  stroke: rgba(243, 244, 246, 0.42);
+  stroke-width: 1;
+  outline: none;
+}
+
+.iso-tiles[data-can-pick='true'] .iso-tiles__tile {
+  pointer-events: all;
+  cursor: crosshair;
+}
+
+.iso-tiles[data-can-pick='true'] .iso-tiles__tile:hover,
+.iso-tiles__tile:focus-visible {
+  fill: rgba(214, 241, 255, 0.1);
+  stroke: var(--iso-curtain);
+  stroke-width: 1.5;
+}
+
+.iso-tiles__tile[data-looked] {
+  stroke: var(--iso-ink);
+  stroke-width: 1.5;
+}
+
+.iso-tiles__label {
+  font: 500 12px/1 var(--font-mono);
+  fill: var(--iso-ink);
+  paint-order: stroke;
+  stroke: rgba(8, 11, 17, 0.8);
+  stroke-width: 3px;
+}

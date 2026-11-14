@@ -1,0 +1,195 @@
+/* Evidence sheet (components/EvidenceSheet.tsx). Built on the Method sheet: the same glass, head, lede and
+   sheet table. Plain tables and text only; wide tables scroll inside their own wrapper, never the page. */
+
+.iso-evidence {
+  width: min(900px, calc(100vw - 2 * var(--iso-gutter)));
+  max-height: calc(100dvh - 2 * var(--iso-gutter));
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  padding-bottom: 28px;
+  user-select: text;
+}
+
+.iso-evidence__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 14px;
+  row-gap: 6px;
+  min-width: 0;
+}
+
+/* Where the numbers come from, beside the title: "Demo data" or "NASA FIRMS". */
+.iso-evidence__source {
+  font: 400 12px/16px var(--font-mono);
+  color: var(--iso-curtain);
+  white-space: nowrap;
+}
+
+.iso-evidence__section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  padding-top: 10px;
+}
+
+.iso-evidence__heading {
+  margin: 0;
+  padding: 0 28px;
+  font: 500 16px/20px var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+.iso-evidence__text {
+  margin: 0;
+  padding: 0 28px;
+  max-width: calc(72ch + 56px);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--iso-ink-2);
+}
+
+.iso-evidence__choice {
+  padding: 0 28px;
+}
+
+.iso-evidence__scroll {
+  min-width: 0;
+  overflow-x: auto;
+  padding: 0 28px;
+}
+
+.iso-evidence .iso-evidence__scroll .iso-table--sheet {
+  width: 100%;
+  margin: 0;
+}
+
+.iso-evidence .iso-evidence__scroll .iso-table th,
+.iso-evidence .iso-evidence__scroll .iso-table td {
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+/* Row names wrap before the numbers have to scroll; each date keeps its day and time together. */
+.iso-evidence .iso-evidence__scroll .iso-table tbody th {
+  min-width: 9em;
+  white-space: normal;
+}
+
+.iso-evidence .iso-evidence__scroll .iso-table td.iso-evidence__val {
+  white-space: normal;
+}
+
+.iso-evidence__when {
+  white-space: nowrap;
+}
+
+.iso-evidence .iso-evidence__scroll .iso-table thead th {
+  font-size: 12.5px;
+  color: var(--iso-ink-3);
+}
+
+.iso-evidence .iso-table .iso-evidence__num {
+  padding-left: 18px;
+  text-align: right;
+}
+
+.iso-evidence .iso-table .iso-evidence__test,
+.iso-evidence .iso-table .iso-evidence__who,
+.iso-evidence .iso-table .iso-evidence__val {
+  padding-left: 18px;
+  text-align: left;
+}
+
+.iso-evidence .iso-table td.iso-evidence__test {
+  font: 400 12.5px/18px var(--font-sans);
+  color: var(--iso-ink-2);
+}
+
+.iso-evidence .iso-table td.iso-evidence__num,
+.iso-evidence .iso-table td.iso-evidence__val {
+  color: var(--iso-ink);
+}
+
+/* Who is ahead on the row, in words. One colour whoever is ahead, so a row Isogon loses reads as plainly as
+   one it wins. */
+.iso-evidence .iso-table td.iso-evidence__who {
+  padding-left: 22px;
+  font: 400 12.5px/18px var(--font-sans);
+  color: var(--iso-ink);
+}
+
+/* The first protocol sits under the corrected one, one step quieter. */
+.iso-evidence .iso-table tr[data-test='old'] td.iso-evidence__num,
+.iso-evidence .iso-table tr[data-test='old'] td.iso-evidence__who,
+.iso-evidence .iso-table td.iso-evidence__val[data-test='old'] {
+  color: var(--iso-ink-2);
+}
+
+.iso-evidence__hint {
+  display: block;
+  margin-top: 1px;
+  font: 400 11.5px/15px var(--font-sans);
+  color: var(--iso-ink-3);
+}
+
+/* Validation parts: the part and its scores in plain words, then the verdict. Wraps at any width. */
+.iso-evidence .iso-evidence__parts th {
+  width: 62%;
+  white-space: normal;
+}
+
+.iso-evidence .iso-table.iso-evidence__parts td {
+  color: var(--iso-ink);
+}
+
+.iso-evidence__limits {
+  margin: 0;
+  padding: 0 28px;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  max-width: calc(72ch + 56px);
+}
+
+.iso-evidence__limits li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--iso-ink-2);
+}
+
+.iso-evidence__limit-num {
+  font: 400 12px/21px var(--font-mono);
+  color: var(--iso-ink-3);
+}
+
+@media (max-width: 520px) {
+  .iso-evidence .iso-sheet__head {
+    padding: 22px 20px 0;
+  }
+
+  .iso-evidence .iso-sheet__lede,
+  .iso-evidence__heading,
+  .iso-evidence__text,
+  .iso-evidence__choice,
+  .iso-evidence__scroll,
+  .iso-evidence__limits {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .iso-evidence .iso-evidence__parts {
+    width: calc(100% - 40px);
+    margin: 0 20px;
+  }
+
+  .iso-evidence .iso-evidence__parts th {
+    width: 58%;
+  }
+}

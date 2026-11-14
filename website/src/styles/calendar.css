@@ -1,0 +1,174 @@
+/* Burning calendar (components/BurningCalendar.tsx): the workspace's time control, bottom left, above the
+   pass timeline. No box around the grid; cells are square-cornered; empty cells draw nothing. */
+
+.iso-cal {
+  display: grid;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.iso-cal__bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.iso-cal__scale {
+  white-space: nowrap;
+}
+
+.iso-cal__end {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.iso-cal__tag {
+  font: 400 11px/16px var(--font-mono);
+  color: var(--iso-modis-ink);
+}
+
+.iso-cal__body {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  column-gap: 6px;
+}
+
+.iso-cal__months {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-bottom: 18px;
+  font: 400 10.5px/10px var(--font-mono);
+  color: var(--iso-ink-3);
+}
+
+.iso-cal__plot {
+  position: relative;
+  display: grid;
+  gap: 4px;
+}
+
+.iso-cal__grid {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 486 / 106.5;
+  cursor: crosshair;
+  outline: none;
+}
+
+.iso-cal__grid:focus-visible {
+  outline: 1px solid var(--iso-curtain);
+  outline-offset: 4px;
+}
+
+.iso-cal__focus,
+.iso-cal__range,
+.iso-cal__hover {
+  fill: none;
+  pointer-events: none;
+}
+
+.iso-cal__focus {
+  stroke: var(--iso-curtain);
+  stroke-width: 1.5;
+}
+
+.iso-cal__range {
+  stroke: rgba(214, 241, 255, 0.55);
+  stroke-width: 1;
+}
+
+.iso-cal__hover {
+  stroke: var(--iso-ink);
+  stroke-width: 1;
+}
+
+.iso-cal__years {
+  position: relative;
+  height: 14px;
+  font: 400 10.5px/14px var(--font-mono);
+  color: var(--iso-ink-3);
+}
+
+.iso-cal__years span {
+  position: absolute;
+  top: 0;
+  translate: -50% 0;
+}
+
+.iso-cal__years span:first-child {
+  translate: 0 0;
+}
+
+.iso-cal__years span:last-child {
+  translate: -100% 0;
+}
+
+.iso-cal__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 6px;
+  min-width: 0;
+  padding-left: 32px;
+  font: 400 11px/14px var(--font-mono);
+  color: var(--iso-ink-3);
+}
+
+.iso-cal__ramp {
+  flex-shrink: 0;
+  width: 72px;
+  height: 6px;
+}
+
+.iso-cal__readout {
+  padding-left: 32px;
+}
+
+.iso-cal__table th {
+  padding: 0 14px 2px 0;
+  font: 400 11.5px/15px var(--font-sans);
+  color: var(--iso-ink-3);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.iso-cal__table th:first-child {
+  color: var(--iso-ink);
+  font-weight: 500;
+}
+
+.iso-cal__table td {
+  padding: 0 14px 0 0;
+  font: 400 12.5px/18px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--iso-ink);
+  text-align: left;
+}
+
+.iso-cal__table td:last-child {
+  color: var(--iso-ink);
+}
+
+.iso-cal__csv {
+  font-size: 12px;
+}
+
+.iso-cal__note,
+.iso-cal__empty {
+  margin: 0;
+  padding-left: 32px;
+  font: 400 11.5px/16px var(--font-mono);
+  color: var(--iso-modis-ink);
+}
+
+.iso-cal__empty {
+  padding: 8px 0;
+  color: var(--iso-ink-3);
+}

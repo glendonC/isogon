@@ -1,0 +1,245 @@
+/* Sensor physics as a three-page briefing (stage/SensorDiagnosticModal.tsx). One idea per page: a large
+   visual on the left, plain words and two big numbers on the right. Smoked glass, square corners. */
+
+.iso-brief {
+  width: min(1120px, calc(100vw - 2 * var(--iso-gutter)));
+  max-height: calc(100dvh - 2 * var(--iso-gutter));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  animation: iso-glass-in 420ms var(--ease-studio) backwards;
+  user-select: text;
+}
+
+.iso-brief__head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 32px;
+  padding: 22px 26px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.iso-brief__title {
+  margin: 0;
+  font: 500 26px/30px var(--font-sans);
+  letter-spacing: -0.025em;
+}
+
+.iso-brief__pages {
+  display: flex;
+  gap: 6px;
+}
+
+.iso-brief__page {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 0;
+  background: transparent;
+  color: rgba(243, 244, 246, 0.66);
+  font: 400 15px/20px var(--font-sans);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.iso-brief__page:hover {
+  color: var(--iso-ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.iso-brief__page[data-active='true'] {
+  color: var(--iso-ink);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.iso-brief__page-num {
+  font: 400 12px/20px var(--font-mono);
+  color: rgba(243, 244, 246, 0.6);
+}
+
+.iso-brief__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
+  height: min(470px, calc(100dvh - 2 * var(--iso-gutter) - 140px));
+  min-height: 0;
+  overflow-y: auto;
+  animation: iso-brief-page 320ms var(--ease-studio) backwards;
+}
+
+@keyframes iso-brief-page {
+  from {
+    opacity: 0;
+    transform: translate3d(10px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.iso-brief__visual {
+  padding: 18px 10px 18px 22px;
+  display: grid;
+  align-items: center;
+}
+
+.iso-brief__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.iso-brief__axis {
+  font: 400 12px var(--font-mono);
+  fill: rgba(243, 244, 246, 0.62);
+}
+
+.iso-brief__label {
+  font: 500 14px var(--font-sans);
+}
+
+.iso-brief__value {
+  font: 500 22px var(--font-sans);
+  fill: #d6f1ff;
+}
+
+.iso-brief__value-sm {
+  font: 500 14px var(--font-mono);
+}
+
+.iso-brief__text {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  padding: 26px 28px 26px 26px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.iso-brief__lead {
+  margin: 0;
+  font: 400 19px/1.45 var(--font-sans);
+  letter-spacing: -0.01em;
+  color: var(--iso-ink);
+}
+
+.iso-brief__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.iso-brief__stats > div {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.iso-brief__big {
+  font: 500 44px/1 var(--font-sans);
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  color: var(--iso-ink);
+}
+
+.iso-brief__unit {
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: rgba(243, 244, 246, 0.7);
+}
+
+.iso-brief__take {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: rgba(243, 244, 246, 0.82);
+}
+
+.iso-brief__checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.iso-brief__checks li {
+  display: grid;
+  grid-template-columns: 7px 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+  font-size: 13.5px;
+  color: rgba(243, 244, 246, 0.82);
+}
+
+.iso-brief__checks li[data-status='pass'] .iso-check__box {
+  background: currentColor;
+}
+
+.iso-brief__check-status {
+  font: 400 12px/16px var(--font-mono);
+  color: rgba(243, 244, 246, 0.6);
+}
+
+.iso-brief__angle {
+  display: grid;
+  gap: 6px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.iso-brief__angle-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 14px;
+  color: rgba(243, 244, 246, 0.82);
+}
+
+.iso-brief__angle-val {
+  font: 500 18px/1 var(--font-mono);
+  color: #d6f1ff;
+}
+
+.iso-brief__legend {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 26px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  color: rgba(243, 244, 246, 0.86);
+}
+
+.iso-brief__source {
+  margin-left: auto;
+  font: 400 11.5px/16px var(--font-mono);
+  color: rgba(243, 244, 246, 0.55);
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .iso-brief__head {
+    grid-template-columns: 1fr auto;
+    row-gap: 12px;
+  }
+
+  .iso-brief__pages {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+
+  .iso-brief__body {
+    grid-template-columns: 1fr;
+  }
+
+  .iso-brief__text {
+    border-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}

@@ -1,0 +1,338 @@
+/* W1: the pass track (components/PassTrack.tsx). VIIRS rises above the axis, MODIS hangs below; night is shaded. */
+
+.iso-track {
+  --track-viirs: #f08a45;
+  --track-modis: var(--iso-modis-ink);
+  --track-lane: 76px;
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  column-gap: 18px;
+  align-items: end;
+  color: var(--iso-ink-2);
+  font: 400 12px/16px var(--font-sans);
+}
+
+.iso-track__wait {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--iso-ink-3);
+}
+
+.iso-track__ctl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 22px;
+}
+
+.iso-track__btn {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--iso-hair);
+  border-radius: 0;
+  background: rgba(8, 11, 17, 0.4);
+  color: var(--iso-ink-2);
+  cursor: pointer;
+  padding: 0;
+  transition: color 160ms var(--ease-studio), border-color 160ms var(--ease-studio), background 160ms var(--ease-studio);
+}
+
+.iso-track__btn svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+
+.iso-track__btn svg [data-fill='true'] {
+  fill: currentColor;
+  stroke: none;
+}
+
+.iso-track__btn:hover,
+.iso-track__btn:focus-visible {
+  color: var(--iso-ink);
+  border-color: var(--iso-hair-strong);
+}
+
+.iso-track__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.iso-track__play {
+  width: 34px;
+  height: 34px;
+  background: var(--iso-ink);
+  color: var(--iso-night);
+  border-color: var(--iso-ink);
+}
+
+.iso-track__play:hover,
+.iso-track__play:focus-visible {
+  color: var(--iso-night);
+  background: #fff;
+}
+
+.iso-track__count {
+  display: grid;
+  margin-left: 10px;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.iso-track__count > span:first-child {
+  color: var(--iso-ink);
+  font-weight: 500;
+}
+
+.iso-track__state {
+  color: var(--iso-ink-3);
+}
+
+.iso-track[data-state='hidden'] .iso-track__state,
+.iso-track[data-state='revealed'] .iso-track__state {
+  color: var(--track-viirs);
+}
+
+.iso-track__body {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.iso-track__rows {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  height: var(--track-lane);
+  align-self: end;
+  margin-bottom: 18px;
+  color: var(--iso-ink-3);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.iso-track__rows span:first-child {
+  align-self: start;
+  padding-top: 6px;
+}
+
+.iso-track__rows span:last-child {
+  align-self: end;
+  padding-bottom: 6px;
+}
+
+.iso-track__lane {
+  position: relative;
+  height: var(--track-lane);
+  margin: 58px 0 18px;
+  background: rgba(243, 244, 246, 0.05);
+  cursor: pointer;
+  outline: none;
+  touch-action: none;
+}
+
+.iso-track__lane:focus-visible {
+  box-shadow: 0 0 0 1px var(--iso-hair-strong);
+}
+
+.iso-track__night {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(4, 6, 10, 0.62);
+  pointer-events: none;
+}
+
+.iso-track__day {
+  position: absolute;
+  top: 100%;
+  padding: 4px 0 0 5px;
+  border-left: 1px solid var(--iso-hair);
+  height: 16px;
+  color: var(--iso-ink-3);
+  font-size: 11px;
+  line-height: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.iso-track__axis {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--iso-hair);
+  pointer-events: none;
+}
+
+/* A pass: a bar from the axis, up for VIIRS and down for MODIS, its length by the pixels it flagged (log). */
+.iso-track__mark {
+  --h: 0;
+  --c: var(--track-modis);
+  position: absolute;
+  width: 3px;
+  margin-left: -1.5px;
+  height: calc(4px + var(--h) * 30px);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--c);
+  cursor: pointer;
+}
+
+/* A wider invisible target than the mark itself */
+.iso-track__mark::after {
+  content: '';
+  position: absolute;
+  inset: -4px -5px;
+}
+
+.iso-track__mark[data-row='viirs'] {
+  --c: var(--track-viirs);
+  bottom: 50%;
+}
+
+.iso-track__mark[data-row='modis'] {
+  top: calc(50% + 1px);
+}
+
+.iso-track__mark[data-kind='nothing'] {
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--c);
+  opacity: 0.7;
+}
+
+.iso-track__mark[data-row='viirs'][data-kind='nothing'] {
+  bottom: calc(50% + 3px);
+}
+
+.iso-track__mark[data-row='modis'][data-kind='nothing'] {
+  top: calc(50% + 4px);
+}
+
+.iso-track__mark[data-kind='hidden'] {
+  height: 26px;
+  width: 5px;
+  margin-left: -2.5px;
+  background: repeating-linear-gradient(180deg, var(--c) 0 2px, transparent 2px 5px);
+  opacity: 0.55;
+}
+
+.iso-track__mark[data-current='true'] {
+  width: 5px;
+  margin-left: -2.5px;
+  background: var(--iso-ink);
+  box-shadow: 0 0 0 2px rgba(8, 11, 17, 0.9), 0 0 0 3px var(--iso-ink);
+}
+
+.iso-track__head {
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  width: 1px;
+  margin-left: -0.5px;
+  background: var(--iso-ink);
+  pointer-events: none;
+}
+
+.iso-track__bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  display: grid;
+  gap: 1px;
+  padding: 6px 10px 7px;
+  background: rgba(8, 11, 17, 0.88);
+  border: 1px solid var(--iso-hair);
+  color: var(--iso-ink-2);
+  font-size: 11.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.iso-track__bubble strong {
+  color: var(--iso-ink);
+  font-weight: 500;
+  font-size: 12.5px;
+}
+
+.iso-track__card {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  width: 260px;
+  padding: 9px 12px 10px;
+  background: rgba(8, 11, 17, 0.97);
+  border: 1px solid var(--iso-hair-strong);
+  color: var(--iso-ink-2);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: normal;
+  pointer-events: none;
+}
+
+.iso-track__card strong {
+  color: var(--iso-ink);
+  font-weight: 500;
+}
+
+.iso-track__card[data-row='viirs'] strong {
+  color: var(--track-viirs);
+}
+
+.iso-track__card em {
+  margin-top: 4px;
+  font-style: normal;
+  color: var(--iso-ink-3);
+}
+
+@media (max-width: 960px) {
+  .iso-track {
+    grid-template-columns: 1fr;
+    row-gap: 6px;
+  }
+
+  .iso-track__ctl {
+    padding-bottom: 0;
+  }
+
+  .iso-track__body {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .iso-track__rows {
+    font-size: 10px;
+  }
+
+  /* The bubble and the hover card span the track instead of riding the playhead, so they never leave the screen. */
+  .iso-track__lane {
+    margin-top: 84px;
+  }
+
+  .iso-track__bubble,
+  .iso-track__card {
+    left: 0 !important;
+    right: 0;
+    width: auto;
+    transform: none;
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iso-track__btn {
+    transition: none;
+  }
+}

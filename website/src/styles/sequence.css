@@ -1,0 +1,670 @@
+/* The workspace as a sequence. The bar (where, step, reading, the quiet control), one panel at the right, the
+   pass track along the bottom, the debrief as its own screen. */
+
+.iso-ws {
+  --w1-panel: 360px;
+  --w1-track: 176px;
+}
+
+/* The scrims follow the layout: a column for the panel, a band for the track. */
+.iso-ws__scrim--right {
+  width: calc(var(--w1-panel) + 2 * var(--iso-gutter) + 120px);
+}
+
+.iso-ws__scrim--bottom {
+  height: calc(var(--w1-track) + 90px);
+}
+
+.iso-ws[data-debrief='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 11, 17, 0.62);
+  pointer-events: none;
+}
+
+/* ---- The bar ---- */
+.iso-bar {
+  position: absolute;
+  top: calc(var(--iso-gutter) - 8px);
+  left: var(--iso-gutter);
+  right: var(--iso-gutter);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 24px;
+  pointer-events: auto;
+  z-index: 3;
+}
+
+.iso-bar__where {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.iso-bar__brand {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--iso-ink);
+  cursor: pointer;
+}
+
+.iso-bar__brand svg {
+  width: 20px;
+  height: 20px;
+}
+
+.iso-bar__place {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 10px 5px 0;
+  border: 0;
+  background: none;
+  color: var(--iso-ink);
+  font: 400 16px/22px var(--font-sans);
+  letter-spacing: -0.005em;
+  cursor: pointer;
+}
+
+.iso-bar__place > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iso-bar__place > svg {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: var(--iso-ink-3);
+  stroke-width: 1.3;
+}
+
+/* The place's detail and what the control does, beside it when the pointer or focus is on it. */
+.iso-bar__placecard {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  display: none;
+  gap: 2px;
+  width: max-content;
+  max-width: 320px;
+  padding: 8px 12px 9px;
+  background: rgba(8, 11, 17, 0.96);
+  border: 1px solid var(--iso-hair-strong);
+  color: var(--iso-ink-2);
+  font: 400 12px/16px var(--font-sans);
+  text-align: left;
+  white-space: normal;
+}
+
+.iso-bar__placecard em {
+  font-style: normal;
+  color: var(--iso-ink-3);
+}
+
+.iso-bar__place:hover .iso-bar__placecard,
+.iso-bar__place:focus-visible .iso-bar__placecard {
+  display: grid;
+}
+
+.iso-bar__steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.iso-bar__step {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 0;
+  background: none;
+  color: var(--iso-ink-3);
+  font: 400 14px/18px var(--font-sans);
+  cursor: pointer;
+  transition: color 160ms var(--ease-studio), background 160ms var(--ease-studio);
+}
+
+.iso-bar__num {
+  font: 400 11px/14px var(--font-mono);
+  color: var(--iso-ink-4);
+}
+
+.iso-bar__step:hover:not(:disabled),
+.iso-bar__step:focus-visible {
+  color: var(--iso-ink);
+}
+
+.iso-bar__step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.iso-bar__end {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.iso-bar__read {
+  padding: 6px 2px;
+  border: 0;
+  background: none;
+  color: var(--iso-ink-2);
+  font: 400 14px/18px var(--font-sans);
+  cursor: pointer;
+}
+
+.iso-bar__read:hover,
+.iso-bar__read:focus-visible {
+  color: var(--iso-ink);
+}
+
+.iso-bar__menuwrap {
+  position: relative;
+}
+
+.iso-bar__quiet {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--iso-hair);
+  border-radius: 0;
+  background: rgba(8, 11, 17, 0.4);
+  color: var(--iso-ink-2);
+  cursor: pointer;
+}
+
+.iso-bar__quiet svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
+
+.iso-bar__quiet:hover,
+.iso-bar__quiet:focus-visible,
+.iso-bar__quiet[data-active='true'] {
+  color: var(--iso-ink);
+  border-color: var(--iso-hair-strong);
+}
+
+/* ---- How a selected item is marked: one of three styles, by ?sel=chip, square or box (chip unless named) ---- */
+.iso-sel[data-active='true'] {
+  color: var(--iso-ink);
+}
+
+/* A: the filled chip, like the active key chip */
+.iso-app[data-sel='chip'] .iso-sel[data-active='true'] {
+  background: var(--iso-ink);
+  color: var(--iso-night);
+}
+
+.iso-app[data-sel='chip'] .iso-sel[data-active='true'] .iso-bar__num {
+  color: rgba(8, 11, 17, 0.55);
+}
+
+/* B: the filled square of the calendar legend, before the label */
+.iso-app[data-sel='square'] .iso-sel {
+  position: relative;
+  padding-left: 22px;
+}
+
+.iso-app[data-sel='square'] .iso-sel[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  background: var(--iso-ink);
+}
+
+.iso-app[data-sel='square'] .iso-sel .iso-bar__num {
+  display: none;
+}
+
+/* C: a hairline box around the label */
+.iso-app[data-sel='box'] .iso-sel {
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.iso-app[data-sel='box'] .iso-sel[data-active='true'] {
+  box-shadow: inset 0 0 0 1px var(--iso-hair-strong);
+  background: rgba(243, 244, 246, 0.06);
+}
+
+/* ---- The quiet control's menu ---- */
+.iso-menu {
+  position: absolute;
+  isolation: isolate;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: 14px;
+  width: 300px;
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  padding: 14px 16px 16px;
+  background: #080b11;
+  border: 1px solid var(--iso-hair-strong);
+  scrollbar-width: none;
+}
+
+.iso-menu__group {
+  display: grid;
+  gap: 2px;
+}
+
+.iso-menu__title {
+  margin: 0 0 4px;
+  color: var(--iso-ink-3);
+  font: 400 12px/16px var(--font-sans);
+}
+
+.iso-menu__item {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: 5px 0;
+  border: 0;
+  background: none;
+  color: var(--iso-ink-2);
+  font: 400 13px/18px var(--font-sans);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.iso-menu__item:hover,
+.iso-menu__item:focus-visible {
+  color: var(--iso-ink);
+}
+
+.iso-menu__tick {
+  width: 7px;
+  height: 7px;
+  box-shadow: inset 0 0 0 1px var(--iso-hair);
+}
+
+.iso-menu__tick[data-on='true'] {
+  background: var(--iso-ink);
+  box-shadow: none;
+}
+
+.iso-menu__item kbd,
+.iso-menu__keys kbd {
+  font: 400 11px/14px var(--font-mono);
+  color: var(--iso-ink-3);
+}
+
+.iso-menu__fact {
+  margin: 0;
+  padding: 2px 0;
+  color: var(--iso-ink-3);
+  font: 400 12px/17px var(--font-sans);
+}
+
+.iso-menu__keys {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  color: var(--iso-ink-3);
+  font: 400 12px/17px var(--font-sans);
+}
+
+.iso-menu .iso-vernier {
+  margin: 6px 0 4px;
+}
+
+/* ---- The step panel ---- */
+.iso-step {
+  position: absolute;
+  top: calc(var(--iso-gutter) + 64px);
+  right: var(--iso-gutter);
+  width: var(--w1-panel);
+  max-height: calc(100dvh - var(--iso-gutter) - 64px - var(--w1-track) - 24px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 18px;
+  pointer-events: auto;
+  text-shadow: 0 1px 10px rgba(8, 11, 17, 0.7);
+}
+
+.iso-step::-webkit-scrollbar {
+  display: none;
+}
+
+.iso-step__title {
+  margin: 0;
+  color: var(--iso-ink);
+  font: 300 26px/32px var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+.iso-step__line {
+  margin: 0;
+  color: var(--iso-ink-2);
+  font: 400 14px/21px var(--font-sans);
+}
+
+.iso-step__note {
+  margin: 0;
+  color: var(--iso-ink-3);
+  font: 400 12.5px/18px var(--font-sans);
+}
+
+.iso-step__note strong {
+  color: var(--iso-ink-2);
+  font-weight: 500;
+}
+
+.iso-step__foot {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 4px;
+}
+
+/* The record step's panel is the calendar, so it is wider, and the calendar's lines wrap inside it. */
+.iso-ws[data-step='record'] {
+  --w1-panel: 452px;
+}
+
+/* A round hides the track, so its panel may run to the bottom. */
+.iso-ws[data-step='look'] {
+  --w1-track: 0px;
+}
+
+.iso-step .iso-cal {
+  width: 100%;
+  padding-bottom: 0;
+}
+
+.iso-step .iso-cal__legend,
+.iso-step .iso-cal__readout,
+.iso-step .iso-cal__note {
+  padding-left: 0;
+}
+
+.iso-step .iso-cal__table th {
+  white-space: normal;
+  vertical-align: bottom;
+}
+
+/* The step's one forward action */
+.iso-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px 9px 10px;
+  border: 1px solid var(--iso-hair-strong);
+  border-radius: 0;
+  background: rgba(8, 11, 17, 0.5);
+  color: var(--iso-ink);
+  font: 400 14px/18px var(--font-sans);
+  cursor: pointer;
+  transition: background 160ms var(--ease-studio), border-color 160ms var(--ease-studio);
+}
+
+.iso-action kbd {
+  padding: 1px 6px;
+  background: var(--iso-ink);
+  color: var(--iso-night);
+  font: 500 11px/16px var(--font-mono);
+}
+
+.iso-action:hover,
+.iso-action:focus-visible {
+  border-color: var(--iso-ink);
+  background: rgba(243, 244, 246, 0.08);
+}
+
+.iso-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- The pass track ---- */
+.iso-ws__track {
+  position: absolute;
+  left: var(--iso-gutter);
+  right: var(--iso-gutter);
+  bottom: calc(var(--iso-gutter) - 4px);
+  pointer-events: auto;
+}
+
+/* ---- The debrief ---- */
+.iso-debrief {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--iso-gutter) + 64px);
+  transform: translateX(-50%);
+  width: min(860px, calc(100vw - 2 * var(--iso-gutter)));
+  max-height: calc(100dvh - var(--iso-gutter) - 64px - var(--w1-track) - 24px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  display: grid;
+  gap: 14px;
+  padding: 26px 30px 24px;
+  background: var(--iso-sheet);
+  border: 1px solid var(--iso-hair);
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.iso-debrief__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.iso-debrief__title {
+  margin: 0;
+  color: var(--iso-ink-2);
+  font: 400 15px/20px var(--font-sans);
+}
+
+.iso-debrief__verdict {
+  margin: 4px 0 0;
+  color: var(--iso-ink);
+  font: 300 32px/38px var(--font-sans);
+  letter-spacing: -0.015em;
+  max-width: 24ch;
+}
+
+.iso-debrief__own {
+  margin: 0;
+  color: var(--iso-ink);
+  font: 400 14px/20px var(--font-sans);
+  max-width: 78ch;
+}
+
+.iso-debrief__what,
+.iso-debrief__line {
+  margin: 0;
+  color: var(--iso-ink-2);
+  font: 400 13.5px/20px var(--font-sans);
+  max-width: 78ch;
+}
+
+.iso-debrief__line {
+  color: var(--iso-ink-3);
+}
+
+.iso-debrief__table {
+  margin-top: 6px;
+}
+
+/* Every method's numbers in the same ink: the table does not favour a column. */
+.iso-debrief__table td,
+.iso-debrief__table td:last-child {
+  color: var(--iso-ink);
+  text-align: right;
+}
+
+.iso-debrief__table thead th:not(:first-child) {
+  text-align: right;
+}
+
+.iso-debrief__table th[scope='row'] {
+  display: grid;
+  gap: 1px;
+}
+
+.iso-debrief__more {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--iso-ink-2);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--iso-hair-strong);
+  cursor: pointer;
+}
+
+.iso-debrief__parts {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  font: 400 13px/18px var(--font-sans);
+}
+
+.iso-debrief__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--iso-hair);
+}
+
+.iso-debrief__links {
+  display: flex;
+  gap: 18px;
+}
+
+/* ---- The imagery credit: the data source names stay on the map (Esri's rule); click opens the credits ---- */
+.iso-ws ~ .iso-credit,
+button.iso-credit {
+  position: fixed;
+  right: var(--iso-gutter);
+  left: auto;
+  bottom: 5px;
+  z-index: 21;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--iso-ink-4);
+  font: 400 10.5px/14px var(--font-sans);
+  text-align: right;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+button.iso-credit:hover,
+button.iso-credit:focus-visible {
+  color: var(--iso-ink-2);
+}
+
+/* ---- The reading sheet ---- */
+.iso-reading {
+  width: min(980px, calc(100vw - 2 * var(--iso-gutter)));
+}
+
+.iso-reading__nav {
+  display: flex;
+  gap: 6px;
+}
+
+.iso-reading__tab {
+  padding: 6px 12px;
+  border: 0;
+  background: none;
+  color: var(--iso-ink-3);
+  font: 400 15px/20px var(--font-sans);
+  cursor: pointer;
+}
+
+.iso-reading__tab:hover,
+.iso-reading__tab:focus-visible {
+  color: var(--iso-ink);
+}
+
+.iso-brief--embedded {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+/* ---- Under 960 px: the bar takes two rows, the panel and the track share the scrolling bottom half ---- */
+@media (max-width: 960px) {
+  .iso-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+
+  .iso-bar__steps {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .iso-ws__dock > .iso-step,
+  .iso-ws__dock > .iso-ws__track,
+  .iso-ws__dock > .iso-debrief {
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    transform: none;
+  }
+
+  .iso-ws__dock > .iso-ws__track {
+    order: -1;
+  }
+
+  .iso-debrief {
+    padding: 18px 16px;
+  }
+
+  .iso-debrief__verdict {
+    font-size: 24px;
+    line-height: 30px;
+  }
+
+  .iso-debrief__table {
+    display: block;
+    overflow-x: auto;
+  }
+}

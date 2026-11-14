@@ -1,0 +1,139 @@
+/* S5, any area (components/AreaSheet.tsx). The map is NASA's Blue Marble, as the search palette's locator. */
+
+.iso-area {
+  display: grid;
+  gap: 0;
+}
+
+.iso-area__pick {
+  display: grid;
+  gap: 12px;
+  margin: 18px 28px 20px;
+}
+
+.iso-area__map {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+  background: var(--iso-night);
+}
+
+.iso-area__img {
+  position: absolute;
+  max-width: none;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  filter: saturate(0.75) brightness(0.78) contrast(1.05);
+}
+
+.iso-area__marks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.iso-area__context {
+  fill: none;
+  stroke: rgba(243, 244, 246, 0.55);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.iso-area__box {
+  fill: rgba(214, 241, 255, 0.08);
+  stroke: var(--iso-curtain);
+  stroke-width: 1.5;
+}
+
+.iso-area__credit {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font: 400 10.5px/14px var(--font-mono);
+  color: var(--iso-ink-3);
+}
+
+.iso-area__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px 16px;
+}
+
+.iso-area__field {
+  display: grid;
+  gap: 4px;
+  font: 400 12px/16px var(--font-sans);
+  color: var(--iso-ink-3);
+}
+
+.iso-area__field input {
+  width: 92px;
+  padding: 6px 8px;
+  border: 1px solid var(--iso-hair);
+  border-radius: 0;
+  background: transparent;
+  color: var(--iso-ink);
+  font: 400 13px/18px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.iso-area__field input:focus-visible {
+  outline: 1px solid var(--iso-curtain);
+  outline-offset: 1px;
+}
+
+.iso-area__hint,
+.iso-area__error {
+  margin: 0;
+  font: 400 12px/17px var(--font-sans);
+  color: var(--iso-ink-3);
+}
+
+.iso-area__error {
+  color: var(--iso-fail);
+}
+
+.iso-area__result {
+  display: grid;
+  gap: 14px;
+  margin: 0 28px 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--iso-hair);
+}
+
+.iso-area__result .iso-cal {
+  max-width: 760px;
+}
+
+.iso-area__line {
+  margin: 0;
+  font: 400 13px/19px var(--font-sans);
+  color: var(--iso-ink-2);
+}
+
+.iso-cal__tag[data-source='demo'] {
+  color: var(--iso-modis-ink);
+}
+
+.iso-area__line[data-source='demo'] {
+  color: var(--iso-modis-ink);
+}
+
+@media (max-width: 760px) {
+  .iso-area__pick,
+  .iso-area__result {
+    margin: 0 16px 16px;
+  }
+
+  .iso-area__field input {
+    width: 72px;
+  }
+}
