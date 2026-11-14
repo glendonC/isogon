@@ -54,7 +54,6 @@ import {
   type FieldIntensityScale,
   type NormalizedFootprint,
   type NormalizedObserverDataset,
-  type NormalizedSatellitePass,
   type TerrainFindingCallout,
   parseBeliefFrames,
   parseResidenceHours,
@@ -80,6 +79,7 @@ import {
 import { FIRE_THRESHOLD_NORM, buildFireHistory, type FireHistory } from './engine/fireField';
 import { FootprintField, LIGHT_TEX_SIZE, buildDetectionSource } from './engine/footprintField';
 import { BeliefField, parseDeclaredCells } from './engine/beliefField';
+import { passIsHidden } from './engine/passShown';
 import type { BeliefFrames } from './engine/beliefField';
 import { HdrPipeline, resolveStagePixelRatio } from './engine/hdrPipeline';
 import {
@@ -281,14 +281,6 @@ interface CachedTheaterBundle {
   residenceHours?: number;
   /** Real runs: where the run's fire is in the region (u east, v north). Worked out once. */
   fireCentre?: [number, number] | null;
-}
-
-/**
- * A pass of which nothing is drawn: no footprint, no scan cell, no spacecraft. Either the run says
- * so (a real hold-out run marks its hidden passes), or the page has VIIRS switched off.
- */
-function passIsHidden(pass: NormalizedSatellitePass, holdoutViirs: boolean): boolean {
-  return pass.hidden === true || (holdoutViirs && pass.family === 'viirs');
 }
 
 /**
@@ -4152,6 +4144,21 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         // What the model believes between the passes: fetched once per run, after the run is on show
         const beliefInfo = parseBeliefFrames(run.belief_frames);
         const beliefStore = beliefStoreRef.current;
+        // (a run the page made from one already on show, by laying a look or a reveal on it, names
+        // the same file: its bytes are taken from the run that has them, so the estimate does not
+        // go blank while the file is asked for again)
+        const sameFile =
+          beliefInfo && !beliefStore.has(run.run_id)
+            ? [...beliefStore.values()].find((b) => b.info.url === beliefInfo.url && b.info.steps === beliefInfo.steps)
+            : undefined;
+        if (beliefInfo && sameFile) {
+          beliefStore.set(run.run_id, {
+            info: beliefInfo,
+            bytes: sameFile.bytes,
+            declared: parseDeclaredCells(run.declared_cells),
+          });
+          while (beliefStore.size > 6) beliefStore.delete(beliefStore.keys().next().value as string);
+        }
         if (beliefInfo && !beliefStore.has(run.run_id)) {
           void fetch(assetAddress(propsRef.current, beliefInfo.url))
             .then((resp) => (resp.ok ? resp.arrayBuffer() : null))

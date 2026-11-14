@@ -383,8 +383,11 @@ vec4 detectionLight(vec2 uv) {
 
 // A detection revealed after scoring is drawn as the instrument's pixel: a cool centre here and an
 // outline where it is used. field: the footprint field of its family (minus depth inside).
-float revealCore(float field) {
-  return smoothstep(0.80, 0.98, clamp(-field, 0.0, 1.0));
+// few is 1 where the pixel is only a few screen pixels wide: its centre is then drawn larger (a
+// dot of about half the pixel), since the small centre of a close view would be under one pixel.
+float revealCore(float field, float few) {
+  float depth = clamp(-field, 0.0, 1.0);
+  return mix(smoothstep(0.80, 0.98, depth), smoothstep(0.30, 0.62, depth), few);
 }
 
 // --- The model's belief (real runs) -----------------------------------------------------------
@@ -406,6 +409,10 @@ const float BELIEF_CELL_FILL = 0.58; // side of a certain cell's square, as a sh
 // and the ground right under a light is drawn darker by up to this share (the light's own
 // extent, inside the detection's pixel). Neither says the ground is burned.
 const float BELIEF_DAY_SHADE = 0.30;
+// Detections laid on after a look or a reveal: how much the ground under their marks is darkened
+// by day, and how much their cool centre is lifted when the whole block is in view
+const float REVEAL_DAY_UNDER = 0.55;
+const float REVEAL_FAR_LIFT = 0.6;
 // A declared cell too small on screen for an open frame is drawn as a square of at least this
 // probability's size (display choice: the list says declared or not, it gives no size)
 const float BELIEF_DECLARED_FAR = 0.4;
@@ -869,14 +876,25 @@ void main() {
       // uncovered): the instrument's pixels in outline with a cool centre, so they are never taken
       // for the detections the estimate was made from
       if (uRevealed.x + uRevealed.y > 0.5) {
-        float coreM = revealCore(foot.r) * uRevealed.x;
-        float coreV = revealCore(foot.b) * uRevealed.y;
-        postRgb += vec3(0.22, 0.72, 1.0)
+        // (a pixel's half width on screen is one over its field's gradient: small pixels get a
+        // larger centre and a firmer outline, or a look's detections cannot be found from far)
+        float smallM = 1.0 - smoothstep(3.0, 9.0, 1.0 / footGradM);
+        float smallV = 1.0 - smoothstep(3.0, 9.0, 1.0 / footGradV);
+        float coreM = revealCore(foot.r, smallM) * uRevealed.x;
+        float coreV = revealCore(foot.b, smallV) * uRevealed.y;
+        float hairM = scanHairline(abs(foot.r), footGradM, mix(1.0, 1.5, smallM)) * uRevealed.x;
+        float hairV = scanHairline(abs(foot.b), footGradV, mix(1.0, 1.5, smallV)) * uRevealed.y;
+        float hairR = clamp(hairM + hairV, 0.0, 1.0);
+        float fewPx = max(smallM * uRevealed.x, smallV * uRevealed.y);
+        // By day the ground under the centre and the outline is drawn darker first, so the cool
+        // marks stand on sunlit ground (display choice; the pixel is not filled)
+        postRgb *= 1.0 - REVEAL_DAY_UNDER * clamp(max(coreM, coreV) + hairR, 0.0, 1.0) * (1.0 - uNight) * hazeTrans.g;
+        // (small marks run together: they are drawn in a deeper blue there, so the patch they make
+        // stays apart from the estimate's pale ink)
+        postRgb += mix(vec3(0.22, 0.72, 1.0), vec3(0.05, 0.42, 1.0), fewPx)
                  * (coreM * mix(0.5, 1.5, heatOf(fieldNorm(foot.g))) + coreV * mix(0.5, 1.5, heatOf(fieldNorm(foot.a))))
-                 * hazeTrans.g;
-        float hairR = scanHairline(abs(foot.r), footGradM, 1.0) * uRevealed.x
-                    + scanHairline(abs(foot.b), footGradV, 1.0) * uRevealed.y;
-        postRgb = mix(postRgb, vec3(0.40, 0.82, 1.0) * mix(1.0, 0.7, uNight), clamp(hairR, 0.0, 1.0) * 0.5);
+                 * (1.0 + REVEAL_FAR_LIFT * uFarView) * hazeTrans.g;
+        postRgb = mix(postRgb, mix(vec3(0.40, 0.82, 1.0), vec3(0.16, 0.62, 1.0), fewPx) * mix(1.0, 0.7, uNight), hairR * mix(0.5, 0.8, fewPx));
       }
     } else {
       // Fuel from canopy cover (pack canopy index, or the imagery heuristic without a pack)
