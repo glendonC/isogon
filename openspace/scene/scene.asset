@@ -1,0 +1,95 @@
+-- Isogon: one real fire run on the Earth globe, for OpenSpace 0.21.3 and 0.22.
+--
+-- This file is the same for every export. The run itself (layers, captions, the parts of the show and their
+-- commands) is in scene_data.asset beside it, written by backend/openspace/export.py. Every function and
+-- property used here exists in OpenSpace 0.21.3 and 0.22.1; openspace/README.md lists them with their sources.
+
+local data = asset.require("./scene_data").Data
+local globe = data.Globe
+
+-- Commands name files as __FILE:<path relative to this folder>__. They are resolved here, where the asset
+-- knows its own folder, into a quoted Lua string.
+local function resolve(command)
+  local out = command:gsub("__FILE:([%w_%-%./]+)__", function(rel)
+    return string.format("%q", asset.resource(rel))
+  end)
+  return out
+end
+
+asset.onInitialize(function()
+  for _, layer in ipairs(data.GeoJson) do
+    openspace.globebrowsing.addGeoJson(globe, {
+      Identifier = layer.Id,
+      Name = layer.Name,
+      Description = layer.Description,
+      File = layer.File,
+      Enabled = layer.Enabled,
+      Opacity = 1.0
+    })
+  end
+  for _, layer in ipairs(data.ImageLayers) do
+    openspace.globebrowsing.addLayer(globe, "ColorLayers", {
+      Identifier = layer.Id,
+      Name = layer.Name,
+      Description = layer.Description,
+      FilePath = layer.File,
+      Enabled = layer.Enabled,
+      Opacity = 1.0
+    })
+  end
+  for _, caption in ipairs(data.Captions) do
+    openspace.addScreenSpaceRenderable({
+      Type = "ScreenSpaceImageLocal",
+      Identifier = caption.Id,
+      Name = caption.Name,
+      TexturePath = caption.File,
+      Enabled = caption.Enabled,
+      FaceCamera = true,
+      CartesianPosition = caption.Position,
+      Scale = caption.Scale
+    })
+  end
+  for _, action in ipairs(data.Actions) do
+    openspace.action.registerAction({
+      Identifier = action.Id,
+      Name = action.Name,
+      Documentation = action.Documentation,
+      GuiPath = data.GuiPath,
+      Command = resolve(action.Command),
+      IsLocal = false
+    })
+    if action.Key then
+      openspace.bindKey(action.Key, action.Id)
+    end
+  end
+end)
+
+asset.onDeinitialize(function()
+  for _, group in ipairs(data.SchedulerGroups) do
+    openspace.scriptScheduler.clear(group)
+  end
+  for i = #data.Actions, 1, -1 do
+    local action = data.Actions[i]
+    if action.Key then
+      openspace.clearKey(action.Key)
+    end
+    openspace.action.removeAction(action.Id)
+  end
+  for i = #data.Captions, 1, -1 do
+    openspace.removeScreenSpaceRenderable(data.Captions[i].Id)
+  end
+  for i = #data.ImageLayers, 1, -1 do
+    openspace.globebrowsing.deleteLayer(globe, "ColorLayers", data.ImageLayers[i].Id)
+  end
+  for i = #data.GeoJson, 1, -1 do
+    openspace.globebrowsing.deleteGeoJson(globe, data.GeoJson[i].Id)
+  end
+end)
+
+asset.meta = {
+  Name = data.Name,
+  Description = data.Description,
+  Author = "Isogon",
+  URL = "",
+  License = "Scene code: as the Isogon repository. Detections: NASA FIRMS. Pass swaths: NASA CMR."
+}
