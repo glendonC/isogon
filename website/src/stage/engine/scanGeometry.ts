@@ -159,6 +159,8 @@ struct ScanCell {
   vec2 centerKm;  // cell center, east and north of the region center
   vec2 sizeKm;    // footprint (along scan, along track)
   float edgeKm;   // distance from this point to the nearest cell border
+  float edgeScanKm;  // distance along the scan axis to the nearest border across it
+  float edgeTrackKm; // distance along the track to the nearest row border or seam
   float seamKm;   // distance to the nearest scan-to-scan seam
   float overlap;  // 0 at nadir, grows with the bow-tie overlap between consecutive scans
   float zone;     // aggregation zone 1..3 (always 1 for MODIS)
@@ -236,6 +238,8 @@ ScanCell evalScanCell(vec2 pKm, vec4 pass, vec4 sensor, float k) {
   cell.centerKm = axis * (pass.z - side * xc) + track * yc;
   cell.sizeKm = vec2(x1 - x0, trackKm);
   cell.edgeKm = max(0.0, min(dScan, min(dRow, dSeam)));
+  cell.edgeScanKm = max(0.0, dScan);
+  cell.edgeTrackKm = max(0.0, min(dRow, dSeam));
   cell.seamKm = max(0.0, dSeam);
   cell.overlap = clamp(trackKm / nadirTrackKm - 1.0, 0.0, 1.0);
   cell.zone = sensor.w > 0.5

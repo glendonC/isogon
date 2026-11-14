@@ -10,7 +10,7 @@ import { SLAB_D, SLAB_W } from '../earthCutawayShaders';
  * Relief uses ONE vertical exaggeration factor for every region. It is a display choice and must
  * be stated wherever the stage is described.
  */
-export const VERTICAL_EXAGGERATION = 2.5;
+export const VERTICAL_EXAGGERATION = 2.0;
 
 const SLAB_AREA = SLAB_W * SLAB_D;
 const MIN_ASPECT = 0.62;

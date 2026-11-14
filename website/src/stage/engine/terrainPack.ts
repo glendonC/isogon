@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { createDemR32FTexture } from '../earthCutawayShaders';
 
 /**
- * Consumer side of terrain pack v1 (CONTRACT section 1).
+ * Consumer side of terrain pack v1.
  *
- * Registration as stated by the producer (terrain-assets T1): every raster covers the same bbox as
+ * Registration, as `backend/terrain/terrain_pack.py` writes it: every raster covers the same bbox as
  * `dem_hires_f32.bin`; row 0 is north, column 0 is west. The DEM is node registered (first and last
  * samples on the bbox edges), ortho and aux are pixel registered images, so plain 0..1 plane UVs
  * line up once the images are flipped vertically at decode time (image row 0 = north = v 1).
@@ -38,6 +38,8 @@ export interface TerrainPackManifest {
   }>;
   aux: { url: string; size: number; channels?: Record<string, string> };
   sun: { azimuth_deg: number; elevation_deg: number };
+  /** Terrain around the pack, parsed by ./contextTerrain.ts. Absent for most regions. */
+  context?: unknown;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -120,6 +122,11 @@ function bitmapTexture(bitmap: ImageBitmap): THREE.Texture {
   tex.onUpdate = () => {
     bitmap.close();
   };
+  // A texture disposed before it was ever drawn (the view moved on while it loaded) is never
+  // uploaded, so onUpdate never runs: close the bitmap here too. Closing twice does nothing.
+  tex.addEventListener('dispose', () => {
+    bitmap.close();
+  });
   tex.needsUpdate = true;
   return tex;
 }
@@ -135,21 +142,18 @@ export async function loadPackImage(url: string, maxAnisotropy: number): Promise
 }
 
 /**
- * Display reconstruction of the pack's elevation grid, in place. Two steps:
+ * Display reconstruction of the pack's elevation grid, in place. Every node takes the value a cubic
+ * B-spline through the grid has at that node (weights 1/6, 2/3, 1/6 along each axis). The mesh has
+ * one vertex per node, so this is the surface that spline would draw. It rounds features one or
+ * two posts wide (about 40 m posts) and leaves slopes and ridges several posts wide as they are.
  *
- *   1. Every node takes the value a cubic B-spline through the grid has at that node (weights
- *      1/6, 2/3, 1/6 along each axis). The mesh has one vertex per node, so this is the surface
- *      that spline would draw. It rounds features one or two posts wide (about 40 m posts).
- *   2. Crests are rounded: where a node stands above the mean of its surroundings (about 190 m
- *      across), 45 percent of that excess is taken off. Valleys and even slopes do not move.
- *
- * Why: relief is drawn at twice its height, which turns a real knife ridge into a fin and a rocky
- * crest into saw teeth. It is a rendering treatment. Summits come out lower than they are (by up
- * to a few tens of metres on the sharpest peaks); the elevation range shown on the page comes from
- * the run, not from this grid.
+ * Why: relief is drawn at twice its height, which turns a crest one post wide into a saw tooth.
+ * It is a rendering treatment. Measured on the three hero packs it moves a node by 0.3 to 1.4 m
+ * on average and lowers the highest point by 3 to 11 m. The elevation range shown on the page
+ * comes from the run, not from this grid.
  */
 export function smoothDemForDisplay(dem: Float32Array, n: number): void {
-  if (n < 8 || dem.length !== n * n) return;
+  if (n < 3 || dem.length !== n * n) return;
   const tmp = new Float32Array(n * n);
   const a = 1 / 6;
   const b = 2 / 3;
@@ -169,43 +173,7 @@ export function smoothDemForDisplay(dem: Float32Array, n: number): void {
       dem[row + i] = a * tmp[up + i] + b * tmp[row + i] + a * tmp[down + i];
     }
   }
-
-  // Mean of the surroundings: a box of 5 posts run twice along each axis (close to a Gaussian)
-  const mean = new Float32Array(dem);
-  const radius = 2;
-  const blurRows = (src: Float32Array, dst: Float32Array) => {
-    for (let j = 0; j < n; j++) {
-      const row = j * n;
-      let sum = 0;
-      for (let k = -radius; k <= radius; k++) sum += src[row + Math.min(n - 1, Math.max(0, k))];
-      for (let i = 0; i < n; i++) {
-        dst[row + i] = sum / (2 * radius + 1);
-        sum += src[row + Math.min(n - 1, i + radius + 1)] - src[row + Math.max(0, i - radius)];
-      }
-    }
-  };
-  const blurCols = (src: Float32Array, dst: Float32Array) => {
-    for (let i = 0; i < n; i++) {
-      let sum = 0;
-      for (let k = -radius; k <= radius; k++) sum += src[Math.min(n - 1, Math.max(0, k)) * n + i];
-      for (let j = 0; j < n; j++) {
-        dst[j * n + i] = sum / (2 * radius + 1);
-        sum += src[Math.min(n - 1, j + radius + 1) * n + i] - src[Math.max(0, j - radius) * n + i];
-      }
-    }
-  };
-  for (let pass = 0; pass < 2; pass++) {
-    blurRows(mean, tmp);
-    blurCols(tmp, mean);
-  }
-  for (let k = 0; k < dem.length; k++) {
-    const excess = dem[k] - mean[k];
-    if (excess > 0) dem[k] -= CREST_ROUNDING * excess;
-  }
 }
-
-/** Share of a crest's height above its surroundings that the display reconstruction takes off. */
-const CREST_ROUNDING = 0.45;
 
 /**
  * Downloads and decodes one terrain pack. Resolves null on any failure so the caller keeps the

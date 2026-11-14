@@ -59,6 +59,8 @@ export interface OrbitPoseLike {
 const scratchCamera = new THREE.PerspectiveCamera();
 const scratchTarget = new THREE.Vector3();
 const scratchPoint = new THREE.Vector3();
+const scratchEye = new THREE.Vector3();
+const scratchNormal = new THREE.Vector3();
 
 /**
  * Finds the view window that places the projected bounds of `points` inside `frame` (contain fit,
@@ -139,26 +141,13 @@ const SKYLINE_HIGHEST = 0.24;
 const SKYLINE_LOWEST = 0.46;
 /** Clear band kept between the calm rectangle and the terrain under it. */
 const SKYLINE_MARGIN = 0.03;
-/** Smoke may push the skyline down by at most this much beyond the terrain. */
-const SKYLINE_SMOKE_ALLOWANCE = 0.12;
 
-/**
- * Landing world view. Finds the vertical shift of the image that keeps `points` below the bottom
- * edge of the calm rectangle `frame`, across the rectangle's width and over the idle drift, so the
- * rectangle holds only sky and haze. The first `terrainCount` points are terrain; the rest are
- * smoke, which counts only up to an allowance. Size and horizontal position are left alone.
- */
-export function fitSkylineToFrame(
-  points: Float32Array,
-  pointCount: number,
-  terrainCount: number,
-  pose: OrbitPoseLike,
-  azimuthSwing: number,
-  fovDeg: number,
-  aspect: number,
-  frame: SubjectFrame,
-  out: ViewWindow,
-): ViewWindow {
+/** The row the top of the terrain is put on: just under the calm rectangle, within the allowed band. */
+function skylineRow(frame: SubjectFrame): number {
+  return Math.min(SKYLINE_LOWEST, Math.max(SKYLINE_HIGHEST, frame.bottom + SKYLINE_MARGIN));
+}
+
+function aimScratchCamera(pose: OrbitPoseLike, az: number, fovDeg: number, aspect: number): void {
   scratchCamera.fov = fovDeg;
   scratchCamera.aspect = aspect;
   scratchCamera.near = 0.1;
@@ -166,47 +155,81 @@ export function fitSkylineToFrame(
   scratchCamera.clearViewOffset();
   scratchCamera.updateProjectionMatrix();
   scratchTarget.set(pose.target[0], pose.target[1], pose.target[2]);
+  const sinP = Math.sin(pose.polar);
+  scratchCamera.position.set(
+    scratchTarget.x + pose.distance * sinP * Math.sin(az),
+    scratchTarget.y + pose.distance * Math.cos(pose.polar),
+    scratchTarget.z + pose.distance * sinP * Math.cos(az),
+  );
+  scratchCamera.up.set(0, 1, 0);
+  scratchCamera.lookAt(scratchTarget);
+  scratchCamera.updateMatrixWorld(true);
+}
 
-  let terrainTop = Number.POSITIVE_INFINITY;
-  let smokeTop = Number.POSITIVE_INFINITY;
+/**
+ * Landing world view. Finds the vertical shift of the image that keeps the terrain `points` below
+ * the bottom edge of the calm rectangle `frame`, across the rectangle's width and over the idle
+ * drift, so the rectangle holds only sky and haze. Size and horizontal position are left alone.
+ */
+export function fitSkylineToFrame(
+  points: Float32Array,
+  pointCount: number,
+  pose: OrbitPoseLike,
+  azimuthSwing: number,
+  fovDeg: number,
+  aspect: number,
+  frame: SubjectFrame,
+  out: ViewWindow,
+): ViewWindow {
+  let top = Number.POSITIVE_INFINITY;
   const swings = azimuthSwing > 1e-4 ? [-azimuthSwing, 0, azimuthSwing] : [0];
   for (const swing of swings) {
-    const az = pose.azimuth + swing;
-    const sinP = Math.sin(pose.polar);
-    scratchCamera.position.set(
-      scratchTarget.x + pose.distance * sinP * Math.sin(az),
-      scratchTarget.y + pose.distance * Math.cos(pose.polar),
-      scratchTarget.z + pose.distance * sinP * Math.cos(az),
-    );
-    scratchCamera.up.set(0, 1, 0);
-    scratchCamera.lookAt(scratchTarget);
-    scratchCamera.updateMatrixWorld(true);
-
+    aimScratchCamera(pose, pose.azimuth + swing, fovDeg, aspect);
     for (let i = 0; i < pointCount; i++) {
       scratchPoint.set(points[i * 3], points[i * 3 + 1], points[i * 3 + 2]).project(scratchCamera);
       if (scratchPoint.z >= 1 || scratchPoint.z <= -1) continue;
       const x = scratchPoint.x * 0.5 + 0.5;
       if (x < frame.left - 0.04 || x > frame.right + 0.04) continue;
       const y = 0.5 - scratchPoint.y * 0.5;
-      if (i < terrainCount) {
-        if (y < terrainTop) terrainTop = y;
-      } else if (y < smokeTop) {
-        smokeTop = y;
-      }
+      if (y < top) top = y;
     }
   }
-
   out.scale = 1;
   out.offsetX = 0;
-  if (!Number.isFinite(terrainTop)) {
+  if (!Number.isFinite(top)) {
     out.offsetY = 0;
     return out;
   }
-  const top = Math.min(terrainTop, Math.max(smokeTop, terrainTop - SKYLINE_SMOKE_ALLOWANCE));
-  const want = Math.min(SKYLINE_LOWEST, Math.max(SKYLINE_HIGHEST, frame.bottom + SKYLINE_MARGIN));
+  const want = skylineRow(frame);
   // A point at image height y lands at y - offsetY on screen
   out.offsetY = Math.min(0.1, Math.max(-0.42, top - want));
   return out;
+}
+
+/**
+ * Landing world view. The screen row (fraction of the viewport height from the top) that smoke and
+ * the sensor curtain stay under: the bottom edge of the calm rectangle, and never lower than just
+ * above the row the terrain is fitted to, whatever rectangle the page names.
+ */
+export function calmRow(frame: SubjectFrame): number {
+  return Math.min(frame.bottom, skylineRow(frame) - SKYLINE_MARGIN);
+}
+
+/**
+ * The plane through the eye of `camera` and the screen row `row`, as (normal, offset) with the
+ * normal pointing up: a point p is below the row on screen when dot(normal, p) + offset < 0.
+ * The camera must have its view window and world matrix up to date.
+ */
+export function planeUnderRow(camera: THREE.PerspectiveCamera, row: number, out: THREE.Vector4): THREE.Vector4 {
+  const yNdc = 1 - 2 * row;
+  scratchPoint.set(-1, yNdc, 0.5).unproject(camera);
+  scratchTarget.set(1, yNdc, 0.5).unproject(camera);
+  scratchEye.setFromMatrixPosition(camera.matrixWorld);
+  scratchPoint.sub(scratchEye);
+  scratchTarget.sub(scratchEye);
+  scratchNormal.crossVectors(scratchTarget, scratchPoint).normalize();
+  if (scratchNormal.y < 0) scratchNormal.negate();
+  return out.set(scratchNormal.x, scratchNormal.y, scratchNormal.z, -scratchNormal.dot(scratchEye));
 }
 
 /** Applies a view window to a camera. Clears the offset when the window is the identity. */

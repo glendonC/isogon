@@ -190,6 +190,27 @@ vec3 atmAerialPerspective(
 }
 `;
 
+/**
+ * Night. A real run plays real overpasses, and about two thirds of the VIIRS detections of these
+ * fires were made at night. On a night overpass everything that is not emitted light is drawn as
+ * under moonlight: the daylight picture mostly drained of colour, about a sixth as bright, and
+ * blue. It is a grade of the day picture (the moon is not modelled, and its phase on the night of
+ * the overpass is not used), so relief, haze and horizon stay exactly where they are by day.
+ */
+export const NIGHT_GLSL = /* glsl */ `
+uniform float uNight; // 0 by day, 1 on a night overpass of a real run
+vec3 nightGrade(vec3 c) {
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  // Relief keeps its contrast up to the brightness of ordinary ground. Anything brighter (bare
+  // rock, snow, a quarry, glint on water) is held just above that, so no ground the moon lights
+  // is brighter than the dimmest fire light.
+  float held = l < 0.22 ? l : 0.22 + 0.06 * (1.0 - exp(-(l - 0.22) / 0.06));
+  held *= mix(1.0, 0.7, smoothstep(0.45, 0.9, l));
+  vec3 moon = mix(vec3(l), c, 0.3) * (held / max(l, 1e-4)) * vec3(0.150, 0.215, 0.352);
+  return mix(c, moon, uNight);
+}
+`;
+
 const TRANSMITTANCE_LOOKUP_GLSL = /* glsl */ `
 uniform sampler2D uTransmittanceLut;
 
@@ -203,10 +224,38 @@ vec3 atmTransmittanceToSpace(float hKm, float mu) {
 
 // Sky-view texture: u = azimuth from the sun (0..1 around), v = sqrt of the angle above the
 // horizon over its full range, which puts most rows near the horizon where the sky changes fastest.
-const SKY_VIEW_MAPPING_GLSL = /* glsl */ `
+export const SKY_VIEW_MAPPING_GLSL = /* glsl */ `
 float atmHorizonAngle(float camAltKm) {
   float r = ATM_RG + camAltKm;
   return acos(-sqrt(max(0.0, 1.0 - (ATM_RG * ATM_RG) / (r * r))));
+}
+
+// What the backdrop shows in a true-scale direction (without the sun disc): sky above the horizon
+// and the floor below it. The dome draws this, and the terrain dissolves its far edge into it.
+//
+// The floor is a backdrop, not data. With the interface on it stays dark when seen from above
+// (floorHaze is a fraction of the physical air path); in clean feed it reads as distant ground
+// under the air path. It always fades out completely within the last two degrees, so it meets the
+// sky at the horizon without a step.
+vec3 atmBackdrop(
+  sampler2D skyView, vec3 dir, vec3 sun, float camAlt, float exposure, vec3 floorColor, float floorHaze
+) {
+  float thetaH = atmHorizonAngle(camAlt);
+  float theta = acos(clamp(dir.y, -1.0, 1.0));
+  float above = max(thetaH - theta, 0.0);
+  float phi = atan(dir.z, dir.x) - atan(sun.z, sun.x);
+  // Below the horizon this reads the horizon row, which is the color the floor fades into
+  vec3 sky = texture2D(skyView, vec2(phi / (2.0 * ATM_PI), sqrt(above / thetaH))).rgb * exposure;
+  if (theta < thetaH) {
+    return sky;
+  }
+  float r = ATM_RG + camAlt;
+  float mu = dir.y;
+  float distKm = -r * mu - sqrt(max(0.0, r * r * (mu * mu - 1.0) + ATM_RG * ATM_RG));
+  vec3 unused;
+  vec3 trans = atmAerialPerspective(camAlt, 0.0, distKm * floorHaze, dot(dir, sun), vec3(1.0), unused);
+  float clear = trans.g * smoothstep(0.0, 0.035, theta - thetaH);
+  return mix(sky, floorColor, clear);
 }
 `;
 
@@ -297,7 +346,7 @@ uniform float uVerticalExaggeration;
 uniform vec3 uFloorColor;
 uniform float uFloorHaze;
 uniform float uSkyExposure;
-
+${NIGHT_GLSL}
 varying vec3 vDir;
 
 void main() {
@@ -307,35 +356,19 @@ void main() {
   vec3 sun = normalize(uSunTrue);
   float camAlt = clamp(uCamAltKm, 0.02, ATM_TOP - 1.0);
 
-  float thetaH = atmHorizonAngle(camAlt);
-  float theta = acos(clamp(dir.y, -1.0, 1.0));
-  float above = max(thetaH - theta, 0.0);
-  float phi = atan(dir.z, dir.x) - atan(sun.z, sun.x);
-  // Below the horizon this reads the horizon row, which is the color the floor fades into
-  vec3 sky = texture2D(uSkyView, vec2(phi / (2.0 * ATM_PI), sqrt(above / thetaH))).rgb * uSkyExposure;
-
-  vec3 color;
-  if (theta < thetaH) {
-    color = sky;
+  vec3 color = atmBackdrop(uSkyView, dir, sun, camAlt, uSkyExposure, uFloorColor, uFloorHaze);
+  if (acos(clamp(dir.y, -1.0, 1.0)) < atmHorizonAngle(camAlt)) {
     // Sun disc (angular radius about 0.27 degrees), bright enough to bloom
     float disc = smoothstep(0.999978, 0.999989, dot(dir, sun));
     if (disc > 0.0) {
-      color += atmTransmittanceToSpace(camAlt, sun.y) * ATM_SUN * disc * 12.0;
+      color += atmTransmittanceToSpace(camAlt, sun.y) * ATM_SUN * disc * 12.0 * (1.0 - uNight);
     }
-  } else {
-    float r = ATM_RG + camAlt;
-    float mu = dir.y;
-    float distKm = -r * mu - sqrt(max(0.0, r * r * (mu * mu - 1.0) + ATM_RG * ATM_RG));
-    // The floor is a backdrop, not data. With the interface on it stays dark when seen from above
-    // (uFloorHaze is a fraction of the physical air path); in clean feed it reads as distant
-    // ground under the full path. It always fades out completely within the last two degrees,
-    // so it meets the sky at the horizon without a step.
-    vec3 unused;
-    vec3 trans = atmAerialPerspective(camAlt, 0.0, distKm * uFloorHaze, dot(dir, sun), vec3(1.0), unused);
-    float clear = trans.g * smoothstep(0.0, 0.035, theta - thetaH);
-    color = mix(sky, uFloorColor, clear);
   }
-  gl_FragColor = vec4(color, 1.0);
+  // A little grain in the sky on top of the output dither: a slow gradient is the first thing a
+  // video encoder turns into bands, and half a code of dither does not survive it
+  float grain = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  color *= 1.0 + (grain - 0.5) * 0.02;
+  gl_FragColor = vec4(nightGrade(color), 1.0);
 }
 `;
 

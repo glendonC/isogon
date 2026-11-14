@@ -6,17 +6,17 @@ import { MODIS_SCAN, SCAN_EARTH_RADIUS_KM, VIIRS_SCAN, type ScanSensorSpec } fro
 /**
  * Spacecraft, orbit track and scan plane for the Satellite passes view.
  *
- * Models come from `models/spacecraft/manifest.json` (NASA 3D Resources glb files, CONTRACT
- * section 2). A procedural spacecraft stands in while a model loads or when it is missing.
+ * Models come from `models/spacecraft/manifest.json` (NASA 3D Resources glb files). A procedural
+ * spacecraft stands in while a model loads or when it is missing.
  *
  * What is true to the pass and what is not:
  *   true      the direction from the region to the spacecraft (azimuth and view zenith of the
  *             pass, with the stage's vertical exaggeration applied like everywhere else), the
- *             track direction (square to the scan axis), the scan plane, and the width of the
- *             strip one mirror scan sweeps on the ground
+ *             track direction (square to the scan axis), the scan plane, the width of the
+ *             strip one mirror scan sweeps on the ground, and the direction of travel along the
+ *             track when the pass carries its orbit node (ascending heads north, descending south)
  *   not true  the distance and the size of the spacecraft (a 705 km orbit would be about 150 slab
- *             widths away and the bus would be invisible), its speed, and the direction of travel
- *             along the track, which the pass metadata does not carry
+ *             widths away and the bus would be invisible) and its speed
  *
  * Craft frame: +X along track, +Y zenith, +Z across track.
  */
@@ -29,6 +29,8 @@ export interface FleetPass {
   /** Bearing from the region toward the sub-satellite track, degrees clockwise from north. */
   azimuthDeg: number;
   scanAngleDeg: number;
+  /** Equator-crossing node of the pass, when the run carries it. */
+  orbitNode?: 'ascending' | 'descending';
   /** True for the pass whose scan cells the terrain shader draws for this family. */
   groundStrip: boolean;
 }
@@ -482,7 +484,12 @@ function disposeObject(root: THREE.Object3D): void {
   });
   for (const g of geoms) g.dispose();
   for (const m of mats) m.dispose();
-  for (const t of texs) t.dispose();
+  for (const t of texs) {
+    // The loader decodes embedded images into ImageBitmaps; free their pixels with the texture
+    const image = t.image as { close?: () => void } | null;
+    if (image && typeof image.close === 'function') image.close();
+    t.dispose();
+  }
 }
 
 interface Rig {
@@ -689,18 +696,21 @@ export class SpacecraftFleet {
       dy = (dy / dn) * range;
       dz = (dz / dn) * range;
 
-      // Travel direction is not in the pass metadata. Day-side rule: Terra heads south, the
-      // afternoon spacecraft head north.
+      // Travel direction: an ascending pass heads north, a descending one south. A pass without
+      // its orbit node (the procedural fallback, or a payload that carries none) gets the day-side
+      // rule: Terra heads south, the afternoon spacecraft head north.
       let tx = Math.cos(az);
       let tz = Math.sin(az);
-      const southbound = pass.sensorLabel.toUpperCase().includes('TERRA');
+      const southbound = pass.orbitNode
+        ? pass.orbitNode === 'descending'
+        : pass.sensorLabel.toUpperCase().includes('TERRA');
       if (tz > 0 !== southbound) {
         tx = -tx;
         tz = -tz;
       }
 
       // A new pass starts from the middle of its track so it is in view at once
-      const passKey = `${pass.sensorLabel}|${pass.azimuthDeg}|${pass.scanAngleDeg}`;
+      const passKey = `${pass.sensorLabel}|${pass.azimuthDeg}|${pass.scanAngleDeg}|${pass.orbitNode ?? ''}`;
       if (rig.passKey !== passKey) {
         if (rig.passKey !== '') rig.along = -0.6;
         rig.passKey = passKey;

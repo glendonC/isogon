@@ -189,16 +189,21 @@ struct FireSurface {
   float glow;      // 0..1 smoldering bed activity
 };
 
-// Blackbody-like ramp for wildland flame, t = 0 dull ember red, t = 1 white-yellow core.
+// Radiance of the flame body, t = 0 dull ember red, t = 1 bright amber. The display tone curve
+// turns any strong radiance white, so the body is held at levels where it stays orange on screen
+// (about sRGB 190 30 10, 250 115 35, 255 150 55 and 255 190 85 for the four stops).
 vec3 fireRamp(float t) {
-  vec3 c0 = vec3(0.55, 0.035, 0.004);
-  vec3 c1 = vec3(1.00, 0.180, 0.016);
-  vec3 c2 = vec3(1.00, 0.460, 0.070);
-  vec3 c3 = vec3(1.00, 0.780, 0.360);
+  vec3 c0 = vec3(0.45, 0.030, 0.003);
+  vec3 c1 = vec3(1.05, 0.110, 0.008);
+  vec3 c2 = vec3(1.40, 0.190, 0.013);
+  vec3 c3 = vec3(2.00, 0.360, 0.024);
   return t < 0.33
     ? mix(c0, c1, t / 0.33)
     : (t < 0.66 ? mix(c1, c2, (t - 0.33) / 0.33) : mix(c2, c3, (t - 0.66) / 0.34));
 }
+
+// White-hot core of a flaming front: the only part of the scene above the bloom threshold
+const vec3 FIRE_CORE = vec3(18.0, 6.5, 0.9);
 
 float fireFieldNow(vec2 uv, out float zBracket) {
   float z0 = textureLod(uFieldTex0, uv, 0.0).r;
@@ -286,11 +291,15 @@ FireSurface evalFireSurface(
   // Keep far fronts from gaining energy when the band is widened to stay visible.
   float energy = mix(1.0, sqrt(depthKm / bandKm), 0.55);
   float heat = clamp(0.38 + 0.62 * pow(power, 0.6), 0.0, 1.0) * flicker;
-  vec3 frontRgb = fireRamp(clamp(0.42 + 0.58 * heat, 0.0, 1.0)) * (6.0 + 30.0 * heat * heat) * energy;
+  // Orange body across the band, and a thin core along its leading edge. The core thins out
+  // when the band has been widened to stay visible from far away.
+  float core = smoothstep(0.58, 0.96, lead * tail) * (depthKm / bandKm);
+  vec3 frontRgb = fireRamp(clamp(0.30 + 0.70 * heat, 0.0, 1.0)) * mix(1.0, energy, 0.5)
+                + FIRE_CORE * core * (0.30 + 0.85 * heat * heat) * energy;
 
   // Flame body and ground glow hugging the front, a few flame depths wide, well below the core
   float fringe = exp(-abs(dKm) / (bandKm * 2.4 + 0.015)) * gate * (0.45 + 0.55 * breakup);
-  vec3 fringeRgb = fireRamp(clamp(0.26 + 0.24 * heat, 0.0, 1.0)) * (0.7 + 1.9 * power) * fringe;
+  vec3 fringeRgb = fireRamp(clamp(0.12 + 0.38 * heat, 0.0, 1.0)) * (0.60 + 0.45 * power) * fringe;
 
   // --- Ember bed: cooling, speckled, only while the solver field is still active here ------
   float stillActive = smoothstep(FIRE_THR * 0.45, FIRE_THR * 1.05, zNow) * (1.0 - waterMask);
@@ -302,7 +311,7 @@ FireSurface evalFireSurface(
   // Individual embers resolve only up close; from far away the bed is a faint dull glow
   float emberFade = smoothstep(2.5, 9.0, 0.045 / max(kmPerPx, 1e-6));
   float embers = bed * mix(0.10, spots * twinkle * 1.8, emberFade);
-  vec3 emberRgb = fireRamp(clamp(0.06 + 0.45 * embers, 0.0, 1.0)) * (0.40 + 1.8 * power) * embers;
+  vec3 emberRgb = fireRamp(clamp(0.04 + 0.50 * embers, 0.0, 1.0)) * (0.55 + 0.60 * power) * embers;
 
   fs.emission = frontRgb * front + (fringeRgb + emberRgb) * (1.0 - front);
   fs.front = front;

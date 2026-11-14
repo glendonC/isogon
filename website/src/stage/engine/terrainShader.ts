@@ -1,11 +1,55 @@
-import { COMMON_HEIGHTFIELD_GLSL, SLAB_D, SLAB_W } from '../earthCutawayShaders';
+import { COMMON_HEIGHTFIELD_GLSL } from '../earthCutawayShaders';
+import { ATMOSPHERE_GLSL, NIGHT_GLSL, SKY_VIEW_MAPPING_GLSL } from './atmosphere';
+import { FIRE_GLSL } from './fireField';
+import { NOISE_GLSL } from './noiseGlsl';
 import { SCAN_LATTICE_GLSL } from './scanGeometry';
 
 // =============================================================================
 // TERRAIN SURFACE SHADERS
 // The surface is never displaced by data: sensor cells and fire are drawn on the ground.
 // All output is scene-linear HDR radiance (see ./hdrPipeline.ts).
+//
+// Two shading paths share one shader:
+//   terrain pack   8192 ortho, baked true-scale normals, sky-view AO and canopy index (aux texture)
+//   fallback       2048 jpg (or the procedural canvas) with normals derived from the DEM
+// Sun shadows come from a texture baked once per region (./shadowBake.ts) in both paths.
 // =============================================================================
+// Light balance and picture mapping shared by every surface that shows imagery (the pack terrain
+// here, the context terrain in ./contextTerrain.ts), so they sit under one light.
+export const TERRAIN_LOOK_GLSL = /* glsl */ `
+const float TERRAIN_CEILING = 1.5;   // highest radiance of lit ground, under the bloom threshold
+const float SUN_KEY = 0.66;          // sunlight on the ground: a slope square to the sun gets about 1.15
+const float HAZE_NEAR_KM = 14.0;     // air within about this distance of the camera counts less
+
+// Imagery is a finished picture, not a reflectance map. It goes through the inverse of the display
+// tone curve (the ACES fit of three.js at exposure 1, see ./hdrPipeline.ts) so that under reference
+// light (1.0) the pipeline returns the picture's own colors, and lighter or darker light moves
+// them the way exposure would. The same mapping keeps flat data fills on their legend colors.
+const mat3 ACES_OUT_INV = mat3(
+  vec3(0.643038, 0.059269, 0.005962),
+  vec3(0.311187, 0.931436, 0.063929),
+  vec3(0.045775, 0.009295, 0.930118));
+const mat3 ACES_IN_INV = mat3(
+  vec3(1.764741, -0.147028, -0.036337),
+  vec3(-0.675778, 1.160252, -0.162436),
+  vec3(-0.088963, -0.013224, 1.198773));
+
+vec3 pictureToScene(vec3 displayLinear) {
+  vec3 y = clamp(ACES_OUT_INV * displayLinear, vec3(0.0), vec3(0.90));
+  vec3 a = 1.0 - 0.983729 * y;
+  vec3 b = 0.0245786 - 0.4329510 * y;
+  vec3 c = 0.000090537 + 0.238081 * y;
+  vec3 v = (-b + sqrt(b * b + 4.0 * a * c)) / (2.0 * a);
+  return max(ACES_IN_INV * v, vec3(0.0)) * 0.6;
+}
+
+// Lit ground never reaches the bloom threshold: a smooth ceiling that keeps the hue
+vec3 capSurface(vec3 c) {
+  float m = max(c.r, max(c.g, c.b)) / TERRAIN_CEILING;
+  return c / pow(1.0 + m * m * m * m, 0.25);
+}
+`;
+
 export const TERRAIN_VERTEX_SHADER = /* glsl */ `
 ${COMMON_HEIGHTFIELD_GLSL}
 
@@ -22,15 +66,27 @@ void main() {
   vBaseY = baseY;
   vElevM = elevM;
 
-  vec4 worldPos = modelMatrix * vec4(position.x, baseY, position.z, 1.0);
+  // The plane is unit-parameterised by uv, so the slab can take each region's own aspect ratio
+  vec4 worldPos = modelMatrix * vec4((uv.x - 0.5) * uSlabSize.x, baseY, (0.5 - uv.y) * uSlabSize.y, 1.0);
   vWorldPos = worldPos.xyz;
   gl_Position = projectionMatrix * viewMatrix * worldPos;
+}
+`;
+
+// Depth only, for the pass that lays the terrain depth down before the surface is shaded
+export const TERRAIN_DEPTH_FRAGMENT_SHADER = /* glsl */ `
+void main() {
+  gl_FragColor = vec4(0.0);
 }
 `;
 
 export const TERRAIN_FRAGMENT_SHADER = /* glsl */ `
 ${COMMON_HEIGHTFIELD_GLSL}
 ${SCAN_LATTICE_GLSL}
+
+// Display choices of the close-range look
+const float WALL_STRETCH_FROM = 1.3; // imagery stretched this much down a slope starts to count as a wall
+const float WALL_STRETCH_FULL = 2.3; // about 46 degrees of true slope at the stage's vertical factor
 
 uniform sampler2D uSatPrev;
 uniform sampler2D uSatNext;
@@ -39,7 +95,7 @@ uniform sampler2D uFieldTex1;
 uniform sampler2D uLipariTex;
 
 uniform float uFrameMix;
-uniform vec3 uSunDir;
+uniform vec3 uSunDir;          // stage space, toward the sun
 uniform float uTime;
 uniform float uCutawayMix;
 uniform float uCutawayPlane;
@@ -54,81 +110,159 @@ uniform float uSensitivity;
 uniform vec2 uExtentKm;   // region size on the ground (east-west, north-south)
 uniform vec4 uModisPass;  // (scan axis east, scan axis north, nadir distance km, valid)
 uniform vec4 uViirsPass;
+uniform vec4 uScanStrip;  // (MODIS strip center along track km, strength, VIIRS center km, strength)
+uniform float uLatticeMix; // 1 draws the lattice of empty scan cells; 0 on the landing page, which shows no grid
 uniform float uHasSeaCoast;
+uniform sampler2D uFireHist;  // arrival, extinction, peak, burned (see ./fireField.ts)
+uniform float uFireTime;      // fractional epoch
+uniform vec2 uWindDirUv;
+
+// Terrain pack (all optional, weights are 0 without a pack)
+uniform sampler2D uAuxTex;      // r normal x (east), g normal z (south), b sky view, a canopy
+uniform float uAuxMix;
+uniform sampler2D uShadowTex;   // baked sun shadow factor, 1 = lit
+uniform sampler2D uSmokeShadowTex; // transmittance of the smoke toward the sun at ground level
+uniform float uSmokeShadowMix;
+uniform vec3 uUnitsPerMetre;    // stage units per metre on x, y, z
+uniform vec3 uSunTrue;          // unit vector toward the sun at true scale
+uniform vec3 uSunColor;         // radiance of a white surface in full sun
+uniform vec3 uSunTransmittance; // of the air above the region, toward the sun (feeds only the inscatter the haze discards)
+uniform float uHazeStrength;    // share of the physical air path that is drawn
+uniform sampler2D uSkyView;     // sky radiance by azimuth from the sun and elevation (./atmosphere.ts)
+uniform float uSkyExposure;     // the dome's display exposure, so the far edge meets it exactly
+uniform vec3 uFloorColor;       // the dome's floor (shared with ./atmosphere.ts)
+uniform float uFloorHaze;
+uniform float uOrthoTexelKm;    // ground size of one texel of the current imagery
+uniform float uSatSharpen;      // 1 for low-resolution imagery, 0 for the pack ortho
+uniform sampler2D uDetailTex;   // optional zoom 16 inset
+uniform vec4 uDetailRect;       // (u0, v0, u1, v1) of the inset in slab uv
+uniform float uDetailMix;
+uniform float uDetailTexelKm;
+uniform sampler2D uContextOrtho; // imagery around the pack (see contextJoin in the heightfield code)
+// Real runs: the detections of the overpass on show, each in its own footprint (./footprintField.ts).
+// r, b: inside a footprint minus its depth (0 edge, 1 centre line), outside km to the nearest one
+// (MODIS, VIIRS). g, a: fire radiative power density of that footprint, MW/km2.
+uniform sampler2D uFootTex;
+uniform vec2 uFootMix;      // (MODIS, VIIRS): 1 on a real run, where footprints replace the scan lattice
+uniform float uLightModis;  // 1 when the lights on show are MODIS detections (the raw side shows them too), 0 for VIIRS
+uniform float uLightTexels; // side of the light texture, texels
+uniform vec2 uRevealed;     // (MODIS, VIIRS): 1 when that family's footprints on show were revealed after scoring
+// The run's intensity scale, from its payload: (0 linear or 1 log10, top MW/km2, bottom MW/km2)
+uniform vec3 uFieldScale;
+// Positions on that scale where emitted light starts and where it is at its brightest
+uniform vec2 uHeatRange;
 
 varying vec2 vUv;
 varying vec3 vWorldPos;
 varying float vBaseY;
 varying float vElevM;
 
-vec3 sampleCrispSatellite(vec2 uv) {
-  vec2 texStep = vec2(1.0 / 2048.0);
-  vec3 cPrev = texture2D(uSatPrev, uv).rgb;
-  vec3 cNext = texture2D(uSatNext, uv).rgb;
-  vec3 center = mix(cPrev, cNext, uMorph);
+${NOISE_GLSL}
+${ATMOSPHERE_GLSL}
+${SKY_VIEW_MAPPING_GLSL}
+${NIGHT_GLSL}
+${FIRE_GLSL}
 
-  // Subtle high-frequency unsharp luminance detail boost for granite crags & timberlines
-  vec3 nE = mix(texture2D(uSatPrev, uv + vec2(texStep.x, 0.0)).rgb, texture2D(uSatNext, uv + vec2(texStep.x, 0.0)).rgb, uMorph);
-  vec3 nW = mix(texture2D(uSatPrev, uv - vec2(texStep.x, 0.0)).rgb, texture2D(uSatNext, uv - vec2(texStep.x, 0.0)).rgb, uMorph);
-  vec3 nN = mix(texture2D(uSatPrev, uv + vec2(0.0, texStep.y)).rgb, texture2D(uSatNext, uv + vec2(0.0, texStep.y)).rgb, uMorph);
-  vec3 nS = mix(texture2D(uSatPrev, uv - vec2(0.0, texStep.y)).rgb, texture2D(uSatNext, uv - vec2(0.0, texStep.y)).rgb, uMorph);
+${TERRAIN_LOOK_GLSL}
 
-  vec3 blur = 0.25 * (nE + nW + nN + nS);
-  float detailLuma = dot(center - blur, vec3(0.299, 0.587, 0.114));
-  return clamp(center + vec3(detailLuma * 0.42), 0.0, 1.0);
+// Imagery for the current region. During a region morph the outgoing image is blended in.
+// Returns the picture color and, in insetWeight, how much of it came from the zoom 16 inset.
+//
+// The imagery is projected straight down, so on a steep face every texel is stretched along the
+// fall line by 'stretch' (surface length over map length) and reads as a smear when magnified.
+// The filter footprint is therefore widened across the slope by the same amount ('contourUv' is
+// the uv step per world unit along the contour): detail becomes as coarse across the slope as the
+// projection already made it along the slope, soft instead of streaked.
+vec3 sampleOrtho(vec2 uv, float kmPerPx, vec2 contourUv, float stretch, float bare, out float insetWeight) {
+  float worldPerKm = uUnitsPerMetre.x * 1000.0;
+  float magnified = smoothstep(2.4, 0.9, kmPerPx / max(uOrthoTexelKm, 1e-5));
+  vec2 smear = contourUv * (uOrthoTexelKm * worldPerKm * (stretch - 1.0) * magnified);
+  // On a wall the picture holds almost no real detail (a few texels cover the whole face), so it
+  // is also filtered wider in every direction there and keeps only its color. Rock texture drawn in
+  // the shader takes the place of the streaks (see wallFade in main).
+  // 'bare' is 1 on open rock and 0 under canopy or without a terrain pack: forest keeps its texture
+  float wall = smoothstep(WALL_STRETCH_FROM, WALL_STRETCH_FULL, stretch) * bare;
+  float widen = 1.0 + wall * 5.0;
+  vec2 baseGx = dFdx(uv) * widen;
+  vec2 baseGy = dFdy(uv) * widen;
+  vec3 center = textureGrad(uSatNext, uv, baseGx + smear, baseGy).rgb;
+  insetWeight = 0.0;
+
+  if (uSatSharpen > 0.01) {
+    // Mild unsharp mask, only for the 2048 fallback imagery
+    vec2 texStep = vec2(1.0 / 2048.0);
+    vec3 blur = 0.25 * (
+      texture2D(uSatNext, uv + vec2(texStep.x, 0.0)).rgb + texture2D(uSatNext, uv - vec2(texStep.x, 0.0)).rgb +
+      texture2D(uSatNext, uv + vec2(0.0, texStep.y)).rgb + texture2D(uSatNext, uv - vec2(0.0, texStep.y)).rgb);
+    float detailLuma = dot(center - blur, vec3(0.299, 0.587, 0.114));
+    center = clamp(center + vec3(detailLuma * 0.42 * uSatSharpen), 0.0, 1.0);
+  }
+
+  // Zoom 16 inset over the fire window, used only where the base imagery is being magnified.
+  // Its low frequencies are replaced by those of the base image so tone or season differences
+  // between the two mosaics do not show as a rectangle.
+  vec2 rectSize = max(uDetailRect.zw - uDetailRect.xy, vec2(1e-4));
+  vec2 duv = (uv - uDetailRect.xy) / rectSize;
+  float insetMagnified = smoothstep(2.4, 0.9, kmPerPx / max(uDetailTexelKm, 1e-5));
+  vec2 dGx = dFdx(duv) * widen + contourUv * (uDetailTexelKm * worldPerKm * (stretch - 1.0) * insetMagnified) / rectSize;
+  vec2 dGy = dFdy(duv) * widen;
+  if (uDetailMix > 0.01) {
+    vec2 edge = min(duv, 1.0 - duv);
+    float inside = smoothstep(0.0, 0.035, min(edge.x, edge.y));
+    float need = smoothstep(1.5, 0.75, kmPerPx / max(uOrthoTexelKm, 1e-5));
+    float w = inside * need * uDetailMix;
+    if (w > 0.003) {
+      vec2 cuv = clamp(duv, vec2(0.0), vec2(1.0));
+      vec3 fine = textureGrad(uDetailTex, cuv, dGx, dGy).rgb;
+      vec3 fineLow = textureLod(uDetailTex, cuv, 6.5).rgb;
+      vec3 baseLow = textureLod(uSatNext, uv, 5.0).rgb;
+      fine *= clamp((baseLow + 0.01) / (fineLow + 0.01), vec3(0.55), vec3(1.8));
+      center = mix(center, fine, w);
+      insetWeight = w;
+    }
+  }
+
+  if (uMorph < 0.999) {
+    center = mix(texture2D(uSatPrev, uv).rgb, center, uMorph);
+  }
+  return center;
 }
 
+// Stage-space normal from the heightfield (fallback path and during region morphs)
 vec3 computeTerrainNormal(vec2 uv, out float slopeMag) {
-  float epsU = 1.0 / 512.0;
-  float epsV = 1.0 / 512.0;
-  float hE = evalTerrainWorldYFast(uv + vec2(epsU, 0.0));
-  float hW = evalTerrainWorldYFast(uv - vec2(epsU, 0.0));
-  float hN = evalTerrainWorldYFast(uv + vec2(0.0, epsV));
-  float hS = evalTerrainWorldYFast(uv - vec2(0.0, epsV));
+  float eps = 1.0 / 512.0;
+  float hE = evalTerrainWorldYFast(uv + vec2(eps, 0.0));
+  float hW = evalTerrainWorldYFast(uv - vec2(eps, 0.0));
+  float hN = evalTerrainWorldYFast(uv + vec2(0.0, eps));
+  float hS = evalTerrainWorldYFast(uv - vec2(0.0, eps));
 
-  float dxWorld = 2.0 * epsU * ${SLAB_W.toFixed(2)};
-  float dzWorld = 2.0 * epsV * ${SLAB_D.toFixed(2)};
   // Note: +v is North (-Z world), so dY/dZ = -(hN - hS) / dzWorld
-  float dydx = (hE - hW) / dxWorld;
-  float dydz = -(hN - hS) / dzWorld;
+  float dydx = (hE - hW) / (2.0 * eps * uSlabSize.x);
+  float dydz = -(hN - hS) / (2.0 * eps * uSlabSize.y);
   slopeMag = length(vec2(dydx, dydz));
   return normalize(vec3(-dydx, 1.0, -dydz));
 }
 
-float raymarchSunShadow(vec2 startUv, float startY, vec3 sunDir) {
-  // Convert world sun ray direction into (dU, dY, dV) steps across the heightfield
-  vec2 stepUvDir = vec2(sunDir.x / ${SLAB_W.toFixed(2)}, -sunDir.z / ${SLAB_D.toFixed(2)});
-  float stepLenUv = 0.0115;
-  vec2 dUv = normalize(stepUvDir + vec2(1e-6)) * stepLenUv;
-  float worldHorizDist = length(vec2(dUv.x * ${SLAB_W.toFixed(2)}, dUv.y * ${SLAB_D.toFixed(2)}));
-  float sunSlopeY = sunDir.y / max(0.12, length(sunDir.xz));
-  float dY = worldHorizDist * sunSlopeY;
-
-  float occlusion = 0.0;
-  vec2 curUv = startUv;
-  float rayY = startY + 0.008;
-
-  for (int i = 1; i <= 14; i++) {
-    curUv += dUv;
-    rayY += dY;
-    if (curUv.x < 0.0 || curUv.x > 1.0 || curUv.y < 0.0 || curUv.y > 1.0) {
-      break;
-    }
-    float terrainH = evalTerrainWorldYFast(curUv);
-    float diff = terrainH - rayY;
-    if (diff > 0.0) {
-      float penumbra = clamp(diff * 11.5 / float(i), 0.0, 1.0);
-      occlusion = max(occlusion, penumbra);
-    }
-  }
-  return 1.0 - occlusion * 0.76;
+// Normal of a surface displaced by a small height h (world units), from screen-space derivatives
+// (Mikkelsen, bump mapping unparametrized surfaces).
+vec3 perturbNormal(vec3 pos, vec3 n, float h) {
+  vec3 dpdx = dFdx(pos);
+  vec3 dpdy = dFdy(pos);
+  float dhdx = dFdx(h);
+  float dhdy = dFdy(h);
+  vec3 r1 = cross(dpdy, n);
+  vec3 r2 = cross(n, dpdx);
+  float det = dot(dpdx, r1);
+  vec3 grad = sign(det) * (dhdx * r1 + dhdy * r2);
+  return normalize(abs(det) * n - grad);
 }
 
 // A sensor overpass is one discrete observation, so cell values come from the nearest epoch
 // instead of a blend of two.
 vec4 sampleFieldNearestEpoch(vec2 uv) {
   vec2 c = clamp(uv, vec2(0.002), vec2(0.998));
-  return mix(texture2D(uFieldTex0, c), texture2D(uFieldTex1, c), step(0.5, uFrameMix));
+  // Explicit level 0: cell centers jump between fragments, which would pick a blurred mip level
+  return mix(textureLod(uFieldTex0, c, 0.0), textureLod(uFieldTex1, c, 0.0), step(0.5, uFrameMix));
 }
 
 // Mean of the field channel over the cell footprint (center weighted twice plus four inner taps).
@@ -149,18 +283,76 @@ float scanCellValue(ScanCell cell, vec2 axis, vec4 channelMask) {
 struct ScanDraw {
   float value;   // per-cell field value, 0..1 of the field range
   float hair;    // hairline coverage of the cell border (constant width in device pixels)
+  float hairLit; // wider coverage used for the border of a cell that holds a detection
   float seam;    // hairline coverage of the scan-to-scan seam, scaled by the bow-tie overlap
   float cellPx;  // smaller cell dimension in device pixels
 };
+
+// The strip one mirror scan sweeps under the spacecraft: two hairlines one scan apart (the nadir
+// width, the spacing of the scan seams in the lattice) and a faint lift between them.
+vec3 scanStripMark(vec3 rgb, vec2 pKm, float kmPerPx, vec4 pass, vec4 sensor, float k, vec2 strip, vec3 tint) {
+  vec2 track = vec2(pass.y, -pass.x);
+  float halfKm = 0.5 * sensor.z * SCAN_RE * (k - 1.0) * sensor.y;
+  float d = abs(dot(pKm, track) - strip.x);
+  float edge = scanHairline(abs(d - halfKm), kmPerPx, 1.6);
+  float inside = 1.0 - smoothstep(halfKm - kmPerPx, halfKm + kmPerPx, d);
+  rgb = mix(rgb, rgb * 1.07 + tint * 0.04, inside * strip.y);
+  return mix(rgb, tint, edge * strip.y * 0.92);
+}
 
 ScanDraw evalScanDraw(vec2 pKm, float kmPerPx, vec4 pass, vec4 sensor, float k, vec4 channelMask) {
   ScanDraw d;
   ScanCell cell = evalScanCell(pKm, pass, sensor, k);
   d.value = scanCellValue(cell, pass.xy, channelMask);
   d.cellPx = min(cell.sizeKm.x, cell.sizeKm.y) / max(kmPerPx, 1e-6);
-  d.hair = scanHairline(cell.edgeKm, kmPerPx, 1.15);
-  d.seam = scanHairline(cell.seamKm, kmPerPx, 1.9) * smoothstep(0.04, 0.35, cell.overlap);
+  // Ground distance one pixel covers across each family of borders. With one isotropic figure a
+  // border that runs away from the camera would come out several pixels wide at grazing angles.
+  vec2 track = vec2(pass.y, -pass.x);
+  float sAxis = dot(pKm, pass.xy);
+  float sTrack = dot(pKm, track);
+  float pxAxis = max(length(vec2(dFdx(sAxis), dFdy(sAxis))), 1e-6);
+  float pxTrack = max(length(vec2(dFdx(sTrack), dFdy(sTrack))), 1e-6);
+  d.hair = max(scanHairline(cell.edgeScanKm, pxAxis, 1.15), scanHairline(cell.edgeTrackKm, pxTrack, 1.15));
+  d.hairLit = max(scanHairline(cell.edgeScanKm, pxAxis, 2.3), scanHairline(cell.edgeTrackKm, pxTrack, 2.3));
+  d.seam = scanHairline(cell.seamKm, pxTrack, 1.9) * smoothstep(0.04, 0.35, cell.overlap);
   return d;
+}
+
+// Position (0..1, byte / 255) of a fire radiative power density on the run's intensity scale, as
+// the field bytes are encoded: a detection's own value and the field then share one scale.
+float fieldNorm(float mwKm2) {
+  if (uFieldScale.x < 0.5) return clamp(mwKm2 / max(uFieldScale.y, 1e-3), 0.0, 1.0);
+  if (mwKm2 < uFieldScale.z) return 0.0;
+  return clamp((1.0 + 254.0 * log(mwKm2 / uFieldScale.z) / log(uFieldScale.y / uFieldScale.z)) / 255.0, 0.0, 1.0);
+}
+
+// How hot a position on the scale is drawn: 0 where emitted light starts, 1 at its brightest
+float heatOf(float v) {
+  return clamp((v - uHeatRange.x) / max(uHeatRange.y - uHeatRange.x, 1e-3), 0.0, 1.0);
+}
+
+// A real detection is heat a satellite measured as emitted radiance. It is drawn as light the
+// ground gives off: one light per detection, inside the detection's own footprint, as a small hot
+// core with a soft halo (FIRMS says the fire is somewhere in the footprint, not that it fills it).
+// The lights are drawn into a texture with a mip chain (./footprintField.ts), colour and brightness
+// from each detection's radiative power: deep red, through orange, to near white. On a real run it
+// is bound to uFireHist, whose fire history is not drawn there. rgb: emitted light. a: its strength
+// without the colour.
+// Lights that are small on screen run together: the mip chain averages them into one glow, and
+// the average is lifted so a light smaller than a pixel still shows, as a far lamp does.
+vec4 detectionLight(vec2 uv) {
+  vec2 texel = uv * uLightTexels;
+  float lod = log2(max(max(length(dFdx(texel)), length(dFdy(texel))), 1.0));
+  vec4 light = texture2D(uFireHist, uv) * min(exp2(0.85 * lod), 6.0);
+  // By day the same light competes with sunlit ground and with smoke: it is lifted and kept orange
+  light.rgb *= mix(vec3(1.5, 1.05, 0.7), vec3(1.0), uNight);
+  return light;
+}
+
+// A detection revealed after scoring is drawn as the instrument's pixel: a cool centre here and an
+// outline where it is used. field: the footprint field of its family (minus depth inside).
+float revealCore(float field) {
+  return smoothstep(0.80, 0.98, clamp(-field, 0.0, 1.0));
 }
 
 // Border visibility. A lit cell keeps its border until the cell is only a few pixels across. The
@@ -176,35 +368,158 @@ void main() {
   vec2 pKm = (vUv - vec2(0.5)) * uExtentKm;
   float kmPerPx = max(length(dFdx(pKm)), length(dFdy(pKm)));
 
-  float slopeMag = 0.0;
-  vec3 N = computeTerrainNormal(vUv, slopeMag);
-  float shadow = raymarchSunShadow(vUv, vBaseY, sunDir);
+  // Real detection footprints, and the screen-space gradient of each family's field (for the
+  // one-pixel edge of a footprint, whatever the field's units on either side of that edge)
+  vec4 foot = texture2D(uFootTex, vUv);
+  float footGradM = max(length(vec2(dFdx(foot.r), dFdy(foot.r))), 1e-6);
+  float footGradV = max(length(vec2(dFdx(foot.b), dFdy(foot.b))), 1e-6);
+  // What the overpass on show detected, as emitted light (nothing on a simulated run)
+  vec4 lit = detectionLight(vUv) * uFootMix.x;
 
-  vec3 satRgb = sampleCrispSatellite(vUv);
-  float satLuma = dot(satRgb, vec3(0.2126, 0.7152, 0.0722));
+  // --- Surface normal and sky visibility ------------------------------------------------------
+  float slopeMag = 0.0;   // stage-space gradient magnitude
+  vec3 N = vec3(0.0, 1.0, 0.0);
+  vec4 aux = texture2D(uAuxTex, vUv);
+  if (uAuxMix < 0.999) {
+    N = computeTerrainNormal(vUv, slopeMag);
+  }
+  if (uAuxMix > 0.001) {
+    // True-scale unit normal, y rebuilt, then mapped into the scaled stage space
+    vec2 nxz = aux.rg * 2.0 - 1.0;
+    vec3 nTrue = vec3(nxz.x, sqrt(max(1e-4, 1.0 - dot(nxz, nxz))), nxz.y);
+    vec3 nAux = normalize(nTrue / uUnitsPerMetre);
+    float slopeAux = length(nAux.xz) / max(nAux.y, 1e-3);
+    N = normalize(mix(N, nAux, uAuxMix));
+    slopeMag = mix(slopeMag, slopeAux, uAuxMix);
+  }
+  // Tangent of the true slope angle (the stage exaggerates relief)
+  float trueSlope = slopeMag * uUnitsPerMetre.x / max(uUnitsPerMetre.y, 1e-9);
+  float skyView = mix(1.0, aux.b, uAuxMix);
 
-  // Solar diffuse + cool sky hemisphere fill + subtle ridge rim
+  // --- Imagery ---------------------------------------------------------------------------------
+  // Contour direction on the ground (uv step per world unit) and the stretch of the projection
+  vec2 fall = N.xz / max(length(N.xz), 1e-4);
+  vec2 contourUv = vec2(-fall.y / uSlabSize.x, -fall.x / uSlabSize.y);
+  float stretch = min(sqrt(1.0 + slopeMag * slopeMag), 6.0);
+  float insetWeight = 0.0;
+  float bare = uAuxMix * (1.0 - smoothstep(0.15, 0.6, aux.a));
+  vec3 photoRgb = sampleOrtho(vUv, kmPerPx, contourUv, stretch, bare, insetWeight);
+  // Over its last stretch the pack shows the context imagery, like its surface takes the context
+  // elevation there: the step in detail between the two is spread over the join
+  float joinK = contextJoin(vUv);
+  // (derivatives are taken outside the branch; inside it they are undefined)
+  vec2 contextUv = (vUv - 0.5) / uContextScale + 0.5;
+  vec2 contextDx = dFdx(contextUv);
+  vec2 contextDy = dFdy(contextUv);
+  if (joinK > 0.0) {
+    photoRgb = mix(photoRgb, textureGrad(uContextOrtho, contextUv, contextDx, contextDy).rgb, joinK);
+  }
+  float satLuma = dot(photoRgb, vec3(0.2126, 0.7152, 0.0722));
+  vec3 satRgb = pictureToScene(photoRgb);
+
+  // Canopy cover: the pack's canopy index, or an imagery heuristic without a pack
+  float vegHeuristic = clamp((photoRgb.g - max(photoRgb.r, photoRgb.b)) * 7.0 + 0.5, 0.0, 1.0);
+  float canopyK = mix(vegHeuristic, aux.a, uAuxMix);
+
+  // Water (hydrologically flat lakes, rivers, sea coves)
+  float seaMask = uHasSeaCoast * (1.0 - smoothstep(1.2, 4.5, vElevM));
+  float inlandWater = step(photoRgb.g * 0.94, photoRgb.b)
+                    * step(photoRgb.r * 1.45, photoRgb.b)
+                    * (1.0 - smoothstep(0.022, 0.042, satLuma))
+                    * (1.0 - smoothstep(0.012, 0.028, slopeMag));
+  float waterMask = clamp(max(seaMask, inlandWater), 0.0, 1.0);
+
+  // --- Close-range micro detail: rock on steep walls, crown texture where canopy is high ----
+  // Rendering treatment only. It appears when the imagery is magnified past its own resolution.
+  float texelKm = mix(uOrthoTexelKm, uDetailTexelKm, insetWeight);
+  float detailFade = smoothstep(1.6, 0.45, kmPerPx / max(texelKm, 1e-5)) * (1.0 - waterMask);
+  float rockMask = smoothstep(0.50, 1.05, trueSlope) * (1.0 - 0.75 * canopyK);
+  float canopyMask = smoothstep(0.30, 0.75, canopyK) * (1.0 - smoothstep(0.9, 1.6, trueSlope));
+  // On walls the imagery keeps only its color (see sampleOrtho), so the rock texture is drawn there
+  // at any distance where it still resolves, not only when the imagery is magnified
+  float wallFade = smoothstep(WALL_STRETCH_FROM, WALL_STRETCH_FULL, stretch) * bare
+                 * (1.0 - smoothstep(0.010, 0.030, kmPerPx)) * (1.0 - waterMask);
+  float roughness = 0.9;
+  if (detailFade > 0.01 || wallFade > 0.01) {
+    // Isotropic km-like coordinates in stage space, so detail is not stretched by the exaggeration
+    vec3 p = vWorldPos / (uUnitsPerMetre.x * 1000.0);
+    vec3 wgt = pow(abs(N), vec3(4.0));
+    wgt /= (wgt.x + wgt.y + wgt.z);
+
+    // Rock: fractured faces, slightly banded on the side projections
+    float rockTop = fbm2Lite(p.xz * 34.0);
+    float rockX = fbm2Lite(vec2(p.z * 22.0, p.y * 58.0) + vec2(7.0, 3.0));
+    float rockZ = fbm2Lite(vec2(p.x * 22.0, p.y * 58.0) + vec2(1.0, 9.0));
+    float rockH = wgt.y * rockTop + wgt.x * rockX + wgt.z * rockZ;
+    if (wallFade > 0.01) {
+      // Beds across the face (they follow elevation, gently bent) break up the fall-line streaks
+      float bend = (valueNoise2(p.xz * 2.3) - 0.5) * 0.14;
+      float beds = fbm2Lite(vec2((vElevM * 0.001 + bend) * 38.0, dot(p.xz, vec2(0.71, 0.71)) * 3.0));
+      rockH = mix(rockH, smoothstep(0.25, 0.75, 0.5 * (rockH + beds)), wallFade);
+    }
+
+    // Canopy: crown clusters about 16 m across, seen from above
+    // (cluster size varies with a low-frequency term so it does not read as a regular stipple)
+    float crownScale = 46.0 + 26.0 * valueNoise2(p.xz * 3.1);
+    vec3 crown = worley2(p.xz * crownScale + vec2(13.0, 5.0));
+    float crownH = 1.0 - smoothstep(0.0, 0.70, crown.x);
+
+    float rockW = rockMask * max(detailFade, wallFade);
+    float canopyW = canopyMask * detailFade;
+    satRgb *= 1.0 + (rockH - 0.5) * mix(0.34, 0.85, wallFade) * rockW;
+    satRgb *= mix(1.0, 0.84 + 0.24 * crownH + 0.08 * (crown.z - 0.5), canopyW);
+
+    // Relief of the detail in world units (metres times the vertical scale)
+    float hWorld = (rockH * 9.0 * rockMask * detailFade + crownH * 6.0 * canopyW) * uUnitsPerMetre.y;
+    N = normalize(mix(N, perturbNormal(vWorldPos, N, hWorld), detailFade));
+    roughness = mix(roughness, 0.55 + 0.35 * rockH, rockW);
+  }
+
+  // --- Lighting ------------------------------------------------------------------------------
+  // Reference light is 1.0: there the imagery shows its own colors (it already carries the sun
+  // of the day it was taken). A slope square to the sun gets about 1.15, level ground about 0.95,
+  // a slope turned away or in cast shadow about 0.25, so relief reads by contrast.
+  // Sun shadow is baked once per region with a soft edge (./shadowBake.ts).
+  float shadow = mix(0.10, 1.0, texture2D(uShadowTex, vUv).r);
+  // The context terrain around the pack has no baked shadows and no sky view map. Toward the pack
+  // edge both ease out to what the context uses, so the light does not step along the boundary.
+  vec2 toPackEdge = min(vUv, 1.0 - vUv);
+  float edgeEase = (1.0 - smoothstep(0.0, 0.07, min(toPackEdge.x, toPackEdge.y))) * uContextMix;
+  shadow = mix(shadow, 1.0, edgeEase);
+  // Soft shadow of the smoke column (see ./smokeVolume.ts). It dims sunlight, not emission.
+  // Five taps soften it into a penumbra, and part of the light always gets through: thick smoke
+  // dims the ground, it does not blot it out.
+  float smokeT = 0.36 * texture2D(uSmokeShadowTex, vUv).r
+               + 0.16 * (texture2D(uSmokeShadowTex, vUv + vec2(0.012, 0.007)).r
+                       + texture2D(uSmokeShadowTex, vUv + vec2(-0.007, 0.012)).r
+                       + texture2D(uSmokeShadowTex, vUv + vec2(-0.012, -0.007)).r
+                       + texture2D(uSmokeShadowTex, vUv + vec2(0.007, -0.012)).r);
+  float smokeShade = mix(1.0, mix(0.42, 1.0, smokeT), uSmokeShadowMix);
   float nDotL = max(0.0, dot(N, sunDir));
   float skyFill = 0.5 + 0.5 * N.y;
-  vec3 sunIrradiance = vec3(1.06, 0.99, 0.92) * (nDotL * shadow * 0.88);
-  vec3 ambientSky = mix(vec3(0.16, 0.20, 0.28), vec3(0.32, 0.37, 0.46), skyFill);
-  vec3 litEarth = satRgb * (ambientSky + sunIrradiance);
+  float ao = mix(mix(0.34, 1.0, smoothstep(0.42, 0.98, skyView)), 0.92, edgeEase);
+  vec3 sunIrradiance = uSunColor * (SUN_KEY * nDotL * shadow * smokeShade);
+  vec3 ambientSky = mix(vec3(0.16, 0.19, 0.25), vec3(0.24, 0.27, 0.33), skyFill) * ao;
+  vec3 lighting = ambientSky + sunIrradiance;
+  vec3 litEarth = satRgb * lighting;
+
+  // Broad sun sheen on bare rock, scaled by the detail roughness
+  vec3 halfVec = normalize(sunDir + viewDir);
+  float rockSpec = pow(max(0.0, dot(N, halfVec)), mix(64.0, 10.0, roughness))
+                 * (1.0 - roughness) * 0.22 * rockMask * shadow * nDotL;
+  litEarth += vec3(1.0, 0.96, 0.90) * rockSpec;
+
   // Relief shading term reused by flat data fills so they sit on the ground instead of floating
   float shadeTerm = clamp(nDotL * shadow * 1.15 + 0.22, 0.0, 1.0);
 
-  // Physical Water Specular Glint (hydrologically flat lakes, rivers, and Aegean sea coves)
-  float seaMask = uHasSeaCoast * (1.0 - smoothstep(1.2, 4.5, vElevM));
-  float inlandWater = step(satRgb.g * 0.94, satRgb.b)
-                    * step(satRgb.r * 1.45, satRgb.b)
-                    * (1.0 - smoothstep(0.022, 0.042, satLuma))
-                    * (1.0 - smoothstep(0.018, 0.038, slopeMag));
-  float waterMask = clamp(max(seaMask, inlandWater), 0.0, 1.0);
-
   if (waterMask > 0.02) {
-    float rippleA = sin(vWorldPos.x * 26.0 + uTime * 1.4 + vWorldPos.z * 19.0);
-    float rippleB = cos(vWorldPos.x * 34.0 - uTime * 1.1 + vWorldPos.z * 29.0);
-    vec3 waterN = normalize(N + vec3(rippleA * 0.028, 0.0, rippleB * 0.028) * waterMask);
-    vec3 halfVec = normalize(sunDir + viewDir);
+    // Wind ruffles from two drifting noise fields. Regular wave trains read as stripes across
+    // the whole sea from the distances the stage looks from.
+    vec2 wq = vWorldPos.xz * 7.0;
+    float rippleA = valueNoise2(wq + vec2(uTime * 0.21, uTime * 0.13)) - 0.5;
+    float rippleB = valueNoise2(wq * 2.3 + vec2(7.0 - uTime * 0.17, 3.0 + uTime * 0.19)) - 0.5;
+    float rippleFade = 1.0 - smoothstep(0.015, 0.09, kmPerPx);
+    vec3 waterN = normalize(N + vec3(rippleA, 0.0, rippleB) * (0.05 * rippleFade * waterMask));
     float spec = pow(max(0.0, dot(waterN, halfVec)), 96.0) * shadow;
     float fresnel = pow(1.0 - max(0.0, dot(waterN, viewDir)), 4.0);
     vec3 deepWaterTint = mix(litEarth, vec3(0.05, 0.13, 0.21), 0.42);
@@ -215,18 +530,38 @@ void main() {
     );
   }
 
-  // Rayleigh Valley Aerial Perspective (cool-silver depth scattering in deep gorges & far corners)
-  float minRange = mix(uElevPrevRange.x, uElevNextRange.x, uMorph);
-  float maxRange = mix(uElevPrevRange.y, uElevNextRange.y, uMorph);
-  float normElev = clamp((vElevM - minRange) / max(350.0, maxRange - minRange), 0.0, 1.0);
-  float camDist = length(cameraPosition - vWorldPos);
-  float valleyMist = (1.0 - smoothstep(0.04, 0.48, normElev)) * 0.14
-                   + smoothstep(9.5, 22.0, camDist) * 0.16;
-  litEarth = mix(litEarth, vec3(0.42, 0.50, 0.62) * (0.45 + 0.45 * shadow), clamp(valleyMist, 0.0, 0.26));
+  // Aerial perspective: Rayleigh and Mie scattering along the true-scale path from the camera
+  // (see ./atmosphere.ts). Valleys and far slopes sit behind more air than ridges and near ones.
+  vec3 toPointKm = (vWorldPos - cameraPosition) / (uUnitsPerMetre * 1000.0);
+  float pathKm = length(toPointKm);
+  float baseElevM = mix(uElevPrevRange.x, uElevNextRange.x, uMorph);
+  float camAltKm = (baseElevM + cameraPosition.y / uUnitsPerMetre.y) * 0.001;
+  // The stage is a miniature: a close view is in truth tens of kilometres away, and the full air
+  // path would veil the foreground. Air near the camera therefore counts less (display choice).
+  float hazeKm = pathKm * uHazeStrength * pathKm / (pathKm + HAZE_NEAR_KM);
+  vec3 viewTrue = toPointKm / max(pathKm, 1e-4);
+  vec3 hazeUnused;
+  vec3 hazeTrans = atmAerialPerspective(
+    camAltKm, vElevM * 0.001, hazeKm, dot(viewTrue, uSunTrue), uSunTransmittance, hazeUnused
+  );
+  // The light scattered into the path is whatever the dome draws behind this direction: sky near
+  // and above the horizon, the floor when the view looks down. Distance therefore takes the ground
+  // into exactly its backdrop, in every view and mode, and the far part of the slab never stands
+  // out lighter or darker than what surrounds it.
+  vec3 backdrop = atmBackdrop(
+    uSkyView, viewTrue, normalize(uSunTrue), clamp(camAltKm, 0.02, ATM_TOP - 1.0),
+    uSkyExposure, uFloorColor, uFloorHaze
+  );
+  vec3 hazeIn = backdrop * (1.0 - hazeTrans);
+  // Surface radiance before the air in between (burned ground is composed from it below)
+  vec3 litEarthClear = litEarth;
+  litEarth = nightGrade(capSurface(litEarth * hazeTrans + hazeIn));
+  // By night water gives back a dark sky: never brighter than the land beside it
+  litEarth *= 1.0 - 0.55 * waterMask * uNight;
 
   // Sample 256x256 scientific solver fields
-  vec4 f0 = texture2D(uFieldTex0, vUv);
-  vec4 f1 = texture2D(uFieldTex1, vUv);
+  vec4 f0 = textureLod(uFieldTex0, vUv, 0.0);
+  vec4 f1 = textureLod(uFieldTex1, vUv, 0.0);
   vec4 field = mix(f0, f1, uFrameMix);
 
   float sensGate = max(0.015, uSensitivity * 0.42);
@@ -245,71 +580,88 @@ void main() {
   vec3 finalRgb = litEarth;
 
   // ===========================================================================
-  // A. HARMONIZED 375 M POSTERIOR SIDE (OR FULL RECONSTRUCTION MODE)
+  // A. HARMONIZED 375 M SIDE (OR FULL FIRE FIELD MODE): FIRE AS A SURFACE TREATMENT
+  // Position, timing and strength come from the solver field. Shape below one cell is rendering.
   // ===========================================================================
   if (showPosterior > 0.005) {
-    // Physical dynamic range: Z_hat burn interior [0.03..0.11], active 375 m canyon firelines [0.11..0.62]
-    float zFloor = 0.105 * (0.55 + 0.65 * uSensitivity);
-    float zScaled = clamp((zHatNorm - zFloor) / 0.44, 0.0, 1.0);
+    vec3 postRgb;
+    if (uFootMix.x > 0.5) {
+      // A real run. Two things are drawn and nothing is invented: no flames, no embers, no
+      // burned ground, no outline.
+      // 1. The model's estimate: a dim, soft glow. The field is read blurred (it has a mip
+      // chain), so the glow has no edge of its own.
+      // The estimate is a faint glow in the ground. It is read from a coarse level of the
+      // field's mip chain, over a kilometre wide, so it has no edge and takes no shape of its own (no
+      // band along a ridge), and its strength rises slowly. A dull ember colour: dimmer and less
+      // saturated than the dimmest detection light, and with no core.
+      float zWide = mix(textureLod(uFieldTex0, vUv, 3.0).r, textureLod(uFieldTex1, vUv, 3.0).r, uFrameMix);
+      float glowA = smoothstep(0.04, 0.75, zWide) * (1.0 - waterMask);
+      // By day: the ground a little darker and warmer where the estimate is
+      vec3 byDay = litEarth * (1.0 - 0.20 * glowA) + vec3(0.150, 0.050, 0.018) * (glowA * hazeTrans.g);
+      vec3 byNight = litEarth + vec3(0.062, 0.023, 0.014) * (glowA * hazeTrans.g);
+      postRgb = mix(byDay, byNight, uNight);
+      // 2. What the overpass on show detected, as emitted light, each detection in its own
+      // footprint. A paired MODIS overpass (landing) belongs to the raw side only.
+      postRgb += lit.rgb * hazeTrans.g;
+      // 3. Detections revealed after scoring (the hidden instrument of a blind run, or what a look
+      // uncovered): the instrument's pixels in outline with a cool centre, so they are never taken
+      // for the detections the estimate was made from
+      if (uRevealed.x + uRevealed.y > 0.5) {
+        float coreM = revealCore(foot.r) * uRevealed.x;
+        float coreV = revealCore(foot.b) * uRevealed.y;
+        postRgb += vec3(0.22, 0.72, 1.0)
+                 * (coreM * mix(0.5, 1.5, heatOf(fieldNorm(foot.g))) + coreV * mix(0.5, 1.5, heatOf(fieldNorm(foot.a))))
+                 * hazeTrans.g;
+        float hairR = scanHairline(abs(foot.r), footGradM, 1.0) * uRevealed.x
+                    + scanHairline(abs(foot.b), footGradV, 1.0) * uRevealed.y;
+        postRgb = mix(postRgb, vec3(0.40, 0.82, 1.0) * mix(1.0, 0.7, uNight), clamp(hairR, 0.0, 1.0) * 0.5);
+      }
+    } else {
+      // Fuel from canopy cover (pack canopy index, or the imagery heuristic without a pack)
+      float fuel = mix(0.30, 1.0, canopyK) * (1.0 - waterMask);
 
-    // 1. Scorched charcoal burn scar + cooling residual embers inside swept perimeter
-    float charZone = smoothstep(0.028, 0.108, zHatNorm) * (1.0 - waterMask);
-    vec3 burnScarRgb = mix(litEarth, vec3(0.016, 0.014, 0.018) * (0.52 + 0.48 * nDotL), charZone * 0.86);
-    float residualSmolder = smoothstep(0.055, 0.125, zHatNorm) * (1.0 - smoothstep(0.14, 0.26, zHatNorm)) * (1.0 - waterMask);
-    burnScarRgb += vec3(0.24, 0.028, 0.004) * residualSmolder;
+      FireSurface fire = evalFireSurface(vUv, pKm, kmPerPx, N, slopeMag, fuel, waterMask);
 
-    // 2. Warm orange radiative bounce-light illuminating adjacent canyon rock faces
-    float fEps = 2.0 / 256.0;
-    float zE = mix(texture2D(uFieldTex0, vUv + vec2(fEps, 0.0)).r, texture2D(uFieldTex1, vUv + vec2(fEps, 0.0)).r, uFrameMix);
-    float zW = mix(texture2D(uFieldTex0, vUv - vec2(fEps, 0.0)).r, texture2D(uFieldTex1, vUv - vec2(fEps, 0.0)).r, uFrameMix);
-    float zN = mix(texture2D(uFieldTex0, vUv + vec2(0.0, fEps)).r, texture2D(uFieldTex1, vUv + vec2(0.0, fEps)).r, uFrameMix);
-    float zS = mix(texture2D(uFieldTex0, vUv - vec2(0.0, fEps)).r, texture2D(uFieldTex1, vUv - vec2(0.0, fEps)).r, uFrameMix);
-    vec3 toFireDir = normalize(vec3(zE - zW, 0.14, -(zN - zS)) + vec3(1e-5));
-    float nearPeak = clamp((max(max(zE, zW), max(zN, zS)) - 0.09) / 0.42, 0.0, 1.0);
-    float fireBounce = (0.32 + 0.68 * max(0.0, dot(N, toFireDir))) * nearPeak * (1.0 - waterMask);
-    burnScarRgb += vec3(0.82, 0.13, 0.012) * fireBounce * 0.48;
+      // 1. Burned ground: char with pale ash where severity and fuel were high
+      float grit = 0.80 + 0.40 * valueNoise2(pKm * 46.0);
+      // Char keeps a share of the picture under it, so rock faces, gullies and roads still read
+      // through the burn instead of the ground turning into flat dark paint with pale blotches.
+      vec3 charAlbedo = (vec3(0.012, 0.011, 0.012) + satRgb * 0.22) * grit;
+      vec3 ashAlbedo = (vec3(0.085, 0.082, 0.076) + satRgb * 0.30) * grit;
+      vec3 burnAlbedo = mix(charAlbedo, ashAlbedo, fire.ash * 0.6);
+      postRgb = mix(litEarthClear, burnAlbedo * lighting, fire.burned);
 
-    // 3. Linear-light blackbody + Lipari 375 m radiative filaments & incandescent ridge cores
-    float zCurved = pow(zScaled, 0.78);
-    vec3 lipariLinear = texture2D(uLipariTex, vec2(clamp(0.18 + zCurved * 0.78, 0.01, 0.99), 0.5)).rgb;
-    vec3 fireCrimson = vec3(0.58, 0.022, 0.004);
-    vec3 fireOrange  = vec3(1.38, 0.26, 0.014);
-    vec3 fireGold    = vec3(2.05, 1.18, 0.28);
-    vec3 blackbody = mix(
-      mix(fireCrimson, fireOrange, smoothstep(0.0, 0.55, zCurved)),
-      fireGold,
-      smoothstep(0.52, 0.96, zCurved)
-    );
-    vec3 flameLinear = mix(blackbody, lipariLinear * vec3(1.55, 0.72, 0.32), 0.26);
-    float shimmer = 0.94 + 0.06 * sin(uTime * 4.2 + vWorldPos.x * 6.5 + vWorldPos.z * 5.8);
-    float flameAlpha = smoothstep(0.02, 0.26, zScaled) * (1.0 - waterMask * 0.95);
+      // 2. Warm bounce light from nearby flames on the ground and canyon walls around them
+      vec3 groundAlbedo = mix(satRgb, burnAlbedo, fire.burned);
+      postRgb += groundAlbedo * fireBounceLight(vUv, N, fire.front) * (1.0 - 0.7 * waterMask);
 
-    // Scene-linear HDR radiance: the hottest cores of the solver field rise well above 1.0 so the
-    // composer bloom picks them up; the body of the band stays below the bloom threshold.
-    float flameHdr = 1.0 + 6.0 * smoothstep(0.35, 1.0, zCurved);
-    vec3 postRgb = mix(burnScarRgb, flameLinear * shimmer * flameHdr, clamp(flameAlpha, 0.0, 1.0));
+      // The air in between tints the ground, not the flames
+      postRgb = capSurface(postRgb * hazeTrans + hazeIn);
 
-    // 4. Crisp Topographic 90% Conformal Confidence Contours (+-sigma) in linear ice-cyan (#9be3ff)
-    if (uUncertaintyMix > 0.01) {
-      float sEps = 1.0 / 256.0;
-      float sScale = (1.0 + 0.28 * uHoldoutBoost) / 0.135;
-      float sigmaScaled = sigmaNorm * sScale;
-      float sE = mix(texture2D(uFieldTex0, vUv + vec2(sEps, 0.0)).g, texture2D(uFieldTex1, vUv + vec2(sEps, 0.0)).g, uFrameMix) * sScale;
-      float sW = mix(texture2D(uFieldTex0, vUv - vec2(sEps, 0.0)).g, texture2D(uFieldTex1, vUv - vec2(sEps, 0.0)).g, uFrameMix) * sScale;
-      float sN = mix(texture2D(uFieldTex0, vUv + vec2(0.0, sEps)).g, texture2D(uFieldTex1, vUv + vec2(0.0, sEps)).g, uFrameMix) * sScale;
-      float sS = mix(texture2D(uFieldTex0, vUv - vec2(0.0, sEps)).g, texture2D(uFieldTex1, vUv - vec2(0.0, sEps)).g, uFrameMix) * sScale;
+      // 3. Flaming front and ember bed (HDR, above the bloom threshold only at the front)
+      postRgb = mix(postRgb, vec3(0.0), clamp(fire.front, 0.0, 1.0) * 0.85);
+      postRgb += fire.emission;
 
-      float bands = 3.5;
-      vec2 grad = vec2(sE - sW, sN - sS) * 0.5 * bands;
-      float gradLen = max(length(grad), 0.032);
-      float distIso = abs(fract(sigmaScaled * bands - 0.5) - 0.5) / gradLen;
-      float contour = (1.0 - smoothstep(0.05, 0.46, distIso))
-                    * smoothstep(0.22, 0.48, sigmaScaled)
-                    * (1.0 - flameAlpha * 0.88)
-                    * uUncertaintyMix * (1.0 - waterMask * 0.85);
-
-      vec3 iceCyanLinear = vec3(0.24, 0.70, 1.0);
-      postRgb = mix(postRgb, iceCyanLinear, contour * 0.58);
+      // 4. 90% bounds of the active fire line: where z_hat + sigma and z_hat - sigma cross the
+      // fire threshold. Hairlines from screen-space derivatives. Nothing is drawn where the bound
+      // does not cross the threshold (for example a swath-gap epoch with saturated sigma).
+      if (uUncertaintyMix > 0.01) {
+        float zMw = zHatNorm * 80.0;
+        float sMw = sigmaNorm * 24.0;
+        float thrMw = FIRE_THR * 80.0;
+        float upper = zMw + sMw - thrMw;
+        float lower = zMw - sMw - thrMw;
+        float gU = max(fwidth(upper), 1e-4);
+        float gL = max(fwidth(lower), 1e-4);
+        // Require a real gradient (MW/km2 per km) so flat plateaus near the threshold stay clean
+        float steepU = smoothstep(0.6, 2.4, gU / max(kmPerPx, 1e-6));
+        float steepL = smoothstep(0.6, 2.4, gL / max(kmPerPx, 1e-6));
+        float lineU = (1.0 - smoothstep(0.55, 1.45, abs(upper) / gU)) * steepU;
+        float lineL = (1.0 - smoothstep(0.40, 1.10, abs(lower) / gL)) * steepL;
+        float boundsMask = uUncertaintyMix * (1.0 - waterMask * 0.85) * (1.0 - fire.front);
+        postRgb = mix(postRgb, vec3(0.20, 0.66, 1.0), lineU * 0.62 * boundsMask);
+        postRgb = mix(postRgb, vec3(0.72, 0.90, 1.0), lineL * 0.38 * boundsMask);
+      }
     }
 
     finalRgb = mix(finalRgb, postRgb, showPosterior);
@@ -323,32 +675,50 @@ void main() {
     // 1. Cool slate rendition of the terrain so the data layer reads as an instrument view
     float irContrast = clamp((pow(max(satLuma, 0.0005), 0.45) - 0.24) * 1.42 + 0.34, 0.04, 0.96);
     float irShade = irContrast * (0.42 + 0.58 * nDotL * shadow);
-    vec3 slateIr = mix(vec3(0.018, 0.028, 0.048), vec3(0.22, 0.30, 0.42), irShade);
-    vec3 rawPassRgb = mix(litEarth, slateIr, 0.82);
+    vec3 slateIr = nightGrade(mix(vec3(0.018, 0.028, 0.048), vec3(0.22, 0.30, 0.42), irShade));
+    // With context terrain around the pack the rendition fades out before the edge of the data,
+    // so the instrument view ends in the landscape and not along a straight line across it
+    float slateShare = 0.82 * mix(1.0, smoothstep(0.0, 0.10, min(toPackEdge.x, toPackEdge.y)), uContextMix);
+    vec3 rawPassRgb = mix(litEarth, slateIr, slateShare);
 
     float modisFloor = 0.105 * (0.55 + 0.65 * uSensitivity);
     float modisLit = 0.0;
 
-    if (uModisPass.w > 0.5) {
+    if (uFootMix.x > 0.5) {
+      // Real run: every MODIS detection as emitted light in its own footprint (scan by track
+      // km), with a faint hairline around the pixel: this side is the instrument's view. No empty
+      // cells: the source lists detections, not where the sensor looked and saw nothing.
+      modisLit = step(0.001, -foot.r);
+      rawPassRgb += lit.rgb * uLightModis * hazeTrans.g;
+      float hair = scanHairline(abs(foot.r), footGradM, 1.6) * scanLitFade(1.0 / footGradM);
+      rawPassRgb = mix(rawPassRgb, vec3(0.80, 0.87, 0.96), hair * 0.34);
+    } else if (uModisPass.w > 0.5) {
       ScanDraw md = evalScanDraw(pKm, kmPerPx, uModisPass, MODIS_SENSOR, MODIS_ORBIT_K, vec4(0.0, 0.0, 1.0, 0.0));
       float mScaled = clamp((md.value - modisFloor) / 0.35, 0.0, 1.0);
       modisLit = step(0.035, mScaled);
 
-      // 2. Flat radiometric fill on the same Lipari scale as the harmonized side
-      vec3 fill = texture2D(uLipariTex, vec2(clamp(0.22 + pow(mScaled, 0.78) * 0.74, 0.01, 0.99), 0.5)).rgb;
-      fill *= mix(0.72, 1.12, shadeTerm);
-      rawPassRgb = mix(rawPassRgb, fill, modisLit * 0.94);
+      // 2. Flat radiometric fill: the cell value read straight off the intensity scale of the
+      // legend (Lipari, 0 to 80 MW/km2 across the ramp), with no remapping.
+      // The fill is translucent and takes the relief shading, so the ground reads through it.
+      vec3 fill = pictureToScene(texture2D(uLipariTex, vec2(clamp(md.value, 0.005, 0.995), 0.5)).rgb);
+      fill *= mix(0.62, 1.30, shadeTerm);
+      rawPassRgb = mix(rawPassRgb, fill + rawPassRgb * 0.30, modisLit * 0.66);
 
-      // 3. Hairline cell borders and scan seams (constant width in device pixels)
+      // 3. Hairline borders (constant width in device pixels). A cell that holds a detection gets
+      // a crisp light border so it reads as one discrete sensor cell; the lattice over empty
+      // ground stays faint.
       float hairFade = mix(scanEmptyFade(md.cellPx, 26.0), scanLitFade(md.cellPx), modisLit);
       vec3 hairEmpty = vec3(0.36, 0.47, 0.62);
-      vec3 hairLit = min(fill * 1.35 + vec3(0.10), vec3(1.0));
-      rawPassRgb = mix(rawPassRgb, mix(hairEmpty, hairLit, modisLit), md.hair * hairFade * mix(0.30, 0.85, modisLit));
-      rawPassRgb = mix(rawPassRgb, vec3(0.50, 0.62, 0.78), md.seam * hairFade * 0.45 * (1.0 - modisLit));
+      vec3 hairLit = vec3(0.93, 0.91, 0.86);
+      rawPassRgb = mix(rawPassRgb, hairEmpty, md.hair * hairFade * 0.30 * (1.0 - modisLit) * uLatticeMix);
+      rawPassRgb = mix(rawPassRgb, hairLit, md.hairLit * hairFade * 0.92 * modisLit);
+      rawPassRgb = mix(rawPassRgb, vec3(0.50, 0.62, 0.78), md.seam * hairFade * 0.45 * (1.0 - modisLit) * uLatticeMix);
     }
 
     // 4. Amber hairline hatch where the harmonized record has fire and this MODIS pass reports none
-    float missedMask = smoothstep(0.11, 0.24, zHatNorm) * (1.0 - modisLit) * (1.0 - waterMask);
+    // Only on a frame that has a MODIS overpass: without one, MODIS missed nothing, it did not look
+    float missedMask = smoothstep(0.11, 0.24, zHatNorm) * (1.0 - modisLit) * (1.0 - waterMask)
+                     * step(0.5, uModisPass.w) * (1.0 - step(0.5, uFootMix.x));
     if (missedMask > 0.01) {
       float spacingKm = 0.30;
       float hatchDistKm = abs(fract((pKm.x + pKm.y) / spacingKm) - 0.5) * spacingKm * 0.7071;
@@ -367,19 +737,28 @@ void main() {
     float earthLuma = dot(litEarth, vec3(0.2126, 0.7152, 0.0722));
     vec3 obsRgb = mix(litEarth, vec3(earthLuma), 0.35) * 0.80;
 
-    if (uModisWeight > 0.01 && uModisPass.w > 0.5) {
+    if (uModisWeight > 0.01 && uFootMix.x > 0.5) {
+      // Real run: the detections themselves, as light in the sensor's colour, each in its own footprint
+      obsRgb += vec3(1.0, 0.36, 0.10) * (0.55 * lit.a * uLightModis) * uModisWeight;
+      float hair = scanHairline(abs(foot.r), footGradM, 1.6);
+      obsRgb = mix(obsRgb, vec3(1.0, 0.87, 0.78), hair * 0.60 * uModisWeight);
+    } else if (uModisWeight > 0.01 && uModisPass.w > 0.5) {
       ScanDraw md = evalScanDraw(pKm, kmPerPx, uModisPass, MODIS_SENSOR, MODIS_ORBIT_K, vec4(0.0, 0.0, 1.0, 0.0));
       float s = clamp((md.value - sensGate) / 0.35, 0.0, 1.0);
       float lit = step(0.02, s);
       vec3 fill = mix(vec3(0.30, 0.05, 0.015), vec3(1.0, 0.36, 0.10), pow(s, 0.7)) * (0.86 + 0.22 * shadeTerm);
       obsRgb = mix(obsRgb, fill, lit * 0.90 * uModisWeight);
       float hairFade = mix(scanEmptyFade(md.cellPx, 26.0), scanLitFade(md.cellPx), lit);
-      vec3 hairCol = mix(vec3(0.62, 0.36, 0.24), min(fill * 1.4 + vec3(0.08), vec3(1.0)), lit);
-      obsRgb = mix(obsRgb, hairCol, md.hair * hairFade * mix(0.24, 0.85, lit) * uModisWeight);
+      obsRgb = mix(obsRgb, vec3(0.62, 0.36, 0.24), md.hair * hairFade * 0.24 * (1.0 - lit) * uModisWeight);
+      obsRgb = mix(obsRgb, vec3(1.0, 0.87, 0.78), md.hairLit * hairFade * 0.90 * lit * uModisWeight);
       obsRgb = mix(obsRgb, vec3(0.78, 0.50, 0.36), md.seam * hairFade * 0.40 * (1.0 - lit) * uModisWeight);
     }
 
-    if (uViirsWeight > 0.01 && uViirsPass.w > 0.5) {
+    if (uViirsWeight > 0.01 && uFootMix.y > 0.5) {
+      obsRgb += vec3(0.16, 0.70, 1.0) * (0.55 * lit.a * (1.0 - uLightModis)) * uViirsWeight;
+      float hair = scanHairline(abs(foot.b), footGradV, 1.3);
+      obsRgb = mix(obsRgb, vec3(0.84, 0.96, 1.0), hair * 0.50 * uViirsWeight);
+    } else if (uViirsWeight > 0.01 && uViirsPass.w > 0.5) {
       ScanDraw vd = evalScanDraw(pKm, kmPerPx, uViirsPass, VIIRS_SENSOR, VIIRS_ORBIT_K, vec4(0.0, 0.0, 0.0, 1.0));
       float s = clamp((vd.value - sensGate * 0.45) / 0.35, 0.0, 1.0);
       float lit = step(0.02, s);
@@ -387,9 +766,18 @@ void main() {
       obsRgb = mix(obsRgb, fill, lit * 0.92 * uViirsWeight);
       // The 375 m lattice over empty ground appears only once its cells are large on screen
       float hairFade = mix(scanEmptyFade(vd.cellPx, 54.0), scanLitFade(vd.cellPx), lit);
-      vec3 hairCol = mix(vec3(0.30, 0.52, 0.66), min(fill * 1.4 + vec3(0.08), vec3(1.0)), lit);
-      obsRgb = mix(obsRgb, hairCol, vd.hair * hairFade * mix(0.20, 0.80, lit) * uViirsWeight);
+      obsRgb = mix(obsRgb, vec3(0.30, 0.52, 0.66), vd.hair * hairFade * 0.20 * (1.0 - lit) * uViirsWeight);
+      obsRgb = mix(obsRgb, vec3(0.84, 0.96, 1.0), vd.hairLit * hairFade * 0.85 * lit * uViirsWeight);
       obsRgb = mix(obsRgb, vec3(0.42, 0.68, 0.84), vd.seam * hairFade * 0.40 * (1.0 - lit) * uViirsWeight);
+    }
+
+    if (uModisWeight > 0.01 && uModisPass.w > 0.5 && uScanStrip.y > 0.004) {
+      obsRgb = scanStripMark(obsRgb, pKm, kmPerPx, uModisPass, MODIS_SENSOR, MODIS_ORBIT_K,
+                             vec2(uScanStrip.x, uScanStrip.y * uModisWeight), vec3(1.0, 0.74, 0.52));
+    }
+    if (uViirsWeight > 0.01 && uViirsPass.w > 0.5 && uScanStrip.w > 0.004) {
+      obsRgb = scanStripMark(obsRgb, pKm, kmPerPx, uViirsPass, VIIRS_SENSOR, VIIRS_ORBIT_K,
+                             vec2(uScanStrip.z, uScanStrip.w * uViirsWeight), vec3(0.72, 0.93, 1.0));
     }
 
     finalRgb = mix(finalRgb, obsRgb, uObserverMix);
@@ -399,16 +787,30 @@ void main() {
   // D. RAZOR-SHARP OPTICAL LASER LINE WHERE THE 3D GLASS CURTAIN SLICES TERRAIN
   // ===========================================================================
   if (uCutawayMix > 0.01) {
-    float scanLine = exp(-abs(scanCoord) * 280.0) * uCutawayMix;
-    float scanHalo = exp(-abs(scanCoord) * 58.0) * uCutawayMix;
-    // Instrument graphics stay under the bloom threshold: only fire is allowed to bloom
-    finalRgb += vec3(0.35, 0.82, 1.0) * scanHalo * 0.24 + vec3(0.92, 0.99, 1.0) * scanLine * 0.66;
+    // Hairline of constant screen width where the curtain meets the ground, with a tight halo.
+    // Instrument graphics stay under the bloom threshold: only fire is allowed to bloom.
+    float cutKm = abs(scanCoord) * length(cutDir * uExtentKm);
+    float scanLine = scanHairline(cutKm, kmPerPx, 1.6) * uCutawayMix;
+    // Over open water the seam is a straight bright bar to the horizon, so it is drawn fainter there
+    float scanHalo = exp(-cutKm / max(0.10, 7.0 * kmPerPx)) * uCutawayMix * (1.0 - 0.8 * waterMask);
+    scanLine *= 1.0 - 0.6 * waterMask;
+    // By night the seam is kept quiet: the fire is the brightest thing in the frame
+    finalRgb += (vec3(0.35, 0.82, 1.0) * scanHalo * 0.15 + vec3(0.92, 0.99, 1.0) * scanLine * 0.70)
+              * mix(1.0, 0.22, uNight);
   }
+
+  // Close views: the far edge of the slab dissolves into what the dome draws behind it (sky, or
+  // the hazy floor under the horizon), so the view ends in air and not at the cut edge of a model.
+  // Overview and nadir keep the edge.
+  // The same share of the surface also sinks to the base, and ground that stands above the
+  // horizon is left alone (see edgeGone and edgeGoneAt in the heightfield code).
+  float gone = edgeGone(vUv) * belowHorizon(vWorldPos);
+  finalRgb = mix(finalRgb, nightGrade(backdrop), gone);
 
   // Subtle top bevel edge highlight around the 4 outer cut boundaries of the slab
   float borderDist = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
   float rimBevel = 1.0 - smoothstep(0.0, 0.0028, borderDist);
-  finalRgb = mix(finalRgb, finalRgb + vec3(0.14, 0.17, 0.22), rimBevel * 0.65);
+  finalRgb = mix(finalRgb, finalRgb + vec3(0.14, 0.17, 0.22), rimBevel * 0.65 * (1.0 - gone));
 
   gl_FragColor = vec4(finalRgb, 1.0);
 }

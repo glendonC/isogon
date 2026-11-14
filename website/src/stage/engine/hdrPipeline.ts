@@ -14,9 +14,9 @@ import {
  * Scene-referred HDR conventions for the stage.
  *
  * Every stage material writes scene-linear radiance with no tone curve and no sRGB encode. The unit
- * is "diffuse white in full sun": a perfect white Lambert surface facing the sun reads about 1.0.
- * Sunlit terrain therefore lands between 0.02 and 0.6, and only emissive sources (flaming fronts,
- * embers) are allowed above the bloom threshold.
+ * is the reference light of the terrain: under light 1.0 the imagery shows its own colors (the
+ * terrain shader passes it through the inverse of the tone curve below). Lit ground is held under
+ * a ceiling of 1.5, and only the white-hot core of a flaming front is above the bloom threshold.
  *
  * ACES Filmic tone mapping and the sRGB encode happen exactly once, in the last pass of the composer.
  */
@@ -38,8 +38,8 @@ export interface HdrPipelineOptions {
 
 export const HDR_DEFAULTS: Required<HdrPipelineOptions> = {
   exposure: 1.0,
-  bloomThreshold: 1.25,
-  bloomSmoothing: 0.35,
+  bloomThreshold: 1.7,
+  bloomSmoothing: 0.3,
   bloomIntensity: 0.85,
   bloomRadius: 0.7,
   bloomLevels: 7,
@@ -104,6 +104,9 @@ export class HdrPipeline {
 
     // Bloom is added in scene-linear space, then the one and only tone curve and sRGB encode run.
     this.finalPass = new EffectPass(camera, this.bloom, this.toneMapping);
+    // Half a code value of noise on the encoded output, so slow gradients (sky, haze, the floor)
+    // do not step in an 8 bit frame. It is added last, at display precision, for every pixel.
+    this.finalPass.dithering = true;
     this.composer.addPass(this.finalPass);
   }
 

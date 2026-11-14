@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import { COMMON_HEIGHTFIELD_GLSL, createDemR32FTexture } from '../earthCutawayShaders';
-import { ATMOSPHERE_GLSL, SKY_VIEW_MAPPING_GLSL } from './atmosphere';
+import { ATMOSPHERE_GLSL, NIGHT_GLSL, SKY_VIEW_MAPPING_GLSL } from './atmosphere';
 import { loadPackImage } from './terrainPack';
 import { TERRAIN_LOOK_GLSL } from './terrainShader';
 
 /**
- * Consumer side of the context terrain (CONTRACT section 1b): land and sea around a terrain pack,
+ * Consumer side of the context terrain: land and sea around a terrain pack,
  * `scale` times its side, so the world continues to a horizon instead of ending at the pack edge.
  *
- * Registration as stated by the producer (terrain-assets T16): same centre, axes and row order as
+ * Registration, as `backend/terrain/terrain_pack.py` writes it: same centre, axes and row order as
  * the pack (row 0 north, column 0 west). The DEM is node registered (first and last posts on the
  * context box edges), the ortho is a pixel registered image. The pack box is the central 1/scale of
  * the context box on each axis. Sea posts are exactly 0 m.
@@ -207,6 +207,7 @@ varying float vElevM;
 
 ${ATMOSPHERE_GLSL}
 ${SKY_VIEW_MAPPING_GLSL}
+${NIGHT_GLSL}
 ${TERRAIN_LOOK_GLSL}
 
 void main() {
@@ -238,6 +239,8 @@ void main() {
     vec3 water = mix(lit, vec3(0.05, 0.13, 0.21), 0.42)
                + vec3(0.22, 0.28, 0.36) * fresnel * 0.45 + vec3(1.0, 0.93, 0.80) * spec * 0.85;
     lit = mix(lit, water, sea);
+    // By night water gives back a dark sky: no glint, and never brighter than the land beside it
+    lit = mix(lit, mix(lit, vec3(0.05, 0.13, 0.21), 0.42) * 0.45, sea * uNight);
   }
 
   // The same air as over the pack: distance takes the ground into what the dome draws behind it
@@ -254,7 +257,7 @@ void main() {
     uSkyView, viewTrue, normalize(uSunTrue), clamp(camAltKm, 0.02, ATM_TOP - 1.0),
     uSkyExposure, uFloorColor, uFloorHaze
   );
-  vec3 rgb = capSurface(lit * trans + backdrop * (1.0 - trans));
+  vec3 rgb = nightGrade(capSurface(lit * trans + backdrop * (1.0 - trans)));
   gl_FragColor = vec4(rgb, uContextMix);
 }
 `;
@@ -279,6 +282,7 @@ export interface ContextSharedUniforms {
   uContextScale: THREE.IUniform;
   uContextMix: THREE.IUniform;
   uContextOrtho: THREE.IUniform;
+  uNight: THREE.IUniform;
 }
 
 /** Grid cells per side of the context mesh. The context DEM has 1024 posts; this draws every 1.6th. */
