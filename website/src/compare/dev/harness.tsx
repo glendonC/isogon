@@ -6,6 +6,8 @@
  *   ?use=places   the featured fires of the places registry
  *   ?use=players  one block per player of a round (region, start, ceiling=1)
  *   ?use=agent    the Agent part's picture, inside a stand-in for the workspace (region, start)
+ *   ?use=fires    the featured fires as the place screen mounts them, in a box the size of its slot (h, pick)
+ *   ?use=reveal   one fire three ways as World model mounts it, inside a stand-in for the workspace (region, start, pass)
  */
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -15,7 +17,10 @@ import '../../styles/tokens.css';
 import '../../styles/system.css';
 import { WorkspaceProvider, type WorkspaceStore } from '../../app/store';
 import { AgentPicture } from '../../beats/agent/AgentPicture';
+import { parsePlaces, type FeaturedFire, type Places } from '../../app/places';
 import { ComparePlane } from '../ComparePlane';
+import { FeaturedFiresPlane } from '../FeaturedFiresPlane';
+import { ThreeWaysPlane } from '../ThreeWaysPlane';
 import { fireBlock, groundOfRun, playerBlocks, threeWays } from '../blocks';
 import type { CompareBlock, DetectionRow } from '../types';
 
@@ -160,6 +165,69 @@ function AgentHarness() {
   );
 }
 
+/** The featured fires in a box the size of the place screen's slot. This page leaves the recorded test fires out. */
+function FiresHarness() {
+  const [places, setPlaces] = useState<Places | null>(null);
+  const [current, setCurrent] = useState<string | null>(Q.get('pick'));
+  useEffect(() => {
+    void getJson<unknown>('/api/regions').then((body) => setPlaces(parsePlaces(body)));
+  }, []);
+  const standing = (f: FeaturedFire) => (f as unknown as { to_the_world_model?: string | null }).to_the_world_model ?? null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--sys-night)', display: 'grid', alignContent: 'end' }}>
+      <div data-slot="featured-fires" style={{ height: Number(Q.get('h') ?? 340) }}>
+        {places && (
+          <FeaturedFiresPlane places={places} currentFire={current} onFire={(_, fire) => setCurrent(fire.id)} include="not-test-fires" standing={standing} />
+        )}
+      </div>
+      <span id="events" className="sys-unit" style={{ padding: 'var(--sys-s3) var(--sys-s5)' }}>
+        open {current ?? 'none'}
+      </span>
+    </div>
+  );
+}
+
+/** One fire three ways with just enough of the workspace around it: the run on show, the test's state, the pass. */
+function RevealHarness() {
+  const [run, setRun] = useState<Any | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [where, setWhere] = useState<{ regionId: string; start: string } | null>(null);
+  useEffect(() => {
+    void defaults().then(async (d) => {
+      setWhere(d);
+      setRun(await heldOutRun(d.regionId, d.start));
+    });
+  }, []);
+  const reveal = async () => {
+    if (!where) return;
+    setRun(await heldOutRun(where.regionId, where.start, true));
+    setRevealed(true);
+  };
+  const store = run
+    ? ({
+        run: { active: run, isReal: true, realStart: where?.start },
+        test: { revealed, hidden: !revealed },
+        time: { pass: Number(Q.get('pass') ?? 23) },
+      } as unknown as WorkspaceStore)
+    : null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--sys-night)', display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' }}>
+      {store && (
+        <WorkspaceProvider value={store}>
+          <ThreeWaysPlane />
+        </WorkspaceProvider>
+      )}
+      <div style={{ padding: 'var(--sys-s3) var(--sys-s5)' }}>
+        {!revealed && (
+          <button id="reveal" type="button" className="sys-ctl" onClick={() => void reveal()}>
+            Reveal VIIRS
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Harness() {
   const [revealed, setRevealed] = useState(Q.get('revealed') === '1');
   const [view, setView] = useState<View | null>(null);
@@ -214,4 +282,8 @@ function Harness() {
 }
 
 const root = document.getElementById('root');
-if (root) ReactDOM.createRoot(root).render(USE === 'agent' ? <AgentHarness /> : <Harness />);
+if (root) {
+  ReactDOM.createRoot(root).render(
+    USE === 'agent' ? <AgentHarness /> : USE === 'fires' ? <FiresHarness /> : USE === 'reveal' ? <RevealHarness /> : <Harness />,
+  );
+}

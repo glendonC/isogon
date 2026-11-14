@@ -74,15 +74,36 @@ test('the estimate shown is the step at or before the hidden pass, never a later
   assert.equal(tw.blocks[1].label.lines[0], '3 cells expected to burn, 375 m grid');
 });
 
-test('the cut does not move at the reveal unless a revealed detection lies outside it, and then it grows to keep it', () => {
+test('the cut comes from the coarse satellite rows only: the hidden satellite never moves it, before or after the reveal', () => {
   const before = threeWays(run, null).blocks[0].ground.cut;
   assert.ok(before, 'the blocks are cut to the fire');
-  const after = threeWays(run, revealed).blocks[0].ground.cut;
-  assert.ok(FAR[0] > before[2] || FAR[1] > before[3], 'the far detection is outside the first cut');
-  assert.ok(FAR[0] >= after[0] && FAR[0] <= after[2] && FAR[1] >= after[1] && FAR[1] <= after[3], 'and inside the cut after the reveal');
-  // A reveal with nothing outside leaves the cut where it was
-  const near = { ...revealed, blind_test: { ...revealed.blind_test, reveal: { overpasses: [{ ...revealed.blind_test.reveal.overpasses[0], footprints: [[-120.5, 39.5, 0.4, 0.4, 280, 3, 0, 4]] }] } } };
-  assert.deepEqual(threeWays(run, near).blocks[0].ground.cut, before);
+  // The revealed pass holds a detection far outside the cut: the cut stays where the coarse rows put it
+  assert.ok(FAR[0] > before[2] || FAR[1] > before[3], 'the far detection is outside the cut');
+  const after = threeWays(run, revealed);
+  for (const block of after.blocks) assert.deepEqual(block.ground.cut, before);
+  // Whatever the hidden satellite saw, the cut is the same
+  const other = { ...revealed, blind_test: { ...revealed.blind_test, reveal: { overpasses: [{ ...revealed.blind_test.reveal.overpasses[0], footprints: [[-120.9, 39.1, 0.4, 0.4, 280, 3, 0, 4]] }] } } };
+  assert.deepEqual(threeWays(run, other).blocks[2].ground.cut, before);
+  // And what lies outside it is counted on the label, not passed over
+  assert.equal(after.blocks[2].label.lines[2], '1 of them outside this cut');
+  assert.equal(after.blocks[2].label.lines[0], '2 detections at 375 m');
+});
+
+test('the pass compared at follows the pass on show', () => {
+  const two = {
+    ...run,
+    observer_passes: {
+      frames: [
+        ...run.observer_passes.frames,
+        { frame: 2, timestamp_utc: '2020-01-01T11:00:00Z', sensor: 'MODIS_TERRA', held_out: false, is_day: true, footprints: [[-120.5, 39.5, 1.1, 1.0, 280, 10, 80, 0]] },
+        { frame: 3, timestamp_utc: '2020-01-01T11:30:00Z', sensor: 'VIIRS_NOAA20', held_out: true, is_day: true, footprints: [] },
+      ],
+    },
+  };
+  assert.equal(threeWays(two, null).timeUtc, '2020-01-01T11:30:00Z');
+  assert.equal(threeWays(two, null, { at: 2 }).timeUtc, '2020-01-01T10:20:00Z');
+  assert.equal(threeWays(two, null, { at: 3 }).timeUtc, '2020-01-01T11:30:00Z');
+  assert.equal(threeWays(two, null, { at: 0 }).timeUtc, '2020-01-01T11:30:00Z');
 });
 
 test('a cut stays inside the ground and is square on the ground', () => {
@@ -134,7 +155,11 @@ test('a player block holds only what that player own looks revealed', () => {
   assert.equal(found(3).length, 1); // tile 0 twice: the second look found nothing there
   assert.equal(blocks[3].pins[0].text, '1 2');
   assert.equal(blocks[2].label.lines[1], 'score gain -0.004');
-  assert.equal(playerBlocks(groundOfRun(run), start, end, { ceiling: true }).length, 5);
+  // The Ceiling took the same looks as Latest MODIS in this round, and its block says so
+  const five = playerBlocks(groundOfRun(run), start, end, { ceiling: true });
+  assert.equal(five.length, 5);
+  assert.equal(five[4].label.lines[2], 'the same looks as Latest MODIS');
+  assert.ok(!five[1].label.lines.some((l) => l.startsWith('the same looks')));
 });
 
 test('a round on another box than the ground gives no block', () => {
@@ -199,6 +224,14 @@ test('a play becomes a block with only the detections its own looks handed over,
   assert.deepEqual(first.label.lines, ['2 detections found in 1 look', 'score gain +0.010']);
   const [none] = playBlocks(groundOfRun(run), [play], { looks: 0 });
   assert.equal(none.marks.find((m) => m.kind === 'detections' && m.instrument === 'viirs').rows.length, 0);
+});
+
+test('two plays with the same looks: the second says so, and only once every look stands', () => {
+  const twin = { play: { ...play.play, player: { id: 'learned', label: 'Learned agent' } } };
+  const blocks = playBlocks(groundOfRun(run), [play, twin]);
+  assert.ok(!blocks[0].label.lines.some((l) => l.startsWith('the same looks')));
+  assert.equal(blocks[1].label.lines[2], 'the same looks as Least sure');
+  assert.ok(!playBlocks(groundOfRun(run), [play, twin], { looks: 1 })[1].label.lines.some((l) => l.startsWith('the same looks')));
 });
 
 test('a play on other ground than the run gives no block', () => {

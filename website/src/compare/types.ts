@@ -131,6 +131,16 @@ export interface CompareAnchor {
   image: boolean;
 }
 
+/** The plane's one scale bar: a round length laid along the ground beside the first block. CSS pixels. */
+export interface CompareScaleBar {
+  km: number;
+  /** The bar's two ends on screen. */
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  /** A short tick across each end, along the ground. */
+  ticks: [{ x: number; y: number }, { x: number; y: number }][];
+}
+
 export interface ComparePlaneProps {
   /** The cut-outs, in reading order. One to nine. */
   blocks: CompareBlock[];
@@ -148,6 +158,8 @@ export interface ComparePlaneProps {
   renderLabel?: (block: CompareBlock, anchor: CompareAnchor, hovered: boolean) => ReactNode;
   /** Set the default labels on a plate, for a plane over a picture. */
   labelPlate?: boolean;
+  /** The scale bar: every block is at one scale, and the bar says which. Default true. */
+  scaleBar?: boolean;
   /** A name for the whole plane, for a screen reader. */
   ariaLabel?: string;
   className?: string;

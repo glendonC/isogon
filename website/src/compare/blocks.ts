@@ -100,7 +100,8 @@ function framesOf(run: unknown): Frame[] {
       const named = str(codes[String(arr(row)[7])]);
       return isCoarse(named ?? sensor);
     });
-    out.push({ frame, time, sensor, heldOut: o.held_out === true, isDay: o.is_day === true, rows: detectionRows(coarse) });
+    // A frame the page has laid a revealed pass on is still a pass that was hidden
+    out.push({ frame, time, sensor, heldOut: o.held_out === true || o.revealed === true, isDay: o.is_day === true, rows: detectionRows(coarse) });
   }
   return out;
 }
@@ -182,6 +183,8 @@ export function fireBlock(place: unknown, fire: unknown, run: unknown, opts: Fir
 export interface ThreeWaysOptions {
   /** The held-out frame to compare at. Default the last one of the run. */
   frame?: number;
+  /** The pass on show: the hidden pass at it, or the last hidden pass before it, is compared at. */
+  at?: number;
   /** Cut all three blocks to the fire. Default true. */
   cut?: boolean;
   /** A platform's name as the page shows it. Default: the code as the run gives it. */
@@ -210,15 +213,20 @@ export function scoreLine(verdict: unknown): string | null {
  * made from the coarse satellite alone at that time, and what the sharp satellite saw. `revealed` is the same run
  * after the reveal, or null before it; without it the third block is withheld and holds no row.
  *
- * The cut is chosen from the MODIS detections of the whole window, so it does not move at the reveal. It grows
- * only if a revealed detection lies outside it, so that nothing the estimate missed is cut away.
+ * The cut is taken from the coarse satellite's detections of the whole window and from nothing else, before and
+ * after the reveal: the hidden satellite never shapes the block. A revealed detection outside the cut is not
+ * drawn, and the block's label counts them, so nothing the estimate missed goes unsaid.
  */
 export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOptions = {}): ThreeWays | null {
   const ground = groundOfRun(run);
   const frames = framesOf(run);
   if (!ground || frames.length === 0) return null;
   const hiddenFrames = frames.filter((f) => f.heldOut);
-  const hidden = (opts.frame !== undefined ? frames.find((f) => f.frame === opts.frame && f.heldOut) : undefined) ?? hiddenFrames[hiddenFrames.length - 1];
+  const at = opts.at;
+  const hidden =
+    (opts.frame !== undefined ? frames.find((f) => f.frame === opts.frame && f.heldOut) : undefined) ??
+    (at !== undefined ? [...hiddenFrames].reverse().find((f) => f.frame <= at) : undefined) ??
+    hiddenFrames[hiddenFrames.length - 1];
   if (!hidden) return null;
   const name = opts.platformName ?? ((code: string) => code);
 
@@ -262,8 +270,8 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
   if (opts.cut !== false) {
     const seen = frames.filter((f) => !f.heldOut).flatMap((f) => f.rows);
     cut = cutAround(seen, ground, CUT_MARGIN_KM);
-    if (cut && sharp && sharp.rows.some((r) => !inside(r, cut as Box))) cut = cutAround([...seen, ...sharp.rows], ground, CUT_MARGIN_KM);
   }
+  const outside = cut && sharp ? sharp.rows.filter((r) => !inside(r, cut as Box)).length : 0;
   const cutGround: CompareGround = cut ? { ...ground, cut } : ground;
   // The image is darkened by day as by night: on this plane the marks lead
   const night = true;
@@ -307,6 +315,7 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
         lines: [
           sharp ? `${count(sharp.rows.length, 'detection', 'detections')} at ${WORDS.sharpSize}` : WORDS.hidden,
           `${name(sharp ? sharp.platform : hidden.sensor)} pass, ${clock(sharp ? sharp.time : hidden.time)}`,
+          ...(outside > 0 ? [`${outside} of them outside this cut`] : []),
         ],
       },
     },
@@ -354,6 +363,8 @@ export function playerBlocks(ground: CompareGround | null, start: unknown, end: 
   const reveal = rowsByColumns(obj(end).reveal);
 
   const blocks: CompareBlock[] = [];
+  // The first player to make each run of looks, so that a later one with the same looks can say so
+  const sameLooks = new Map<string, string>();
   for (const player of PLAYERS) {
     if (player.key === 'oracle' && !opts.ceiling) continue;
     const ref = obj(reference[player.key]);
@@ -403,7 +414,11 @@ export function playerBlocks(ground: CompareGround | null, start: unknown, end: 
     lines.push(`${count(found.length, 'detection', 'detections')} found in ${count(taken.length, 'look', 'looks')}`);
     // The end of a round gives a player's gain for the whole round only
     if (gain !== null && whole) lines.push(`score gain ${signed(gain)}`);
-    if (note && whole) lines.push(note);
+    const looksKey = every.map((t) => `${t.look}:${t.tile}`).join(',');
+    const twin = whole ? sameLooks.get(looksKey) : undefined;
+    if (twin) lines.push(`the same looks as ${twin}`);
+    else if (note && whole) lines.push(note);
+    if (!sameLooks.has(looksKey)) sameLooks.set(looksKey, player.name);
     blocks.push({
       id: player.key,
       ground,
@@ -512,6 +527,7 @@ export function readPlay(answer: unknown): PlaySummary | null {
 export function playBlocks(ground: CompareGround | null, plays: readonly unknown[], opts: PlayBlocksOptions = {}): CompareBlock[] {
   if (!ground) return [];
   const blocks: CompareBlock[] = [];
+  const sameLooks = new Map<string, string>();
   for (const answer of plays) {
     const play = readPlay(answer);
     if (!play || !play.box || !play.tiles) continue;
@@ -533,7 +549,11 @@ export function playBlocks(ground: CompareGround | null, plays: readonly unknown
     const gain = all && play.gain !== null ? play.gain : rewards.every((r): r is number => r !== null) ? rewards.reduce((a: number, b) => a + b, 0) : null;
     const lines = [`${count(found.length, 'detection', 'detections')} found in ${count(shown.length, 'look', 'looks')}`];
     if (gain !== null) lines.push(`score gain ${signed(gain)}`);
-    if (play.id === 'oracle') lines.push('sees the answer');
+    const looksKey = play.looks.map((l) => `${l.decision}:${l.tile}`).join(',');
+    const twin = all ? sameLooks.get(looksKey) : undefined;
+    if (twin) lines.push(`the same looks as ${twin}`);
+    else if (play.id === 'oracle') lines.push('sees the answer');
+    if (!sameLooks.has(looksKey)) sameLooks.set(looksKey, play.name);
     const marks: CompareMark[] = [{ kind: 'tiles', rows: rowsN, cols: colsN, looked: shown.map((l) => l.tile) }];
     if (opts.seen && opts.seen.length > 0) marks.push({ kind: 'detections', instrument: 'modis', rows: opts.seen, weight: 'quiet' });
     marks.push({ kind: 'detections', instrument: 'viirs', rows: found });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { PlaneEngine } from './planeEngine';
 import type { MarkPalette } from './marks';
-import type { CompareAnchor, CompareBlock, ComparePlaneProps } from './types';
+import type { CompareAnchor, CompareBlock, ComparePlaneProps, CompareScaleBar } from './types';
 import './compare.css';
 
 /**
@@ -41,6 +41,7 @@ export function ComparePlane({
   onAnchors,
   renderLabel,
   labelPlate = false,
+  scaleBar = true,
   ariaLabel,
   className,
 }: ComparePlaneProps) {
@@ -48,6 +49,7 @@ export function ComparePlane({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<PlaneEngine | null>(null);
   const [anchors, setAnchors] = useState<CompareAnchor[]>([]);
+  const [bar, setBar] = useState<CompareScaleBar | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   // The latest callbacks, so the engine is made once
   const latest = useRef({ onHover, onPick, onAnchors });
@@ -57,8 +59,9 @@ export function ComparePlane({
     const host = hostRef.current;
     const canvas = canvasRef.current;
     if (!host || !canvas) return;
-    const engine = new PlaneEngine(canvas, readPalette(host), (next) => {
+    const engine = new PlaneEngine(canvas, readPalette(host), (next, nextBar) => {
       setAnchors(next);
+      setBar(nextBar);
       latest.current.onAnchors?.(next);
     });
     engineRef.current = engine;
@@ -111,6 +114,21 @@ export function ComparePlane({
       }}
     >
       <canvas ref={canvasRef} aria-hidden="true" />
+      {scaleBar && bar && anchors.some((a) => a.ready) && (
+        <>
+          <svg className="cmp-scale" aria-hidden="true">
+            <path
+              d={[
+                `M${bar.from.x} ${bar.from.y} L${bar.to.x} ${bar.to.y}`,
+                ...bar.ticks.map(([a, b]) => `M${a.x} ${a.y} L${b.x} ${b.y}`),
+              ].join(' ')}
+            />
+          </svg>
+          <span className="cmp-scale__text sys-unit" style={{ left: Math.min(bar.from.x, bar.to.x), top: Math.max(bar.from.y, bar.to.y) }}>
+            {bar.km} km
+          </span>
+        </>
+      )}
       {blocks.map((block) => {
         const a = anchorOf(block.id);
         if (!a) return null;

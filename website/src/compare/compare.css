@@ -65,3 +65,45 @@
   padding: 0 var(--sys-s1);
   pointer-events: none;
 }
+
+/* The one scale bar: a round length along the ground beside the first block, and its length in words. */
+.cmp-scale {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.cmp-scale path {
+  fill: none;
+  stroke: var(--sys-ink-2);
+  stroke-width: 1.5px;
+}
+
+.cmp-scale__text {
+  position: absolute;
+  padding-top: var(--sys-s1);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* One fire three ways: the plane, and under it the count of scores with its kind. */
+.cmp-ways {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+}
+
+.cmp-ways__score {
+  justify-self: center;
+  margin: 0 0 var(--sys-s4);
+  padding: var(--sys-s2) var(--sys-s3);
+}
+
+.cmp-fires {
+  width: 100%;
+  height: 100%;
+}

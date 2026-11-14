@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { buildTerrain, cutOf, loadBelief, loadElevation, loadImage, type Terrain } from './ground';
 import { marksSignature, paintMarks, type BeliefStep, type MarkPalette } from './marks';
-import type { CompareAnchor, CompareBlock, EstimateGrid } from './types';
+import type { CompareAnchor, CompareBlock, CompareScaleBar, EstimateGrid } from './types';
 
 /**
  * The plane's renderer: lays the cut-outs out at one scale, looks at them with an orthographic camera at an
@@ -111,7 +111,7 @@ export class PlaneEngine {
   constructor(
     canvas: HTMLCanvasElement,
     private palette: MarkPalette,
-    private onAnchors: (anchors: CompareAnchor[]) => void,
+    private onAnchors: (anchors: CompareAnchor[], scaleBar: CompareScaleBar | null) => void,
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -427,7 +427,7 @@ export class PlaneEngine {
     this.camera.bottom = -this.height / (2 * scale);
     this.camera.updateProjectionMatrix();
     for (const entry of this.entries) this.paint(entry);
-    this.onAnchors(this.anchors());
+    this.onAnchors(this.anchors(), this.scaleBar());
     this.requestRender();
   }
 
@@ -475,6 +475,31 @@ export class PlaneEngine {
         image: entry.image,
       };
     });
+  }
+
+  /** A round length laid along the ground just south of the first block's south edge, a little in from its west corner. */
+  private scaleBar(): CompareScaleBar | null {
+    const first = this.entries.find((x) => x.terrain);
+    if (!first || !first.terrain) return null;
+    const narrowest = Math.min(...this.entries.map((x) => (x.terrain ? x.terrain.widthKm : Infinity)));
+    const km = [100, 50, 20, 10, 5, 2, 1].find((v) => v <= narrowest * 0.3) ?? 1;
+    const t = first.terrain;
+    const pos = first.group.position;
+    const off = t.depthKm * 0.07;
+    const tick = t.depthKm * 0.018;
+    // In from the corner, so that the bar and its words stay under the block and inside the plane
+    const west = pos.x - t.widthKm / 2 + t.widthKm * 0.16;
+    const south = pos.z + t.depthKm / 2 + off;
+    const at = (x: number, z: number) => this.toScreen(new THREE.Vector3(x, 0, z));
+    return {
+      km,
+      from: at(west, south),
+      to: at(west + km, south),
+      ticks: [
+        [at(west, south - tick), at(west, south + tick)],
+        [at(west + km, south - tick), at(west + km, south + tick)],
+      ],
+    };
   }
 
   private requestRender(): void {
