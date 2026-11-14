@@ -19,3 +19,84 @@
 .tw-label[data-focus='true'] {
   outline: 1px solid var(--sys-focus);
 }
+
+/* Test world in place on the terrain (beats/test-world/TestWorldBeat.tsx). Sizes, inks and shapes from system.css. */
+.tw-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tw-scene button,
+.tw-scene .sys-plate {
+  pointer-events: auto;
+}
+
+.tw-head {
+  position: absolute;
+  left: var(--sys-gutter);
+  top: 96px;
+  display: grid;
+  gap: var(--sys-s1);
+  max-width: 400px;
+  padding: var(--sys-s3) var(--sys-s4);
+}
+
+.tw-wrap {
+  white-space: normal;
+}
+
+.tw-fail {
+  color: var(--sys-fail);
+}
+
+.tw-readout {
+  position: absolute;
+  left: var(--sys-gutter);
+  bottom: 40px;
+  max-width: 640px;
+}
+
+.tw-keys {
+  position: absolute;
+  right: var(--sys-gutter);
+  bottom: 40px;
+  display: flex;
+  gap: var(--sys-s3);
+}
+
+.tw-keys .sys-ctl {
+  padding: var(--sys-s3) var(--sys-s4);
+  color: var(--sys-ink);
+}
+
+.tw-end {
+  position: absolute;
+  right: var(--sys-gutter);
+  top: 96px;
+  display: grid;
+  gap: var(--sys-s2);
+  width: 440px;
+  max-height: calc(100vh - 96px - 120px);
+  overflow-y: auto;
+  padding: var(--sys-s4);
+}
+
+.tw-gains .sys-row {
+  --cols: minmax(0, 1fr) auto;
+}
+
+.tw-gains .sys-row[data-you='true'] .sys-label,
+.tw-gains .sys-row[data-you='true'] .sys-value {
+  color: var(--sys-ink);
+}
+
+.tw-note {
+  display: block;
+  white-space: normal;
+}
+
+/* No column in Test world either: the right scrim goes with it. */
+.iso-ws[data-scene='world'] .iso-ws__scrim--right {
+  display: none;
+}

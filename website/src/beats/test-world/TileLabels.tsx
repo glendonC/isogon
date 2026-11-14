@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StageTileAnchor } from '../../stage/earthCutawayTypes';
-import type { RoundState } from '../../components/NextLookRound';
+import type { RoundState } from './round';
 import { tileName } from '../../content/nextLook';
 import '../../styles/test-world.css';
 

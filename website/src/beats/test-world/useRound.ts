@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DynamicRegionRun } from '../../stage/types';
 import type { StageTileAnchor, StageTileBoard } from '../../stage/earthCutawayTypes';
 import type { NextLookEnd, NextLookStart } from '../../content/demo/nextLook';
-import { NEW_ROUND, type RoundState } from '../../components/NextLookRound';
+import { NEW_ROUND, type RoundState } from './round';
 import { frameNearest, withLooks } from '../../content/nextLook';
 import { isRealRun, withReveal } from '../../content/realRuns';
 import { HttpError, NotRecorded } from '../../lib/api';

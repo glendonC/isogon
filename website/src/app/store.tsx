@@ -3,7 +3,7 @@ import type { DynamicRegionRun } from '../stage/types';
 import type { CalendarState } from '../ui/useCalendar';
 import type { CalendarArea } from '../components/BurningCalendar';
 import type { BlindTest, IntensityLegend, ModelStatus } from '../content/realRuns';
-import type { RoundState } from '../components/NextLookRound';
+import type { RoundState } from '../beats/test-world/round';
 import type { NextLookEnd, NextLookStart } from '../content/demo/nextLook';
 import type { Step } from '../components/WorkspaceBar';
 import type { Box, FeaturedFire, Place, Places } from './places';
@@ -116,6 +116,10 @@ export interface WorkspaceStore {
     /** Why the round's held-out run did not load. */
     runError: string | null;
     next: () => void;
+    /** The tile under keyboard focus, whether a tile can be picked now, and a look at the focused tile. */
+    focus: number | null;
+    canPick: boolean;
+    pickFocused: () => void;
   };
   step: Step;
   goStep: (s: Step) => void;

@@ -80,16 +80,12 @@ function useViewportWidth(): number {
 }
 
 /**
- * Where the slab may sit during a round of next look. The calendar and the pass track step aside, so the terrain may
- * take more of the screen: it stays clear of the top bar and of the readout column on the right. The column is 336 px
- * plus the page gutter (styles/workspace.css), so the right edge is computed from the viewport width. Under 960 px
- * the readout moves to the bottom.
+ * Where the slab sits during a round: the whole width, clear of the bar, of what the round is at the top left and of
+ * the readout and keys along the bottom. Under 960 px the top half.
  */
 function roundFrame(width: number) {
   if (width < 960) return { left: 0.0, top: 0.12, right: 1.0, bottom: 0.5 };
-  const gutter = Math.min(36, Math.max(20, width * 0.02));
-  const right = 1 - (336 + gutter + 32) / width;
-  return { left: 0.02, top: 0.09, right: Math.max(0.5, right), bottom: 0.93 };
+  return { left: 0.04, top: 0.14, right: 0.96, bottom: 0.84 };
 }
 
 function workspaceFrame(width: number) {
@@ -1355,12 +1351,15 @@ export function App() {
       error: rnd.error,
       runError: realFailed && rnd.fire && realFailed.start === rnd.fire.start ? realFailed.message : null,
       next: nextLook,
+      focus: rnd.focus,
+      canPick: rnd.canPick,
+      pickFocused: rnd.pickFocused,
     },
     step,
     goStep,
     blocked: stepBlocked,
   };
-  const beatPanel = step === 'look' ? <TestWorldBeat /> : <WorldModelBeat>{finding}</WorldModelBeat>;
+  const beatPanel = <WorldModelBeat>{finding}</WorldModelBeat>;
   /** World model on a real run: in place on the terrain (beats/world-model/WorldModelScene.tsx), no column. */
   const modelScene = inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen;
 
@@ -1398,7 +1397,7 @@ export function App() {
             data-clean={cleanHud ? 'true' : 'false'}
             data-step={step}
             data-debrief={debriefOpen ? 'true' : 'false'}
-            data-scene={modelScene ? 'model' : undefined}
+            data-scene={modelScene ? 'model' : step === 'look' ? 'world' : undefined}
           >
             <div className="iso-ws__scrim iso-ws__scrim--top" aria-hidden="true" />
             <div className="iso-ws__scrim iso-ws__scrim--right" aria-hidden="true" />
@@ -1424,6 +1423,7 @@ export function App() {
             {step === 'record' && <CalendarBeat />}
             {modelScene && <WorldModelScene />}
             {step === 'agent' && <AgentBeat />}
+            {step === 'look' && <TestWorldBeat />}
             <div className="iso-ws__dock" hidden={step === 'record' || step === 'agent'}>
               {debriefOpen && blindTest ? (
                 <Debrief
@@ -1437,7 +1437,7 @@ export function App() {
                   terraOpen={terraOpen}
                   onToggleTerra={() => setTerraOpen((o) => !o)}
                 />
-              ) : modelScene ? null : (
+              ) : modelScene || step === 'look' ? null : (
                 <aside className="iso-step" data-step={step} aria-label={beatOf(beatOfStep(step)).name}>
                   {beatPanel}
                 </aside>
