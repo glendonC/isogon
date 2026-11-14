@@ -21,18 +21,20 @@ from typing import Any
 
 import numpy as np
 
-from backend.env import KNOWN_LIMITS
 from backend.env.agents import (
     CentreTileAgent,
     ConstantTileAgent,
     ExpectedNewAgent,
     LatestModisAgent,
     LeastSureAgent,
+    NightLeastSureAgent,
     OracleAgent,
     RandomAgent,
+    SharpLeastSureAgent,
+    WhenUnsureAgent,
     centre_tiles,
+    looks_now,
     reads_hidden_rows,
-    spend_now,
     tile_scores,
 )
 from backend.env.next_look import NO_LOOK, REWARD, NextLookEnv, Observation
@@ -47,7 +49,11 @@ PLAYERS: dict[str, tuple[str, str, str]] = {
     "latest_modis": ("Latest MODIS", "the tile with the strongest recent MODIS fire power", "the observation"),
     "least_sure": ("Least sure", "the tile where the model is least sure", "the observation"),
     "expected_new": ("Most expected new detections", "the tile where the model expects the most hidden detections its map does not already hold", "the observation"),
+    "least_sure_at_night": ("Least sure, at night", "the tile where the model is least sure, on night passes", "the observation"),
+    "least_sure_when_unsure": ("Least sure, when most unsure", "the tile where the model is least sure, in each stretch at the look where it is most unsure", "the observation"),
+    "least_sure_when_sharp": ("Least sure, at the sharpest pass", "the tile where the model is least sure, in each stretch at the pass with the smallest pixels", "the observation"),
     "learned": ("Learned", "the tile with the highest learned score", "the observation"),
+    "learned_tiles_only": ("Learned, tiles only", "the tile with the highest learned score, on the evenly spread looks", "the observation"),
     "oracle": ("Oracle", "tries every tile against the hidden data and takes the best: a ceiling, not a player", "the hidden rows"),
 }
 COMPUTED_AGAINST_HIDDEN_ROWS: tuple[str, ...] = (
@@ -117,11 +123,35 @@ def tile_view(obs: Observation, revealed_before: list[int] | None = None) -> dic
     }
 
 
-def _why(agent: Any, spending: bool, budget_left: int, scores: np.ndarray | None) -> str:
+def _when(agent: Any, obs: Observation, spending: bool) -> dict[str, Any] | None:
+    """How a player that chooses when to look decided about this look: its look score, the bar the score had to
+    reach and, for the learned player, what made the score. None for a player on the evenly spread looks, and once
+    the budget is spent."""
+    if getattr(agent, "looks_now", None) is None or obs.budget_left <= 0:
+        return None
+    last = getattr(agent, "last_when", None)
+    if last is None:                                           # a rule with no score: night passes, evenly
+        return {"looks": spending, "score": None, "bar": None, "stretch": None,
+                "reason": "one of the night looks its budget is spread over" if spending else "not one of the night looks its budget is spread over",
+                "rule": "night passes, the budget spread evenly over them"}
+    out: dict[str, Any] = {
+        "looks": spending, "score": _num(last["score"], 6), "bar": None if last["bar"] is None else _num(last["bar"], 6),
+        "stretch": int(last["stretch"]), "reason": str(last["reason"]),
+        "rule": "one look in each of as many equal stretches of the episode as the budget has looks: as soon as the look "
+                "score is in the top share of what the stretch has shown so far, and at the stretch's last look if not before",
+    }
+    if "parts" in last:
+        out["score_parts"] = {"names": list(last["names"]), "parts": list(last["parts"])}
+    if "signal" in last:
+        out["signal"] = last["signal"]
+    return out
+
+
+def _why(agent: Any, spending: bool, budget_left: int, scores: np.ndarray | None, when: dict[str, Any] | None = None) -> str:
     if budget_left <= 0:
         return "no look left in the budget"
     if not spending:
-        return "not one of the looks the budget is spread over"
+        return "not one of the looks the budget is spread over" if when is None else str(when["reason"])
     if isinstance(agent, ConstantTileAgent):
         return "its constant tile"
     if isinstance(agent, CentreTileAgent):
@@ -162,7 +192,8 @@ def play_steps(env: NextLookEnv, agent: Any, seed: int = 0, ceiling: bool = Fals
     while not done:
         assert obs is not None
         k = int(obs.decision)
-        spending = bool(obs.budget_left > 0 and spend_now(k, env.n_looks, env.budget))
+        spending = looks_now(agent, obs, env.n_looks, env.budget)
+        when = _when(agent, obs, spending)
         scores = tile_scores(agent, obs, ask) if spending else None
         parts = explain(obs) if (spending and explain is not None) else None
         act = int(agent.choose(obs, ask)) if spending else NO_LOOK
@@ -173,8 +204,8 @@ def play_steps(env: NextLookEnv, agent: Any, seed: int = 0, ceiling: bool = Fals
             "budget_left": int(obs.budget_left),
             "looks_left": int(obs.looks_left),
             "spending_look": spending,
-            # how the player decided whether to look now: null while every player spends on the evenly spread looks
-            "when": None,
+            # how the player decided whether to look now: null for a player on the evenly spread looks
+            "when": when,
             "knew": {
                 "tiles": tile_view(obs, list(shown_per_tile)),
                 "modis_detections": int(obs.modis.shape[0]),
@@ -184,7 +215,7 @@ def play_steps(env: NextLookEnv, agent: Any, seed: int = 0, ceiling: bool = Fals
             "tile_scores": None if scores is None else [_num(s, 6) for s in scores],
             "score_parts": parts,
             "chosen_tile": act,
-            "why": _why(agent, spending, int(obs.budget_left), scores),
+            "why": _why(agent, spending, int(obs.budget_left), scores, when),
         }
         if fields:
             step["knew"]["estimate"] = {
@@ -229,7 +260,11 @@ def play_steps(env: NextLookEnv, agent: Any, seed: int = 0, ceiling: bool = Fals
             "centre_tiles": centre_tiles(env.tiles),
             "fields": grids,
         },
-        "spending": "the budget is spent on looks spread evenly over the episode; the player chooses only the tile",
+        "spending": (
+            "the player chooses when to look as well as where; steps[].when says how it decided at each look"
+            if getattr(agent, "looks_now", None) is not None else
+            "the budget is spent on looks spread evenly over the episode; the player chooses only the tile"
+        ),
         "score_start": _num(start),
         "steps": steps,
         "score_end": _num(score),
@@ -241,33 +276,32 @@ def play_steps(env: NextLookEnv, agent: Any, seed: int = 0, ceiling: bool = Fals
             "the player's own score for each tile at a look it decides; null for a player that does not rank tiles"
         ),
         "computed_against_hidden_rows": list(COMPUTED_AGAINST_HIDDEN_ROWS) + (["steps[].tile_scores"] if hidden_reader else []),
-        "known_limits": KNOWN_LIMITS,
+        "known_limits": env.known_limits,
     }
 
 
 def reference_player(name: str, seed: int = 0, policy: Any | None = None) -> Any:
     """A reference player by the id the tables use: random, constant_<tile>, centre, latest_modis, least_sure,
-    expected_new, learned (the tracked policy, or the one given) or oracle."""
+    expected_new, least_sure_at_night, least_sure_when_unsure, least_sure_when_sharp, learned (the tracked policy, or the one given),
+    learned_tiles_only (the tracked policy's tile choice on the evenly spread looks) or oracle."""
     if name == "random":
         return RandomAgent(seed=seed)
     if name.startswith("constant_"):
         return ConstantTileAgent(int(name.split("_", 1)[1]))
-    if name == "centre":
-        return CentreTileAgent()
-    if name == "latest_modis":
-        return LatestModisAgent()
-    if name == "least_sure":
-        return LeastSureAgent()
-    if name == "expected_new":
-        return ExpectedNewAgent()
-    if name == "oracle":
-        return OracleAgent()
-    if name == "learned":
+    simple = {"centre": CentreTileAgent, "latest_modis": LatestModisAgent, "least_sure": LeastSureAgent,
+              "expected_new": ExpectedNewAgent, "least_sure_at_night": NightLeastSureAgent,
+              "least_sure_when_unsure": WhenUnsureAgent, "least_sure_when_sharp": SharpLeastSureAgent, "oracle": OracleAgent}
+    if name in simple:
+        return simple[name]()
+    if name in ("learned", "learned_tiles_only"):
         if policy is None:
-            from backend.env.policy import load_policy
+            from backend.env.policy import load_fitted, policy_from
 
-            policy = load_policy()
-        if policy is None:
-            raise LookupError("no learned policy is tracked")
+            doc = load_fitted()
+            if doc is None or "policy" not in doc:
+                raise LookupError("no learned policy is tracked")
+            policy = policy_from(doc["policy"], tiles_only=(name == "learned_tiles_only"))
+        if name == "learned_tiles_only":
+            policy.name = name
         return policy
     raise LookupError(f"no reference player named {name!r}")

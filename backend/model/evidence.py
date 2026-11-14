@@ -411,7 +411,11 @@ def _on_validation(env: dict[str, Any]) -> dict[str, Any] | None:
         "latest_modis": ("Latest MODIS", "the tile with the most recent MODIS fire power"),
         "least_sure": ("Least sure", "the tile where the model is least sure"),
         "expected_new": ("Most expected new detections", "the tile where the model expects the most hidden detections its map does not already hold"),
-        "learned": ("Learned", "a linear policy with the tracked weights"),
+        "least_sure_at_night": ("Least sure, at night", "the least sure tile, with the looks spread over the night passes: chooses when by a fixed rule"),
+        "least_sure_when_unsure": ("Least sure, when most unsure", "the least sure tile, in each stretch of the episode at the look where the model is most unsure: chooses when by a fixed rule"),
+        "least_sure_when_sharp": ("Least sure, at the sharpest pass", "the least sure tile, in each stretch of the episode at the pass with the smallest pixels: chooses when by a fixed rule"),
+        "learned_tiles_only": ("Learned, tiles only", "the learned tile score on the evenly spread looks"),
+        "learned": ("Learned", "the tracked learned player"),
         "oracle": ("Oracle", "sees the hidden data and takes the best tile at each look: a greedy ceiling"),
     }
     agents = []
@@ -424,6 +428,9 @@ def _on_validation(env: dict[str, Any]) -> dict[str, Any] | None:
             **{k: row[k] for k in ("mean_gain", "mean_final_score", "share_of_oracle_gain", "sd_across_episodes",
                                    "least_and_most_over_episodes", "episodes_with_a_gain", "mean_gain_on_cells_never_shown")},
         })
+    policy = env.get("policy") or {}
+    when = policy.get("when") or {}
+    held_out = policy.get("on_training_fires_held_out")
     return {
         "what": "the reference players under the reward in use, on the validation episodes",
         "reward": ref["reward"],
@@ -432,14 +439,27 @@ def _on_validation(env: dict[str, Any]) -> dict[str, Any] | None:
         "tiles": ref["tiles"],
         "budget": ref["budget"],
         "mean_start_score": ref["mean_start_score"],
+        "spending": ref.get("spending"),
         "agents": agents,
         "differences": ref["differences"],
         "plainly": ref["plainly"],
         "learned_weights": ref.get("learned"),
+        # the learned player as tracked: what it is, how it was chosen, and whether it chooses when to look
+        "learned_player": None if not policy.get("fitted_with") else {
+            "kind": policy.get("kind"),
+            "fitted_with": policy["fitted_with"],
+            "tile_features": len(policy.get("feature_names") or []),
+            "chooses_when_to_look": bool(when.get("adopted")),
+            "when_rule": when.get("rule"),
+            "when_how": when.get("how"),
+            "chosen_on": "training fires only, with fires held out in turn; the validation episodes chose nothing about it",
+            "on_training_fires_held_out": held_out,
+        },
         "reconstruction_values": ref.get("reconstruction_parameters"),
         "not_a_test": (
-            "these are the validation episodes: fires of 2024 and 2025 that fitted nothing, but that chose settings "
-            "and are in the regions the model was trained in. They are not fires the project has never seen."
+            "these are the validation episodes: fires of 2024 and 2025 in the regions the model was trained in. "
+            "They fitted nothing, and the reconstruction's values were validated on fires of the same years. They "
+            "are not fires the project has never seen."
         ),
     }
 

@@ -5,10 +5,11 @@
   ... python3 -m backend.env.report --record-from=<out.json>
 
 Builds the catalogue, keeps the episodes that may be played (`backend.env.episodes.may_be_played`: never a test
-episode), and plays every reference player on the validation episodes for several tile splits and budgets. Every
-player spends the same budget on the same looks. `--record` also writes the table into the tracked file
-(`validation_reference` in backend/env/fitted/next_look.json); `--record-from` writes there a table this tool
-measured earlier, and plays nothing.
+episode), and plays every reference player on the validation episodes for several tile splits and budgets, with
+the looks the environment takes by default (the pass list where it is cached). `--record` also writes the table
+into the tracked file (`validation_reference` in backend/env/fitted/next_look.json); `--record-from` writes there
+a table this tool measured earlier, and plays nothing. The learned player is the tracked one, played as recorded:
+the validation episodes choose nothing about it.
 
 What the table separates. Episodes are framed around a fire, so a player that reads nothing can still gain by
 looking near where fires tend to lie in the box. The table therefore lists `random`, every constant tile and the
@@ -16,6 +17,13 @@ centre tiles beside the players that read the observation. Two constant tiles ar
 the training episodes, which is a player anyone could have fielded, and the one that gains most on the validation
 episodes themselves, which is hindsight and an upper bound on geometry. A player shows skill by what it gains
 beyond them.
+
+Where and when. Most players spend the budget on the same evenly spread looks and differ only in the tile. Some
+choose when to look as well: least sure on night passes, least sure when the model is most unsure, least sure at
+the sharpest pass of each stretch, and the learned player when its look score is in use. So that a gain from
+choosing when is not read as a gain from choosing where, the learned player's tile choice is also listed on the
+evenly spread looks, and the three simple rules for when stand beside it. The oracle is a ceiling for the tile on
+the evenly spread looks only.
 """
 
 from __future__ import annotations
@@ -34,14 +42,17 @@ from backend.env.agents import ConstantTileAgent, reference_agents, run_episode
 from backend.env.episodes import EnvEpisode, catalogue, fit_split, may_be_played
 from backend.env.learn import make_env, paired_bootstrap
 from backend.env.next_look import REWARD, NextLookEnv
-from backend.env.policy import FITTED_FILE, LinearPolicyAgent, load_fitted
+from backend.env.policy import FITTED_FILE, load_fitted, policy_from
 
 SETTINGS: tuple[tuple[int, int], ...] = ((4, 4), (3, 4), (6, 4), (4, 2), (4, 8))     # (tiles per side, budget)
 MAIN_SETTING: tuple[int, int] = (4, 4)
 RANDOM_SEEDS: int = 10
-SCHEDULE: str = "nominal"
+SCHEDULE: str = "auto"               # the environment's default: the pass list where it is cached
 # the players a table row is written for, beside the constant tiles
-NAMED: tuple[str, ...] = ("random", "centre", "latest_modis", "least_sure", "expected_new", "learned", "oracle")
+NAMED: tuple[str, ...] = ("random", "centre", "latest_modis", "least_sure", "expected_new", "least_sure_at_night",
+                          "least_sure_when_unsure", "least_sure_when_sharp", "learned_tiles_only", "learned", "oracle")
+# the players that choose when to look; every other player spends on the evenly spread looks
+CHOOSE_WHEN: tuple[str, ...] = ("least_sure_at_night", "least_sure_when_unsure", "least_sure_when_sharp")
 
 
 def _env(ep: EnvEpisode, n_side: int, budget: int, pdict: dict[str, Any], score: str, schedule: str) -> NextLookEnv:
@@ -50,16 +61,31 @@ def _env(ep: EnvEpisode, n_side: int, budget: int, pdict: dict[str, Any], score:
     return make_env(ep, pdict, {"score": score, "schedule": schedule}, tiles=n_side, budget=budget)
 
 
-def _play(job: tuple[EnvEpisode, int, int, dict[str, Any], int, str, str, list[float] | None, bool]) -> dict[str, Any]:
+def learned_players(policy: dict[str, Any] | None) -> list[Any]:
+    """The learned player a `policy` block describes, as the tables list it. When its look score is in use the
+    same tile weights with the evenly spread looks are listed too, as `learned_tiles_only`, so that what the
+    player gains by choosing when is not read as a gain from choosing where."""
+    if policy is None:
+        return []
+    player = policy_from(policy)
+    if getattr(player, "looks_now", None) is None:
+        return [player]
+    tiles_only = policy_from(policy, tiles_only=True)
+    tiles_only.name = "learned_tiles_only"
+    return [tiles_only, player]
+
+
+def _play(job: tuple[EnvEpisode, int, int, dict[str, Any], int, str, str, dict[str, Any] | None, bool]) -> dict[str, Any]:
     """Every reference player on one episode and setting. `constant_only` plays the constant tiles alone."""
-    ep, n_side, budget, pdict, seeds, score, schedule, weights, constant_only = job
+    ep, n_side, budget, pdict, seeds, score, schedule, policy, constant_only = job
     env = _env(ep, n_side, budget, pdict, score, schedule)
-    out: dict[str, Any] = {"episode": ep.key, "tiles": n_side, "budget": budget, "looks": env.n_looks, "players": {}}
+    out: dict[str, Any] = {"episode": ep.key, "tiles": n_side, "budget": budget, "looks": env.n_looks, "players": {},
+                           "schedule": env.describe()["looks"]["source"]}
     if constant_only:
         agents: list[Any] = [ConstantTileAgent(t) for t in range(n_side * n_side)]
     else:
-        policy = LinearPolicyAgent(weights) if weights is not None else None
-        agents = reference_agents((n_side, n_side), random_seeds=seeds, policy=policy)
+        agents = reference_agents((n_side, n_side), random_seeds=seeds)
+        agents[-1:-1] = learned_players(policy)                       # before the oracle, which is last
     n_random = 0
     for agent in agents:
         seed = 0
@@ -104,16 +130,17 @@ def _per_episode(rs: list[dict[str, Any]], name: str) -> list[float]:
 def reference_table(
     episodes: list[EnvEpisode], params: Any, settings: tuple[tuple[int, int], ...] = SETTINGS,
     seeds: int = RANDOM_SEEDS, score: str = "csi", schedule: str = SCHEDULE, workers: int | None = None,
-    policy_weights: list[float] | None = None, train_episodes: list[EnvEpisode] | None = None, log: Any = print,
+    policy: dict[str, Any] | None = None, train_episodes: list[EnvEpisode] | None = None, log: Any = print,
 ) -> dict[str, Any]:
     """Play every reference player on every episode for every setting; one block per setting.
 
-    `train_episodes`, when given, are played with the constant tiles only and in the first setting only, to name
-    the constant tile a player could have chosen without the episodes of the table.
+    `policy` is a `policy` block of the tracked file (`backend.env.policy.policy_from`); the learned player it
+    describes is listed as `learned`. `train_episodes`, when given, are played with the constant tiles only and in
+    the first setting only, to name the constant tile a player could have chosen without the episodes of the table.
     """
     pdict = params.as_dict()
     n_workers = workers or max(1, min(8, (os.cpu_count() or 2) - 1))
-    jobs = [(ep, n, b, pdict, seeds, score, schedule, policy_weights, False) for (n, b) in settings for ep in episodes]
+    jobs = [(ep, n, b, pdict, seeds, score, schedule, policy, False) for (n, b) in settings for ep in episodes]
     train_jobs = [(ep, n, b, pdict, seeds, score, schedule, None, True) for (n, b) in settings[:1] for ep in (train_episodes or [])]
     if workers == 0:                      # in this process, for tests
         results, train_results = [_play(j) for j in jobs], [_play(j) for j in train_jobs]
@@ -151,14 +178,30 @@ def reference_table(
         if chosen is not None:
             pairs.append(("least_sure", constants[chosen]))
             labels.append("least_sure_minus_constant_best_on_training")
+        for timed in CHOOSE_WHEN:
+            if timed in agents:
+                pairs.append((timed, "least_sure"))
+                labels.append(f"{timed}_minus_least_sure")
         if "learned" in agents:
-            pairs += [("learned", "least_sure"), ("learned", "random"), ("oracle", "learned")]
-            labels += ["learned_minus_least_sure", "learned_minus_random", "oracle_minus_learned"]
+            pairs += [("learned", "least_sure"), ("learned", "random"), ("oracle", "learned"),
+                      ("learned", "latest_modis"), ("learned", constants[hindsight])]
+            labels += ["learned_minus_least_sure", "learned_minus_random", "oracle_minus_learned",
+                       "learned_minus_latest_modis", "learned_minus_constant_best_in_hindsight"]
             if chosen is not None:
                 pairs.append(("learned", constants[chosen]))
                 labels.append("learned_minus_constant_best_on_training")
+        if "learned_tiles_only" in agents:
+            # the learned player chooses when to look: what that adds to its own tile choice, and how it stands
+            # against the simple rules for when
+            pairs += [("learned", "learned_tiles_only"), ("learned_tiles_only", "least_sure")]
+            labels += ["learned_minus_learned_tiles_only", "learned_tiles_only_minus_least_sure"]
+            for timed in CHOOSE_WHEN:
+                if timed in agents:
+                    pairs.append(("learned", timed))
+                    labels.append(f"learned_minus_{timed}")
         block = {
             "tiles": f"{n}x{n}", "budget": b, "episodes": len(rs),
+            "looks_from": sorted({r["schedule"] for r in rs}),
             "mean_start_score": round(float(np.mean([r["score_start"] for r in rs])), 4),
             "looks_per_episode": [int(min(r["looks"] for r in rs)), int(np.median([r["looks"] for r in rs])), int(max(r["looks"] for r in rs))],
             "agents": agents,
@@ -195,8 +238,17 @@ def plainly(block: dict[str, Any]) -> list[str]:
         verdict("least_sure_minus_constant_best_on_training", "least sure", "the constant tile chosen on the training episodes"),
         verdict("least_sure_minus_constant_best_in_hindsight", "least sure", "the best constant tile in hindsight"),
         verdict("expected_new_minus_least_sure", "the most expected new detections", "least sure"),
-        verdict("learned_minus_least_sure", "the learned policy", "least sure"),
-        verdict("oracle_minus_least_sure", "the oracle", "least sure"),
+        verdict("learned_minus_least_sure", "the learned player", "least sure"),
+        verdict("learned_tiles_only_minus_least_sure", "the learned tile choice on the evenly spread looks", "least sure"),
+        verdict("learned_minus_learned_tiles_only", "the learned player choosing when to look", "the same tile choice on the evenly spread looks"),
+        verdict("least_sure_when_sharp_minus_least_sure", "least sure at the sharpest pass of each stretch", "least sure on the evenly spread looks"),
+        verdict("least_sure_when_unsure_minus_least_sure", "least sure where the model is most unsure in each stretch", "least sure on the evenly spread looks"),
+        verdict("least_sure_at_night_minus_least_sure", "least sure on night passes", "least sure on the evenly spread looks"),
+        verdict("learned_minus_least_sure_when_sharp", "the learned player", "least sure at the sharpest pass of each stretch"),
+        verdict("oracle_minus_least_sure", "the oracle on the evenly spread looks", "least sure"),
+        verdict("learned_minus_latest_modis", "the learned player", "latest MODIS"),
+        verdict("learned_minus_random", "the learned player", "random"),
+        verdict("learned_minus_constant_best_in_hindsight", "the learned player", "the best constant tile in hindsight"),
     ]
     return [s for s in said if s]
 
@@ -232,7 +284,7 @@ def main(argv: list[str]) -> int:
         with open(measured, encoding="utf-8") as fh:
             doc = json.load(fh)
         tracked = load_fitted() or {}
-        tracked["validation_reference"] = doc
+        record_table(tracked, doc)
         FITTED_FILE.write_text(json.dumps(tracked, indent=1) + "\n", encoding="utf-8")
         print(f"recorded {measured} as validation_reference in {FITTED_FILE.name}")
         return 0
@@ -245,19 +297,32 @@ def main(argv: list[str]) -> int:
           f"{sum(1 for e in closed if e.split == 'fit')} other windows of the test fires' regions and year)", flush=True)
     params = load_params()
     tracked = load_fitted() or {}
-    weights = (tracked.get("policy") or {}).get("weights")
-    ref = reference_table(val, params, schedule=schedule, policy_weights=weights, train_episodes=train, workers=workers,
+    policy = tracked.get("policy")
+    ref = reference_table(val, params, schedule=schedule, policy=policy, train_episodes=train, workers=workers,
                           log=lambda m: print(m, flush=True))
     print(format_table(ref))
     main_block = next(b for b in ref["settings"] if (b["tiles"], b["budget"]) == (f"{MAIN_SETTING[0]}x{MAIN_SETTING[0]}", MAIN_SETTING[1]))
+    when = bool(((policy or {}).get("when") or {}).get("adopted"))
     doc = {
         "what": "reference players of the next-look environment on the validation episodes",
         "known_limits": KNOWN_LIMITS,
         "reward": REWARD,
-        "schedule": ref["schedule"],
-        "spending": "every player spends the budget on the same looks, spread evenly over the episode; only the tile differs",
-        "oracle": "greedy: at each look it takes the tile with the largest true reward; a ceiling for these looks, not a global optimum",
-        "learned": None if weights is None else "the tracked policy weights: " + str((tracked.get("protocol") or {}).get("note", "")),
+        "schedule": "+".join(main_block["looks_from"]),
+        "schedule_asked_for": ref["schedule"],
+        "spending": (
+            "a player that does not choose when to look spends the budget on the same looks as every other such player, "
+            "spread evenly over the episode, and only the tile differs. least_sure_at_night, least_sure_when_unsure and "
+            "least_sure_when_sharp choose when" + (", and so does learned; learned_tiles_only is its tile choice on the evenly spread looks" if when else "")
+        ),
+        "oracle": (
+            "greedy, on the evenly spread looks: at each of them it takes the tile with the largest true reward. A ceiling "
+            "for choosing the tile on those looks, not for a player that also chooses its looks, and not a global optimum"
+        ),
+        "learned": None if policy is None else {
+            "fitted_with": policy.get("fitted_with") or "the first policy: " + str((tracked.get("protocol") or {}).get("note", "")),
+            "chooses_when_to_look": when,
+            "played_here": "once, with the policy as recorded before this table was measured",
+        },
         "reconstruction_parameters": params.fitted_on,
         "episodes": {
             "played": "validation: the episodes of 2024 and 2025 that may be played",
@@ -282,10 +347,26 @@ def main(argv: list[str]) -> int:
             json.dump(doc, fh, indent=1)
             fh.write("\n")
     if "--record" in argv:
-        tracked["validation_reference"] = doc
+        record_table(tracked, doc)
         FITTED_FILE.write_text(json.dumps(tracked, indent=1) + "\n", encoding="utf-8")
         print(f"recorded as validation_reference in {FITTED_FILE.name}")
     return 0
+
+
+def record_table(tracked: dict[str, Any], doc: dict[str, Any]) -> None:
+    """Put a measured table into the tracked document as `validation_reference`. A table measured on the nominal
+    slots is not thrown away when one measured on the pass list replaces it: it stays beside it, named for its
+    looks, so that the two can be read against each other."""
+    old = tracked.get("validation_reference")
+    if old and old.get("schedule") == "nominal" and doc.get("schedule") != "nominal":
+        tracked["validation_reference_on_nominal_looks"] = {
+            "note": (
+                "measured before the pass list became the default schedule: nominal half-day slots, and the first "
+                "policy's weights as the learned player"
+            ),
+            **old,
+        }
+    tracked["validation_reference"] = doc
 
 
 if __name__ == "__main__":

@@ -221,9 +221,9 @@ class ShapeTests(unittest.TestCase):
             self.assertEqual(reference_player(name).name, name)
         # every player the reference tables name can be played step by step, the oracle only as the ceiling
         table = A.play_reference(_env(DET, "nominal", budget=2), random_seeds=1)
-        not_a_single_player = ("constant", "learned", "oracle", "score_start", "reads_nothing", "reads_hidden_rows")
-        played = [name for name in table if name not in not_a_single_player]
+        played = [name for name, entry in table.items() if isinstance(entry, dict) and name not in ("constant", "learned", "oracle")]
         self.assertIn("expected_new", played)
+        self.assertIn("least_sure_when_sharp", played)
         for name in played:
             play = play_steps(_env(DET, "nominal", budget=2), reference_player(name))
             self.assertEqual(play["player"]["id"], name)

@@ -1,5 +1,15 @@
 {
  "what": "next-look environment: the model change and the learned policy",
+ "layout": {
+  "policy": "the learned player in use",
+  "policy_fit": "the fit that made it: its setting, its episodes and the reconstruction values it played with",
+  "validation_reference": "every reference player under the reward in use, on the validation episodes, with the looks the environment takes by default",
+  "validation_reference_on_nominal_looks": "the same on nominal looks, measured before the pass list became the default, with the first policy as the learned player",
+  "policy_first": "the first learned policy, not in use: the weights the tables on record were played with",
+  "rewards": "the reward in use, the first reward, and which tables were measured under the first",
+  "known_limits, setting, episodes, reconstruction_parameters, protocol, seconds, generated_utc": "the first fit, the one that made policy_first: they say how the tables on record were played, not how the policy in use was fitted",
+  "learn_from_looks": "a variant tried under the first reward and not adopted"
+ },
  "known_limits": "FIRMS lists detections, not where a satellite looked and saw nothing. Every tile is assumed covered by a pass that flagged anything in the wider context box, and cloud is unknown, so a revealed tile with no detection may have been cloudy rather than free of fire.",
  "setting": {
   "tiles": "4x4",
@@ -89,6 +99,467 @@
   }
  },
  "policy": {
+  "kind": "a linear score per tile for where to look; a linear score per look, one look per stretch of the episode, for when",
+  "feature_names": [
+   "unsure",
+   "burning",
+   "power",
+   "spread",
+   "modis_recent_frp",
+   "modis_recent_pixels",
+   "modis_all_pixels",
+   "seen_before",
+   "unsure_neighbours",
+   "relief",
+   "unsure_by_day",
+   "unsure_by_night",
+   "modis_recent_frp_by_day",
+   "unsure_when_modis_is_old",
+   "burning_early"
+  ],
+  "features": {
+   "unsure": "sum of p (1 - p) over the tile's cells: how unsure the model is there",
+   "burning": "sum of p: cells the model expects to burn",
+   "power": "sum of the model's expected FRP",
+   "spread": "sum of the model's standard deviation",
+   "modis_recent_frp": "MODIS FRP in the tile, halved for every six hours of age",
+   "modis_recent_pixels": "MODIS pixels in the tile, halved for every six hours of age",
+   "modis_all_pixels": "every MODIS pixel in the tile so far",
+   "seen_before": "earlier looks at this tile, each halved for every twelve hours of age (not rescaled)",
+   "unsure_neighbours": "mean of `unsure` over the tiles around it",
+   "relief": "standard deviation of elevation in the tile (0 when no terrain is given)",
+   "unsure_by_day": "`unsure` on a day overpass, else 0",
+   "unsure_by_night": "`unsure` on a night overpass, else 0",
+   "modis_recent_frp_by_day": "`modis_recent_frp` on a day overpass, else 0",
+   "unsure_when_modis_is_old": "`unsure` times the hours since the last MODIS pass, capped at twelve, over twelve",
+   "burning_early": "`burning` times the share of the episode's looks still to come"
+  },
+  "weights": [
+   0.22626907087976467,
+   0.0607235954588776,
+   -0.018539929792983127,
+   0.13712726888144725,
+   0.060027313935234916,
+   0.12494781985229365,
+   0.179622460688081,
+   -0.020166617761854303,
+   -0.024704579718988352,
+   0.0008958411598662536,
+   0.09604642646693207,
+   0.13022264441285886,
+   0.021278111414921908,
+   -0.3986435016240672,
+   -0.00881123681801207
+  ],
+  "fit": "ridge regression of each tile's true reward divided by the largest reward of its decision",
+  "ridge": 10.0,
+  "fitted_with": {
+   "reward": "the score after the look minus the score before it, on one fixed set: every real hidden detection of the episode. The rewards of a round add up to the score at the end minus the score at the start. A look that hands over no hidden pixel earns nothing.",
+   "looks": "cmr",
+   "reconstruction_parameters": "22 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)"
+  },
+  "training": {
+   "episodes": 95,
+   "decisions": 730,
+   "tile_samples": 11680,
+   "behaviour_round_0": "the best tile half the time, least sure a quarter, random a quarter",
+   "behaviour_round_1": "the round 0 policy's own choices"
+  },
+  "ridge_chosen_with_fires_held_out": [
+   {
+    "ridge": 0.01,
+    "one_look_reward": 0.019469028284400856,
+    "share_of_best_tile": 0.8674117060255863,
+    "decisions": 760
+   },
+   {
+    "ridge": 0.1,
+    "one_look_reward": 0.019469028284400856,
+    "share_of_best_tile": 0.8674117060255863,
+    "decisions": 760
+   },
+   {
+    "ridge": 1.0,
+    "one_look_reward": 0.01946542903607883,
+    "share_of_best_tile": 0.8672513472197017,
+    "decisions": 760
+   },
+   {
+    "ridge": 10.0,
+    "one_look_reward": 0.01951632216913855,
+    "share_of_best_tile": 0.8695188101216735,
+    "decisions": 760
+   }
+  ],
+  "least_sure_on_the_same_decisions": {
+   "one_look_reward": 0.01953424035114246,
+   "share_of_best_tile": 0.8703171263290282,
+   "decisions": 760
+  },
+  "when": {
+   "adopted": true,
+   "rule": "used when, on training episodes played with weights fitted without their fold, the gain with the look score minus the gain with the evenly spread looks lies above zero at 90 percent (episodes resampled)",
+   "how": "one look in each of as many equal stretches of the episode as the budget has looks: as soon as the look score is in the top share of what the stretch has shown so far, and at the stretch's last look if not before",
+   "feature_names": [
+    "largest_unsure",
+    "total_unsure",
+    "largest_burning",
+    "total_burning",
+    "largest_recent_modis_power",
+    "largest_recent_modis_pixels",
+    "modis_pixels_last_pass",
+    "day",
+    "pixel_area_km2",
+    "hours_since_modis",
+    "hours_from_previous_look",
+    "hours_to_next_look",
+    "episode_share_done"
+   ],
+   "features": {
+    "largest_unsure": "log of one plus the largest tile sum of p (1 - p): how unsure the model is where it is least sure",
+    "total_unsure": "log of one plus the sum of p (1 - p) over the box",
+    "largest_burning": "log of one plus the largest tile sum of p",
+    "total_burning": "log of one plus the sum of p over the box",
+    "largest_recent_modis_power": "log of one plus the largest tile sum of MODIS power, halved for every six hours of age",
+    "largest_recent_modis_pixels": "log of one plus the largest tile count of MODIS pixels, halved for every six hours of age",
+    "modis_pixels_last_pass": "log of one plus the MODIS pixels in the box within half an hour of the newest one",
+    "day": "1 on a day pass, 0 at night",
+    "pixel_area_km2": "the look's pixel area, scan times track, from the schedule",
+    "hours_since_modis": "hours since the newest MODIS detection, capped at twelve, over twelve",
+    "hours_from_previous_look": "hours since the previous scheduled look, capped at twelve, over twelve",
+    "hours_to_next_look": "hours to the next scheduled look, capped at twelve, over twelve",
+    "episode_share_done": "the look's index over the number of looks less one"
+   },
+   "weights": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -0.053571872243893405,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scales": [
+    0.5774012702555948,
+    0.6170302310537981,
+    0.6901130692734219,
+    0.7135740502887686,
+    1.2020338099692576,
+    0.5718425652749339,
+    0.8846300075723745,
+    0.4954709709432722,
+    0.1189717820461506,
+    0.18105020280951267,
+    0.3673642810395514,
+    0.3673642810395514,
+    0.3101608036663202
+   ],
+   "fit": "ridge regression, on features centred within their episode and divided by their spread, of the reward the least sure tile would pay at each look as a share of the episode's best look; only the selected features are fitted and every other weight is zero",
+   "selected_features": [
+    "pixel_area_km2"
+   ],
+   "selection": {
+    "how": "forward selection with fires held out: starting from no feature, the feature that raises the held-out figure most is added, until the best addition raises it by less than 0.01 of the evenly spread figure. The held-out figure is the sum of the first-look rewards of the looks the score picks, one per stretch",
+    "ridge_while_selecting": 10.0,
+    "steps": [
+     {
+      "feature": "pixel_area_km2",
+      "sum_of_first_look_rewards": 0.08561473435537899,
+      "raised_it_by": 0.0036614748146675813,
+      "kept": true
+     },
+     {
+      "feature": "hours_from_previous_look",
+      "sum_of_first_look_rewards": 0.0861169658311115,
+      "raised_it_by": 0.0005022314757325147,
+      "kept": false,
+      "why": "the best addition left raises the held-out figure by less than 0.01 of the evenly spread figure"
+     }
+    ],
+    "selected_without_each_fold": {
+     "0": [
+      "pixel_area_km2"
+     ],
+     "1": [
+      "pixel_area_km2"
+     ],
+     "2": [
+      "pixel_area_km2",
+      "episode_share_done"
+     ],
+     "3": [
+      "pixel_area_km2"
+     ],
+     "4": [
+      "pixel_area_km2"
+     ]
+    }
+   },
+   "ridge": 1.0,
+   "training": {
+    "episodes": 95,
+    "looks": 1361
+   },
+   "ridge_chosen_with_fires_held_out": [
+    {
+     "ridge": 1.0,
+     "sum_of_first_look_rewards": 0.08561473435537899,
+     "evenly_spread": 0.0819532595407114,
+     "difference": {
+      "mean_difference": 0.0036614748146675726,
+      "p05": 0.0011784402470124827,
+      "p95": 0.006148525618334907,
+      "episodes": 95,
+      "episodes_a_ahead": 38,
+      "episodes_b_ahead": 16
+     }
+    },
+    {
+     "ridge": 10.0,
+     "sum_of_first_look_rewards": 0.08561473435537899,
+     "evenly_spread": 0.0819532595407114,
+     "difference": {
+      "mean_difference": 0.0036614748146675726,
+      "p05": 0.0011784402470124827,
+      "p95": 0.006148525618334907,
+      "episodes": 95,
+      "episodes_a_ahead": 38,
+      "episodes_b_ahead": 16
+     }
+    },
+    {
+     "ridge": 100.0,
+     "sum_of_first_look_rewards": 0.08561473435537899,
+     "evenly_spread": 0.0819532595407114,
+     "difference": {
+      "mean_difference": 0.0036614748146675726,
+      "p05": 0.0011784402470124827,
+      "p95": 0.006148525618334907,
+      "episodes": 95,
+      "episodes_a_ahead": 38,
+      "episodes_b_ahead": 16
+     }
+    },
+    {
+     "ridge": 1000.0,
+     "sum_of_first_look_rewards": 0.08561473435537899,
+     "evenly_spread": 0.0819532595407114,
+     "difference": {
+      "mean_difference": 0.0036614748146675726,
+      "p05": 0.0011784402470124827,
+      "p95": 0.006148525618334907,
+      "episodes": 95,
+      "episodes_a_ahead": 38,
+      "episodes_b_ahead": 16
+     }
+    }
+   ],
+   "every_look_feature_at_once": {
+    "what": "the look score with all its features fitted at once: the first form tried. It is not in use",
+    "ridge": 1.0,
+    "ridge_chosen_with_fires_held_out": [
+     {
+      "ridge": 1.0,
+      "sum_of_first_look_rewards": 0.08464053305484627,
+      "evenly_spread": 0.0819532595407114,
+      "difference": {
+       "mean_difference": 0.0026872735141348783,
+       "p05": 8.511400487356597e-05,
+       "p95": 0.00540710182215107,
+       "episodes": 95,
+       "episodes_a_ahead": 30,
+       "episodes_b_ahead": 25
+      }
+     },
+     {
+      "ridge": 10.0,
+      "sum_of_first_look_rewards": 0.08453279933445257,
+      "evenly_spread": 0.0819532595407114,
+      "difference": {
+       "mean_difference": 0.0025795397937411753,
+       "p05": 3.374660170720855e-06,
+       "p95": 0.0052928220003328206,
+       "episodes": 95,
+       "episodes_a_ahead": 30,
+       "episodes_b_ahead": 25
+      }
+     },
+     {
+      "ridge": 100.0,
+      "sum_of_first_look_rewards": 0.08435407769154264,
+      "evenly_spread": 0.0819532595407114,
+      "difference": {
+       "mean_difference": 0.0024008181508312332,
+       "p05": -0.00020258692257474087,
+       "p95": 0.0051575006537440985,
+       "episodes": 95,
+       "episodes_a_ahead": 30,
+       "episodes_b_ahead": 24
+      }
+     },
+     {
+      "ridge": 1000.0,
+      "sum_of_first_look_rewards": 0.08420974478358177,
+      "evenly_spread": 0.0819532595407114,
+      "difference": {
+       "mean_difference": 0.002256485242870373,
+       "p05": -0.0005077415065503396,
+       "p95": 0.005014277321221739,
+       "episodes": 95,
+       "episodes_a_ahead": 33,
+       "episodes_b_ahead": 22
+      }
+     }
+    ],
+    "on_training_fires_held_out": {
+     "mean_difference": 0.002262044176267074,
+     "p05": -0.0006007981275735734,
+     "p95": 0.005125293177264412,
+     "episodes": 95,
+     "episodes_a_ahead": 32,
+     "episodes_b_ahead": 23
+    }
+   }
+  },
+  "on_training_fires_held_out": {
+   "what": "mean gain over the training episodes, each played with weights fitted without its fold",
+   "mean_gain": {
+    "learned_tiles_only": 0.07792497404117694,
+    "learned_with_when": 0.08213868447302289,
+    "learned_with_every_look_feature": 0.08018701821744402,
+    "least_sure": 0.07773183972839072,
+    "least_sure_at_night": 0.07673929692738621,
+    "least_sure_when_unsure": 0.07769708147877913,
+    "least_sure_when_sharp": 0.08235041887565125,
+    "least_sure_looking_freely": 0.0732625518045715
+   },
+   "differences": {
+    "learned_with_when_minus_learned_tiles_only": {
+     "mean_difference": 0.004213710431845947,
+     "p05": 0.0016341734344138283,
+     "p95": 0.006881781676167233,
+     "episodes": 95,
+     "episodes_a_ahead": 34,
+     "episodes_b_ahead": 19
+    },
+    "learned_with_every_look_feature_minus_learned_tiles_only": {
+     "mean_difference": 0.002262044176267074,
+     "p05": -0.0006007981275735734,
+     "p95": 0.005125293177264412,
+     "episodes": 95,
+     "episodes_a_ahead": 32,
+     "episodes_b_ahead": 23
+    },
+    "learned_tiles_only_minus_least_sure": {
+     "mean_difference": 0.00019313431278621893,
+     "p05": -0.001562636328949868,
+     "p95": 0.0022102485302793015,
+     "episodes": 95,
+     "episodes_a_ahead": 18,
+     "episodes_b_ahead": 24
+    },
+    "learned_with_when_minus_least_sure": {
+     "mean_difference": 0.004406844744632166,
+     "p05": 0.0012025004017785536,
+     "p95": 0.007685237646632022,
+     "episodes": 95,
+     "episodes_a_ahead": 41,
+     "episodes_b_ahead": 28
+    },
+    "learned_with_when_minus_least_sure_at_night": {
+     "mean_difference": 0.005399387545636683,
+     "p05": 0.0007358153783314277,
+     "p95": 0.01012650140750014,
+     "episodes": 95,
+     "episodes_a_ahead": 51,
+     "episodes_b_ahead": 33
+    },
+    "learned_with_when_minus_least_sure_when_unsure": {
+     "mean_difference": 0.004441602994243755,
+     "p05": 0.00103095876711508,
+     "p95": 0.007918819667138068,
+     "episodes": 95,
+     "episodes_a_ahead": 39,
+     "episodes_b_ahead": 28
+    },
+    "learned_with_when_minus_least_sure_when_sharp": {
+     "mean_difference": -0.00021173440262836716,
+     "p05": -0.002433247450111836,
+     "p95": 0.0020730336312173602,
+     "episodes": 95,
+     "episodes_a_ahead": 19,
+     "episodes_b_ahead": 21
+    },
+    "least_sure_at_night_minus_least_sure": {
+     "mean_difference": -0.000992542801004517,
+     "p05": -0.0044598303656103126,
+     "p95": 0.002362447948125299,
+     "episodes": 95,
+     "episodes_a_ahead": 34,
+     "episodes_b_ahead": 36
+    },
+    "least_sure_when_unsure_minus_least_sure": {
+     "mean_difference": -3.4758249611589964e-05,
+     "p05": -0.0031800634054340517,
+     "p95": 0.0028392861736997567,
+     "episodes": 95,
+     "episodes_a_ahead": 28,
+     "episodes_b_ahead": 27
+    },
+    "least_sure_when_sharp_minus_least_sure": {
+     "mean_difference": 0.004618579147260532,
+     "p05": 0.0019756877361075393,
+     "p95": 0.007379718992072732,
+     "episodes": 95,
+     "episodes_a_ahead": 36,
+     "episodes_b_ahead": 18
+    },
+    "least_sure_looking_freely_minus_least_sure": {
+     "mean_difference": -0.004469287923819216,
+     "p05": -0.008067777176768287,
+     "p95": -0.0008699444671489279,
+     "episodes": 95,
+     "episodes_a_ahead": 42,
+     "episodes_b_ahead": 50
+    }
+   }
+  }
+ },
+ "policy_fit": {
+  "what": "the learned player of the next-look environment: tile weights, look weights, and how they were chosen",
+  "known_limits": "FIRMS lists detections, not where a satellite looked and saw nothing, and has no cloud mask: a revealed tile with no detection may have been cloudy rather than free of fire. So a look that hands over no detection is taken as unknown: it teaches the model nothing and earns nothing. The looks are the passes of each VIIRS platform whose swath held the whole box, from NASA's pass list, at their real times and pixel sizes; a pass that held only part of the box is not a look. Where no pass list is cached for a window the looks are the nominal half-day slots of each platform instead: the real pass is up to about 90 minutes from a slot's time, sometimes comes twice, and its pixel size is not known in advance.",
+  "setting": {
+   "tiles": "4x4",
+   "budget": 4,
+   "score": "csi",
+   "reward": "the score after the look minus the score before it, on one fixed set: every real hidden detection of the episode. The rewards of a round add up to the score at the end minus the score at the start. A look that hands over no hidden pixel earns nothing.",
+   "looks": "cmr"
+  },
+  "episodes": {
+   "train": 95,
+   "validation_not_played_here": 13,
+   "train_years": "2012 to 2023",
+   "folds": 5,
+   "folds_are": "fires grouped by region and year, dealt out in turn",
+   "test": "closed and not played"
+  },
+  "reconstruction_parameters": "22 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)",
+  "seconds": 368.1,
+  "generated_utc": "2026-11-14T21:40:54Z"
+ },
+ "policy_first": {
+  "note": "the first learned policy: fitted under protocol version 1, with the earlier reconstruction values and with the first reward as its target. The tables on record (test, test_protocol_2 and the two beside it) were played with these weights. It is not in use.",
+  "protocol": {
+   "fitted_under": 1,
+   "note": "the weights, the validation and the `test` block are fitted and measured under protocol version 1 (looks were the hidden instrument's own overpasses, episodes counted hidden overpasses). Nothing was refitted for version 2. `test_protocol_2` is the same table measured again under version 2."
+  },
+  "reconstruction_parameters": "21 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)",
   "kind": "linear score per tile; the tile with the highest score is looked at",
   "feature_names": [
    "unsure",
@@ -1032,6 +1503,2475 @@
   ]
  },
  "validation_reference": {
+  "what": "reference players of the next-look environment on the validation episodes",
+  "known_limits": "FIRMS lists detections, not where a satellite looked and saw nothing, and has no cloud mask: a revealed tile with no detection may have been cloudy rather than free of fire. So a look that hands over no detection is taken as unknown: it teaches the model nothing and earns nothing. The looks are the passes of each VIIRS platform whose swath held the whole box, from NASA's pass list, at their real times and pixel sizes; a pass that held only part of the box is not a look. Where no pass list is cached for a window the looks are the nominal half-day slots of each platform instead: the real pass is up to about 90 minutes from a slot's time, sometimes comes twice, and its pixel size is not known in advance.",
+  "reward": "the score after the look minus the score before it, on one fixed set: every real hidden detection of the episode. The rewards of a round add up to the score at the end minus the score at the start. A look that hands over no hidden pixel earns nothing.",
+  "schedule": "cmr",
+  "schedule_asked_for": "auto",
+  "spending": "a player that does not choose when to look spends the budget on the same looks as every other such player, spread evenly over the episode, and only the tile differs. least_sure_at_night, least_sure_when_unsure and least_sure_when_sharp choose when, and so does learned; learned_tiles_only is its tile choice on the evenly spread looks",
+  "oracle": "greedy, on the evenly spread looks: at each of them it takes the tile with the largest true reward. A ceiling for choosing the tile on those looks, not for a player that also chooses its looks, and not a global optimum",
+  "learned": {
+   "fitted_with": {
+    "reward": "the score after the look minus the score before it, on one fixed set: every real hidden detection of the episode. The rewards of a round add up to the score at the end minus the score at the start. A look that hands over no hidden pixel earns nothing.",
+    "looks": "cmr",
+    "reconstruction_parameters": "22 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)"
+   },
+   "chooses_when_to_look": true,
+   "played_here": "once, with the policy as recorded before this table was measured"
+  },
+  "reconstruction_parameters": "22 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)",
+  "episodes": {
+   "played": "validation: the episodes of 2024 and 2025 that may be played",
+   "validation": 13,
+   "training": 95,
+   "closed_and_not_played": 49,
+   "validation_keys": [
+    "plumas_ca:12:2024-07-27T17",
+    "plumas_ca:12:2024-07-30T04",
+    "plumas_ca:12:2024-08-02T05",
+    "plumas_ca:13:2024-07-28T21",
+    "plumas_ca:13:2024-08-06T06",
+    "plumas_ca:04:2025-07-10T04",
+    "plumas_ca:04:2025-07-13T04",
+    "lytton_bc:23:2024-07-13T04",
+    "lytton_bc:23:2024-07-17T11",
+    "lytton_bc:23:2024-07-20T04",
+    "lytton_bc:23:2024-07-22T10",
+    "lytton_bc:23:2024-08-02T10",
+    "lytton_bc:31:2025-09-04T10"
+   ],
+   "training_use": "the constant tiles only, to name the constant tile that gains most there"
+  },
+  "random_seeds": 10,
+  "score": "csi",
+  "tiles": "4x4",
+  "budget": 4,
+  "mean_start_score": 0.252,
+  "looks_per_episode": [
+   17,
+   27,
+   41
+  ],
+  "agents": {
+   "random": {
+    "mean_gain": 0.006,
+    "mean_final_score": 0.258,
+    "share_of_oracle_gain": 0.106,
+    "sd_across_episodes": 0.0034,
+    "least_and_most_over_episodes": [
+     0.0018,
+     0.0119
+    ],
+    "episodes_with_a_gain": 13,
+    "sd_of_mean_gain_across_seeds": 0.0031,
+    "mean_gain_on_cells_never_shown": 0.0032,
+    "mean_pixels_revealed": 20.2,
+    "share_of_looks_that_revealed_nothing": 0.821
+   },
+   "centre": {
+    "mean_gain": 0.0048,
+    "mean_final_score": 0.2568,
+    "share_of_oracle_gain": 0.085,
+    "sd_across_episodes": 0.0056,
+    "least_and_most_over_episodes": [
+     0.0,
+     0.0177
+    ],
+    "episodes_with_a_gain": 10,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.003,
+    "mean_pixels_revealed": 14.0,
+    "share_of_looks_that_revealed_nothing": 0.769
+   },
+   "latest_modis": {
+    "mean_gain": 0.0455,
+    "mean_final_score": 0.2975,
+    "share_of_oracle_gain": 0.801,
+    "sd_across_episodes": 0.0262,
+    "least_and_most_over_episodes": [
+     0.0091,
+     0.098
+    ],
+    "episodes_with_a_gain": 13,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0269,
+    "mean_pixels_revealed": 129.7,
+    "share_of_looks_that_revealed_nothing": 0.077
+   },
+   "least_sure": {
+    "mean_gain": 0.0477,
+    "mean_final_score": 0.2997,
+    "share_of_oracle_gain": 0.841,
+    "sd_across_episodes": 0.0262,
+    "least_and_most_over_episodes": [
+     0.0091,
+     0.098
+    ],
+    "episodes_with_a_gain": 13,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0281,
+    "mean_pixels_revealed": 133.8,
+    "share_of_looks_that_revealed_nothing": 0.077
+   },
+   "expected_new": {
+    "mean_gain": 0.0471,
+    "mean_final_score": 0.2991,
+    "share_of_oracle_gain": 0.83,
+    "sd_across_episodes": 0.0273,
+    "least_and_most_over_episodes": [
+     0.0112,
+     0.098
+    ],
+    "episodes_with_a_gain": 13,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0271,
+    "mean_pixels_revealed": 123.3,
+    "share_of_looks_that_revealed_nothing": 0.077
+   },
+   "least_sure_at_night": {
+    "mean_gain": 0.0491,
+    "mean_final_score": 0.3011,
+    "share_of_oracle_gain": 0.865,
+    "sd_across_episodes": 0.0285,
+    "least_and_most_over_episodes": [
+     0.0067,
+     0.0896
+    ],
+    "episodes_with_a_gain": 13,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0295,
+    "mean_pixels_revealed": 227.0,
+    "share_of_looks_that_revealed_nothing": 0.058
+   },
+   "least_sure_when_unsure": {
+    "mean_gain": 0.0549,
+    "mean_final_score": 0.3069,
+    "share_of_oracle_gain": 0.967,
+    "sd_across_episodes": 0.0285,
+    "least_and_most_over_episodes": [
+     0.0166,
+     0.1116
+    ],
+    "episodes_with_a_gain": 13,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0345,
+    "mean_pixels_revealed": 186.4,
+    "share_of_looks_that_revealed_nothing": 0.038
+   },
+   "least_sure_when_sharp": {
+    "mean_gain": 0.0512,
+    "mean_final_score": 0.3032,
+    "share_of_oracle_gain": 0.901,
+    "sd_across_episodes": 0.0229,
+    "least_and_most_over_episodes": [
+     0.0203,
+     0.0879
+    ],
+    "episodes_with_a_gain": 13,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0311,
+    "mean_pixels_revealed": 196.4,
+    "share_of_looks_that_revealed_nothing": 0.096
+   },
+   "learned_tiles_only": {
+    "mean_gain": 0.048,
+    "mean_final_score": 0.3,
+    "share_of_oracle_gain": 0.845,
+    "sd_across_episodes": 0.0278,
+    "least_and_most_over_episodes": [
+     0.0102,
+     0.098
+    ],
+    "episodes_with_a_gain": 13,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0285,
+    "mean_pixels_revealed": 135.6,
+    "share_of_looks_that_revealed_nothing": 0.077
+   },
+   "learned": {
+    "mean_gain": 0.0502,
+    "mean_final_score": 0.3022,
+    "share_of_oracle_gain": 0.884,
+    "sd_across_episodes": 0.0231,
+    "least_and_most_over_episodes": [
+     0.0172,
+     0.0879
+    ],
+    "episodes_with_a_gain": 13,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0302,
+    "mean_pixels_revealed": 198.2,
+    "share_of_looks_that_revealed_nothing": 0.096
+   },
+   "oracle": {
+    "mean_gain": 0.0568,
+    "mean_final_score": 0.3088,
+    "share_of_oracle_gain": 1.0,
+    "sd_across_episodes": 0.0236,
+    "least_and_most_over_episodes": [
+     0.0198,
+     0.098
+    ],
+    "episodes_with_a_gain": 13,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0348,
+    "mean_pixels_revealed": 153.6,
+    "share_of_looks_that_revealed_nothing": 0.077
+   },
+   "constant_best_in_hindsight": {
+    "tile": 14,
+    "mean_gain": 0.0168,
+    "mean_final_score": 0.2688,
+    "share_of_oracle_gain": 0.296,
+    "sd_across_episodes": 0.0317,
+    "least_and_most_over_episodes": [
+     0.0,
+     0.098
+    ],
+    "episodes_with_a_gain": 6,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0111,
+    "mean_pixels_revealed": 28.3,
+    "share_of_looks_that_revealed_nothing": 0.654
+   },
+   "constant_best_on_training": {
+    "tile": 5,
+    "training_episodes": 95,
+    "mean_gain_on_training": 0.0142,
+    "mean_gain": 0.0,
+    "mean_final_score": 0.252,
+    "share_of_oracle_gain": 0.0,
+    "sd_across_episodes": 0.0,
+    "least_and_most_over_episodes": [
+     0.0,
+     0.0
+    ],
+    "episodes_with_a_gain": 0,
+    "sd_of_mean_gain_across_seeds": null,
+    "mean_gain_on_cells_never_shown": 0.0,
+    "mean_pixels_revealed": 0.0,
+    "share_of_looks_that_revealed_nothing": 1.0
+   }
+  },
+  "constant_tiles_mean_gain": [
+   0.0,
+   0.0022,
+   0.0075,
+   0.0001,
+   0.0,
+   0.0,
+   0.0095,
+   0.0059,
+   -0.0002,
+   0.001,
+   0.0058,
+   0.007,
+   0.0,
+   0.011,
+   0.0168,
+   0.0142
+  ],
+  "differences": {
+   "least_sure_minus_random": {
+    "mean_difference": 0.04168807198973613,
+    "p05": 0.031225201981719,
+    "p95": 0.05343737644734088,
+    "episodes": 13,
+    "episodes_a_ahead": 13,
+    "episodes_b_ahead": 0
+   },
+   "least_sure_minus_centre": {
+    "mean_difference": 0.042908484349280324,
+    "p05": 0.03194589285046203,
+    "p95": 0.05523009111644414,
+    "episodes": 13,
+    "episodes_a_ahead": 13,
+    "episodes_b_ahead": 0
+   },
+   "least_sure_minus_constant_best_in_hindsight": {
+    "mean_difference": 0.030910277751338103,
+    "p05": 0.01873241394835903,
+    "p95": 0.04372127905324467,
+    "episodes": 13,
+    "episodes_a_ahead": 10,
+    "episodes_b_ahead": 2
+   },
+   "least_sure_minus_latest_modis": {
+    "mean_difference": 0.002224512193661682,
+    "p05": -0.00029169934805577406,
+    "p95": 0.004947990334024026,
+    "episodes": 13,
+    "episodes_a_ahead": 4,
+    "episodes_b_ahead": 3
+   },
+   "latest_modis_minus_random": {
+    "mean_difference": 0.039463559796074445,
+    "p05": 0.028990359693644312,
+    "p95": 0.05135569091612321,
+    "episodes": 13,
+    "episodes_a_ahead": 13,
+    "episodes_b_ahead": 0
+   },
+   "oracle_minus_least_sure": {
+    "mean_difference": 0.009045397131368167,
+    "p05": 0.005331408285358515,
+    "p95": 0.013240751893250087,
+    "episodes": 13,
+    "episodes_a_ahead": 11,
+    "episodes_b_ahead": 0
+   },
+   "expected_new_minus_least_sure": {
+    "mean_difference": -0.0006059894394929539,
+    "p05": -0.002740455770945084,
+    "p95": 0.0013893710641643452,
+    "episodes": 13,
+    "episodes_a_ahead": 4,
+    "episodes_b_ahead": 3
+   },
+   "expected_new_minus_random": {
+    "mean_difference": 0.04108208255024316,
+    "p05": 0.029940245622141662,
+    "p95": 0.05348219099861606,
+    "episodes": 13,
+    "episodes_a_ahead": 13,
+    "episodes_b_ahead": 0
+   },
+   "least_sure_minus_constant_best_on_training": {
+    "mean_difference": 0.047728897377852054,
+    "p05": 0.03668144949766494,
+    "p95": 0.0600913713488828,
+    "episodes": 13,
+    "episodes_a_ahead": 13,
+    "episodes_b_ahead": 0
+   },
+   "least_sure_at_night_minus_least_sure": {
+    "mean_difference": 0.0013680001723014163,
+    "p05": -0.006929767981345657,
+    "p95": 0.009172365567985452,
+    "episodes": 13,
+    "episodes_a_ahead": 7,
+    "episodes_b_ahead": 6
+   },
+   "least_sure_when_unsure_minus_least_sure": {
+    "mean_difference": 0.007153783668103734,
+    "p05": -0.0024088610673592024,
+    "p95": 0.017076569587018947,
+    "episodes": 13,
+    "episodes_a_ahead": 6,
+    "episodes_b_ahead": 7
+   },
+   "least_sure_when_sharp_minus_least_sure": {
+    "mean_difference": 0.0034458949675133565,
+    "p05": -0.0064567611892083696,
+    "p95": 0.013289953152296526,
+    "episodes": 13,
+    "episodes_a_ahead": 7,
+    "episodes_b_ahead": 6
+   },
+   "learned_minus_least_sure": {
+    "mean_difference": 0.0024600014929852232,
+    "p05": -0.007223764340213574,
+    "p95": 0.012504262398959881,
+    "episodes": 13,
+    "episodes_a_ahead": 5,
+    "episodes_b_ahead": 8
+   },
+   "learned_minus_random": {
+    "mean_difference": 0.04414807348272135,
+    "p05": 0.034555794712220145,
+    "p95": 0.053613744061351165,
+    "episodes": 13,
+    "episodes_a_ahead": 13,
+    "episodes_b_ahead": 0
+   },
+   "oracle_minus_learned": {
+    "mean_difference": 0.006585395638382943,
+    "p05": -2.315095083170769e-05,
+    "p95": 0.013428079513445698,
+    "episodes": 13,
+    "episodes_a_ahead": 9,
+    "episodes_b_ahead": 4
+   },
+   "learned_minus_latest_modis": {
+    "mean_difference": 0.0046845136866469055,
+    "p05": -0.005067277096186268,
+    "p95": 0.014708314214853298,
+    "episodes": 13,
+    "episodes_a_ahead": 6,
+    "episodes_b_ahead": 7
+   },
+   "learned_minus_constant_best_in_hindsight": {
+    "mean_difference": 0.03337027924432333,
+    "p05": 0.022733547921625876,
+    "p95": 0.044120407644197064,
+    "episodes": 13,
+    "episodes_a_ahead": 12,
+    "episodes_b_ahead": 1
+   },
+   "learned_minus_constant_best_on_training": {
+    "mean_difference": 0.050188898870837266,
+    "p05": 0.0399665617506815,
+    "p95": 0.060212178089130354,
+    "episodes": 13,
+    "episodes_a_ahead": 13,
+    "episodes_b_ahead": 0
+   },
+   "learned_minus_learned_tiles_only": {
+    "mean_difference": 0.002190809286906984,
+    "p05": -0.0076196186901962655,
+    "p95": 0.012149075335956673,
+    "episodes": 13,
+    "episodes_a_ahead": 5,
+    "episodes_b_ahead": 8
+   },
+   "learned_tiles_only_minus_least_sure": {
+    "mean_difference": 0.00026919220607823924,
+    "p05": -0.0024509267061568582,
+    "p95": 0.002993728553639996,
+    "episodes": 13,
+    "episodes_a_ahead": 3,
+    "episodes_b_ahead": 2
+   },
+   "learned_minus_least_sure_at_night": {
+    "mean_difference": 0.001092001320683807,
+    "p05": -0.007209206552421735,
+    "p95": 0.008876179433761627,
+    "episodes": 13,
+    "episodes_a_ahead": 7,
+    "episodes_b_ahead": 6
+   },
+   "learned_minus_least_sure_when_unsure": {
+    "mean_difference": -0.0046937821751185105,
+    "p05": -0.011963154859305913,
+    "p95": 0.0020174698229424005,
+    "episodes": 13,
+    "episodes_a_ahead": 7,
+    "episodes_b_ahead": 6
+   },
+   "learned_minus_least_sure_when_sharp": {
+    "mean_difference": -0.0009858934745281332,
+    "p05": -0.0033519371308714987,
+    "p95": 0.0012823997709270512,
+    "episodes": 13,
+    "episodes_a_ahead": 1,
+    "episodes_b_ahead": 2
+   }
+  },
+  "per_episode": {
+   "episode": [
+    "plumas_ca:12:2024-07-27T17",
+    "plumas_ca:12:2024-07-30T04",
+    "plumas_ca:12:2024-08-02T05",
+    "plumas_ca:13:2024-07-28T21",
+    "plumas_ca:13:2024-08-06T06",
+    "plumas_ca:04:2025-07-10T04",
+    "plumas_ca:04:2025-07-13T04",
+    "lytton_bc:23:2024-07-13T04",
+    "lytton_bc:23:2024-07-17T11",
+    "lytton_bc:23:2024-07-20T04",
+    "lytton_bc:23:2024-07-22T10",
+    "lytton_bc:23:2024-08-02T10",
+    "lytton_bc:31:2025-09-04T10"
+   ],
+   "start": [
+    0.25657,
+    0.29011,
+    0.2371,
+    0.31562,
+    0.34578,
+    0.22735,
+    0.17229,
+    0.29923,
+    0.2311,
+    0.27079,
+    0.14215,
+    0.23862,
+    0.24925
+   ],
+   "random": [
+    0.0033,
+    0.00208,
+    0.00201,
+    0.01016,
+    0.00729,
+    0.00415,
+    0.00437,
+    0.00831,
+    0.0082,
+    0.01195,
+    0.00184,
+    0.00523,
+    0.00966
+   ],
+   "centre": [
+    0.01351,
+    0.00183,
+    0.0,
+    0.00106,
+    0.00439,
+    0.01768,
+    0.00511,
+    0.0,
+    0.00191,
+    0.00891,
+    0.00075,
+    0.00752,
+    0.0
+   ],
+   "latest_modis": [
+    0.04919,
+    0.03611,
+    0.03,
+    0.08454,
+    0.0386,
+    0.03701,
+    0.02263,
+    0.07182,
+    0.0201,
+    0.03546,
+    0.00914,
+    0.09802,
+    0.05893
+   ],
+   "least_sure": [
+    0.04623,
+    0.03611,
+    0.03,
+    0.08454,
+    0.03272,
+    0.04929,
+    0.02203,
+    0.07182,
+    0.02339,
+    0.0504,
+    0.00914,
+    0.09802,
+    0.06677
+   ],
+   "expected_new": [
+    0.05158,
+    0.03611,
+    0.03,
+    0.08454,
+    0.03272,
+    0.05333,
+    0.01119,
+    0.07182,
+    0.01612,
+    0.04495,
+    0.01509,
+    0.09802,
+    0.06712
+   ],
+   "least_sure_at_night": [
+    0.01971,
+    0.05043,
+    0.00706,
+    0.06048,
+    0.05176,
+    0.0677,
+    0.02334,
+    0.08957,
+    0.04466,
+    0.04815,
+    0.00669,
+    0.08133,
+    0.08739
+   ],
+   "least_sure_when_unsure": [
+    0.04279,
+    0.06607,
+    0.01741,
+    0.07915,
+    0.0596,
+    0.03937,
+    0.01664,
+    0.04613,
+    0.06084,
+    0.06682,
+    0.01956,
+    0.08753,
+    0.11157
+   ],
+   "least_sure_when_sharp": [
+    0.03333,
+    0.05677,
+    0.02031,
+    0.04791,
+    0.06178,
+    0.03687,
+    0.02299,
+    0.0629,
+    0.0768,
+    0.05927,
+    0.02034,
+    0.0879,
+    0.07809
+   ],
+   "learned_tiles_only": [
+    0.05241,
+    0.03611,
+    0.03,
+    0.08454,
+    0.03272,
+    0.04929,
+    0.01897,
+    0.07182,
+    0.02339,
+    0.03546,
+    0.01016,
+    0.09802,
+    0.08108
+   ],
+   "learned": [
+    0.04166,
+    0.05677,
+    0.02031,
+    0.04791,
+    0.06178,
+    0.03687,
+    0.01722,
+    0.0629,
+    0.0768,
+    0.04389,
+    0.02034,
+    0.0879,
+    0.07809
+   ],
+   "oracle": [
+    0.05377,
+    0.0468,
+    0.03211,
+    0.08454,
+    0.04587,
+    0.05333,
+    0.03082,
+    0.0794,
+    0.05759,
+    0.05141,
+    0.01985,
+    0.09802,
+    0.08457
+   ],
+   "constant_tiles": {
+    "constant_0": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "constant_1": [
+     0.02154,
+     0.0072,
+     -0.00076,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "constant_2": [
+     0.02111,
+     0.0468,
+     0.03,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "constant_3": [
+     0.0,
+     0.0,
+     0.0017,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "constant_4": [
+     4e-05,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "constant_5": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "constant_6": [
+     0.05241,
+     0.00403,
+     0.0,
+     0.0,
+     0.0,
+     0.05144,
+     0.01125,
+     0.0,
+     -0.00053,
+     0.00774,
+     -0.0034,
+     0.0,
+     0.0
+    ],
+    "constant_7": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.03041,
+     0.02203,
+     0.0,
+     0.01433,
+     0.01212,
+     -0.0016,
+     0.0,
+     0.0
+    ],
+    "constant_8": [
+     0.0,
+     0.0,
+     0.0,
+     -0.00278,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "constant_9": [
+     -0.00014,
+     0.0,
+     0.0,
+     0.01277,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "constant_10": [
+     0.00477,
+     0.0,
+     0.0,
+     0.0,
+     0.00508,
+     0.01169,
+     0.01625,
+     0.0,
+     -0.01008,
+     0.0239,
+     0.00361,
+     0.02054,
+     0.0
+    ],
+    "constant_11": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.01753,
+     0.0,
+     0.0,
+     0.0,
+     0.05286,
+     0.02287,
+     -0.00281,
+     0.0,
+     0.0
+    ],
+    "constant_12": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "constant_13": [
+     0.0,
+     0.0,
+     0.0,
+     0.08454,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.05893
+    ],
+    "constant_14": [
+     0.00131,
+     0.0,
+     0.0,
+     0.0,
+     0.0386,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.00699,
+     0.00659,
+     0.09802,
+     0.06712
+    ],
+    "constant_15": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0229,
+     0.0,
+     0.0,
+     0.0794,
+     0.01435,
+     0.0504,
+     0.01552,
+     0.0014,
+     0.0
+    ]
+   }
+  },
+  "random_mean_gain_by_seed": [
+   0.0093,
+   0.0051,
+   0.0064,
+   0.004,
+   0.01,
+   0.0011,
+   0.0013,
+   0.0082,
+   0.0071,
+   0.008
+  ],
+  "plainly": [
+   "least sure gains more than random by more than the noise (+0.0417, 90 percent interval +0.0312 to +0.0534, ahead on 13 of 13 episodes)",
+   "least sure gains more than the constant tile chosen on the training episodes by more than the noise (+0.0477, 90 percent interval +0.0367 to +0.0601, ahead on 13 of 13 episodes)",
+   "least sure gains more than the best constant tile in hindsight by more than the noise (+0.0309, 90 percent interval +0.0187 to +0.0437, ahead on 10 of 13 episodes)",
+   "the most expected new detections does not differ from least sure by more than the noise (-0.0006, 90 percent interval -0.0027 to +0.0014, ahead on 4 of 13 episodes)",
+   "the learned player does not differ from least sure by more than the noise (+0.0025, 90 percent interval -0.0072 to +0.0125, ahead on 5 of 13 episodes)",
+   "the learned tile choice on the evenly spread looks does not differ from least sure by more than the noise (+0.0003, 90 percent interval -0.0025 to +0.0030, ahead on 3 of 13 episodes)",
+   "the learned player choosing when to look does not differ from the same tile choice on the evenly spread looks by more than the noise (+0.0022, 90 percent interval -0.0076 to +0.0121, ahead on 5 of 13 episodes)",
+   "least sure at the sharpest pass of each stretch does not differ from least sure on the evenly spread looks by more than the noise (+0.0034, 90 percent interval -0.0065 to +0.0133, ahead on 7 of 13 episodes)",
+   "least sure where the model is most unsure in each stretch does not differ from least sure on the evenly spread looks by more than the noise (+0.0072, 90 percent interval -0.0024 to +0.0171, ahead on 6 of 13 episodes)",
+   "least sure on night passes does not differ from least sure on the evenly spread looks by more than the noise (+0.0014, 90 percent interval -0.0069 to +0.0092, ahead on 7 of 13 episodes)",
+   "the learned player does not differ from least sure at the sharpest pass of each stretch by more than the noise (-0.0010, 90 percent interval -0.0034 to +0.0013, ahead on 1 of 13 episodes)",
+   "the oracle on the evenly spread looks gains more than least sure by more than the noise (+0.0090, 90 percent interval +0.0053 to +0.0132, ahead on 11 of 13 episodes)",
+   "the learned player does not differ from latest MODIS by more than the noise (+0.0047, 90 percent interval -0.0051 to +0.0147, ahead on 6 of 13 episodes)",
+   "the learned player gains more than random by more than the noise (+0.0441, 90 percent interval +0.0346 to +0.0536, ahead on 13 of 13 episodes)",
+   "the learned player gains more than the best constant tile in hindsight by more than the noise (+0.0334, 90 percent interval +0.0227 to +0.0441, ahead on 12 of 13 episodes)"
+  ],
+  "other_settings": [
+   {
+    "tiles": "3x3",
+    "budget": 4,
+    "episodes": 13,
+    "mean_start_score": 0.252,
+    "looks_per_episode": [
+     17,
+     27,
+     41
+    ],
+    "agents": {
+     "random": {
+      "mean_gain": 0.0119,
+      "mean_final_score": 0.2639,
+      "share_of_oracle_gain": 0.177,
+      "sd_across_episodes": 0.0096,
+      "least_and_most_over_episodes": [
+       0.0028,
+       0.0368
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": 0.0053,
+      "mean_gain_on_cells_never_shown": 0.0073,
+      "mean_pixels_revealed": 30.0,
+      "share_of_looks_that_revealed_nothing": 0.74
+     },
+     "centre": {
+      "mean_gain": 0.0022,
+      "mean_final_score": 0.2542,
+      "share_of_oracle_gain": 0.033,
+      "sd_across_episodes": 0.0044,
+      "least_and_most_over_episodes": [
+       -0.0006,
+       0.011
+      ],
+      "episodes_with_a_gain": 3,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0009,
+      "mean_pixels_revealed": 17.5,
+      "share_of_looks_that_revealed_nothing": 0.769
+     },
+     "latest_modis": {
+      "mean_gain": 0.0627,
+      "mean_final_score": 0.3147,
+      "share_of_oracle_gain": 0.932,
+      "sd_across_episodes": 0.0373,
+      "least_and_most_over_episodes": [
+       0.0209,
+       0.1524
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0387,
+      "mean_pixels_revealed": 168.2,
+      "share_of_looks_that_revealed_nothing": 0.077
+     },
+     "least_sure": {
+      "mean_gain": 0.0624,
+      "mean_final_score": 0.3144,
+      "share_of_oracle_gain": 0.928,
+      "sd_across_episodes": 0.0377,
+      "least_and_most_over_episodes": [
+       0.0209,
+       0.1524
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0385,
+      "mean_pixels_revealed": 166.1,
+      "share_of_looks_that_revealed_nothing": 0.096
+     },
+     "expected_new": {
+      "mean_gain": 0.0624,
+      "mean_final_score": 0.3144,
+      "share_of_oracle_gain": 0.927,
+      "sd_across_episodes": 0.0366,
+      "least_and_most_over_episodes": [
+       0.0225,
+       0.1524
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0388,
+      "mean_pixels_revealed": 151.8,
+      "share_of_looks_that_revealed_nothing": 0.096
+     },
+     "least_sure_at_night": {
+      "mean_gain": 0.0582,
+      "mean_final_score": 0.3102,
+      "share_of_oracle_gain": 0.866,
+      "sd_across_episodes": 0.0332,
+      "least_and_most_over_episodes": [
+       0.0075,
+       0.1194
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0352,
+      "mean_pixels_revealed": 270.3,
+      "share_of_looks_that_revealed_nothing": 0.038
+     },
+     "least_sure_when_unsure": {
+      "mean_gain": 0.066,
+      "mean_final_score": 0.318,
+      "share_of_oracle_gain": 0.981,
+      "sd_across_episodes": 0.041,
+      "least_and_most_over_episodes": [
+       0.0094,
+       0.1666
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0418,
+      "mean_pixels_revealed": 238.7,
+      "share_of_looks_that_revealed_nothing": 0.019
+     },
+     "least_sure_when_sharp": {
+      "mean_gain": 0.0685,
+      "mean_final_score": 0.3204,
+      "share_of_oracle_gain": 1.018,
+      "sd_across_episodes": 0.0422,
+      "least_and_most_over_episodes": [
+       0.0094,
+       0.1807
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0443,
+      "mean_pixels_revealed": 260.2,
+      "share_of_looks_that_revealed_nothing": 0.077
+     },
+     "learned_tiles_only": {
+      "mean_gain": 0.0633,
+      "mean_final_score": 0.3153,
+      "share_of_oracle_gain": 0.94,
+      "sd_across_episodes": 0.0368,
+      "least_and_most_over_episodes": [
+       0.0225,
+       0.1524
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0388,
+      "mean_pixels_revealed": 169.8,
+      "share_of_looks_that_revealed_nothing": 0.077
+     },
+     "learned": {
+      "mean_gain": 0.0685,
+      "mean_final_score": 0.3205,
+      "share_of_oracle_gain": 1.018,
+      "sd_across_episodes": 0.0431,
+      "least_and_most_over_episodes": [
+       0.0094,
+       0.1807
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0442,
+      "mean_pixels_revealed": 259.2,
+      "share_of_looks_that_revealed_nothing": 0.077
+     },
+     "oracle": {
+      "mean_gain": 0.0673,
+      "mean_final_score": 0.3193,
+      "share_of_oracle_gain": 1.0,
+      "sd_across_episodes": 0.0362,
+      "least_and_most_over_episodes": [
+       0.0246,
+       0.1524
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.042,
+      "mean_pixels_revealed": 171.2,
+      "share_of_looks_that_revealed_nothing": 0.077
+     },
+     "constant_best_in_hindsight": {
+      "tile": 8,
+      "mean_gain": 0.0259,
+      "mean_final_score": 0.2779,
+      "share_of_oracle_gain": 0.385,
+      "sd_across_episodes": 0.0332,
+      "least_and_most_over_episodes": [
+       0.0,
+       0.0946
+      ],
+      "episodes_with_a_gain": 6,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0141,
+      "mean_pixels_revealed": 77.5,
+      "share_of_looks_that_revealed_nothing": 0.558
+     }
+    },
+    "constant_tiles_mean_gain": [
+     0.0005,
+     0.009,
+     0.0042,
+     -0.0002,
+     0.0022,
+     0.0186,
+     -0.0001,
+     0.0252,
+     0.0259
+    ],
+    "differences": {
+     "least_sure_minus_random": {
+      "mean_difference": 0.05048347229991371,
+      "p05": 0.03854749837710749,
+      "p95": 0.06382922782795722,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_minus_centre": {
+      "mean_difference": 0.060161995968955675,
+      "p05": 0.04405107526699494,
+      "p95": 0.07843356032861323,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_minus_constant_best_in_hindsight": {
+      "mean_difference": 0.03650586816082149,
+      "p05": 0.01714853695486992,
+      "p95": 0.059738097848430656,
+      "episodes": 13,
+      "episodes_a_ahead": 9,
+      "episodes_b_ahead": 3
+     },
+     "least_sure_minus_latest_modis": {
+      "mean_difference": -0.00031112668421403504,
+      "p05": -0.001081380760414376,
+      "p95": 0.000148000707772271,
+      "episodes": 13,
+      "episodes_a_ahead": 1,
+      "episodes_b_ahead": 1
+     },
+     "latest_modis_minus_random": {
+      "mean_difference": 0.05079459898412775,
+      "p05": 0.03890156629305769,
+      "p95": 0.06405700238186852,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "oracle_minus_least_sure": {
+      "mean_difference": 0.004862924968198753,
+      "p05": 0.002361026934805106,
+      "p95": 0.007576086254609473,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 0
+     },
+     "expected_new_minus_least_sure": {
+      "mean_difference": -5.361974434182156e-05,
+      "p05": -0.0021782334208385263,
+      "p95": 0.002145858070538556,
+      "episodes": 13,
+      "episodes_a_ahead": 4,
+      "episodes_b_ahead": 3
+     },
+     "expected_new_minus_random": {
+      "mean_difference": 0.0504298525555719,
+      "p05": 0.039216359649203246,
+      "p95": 0.06310437483568646,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_at_night_minus_least_sure": {
+      "mean_difference": -0.00418142163362639,
+      "p05": -0.011905480675790212,
+      "p95": 0.0028732304156090954,
+      "episodes": 13,
+      "episodes_a_ahead": 5,
+      "episodes_b_ahead": 8
+     },
+     "least_sure_when_unsure_minus_least_sure": {
+      "mean_difference": 0.003607881388968969,
+      "p05": -0.006781939367576035,
+      "p95": 0.013354120851704305,
+      "episodes": 13,
+      "episodes_a_ahead": 9,
+      "episodes_b_ahead": 4
+     },
+     "least_sure_when_sharp_minus_least_sure": {
+      "mean_difference": 0.006040893600411202,
+      "p05": -0.004958897860153131,
+      "p95": 0.016650476382803963,
+      "episodes": 13,
+      "episodes_a_ahead": 8,
+      "episodes_b_ahead": 5
+     },
+     "learned_minus_least_sure": {
+      "mean_difference": 0.006050576946157842,
+      "p05": -0.004492662591132375,
+      "p95": 0.01659088129057349,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "learned_minus_random": {
+      "mean_difference": 0.056534049246071555,
+      "p05": 0.04147450367295894,
+      "p95": 0.07293246573084702,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "oracle_minus_learned": {
+      "mean_difference": -0.0011876519779590888,
+      "p05": -0.011433420555526206,
+      "p95": 0.009505905704043235,
+      "episodes": 13,
+      "episodes_a_ahead": 6,
+      "episodes_b_ahead": 7
+     },
+     "learned_minus_latest_modis": {
+      "mean_difference": 0.005739450261943807,
+      "p05": -0.004720939694516276,
+      "p95": 0.01635918342455461,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "learned_minus_constant_best_in_hindsight": {
+      "mean_difference": 0.042556445106979326,
+      "p05": 0.02269472242679347,
+      "p95": 0.06673218069546104,
+      "episodes": 13,
+      "episodes_a_ahead": 12,
+      "episodes_b_ahead": 1
+     },
+     "learned_minus_learned_tiles_only": {
+      "mean_difference": 0.005202514837432132,
+      "p05": -0.005208178415860073,
+      "p95": 0.015917603641664696,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "learned_tiles_only_minus_least_sure": {
+      "mean_difference": 0.0008480621087257099,
+      "p05": 0.00013311366549268754,
+      "p95": 0.0017044126586315779,
+      "episodes": 13,
+      "episodes_a_ahead": 3,
+      "episodes_b_ahead": 0
+     },
+     "learned_minus_least_sure_at_night": {
+      "mean_difference": 0.010231998579784232,
+      "p05": -0.0009101065423121722,
+      "p95": 0.021454510559379796,
+      "episodes": 13,
+      "episodes_a_ahead": 10,
+      "episodes_b_ahead": 3
+     },
+     "learned_minus_least_sure_when_unsure": {
+      "mean_difference": 0.002442695557188873,
+      "p05": -0.0063433703378512,
+      "p95": 0.010363953945686732,
+      "episodes": 13,
+      "episodes_a_ahead": 9,
+      "episodes_b_ahead": 4
+     },
+     "learned_minus_least_sure_when_sharp": {
+      "mean_difference": 9.683345746640367e-06,
+      "p05": -0.0024326537057431843,
+      "p95": 0.0024617037429831056,
+      "episodes": 13,
+      "episodes_a_ahead": 1,
+      "episodes_b_ahead": 1
+     }
+    }
+   },
+   {
+    "tiles": "6x6",
+    "budget": 4,
+    "episodes": 13,
+    "mean_start_score": 0.252,
+    "looks_per_episode": [
+     17,
+     27,
+     41
+    ],
+    "agents": {
+     "random": {
+      "mean_gain": 0.0023,
+      "mean_final_score": 0.2543,
+      "share_of_oracle_gain": 0.064,
+      "sd_across_episodes": 0.0017,
+      "least_and_most_over_episodes": [
+       0.0001,
+       0.0056
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": 0.0015,
+      "mean_gain_on_cells_never_shown": 0.0011,
+      "mean_pixels_revealed": 8.2,
+      "share_of_looks_that_revealed_nothing": 0.848
+     },
+     "centre": {
+      "mean_gain": 0.0007,
+      "mean_final_score": 0.2527,
+      "share_of_oracle_gain": 0.02,
+      "sd_across_episodes": 0.0015,
+      "least_and_most_over_episodes": [
+       -0.0006,
+       0.0039
+      ],
+      "episodes_with_a_gain": 3,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0002,
+      "mean_pixels_revealed": 3.7,
+      "share_of_looks_that_revealed_nothing": 0.885
+     },
+     "latest_modis": {
+      "mean_gain": 0.0255,
+      "mean_final_score": 0.2775,
+      "share_of_oracle_gain": 0.704,
+      "sd_across_episodes": 0.0164,
+      "least_and_most_over_episodes": [
+       0.0054,
+       0.0592
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0138,
+      "mean_pixels_revealed": 95.8,
+      "share_of_looks_that_revealed_nothing": 0.077
+     },
+     "least_sure": {
+      "mean_gain": 0.0265,
+      "mean_final_score": 0.2785,
+      "share_of_oracle_gain": 0.731,
+      "sd_across_episodes": 0.017,
+      "least_and_most_over_episodes": [
+       0.0012,
+       0.0608
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0152,
+      "mean_pixels_revealed": 92.8,
+      "share_of_looks_that_revealed_nothing": 0.135
+     },
+     "expected_new": {
+      "mean_gain": 0.0247,
+      "mean_final_score": 0.2767,
+      "share_of_oracle_gain": 0.681,
+      "sd_across_episodes": 0.0188,
+      "least_and_most_over_episodes": [
+       -0.0078,
+       0.0658
+      ],
+      "episodes_with_a_gain": 12,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0131,
+      "mean_pixels_revealed": 69.1,
+      "share_of_looks_that_revealed_nothing": 0.096
+     },
+     "least_sure_at_night": {
+      "mean_gain": 0.0312,
+      "mean_final_score": 0.2832,
+      "share_of_oracle_gain": 0.861,
+      "sd_across_episodes": 0.0173,
+      "least_and_most_over_episodes": [
+       0.0055,
+       0.0565
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0185,
+      "mean_pixels_revealed": 150.4,
+      "share_of_looks_that_revealed_nothing": 0.058
+     },
+     "least_sure_when_unsure": {
+      "mean_gain": 0.0357,
+      "mean_final_score": 0.2877,
+      "share_of_oracle_gain": 0.983,
+      "sd_across_episodes": 0.018,
+      "least_and_most_over_episodes": [
+       0.0151,
+       0.0707
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.022,
+      "mean_pixels_revealed": 135.5,
+      "share_of_looks_that_revealed_nothing": 0.058
+     },
+     "least_sure_when_sharp": {
+      "mean_gain": 0.0315,
+      "mean_final_score": 0.2835,
+      "share_of_oracle_gain": 0.867,
+      "sd_across_episodes": 0.0159,
+      "least_and_most_over_episodes": [
+       0.0067,
+       0.0583
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0178,
+      "mean_pixels_revealed": 136.9,
+      "share_of_looks_that_revealed_nothing": 0.115
+     },
+     "learned_tiles_only": {
+      "mean_gain": 0.0271,
+      "mean_final_score": 0.2791,
+      "share_of_oracle_gain": 0.747,
+      "sd_across_episodes": 0.0166,
+      "least_and_most_over_episodes": [
+       0.0092,
+       0.0592
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0144,
+      "mean_pixels_revealed": 99.5,
+      "share_of_looks_that_revealed_nothing": 0.077
+     },
+     "learned": {
+      "mean_gain": 0.0298,
+      "mean_final_score": 0.2818,
+      "share_of_oracle_gain": 0.82,
+      "sd_across_episodes": 0.0156,
+      "least_and_most_over_episodes": [
+       0.0071,
+       0.0572
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0159,
+      "mean_pixels_revealed": 133.8,
+      "share_of_looks_that_revealed_nothing": 0.096
+     },
+     "oracle": {
+      "mean_gain": 0.0363,
+      "mean_final_score": 0.2883,
+      "share_of_oracle_gain": 1.0,
+      "sd_across_episodes": 0.016,
+      "least_and_most_over_episodes": [
+       0.0144,
+       0.0658
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0226,
+      "mean_pixels_revealed": 91.5,
+      "share_of_looks_that_revealed_nothing": 0.096
+     },
+     "constant_best_in_hindsight": {
+      "tile": 32,
+      "mean_gain": 0.0086,
+      "mean_final_score": 0.2606,
+      "share_of_oracle_gain": 0.238,
+      "sd_across_episodes": 0.0211,
+      "least_and_most_over_episodes": [
+       0.0,
+       0.0592
+      ],
+      "episodes_with_a_gain": 2,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0048,
+      "mean_pixels_revealed": 20.5,
+      "share_of_looks_that_revealed_nothing": 0.865
+     }
+    },
+    "constant_tiles_mean_gain": [
+     0.0,
+     0.0005,
+     0.0016,
+     0.0034,
+     0.0009,
+     0.0,
+     0.0,
+     0.0,
+     0.0001,
+     0.0022,
+     0.0032,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.001,
+     0.0084,
+     0.0006,
+     -0.0002,
+     0.0,
+     0.0,
+     0.0011,
+     0.0048,
+     0.0025,
+     0.0001,
+     0.0,
+     0.0019,
+     0.0028,
+     0.0074,
+     0.0054,
+     0.0,
+     0.0,
+     0.0086,
+     0.0058,
+     0.0066,
+     0.003
+    ],
+    "differences": {
+     "least_sure_minus_random": {
+      "mean_difference": 0.024208307489917643,
+      "p05": 0.017392128039953218,
+      "p95": 0.031979344967901745,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_minus_centre": {
+      "mean_difference": 0.025800594369379495,
+      "p05": 0.018726991961469736,
+      "p95": 0.0335673075323404,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_minus_constant_best_in_hindsight": {
+      "mean_difference": 0.01787684866829118,
+      "p05": 0.0128652525492647,
+      "p95": 0.022836697734808037,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_minus_latest_modis": {
+      "mean_difference": 0.0009663204303248753,
+      "p05": -0.0024871466499057863,
+      "p95": 0.003686260999635843,
+      "episodes": 13,
+      "episodes_a_ahead": 8,
+      "episodes_b_ahead": 4
+     },
+     "latest_modis_minus_random": {
+      "mean_difference": 0.023241987059592763,
+      "p05": 0.01671953835071874,
+      "p95": 0.030880569605394013,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "oracle_minus_least_sure": {
+      "mean_difference": 0.009758210044710338,
+      "p05": 0.007029222984345731,
+      "p95": 0.012541458890566586,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "expected_new_minus_least_sure": {
+      "mean_difference": -0.0018016993543062388,
+      "p05": -0.00656708751434715,
+      "p95": 0.0025650620343651387,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 5
+     },
+     "expected_new_minus_random": {
+      "mean_difference": 0.022406608135611402,
+      "p05": 0.01517411715198173,
+      "p95": 0.0306514689239806,
+      "episodes": 13,
+      "episodes_a_ahead": 12,
+      "episodes_b_ahead": 1
+     },
+     "least_sure_at_night_minus_least_sure": {
+      "mean_difference": 0.004708693028642532,
+      "p05": 0.00010925619494817552,
+      "p95": 0.009187198489435567,
+      "episodes": 13,
+      "episodes_a_ahead": 9,
+      "episodes_b_ahead": 4
+     },
+     "least_sure_when_unsure_minus_least_sure": {
+      "mean_difference": 0.009143728525504626,
+      "p05": 0.0043177021470302696,
+      "p95": 0.01387404760002804,
+      "episodes": 13,
+      "episodes_a_ahead": 10,
+      "episodes_b_ahead": 3
+     },
+     "least_sure_when_sharp_minus_least_sure": {
+      "mean_difference": 0.004949957679738608,
+      "p05": -0.0015774771831338036,
+      "p95": 0.010896953594521539,
+      "episodes": 13,
+      "episodes_a_ahead": 10,
+      "episodes_b_ahead": 3
+     },
+     "learned_minus_least_sure": {
+      "mean_difference": 0.0032414183361150184,
+      "p05": -0.0026277635092328265,
+      "p95": 0.008582188039533884,
+      "episodes": 13,
+      "episodes_a_ahead": 9,
+      "episodes_b_ahead": 4
+     },
+     "learned_minus_random": {
+      "mean_difference": 0.02744972582603266,
+      "p05": 0.020727490277534913,
+      "p95": 0.03428170853283036,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "oracle_minus_learned": {
+      "mean_difference": 0.00651679170859532,
+      "p05": 0.0005187776245611358,
+      "p95": 0.012630617674083794,
+      "episodes": 13,
+      "episodes_a_ahead": 9,
+      "episodes_b_ahead": 4
+     },
+     "learned_minus_latest_modis": {
+      "mean_difference": 0.004207738766439894,
+      "p05": -0.002242279833289967,
+      "p95": 0.010348732391005548,
+      "episodes": 13,
+      "episodes_a_ahead": 8,
+      "episodes_b_ahead": 5
+     },
+     "learned_minus_constant_best_in_hindsight": {
+      "mean_difference": 0.0211182670044062,
+      "p05": 0.012240346806044765,
+      "p95": 0.029301129702829342,
+      "episodes": 13,
+      "episodes_a_ahead": 12,
+      "episodes_b_ahead": 1
+     },
+     "learned_minus_learned_tiles_only": {
+      "mean_difference": 0.0026694085091978773,
+      "p05": -0.002906988812004911,
+      "p95": 0.008041927139485169,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "learned_tiles_only_minus_least_sure": {
+      "mean_difference": 0.0005720098269171409,
+      "p05": -0.0008069091471537066,
+      "p95": 0.002118616764701474,
+      "episodes": 13,
+      "episodes_a_ahead": 4,
+      "episodes_b_ahead": 4
+     },
+     "learned_minus_least_sure_at_night": {
+      "mean_difference": -0.0014672746925275132,
+      "p05": -0.006277455092563227,
+      "p95": 0.0031561689149458188,
+      "episodes": 13,
+      "episodes_a_ahead": 8,
+      "episodes_b_ahead": 5
+     },
+     "learned_minus_least_sure_when_unsure": {
+      "mean_difference": -0.005902310189389607,
+      "p05": -0.011451713854097543,
+      "p95": -0.0010687054458869034,
+      "episodes": 13,
+      "episodes_a_ahead": 3,
+      "episodes_b_ahead": 10
+     },
+     "learned_minus_least_sure_when_sharp": {
+      "mean_difference": -0.0017085393436235895,
+      "p05": -0.004129477431402383,
+      "p95": 0.000450173672803958,
+      "episodes": 13,
+      "episodes_a_ahead": 3,
+      "episodes_b_ahead": 5
+     }
+    }
+   },
+   {
+    "tiles": "4x4",
+    "budget": 2,
+    "episodes": 13,
+    "mean_start_score": 0.252,
+    "looks_per_episode": [
+     17,
+     27,
+     41
+    ],
+    "agents": {
+     "random": {
+      "mean_gain": 0.0033,
+      "mean_final_score": 0.2553,
+      "share_of_oracle_gain": 0.127,
+      "sd_across_episodes": 0.0026,
+      "least_and_most_over_episodes": [
+       0.0,
+       0.0091
+      ],
+      "episodes_with_a_gain": 12,
+      "sd_of_mean_gain_across_seeds": 0.0017,
+      "mean_gain_on_cells_never_shown": 0.002,
+      "mean_pixels_revealed": 9.6,
+      "share_of_looks_that_revealed_nothing": 0.792
+     },
+     "centre": {
+      "mean_gain": 0.0033,
+      "mean_final_score": 0.2553,
+      "share_of_oracle_gain": 0.125,
+      "sd_across_episodes": 0.0072,
+      "least_and_most_over_episodes": [
+       0.0,
+       0.0203
+      ],
+      "episodes_with_a_gain": 5,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.002,
+      "mean_pixels_revealed": 5.8,
+      "share_of_looks_that_revealed_nothing": 0.808
+     },
+     "latest_modis": {
+      "mean_gain": 0.0247,
+      "mean_final_score": 0.2767,
+      "share_of_oracle_gain": 0.938,
+      "sd_across_episodes": 0.0147,
+      "least_and_most_over_episodes": [
+       0.0043,
+       0.0564
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0141,
+      "mean_pixels_revealed": 78.4,
+      "share_of_looks_that_revealed_nothing": 0.038
+     },
+     "least_sure": {
+      "mean_gain": 0.0231,
+      "mean_final_score": 0.2751,
+      "share_of_oracle_gain": 0.878,
+      "sd_across_episodes": 0.0152,
+      "least_and_most_over_episodes": [
+       0.006,
+       0.0564
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0126,
+      "mean_pixels_revealed": 75.4,
+      "share_of_looks_that_revealed_nothing": 0.038
+     },
+     "expected_new": {
+      "mean_gain": 0.0226,
+      "mean_final_score": 0.2746,
+      "share_of_oracle_gain": 0.86,
+      "sd_across_episodes": 0.0158,
+      "least_and_most_over_episodes": [
+       0.0043,
+       0.0564
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0121,
+      "mean_pixels_revealed": 69.5,
+      "share_of_looks_that_revealed_nothing": 0.038
+     },
+     "least_sure_at_night": {
+      "mean_gain": 0.0272,
+      "mean_final_score": 0.2792,
+      "share_of_oracle_gain": 1.034,
+      "sd_across_episodes": 0.0153,
+      "least_and_most_over_episodes": [
+       0.0017,
+       0.0564
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0158,
+      "mean_pixels_revealed": 109.6,
+      "share_of_looks_that_revealed_nothing": 0.0
+     },
+     "least_sure_when_unsure": {
+      "mean_gain": 0.0272,
+      "mean_final_score": 0.2792,
+      "share_of_oracle_gain": 1.033,
+      "sd_across_episodes": 0.0187,
+      "least_and_most_over_episodes": [
+       0.0032,
+       0.0595
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0163,
+      "mean_pixels_revealed": 118.3,
+      "share_of_looks_that_revealed_nothing": 0.038
+     },
+     "least_sure_when_sharp": {
+      "mean_gain": 0.029,
+      "mean_final_score": 0.281,
+      "share_of_oracle_gain": 1.102,
+      "sd_across_episodes": 0.0153,
+      "least_and_most_over_episodes": [
+       0.0059,
+       0.0544
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0178,
+      "mean_pixels_revealed": 115.6,
+      "share_of_looks_that_revealed_nothing": 0.0
+     },
+     "learned_tiles_only": {
+      "mean_gain": 0.0241,
+      "mean_final_score": 0.2761,
+      "share_of_oracle_gain": 0.916,
+      "sd_across_episodes": 0.0147,
+      "least_and_most_over_episodes": [
+       0.0049,
+       0.0564
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0135,
+      "mean_pixels_revealed": 75.6,
+      "share_of_looks_that_revealed_nothing": 0.038
+     },
+     "learned": {
+      "mean_gain": 0.0293,
+      "mean_final_score": 0.2813,
+      "share_of_oracle_gain": 1.115,
+      "sd_across_episodes": 0.0134,
+      "least_and_most_over_episodes": [
+       0.0059,
+       0.0544
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0179,
+      "mean_pixels_revealed": 119.8,
+      "share_of_looks_that_revealed_nothing": 0.0
+     },
+     "oracle": {
+      "mean_gain": 0.0263,
+      "mean_final_score": 0.2783,
+      "share_of_oracle_gain": 1.0,
+      "sd_across_episodes": 0.0142,
+      "least_and_most_over_episodes": [
+       0.0074,
+       0.0564
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.016,
+      "mean_pixels_revealed": 71.6,
+      "share_of_looks_that_revealed_nothing": 0.115
+     },
+     "constant_best_in_hindsight": {
+      "tile": 14,
+      "mean_gain": 0.0083,
+      "mean_final_score": 0.2603,
+      "share_of_oracle_gain": 0.315,
+      "sd_across_episodes": 0.0167,
+      "least_and_most_over_episodes": [
+       0.0,
+       0.0564
+      ],
+      "episodes_with_a_gain": 5,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0059,
+      "mean_pixels_revealed": 16.5,
+      "share_of_looks_that_revealed_nothing": 0.654
+     }
+    },
+    "constant_tiles_mean_gain": [
+     0.0,
+     0.0011,
+     0.0031,
+     0.0001,
+     0.0,
+     0.0,
+     0.0058,
+     0.0031,
+     -0.0001,
+     0.0002,
+     0.0055,
+     0.0024,
+     0.0,
+     0.0047,
+     0.0083,
+     0.0076
+    ],
+    "differences": {
+     "least_sure_minus_random": {
+      "mean_difference": 0.019741151838443306,
+      "p05": 0.013617427502611074,
+      "p95": 0.026812405503250755,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_minus_centre": {
+      "mean_difference": 0.01978328742448068,
+      "p05": 0.012947420795822506,
+      "p95": 0.027620303197413907,
+      "episodes": 13,
+      "episodes_a_ahead": 12,
+      "episodes_b_ahead": 1
+     },
+     "least_sure_minus_constant_best_in_hindsight": {
+      "mean_difference": 0.014792812699773299,
+      "p05": 0.008353635411480709,
+      "p95": 0.021718549455106064,
+      "episodes": 13,
+      "episodes_a_ahead": 11,
+      "episodes_b_ahead": 1
+     },
+     "least_sure_minus_latest_modis": {
+      "mean_difference": -0.0015936047958401466,
+      "p05": -0.0032645420365499498,
+      "p95": -0.00027826981929977526,
+      "episodes": 13,
+      "episodes_a_ahead": 1,
+      "episodes_b_ahead": 3
+     },
+     "latest_modis_minus_random": {
+      "mean_difference": 0.021334756634283452,
+      "p05": 0.015461674737990828,
+      "p95": 0.028163398317300158,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "oracle_minus_least_sure": {
+      "mean_difference": 0.0032179734302594286,
+      "p05": 0.001261880905228948,
+      "p95": 0.005398369353171282,
+      "episodes": 13,
+      "episodes_a_ahead": 6,
+      "episodes_b_ahead": 1
+     },
+     "expected_new_minus_least_sure": {
+      "mean_difference": -0.0004492281125124184,
+      "p05": -0.002238231749067074,
+      "p95": 0.0013194606408814152,
+      "episodes": 13,
+      "episodes_a_ahead": 1,
+      "episodes_b_ahead": 4
+     },
+     "expected_new_minus_random": {
+      "mean_difference": 0.01929192372593089,
+      "p05": 0.012674221126820099,
+      "p95": 0.026656942900084662,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_at_night_minus_least_sure": {
+      "mean_difference": 0.004116387039770937,
+      "p05": -0.0007640535841542161,
+      "p95": 0.008766976661581126,
+      "episodes": 13,
+      "episodes_a_ahead": 6,
+      "episodes_b_ahead": 3
+     },
+     "least_sure_when_unsure_minus_least_sure": {
+      "mean_difference": 0.004092092463713724,
+      "p05": -0.004869308823783225,
+      "p95": 0.012785763573316657,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "least_sure_when_sharp_minus_least_sure": {
+      "mean_difference": 0.005887173139532144,
+      "p05": -0.0029497405032164335,
+      "p95": 0.014683487126187054,
+      "episodes": 13,
+      "episodes_a_ahead": 8,
+      "episodes_b_ahead": 5
+     },
+     "learned_minus_least_sure": {
+      "mean_difference": 0.00624504302333782,
+      "p05": -0.00243930451599264,
+      "p95": 0.014487761549516509,
+      "episodes": 13,
+      "episodes_a_ahead": 8,
+      "episodes_b_ahead": 5
+     },
+     "learned_minus_random": {
+      "mean_difference": 0.02598619486178113,
+      "p05": 0.0200890227005228,
+      "p95": 0.031772156660755724,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "oracle_minus_learned": {
+      "mean_difference": -0.003027069593078392,
+      "p05": -0.010823557793729142,
+      "p95": 0.004936589841883562,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "learned_minus_latest_modis": {
+      "mean_difference": 0.004651438227497673,
+      "p05": -0.00354335372504374,
+      "p95": 0.012411190121760398,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "learned_minus_constant_best_in_hindsight": {
+      "mean_difference": 0.02103785572311112,
+      "p05": 0.01340007960767112,
+      "p95": 0.027669626940734778,
+      "episodes": 13,
+      "episodes_a_ahead": 12,
+      "episodes_b_ahead": 1
+     },
+     "learned_minus_learned_tiles_only": {
+      "mean_difference": 0.005225027164683493,
+      "p05": -0.0032291937866566665,
+      "p95": 0.013507152441298383,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "learned_tiles_only_minus_least_sure": {
+      "mean_difference": 0.0010200158586543273,
+      "p05": -8.016843546681443e-05,
+      "p95": 0.0022416901872984642,
+      "episodes": 13,
+      "episodes_a_ahead": 2,
+      "episodes_b_ahead": 1
+     },
+     "learned_minus_least_sure_at_night": {
+      "mean_difference": 0.0021286559835668826,
+      "p05": -0.004709694985416199,
+      "p95": 0.008475075382976345,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "learned_minus_least_sure_when_unsure": {
+      "mean_difference": 0.002152950559624097,
+      "p05": -0.004078857400027342,
+      "p95": 0.007939747000877505,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "learned_minus_least_sure_when_sharp": {
+      "mean_difference": 0.0003578698838056761,
+      "p05": -0.0026201800002148257,
+      "p95": 0.002924789640142166,
+      "episodes": 13,
+      "episodes_a_ahead": 3,
+      "episodes_b_ahead": 1
+     }
+    }
+   },
+   {
+    "tiles": "4x4",
+    "budget": 8,
+    "episodes": 13,
+    "mean_start_score": 0.252,
+    "looks_per_episode": [
+     17,
+     27,
+     41
+    ],
+    "agents": {
+     "random": {
+      "mean_gain": 0.0123,
+      "mean_final_score": 0.2643,
+      "share_of_oracle_gain": 0.118,
+      "sd_across_episodes": 0.0068,
+      "least_and_most_over_episodes": [
+       0.003,
+       0.0246
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": 0.0055,
+      "mean_gain_on_cells_never_shown": 0.0076,
+      "mean_pixels_revealed": 37.7,
+      "share_of_looks_that_revealed_nothing": 0.823
+     },
+     "centre": {
+      "mean_gain": 0.011,
+      "mean_final_score": 0.2629,
+      "share_of_oracle_gain": 0.105,
+      "sd_across_episodes": 0.0143,
+      "least_and_most_over_episodes": [
+       -0.0012,
+       0.0455
+      ],
+      "episodes_with_a_gain": 9,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0072,
+      "mean_pixels_revealed": 30.6,
+      "share_of_looks_that_revealed_nothing": 0.769
+     },
+     "latest_modis": {
+      "mean_gain": 0.0783,
+      "mean_final_score": 0.3303,
+      "share_of_oracle_gain": 0.752,
+      "sd_across_episodes": 0.0413,
+      "least_and_most_over_episodes": [
+       0.0193,
+       0.1448
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0425,
+      "mean_pixels_revealed": 298.4,
+      "share_of_looks_that_revealed_nothing": 0.077
+     },
+     "least_sure": {
+      "mean_gain": 0.0884,
+      "mean_final_score": 0.3404,
+      "share_of_oracle_gain": 0.85,
+      "sd_across_episodes": 0.0429,
+      "least_and_most_over_episodes": [
+       0.0187,
+       0.1476
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0533,
+      "mean_pixels_revealed": 303.8,
+      "share_of_looks_that_revealed_nothing": 0.077
+     },
+     "expected_new": {
+      "mean_gain": 0.0857,
+      "mean_final_score": 0.3377,
+      "share_of_oracle_gain": 0.823,
+      "sd_across_episodes": 0.0435,
+      "least_and_most_over_episodes": [
+       0.0193,
+       0.1448
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0491,
+      "mean_pixels_revealed": 273.6,
+      "share_of_looks_that_revealed_nothing": 0.096
+     },
+     "least_sure_at_night": {
+      "mean_gain": 0.0715,
+      "mean_final_score": 0.3235,
+      "share_of_oracle_gain": 0.687,
+      "sd_across_episodes": 0.0329,
+      "least_and_most_over_episodes": [
+       0.0098,
+       0.1183
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0406,
+      "mean_pixels_revealed": 380.0,
+      "share_of_looks_that_revealed_nothing": 0.087
+     },
+     "least_sure_when_unsure": {
+      "mean_gain": 0.0855,
+      "mean_final_score": 0.3375,
+      "share_of_oracle_gain": 0.821,
+      "sd_across_episodes": 0.0415,
+      "least_and_most_over_episodes": [
+       0.0204,
+       0.1524
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0517,
+      "mean_pixels_revealed": 316.4,
+      "share_of_looks_that_revealed_nothing": 0.096
+     },
+     "least_sure_when_sharp": {
+      "mean_gain": 0.0922,
+      "mean_final_score": 0.3442,
+      "share_of_oracle_gain": 0.886,
+      "sd_across_episodes": 0.042,
+      "least_and_most_over_episodes": [
+       0.0286,
+       0.1598
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0563,
+      "mean_pixels_revealed": 325.5,
+      "share_of_looks_that_revealed_nothing": 0.087
+     },
+     "learned_tiles_only": {
+      "mean_gain": 0.0876,
+      "mean_final_score": 0.3396,
+      "share_of_oracle_gain": 0.842,
+      "sd_across_episodes": 0.0463,
+      "least_and_most_over_episodes": [
+       0.0193,
+       0.1564
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0508,
+      "mean_pixels_revealed": 316.2,
+      "share_of_looks_that_revealed_nothing": 0.067
+     },
+     "learned": {
+      "mean_gain": 0.0928,
+      "mean_final_score": 0.3448,
+      "share_of_oracle_gain": 0.892,
+      "sd_across_episodes": 0.0434,
+      "least_and_most_over_episodes": [
+       0.03,
+       0.1598
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0551,
+      "mean_pixels_revealed": 336.2,
+      "share_of_looks_that_revealed_nothing": 0.087
+     },
+     "oracle": {
+      "mean_gain": 0.1041,
+      "mean_final_score": 0.3561,
+      "share_of_oracle_gain": 1.0,
+      "sd_across_episodes": 0.0425,
+      "least_and_most_over_episodes": [
+       0.0396,
+       0.1724
+      ],
+      "episodes_with_a_gain": 13,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0657,
+      "mean_pixels_revealed": 315.2,
+      "share_of_looks_that_revealed_nothing": 0.058
+     },
+     "constant_best_in_hindsight": {
+      "tile": 14,
+      "mean_gain": 0.0281,
+      "mean_final_score": 0.2801,
+      "share_of_oracle_gain": 0.27,
+      "sd_across_episodes": 0.05,
+      "least_and_most_over_episodes": [
+       0.0,
+       0.1446
+      ],
+      "episodes_with_a_gain": 6,
+      "sd_of_mean_gain_across_seeds": null,
+      "mean_gain_on_cells_never_shown": 0.0154,
+      "mean_pixels_revealed": 74.6,
+      "share_of_looks_that_revealed_nothing": 0.635
+     }
+    },
+    "constant_tiles_mean_gain": [
+     0.0001,
+     0.0046,
+     0.0104,
+     0.0001,
+     0.0001,
+     0.0,
+     0.0158,
+     0.0085,
+     -0.0001,
+     0.0014,
+     0.011,
+     0.0122,
+     0.0,
+     0.0175,
+     0.0281,
+     0.0262
+    ],
+    "differences": {
+     "least_sure_minus_random": {
+      "mean_difference": 0.07614060114088533,
+      "p05": 0.05961898729215525,
+      "p95": 0.09315873276333408,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_minus_centre": {
+      "mean_difference": 0.07745677777676709,
+      "p05": 0.057523390862310786,
+      "p95": 0.0980417383437729,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_minus_constant_best_in_hindsight": {
+      "mean_difference": 0.06031525474044919,
+      "p05": 0.04069401519406312,
+      "p95": 0.0805942012114466,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_minus_latest_modis": {
+      "mean_difference": 0.010155295750736664,
+      "p05": 0.002789258659627077,
+      "p95": 0.018906893175552858,
+      "episodes": 13,
+      "episodes_a_ahead": 10,
+      "episodes_b_ahead": 2
+     },
+     "latest_modis_minus_random": {
+      "mean_difference": 0.06598530539014867,
+      "p05": 0.05010452716454981,
+      "p95": 0.0831557492010235,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "oracle_minus_least_sure": {
+      "mean_difference": 0.01565443383933621,
+      "p05": 0.010847637415927064,
+      "p95": 0.02073771079840407,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "expected_new_minus_least_sure": {
+      "mean_difference": -0.002740168235218018,
+      "p05": -0.005822635420508279,
+      "p95": 0.0002190034820271378,
+      "episodes": 13,
+      "episodes_a_ahead": 4,
+      "episodes_b_ahead": 8
+     },
+     "expected_new_minus_random": {
+      "mean_difference": 0.0734004329056673,
+      "p05": 0.0567031636924499,
+      "p95": 0.09077332274233064,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "least_sure_at_night_minus_least_sure": {
+      "mean_difference": -0.016880766423886612,
+      "p05": -0.027483653027243943,
+      "p95": -0.008061506849072846,
+      "episodes": 13,
+      "episodes_a_ahead": 3,
+      "episodes_b_ahead": 9
+     },
+     "least_sure_when_unsure_minus_least_sure": {
+      "mean_difference": -0.0029416580271112713,
+      "p05": -0.008711977010446204,
+      "p95": 0.0018889342112624798,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 6
+     },
+     "least_sure_when_sharp_minus_least_sure": {
+      "mean_difference": 0.0037847385160555305,
+      "p05": -0.0014351304803176604,
+      "p95": 0.009558313350261423,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 5
+     },
+     "learned_minus_least_sure": {
+      "mean_difference": 0.004377466865698091,
+      "p05": -0.0012581680964845962,
+      "p95": 0.010360831045642158,
+      "episodes": 13,
+      "episodes_a_ahead": 8,
+      "episodes_b_ahead": 5
+     },
+     "learned_minus_random": {
+      "mean_difference": 0.08051806800658341,
+      "p05": 0.06356267515796224,
+      "p95": 0.09822629020019136,
+      "episodes": 13,
+      "episodes_a_ahead": 13,
+      "episodes_b_ahead": 0
+     },
+     "oracle_minus_learned": {
+      "mean_difference": 0.011276966973638117,
+      "p05": 0.006076345889190115,
+      "p95": 0.015994335855574925,
+      "episodes": 13,
+      "episodes_a_ahead": 12,
+      "episodes_b_ahead": 1
+     },
+     "learned_minus_latest_modis": {
+      "mean_difference": 0.014532762616434753,
+      "p05": 0.006054342165848107,
+      "p95": 0.024297179618990514,
+      "episodes": 13,
+      "episodes_a_ahead": 11,
+      "episodes_b_ahead": 2
+     },
+     "learned_minus_constant_best_in_hindsight": {
+      "mean_difference": 0.06469272160614727,
+      "p05": 0.04479678084726142,
+      "p95": 0.08608822265358591,
+      "episodes": 13,
+      "episodes_a_ahead": 12,
+      "episodes_b_ahead": 1
+     },
+     "learned_minus_learned_tiles_only": {
+      "mean_difference": 0.005216814431640652,
+      "p05": -0.0004090918483098865,
+      "p95": 0.011374916654935861,
+      "episodes": 13,
+      "episodes_a_ahead": 7,
+      "episodes_b_ahead": 5
+     },
+     "learned_tiles_only_minus_least_sure": {
+      "mean_difference": -0.0008393475659425609,
+      "p05": -0.003924197641974809,
+      "p95": 0.0023557660577559042,
+      "episodes": 13,
+      "episodes_a_ahead": 5,
+      "episodes_b_ahead": 6
+     },
+     "learned_minus_least_sure_at_night": {
+      "mean_difference": 0.0212582332895847,
+      "p05": 0.010661374712626216,
+      "p95": 0.03286302752788346,
+      "episodes": 13,
+      "episodes_a_ahead": 10,
+      "episodes_b_ahead": 3
+     },
+     "learned_minus_least_sure_when_unsure": {
+      "mean_difference": 0.007319124892809363,
+      "p05": -0.0003041489637223739,
+      "p95": 0.017502096359883482,
+      "episodes": 13,
+      "episodes_a_ahead": 9,
+      "episodes_b_ahead": 4
+     },
+     "learned_minus_least_sure_when_sharp": {
+      "mean_difference": 0.0005927283496425603,
+      "p05": -0.0021033739253026704,
+      "p95": 0.0033387945742700646,
+      "episodes": 13,
+      "episodes_a_ahead": 5,
+      "episodes_b_ahead": 3
+     }
+    }
+   }
+  ],
+  "seconds": 1052.0
+ },
+ "validation_reference_on_nominal_looks": {
+  "note": "measured before the pass list became the default schedule: nominal half-day slots, and the first policy's weights as the learned player",
   "what": "reference players of the next-look environment on the validation episodes",
   "known_limits": "FIRMS lists detections, not where a satellite looked and saw nothing, and has no cloud mask: a revealed tile with no detection may have been cloudy rather than free of fire, and on the nominal schedule it may be a half day on which the platform did not fly or its swath missed the box. So a look that hands over no detection is taken as unknown: it teaches the model nothing and earns nothing. The looks are the nominal half-day slots of each VIIRS platform, taken from the platform and the calendar and not from the hidden detections; the real pass is up to about 90 minutes from a slot's time, sometimes comes twice, and its pixel size is not known in advance. A list of real overpass times would remove that approximation.",
   "reward": "the score after the look minus the score before it, on one fixed set: every real hidden detection of the episode. The rewards of a round add up to the score at the end minus the score at the start. A look that hands over no hidden pixel earns nothing.",

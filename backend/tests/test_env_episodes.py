@@ -116,13 +116,16 @@ class ReferenceTableTests(unittest.TestCase):
         eps = _catalogue(ROWS_2099, 2099, min_modis_pixels=40)
         # four looks: with fewer, an evenly spread budget lands only on slots of the made-up NOAA-21, which has no row
         # behind it; such a look is unknown and nobody gains from it
+        policy = {"weights": [1.0] + [0.0] * (len(FEATURE_NAMES) - 1), "feature_names": list(FEATURE_NAMES)}
         ref = reference_table(eps, OccupancyParams(), settings=((2, 4),), seeds=3, workers=0, train_episodes=eps,
-                              policy_weights=[1.0] + [0.0] * (len(FEATURE_NAMES) - 1), log=lambda m: None)
-        self.assertEqual((ref["schedule"], ref["random_seeds"]), ("nominal", 3))
+                              policy=policy, log=lambda m: None)
+        self.assertEqual((ref["schedule"], ref["random_seeds"]), ("auto", 3))
         self.assertIn("add up", ref["reward"])
         row = ref["settings"][0]
         self.assertEqual((row["tiles"], row["budget"], row["episodes"]), ("2x2", 4, 1))
-        self.assertEqual(set(row["agents"]), set(NAMED) | {"constant_best_in_hindsight", "constant_best_on_training"})
+        self.assertEqual(row["looks_from"], ["nominal"])                 # no pass list is cached for the fixture's made-up year
+        # this policy has no look score, so its tile choice is not listed a second time
+        self.assertEqual(set(row["agents"]), (set(NAMED) - {"learned_tiles_only"}) | {"constant_best_in_hindsight", "constant_best_on_training"})
         for name, a in row["agents"].items():
             # a gain is the final score minus the starting score: the rewards add up
             self.assertAlmostEqual(a["mean_final_score"] - row["mean_start_score"], a["mean_gain"], places=3, msg=name)
@@ -149,11 +152,33 @@ class ReferenceTableTests(unittest.TestCase):
         self.assertEqual(len(row["per_episode"]["constant_tiles"]), 4)
         said = plainly(row)
         self.assertTrue(any(s.startswith("least sure") and "random" in s for s in said))
-        self.assertTrue(any(s.startswith("the learned policy") for s in said))
+        self.assertTrue(any(s.startswith("the learned player") for s in said))
+        self.assertTrue(any(s.startswith("least sure on night passes") for s in said))
+        for key in ("least_sure_at_night_minus_least_sure", "least_sure_when_unsure_minus_least_sure", "least_sure_when_sharp_minus_least_sure"):
+            self.assertIn(key, row["differences"])
         text = format_table(ref)
         self.assertIn("oracle", text)
         self.assertIn("constant_best_on_training (tile", text)
         self.assertIn("no cloud mask", KNOWN_LIMITS)
+
+    def test_a_learned_player_that_chooses_when_is_listed_beside_its_own_tile_choice(self) -> None:
+        from backend.env.policy import LOOK_FEATURE_NAMES
+
+        eps = _catalogue(ROWS_2099, 2099, min_modis_pixels=40)
+        look = [0.0] * len(LOOK_FEATURE_NAMES)
+        look[0] = 1.0
+        policy = {"weights": [1.0] + [0.0] * (len(FEATURE_NAMES) - 1), "feature_names": list(FEATURE_NAMES),
+                  "when": {"adopted": True, "weights": look, "scales": [1.0] * len(look), "feature_names": list(LOOK_FEATURE_NAMES)}}
+        ref = reference_table(eps, OccupancyParams(), settings=((2, 4),), seeds=1, workers=0, policy=policy, log=lambda m: None)
+        row = ref["settings"][0]
+        self.assertIn("learned_tiles_only", row["agents"])
+        self.assertIn("learned", row["agents"])
+        # the tile choice alone is least sure here (one weight, on the first feature), on the evenly spread looks
+        self.assertEqual(row["agents"]["learned_tiles_only"]["mean_gain"], row["agents"]["least_sure"]["mean_gain"])
+        for key in ("learned_minus_learned_tiles_only", "learned_tiles_only_minus_least_sure",
+                    "learned_minus_least_sure_at_night", "learned_minus_least_sure_when_unsure", "learned_minus_least_sure_when_sharp"):
+            self.assertIn(key, row["differences"])
+        self.assertTrue(any(s.startswith("the learned player choosing when to look") for s in plainly(row)))
 
 
 if __name__ == "__main__":

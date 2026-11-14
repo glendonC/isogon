@@ -31,9 +31,11 @@ with no detection may have been cloudy. The two demands on the reward meet here:
 every change of the estimate, so a look that is to earn nothing must not change the estimate. What is given up is
 a look spent to confirm that a tile is clear.
 
-Two schedules. `schedule="nominal"`, the default, is the half-day slots of each hidden platform.
-`schedule="cmr"` (or "auto") takes the looks from NASA's pass list: one look per pass of a hidden platform whose
-swath held the box, at its real time and pixel size, and a pass that flagged nothing is scored like any other.
+Two schedules. The default, `schedule="auto"`, takes the looks from NASA's pass list: one look per pass of a hidden
+platform whose swath held the whole box, at its real time and pixel size, and a pass that flagged nothing is scored
+like any other (protocol version 3). Where no pass list is cached for the window it falls back to the nominal
+half-day slots of each hidden platform (protocol version 2) and says so in `describe()`. `schedule="cmr"` asks
+for the pass list and fails without one; `schedule="nominal"` asks for the nominal slots.
 
 The environment opens the sealed rows for two things only: to hand over the rows of a tile an agent looks at, and
 to pay the reward. It is one of the two modules allowed to (`backend.eval.holdout.SCORERS`).
@@ -47,16 +49,26 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from backend.env import KNOWN_LIMITS
+from backend.env import KNOWN_LIMITS_BY_SCHEDULE
 from backend.eval import metrics as M
-# PROTOCOL is the protocol the environment plays under by default (sealed hidden rows, looks on the nominal
-# schedule); it is named here so that the round routes can read the environment's protocol from the environment
-from backend.eval.blind_test import PROTOCOL, SLOT_MARGIN_S  # noqa: F401
+# The protocols a round plays under: version 3 with the looks from the pass list, version 2 on the nominal slots.
+# PROTOCOL is the default's, where a pass list is cached; the one a given round plays under is `env.protocol`.
+from backend.eval.blind_test import PROTOCOL_PASS_LIST as PROTOCOL  # noqa: F401
+from backend.eval.blind_test import PROTOCOLS, SLOT_MARGIN_S
 from backend.eval.grid import EvalGrid, Painted, footprint_cells, paint
 from backend.eval.holdout import seal
 from backend.eval.overpass import OVERPASS_GAP_S, group_overpasses
 from backend.eval.rows import Detections, local_solar_time_hr
-from backend.eval.schedule import NOTES, SOURCE_CMR, SOURCE_NOMINAL, PassReader, Slot, rows_of_slot, schedule_for
+from backend.eval.schedule import (
+    NOTES,
+    SOURCE_AUTO,
+    SOURCE_CMR,
+    SOURCE_NOMINAL,
+    PassReader,
+    Slot,
+    rows_of_slot,
+    schedule_for,
+)
 from backend.model.occupancy import (
     OccupancyParams,
     OccupancyReconstruction,
@@ -111,6 +123,7 @@ class Observation:
     budget_left: int
     looks_left: int                         # scheduled looks still to come, this one included
     look_times_s: NDArray[np.float64]       # (looks,) time of every scheduled look of the episode, from the schedule
+    look_is_day: NDArray[np.bool_]          # (looks,) whether each of them is a day pass
     tiles_shape: tuple[int, int]            # (rows, columns) of the tile split; tile t is row t // columns, column t % columns
     tile_of_cell: NDArray[np.int64]         # (ny, nx) tile index of every 375 m cell
     tile_covered: NDArray[np.bool_]         # (tiles,) tiles this look covers (assumed from swath width: all)
@@ -177,7 +190,7 @@ class NextLookEnv:
         learn_from_looks: bool = False,
         prior_cells: float = 40.0,
         hidden: str = "VIIRS",
-        schedule: str = SOURCE_NOMINAL,
+        schedule: str = SOURCE_AUTO,
         read_passes: PassReader | None = None,
     ) -> None:
         if score not in SCORES:
@@ -223,6 +236,8 @@ class NextLookEnv:
             hidden, None, window[0], window[1], box, source=schedule, read_passes=read_passes, nominal_margin_s=SLOT_MARGIN_S
         )
         from_list = self.schedule_source == SOURCE_CMR
+        self.protocol: dict[str, Any] = PROTOCOLS[self.schedule_source]
+        self.known_limits: str = KNOWN_LIMITS_BY_SCHEDULE[self.schedule_source]
 
         # ---- the sealed rows, for revealing a tile and for the reward; nothing above has read them --------------
         hid = self._sealed.open_for_scoring()
@@ -492,6 +507,7 @@ class NextLookEnv:
             budget_left=self._budget_left,
             looks_left=self.n_looks - self._k,
             look_times_s=np.array([lk.time_s for lk in self._looks], dtype=np.float64),
+            look_is_day=np.array([lk.is_day for lk in self._looks], dtype=bool),
             tiles_shape=self.tiles,
             tile_of_cell=self.tile_of_cell,
             tile_covered=np.ones(self.n_tiles, dtype=bool),
@@ -551,7 +567,7 @@ class NextLookEnv:
             "look_factors": self.look_factors(self._revealed) if (self.learn_from_looks and self._revealed) else None,
             "score_detail": dict(self._detail),
             "revealed_pixels": int(np.isin(self._pixel_tile[self._k], [int(action)]).sum()) if spent else 0,
-            "known_limits": KNOWN_LIMITS,
+            "known_limits": self.known_limits,
         }
         self._k += 1
         done = self._k >= self.n_looks
@@ -582,6 +598,7 @@ class NextLookEnv:
             "score": self.score_name,
             "reward": REWARD,
             "reward_target": self.reward_target,
-            "known_limits": KNOWN_LIMITS,
+            "protocol": {"version": self.protocol["version"], "name": self.protocol["name"]},
+            "known_limits": self.known_limits,
             "platform_codes": {str(i): n for i, n in enumerate(PLATFORMS)},
         }

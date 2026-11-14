@@ -306,7 +306,8 @@ class GeometryPlayersTests(unittest.TestCase):
         names = [a.name for a in A.reference_agents((4, 4), random_seeds=2)]
         self.assertEqual(names[:2], ["random", "random"])
         self.assertEqual(names[2:18], [f"constant_{t}" for t in range(16)])
-        self.assertEqual(names[18:], ["centre", "latest_modis", "least_sure", "expected_new", "oracle"])
+        self.assertEqual(names[18:], ["centre", "latest_modis", "least_sure", "expected_new", "least_sure_at_night",
+                                      "least_sure_when_unsure", "least_sure_when_sharp", "oracle"])
 
     def test_the_most_expected_new_detections_is_the_model_s_own_prediction_used_as_a_rule(self) -> None:
         from backend.model.occupancy import expected_count_cells

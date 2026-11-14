@@ -18,7 +18,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from backend.env import KNOWN_LIMITS  # noqa: E402
+from backend.env import KNOWN_LIMITS, KNOWN_LIMITS_BY_SCHEDULE  # noqa: E402
 from backend.env.agents import (  # noqa: E402
     LatestModisAgent,
     LeastSureAgent,
@@ -120,10 +120,12 @@ class InterfaceTests(unittest.TestCase):
 
     def test_description_states_the_known_limits(self) -> None:
         d = _env().describe()
-        self.assertEqual(d["known_limits"], KNOWN_LIMITS)
-        self.assertIn("looked and saw", KNOWN_LIMITS)
-        self.assertIn("no cloud mask", KNOWN_LIMITS)
-        self.assertIn("nominal half-day slots", KNOWN_LIMITS)
+        # no pass list is cached for the fixture's made-up year, so the round is on the nominal slots and says so
+        self.assertEqual(d["known_limits"], KNOWN_LIMITS_BY_SCHEDULE["nominal"])
+        for text in (KNOWN_LIMITS, d["known_limits"]):
+            self.assertIn("looked and saw", text)
+            self.assertIn("no cloud mask", text)
+            self.assertIn("nominal half-day slots", text)
         self.assertEqual(d["looks"]["source"], "nominal")
         self.assertEqual(d["viirs_platforms"], ["VIIRS_NOAA20", "VIIRS_NOAA21", "VIIRS_SNPP"])
 

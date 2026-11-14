@@ -250,8 +250,14 @@ class EvidenceShapeTests(unittest.TestCase):
             self.assertIn(key.split(":")[2][:4], ("2024", "2025"), key)
         self.assertGreater(ref["episodes"]["closed_and_not_played"], 0)
         ids = [a["id"] for a in v["agents"]]
-        self.assertEqual(ids, ["random", "constant_best_on_training", "constant_best_in_hindsight", "centre", "latest_modis",
-                               "least_sure", "expected_new", "learned", "oracle"])
+        want = ["random", "constant_best_on_training", "constant_best_in_hindsight", "centre", "latest_modis", "least_sure",
+                "expected_new", "least_sure_at_night", "least_sure_when_unsure", "least_sure_when_sharp"]
+        # the learned player's tile choice is listed apart only when the player also chooses when to look
+        want += ["learned_tiles_only"] if self.env["policy"]["when"]["adopted"] else []
+        self.assertEqual(ids, want + ["learned", "oracle"])
+        self.assertEqual(v["looks"], "cmr")                               # the pass list: the environment's default schedule
+        self.assertEqual(v["learned_player"]["chooses_when_to_look"], self.env["policy"]["when"]["adopted"])
+        self.assertIn("training fires only", v["learned_player"]["chosen_on"])
         for a in v["agents"]:
             row = ref["agents"][a["id"]]
             self.assertEqual(a["mean_gain"], row["mean_gain"], a["id"])
@@ -265,7 +271,7 @@ class EvidenceShapeTests(unittest.TestCase):
         self.assertGreaterEqual(by["constant_best_in_hindsight"]["mean_gain"], by["constant_best_on_training"]["mean_gain"])
         said = " ".join(v["plainly"])
         for key, a, b in (("least_sure_minus_random", "least sure", "random"),
-                          ("learned_minus_least_sure", "the learned policy", "least sure")):
+                          ("learned_minus_least_sure", "the learned player", "least sure")):
             d = ref["differences"][key]
             want = ("gains more than" if d["p05"] > 0 else "gains less than" if d["p95"] < 0 else "does not differ from")
             self.assertIn(f"{a} {want} {b}", said)

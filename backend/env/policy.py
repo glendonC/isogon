@@ -1,9 +1,22 @@
-"""A small learned policy for the next-look environment: one linear score per tile.
+"""A small learned player for the next-look environment: one linear score per tile, and one linear score per look.
 
-At a look the policy describes every tile by a short list of numbers read from the observation (nothing hidden),
-multiplies them by fixed weights, and looks at the tile with the highest score. The weights are fitted by ridge
-regression to the true gain of looking at each tile, measured on fit episodes (`backend/env/learn.py`). The whole
-policy is the table of weights in `backend/env/fitted/next_look.json`.
+Where. At a look the policy describes every tile by a short list of numbers read from the observation (nothing
+hidden), multiplies them by fixed weights, and looks at the tile with the highest score. The weights are fitted by
+ridge regression to the true reward of looking at each tile, measured on training episodes
+(`backend/env/learn.py`).
+
+When. The policy describes the look itself by a second short list read from the observation (how unsure the model
+is at its most unsure tile, how fresh and how strong the MODIS signal is, day or night, the pass's pixel size, how
+close the looks around it are) and multiplies it by fixed weights. The episode's looks are cut into as many equal
+stretches as the budget has looks, and the policy takes one look in each: as soon as the look score is in the top
+share of what the stretch has shown so far, and at the stretch's last look if not before
+(`backend.env.agents.StretchClock`). Looks taken close together repeat each other, which is why the looks stay
+spread; a policy that always waited for the last look of a stretch would be on the evenly spread looks of every
+reference player. The when part is used only if it gained on training fires it was not fitted on; the tracked file
+says whether it is.
+
+The whole policy is two tables of weights in `backend/env/fitted/next_look.json`. Every part of a score can be
+shown: `explain` gives each feature's value times its weight, per tile and for the look.
 """
 
 from __future__ import annotations
@@ -14,6 +27,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from backend.env.agents import StretchClock
 from backend.env.next_look import NextLookEnv, Observation
 
 FEATURES: tuple[tuple[str, str], ...] = (
@@ -118,6 +132,91 @@ class LinearPolicyAgent:
                 "per_tile": [[round(float(v), 6) for v in row] for row in parts]}
 
 
+LOOK_FEATURES: tuple[tuple[str, str], ...] = (
+    ("largest_unsure", "log of one plus the largest tile sum of p (1 - p): how unsure the model is where it is least sure"),
+    ("total_unsure", "log of one plus the sum of p (1 - p) over the box"),
+    ("largest_burning", "log of one plus the largest tile sum of p"),
+    ("total_burning", "log of one plus the sum of p over the box"),
+    ("largest_recent_modis_power", "log of one plus the largest tile sum of MODIS power, halved for every six hours of age"),
+    ("largest_recent_modis_pixels", "log of one plus the largest tile count of MODIS pixels, halved for every six hours of age"),
+    ("modis_pixels_last_pass", "log of one plus the MODIS pixels in the box within half an hour of the newest one"),
+    ("day", "1 on a day pass, 0 at night"),
+    ("pixel_area_km2", "the look's pixel area, scan times track, from the schedule"),
+    ("hours_since_modis", "hours since the newest MODIS detection, capped at twelve, over twelve"),
+    ("hours_from_previous_look", "hours since the previous scheduled look, capped at twelve, over twelve"),
+    ("hours_to_next_look", "hours to the next scheduled look, capped at twelve, over twelve"),
+    ("episode_share_done", "the look's index over the number of looks less one"),
+)
+LOOK_FEATURE_NAMES: tuple[str, ...] = tuple(n for n, _ in LOOK_FEATURES)
+
+
+def look_features(obs: Observation) -> NDArray[np.float64]:
+    """(features,) for the look an observation asks about. Reads the observation and nothing else."""
+    unsure = _per_tile(obs, obs.p_burning * (1.0 - obs.p_burning))
+    burning = _per_tile(obs, obs.p_burning)
+    n = unsure.size
+    recent_frp, recent_n = np.zeros(n), np.zeros(n)
+    last_pass, since = 0.0, 12.0
+    if obs.modis.shape[0] > 0:
+        newest = float(obs.modis[:, 5].max())
+        since = float(min(12.0, (obs.time_s - newest) / 3600.0))
+        ok = obs.modis_tile >= 0
+        if ok.any():
+            w = 0.5 ** ((obs.time_s - obs.modis[ok, 5]) / 3600.0 / 6.0)
+            recent_frp = np.bincount(obs.modis_tile[ok], weights=obs.modis[ok, 4] * w, minlength=n)
+            recent_n = np.bincount(obs.modis_tile[ok], weights=w, minlength=n)
+            last_pass = float((obs.modis[ok, 5] >= newest - 1800.0).sum())
+    k, t = int(obs.decision), obs.look_times_s
+    before = float(min(12.0, (t[k] - t[k - 1]) / 3600.0)) if k > 0 else 12.0
+    after = float(min(12.0, (t[k + 1] - t[k]) / 3600.0)) if k + 1 < t.size else 12.0
+    return np.array([
+        np.log1p(unsure.max()), np.log1p(unsure.sum()), np.log1p(burning.max()), np.log1p(burning.sum()),
+        np.log1p(recent_frp.max()), np.log1p(recent_n.max()), np.log1p(last_pass),
+        1.0 if obs.is_day else 0.0, float(obs.pixel_km[0] * obs.pixel_km[1]),
+        since / 12.0, before / 12.0, after / 12.0, k / max(t.size - 1, 1),
+    ], dtype=np.float64)
+
+
+class LearnedPlayer(LinearPolicyAgent):
+    """The tile by the tile score; the moment by the look score, one look per stretch of the episode. With no look
+    weights it is the tile policy alone and spends on the evenly spread looks like every reference player."""
+
+    def __init__(
+        self, weights: list[float] | NDArray[np.float64], look_weights: list[float] | NDArray[np.float64] | None = None,
+        look_scales: list[float] | NDArray[np.float64] | None = None,
+        feature_names: tuple[str, ...] | list[str] = FEATURE_NAMES,
+        look_feature_names: tuple[str, ...] | list[str] = LOOK_FEATURE_NAMES,
+    ) -> None:
+        super().__init__(weights, feature_names)
+        self.look_weights: NDArray[np.float64] | None = None
+        self.look_scales = np.ones(len(LOOK_FEATURE_NAMES))
+        self._clock = StretchClock()
+        self.last_when: dict[str, Any] | None = None
+        if look_weights is not None:
+            if tuple(look_feature_names) != LOOK_FEATURE_NAMES:
+                raise ValueError("the look weights were fitted for a different feature list")
+            self.look_weights = np.asarray(look_weights, dtype=np.float64)
+            if look_scales is not None:
+                self.look_scales = np.asarray(look_scales, dtype=np.float64)
+            if self.look_weights.shape != (len(LOOK_FEATURE_NAMES),) or self.look_scales.shape != self.look_weights.shape:
+                raise ValueError("one weight and one scale per look feature are needed")
+            self.looks_now = self._looks_now      # only a player with look weights says when it looks
+
+    def look_parts(self, obs: Observation) -> NDArray[np.float64]:
+        """Each look feature's value over its scale, times its weight. The parts add up to the look score."""
+        assert self.look_weights is not None
+        return look_features(obs) / self.look_scales * self.look_weights
+
+    def look_score(self, obs: Observation) -> float:
+        return float(self.look_parts(obs).sum())
+
+    def _looks_now(self, obs: Observation) -> bool:
+        parts = self.look_parts(obs)
+        self.last_when = {**self._clock.decide(obs, float(parts.sum())), "names": list(LOOK_FEATURE_NAMES),
+                          "parts": [round(float(v), 6) for v in parts]}
+        return bool(self.last_when["looks"])
+
+
 def fit_ridge(features: NDArray[np.float64], target: NDArray[np.float64], strength: float) -> NDArray[np.float64]:
     """Weights that minimise squared error plus `strength` times their squared size."""
     x = np.asarray(features, dtype=np.float64)
@@ -133,12 +232,21 @@ def load_fitted() -> dict[str, Any] | None:
     return json.loads(FITTED_FILE.read_text(encoding="utf-8")) if FITTED_FILE.is_file() else None
 
 
+def policy_from(block: dict[str, Any], tiles_only: bool = False) -> LinearPolicyAgent:
+    """The player a `policy` block of the tracked file describes. Its when part is used only when the block says
+    it was adopted, and never with `tiles_only`."""
+    when = block.get("when") or {}
+    if when.get("adopted") and not tiles_only:
+        return LearnedPlayer(block["weights"], when["weights"], when["scales"], block["feature_names"], when["feature_names"])
+    return LearnedPlayer(block["weights"], feature_names=block["feature_names"])
+
+
 def load_policy() -> LinearPolicyAgent | None:
     """The tracked learned policy, or None before one has been fitted."""
     doc = load_fitted()
     if doc is None or "policy" not in doc:
         return None
-    return LinearPolicyAgent(doc["policy"]["weights"], doc["policy"]["feature_names"])
+    return policy_from(doc["policy"])
 
 
 def env_settings() -> dict[str, Any]:
