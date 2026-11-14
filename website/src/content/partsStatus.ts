@@ -1,4 +1,5 @@
 import type { EvidenceDoc } from './evidence';
+import { PART_NAMES } from '../app/names';
 
 /**
  * The three parts under the landing's hero, each with one line of what it does and one line of its real status,
@@ -28,9 +29,9 @@ function listOf(values: number[]): string {
 }
 
 const PARTS: ReadonlyArray<Omit<PartStatus, 'status'>> = [
-  { id: 'model', name: 'World model', does: 'Rebuilds a real fire from the coarse satellite alone.', open: 'Open the fire and its test' },
-  { id: 'environment', name: 'Environment', does: 'Real fires with the sharp satellite hidden as the answer key.', open: 'Play a round' },
-  { id: 'agent', name: 'Agent', does: 'Chooses where to look next.', open: "See the agents' table" },
+  { id: 'model', name: PART_NAMES.model, does: 'Rebuilds a real fire from the coarse satellite alone.', open: 'Open the fire and its test' },
+  { id: 'environment', name: PART_NAMES.environment, does: 'Real fires with the sharp satellite hidden as the answer key.', open: 'Play a round' },
+  { id: 'agent', name: PART_NAMES.agent, does: 'Chooses where to look next.', open: "See the agents' table" },
 ];
 
 export function partsStatus(doc: EvidenceDoc | null): PartStatus[] {

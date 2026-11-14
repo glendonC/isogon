@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { TheaterId } from '../stage/earthCutawayTypes';
-import { THEATER_DISPLAY } from '../content/theaters';
+import { ENTRY } from '../app/names';
 import { IsogonMark } from './IsogonMark';
 import { SplitHeadline } from './SplitHeadline';
 import type { PartId, PartStatus } from '../content/partsStatus';
@@ -45,12 +44,8 @@ export interface CustomRegionSummary {
 }
 
 interface LandingCompositionProps {
-  activeTheaterId: TheaterId;
   /** Imagery credit from the active run (ui/attribution.ts). */
   imageryCredit: string;
-  customRegion: CustomRegionSummary | null;
-  /** The year of the real run on the landing, from the run's own window; null when no real run is in. */
-  runYear: string | null;
   /** The three parts under the hero, their status read from the evidence data. */
   parts: PartStatus[];
   onOpenPart: (id: PartId) => void;
@@ -63,10 +58,7 @@ interface LandingCompositionProps {
 }
 
 export function LandingComposition({
-  activeTheaterId,
   imageryCredit,
-  customRegion,
-  runYear,
   parts,
   onOpenPart,
   realPass,
@@ -94,10 +86,8 @@ export function LandingComposition({
     return () => window.clearTimeout(timer);
   }, [ready]);
 
-  const placeName = customRegion ? customRegion.name : THEATER_DISPLAY[activeTheaterId].name;
-  // The entry names the first application: the region's fire and the year of its real run ("the 2021 Dixie Fire").
-  const fire = customRegion ? undefined : THEATER_DISPLAY[activeTheaterId].fire;
-  const entry = fire && runYear ? `Explore the ${runYear} ${fire}` : `Explore ${placeName}`;
+  // The entry leads with the idea, not one fire: it opens the choice of a place.
+  const entry = ENTRY;
 
   return (
     <div className="iso-land" data-ready={ready ? 'true' : 'false'} ref={scrollRef}>

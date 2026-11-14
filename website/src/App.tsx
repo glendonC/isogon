@@ -30,6 +30,7 @@ import { useSensorModel } from './ui/useSensorModel';
 import { LandingComposition } from './ui/LandingComposition';
 import { imageryCredit } from './ui/attribution';
 import { useCalendar } from './ui/useCalendar';
+import { openingStart, usePlaces } from './app/places';
 import { usePassList } from './ui/usePassList';
 import {
   isRealRun,
@@ -557,6 +558,8 @@ export function App() {
   // follows the region asked for, so opening a region can read its start list before any run arrives.
   const calendarRegionId = regionAsk?.id ?? activeRun?.region.id ?? activeTheaterId;
   const calendar = useCalendar(API_BASE, calendarRegionId);
+  // The places registry: the default fire and each place's opening start, by the rule the route states.
+  const placesState = usePlaces();
 
   // Real is the default: a region with real run starts opens on its default start; one without real rows opens on a
   // simulated run, labelled as such. Each ask is handled once, after its calendar is in.
@@ -565,9 +568,10 @@ export function App() {
     if (!regionAsk) return;
     const key = `${regionAsk.id}:${regionAsk.nonce}`;
     if (handledAskRef.current === key) return;
-    if (calendar.regionId !== regionAsk.id || calendar.state === 'loading') return;
+    if (calendar.regionId !== regionAsk.id || calendar.state === 'loading' || placesState.state === 'loading') return;
     handledAskRef.current = key;
-    const opening = calendar.cal && !calendar.cal.simulated ? calendar.cal.defaultStart : null;
+    const opening =
+      calendar.cal && !calendar.cal.simulated ? openingStart(placesState.places, regionAsk.id) ?? calendar.cal.defaultStart : null;
     if (opening) {
       if (isRealRun(activeRun) && activeRun?.region.id === regionAsk.id && realStart === opening) return;
       void executeWorldModel({
@@ -581,7 +585,7 @@ export function App() {
     } else if (activeRun?.region.id !== regionAsk.id || isRealRun(activeRun)) {
       void executeWorldModel({ regionId: regionAsk.id, holdoutViirs: false, cloudOverride, enterWorkspace: false });
     }
-  }, [regionAsk, calendar, activeRun, realStart, cloudOverride, executeWorldModel]);
+  }, [regionAsk, calendar, placesState, activeRun, realStart, cloudOverride, executeWorldModel]);
 
   /** Selecting a month that has a real run requests it; the stage replays whatever comes back. */
   const handleSelectMonth = useCallback(
@@ -1401,18 +1405,7 @@ export function App() {
     <div className="iso-app" data-workspace={inWorkspace ? 'true' : 'false'} data-sel={selStyle}>
       {!inWorkspace && (
         <LandingComposition
-          activeTheaterId={activeTheaterId}
           imageryCredit={credit}
-          customRegion={
-            isCustomRegion && activeRun
-              ? {
-                  name: plainText(activeRun.region.name),
-                  lat: activeRun.region.center_lat,
-                  lon: activeRun.region.center_lon,
-                }
-              : null
-          }
-          runYear={isRealRun(activeRun) ? (runWindow(activeRun)?.first.slice(0, 4) ?? null) : null}
           parts={landingParts}
           onOpenPart={openPart}
           realPass={stageTelemetry?.realPass ?? null}

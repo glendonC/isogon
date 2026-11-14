@@ -1,0 +1,48 @@
+/**
+ * Every name and one-line description the product shows for its parts, in one place, so a change of name is one
+ * edit. The words follow the product's vocabulary: pass, look, detection, estimate.
+ */
+
+export type BeatId = 'calendar' | 'model' | 'world' | 'agent';
+
+export interface BeatName {
+  id: BeatId;
+  /** The name in the bar and where the part opens. */
+  name: string;
+  /** The key that opens it. */
+  key: string;
+  /** One line under the name, the same on the landing and where the part opens. */
+  line: string;
+}
+
+export const BEATS: readonly BeatName[] = [
+  { id: 'calendar', name: 'Calendar', key: '0', line: 'Fire record, November 2000 to this month, on one scale.' },
+  {
+    id: 'model',
+    name: '1 World model',
+    key: '1',
+    line: 'This fire rebuilt from MODIS alone, then checked against VIIRS, which is hidden.',
+  },
+  {
+    id: 'world',
+    name: '2 Test world',
+    key: '2',
+    line: 'The same fire with VIIRS hidden. A few looks to spend. You choose where to look.',
+  },
+  { id: 'agent', name: '3 Agent', key: '3', line: 'A rule and a learned agent play the same round. Watch where they look.' },
+];
+
+export const beatOf = (id: BeatId): BeatName => BEATS.find((b) => b.id === id) ?? BEATS[0];
+
+/** The landing's one entry. */
+export const ENTRY = 'Choose a place';
+
+/** The bar's reading entry: the evidence first, then method, sensors, sources. */
+export const READING = 'Method';
+
+/** The three parts under the landing's hero, by the same names as the bar, without their numbers. */
+export const PART_NAMES = {
+  model: 'World model',
+  environment: 'Test world',
+  agent: 'Agent',
+} as const;
