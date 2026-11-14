@@ -11,9 +11,10 @@ the page looks answers up in:
 
 Without `--plan` it builds the demo path's plan from `GET /api/regions`: the regions, the evidence, each region's
 calendar and start list, each named fire's box calendar, and for every featured fire that is not a blind test fire
-its run held out and then revealed, the run's assets, its passes, one round of next look played by the least sure
-rule, and every reference player's play of that episode step by step (the oracle as the ceiling). Nothing of a blind
-test fire is run, held out or played.
+its run held out and then revealed, the run's assets, its pass list as a held-out window shows it (`hidden=VIIRS`)
+and in full for the reveal, every reference player's play of that episode step by step (the oracle as the ceiling),
+and one round of next look played with the looks of the reference player `least_sure`, taken from its play. Nothing
+of a blind test fire is run, held out or played. Only the files the index names are kept.
 
 Round ids are random on a live server; each round is renamed `nl-rec-<8 hex>` in every stored answer and key, so the
 recorded round replays with one id. Imagery published for viewing only (Esri World Imagery, and what is derived from
@@ -43,6 +44,7 @@ ESRI_WITHHELD: str = "Esri World Imagery is published for viewing, not for expor
 US_IMAGERY: str = "usgs_naip"
 ROUND_TILES: list[int] = [4, 4]
 ROUND_BUDGET: int = 4
+ROUND_PLAYER: str = "least_sure"     # the reference player whose looks the recorded round takes
 EXT: dict[str, str] = {"application/json": "json", "text/csv": "csv", "image/jpeg": "jpg", "image/png": "png"}
 KEPT_HEADERS: tuple[str, ...] = ("X-Row-Count", "Content-Disposition")
 FORBIDDEN: tuple[bytes, ...] = (b"MAP_KEY=", b"/Users/", b"/home/", b"isogon-notes")
@@ -172,7 +174,14 @@ class Recorder:
                 self.fetch("GET", path, query or None)
         return ans
 
-    def play_round(self, reset_body: dict[str, Any], policy: Callable[[dict[str, Any]], int], policy_name: str) -> None:
+    def play_actions(self, episode: dict[str, Any], player: str) -> list[int] | None:
+        """The looks a reference player takes on an episode, from its recorded play (None without a play route)."""
+        play = self.fetch("POST", "/api/env/next_look/play", body={**episode, "player": player})
+        steps = ((play or {}).get("play") or {}).get("steps") if isinstance(play, dict) else None
+        return [int(st["chosen_tile"]) for st in steps] if steps else None
+
+    def play_round(self, reset_body: dict[str, Any], policy: Callable[[dict[str, Any]], int], policy_name: str,
+                   actions_from: str = "") -> None:
         key = request_key("POST", "/api/env/next_look/reset", body=reset_body)
         if key in self.entries:
             return
@@ -203,7 +212,8 @@ class Recorder:
             time.sleep(5)
             self.entries.pop(state_key, None)
             self.parsed.pop(state_key, None)
-        self.rounds.append({"episode_from": reset_body, "round_id": rec_id, "policy": policy_name, "steps": steps})
+        self.rounds.append({"episode_from": reset_body, "round_id": rec_id, "player": policy_name,
+                            "actions_from": actions_from, "steps": steps})
 
     def record_plays(self, episode: dict[str, Any]) -> None:
         """Every reference player's play of one episode step by step (`POST /api/env/next_look/play`): the constant
@@ -250,10 +260,18 @@ class Recorder:
                 first, last = window.get("first_overpass_utc"), window.get("last_overpass_utc")
                 if first and last:
                     end = (_dt.date.fromisoformat(last[:10]) + _dt.timedelta(days=1)).isoformat()
-                    self.fetch("GET", "/api/passes", {"region_id": rid, "start": first[:10], "end": end})
+                    window = {"region_id": rid, "start": first[:10], "end": end}
+                    self.fetch("GET", "/api/passes", {**window, "hidden": "VIIRS"})   # what the held-out run may show
+                    self.fetch("GET", "/api/passes", window)                          # the reveal's full list
                 episode = {"region_id": rid, "start": start, "tiles": ROUND_TILES, "budget": ROUND_BUDGET}
-                self.play_round(episode, least_sure, "least_sure")
                 self.record_plays(episode)
+                actions = self.play_actions(episode, ROUND_PLAYER)
+                if actions is not None:
+                    self.play_round(episode, lambda obs, a=actions: a[obs["decision"]] if obs["decision"] < len(a) else -1,
+                                    ROUND_PLAYER, actions_from="POST /api/env/next_look/play, the reference player's own looks")
+                else:
+                    self.play_round(episode, least_sure, "least_sure_every_look",
+                                    actions_from="this tool: the least sure tile at every look while the budget lasts")
 
     def record_plan(self, plan: dict[str, Any]) -> None:
         for r in plan.get("requests", []):
@@ -283,6 +301,11 @@ class Recorder:
         }
         path = self.out / "index.json"
         path.write_text(json.dumps(doc, indent=1, ensure_ascii=False), encoding="utf-8")
+        # only what the index names is kept (an answer replaced while waiting, such as a round's state, goes)
+        named = {e["file"] for e in self.entries.values() if "file" in e}
+        for f in sorted((self.out / "files").iterdir()):
+            if f"files/{f.name}" not in named:
+                f.unlink()
         return path
 
     def check(self, key: str) -> list[str]:

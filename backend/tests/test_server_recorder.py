@@ -75,7 +75,8 @@ class StandIn:
             return js({"players": [{"id": "least_sure", "reads": "the observation"}, {"id": "constant", "reads": "nothing"},
                                    {"id": "oracle", "reads": "the hidden rows"}]})
         if u.path == "/api/env/next_look/play":
-            return js({"play_id": "play-" + body["player"], "play": {"player": {"id": body["player"]}}})
+            return js({"play_id": "play-" + body["player"],
+                       "play": {"player": {"id": body["player"]}, "steps": [{"chosen_tile": -1}, {"chosen_tile": 2}]}})
         if u.path == "/api/env/next_look/state":
             return js({"round_id": LIVE_ROUND, "done": self.decision >= 2, "end": {"reference_status": "ready"}})
         return js({"path": u.path})
@@ -109,10 +110,21 @@ class RecorderTests(unittest.TestCase):
             self.assertIn("withheld", entries["GET /api/runs/run_2012-08-10/satellite.jpg"])
             self.assertIn("withheld", entries["GET /api/runs/run_2012-08-10/terrain/ortho_8192.jpg"])
             self.assertIn("file", entries["GET /api/runs/run_2012-08-10/terrain/dem_1024_f32.bin"])
-            # the round's id is renamed everywhere, in keys and in stored answers, and the least sure tile is looked at
+            # the round's id is renamed everywhere, in keys and in stored answers, and the round takes the looks of the
+            # reference player of its name, from that player's play
             rid = index["rounds"][0]["round_id"]
             self.assertTrue(rid.startswith("nl-rec-"))
-            self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": 1, "decision": 0, "round_id": rid}), entries)
+            self.assertEqual((index["rounds"][0]["player"], index["rounds"][0]["actions_from"][:30]),
+                             ("least_sure", "POST /api/env/next_look/play, "))
+            self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": -1, "decision": 0, "round_id": rid}), entries)
+            self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": 2, "decision": 1, "round_id": rid}), entries)
+            # the pass list as a held-out window shows it, and in full for the reveal
+            passes = [k for k in entries if k.startswith("GET /api/passes?")]
+            self.assertEqual(len(passes), 2)
+            self.assertEqual(sum("hidden=VIIRS" in k for k in passes), 1)
+            # every stored file is one the index names
+            named = {e["file"] for e in entries.values() if "file" in e}
+            self.assertEqual({f"files/{f.name}" for f in (Path(tmp) / "files").iterdir()}, named)
             text = "".join(p.read_text(errors="replace") for p in (Path(tmp) / "files").iterdir()) + json.dumps(index)
             self.assertNotIn(LIVE_ROUND, text)
             # every reference player's play: the constant tile once per tile, the oracle only as the ceiling
