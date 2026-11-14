@@ -37,3 +37,6 @@ data/cache/
 *.h5
 *.tif
 *.tiff
+
+# Private internal notes
+.private/
