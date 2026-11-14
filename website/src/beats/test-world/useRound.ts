@@ -43,7 +43,8 @@ export interface RoundApi {
   /** The tile under keyboard focus. */
   focus: number | null;
   begin: (fire: RoundFire) => void;
-  leave: () => void;
+  /** End the round; `keepRun` leaves the round's held-out run on the terrain (World model opens blind on it). */
+  leave: (keepRun?: boolean) => void;
   pick: (tile: number) => void;
   next: () => void;
   moveFocus: (dRow: number, dCol: number) => void;
@@ -98,17 +99,20 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
     [requestBlindRun, openEnv],
   );
 
-  const leave = useCallback(() => {
-    seqRef.current += 1;
-    const f = fire;
-    setState(null);
-    setEnv(null);
-    setEnd(null);
-    setError(null);
-    setFire(null);
-    setFocus(null);
-    if (f) restoreRun(f);
-  }, [fire, restoreRun]);
+  const leave = useCallback(
+    (keepRun = false) => {
+      seqRef.current += 1;
+      const f = fire;
+      setState(null);
+      setEnv(null);
+      setEnd(null);
+      setError(null);
+      setFire(null);
+      setFocus(null);
+      if (f && !keepRun) restoreRun(f);
+    },
+    [fire, restoreRun],
+  );
 
   /** Spend the current look on a tile (or pass with -1); the answer says what it revealed and what comes next. */
   const answer = useCallback(

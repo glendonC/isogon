@@ -123,6 +123,8 @@ export interface WorkspaceStore {
   };
   step: Step;
   goStep: (s: Step) => void;
+  /** The one way into World model: VIIRS hidden where it can be, close to the fire. */
+  openModel: () => void;
   /** Why a step cannot be opened here (null: it can). */
   blocked: Partial<Record<Step, string | null>>;
 }

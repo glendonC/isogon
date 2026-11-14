@@ -59,7 +59,15 @@ export function WorkspaceBar({ place, placeDates, placeDetail, onPlace, beat, on
         <button type="button" className="iso-bar__brand" onClick={onLanding} aria-label="Isogon, back to the landing (Esc)">
           <IsogonMark />
         </button>
-        <button type="button" className="iso-bar__place" onClick={onPlace} aria-describedby="iso-bar-placecard">
+        <button
+          type="button"
+          className="iso-bar__place"
+          onClick={(e) => {
+            onPlace();
+            if (e.detail > 0) e.currentTarget.blur();
+          }}
+          aria-describedby="iso-bar-placecard"
+        >
           <span>{place}</span>
           {placeDates ? <span className="sys-value iso-bar__dates">{placeDates}</span> : null}
           <svg viewBox="0 0 10 10" aria-hidden="true">
@@ -84,7 +92,10 @@ export function WorkspaceBar({ place, placeDates, placeDetail, onPlace, beat, on
               aria-current={beat === b.id ? 'step' : undefined}
               disabled={Boolean(blocked)}
               title={blocked ?? `${b.line} (${b.key})`}
-              onClick={() => onBeat(b.id)}
+              onClick={(e) => {
+                onBeat(b.id);
+                if (e.detail > 0) e.currentTarget.blur();
+              }}
             >
               {b.name}
             </button>

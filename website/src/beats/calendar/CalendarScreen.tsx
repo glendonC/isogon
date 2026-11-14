@@ -360,7 +360,7 @@ export function CalendarScreen({ place, stageMonth, canOpen, onOpenMonth, onChoo
             )}
             {csvPath && (
               <RouteLink className="sys-ctl cal-screen__act" path={csvPath}>
-                <span className="sys-key">C</span> This month's rows as CSV
+                This month's rows as CSV
               </RouteLink>
             )}
           </div>

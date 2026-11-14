@@ -3,7 +3,6 @@ import { useWorkspace } from '../../app/store';
 import { ThreeWaysPlane } from '../../compare/ThreeWaysPlane';
 import { fireNameWords, fireOfStart } from '../../app/places';
 import { utcDay } from '../../content/realRuns';
-import { beatOf } from '../../app/names';
 import type { StageFireAnchor } from '../../stage/earthCutawayTypes';
 import { fireAt, fireExtent, hoursWords, looksOf, onScreen, passFacts, recordLine, runBox, satelliteName, windowCounts, type ScreenBox } from './fire';
 import '../../styles/world-model.css';
@@ -59,7 +58,6 @@ function anchorBox(a: StageFireAnchor | null): ScreenBox | null {
 export function WorldModelScene() {
   const ws = useWorkspace();
   const { run, test, time, model } = ws;
-  const b = beatOf('model');
   const facts = passFacts(run.active, time.pass);
   const counts = windowCounts(run.active);
   const box = runBox(run.active);
@@ -77,12 +75,6 @@ export function WorldModelScene() {
   const nameWords = registryFire ? fireNameWords(registryFire) : null;
   // A recorded test fire may open on another window than the one on record: the record says which.
   const otherWindow = looks && run.realStart && looks.firstUtc.slice(0, 10) !== run.realStart.slice(0, 10) ? looks.firstUtc : null;
-  // The banner shows once each time the part opens, when its run is in (not while a run is being asked for).
-  const settled = scene !== 'hiding' && !run.pendingStart;
-  const [banner, setBanner] = useState(false);
-  useEffect(() => {
-    if (settled) setBanner(true);
-  }, [settled]);
 
   let plate: React.ReactNode = null;
   let hidden = false;
@@ -272,13 +264,6 @@ export function WorldModelScene() {
 
   return (
     <div className="wm-scene" data-scene={scene}>
-      {banner && (
-        <div className="wm-banner sys-plate">
-          <span className="sys-title">World model</span>
-          <span className="sys-label">{(scene === 'record' && b.recordLine) || (run.beforeSharp && b.earlyLine) || b.line}</span>
-        </div>
-      )}
-
       {beside ?? (at ? label : plate && <div className="wm-corner sys-plate">{plate}</div>)}
 
       {readout && <div className="wm-readout sys-readout sys-plate">{readout}</div>}

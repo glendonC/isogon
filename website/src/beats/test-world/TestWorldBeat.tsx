@@ -98,7 +98,7 @@ export function TestWorldBeat() {
         <button type="button" className="sys-ctl sys-plate" onClick={round.next}>
           <span className="sys-key">Enter</span> {st.done ? 'Play again' : st.awaitingNext || left === 0 ? 'Next pass' : 'Pass'}
         </button>
-        <button type="button" className="sys-ctl sys-plate" onClick={() => ws.goStep('fire')}>
+        <button type="button" className="sys-ctl sys-plate" onClick={ws.openModel}>
           <span className="sys-key">Esc</span> Leave
         </button>
       </div>

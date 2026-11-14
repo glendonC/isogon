@@ -328,6 +328,10 @@ export function App() {
       anchorListeners.current.delete(fn);
     };
   }, []);
+  /** Each entry into World model, counted, so its title card shows once per entry (and never again on a sheet's close). */
+  const [modelEntry, setModelEntry] = useState(0);
+  const [cardEntry, setCardEntry] = useState(-1);
+  const prevStepRef = useRef<Step>('fire');
   /** The round of Test world (beats/test-world/useRound.ts), for the callbacks defined before it. */
   const roundRef = useRef<RoundApi | null>(null);
   // The places registry: the default fire, each place's opening start, and the recorded test fires.
@@ -694,15 +698,20 @@ export function App() {
       setDebriefOpen(false);
       // A round or a test on a recorded test fire, or where nothing can be hidden: not played or run.
       const nothingToHide = !isRealRun(activeRun) || beforeSharpSatellite(activeRun) || hideRefused(activeRun?.region.id ?? '', realStart);
+      // While a run is on its way (the landing's, a fire just chosen), the test waits for it rather than being refused;
+      // the hide refuses a closed window or a year before VIIRS by itself once the run is in.
+      const runInFlight = isExecuting || !activeRun;
       if ((next === 'look' || next === 'agent') && step !== next && nothingToHide) return;
-      if (next === 'test' && step !== 'test' && !holdoutViirs && !revealed && nothingToHide) return;
+      if (next === 'test' && step !== 'test' && !holdoutViirs && !revealed && !runInFlight && nothingToHide) return;
       if (next === step && next !== 'look') return;
-      if (step === 'look' && next !== 'look' && round) leaveRound();
+      // Leaving a round for World model keeps the round's held-out run: the test opens blind on it at once.
+      if (step === 'look' && next !== 'look' && round) leaveRound(next === 'test');
       if (next === 'record' || next === 'fire') {
         if (step === 'test') restoreFullRun();
       } else if (next === 'test') {
+        // A run is on its way (a fire just chosen, a month just opened): the hide waits for it.
         if (!holdoutViirs && !revealed) {
-          if (round || step === 'look') pendingHideRef.current = true;
+          if (round || step === 'look' || runInFlight) pendingHideRef.current = true;
           else toggleHoldoutLive();
         }
       } else if (next === 'look') {
@@ -710,24 +719,32 @@ export function App() {
       }
       setStep(next);
     },
-    [step, round, leaveRound, restoreFullRun, holdoutViirs, revealed, toggleHoldoutLive, startRound, hideRefused, activeRun, realStart],
+    [step, round, leaveRound, restoreFullRun, holdoutViirs, revealed, toggleHoldoutLive, startRound, hideRefused, activeRun, realStart, isExecuting],
   );
 
-  /** A part from the bar or its key: the Calendar, the fire and its test, a round. The Agent is not open yet. */
+  /**
+   * The one way into World model, from the bar, its key, Enter on the Calendar, V, Esc from a round or the Agent part:
+   * VIIRS hidden where it can be hidden (a real run from 2012 on, not a recorded test fire), on the estimate's own view,
+   * close to its fire. Elsewhere the run as it is.
+   */
+  const openModel = useCallback(() => {
+    if (step === 'fire' || step === 'test') return setDebriefOpen(false);
+    setWorkspaceMode('reconstruction');
+    setCameraPreset('canyon');
+    const blind =
+      isExecuting || !activeRun || (isRealRun(activeRun) && !beforeSharpSatellite(activeRun) && !hideRefused(activeRun.region.id, realStart));
+    goStep(blind ? 'test' : 'fire');
+  }, [goStep, step, activeRun, realStart, hideRefused, isExecuting]);
+
+  /** A part from the bar or its key: the Calendar, World model, a round, the players. */
   const goBeat = useCallback(
     (b: BeatId) => {
       if (b === 'calendar') goStep('record');
-      else if (b === 'model') {
-        if (step === 'fire' || step === 'test') return setDebriefOpen(false);
-        // World model opens with VIIRS hidden where it can be hidden, on the estimate's own view, close to its fire.
-        setWorkspaceMode('reconstruction');
-        setCameraPreset('canyon');
-        const blind = isRealRun(activeRun) && !beforeSharpSatellite(activeRun) && !hideRefused(activeRun?.region.id ?? '', realStart);
-        goStep(blind ? 'test' : 'fire');
-      } else if (b === 'world') goStep('look');
+      else if (b === 'model') openModel();
+      else if (b === 'world') goStep('look');
       else if (b === 'agent') goStep('agent');
     },
-    [goStep, step, activeRun, realStart, hideRefused],
+    [goStep, openModel],
   );
 
 
@@ -786,10 +803,10 @@ export function App() {
 
   /** V: on the test step it hides, then reveals, then opens the score; elsewhere it goes to the test. */
   const testAction = useCallback(() => {
-    if (step !== 'test') return goStep('test');
+    if (step !== 'test') return step === 'fire' ? goStep('test') : openModel();
     if (revealed) return setDebriefOpen(true);
     toggleHoldoutLive();
-  }, [step, revealed, goStep, toggleHoldoutLive]);
+  }, [step, revealed, goStep, openModel, toggleHoldoutLive]);
 
 
   // Continuous 60fps time evolution when playback is active
@@ -895,7 +912,7 @@ export function App() {
         const move: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
         if (e.key === 'Escape') {
           e.preventDefault();
-          goStep('fire');
+          openModel();
         } else if (e.key === 'Enter') {
           e.preventDefault();
           nextLook();
@@ -950,14 +967,16 @@ export function App() {
           } else if (cleanHud) {
             setCleanHud(false);
           } else if (step === 'agent') {
-            goStep('fire');
+            openModel();
+          } else if (step === 'test' && (holdoutViirs || revealed)) {
+            // A test in hand: Esc closes what is open and never leaves the workspace by itself.
           } else {
             exitToOverview();
           }
         } else if (e.key === 'Enter' && (!onControl || Boolean(target?.closest('.iso-bar__step[data-active="true"], .iso-track__lane')))) {
           e.preventDefault();
           // The step's one forward action
-          if (step === 'record') goStep('fire');
+          if (step === 'record') openModel();
           else if (step === 'fire') goStep('test');
           else if (step === 'test') {
             if (debriefOpen) goStep('look');
@@ -1009,6 +1028,8 @@ export function App() {
     step,
     goStep,
     goBeat,
+    openModel,
+    holdoutViirs,
     testAction,
     evidenceOpen,
     areaOpen,
@@ -1350,11 +1371,32 @@ export function App() {
     },
     step,
     goStep,
+    openModel,
     blocked: stepBlocked,
   };
   const beatPanel = <WorldModelBeat>{finding}</WorldModelBeat>;
   /** World model on a real run: in place on the terrain (beats/world-model/WorldModelScene.tsx), no column. */
+  const inModelStep = step === 'fire' || step === 'test';
   const modelScene = inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen;
+  // An entry into World model is counted; its title card waits for the entry's own state (the run in, the hide done)
+  // and never comes after the reveal.
+  useEffect(() => {
+    const was = prevStepRef.current === 'fire' || prevStepRef.current === 'test';
+    prevStepRef.current = step;
+    if (inModelStep && !was) setModelEntry((n) => n + 1);
+  }, [step, inModelStep]);
+  const cardSettled = modelScene && !pendingStart && !blindLoading && !revealed && (step !== 'test' || holdoutViirs);
+  useEffect(() => {
+    if (cardSettled && cardEntry !== modelEntry) setCardEntry(modelEntry);
+  }, [cardSettled, cardEntry, modelEntry]);
+  const modelName = beatOf('model');
+  const cardLine = closedWindow
+    ? modelName.recordLine
+    : noSharp
+      ? modelName.earlyLine
+      : holdoutViirs || revealed
+        ? modelName.line
+        : modelName.openLine;
 
   return (
     <WorkspaceProvider value={store}>
@@ -1414,6 +1456,12 @@ export function App() {
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
             {step === 'record' && <CalendarBeat />}
+            {inModelStep && runIsReal && cardEntry === modelEntry && (
+              <div key={modelEntry} className="wm-banner sys-plate">
+                <span className="sys-title">{modelName.name.replace(/^\d+\s*/, '')}</span>
+                <span className="sys-label">{cardLine ?? modelName.line}</span>
+              </div>
+            )}
             {modelScene && <WorldModelScene />}
             {step === 'agent' && <AgentBeat />}
             {step === 'look' && <TestWorldBeat />}

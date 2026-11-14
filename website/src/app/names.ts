@@ -17,6 +17,8 @@ export interface BeatName {
   recordLine?: string;
   /** The line where the part opens on a run from before VIIRS flew, when the usual line would not be true there. */
   earlyLine?: string;
+  /** The line where the part shows a run with every satellite (a hide that has not happened), so as to stay true. */
+  openLine?: string;
 }
 
 export const BEATS: readonly BeatName[] = [
@@ -28,6 +30,7 @@ export const BEATS: readonly BeatName[] = [
     line: 'This fire rebuilt from MODIS alone, then checked against VIIRS, which is hidden.',
     recordLine: 'A recorded test fire: its test is on record, and the terrain shows every satellite.',
     earlyLine: 'Before 2012 no VIIRS flew: this fire rebuilt from MODIS alone, with nothing hidden.',
+    openLine: 'This fire with every satellite. Hide VIIRS to test the estimate made from MODIS alone.',
   },
   {
     id: 'world',
