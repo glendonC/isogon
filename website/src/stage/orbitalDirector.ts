@@ -185,7 +185,6 @@ export interface CinemaFramePose {
   lookAt: THREE.Vector3;
   up: THREE.Vector3;
   fov: number;
-  cutawayPlane: number;
   syntheticTimeProgress: number;
   cycleProgress: number;
   legProgress: number;
@@ -332,10 +331,6 @@ export class CinemaDirector {
       .applyAxisAngle(this.tmpForward, bankAngle)
       .normalize();
 
-    // Sweep the 3D optical sensor curtain smoothly across the mountain fireline during each canyon pass
-    const sweepWave = Math.sin((legProgress * Math.PI * 2.0) - Math.PI * 0.35);
-    const cutawayPlane = sweepWave * 0.36;
-
     // Advance diurnal fire reconstruction epoch smoothly from morning ignition through peak afternoon burn
     const syntheticTimeProgress = 0.18 + 0.68 * (0.5 - 0.5 * Math.cos(legProgress * Math.PI * 2.0));
 
@@ -348,7 +343,6 @@ export class CinemaDirector {
       lookAt: this.tmpLook,
       up: this.tmpUp,
       fov,
-      cutawayPlane,
       syntheticTimeProgress,
       cycleProgress: wrappedSec / totalCycleSec,
       legProgress,

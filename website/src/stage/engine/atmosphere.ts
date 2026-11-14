@@ -199,6 +199,10 @@ vec3 atmAerialPerspective(
  */
 export const NIGHT_GLSL = /* glsl */ `
 uniform float uNight; // 0 by day, 1 on a night overpass of a real run
+// How much brighter the moonlit ground is drawn than in a close view: 1 or more. The whole block
+// seen from far is a small dark shape on a dark page and its relief has to read; a material that
+// does not set it (the sky) gets 1.
+uniform float uMoonLift;
 vec3 nightGrade(vec3 c) {
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   // Relief keeps its contrast up to the brightness of ordinary ground. Anything brighter (bare
@@ -206,7 +210,7 @@ vec3 nightGrade(vec3 c) {
   // is brighter than the dimmest fire light.
   float held = l < 0.22 ? l : 0.22 + 0.06 * (1.0 - exp(-(l - 0.22) / 0.06));
   held *= mix(1.0, 0.7, smoothstep(0.45, 0.9, l));
-  vec3 moon = mix(vec3(l), c, 0.3) * (held / max(l, 1e-4)) * vec3(0.150, 0.215, 0.352);
+  vec3 moon = mix(vec3(l), c, 0.3) * (held / max(l, 1e-4)) * vec3(0.150, 0.215, 0.352) * max(uMoonLift, 1.0);
   return mix(c, moon, uNight);
 }
 `;

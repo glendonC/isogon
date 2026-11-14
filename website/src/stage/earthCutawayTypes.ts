@@ -55,6 +55,7 @@ export interface EarthStageTelemetry {
   activeTheaterId: TheaterId;
   slewActive: boolean;
   cinemaProgress: number;
+  /** Always 0: it was the sensor curtain's place across the block, and no curtain is drawn. */
   wavePosition: number;
   /** Attribution of the imagery on screen, empty when the imagery is procedural. */
   imageryAttribution?: string;
@@ -67,9 +68,8 @@ export interface EarthStageTelemetry {
    */
   intensityLegend?: { scale: 'linear' | 'log'; ticks: Array<{ at: number; mwPerKm2: number }> };
   /**
-   * Real runs: the overpass on show. On the landing the stage chooses it (the night VIIRS overpass
-   * with the most detections) and, when that overpass has no MODIS detections, shows the MODIS
-   * overpass nearest in time on the raw side: `pairedModis`. The legend has to name both times.
+   * Real runs: the overpass on show. On the landing the stage chooses it. `pairedModis` is no
+   * longer set: it named a second overpass drawn beside the sensor curtain, and no curtain is drawn.
    */
   realPass?: {
     index: number;
@@ -86,6 +86,8 @@ export interface EarthStageTelemetry {
    * is null. Sent with the rest of the telemetry (about three times a second).
    */
   regionGrid?: { divisions: number; points: Array<[number, number] | null> };
+  /** Real runs: the pass on show, and whether its detections are hidden from the model and the picture. */
+  passOnShow?: { index: number; sensor: string; timeUtc: string; isDay: boolean; hidden: boolean };
   /**
    * Real runs, on a pass whose detections are hidden: the last pass before it that the stage shows,
    * whose detections are drawn as an afterglow, and how many hours before the pass on show it was.
@@ -95,6 +97,7 @@ export interface EarthStageTelemetry {
   landingStandpoint?: LandingStandpointCheck;
 }
 
+/** The sensor curtain's seam on screen. No curtain is drawn: `visible` is always false. */
 export interface CurtainScreenSeam {
   /** Seam point at the slab's near edge, on the terrain surface. */
   near: { x: number; y: number };
@@ -181,6 +184,7 @@ export interface EarthCutawayStageProps {
   showUncertainty: boolean;
   holdoutViirs: boolean;
   sensitivityThreshold: number;
+  /** Not used: it placed the sensor curtain across the block, and no curtain is drawn. */
   cutawaySplit: number | null;
   cameraPreset: InspectorCameraPreset;
   cinemaActive: boolean;
@@ -210,6 +214,13 @@ export interface EarthCutawayStageProps {
    */
   landingPass?: number;
   /**
+   * Landing only, real runs. The stage tours the run by itself: it rests on the pass it chose, then
+   * steps slowly through the run's night passes in their order, the hidden ones among them, the
+   * lights fading out and in, and comes round again. `telemetry.passOnShow` names the pass on show.
+   * Ignored while `landingPass` is given, and under reduced motion.
+   */
+  landingTour?: boolean;
+  /**
    * Real runs. When the time on show reaches another pass, the pass arrives as a scan: a front
    * crosses the region along the pass's ground track and what the pass brought appears behind it.
    * Off by default. Never under reduced motion.
@@ -217,11 +228,11 @@ export interface EarthCutawayStageProps {
   passScan?: boolean;
   /**
    * Real runs. Draws the outline of each detection's own pixel around its light, on the landing and
-   * on the estimate's side of the workspace (a 1 km MODIS pixel then reads as coarse beside the
-   * model's 375 m cells). Off by default.
+   * in the workspace (a 1 km MODIS pixel then reads as coarse beside the model's 375 m cells).
+   * Off by default.
    */
   detectionPixels?: boolean;
-  /** Landing only. Projected sensor curtain seam in viewport CSS px, called each rendered frame. */
+  /** Called once with `visible: false`: no curtain is drawn, so there is no seam to follow. */
   onCurtainScreen?: (seam: CurtainScreenSeam) => void;
   /** Asks for `telemetry.regionGrid` with this many cells each way (1 to 32). */
   regionGridDivisions?: number;

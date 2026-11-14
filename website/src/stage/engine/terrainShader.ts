@@ -85,7 +85,11 @@ ${COMMON_HEIGHTFIELD_GLSL}
 ${SCAN_LATTICE_GLSL}
 
 // How strongly the detections' light falls on the ground near them and farther out (display choice)
-const float FIRE_CAST_NEAR = 10.0;
+// From far (the whole block in view) a detection is a few pixels: its light and its fall on the
+// ground are lifted so a small fire still reads as fire (display choice)
+const float FAR_LIGHT_LIFT = 2.4;
+const float FAR_CAST_LIFT = 1.4;
+const float FIRE_CAST_NEAR = 14.0;
 const float FIRE_CAST_FAR = 9.0;
 const float FIRE_CAST_EASE = 0.8;
 
@@ -167,6 +171,7 @@ uniform float uHeldOut;      // 1 on a pass whose detections were kept from the 
 // A hidden pass: above 0 the light texture holds the last visible pass, drawn as an afterglow at
 // this share of its light. 0: the lights are the detections of the pass on show.
 uniform float uAfterglow;
+uniform float uFarView;      // 0 in a close view, 1 when the whole block is in view: lights and their fall on the ground are lifted there
 uniform float uLightGain;    // share of the lights drawn (below 1 while the landing fades from one pass to the next)
 uniform float uBeliefQuiet;  // 1 on a run that kept nothing from the model: its squares are drawn quieter
 // A pass as a scan: while a pass arrives, a front crosses the region along its ground track and
@@ -394,6 +399,8 @@ float revealCore(float field) {
 const float BELIEF_DECLARED = 0.5;   // a cell at this probability or more is declared burning
 const float BELIEF_MAY_BURN = 0.02;  // the dotted line runs where the smoothed probability crosses this
 const float BELIEF_CELL_FILL = 0.58; // side of a certain cell's square, as a share of the cell
+const float BELIEF_INK_FAR = 1.35;       // how much stronger the ink is drawn on such small cells
+const float BELIEF_CELL_FILL_FAR = 0.88; // the same when the cell is only a few pixels wide on screen
 const float BELIEF_FRAME_HALF = 0.40; // half side of the open frame of a declared cell on a held-out pass
 
 // Probability and expected intensity of one cell at the time on show
@@ -444,7 +451,10 @@ vec3 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   // depends on its size on screen, so the marks weigh about the same at any distance: solid when
   // small, an outline over a faint pane when larger, and its four corners alone in a close view,
   // where an outline around every cell would cage the ground and the lights.
-  float halfSide = BELIEF_CELL_FILL * 0.5 * sqrt(p);
+  // (a cell that is only a few pixels wide is drawn fuller and, below, brighter: from far the
+  // estimate has to read as a shape, and the ground between such squares could not be seen anyway)
+  float tiny = 1.0 - smoothstep(5.0, 11.0, inversesqrt(aa.x * aa.y));
+  float halfSide = mix(BELIEF_CELL_FILL, BELIEF_CELL_FILL_FAR, tiny) * 0.5 * sqrt(p);
   vec2 d = abs(fc) - halfSide;
   float inside = (1.0 - smoothstep(-0.5 * aa.x, 0.5 * aa.x, d.x)) * (1.0 - smoothstep(-0.5 * aa.y, 0.5 * aa.y, d.y)) * some;
   vec2 dIn = d + 1.3 * aa;
@@ -460,7 +470,8 @@ vec3 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   // A pass kept from the model: every cell the model declares burning is an open frame in place
   // of its square, the answer it committed to and has not been shown. The other cells stay as
   // they are.
-  float declared = step(BELIEF_DECLARED, p) * heldOut;
+  // (an open frame needs about seven pixels to read as open; smaller cells keep their square)
+  float declared = step(BELIEF_DECLARED, p) * heldOut * smoothstep(5.5, 8.0, cellPx);
   float box = max(abs(fc.x), abs(fc.y));
   float strokeCells = max(1.5 * px, 0.06);
   float ring = (1.0 - smoothstep(BELIEF_FRAME_HALF - 0.5 * px, BELIEF_FRAME_HALF + 0.5 * px, box))
@@ -488,8 +499,8 @@ vec3 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   line *= dots;
   lineEdge *= dots;
 
-  float strength = mix(0.70, 1.0, heatOf(be.y));
-  return vec3(max(cells, line * 0.9), lineEdge * 0.7, mix(strength, 1.0, line));
+  float strength = mix(0.70, 1.0, heatOf(be.y)) * mix(1.0, BELIEF_INK_FAR, tiny);
+  return vec3(max(cells, line * 0.9), lineEdge * 0.7, mix(strength, mix(1.0, BELIEF_INK_FAR, tiny), line));
 }
 
 // --- The board of tiles ------------------------------------------------------------------------
@@ -558,9 +569,9 @@ void main() {
   // The pass being scanned: 1 on ground the front has crossed (everywhere once it is through)
   float scanAlong = dot(pKm, uScan.xy);
   float scanned = mix(1.0, 1.0 - smoothstep(uScan.z - 0.25, uScan.z, scanAlong), uScan.w);
-  vec4 lit = detectionLight(vUv) * uFootMix.x * scanned * uLightGain;
+  vec4 lit = detectionLight(vUv) * uFootMix.x * scanned * uLightGain * (1.0 + FAR_LIGHT_LIFT * uFarView);
   // How much of the light's fall on the ground is drawn (all of it for the pass on show)
-  float castShare = uLightGain;
+  float castShare = uLightGain * (1.0 + FAR_CAST_LIFT * uFarView);
   if (uAfterglow > 0.001) {
     // The pass on show is hidden. What the last visible pass detected is kept as an afterglow:
     // blurred, dull and red, with no point of light, so it cannot be taken for a detection of this pass.
@@ -568,7 +579,9 @@ void main() {
     // instrument last saw fire, not what burns now. By night only: by day a glow would be a red
     // tint on sunlit ground, and the trace of the fire is the smoke that pass left.
     vec4 soft = textureLod(uFireHist, vUv, 3.4);
-    lit = vec4(vec3(0.62, 0.10, 0.03) * dot(soft.rgb, vec3(0.5, 0.4, 0.1)) * 1.3, 0.0) * uAfterglow * uNight * uFootMix.x * uLightGain;
+    // (lifted when it is small on screen, as the lights are: from far a dull glow would vanish)
+    float glowLift = mix(1.0, 2.6, smoothstep(0.02, 0.06, kmPerPx));
+    lit = vec4(vec3(0.62, 0.10, 0.03) * dot(soft.rgb, vec3(0.5, 0.4, 0.1)) * 1.3 * glowLift, 0.0) * uAfterglow * uNight * uFootMix.x * uLightGain;
     castShare = 0.30 * uAfterglow * uLightGain;
   }
   // The model's belief as ink marks (worked out here, outside any branch, for its derivatives)
@@ -797,7 +810,9 @@ void main() {
         // The belief, in ink (see beliefMarks). By day a dark edge holds the ink on bright ground.
         vec3 ink = mix(vec3(1.30, 1.32, 1.36), vec3(0.40, 0.46, 0.56), uNight) * marks.z;
         postRgb = litEarth * (1.0 - 0.55 * marks.y * (1.0 - uNight) * hazeTrans.g);
-        postRgb = mix(postRgb, ink, marks.x * mix(0.84, 0.48, uBeliefQuiet) * hazeTrans.g);
+        // (while the landing fades from one pass to the next the ink dips with the lights, so the
+        // belief's change of time does not pop)
+        postRgb = mix(postRgb, ink, marks.x * mix(0.84, 0.48, uBeliefQuiet) * mix(0.4, 1.0, uLightGain) * hazeTrans.g);
       } else {
         // A run without belief frames: the estimate of the pass on show as a faint tint
         float zWide = mix(textureLod(uFieldTex0, vUv, 3.0).r, textureLod(uFieldTex1, vUv, 3.0).r, uFrameMix);
