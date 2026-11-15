@@ -38,7 +38,7 @@
 
 .iso-area-map__box {
   fill: rgba(240, 138, 69, 0.14);
-  stroke: var(--sys-detection);
+  stroke: var(--id-signal, #9fe3ff);
   stroke-width: 1.5;
 }
 

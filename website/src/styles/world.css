@@ -59,7 +59,7 @@
 
 .world-mark:hover,
 .world-mark[aria-expanded='true'] {
-  background: var(--sys-detection);
+  background: var(--id-signal, #9fe3ff);
 }
 
 /* A place whose fires are all kept as the test: a hollow square. Held: hollow and dashed, fainter. */

@@ -55,7 +55,7 @@ const DEFAULT_RAMP = [
   [255, 250, 220],
 ];
 
-/** The site's ramp for detections, dim ember to white heat; `--sys-detection` sits at its middle. */
+/** The site's ramp for detections, dim ember to white heat, through the orange of MODIS fire. */
 export const FIRE_RAMP: Array<[number, [number, number, number]]> = [
   [0, [74, 22, 10]],
   [0.35, [168, 58, 24]],

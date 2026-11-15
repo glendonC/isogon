@@ -216,8 +216,8 @@ export function fireBlock(place: unknown, fire: unknown, run: unknown, opts: Fir
   return {
     id,
     ground,
-    // The fire is the subject here, not the instrument: every pass's footprints as a wash in the detection's colour
-    marks: [{ kind: 'detections', instrument: 'modis', ink: 'detection', draw: 'wash', rows }],
+    // Every pass's MODIS footprints as a wash, in MODIS's colour
+    marks: [{ kind: 'detections', instrument: 'modis', ink: 'instrument', draw: 'wash', rows }],
     label: { title: str(obj(fire).label) ?? id, lines },
     night: true,
   };

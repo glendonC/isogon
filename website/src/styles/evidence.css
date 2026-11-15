@@ -154,7 +154,7 @@
 }
 
 .iso-ev-gain-bar[data-role='learned'] > span {
-  background: var(--sys-detection);
+  background: var(--sys-ink);
 }
 
 /* Method and Data scale + calibration visual pane */
