@@ -1066,6 +1066,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const uRevealed = new THREE.Vector2(0, 0);
     // The day's photograph of the box (prop dayPicture): textures by address, and the one on show
     const uDayJoin = { value: 0.0 };
+    // (1 while that photograph is the false-colour one: its green is laid quieter, see the terrain shader)
+    const uDayFalse = { value: 0.0 };
     // The drawn fine texture where the picture is magnified: none on a stand-in
     const uMicroDetail = { value: 1.0 };
     const dayTextures = new Map<string, THREE.Texture | 'loading' | 'missing'>();
@@ -1366,6 +1368,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uDeclaredGiven,
       uChanceSquares,
       uDayJoin,
+      uDayFalse,
       uMicroDetail,
       uRevealArrive: { value: uRevealArrive },
       uAfterglow,
@@ -3604,6 +3607,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         terrainUniforms.uOrthoTexelKm.value = nextBundle.widthKm / Math.max(1, img?.width ?? 256);
         dayApplied = true;
         uDayJoin.value = DAY_PICTURE_JOIN;
+        uDayFalse.value = p.dayPicture === 'false_color' ? 1 : 0;
       } else if (dayApplied) {
         terrainUniforms.uSatNext.value = nextBundle.satTex;
         terrainUniforms.uSatPrev.value = prevBundle.satTex;
@@ -3611,6 +3615,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         terrainUniforms.uOrthoTexelKm.value = nextBundle.orthoTexelKm;
         dayApplied = false;
         uDayJoin.value = 0;
+        uDayFalse.value = 0;
       }
       uMicroDetail.value = nextBundle.runId === null ? 0.0 : 1.0;
       // (a day's photograph is drawn by day, whatever the hour of the pass on show)

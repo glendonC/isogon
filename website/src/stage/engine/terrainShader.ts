@@ -201,6 +201,7 @@ uniform vec4 uBeliefBox;     // the part of the region that holds any belief: (u
 uniform float uHeldOut;      // 1 on a pass whose detections were kept from the estimate
 uniform vec4 uRevealArrive;  // detections laid on after scoring arrive: xy the pass's direction of travel (east, north), z the front along it (km from the box's centre), w the front's soft width (km)
 uniform float uDayJoin;       // share of the box's side over which a day's photograph blends into the land around (0: none)
+uniform float uDayFalse;      // 1 while the day's photograph on the box is the false-colour one (bands 7, 2, 1)
 uniform float uChanceSquares; // 1 when the squares sized by chance are asked for (eased)
 uniform float uDeclaredGiven; // 1 when the run says which cells its model declares at the hidden pass on show (the low bit of a cell's intensity byte)
 // A hidden pass: above 0 the light texture holds the last visible pass, drawn as an afterglow at
@@ -239,6 +240,16 @@ ${TERRAIN_LOOK_GLSL}
 // The filter footprint is therefore widened across the slope by the same amount ('contourUv' is
 // the uv step per world unit along the contour): detail becomes as coarse across the slope as the
 // projection already made it along the slope, soft instead of streaked.
+// The false-colour photograph (MODIS bands 7, 2, 1) shows plants a vivid green and burned ground
+// brown or red. Drawing: its green is laid at a third of its saturation and a little darker, so the
+// burn reads against the land and the box does not stand as a green slab on its land; red, brown,
+// the smoke's cyan and water keep their colours. Each pixel's own colour decides; no burn is drawn.
+vec3 quietFalseColour(vec3 c) {
+  float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float green = smoothstep(1.03, 1.30, c.g / max(max(c.r, c.b), 1e-4));
+  return mix(c, mix(vec3(luma), c, 0.33) * 0.85, green);
+}
+
 vec3 sampleOrtho(vec2 uv, float kmPerPx, vec2 contourUv, float stretch, float bare, out float insetWeight) {
   float worldPerKm = uUnitsPerMetre.x * 1000.0;
   float magnified = smoothstep(2.4, 0.9, kmPerPx / max(uOrthoTexelKm, 1e-5));
@@ -698,6 +709,7 @@ void main() {
   float insetWeight = 0.0;
   float bare = uAuxMix * (1.0 - smoothstep(0.15, 0.6, aux.a));
   vec3 photoRgb = sampleOrtho(vUv, kmPerPx, contourUv, stretch, bare, insetWeight);
+  if (uDayFalse > 0.5) photoRgb = quietFalseColour(photoRgb);
   // Over its last stretch the pack shows the context imagery, like its surface takes the context
   // elevation there: the step in detail between the two is spread over the join
   float joinK = contextJoin(vUv);
