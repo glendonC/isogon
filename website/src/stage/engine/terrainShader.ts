@@ -157,6 +157,7 @@ uniform vec2 uWindDirUv;
 
 // Terrain pack (all optional, weights are 0 without a pack)
 uniform sampler2D uAuxTex;      // r normal x (east), g normal z (south), b sky view, a canopy
+uniform float uMicroDetail;   // 1: the drawn fine texture (crowns, rock) where the picture is magnified; 0 on a stand-in
 uniform float uAuxMix;
 uniform sampler2D uShadowTex;   // baked once: r the sun shadow factor (1 = lit), g level ground
 uniform sampler2D uSmokeShadowTex; // transmittance of the smoke toward the sun at ground level
@@ -735,13 +736,14 @@ void main() {
   // --- Close-range micro detail: rock on steep walls, crown texture where canopy is high ----
   // Rendering treatment only. It appears when the imagery is magnified past its own resolution.
   float texelKm = mix(uOrthoTexelKm, uDetailTexelKm, insetWeight);
-  float detailFade = smoothstep(1.6, 0.45, kmPerPx / max(texelKm, 1e-5)) * (1.0 - waterMask);
+  // (none on a stand-in: its picture is coarse, and close to it the drawn texture aliases into waves)
+  float detailFade = smoothstep(1.6, 0.45, kmPerPx / max(texelKm, 1e-5)) * (1.0 - waterMask) * uMicroDetail;
   float rockMask = smoothstep(0.50, 1.05, trueSlope) * (1.0 - 0.75 * canopyK);
   float canopyMask = smoothstep(0.30, 0.75, canopyK) * (1.0 - smoothstep(0.9, 1.6, trueSlope));
   // On walls the imagery keeps only its color (see sampleOrtho), so the rock texture is drawn there
   // at any distance where it still resolves, not only when the imagery is magnified
   float wallFade = smoothstep(WALL_STRETCH_FROM, WALL_STRETCH_FULL, stretch) * bare
-                 * (1.0 - smoothstep(0.010, 0.030, kmPerPx)) * (1.0 - waterMask);
+                 * (1.0 - smoothstep(0.010, 0.030, kmPerPx)) * (1.0 - waterMask) * uMicroDetail;
   float roughness = 0.9;
   if (detailFade > 0.01 || wallFade > 0.01) {
     // Isotropic km-like coordinates in stage space, so detail is not stretched by the exaggeration

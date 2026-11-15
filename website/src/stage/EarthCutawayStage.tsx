@@ -1066,6 +1066,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const uRevealed = new THREE.Vector2(0, 0);
     // The day's photograph of the box (prop dayPicture): textures by address, and the one on show
     const uDayJoin = { value: 0.0 };
+    // The drawn fine texture where the picture is magnified: none on a stand-in
+    const uMicroDetail = { value: 1.0 };
     const dayTextures = new Map<string, THREE.Texture | 'loading' | 'missing'>();
     let dayApplied = false;
     let dayNow: EarthStageTelemetry['dayPicture'];
@@ -1364,6 +1366,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uDeclaredGiven,
       uChanceSquares,
       uDayJoin,
+      uMicroDetail,
       uRevealArrive: { value: uRevealArrive },
       uAfterglow,
       uLightGain,
@@ -3609,6 +3612,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         dayApplied = false;
         uDayJoin.value = 0;
       }
+      uMicroDetail.value = nextBundle.runId === null ? 0.0 : 1.0;
       // (a day's photograph is drawn by day, whatever the hour of the pass on show)
       const nightTarget =
         dayTex ? 0.0 : (realRun && rawPasses[0]?.isDay === false) || nextBundle.runId === null ? 1.0 : 0.0;
