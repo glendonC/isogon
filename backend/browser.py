@@ -22,6 +22,14 @@ from typing import Any
 
 # How the reveal is asked for here
 REVEAL_HERE: str = "backend.browser.reveal(run_id), with the run_id of the first answer"
+# What an answer made here says of its digests: they are this build's, and a seal the server made is not checked here
+DIGESTS_HERE: dict[str, Any] = {
+    "made_by": "this build of the numbers (numbers_built_by)",
+    "a_server_seal_checked_here": False,
+    "why": ("a digest is of the bytes one build of numpy gives, and the server's build is not this one; its seals are "
+            "checked where they were made. An answer made here is compared with the server's figure by figure within "
+            "0.08 percent, its classes, flags and words exactly (compare_with)"),
+}
 # Solved runs kept for their reveal and their pictures, the least recently asked dropped first
 MAX_RUNS: int = 4
 _RUNS: "OrderedDict[str, Any]" = OrderedDict()
@@ -64,7 +72,7 @@ def held_out_run(region_id: str, start: str, estimate: str | None = "challenger"
     terrain = load_region_terrain(resolve_region_request(region_id=region_id), allow_network=False)
     solved = solve_real_reconstruction(terrain, str(start), holdout_viirs=True, estimate=estimate, **solve)
     _keep(solved)
-    return withhold_scorer_keys(real_response(solved, {}), reveal_with=REVEAL_HERE)
+    return {**withhold_scorer_keys(real_response(solved, {}), reveal_with=REVEAL_HERE), "digests": DIGESTS_HERE}
 
 
 def reveal(run_id: str) -> dict[str, Any]:
@@ -72,7 +80,27 @@ def reveal(run_id: str) -> dict[str, Any]:
     `"reveal": true`."""
     from backend.model.real_run import real_response
 
-    return real_response(_solved(run_id), {})
+    return {**real_response(_solved(run_id), {}), "digests": DIGESTS_HERE}
+
+
+def compare_with(other: dict[str, Any], answer: dict[str, Any]) -> dict[str, Any]:
+    """Whether an answer made here and another made by another build of the numbers (the server's, a recording's)
+    agree as two builds can: figures within 0.08 percent, words, flags and counts exactly, digests not compared
+    (`backend.model.numbers_build.agree_within`). What differs by design is left out: the build itself, the note on
+    digests, how the reveal is asked for, and the wall clock times. A digest made elsewhere is never claimed as
+    checked here."""
+    import copy
+
+    from backend.model.numbers_build import agree_within
+
+    def comparable(doc: dict[str, Any]) -> dict[str, Any]:
+        doc = copy.deepcopy({k: v for k, v in doc.items() if k not in ("numbers_built_by", "digests")})
+        (doc.get("hidden_rows") or {}).pop("reveal_with", None)
+        for stage in doc.get("pipeline_stages") or []:
+            stage.pop("duration_ms", None)
+        return doc
+
+    return agree_within(comparable(other), comparable(answer))
 
 
 def pictures(run_id: str) -> dict[str, bytes]:

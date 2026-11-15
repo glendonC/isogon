@@ -32,8 +32,9 @@ def _as_the_route_names_it(resp: dict, route: dict) -> dict:
 
 
 def _comparable(resp: dict) -> str:
-    """The answer without how its reveal is asked for and without the wall clock times, which differ by design."""
-    doc = copy.deepcopy(resp)
+    """The answer without how its reveal is asked for, its note on digests and the wall clock times, which differ by
+    design."""
+    doc = copy.deepcopy({k: v for k, v in resp.items() if k != "digests"})
     (doc.get("hidden_rows") or {}).pop("reveal_with", None)
     for stage in doc.get("pipeline_stages", []):
         stage.pop("duration_ms", None)
@@ -72,6 +73,17 @@ class EntryTests(unittest.TestCase):
         self.assertEqual(sorted(self.pics), ["belief_u8.bin", "export.csv", "export.geojson", "reconstruction_u8.bin"])
         self.assertEqual(len(self.pics["reconstruction_u8.bin"]), 24 * 256 * 256 * 4)
         self.assertEqual(len(self.pics["belief_u8.bin"]), self.whole["belief_frames"]["bytes"])
+
+    def test_an_answer_made_here_says_its_digests_are_its_own_and_compares_with_the_route_s(self) -> None:
+        from backend import browser as B
+
+        for doc in (self.first, self.whole):
+            self.assertIs(doc["digests"]["a_server_seal_checked_here"], False)
+            self.assertIn("0.08 percent", doc["digests"]["why"])
+        got = B.compare_with(self.route_whole, _as_the_route_names_it(self.whole, self.route_whole))
+        self.assertTrue(got["agree"], got["differences"][:3])
+        self.assertGreater(got["digests_not_compared"], 0)
+        self.assertGreater(got["numbers"], 1000)
 
     def test_a_run_not_kept_is_said_so(self) -> None:
         from backend import browser as B

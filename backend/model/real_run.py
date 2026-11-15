@@ -1040,6 +1040,12 @@ def real_run_starts(
     }
 
 
+def _numbers_build() -> dict[str, Any]:
+    from backend.model.numbers_build import numbers_build
+
+    return numbers_build()
+
+
 def real_response(solved: SolvedRealRun, assets: dict[str, Any]) -> dict[str, Any]:
     """The `/api/reconstruct` response for a real run: a simulated run's keys, then the additive ones.
 
@@ -1055,6 +1061,8 @@ def real_response(solved: SolvedRealRun, assets: dict[str, Any]) -> dict[str, An
         "metrics": solved.metrics,
         "epoch_summaries": solved.epoch_summaries,
         "observer_passes": solved.observer_passes,
+        # which build of the numbers made this answer: its figures and digests are that build's
+        "numbers_built_by": _numbers_build(),
     }
     out.update(solved.extras)
     return out
