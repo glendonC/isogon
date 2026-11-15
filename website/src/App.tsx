@@ -1390,6 +1390,28 @@ export function App() {
     worldYears,
   });
   const guideKey = `${guide.step}:${guide.stateId}:${realStart}`;
+  // At the round's end the board stands above the results rows (the stage fits it into a shorter frame): the frame's
+  // bottom is the rows' top over the window's height, less a little room.
+  const [endFrameBottom, setEndFrameBottom] = useState<number | null>(null);
+  const resultsShown = Boolean(round?.done && guide.results && guide.results.rows.length > 0);
+  useEffect(() => {
+    if (!resultsShown) {
+      setEndFrameBottom(null);
+      return;
+    }
+    const measure = () => {
+      const top = document.querySelector('.guide-results')?.getBoundingClientRect().top;
+      if (top === undefined || window.innerHeight <= 0) return;
+      const b = Math.round((top / window.innerHeight - 0.03) * 1000) / 1000;
+      setEndFrameBottom((prev) => (prev === b ? prev : b));
+    };
+    const t = window.setTimeout(measure, 0);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('resize', measure);
+    };
+  }, [resultsShown, guide.results?.rows.length, viewportWidth]);
   guideRef.current = guide;
   marksOpenRef.current = marksOpen;
   /** The commands the guide's actions name (script.json, "commands"). */
@@ -1792,7 +1814,15 @@ export function App() {
                 // Behind the Record and the choice of a place the stage rests: dark and calm, no estimate, no film move.
                 backdrop={inWorkspace && step === 'record'}
                 landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
-                workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
+                workspaceSubjectFrame={
+                  round
+                    ? endFrameBottom !== null
+                      ? { ...roundFrame(viewportWidth), bottom: Math.min(roundFrame(viewportWidth).bottom, endFrameBottom) }
+                      : roundFrame(viewportWidth)
+                    : modelScene
+                      ? modelFrame(viewportWidth)
+                      : workspaceFrame(viewportWidth)
+                }
                 regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
                 chanceSquares={chanceOn}
                 onFireAnchor={modelScene || step === 'look' ? emitAnchor : undefined}
