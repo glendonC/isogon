@@ -452,7 +452,15 @@ export function App() {
     async (params: ReconstructRequestParams): Promise<boolean> => {
       if (params.theaterId && !params.queryText) {
         slewToTheater(params.theaterId);
-        if (params.enterWorkspace) enterWorkspace('cutaway');
+        if (params.enterWorkspace) {
+          // A place opened from search opens on Estimate: its held-out run is asked for (the region's ask hides on
+          // Estimate wherever the window can be hidden) and it opens on its hidden pass; a recorded test fire or a year
+          // before the sharp satellite opens with every satellite, as Estimate says.
+          roundRef.current?.leave();
+          enterWorkspace('cutaway');
+          setStep('test');
+          openingDueRef.current = true;
+        }
         return true;
       }
       return executeWorldModel(params);
@@ -518,11 +526,13 @@ export function App() {
         ? chosen ?? openingStart(placesState.places, regionAsk.id)
         : null;
     if (opening) {
-      if (isRealRun(activeRun) && activeRun?.region.id === regionAsk.id && realStart === opening) return;
-      // On the landing, and on Estimate (a place stepped to with N while Estimate is on screen), the fire is shown as the
+      // On the landing, and on Estimate (a place stepped to with N, or opened from search), the fire is shown as the
       // model saw it: the sharp satellite hidden wherever its window can be (from 2012, not a recorded test fire), so
       // what lights up is what the model was given, and Estimate has its held-out run to show.
       const hideable = (!inWorkspace || step === 'test') && Number(opening.slice(0, 4)) >= 2012 && !hideRefused(regionAsk.id, opening);
+      // The run on show already is the one wanted: nothing to ask.
+      const shownHidden = activeRun?.metrics?.holdout_viirs === true;
+      if (isRealRun(activeRun) && activeRun?.region.id === regionAsk.id && realStart === opening && shownHidden === hideable) return;
       void executeWorldModel({
         regionId: regionAsk.id,
         holdoutViirs: hideable,
