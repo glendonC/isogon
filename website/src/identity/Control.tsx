@@ -10,13 +10,26 @@ export interface ControlProps {
   reason?: string | null;
   onClick?: (e: MouseEvent<HTMLButtonElement>) => void;
   className?: string;
-  /** The keyboard shortcut, announced to readers and listed in help; it is not printed on the control. */
+  /** The keyboard shortcut: announced to readers and drawn inside the control as a key ("Esc", "Enter"). */
   shortcut?: string;
 }
 
+/** A key's name as a key cap says it. */
+export function keyCap(key: string): string {
+  const k = key.trim();
+  if (/^esc(ape)?$/i.test(k)) return 'Esc';
+  if (/^(enter|return)$/i.test(k)) return 'Enter';
+  if (k === ' ' || /^space(bar)?$/i.test(k)) return 'Space';
+  if (/^arrowleft$/i.test(k)) return '←';
+  if (/^arrowright$/i.test(k)) return '→';
+  return k.length === 1 ? k.toUpperCase() : k;
+}
+
 /**
- * One action on its own, where no thing in the scene can carry it (the first screen, a sheet's Close): plain words;
- * the place finder's corner brackets close round them on hover and focus. The primary is only brighter.
+ * The page's one control: a square button with a fill, an edge and a light. The primary (one a screen) is solid; the
+ * secondary is dark glass with a fine edge. A key that works is drawn inside it; with none, a small square leads. On
+ * hover and keyboard focus the fill lifts, the square falls away, the words move up and an arrow comes in at the right;
+ * a press sinks it. The look is in identity.css (`.id-control`), where the page's other actions take it too.
  */
 export function Control({ children, variant = 'secondary', selected, disabled, reason, onClick, className, shortcut }: ControlProps) {
   const state = { variant, selected, disabled, reason };
@@ -36,8 +49,17 @@ export function Control({ children, variant = 'secondary', selected, disabled, r
         onClick?.(e);
       }}
     >
+      {shortcut ? (
+        <kbd className="id-control__key" aria-hidden="true">
+          {keyCap(shortcut)}
+        </kbd>
+      ) : (
+        <span className="id-control__mark" aria-hidden="true" />
+      )}
       <span className="id-control__label">{children}</span>
-      <span className="id-control__ticks" aria-hidden="true" />
+      <span className="id-control__go" aria-hidden="true">
+        {'→'}
+      </span>
     </button>
   );
 }

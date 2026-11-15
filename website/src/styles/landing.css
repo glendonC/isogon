@@ -511,8 +511,8 @@
   overflow: hidden;
 }
 
-/* The first screen's three ways in, of equal weight: plain words, white, with the interface's one colour (cyan) as a
-   rule under the one pointed at or reached by the keys. */
+/* The first screen's three ways in: the page's control (identity.css), Play the solid one, a size up from the inner
+   screens'. No line under the words. */
 .iso-land__ways {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 220px));
@@ -545,24 +545,8 @@
 }
 
 .iso-way {
-  padding: 6px 0;
-  border: 0;
-  border-radius: 0;
-  background: linear-gradient(#9fe3ff, #9fe3ff) no-repeat 0 100% / 0 1px;
-  font: 500 clamp(18px, 1.4vw, 24px) / 1.25 var(--font-sans);
-  color: #fff;
-  text-shadow: 0 1px 12px rgba(5, 7, 12, 0.85);
-  cursor: pointer;
-  transition:
-    background-size 200ms ease,
-    color 160ms ease;
-}
-
-.iso-way:hover,
-.iso-way:focus-visible {
-  background-size: 100% 1px;
-  color: #9fe3ff;
-  outline: none;
+  --c-h: 56px;
+  font-size: clamp(17px, 1.3vw, 20px);
 }
 
 /* Where the drawn fire covers the bottom right, the legend and its caption stand at the bottom left, over the credit. */

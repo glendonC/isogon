@@ -89,28 +89,15 @@ body:has(.iso-viewer-layer) button.iso-credit {
   gap: var(--sys-s3) var(--sys-s5);
 }
 
+/* A sheet's action is the page's control (identity.css, the shared rules); its words sit in a span. */
 .iso-plain-action {
-  position: relative;
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--sys-s2);
-  padding: 4px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
   text-decoration: none;
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
-  color: var(--sys-ink-2);
-  cursor: pointer;
-  transition: color var(--sys-fast) var(--sys-ease);
 }
 
-/* A link or an action in a sheet is marked as a lone action is: plain words, no line under them; on hover the place
-   finder's corner brackets close round the words in the signal colour, on keyboard focus in white. A selected page of
-   a briefing keeps its brackets. They stand flush with the words' sides: the sheet's column cuts anything past its
-   edges, and a link often ends a line there. */
-.iso-plain-action::after,
+/* A link inside a sentence, and the sensor briefing's actions and pages, are marked as a lone action is: plain words, no
+   line under them; on hover the place finder's corner brackets close round the words in the signal colour, on keyboard
+   focus in white. A selected page of a briefing keeps its brackets. They stand flush with the words' sides: the sheet's
+   column cuts anything past its edges, and a link often ends a line there. */
 .iso-inline-trigger::after,
 .iso-finder__action::after,
 .iso-brief .iso-brief__page::after {
@@ -136,8 +123,6 @@ body:has(.iso-viewer-layer) button.iso-credit {
     linear-gradient(var(--t), var(--t)) bottom right / 1.5px 8px no-repeat;
 }
 
-.iso-plain-action:hover::after,
-.iso-plain-action:focus-visible::after,
 .iso-inline-trigger:hover::after,
 .iso-inline-trigger:focus-visible::after,
 .iso-finder__action:hover:not(:disabled)::after,
@@ -149,7 +134,6 @@ body:has(.iso-viewer-layer) button.iso-credit {
   transform: none;
 }
 
-.iso-plain-action:focus-visible::after,
 .iso-inline-trigger:focus-visible::after,
 .iso-finder__action:focus-visible::after,
 .iso-brief .iso-brief__page:focus-visible::after {
@@ -158,30 +142,6 @@ body:has(.iso-viewer-layer) button.iso-credit {
 
 .iso-viewer__close::after {
   display: none;
-}
-
-.iso-plain-action:hover {
-  color: var(--sys-ink);
-  background: transparent;
-}
-
-.iso-plain-action:focus-visible {
-  outline: none;
-  color: var(--sys-ink);
-}
-
-.iso-plain-action[data-primary='true'] {
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
-  font-size: var(--sys-size-body);
-  line-height: var(--sys-lh-body);
-  font-weight: var(--sys-weight-strong);
-  color: var(--sys-ink);
-}
-
-.iso-plain-action[data-primary='true']:hover {
-  background: transparent;
 }
 
 .iso-plain-action__key {

@@ -47,14 +47,16 @@ export function GuideStrip({
           </p>
         )}
         {rest.length > 0 && open && <p className="guide-say__more">{rest.join(' ')}</p>}
-        {rest.length > 0 && (
-          <button type="button" className="guide-say__toggle" aria-expanded={open} onClick={() => setOpen((m) => !m)}>
-            {open ? LESS : MORE}
-          </button>
-        )}
       </div>
-      {shown.length > 0 && (
+      {(shown.length > 0 || rest.length > 0) && (
         <div className="guide-acts">
+          {/* The rest of what the state says is a control in the screen's group, the first of it, not a line of small
+              text under the caption. */}
+          {rest.length > 0 && (
+            <Control className="guide-say__toggle" selected={open} onClick={() => setOpen((m) => !m)}>
+              {open ? LESS : MORE}
+            </Control>
+          )}
           {[...shown].reverse().map((a) => (
             <Control
               key={a.command + a.label}

@@ -60,7 +60,10 @@ export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = 
   useEffect(() => {
     const onResize = () => setView({ width: window.innerWidth, height: window.innerHeight });
     const onMove = (e: PointerEvent) => {
-      const inside = isNear(frame, e.clientX, e.clientY);
+      // near the frame, or over an acting prompt's words, which are a control too
+      const words = onSelect ? promptRef.current?.getBoundingClientRect() : null;
+      const overWords = Boolean(words && e.clientX >= words.left && e.clientX <= words.right && e.clientY >= words.top && e.clientY <= words.bottom);
+      const inside = isNear(frame, e.clientX, e.clientY) || overWords;
       setNear((was) => {
         if (inside && !was) controlSound('hover');
         return inside;
@@ -85,7 +88,7 @@ export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = 
   } as CSSProperties;
 
   return (
-    <div className="id-scene" data-near={closed ? 'true' : 'false'} data-hang={spot.hang} style={style}>
+    <div className="id-scene" data-near={closed ? 'true' : 'false'} data-act={onSelect ? 'true' : 'false'} data-hang={spot.hang} style={style}>
       {onSelect ? (
         <button
           type="button"
@@ -114,7 +117,21 @@ export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = 
           <i className="id-scene__centre" />
         </div>
       )}
-      <div className="id-scene__prompt" aria-hidden="true" ref={promptRef}>
+      {/* An acting prompt's words are a control too: a click on them does what the frame does (the frame is the one
+          readers and the keys reach). */}
+      <div
+        className="id-scene__prompt"
+        aria-hidden="true"
+        ref={promptRef}
+        onClick={
+          onSelect
+            ? () => {
+                controlSound('press');
+                onSelect();
+              }
+            : undefined
+        }
+      >
         <span className="id-scene__label">{label}</span>
         {readout && <span className="id-scene__readout">{readout}</span>}
         <span className="id-scene__leader" />

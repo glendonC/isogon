@@ -31,37 +31,267 @@
 }
 
 /*
- * A single action that stands alone, where there is no thing in the scene to carry it (the first screen, a sheet):
- * plain words, no body, no box, no mark. On hover or focus the place finder's four corner brackets close round the
- * words in the signal colour. The next step is only brighter. Disabled is dimmed and says why.
+ * The page's one control, for every action on every screen: a square button with a fill, an edge and a light. The
+ * primary (one a screen) is solid white; the secondary is dark glass with a fine edge. A key that works is drawn
+ * inside it; with none, a small square leads. On hover and keyboard focus the fill lifts, the square falls away, the
+ * words move in and an arrow comes in at the right; a press sinks it. Disabled is dimmed and says why. Square corners
+ * only. The page's other actions (the bottom edge's moves, the first screen's ways in, the prompt on the scene, the
+ * sheets' actions) take the same look from the shared rules below.
  */
-.id-control {
+.id-control,
+.id-moves__move,
+.iso-way,
+.iso-plain-action:not(.iso-viewer__close),
+.id-scene[data-act='true'] .id-scene__label {
+  --c-h: 48px;
+  --c-fill: rgba(12, 16, 24, 0.66);
+  --c-fill-on: rgba(243, 244, 246, 0.14);
+  --c-edge: rgba(243, 244, 246, 0.3);
+  --c-edge-on: rgba(243, 244, 246, 0.78);
+  --c-ink: var(--id-ink);
+  --c-go: var(--id-ink);
+  --c-go-ink: var(--id-ground);
+  --c-glow: 0 0 0 rgba(0, 0, 0, 0);
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 10px 16px;
-  border: 0;
+  gap: 12px;
+  min-height: var(--c-h);
+  padding: 0 44px 0 16px;
+  border: 1px solid var(--c-edge);
   border-radius: 0;
-  background: none;
+  background: var(--c-fill);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  backdrop-filter: blur(12px) saturate(1.15);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.32),
+    var(--c-glow);
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
+  overflow: hidden;
   font-family: var(--id-font);
-  color: var(--id-ink-2);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.005em;
+  color: var(--c-ink);
+  text-align: left;
+  text-shadow: none;
+  white-space: nowrap;
+  transition:
+    background-color 380ms var(--id-move),
+    border-color 380ms var(--id-move),
+    box-shadow 380ms var(--id-move),
+    color 380ms var(--id-move),
+    transform 160ms var(--id-move);
+}
+
+.id-control--primary,
+.iso-land__ways > .iso-way:first-child,
+.iso-plain-action[data-primary='true'],
+body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label {
+  --c-fill: var(--id-ink);
+  --c-fill-on: var(--id-signal);
+  --c-edge: rgba(255, 255, 255, 0.9);
+  --c-edge-on: var(--id-signal);
+  --c-ink: var(--id-ground);
+  --c-go: var(--id-ground);
+  --c-go-ink: var(--id-signal);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 0 rgba(5, 7, 12, 0.12),
+    0 12px 32px rgba(0, 0, 0, 0.38),
+    var(--c-glow);
+}
+
+.id-control:hover,
+.id-control:focus-visible,
+.id-moves__move:hover:not(:disabled),
+.id-moves__move:focus-visible,
+.iso-way:hover,
+.iso-way:focus-visible,
+.iso-plain-action:not(.iso-viewer__close):hover,
+.iso-plain-action:not(.iso-viewer__close):focus-visible,
+.id-scene[data-act='true'][data-near='true'] .id-scene__label {
+  --c-glow: 0 0 26px rgba(159, 227, 255, 0.28);
+  background: var(--c-fill-on);
+  border-color: var(--c-edge-on);
+  outline: none;
+}
+
+.id-control:focus-visible,
+.id-moves__move:focus-visible,
+.iso-way:focus-visible,
+.iso-plain-action:not(.iso-viewer__close):focus-visible {
+  outline: 2px solid var(--id-signal);
+  outline-offset: 3px;
+}
+
+.id-control:active,
+.id-moves__move:active:not(:disabled),
+.iso-way:active,
+.iso-plain-action:not(.iso-viewer__close):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+/* the small square that leads at rest, and the key drawn where a key works */
+.id-control__mark,
+.iso-way::before,
+.id-scene[data-act='true'] .id-scene__label::before {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+  opacity: 0.85;
+  transition:
+    transform 340ms var(--id-move),
+    opacity 250ms var(--id-move),
+    margin 380ms var(--id-move);
+}
+
+.iso-way::before,
+.id-scene[data-act='true'] .id-scene__label::before {
+  content: '';
+}
+
+.id-control__key,
+.id-moves__key {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-family: var(--id-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: inherit;
+  opacity: 0.62;
 }
 
 .id-control__label {
   position: relative;
-  font-size: 24px;
-  font-weight: 300;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  text-shadow: 0 1px 12px rgba(5, 7, 12, 0.8);
-  transition:
-    color 300ms var(--id-move),
-    text-shadow 450ms var(--id-move);
+  transition: transform 380ms var(--id-move);
 }
 
+/* the arrow that comes in at the right on hover and focus */
+.id-control__go,
+.id-moves__move::after,
+.iso-way::after,
+.iso-plain-action:not(.iso-viewer__close)::after,
+.id-scene[data-act='true'] .id-scene__label::after {
+  position: absolute;
+  top: calc(50% - 14px);
+  right: 9px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-go);
+  color: var(--c-go-ink);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0) rotate(-12deg);
+  transition:
+    transform 380ms var(--id-move),
+    opacity 280ms var(--id-move);
+}
+
+.id-moves__move::after,
+.iso-way::after,
+.iso-plain-action:not(.iso-viewer__close)::after,
+.id-scene[data-act='true'] .id-scene__label::after {
+  content: '\2192';
+}
+
+.id-control:hover .id-control__mark,
+.id-control:focus-visible .id-control__mark,
+.iso-way:hover::before,
+.iso-way:focus-visible::before,
+.id-scene[data-act='true'][data-near='true'] .id-scene__label::before {
+  transform: scale(0) rotate(45deg);
+  opacity: 0;
+  margin-right: -19px;
+}
+
+.id-control:hover .id-control__go,
+.id-control:focus-visible .id-control__go,
+.id-moves__move:hover:not(:disabled)::after,
+.id-moves__move:focus-visible::after,
+.iso-way:hover::after,
+.iso-way:focus-visible::after,
+.iso-plain-action:not(.iso-viewer__close):hover::after,
+.iso-plain-action:not(.iso-viewer__close):focus-visible::after,
+.id-scene[data-act='true'][data-near='true'] .id-scene__label::after {
+  transform: scale(1) rotate(0deg);
+  opacity: 1;
+}
+
+.id-control--selected {
+  --c-fill: rgba(159, 227, 255, 0.16);
+  --c-edge: var(--id-signal);
+}
+
+.id-control--disabled,
+.id-control--disabled:hover,
+.id-moves__move:disabled {
+  --c-glow: 0 0 0 rgba(0, 0, 0, 0);
+  background: var(--c-fill);
+  border-color: var(--c-edge);
+  opacity: 0.42;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.id-control--disabled .id-control__go,
+.id-control--disabled:hover .id-control__go {
+  opacity: 0;
+}
+
+.id-control--disabled:hover .id-control__mark {
+  transform: none;
+  opacity: 0.85;
+  margin-right: 0;
+}
+
+@media (max-width: 760px) {
+  .id-control,
+  .id-moves__move,
+  .iso-way {
+    --c-h: 44px;
+    font-size: 15px;
+    padding: 0 40px 0 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .id-control,
+  .id-moves__move,
+  .iso-way,
+  .id-control__mark,
+  .id-control__label,
+  .id-control__go,
+  .id-moves__move::after,
+  .iso-way::before,
+  .iso-way::after {
+    transition: none;
+  }
+}
+
+/* the place finder's corner brackets, still drawn round the top bar's first word and the search's chosen row */
 .id-control__ticks {
   position: absolute;
   inset: 0;
@@ -84,54 +314,7 @@
     linear-gradient(var(--t), var(--t)) bottom right / 1.5px 12px no-repeat;
 }
 
-.id-control--primary,
-.id-control--selected {
-  color: var(--id-ink);
-}
-
-.id-control:hover .id-control__label,
-.id-control:focus-visible .id-control__label {
-  color: var(--id-ink);
-  text-shadow: 0 0 18px rgba(159, 227, 255, 0.5), 0 1px 12px rgba(5, 7, 12, 0.8);
-}
-
-.id-control:hover .id-control__ticks,
-.id-control:focus-visible .id-control__ticks,
-.id-control--selected .id-control__ticks {
-  opacity: 1;
-  transform: none;
-}
-
-.id-control:focus-visible {
-  outline: none;
-}
-
-.id-control:focus-visible .id-control__ticks {
-  --t: var(--id-ink);
-}
-
-.id-control:active .id-control__ticks {
-  transform: scale(0.96);
-}
-
-.id-control--disabled,
-.id-control--disabled:hover {
-  color: rgba(243, 244, 246, 0.32);
-  cursor: not-allowed;
-}
-
-.id-control--disabled .id-control__label,
-.id-control--disabled:hover .id-control__label {
-  text-shadow: none;
-}
-
-.id-control--disabled .id-control__ticks,
-.id-control--disabled:hover .id-control__ticks {
-  opacity: 0;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .id-control__label,
   .id-control__ticks {
     transition: none;
   }
@@ -336,11 +519,11 @@ button.id-story__part:focus-visible {
   position: absolute;
   left: 40px;
   right: 40px;
-  bottom: 22px;
+  bottom: 18px;
   z-index: 20;
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 12px 32px;
   padding-top: 10px;
   border-top: 1px solid var(--id-line);
@@ -351,49 +534,27 @@ button.id-story__part:focus-visible {
 .id-moves__on {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 32px;
+  align-items: center;
+  gap: 10px 12px;
 }
 
 .id-moves__on {
   justify-content: flex-end;
 }
 
+/* each move is a control (the shared rules at the top of this file); the way back carries its key, Esc */
 .id-moves__move {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 17px;
-  line-height: 1.4;
-  color: var(--id-ink-2);
-  cursor: pointer;
-  transition: color var(--id-fast) var(--id-ease);
+  --c-h: 36px;
+  padding: 0 36px 0 12px;
+  font-size: 15px;
 }
 
-.id-moves__move:hover,
-.id-moves__move:focus-visible {
-  color: var(--id-ink);
-}
-
-.id-moves__move:focus-visible {
-  outline: 2px solid var(--id-focus);
-  outline-offset: 3px;
-}
-
-.id-moves__move:disabled {
-  color: var(--id-ink-3);
-  opacity: 0.6;
-  cursor: default;
-}
-
-.id-moves__key {
-  font-family: var(--id-mono);
-  font-size: 16px;
-  color: var(--id-ink-3);
+.id-moves__move::after {
+  top: calc(50% - 11px);
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
 }
 
 /* the arrival at a place: a veil until its ground is drawn, its name over it; both go as the ground comes */
@@ -857,6 +1018,7 @@ button.id-story__part:focus-visible {
   padding: 30px 0 0;
 }
 
+/* a prompt that names a thing and takes no click keeps plain words; one that acts is a control (the shared rules) */
 .id-scene__label {
   position: relative;
   display: inline-block;
@@ -866,34 +1028,17 @@ button.id-story__part:focus-visible {
   letter-spacing: 0.01em;
   color: var(--id-ink);
   text-shadow: 0 1px 12px rgba(5, 7, 12, 0.8);
-  transition:
-    transform 450ms var(--id-move),
-    text-shadow 450ms var(--id-move);
 }
 
-.id-scene__label::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  margin-top: -5px;
-  background: var(--id-signal);
-  opacity: 0;
-  transition:
-    opacity 300ms var(--id-move),
-    left 450ms var(--id-move);
+.id-scene[data-act='true'] .id-scene__prompt {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
-.id-scene[data-near='true'] .id-scene__label {
-  transform: translateX(8px);
-  text-shadow: 0 0 18px rgba(159, 227, 255, 0.55), 0 1px 12px rgba(5, 7, 12, 0.8);
-}
-
-.id-scene[data-near='true'] .id-scene__label::before {
-  opacity: 1;
-  left: -14px;
+.id-scene[data-act='true'] .id-scene__label {
+  --c-h: 46px;
+  margin-bottom: 8px;
+  font-size: 18px;
 }
 
 .id-scene__readout {
@@ -938,8 +1083,7 @@ button.id-story__part:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .id-scene__corner,
-  .id-scene__label,
-  .id-scene__label::before {
+  .id-scene__label {
     transition: none;
   }
 }
