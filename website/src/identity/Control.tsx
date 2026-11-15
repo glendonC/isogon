@@ -27,9 +27,9 @@ export function keyCap(key: string): string {
 
 /**
  * The page's one control: a square button with a fill, an edge and a light. The primary (one a screen) is solid; the
- * secondary is dark glass with a fine edge. A key that works is drawn inside it; with none, a small square leads. On
- * hover and keyboard focus the fill lifts, the square falls away, the words move up and an arrow comes in at the right;
- * a press sinks it. The look is in identity.css (`.id-control`), where the page's other actions take it too.
+ * secondary is dark glass with a fine edge. A key that works is drawn inside it at the left, the arrow's square at the
+ * right, both one inset from the edges. On hover and keyboard focus the fill lifts and the arrow's square fills; a
+ * press sinks it. The look is in identity.css (`.id-control`), where the page's other actions take it too.
  */
 export function Control({ children, variant = 'secondary', selected, disabled, reason, onClick, className, shortcut }: ControlProps) {
   const state = { variant, selected, disabled, reason };
@@ -49,12 +49,10 @@ export function Control({ children, variant = 'secondary', selected, disabled, r
         onClick?.(e);
       }}
     >
-      {shortcut ? (
+      {shortcut && (
         <kbd className="id-control__key" aria-hidden="true">
           {keyCap(shortcut)}
         </kbd>
-      ) : (
-        <span className="id-control__mark" aria-hidden="true" />
       )}
       <span className="id-control__label">{children}</span>
       <span className="id-control__go" aria-hidden="true">

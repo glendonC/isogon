@@ -546,6 +546,8 @@
 
 .iso-way {
   --c-h: 56px;
+  --c-pad: 14px;
+  gap: 18px;
   font-size: clamp(17px, 1.3vw, 20px);
 }
 
