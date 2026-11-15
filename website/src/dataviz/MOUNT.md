@@ -58,13 +58,16 @@ sheet keeps its seven rows. Words in `words` (title, line, the two bar names).
 
 ```tsx
 import { YearBars } from '../dataviz/YearBars';
-import { seriesFromCube, seriesFromCountry } from '../dataviz/yearSeries';
+import { countryName, seriesFromCube, seriesFromCountry } from '../dataviz/yearSeries';
 
+// countryKey: the map's name (the atlas, for example "United States of America") or the store's file name.
 const series = countryKey ? seriesFromCountry(countriesAnswer, countryKey) : seriesFromCube(yearsAnswer);
+const label = countryKey ? countryName(countriesAnswer, countryKey) : null;
 {series ? <YearBars series={series} upTo={playingYear} current={currentYear} oneScale={onOneScale} /> : null}
 ```
 
-Orange bars where MODIS counted, light blue from VIIRS's first year; `oneScale` adds each year's estimate as a white
+`countriesAnswer` is `GET /api/cube/years/countries` whole (its `countries` arrays and `by_atlas`). Orange bars where
+MODIS counted, light blue from VIIRS's first year; `oneScale` adds each year's estimate as a white
 outline. `upTo` draws the years only up to the one playing, on the scale of every year, so bars never rescale.
 It replaces the strip's bars, line and key.
 

@@ -52,27 +52,50 @@ export function seriesFromCube(answer: unknown): YearSeries | null {
   );
 }
 
-/** One country: `by_atlas[key].years[year].{modis, viirs, harmonized}`, the first year partial as the route says. */
+/**
+ * One country, from `GET /api/cube/years/countries`: `countries[storeKey]` holds `modis`, `viirs` and `harmonized`
+ * as arrays, one value for each of `years` (null before a series' first year, 0 in a year with no row). `key` is
+ * the store's file name (`United_States`) or the map's name (`United States of America`), which `by_atlas` turns into
+ * the store's. The first year is partial as `first_year_partial` says.
+ */
 export function seriesFromCountry(answer: unknown, key: string): YearSeries | null {
   const a = obj(answer);
-  const c = obj(obj(a?.by_atlas)?.[key]);
-  const ys = obj(c?.years);
-  if (!ys) return null;
+  const countries = obj(a?.countries);
+  if (!countries) return null;
+  const byAtlas = obj(a?.by_atlas);
+  const storeKey = obj(countries[key]) ? key : typeof byAtlas?.[key] === 'string' ? (byAtlas![key] as string) : null;
+  const c = storeKey ? obj(countries[storeKey]) : null;
+  const years = Array.isArray(a?.years) ? (a!.years as unknown[]).map(num) : [];
+  if (!c || years.length === 0) return null;
+  const at = (series: unknown, i: number) => (Array.isArray(series) ? num(series[i]) : null);
   const partial = obj(a?.first_year_partial);
+  const partialYear = num(partial?.year);
   return finish(
-    Object.entries(ys).map(([k, v]) => {
-      const year = Number(k);
-      const o = obj(v);
-      return {
-        year,
-        partial: num(partial?.year) === year,
-        months: num(partial?.year) === year ? num(partial?.months) : 12,
-        modis: num(o?.modis),
-        viirs: num(o?.viirs),
-        oneScale: num(o?.harmonized),
-      };
-    }),
+    years.flatMap((year, i) =>
+      year === null
+        ? []
+        : [
+            {
+              year,
+              partial: partialYear === year,
+              months: partialYear === year ? num(partial?.months) : 12,
+              modis: at(c.modis, i),
+              viirs: at(c.viirs, i),
+              oneScale: at(c.harmonized, i),
+            },
+          ],
+    ),
   );
+}
+
+/** The country's name as the store gives it, for a strip's label. */
+export function countryName(answer: unknown, key: string): string | null {
+  const a = obj(answer);
+  const countries = obj(a?.countries);
+  const byAtlas = obj(a?.by_atlas);
+  const storeKey = obj(countries?.[key]) ? key : typeof byAtlas?.[key] === 'string' ? (byAtlas![key] as string) : null;
+  const n = storeKey ? obj(countries?.[storeKey])?.name : null;
+  return typeof n === 'string' ? n : null;
 }
 
 /** The value a year's bar shows as counted: MODIS before VIIRS's first year, VIIRS from it. */
