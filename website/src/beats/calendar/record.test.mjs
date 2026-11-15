@@ -98,26 +98,22 @@ test('this month so far is said with its unit, the days it was counted over and 
 
 test("how well the correction holds: the place's shares as passed in, the whole Earth's beside them", () => {
   assert.equal(percent(0.1086), '11');
-  const line = RECORD_WORDS.accuracy({ year: 0.1152, uncorrected: 0.7311, monthsHeld: { held: 117, of: 144 } }, 0.8);
+  // One line: the place's error and the whole Earth's in the same measure (a typical year's), with and without the
+  // correction, MODIS and VIIRS by name
+  const line = RECORD_WORDS.accuracy({ year: 0.1152, uncorrected: 0.7311, monthsHeld: { held: 117, of: 144 } });
   assert.equal(
     line,
-    'Hide each year and predict it from the others: here a typical year is off by 12 percent, 73 uncorrected; worldwide, month by month, 14 percent, 18 with one ratio per place, 78 uncorrected. The 80 percent range held in 81 percent of months here, 82 worldwide.',
+    "A hidden year, VIIRS's count predicted from MODIS: off by 12 percent here, 13 worldwide, against 73 and 77 uncorrected.",
   );
   // The place's figures are the ones passed in; the Earth's are the document's
-  const other = RECORD_WORDS.accuracy({ year: 0.3, uncorrected: 0.5, monthsHeld: null }, null);
-  assert.match(other, /off by 30 percent, 50 uncorrected/);
-  assert.match(other, /The range held in 82 percent of months worldwide\.$/);
-  assert.equal(EARTH_HELD_OUT.monthly, 0.141);
-  // A phone's two lines: the place's error and the Earth's
-  assert.equal(
-    RECORD_WORDS.accuracyShort({ year: 0.1152, uncorrected: 0.7311, monthsHeld: null }),
-    'A hidden year predicted from the others: off by 12 percent here (73 uncorrected), 14 worldwide.',
-  );
-  assert.doesNotMatch(RECORD_WORDS.accuracyShort(null), /here/);
+  const other = RECORD_WORDS.accuracy({ year: 0.3, uncorrected: 0.5, monthsHeld: null });
+  assert.match(other, /off by 30 percent here, 13 worldwide, against 50 and 77 uncorrected/);
+  assert.equal(EARTH_HELD_OUT.yearly, 0.127);
   // An answer with no check of its own (a drawn area) says the Earth's alone
-  const earth = RECORD_WORDS.accuracy(null, 0.8);
+  const earth = RECORD_WORDS.accuracy(null);
   assert.doesNotMatch(earth, /here/);
-  assert.match(earth, /^Hide each year and predict it from the others: worldwide/);
+  assert.equal(earth, "A hidden year, VIIRS's count predicted from MODIS: off by 13 percent worldwide, against 77 uncorrected.");
+  assert.match(RECORD_WORDS.asCounted(4.1223, 2012), /VIIRS makes about 4\.1 times as many detections as MODIS/);
   assert.match(RECORD_WORDS.asCounted(4.1223, 2012), /about 4\.1 times as many detections .* before 2012/);
   // With no ratio served, no ratio is said.
   assert.doesNotMatch(RECORD_WORDS.asCounted(null, null), /\d/);
@@ -130,8 +126,8 @@ test('no sentence of The Record carries a percent sign or a forbidden dash', () 
     RECORD_WORDS.failed('Somewhere'),
     RECORD_WORDS.grid('Somewhere'),
     RECORD_WORDS.asCounted(4.1, 2012),
-    RECORD_WORDS.accuracy({ year: 0.1, uncorrected: 0.7, monthsHeld: { held: 9, of: 12 } }, 0.8),
-    RECORD_WORDS.accuracy(null, null),
+    RECORD_WORDS.accuracy({ year: 0.1, uncorrected: 0.7, monthsHeld: { held: 9, of: 12 } }),
+    RECORD_WORDS.accuracy(null),
     RECORD_WORDS.soFar('2026-11'),
     RECORD_WORDS.soFarRate(0.2, { counted: 14, inMonth: 30 }),
     RECORD_WORDS.usualIs('2026-11', 0.3),
@@ -219,10 +215,10 @@ test("the method is named in plain words, with how often a month's band held, al
   assert.deepEqual(r.method, { id: 'pooled_month_size_v1', level: 0.8, monthsHeld: { held: 117, of: 144 }, what: null });
   assert.equal(
     methodLine(r.method.id, r.method.level, r.method.monthsHeld),
-    "Every year is on the newer satellite's scale by a factor for each month of the year and for how much fire it has, leaning on nearby places. A month's band is its range: with each year hidden in turn, it held the newer satellite's own count in 117 of 144 months, meant for 80 percent.",
+    "Every year is on VIIRS's scale by a factor for each month of the year and for how much fire it has, leaning on nearby places. A month's band is its range: with each year hidden in turn, it held VIIRS's own count in 117 of 144 months, meant for 80 percent.",
   );
   // Without the check, the method alone; a method with no words is not named, rather than shown as an id
-  assert.equal(methodLine('overlap_ratio_v1', null, null), "Every year is on the newer satellite's scale by one ratio per place.");
+  assert.equal(methodLine('overlap_ratio_v1', null, null), "Every year is on VIIRS's scale by one ratio per place.");
   assert.equal(methodLine('a_new_method_v2', 0.8, { held: 1, of: 2 }), null);
   assert.equal(rec.method.monthsHeld, null);
 });
@@ -235,7 +231,7 @@ test("a place whose ratio does not hold says its harmonized value is not meaning
   assert.deepEqual(r.unstable, { departing: 6, tested: 14, factor: 10 });
   assert.equal(
     unstableLine(6, 14, 10),
-    "The harmonized value is not meaningful here: with each year hidden in turn, it missed the newer satellite's own count by more than ten times in 6 of 14 years, which lava or gas flares, counted as fire in NASA's files, can cause.",
+    "The harmonized value is not meaningful here: with each year hidden in turn, it missed VIIRS's own count by more than ten times in 6 of 14 years, which lava or gas flares, counted as fire in NASA's files, can cause.",
   );
   assert.match(unstableLine(2, 9, null), /own count by far in 2 of 9 years/);
   // Stable, not tested, or no check at all: nothing is said

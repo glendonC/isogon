@@ -61,9 +61,9 @@ export const BAND_UNIT = 'detections per 1,000 km² a day';
 export function methodLine(id: string | null, level: number | null, monthsHeld: { held: number; of: number } | null): string | null {
   const plain = id ? METHOD_PLAIN[id] : undefined;
   if (!plain) return null;
-  const scale = `Every year is on the newer satellite's scale by ${plain}.`;
+  const scale = `Every year is on VIIRS's scale by ${plain}.`;
   if (level === null || !monthsHeld) return scale;
-  return `${scale} A month's band is its range: with each year hidden in turn, it held the newer satellite's own count in ${count(monthsHeld.held)} of ${count(monthsHeld.of)} months, meant for ${percent(level)} percent.`;
+  return `${scale} A month's band is its range: with each year hidden in turn, it held VIIRS's own count in ${count(monthsHeld.held)} of ${count(monthsHeld.of)} months, meant for ${percent(level)} percent.`;
 }
 
 const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
@@ -75,7 +75,7 @@ const timesWords = (f: number) => (Number.isInteger(f) && f < NUMBER_WORDS.lengt
  */
 export function unstableLine(departing: number, tested: number, factor: number | null): string {
   const by = factor !== null ? ` by more than ${timesWords(factor)}` : ' by far';
-  return `The harmonized value is not meaningful here: with each year hidden in turn, it missed the newer satellite's own count${by} in ${departing} of ${tested} years, which lava or gas flares, counted as fire in NASA's files, can cause.`;
+  return `The harmonized value is not meaningful here: with each year hidden in turn, it missed VIIRS's own count${by} in ${departing} of ${tested} years, which lava or gas flares, counted as fire in NASA's files, can cause.`;
 }
 
 /** A drawn area none of whose squares has a detection: there is no record of it, not a record of zeros. */
@@ -107,11 +107,12 @@ export function monthLine(ym: string, value: number | null, timesUsual: number |
 /**
  * The served method's own check over the whole Earth, each overlap year hidden in turn: from the decision on the fire
  * cube with every country (docs/harmonization.md, "The whole world" and "The interval, held out"). No answer serves
- * these, so they are typed here, and change only with that document. Month by month: the sum of absolute errors over
- * the sum of the newer satellite's rows, for the served method, for one ratio per place and with no correction; and
- * the share of held-out months whose count lay inside the stated range.
+ * these, so they are typed here, and change only with that document. Year by year (the measure a place's answer gives:
+ * the median relative error over place-years with at least 50 VIIRS rows), for the served method and with no
+ * correction. Month by month: the sum of absolute errors over the sum of VIIRS's rows, for the served method, for one
+ * ratio per place and with no correction; and the share of held-out months whose count lay inside the stated range.
  */
-export const EARTH_HELD_OUT = { monthly: 0.141, oneRatio: 0.183, uncorrected: 0.777, monthsHeld: 0.817 };
+export const EARTH_HELD_OUT = { yearly: 0.127, yearlyUncorrected: 0.77, monthly: 0.141, oneRatio: 0.183, uncorrected: 0.777, monthsHeld: 0.817 };
 
 /** A rate as exactly as a reader of the record would copy it: "10.83", "0.388", "0.0035". Its unit is said beside it. */
 export const exactRate = (v: number): string => (v === 0 ? '0' : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : v.toPrecision(2));
@@ -158,31 +159,18 @@ export const RECORD_WORDS = {
   /** What the grid shows while the years are drawn as counted. */
   asCounted: (ratio: number | null, year: number | null) =>
     ratio !== null && year !== null
-      ? `As counted, before the correction. The newer satellite has about ${times(ratio)} times as many detections as the older ones, so the years before ${year} look quieter than they were.`
-      : 'As counted, before the two kinds of satellite are put on one scale.',
+      ? `As counted, before the correction. VIIRS makes about ${times(ratio)} times as many detections as MODIS, so the years before ${year} look quieter than they were.`
+      : 'As counted, before MODIS and VIIRS are put on one scale.',
   /**
-   * How well the correction holds, each year hidden in turn and predicted from the others: here from the answer (a
-   * typical year's error, as the answer measures it), and over the whole Earth month by month, each said with what it
-   * is. Then how often the stated range held, here and over the Earth, both counted in months. This line is the one
-   * place the page says the check.
+   * How well the correction holds, in one line: each year hidden in turn, VIIRS's count of it predicted from MODIS, here
+   * from the answer and over the whole Earth in the same measure (a typical year's error), with and without the
+   * correction. This line is the one place the page says the check.
    */
-  accuracy: (here: HeldOutHere | null, level: number | null) => {
-    const E = EARTH_HELD_OUT;
-    const earth = `worldwide, month by month, ${percent(E.monthly)} percent, ${percent(E.oneRatio)} with one ratio per place, ${percent(E.uncorrected)} uncorrected`;
-    const range = level !== null ? `The ${percent(level)} percent range` : 'The range';
-    const held = here?.monthsHeld
-      ? ` ${range} held in ${percent(here.monthsHeld.held / here.monthsHeld.of)} percent of months here, ${percent(E.monthsHeld)} worldwide.`
-      : ` ${range} held in ${percent(E.monthsHeld)} percent of months worldwide.`;
-    return here
-      ? `Hide each year and predict it from the others: here a typical year is off by ${percent(here.year)} percent, ${percent(here.uncorrected)} uncorrected; ${earth}.${held}`
-      : `Hide each year and predict it from the others: ${earth}.${held}`;
-  },
-  /** The same check in two lines, for a phone's narrow foot: the place's error and the whole Earth's, uncorrected beside. */
-  accuracyShort: (here: HeldOutHere | null) => {
+  accuracy: (here: HeldOutHere | null) => {
     const E = EARTH_HELD_OUT;
     return here
-      ? `A hidden year predicted from the others: off by ${percent(here.year)} percent here (${percent(here.uncorrected)} uncorrected), ${percent(E.monthly)} worldwide.`
-      : `A hidden year predicted from the others: off by ${percent(E.monthly)} percent worldwide (${percent(E.uncorrected)} uncorrected).`;
+      ? `A hidden year, VIIRS's count predicted from MODIS: off by ${percent(here.year)} percent here, ${percent(E.yearly)} worldwide, against ${percent(here.uncorrected)} and ${percent(E.yearlyUncorrected)} uncorrected.`
+      : `A hidden year, VIIRS's count predicted from MODIS: off by ${percent(E.yearly)} percent worldwide, against ${percent(E.yearlyUncorrected)} uncorrected.`;
   },
   /** This month so far: the action that asks for it, its label, and why it cannot be counted. */
   thisMonth: 'This month so far',

@@ -361,12 +361,14 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   // the label gives way first (the grid's bracket and the guide's action name the month), then the satellites' lines,
   // then the legend; a phone's squares may be as small as 6 px. The grid and how well the correction holds always
   // stay. This month so far keeps its label.
-  const minCell = narrowLabel ? 6 : 8;
-  const fits = (head: number, spans: number, foot = footH) => head + 12 * minCell + AXIS_H + spans + foot <= size.h;
+  // Each step is taken while the grid would fall under 8 px squares; only with all three taken may a phone's squares
+  // go down to 6 px, so a readable grid comes before the label.
+  const fits = (head: number, spans: number) => head + 12 * 8 + AXIS_H + spans + footH <= size.h;
   const shortPhone = narrowLabel && !inFilm && !nowOn;
   const labelOff = shortPhone && !fits(HEAD_H, SPANS_H);
   const spansOff = labelOff && !fits(HEAD_SHORT, SPANS_H);
   const legendOff = spansOff && !fits(HEAD_SHORT, 0);
+  const minCell = legendOff ? 6 : 8;
   const spansH = spansOff ? 0 : SPANS_H;
   const headH = labelOff ? HEAD_SHORT : HEAD_H + (banded ? (narrowLabel ? 56 : guideSpeaks ? 16 : BAND_H) : 0);
   const cell = years.length
@@ -421,11 +423,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   // On a narrow screen the foot takes the plot's width from the month names, so its words wrap less. It is decided by
   // the plot's width, not the grid's, so that the grid's size does not move the foot's width back and forth.
   const narrowFoot = size.w < 700;
-  // How well the correction holds, in the words' one place: the answer's own check where it has one, the Earth's beside.
-  // The page says it here and nowhere else.
-  // A phone's narrow foot says it in two lines, the place's error and the Earth's.
+  // How well the correction holds, in one line and the words' one place: the answer's own check where it has one, the
+  // Earth's beside in the same measure. The page says it here and nowhere else.
   const heldHere = rec?.heldOut ? { year: rec.heldOut.harmonized, uncorrected: rec.heldOut.raw, monthsHeld: rec.method.monthsHeld } : null;
-  const accuracyLine = rec ? (narrowFoot && !inFilm ? W.accuracyShort(heldHere) : W.accuracy(heldHere, rec.method.level)) : '';
+  const accuracyLine = rec ? W.accuracy(heldHere) : '';
   // The pointed month's readout stands right of the grid, in one place, where the plot has room for it; not in the film,
   // where nothing points, nor on a phone, where the label says the month
   const readoutX = x0 + gridW + 32;
