@@ -239,7 +239,7 @@ function Sealed({ film, toWord }: Part) {
   const o = live?.overFires ?? null;
   const counted = o && o.ahead !== null && o.tied !== null && o.behind !== null;
   const lines = live ? [S.sealed.marks, ...(scored > 0 && counted ? [S.sealed.soFar(scored, o!.ahead!, o!.tied!, o!.behind!)] : [])] : [];
-  const caption = scored > 0 && counted ? S.sealed.film(o!.ahead!, o!.behind!) : null;
+  const caption = scored > 0 && counted ? S.sealed.film(o!.ahead!, o!.tied!, o!.behind!) : null;
   useWorldKeys((e) => {
     if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey) return false;
     closeWorldScreen();

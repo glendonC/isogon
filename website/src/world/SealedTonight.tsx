@@ -48,9 +48,9 @@ const PARTS: Record<string, string> = {
 };
 
 export const SEAL_WORDS = {
-  // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open; version 7 for the film's caption).
+  // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open; version 9 for the film's caption).
   objective: 'See predictions written before the pass',
-  film: (ahead: number, behind: number) => `Sealed before the pass: ahead on ${ahead}, behind on ${behind}.`,
+  film: (ahead: number, level: number, behind: number) => `Sealed before the pass: ${ahead} ahead, ${level} level, ${behind} behind.`,
   label: 'The Earth, with the fires whose predictions are sealed tonight',
   loading: "Loading tonight's sealed predictions.",
   failed: "Tonight's sealed predictions did not load.",
@@ -177,7 +177,7 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
   // The film's caption once a score exists and the count over the fires stands; before that, the objective.
   const scored = live.seals.filter((s) => s.state === 'scored').length;
   const o = live.overFires;
-  const filmLine = scored > 0 && o && o.ahead !== null && o.behind !== null ? SEAL_WORDS.film(o.ahead, o.behind) : null;
+  const filmLine = scored > 0 && o && o.ahead !== null && o.tied !== null && o.behind !== null ? SEAL_WORDS.film(o.ahead, o.tied, o.behind) : null;
   const captionLine = caption ? (film ? filmLine ?? SEAL_WORDS.objective : SEAL_WORDS.objective) : null;
 
   return (

@@ -205,7 +205,7 @@ export const SCREEN_WORDS = {
     soFar: (scored: number, ahead: number, level: number, behind: number) =>
       `So far ${scored} are scored: ahead of both simple methods on ${ahead} scores, level on ${level} and behind on ${behind}.`,
     back: 'Back to the fire',
-    film: (ahead: number, behind: number) => `Sealed before the pass: ahead on ${ahead}, behind on ${behind}.`,
+    film: (ahead: number, level: number, behind: number) => `Sealed before the pass: ${ahead} ahead, ${level} level, ${behind} behind.`,
   },
 };
 
