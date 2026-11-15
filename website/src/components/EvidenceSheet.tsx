@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { OverlapEvidence } from '../content/calendar';
+import { parseCalendar, type OverlapEvidence } from '../content/calendar';
 import type {
   EvidenceDoc,
   EvidenceFire,
@@ -9,10 +9,10 @@ import type {
   EvidenceState,
 } from '../content/evidence';
 import { utcSpan, type BlindTest, type ModelStatus } from '../content/realRuns';
-import { API_BASE, getJson } from '../lib/api';
+import { API_BASE, getJson, publicUrl } from '../lib/api';
 import { SensorDiagnosticModal } from '../stage/SensorDiagnosticModal';
 import { Loader } from '../ui/Loader';
-import type { SensorModelPayload } from '../ui/useSensorModel';
+import type { SensorModelPayload, SensorModelSource } from '../ui/useSensorModel';
 import {
   AlignedNumber,
   ScoresDocument,
@@ -26,7 +26,13 @@ import {
   type ViewerDocId,
   type ViewerNavItem,
 } from './BlindScoreTable';
-import { MethodDocument, ThisFireDocument, type MethodEvidence } from './MethodSheet';
+import {
+  fetchCachedCalendarRaw,
+  fetchCachedEvidenceDoc,
+  MethodDocument,
+  ThisFireDocument,
+  type MethodEvidence,
+} from './MethodSheet';
 import { SourcesSheet } from './SourcesSheet';
 import '../styles/evidence.css';
 
@@ -62,9 +68,46 @@ interface OnValidationRuntime {
   };
 }
 
+const sensorModelCache = new Map<string, Promise<SensorModelPayload | null>>();
+
+function fetchCachedSensorModel(runId: string | null | undefined): Promise<SensorModelPayload | null> {
+  const key = runId ?? '__default__';
+  const existing = sensorModelCache.get(key);
+  if (existing) return existing;
+  const endpoints: Array<{ load: () => Promise<unknown>; source: SensorModelSource }> = [
+    {
+      load: () => getJson<unknown>('/api/sensor-model', runId ? { run_id: runId } : undefined),
+      source: 'api',
+    },
+    {
+      load: async () => {
+        const res = await fetch(publicUrl('generated/fields/sensor_model_diagnostics.json'));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      },
+      source: 'static_artifact',
+    },
+  ];
+  const req = (async (): Promise<SensorModelPayload | null> => {
+    for (const ep of endpoints) {
+      try {
+        const raw: unknown = await ep.load();
+        const id = (raw as Record<string, unknown> | null)?.benchmark_gates_run_id;
+        return { raw, source: ep.source, gatesRunId: typeof id === 'string' ? id : null };
+      } catch {
+        // Try fallback artifact.
+      }
+    }
+    sensorModelCache.delete(key);
+    return null;
+  })();
+  sensorModelCache.set(key, req);
+  return req;
+}
+
 const PLAIN_SCORE_META: Record<
   string,
-  { name: string; measures: string; format: 'percent' | 'three_decimals' | 'ratio' }
+  { name: string; measures: string; format: 'percent' | 'three_decimals' | 'ratio_error' | 'ratio' }
 > = {
   csi_strict_375m: {
     name: 'Agreement',
@@ -87,14 +130,16 @@ const PLAIN_SCORE_META: Record<
     format: 'three_decimals',
   },
   pixel_ratio_of_sums: {
-    name: 'Detections, expected over real',
-    measures: 'Ratio of expected detections to what the sharp satellite made; 1.00 is exact.',
-    format: 'ratio',
+    name: 'How many detections',
+    measures:
+      'Total detections expected over all hidden passes against what the sharp satellite made: the miss as a share of that. Lower is better.',
+    format: 'ratio_error',
   },
   frp_ratio_of_sums: {
-    name: 'Heat in all, expected over real',
-    measures: 'Ratio of expected total heat to what the sharp satellite measured; 1.00 is exact.',
-    format: 'ratio',
+    name: 'How much heat in all',
+    measures:
+      "The fire's heat output expected over all hidden passes against what the sharp satellite measured: the miss as a share of that. Lower is better.",
+    format: 'ratio_error',
   },
   frp_median_abs_relative_error: {
     name: 'How much heat, pass by pass',
@@ -181,21 +226,25 @@ function formatTestFireCell(score: EvidenceScore, val: number | undefined): {
 } | null {
   if (typeof val !== 'number' || !Number.isFinite(val)) return null;
   const meta = PLAIN_SCORE_META[score.id];
-  const fmt = meta?.format ?? (score.better === 'nearest_one' ? 'ratio' : 'percent');
+  const fmt = meta?.format ?? (score.better === 'nearest_one' ? 'ratio_error' : 'percent');
   if (fmt === 'three_decimals') {
     const [i, f] = val.toFixed(3).split('.');
-    return { intPart: i, fracPart: f ? `.${f}` : '', unit: '' };
+    return { intPart: i, fracPart: f ? `.${f}` : '', unit: 'gap' };
+  }
+  if (fmt === 'ratio_error') {
+    const pct = Math.round(Math.abs(val - 1) * 100);
+    return { intPart: pct.toLocaleString('en-US'), fracPart: '', unit: '%' };
   }
   if (fmt === 'ratio') {
     const [i, f] = val.toFixed(2).split('.');
     return { intPart: i, fracPart: f ? `.${f}` : '', unit: 'x' };
   }
-  return { intPart: String(Math.round(val * 100)), fracPart: '', unit: '%' };
+  return { intPart: Math.round(val * 100).toLocaleString('en-US'), fracPart: '', unit: '%' };
 }
 
 function splitPointsCell(signedPts: string): { intPart: string; fracPart: string; unit: string } {
   const [i, f] = signedPts.split('.');
-  return { intPart: i, fracPart: f ? `.${f}` : '', unit: '' };
+  return { intPart: i, fracPart: f ? `.${f}` : '', unit: 'pts' };
 }
 
 function PerFireDetailTable({
@@ -229,7 +278,7 @@ function PerFireDetailTable({
               aria-pressed={active}
               onClick={() => setSelectedId(f.region_id)}
             >
-              <span>{f.name}</span>
+              <span>{capFirst(f.name)}</span>
               <span className="iso-viewer__trail-meta">
                 {f.new.ahead_of_both_on}/{f.new.scores_judged ?? scores.length}
               </span>
@@ -242,7 +291,7 @@ function PerFireDetailTable({
         <table className="iso-doc-table">
           <thead>
             <tr>
-              <th scope="col">All {scores.length} scores on {fire.name} (final look)</th>
+              <th scope="col">All {scores.length} scores on {capFirst(fire.name)} (final look)</th>
               {methods.map((m) => (
                 <th key={m.id} scope="col" className="is-num">
                   {m.label}
@@ -260,10 +309,13 @@ function PerFireDetailTable({
               const pm = fire.new.scores.painted_modis?.[s.id];
               const or = fire.new.scores.overlap_ratio?.[s.id];
               let winnerText = 'The estimate';
+              let winnerIds: EvidenceMethodId[] = ['reconstruction'];
               if (!won) {
                 if (typeof pm === 'number' && typeof or === 'number') {
-                  if (pm === or) winnerText = 'Both simple methods';
-                  else {
+                  if (pm === or) {
+                    winnerText = 'Both simple methods';
+                    winnerIds = ['painted_modis', 'overlap_ratio'];
+                  } else {
                     const pmBetter =
                       s.better === 'higher'
                         ? pm > or
@@ -271,9 +323,11 @@ function PerFireDetailTable({
                           ? pm < or
                           : Math.abs(pm - 1) < Math.abs(or - 1);
                     winnerText = pmBetter ? 'Coarse as is' : 'Coarse scaled';
+                    winnerIds = [pmBetter ? 'painted_modis' : 'overlap_ratio'];
                   }
                 } else {
                   winnerText = 'Simple method';
+                  winnerIds = [];
                 }
               }
               return (
@@ -284,7 +338,7 @@ function PerFireDetailTable({
                   </th>
                   {methods.map((m) => {
                     const cell = formatTestFireCell(s, fire.new.scores[m.id]?.[s.id]);
-                    const isBest = m.id === 'reconstruction' && won;
+                    const isBest = winnerIds.includes(m.id);
                     return (
                       <td key={m.id} className={`is-num${isBest ? ' is-best' : ''}`}>
                         {cell ? (
@@ -339,7 +393,7 @@ export function EvidenceDocument({
   const fires = doc.test_fires.fires;
   const scores = doc.test_fires.scores;
   const testFiresWord = capFirst(formatCountWord(fires.length) ?? String(fires.length));
-  const testFireNames = formatListAnd(fires.map((f) => f.name));
+  const testFireNames = formatListAnd(fires.map((f) => capFirst(f.name)));
   const testScoresN = fires[0]?.new.scores_judged ?? scores.length;
   const looksList = doc.test_fires.looks ?? [];
   const looksWord = formatCountWord(looksList.length > 0 ? looksList.length : 3) ?? 'three';
@@ -410,7 +464,7 @@ export function EvidenceDocument({
               return (
                 <div key={f.region_id} className="iso-ev-fire">
                   <div className="iso-ev-fire__head">
-                    <span className="iso-ev-fire__name">{f.name}</span>
+                    <span className="iso-ev-fire__name">{capFirst(f.name)}</span>
                     <span className="iso-ev-fire__count" data-low={low ? 'true' : 'false'}>
                       {f.new.ahead_of_both_on} of {judged}
                     </span>
@@ -443,14 +497,14 @@ export function EvidenceDocument({
                 Score tied or lost
               </span>
             </span>
-            <span>UTC dates of the final look</span>
+            <span>Greenwich dates of the final look, as listed in NASA&apos;s archive</span>
           </figcaption>
         </figure>
       )}
 
       <section className="iso-doc-section" aria-labelledby="iso-ev-final-look">
         <h3 id="iso-ev-final-look" className="iso-doc-section__title">
-          The final look
+          The Final Look
         </h3>
         <div className="iso-doc-table-wrap">
           <table className="iso-doc-table">
@@ -491,7 +545,7 @@ export function EvidenceDocument({
                 return (
                   <tr key={f.region_id} data-won={wonHalf ? 'true' : 'false'}>
                     <th scope="row">
-                      <span className="iso-doc-table__row-name">{f.name}</span>
+                      <span className="iso-doc-table__row-name">{capFirst(f.name)}</span>
                     </th>
                     <td>{utcSpan(f.new.first_overpass_utc, f.new.last_overpass_utc)}</td>
                     <td className="is-num">
@@ -529,7 +583,7 @@ export function EvidenceDocument({
 
       <section className="iso-doc-section" aria-labelledby="iso-ev-every-look">
         <h3 id="iso-ev-every-look" className="iso-doc-section__title">
-          Every look at them
+          Every Look at Them
         </h3>
         <div className="iso-doc-table-wrap">
           <table className="iso-doc-table">
@@ -550,7 +604,7 @@ export function EvidenceDocument({
                 return (
                   <tr key={f.region_id}>
                     <th scope="row">
-                      <span className="iso-doc-table__row-name">{f.name}</span>
+                      <span className="iso-doc-table__row-name">{capFirst(f.name)}</span>
                     </th>
                     <td className="is-num">{formatListAnd(perLook)}</td>
                   </tr>
@@ -607,13 +661,14 @@ export function EvidenceDocument({
 
       <section id="iso-evidence-next" className="iso-doc-section" aria-labelledby="iso-ev-players">
         <h3 id="iso-ev-players" className="iso-doc-section__title">
-          Mean gain over those rounds
+          Mean Gain Over Those Rounds
         </h3>
 
         {roundsN && roundLooksWord && (
           <p className="iso-doc-section__p">
-            The game, on {roundsN} rounds of {otherYears} with {roundLooksWord} looks each: the mean gain of each player
-            is in the table below, in points of the burning ground on which the estimate and the sharp satellite agree.
+            The game, across {roundsN} four-day rounds drawn from those {otherFiresWord} fires of {otherYears} (
+            {roundLooksWord} looks per round): the mean gain of each player is in the table below, in points. One point
+            equals one percentage point of burning-square agreement.
           </p>
         )}
 
@@ -746,6 +801,12 @@ export function UnifiedDocumentViewer({
     doc: null,
     state: 'loading',
   });
+  const [fallbackSensorModel, setFallbackSensorModel] = useState<SensorModelPayload | null>(null);
+  const [fallbackOverlap, setFallbackOverlap] = useState<{
+    regionId: string;
+    overlap: OverlapEvidence | null;
+    place: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (open) setActiveDoc(initialDoc);
@@ -756,26 +817,62 @@ export function UnifiedDocumentViewer({
   const effectivePlace = place ?? regionName ?? store?.place.title ?? 'Feather River & Plumas, CA';
   const effectiveRegionId = regionId ?? store?.place.regionId ?? 'plumas_ca';
   const effectiveApiBase = apiBase ?? API_BASE;
+  const activeRunId = store?.run.active?.run_id ?? null;
 
   const providedEvDoc = evidenceDoc ?? store?.model.evidence ?? null;
   useEffect(() => {
     if (!open || providedEvDoc || evidenceState === 'failed') return;
-    const controller = new AbortController();
+    let cancelled = false;
     setFetchedEv({ doc: null, state: 'loading' });
-    getJson<unknown>('/api/evidence', undefined, { signal: controller.signal })
-      .then((d) => {
-        if (controller.signal.aborted) return;
-        if (d && typeof d === 'object' && 'test_fires' in d) {
-          setFetchedEv({ doc: d as EvidenceDoc, state: 'ready' });
-        } else {
-          setFetchedEv({ doc: null, state: 'failed' });
-        }
+    fetchCachedEvidenceDoc()
+      .then((doc) => {
+        if (cancelled) return;
+        setFetchedEv(doc ? { doc, state: 'ready' } : { doc: null, state: 'failed' });
       })
       .catch(() => {
-        if (!controller.signal.aborted) setFetchedEv({ doc: null, state: 'failed' });
+        if (!cancelled) setFetchedEv({ doc: null, state: 'failed' });
       });
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, [open, providedEvDoc, evidenceState]);
+
+  useEffect(() => {
+    if (!open || sensorModel !== null) return;
+    let cancelled = false;
+    fetchCachedSensorModel(activeRunId)
+      .then((m) => {
+        if (!cancelled) setFallbackSensorModel(m);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sensorModel, activeRunId]);
+
+  const cal = store?.calendar.state.cal && !store.calendar.state.cal.simulated ? store.calendar.state.cal : null;
+  const directOverlap = overlap ?? methodEvidence?.overlap ?? cal?.overlap ?? null;
+
+  useEffect(() => {
+    if (!open || directOverlap) return;
+    let cancelled = false;
+    fetchCachedCalendarRaw(effectiveRegionId)
+      .then((raw) => {
+        if (cancelled) return;
+        const parsed = parseCalendar(raw);
+        if (parsed && !parsed.simulated) {
+          setFallbackOverlap({
+            regionId: effectiveRegionId,
+            overlap: parsed.overlap,
+            place: parsed.regionName.split(',')[0] ?? parsed.regionName,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, directOverlap, effectiveRegionId]);
 
   useEffect(() => {
     if (!open || activeDoc !== 'sources' || !scrollCredits) return;
@@ -790,10 +887,16 @@ export function UnifiedDocumentViewer({
     ? 'ready'
     : (evidenceState ?? fetchedEv.state);
 
-  const cal = store?.calendar.state.cal && !store.calendar.state.cal.simulated ? store.calendar.state.cal : null;
-  const resolvedOverlap = overlap ?? methodEvidence?.overlap ?? cal?.overlap ?? null;
+  const effectiveSensorModel = sensorModel ?? fallbackSensorModel;
+  const matchedFallbackOverlap =
+    fallbackOverlap && fallbackOverlap.regionId === effectiveRegionId ? fallbackOverlap : null;
+  const resolvedOverlap = directOverlap ?? matchedFallbackOverlap?.overlap ?? null;
   const resolvedOverlapPlace =
-    overlapPlace ?? methodEvidence?.overlapPlace ?? (cal ? cal.regionName.split(',')[0] : null);
+    overlapPlace ??
+    methodEvidence?.overlapPlace ??
+    (cal ? cal.regionName.split(',')[0] : null) ??
+    matchedFallbackOverlap?.place ??
+    null;
 
   const reconInterval = effectiveScore?.methods.find((m) => m.id === 'reconstruction');
   const resolvedMethodEvidence: MethodEvidence = methodEvidence ?? {
@@ -823,12 +926,10 @@ export function UnifiedDocumentViewer({
     }
     items.push({ id: 'tests', label: 'Every Test on Record' });
     items.push({ id: 'method', label: 'Method and Data' });
-    if (sensorModel !== null || initialDoc === 'sensors') {
-      items.push({ id: 'sensors', label: 'Sensor Geometry' });
-    }
+    items.push({ id: 'sensors', label: 'Sensor Geometry' });
     items.push({ id: 'sources', label: 'Sources' });
     return items;
-  }, [store?.run.active, effectiveScore, sensorModel, initialDoc]);
+  }, [store?.run.active, effectiveScore]);
 
   const handleSelect = (next: ViewerDocId) => {
     setActiveDoc(next);
@@ -890,7 +991,7 @@ export function UnifiedDocumentViewer({
           open
           embedded
           onClose={onClose}
-          model={sensorModel}
+          model={effectiveSensorModel}
           overlap={resolvedOverlap}
           overlapPlace={resolvedOverlapPlace}
         />

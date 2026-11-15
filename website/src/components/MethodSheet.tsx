@@ -3,6 +3,7 @@ import type { OverlapEvidence } from '../content/calendar';
 import type { EvidenceDoc } from '../content/evidence';
 import { parsePlaces } from '../app/places';
 import { runWindow, utcSpan, type ModelStatus } from '../content/realRuns';
+import { localDayRange, midLon } from '../guide/formats';
 import { assetUrlNow, getJson, HttpError } from '../lib/api';
 import {
   AlignedNumber,
@@ -112,6 +113,41 @@ function readSharpSquareKm(activeRun: unknown): number | null {
   return asNum(grid?.cell_km);
 }
 
+const sheetCalendarRawCache = new Map<string, Promise<unknown>>();
+let sheetEvidenceDocCache: Promise<EvidenceDoc | null> | null = null;
+let sheetRegionsRawCache: Promise<unknown> | null = null;
+
+export function fetchCachedCalendarRaw(regionId: string): Promise<unknown> {
+  const existing = sheetCalendarRawCache.get(regionId);
+  if (existing) return existing;
+  const req = getJson<unknown>('/api/calendar', { region_id: regionId, source: 'firms' }).catch((err) => {
+    sheetCalendarRawCache.delete(regionId);
+    throw err;
+  });
+  sheetCalendarRawCache.set(regionId, req);
+  return req;
+}
+
+export function fetchCachedEvidenceDoc(): Promise<EvidenceDoc | null> {
+  if (sheetEvidenceDocCache) return sheetEvidenceDocCache;
+  sheetEvidenceDocCache = getJson<unknown>('/api/evidence')
+    .then((d) => (isObj(d) && isObj(d.test_fires) ? (d as unknown as EvidenceDoc) : null))
+    .catch((err) => {
+      sheetEvidenceDocCache = null;
+      throw err;
+    });
+  return sheetEvidenceDocCache;
+}
+
+export function fetchCachedRegionsRaw(): Promise<unknown> {
+  if (sheetRegionsRawCache) return sheetRegionsRawCache;
+  sheetRegionsRawCache = getJson<unknown>('/api/regions').catch((err) => {
+    sheetRegionsRawCache = null;
+    throw err;
+  });
+  return sheetRegionsRawCache;
+}
+
 function readTerrainPackCredit(activeRun: unknown): string | null {
   if (!isObj(activeRun)) return null;
   const img = isObj(activeRun.imagery) ? activeRun.imagery : null;
@@ -143,46 +179,50 @@ export function MethodDocument({
   const [fallbackPlaces, setFallbackPlaces] = useState<string[]>([]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    getJson<unknown>('/api/calendar', { region_id: regionId, source: 'firms' }, { signal: controller.signal })
+    let cancelled = false;
+    fetchCachedCalendarRaw(regionId)
       .then((raw) => {
-        if (controller.signal.aborted) return;
+        if (cancelled) return;
         setCalFields(parseLiveCalendarFields(regionId, raw));
       })
       .catch((err) => {
-        if (controller.signal.aborted) return;
+        if (cancelled) return;
         if (err instanceof HttpError && err.status === 404) setCalFields(null);
       });
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, [regionId]);
 
   const liveEvidence = store?.model.evidence ?? fallbackEvidence;
   useEffect(() => {
     if (store?.model.evidence) return;
-    const controller = new AbortController();
-    getJson<unknown>('/api/evidence', undefined, { signal: controller.signal })
-      .then((d) => {
-        if (!controller.signal.aborted && isObj(d) && isObj(d.test_fires)) {
-          setFallbackEvidence(d as unknown as EvidenceDoc);
-        }
+    let cancelled = false;
+    fetchCachedEvidenceDoc()
+      .then((doc) => {
+        if (!cancelled && doc) setFallbackEvidence(doc);
       })
       .catch(() => {});
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, [store?.model.evidence]);
 
   const storePlaceNames =
     store?.places.places.filter((p) => p.rows === 'firms').map((p) => p.name) ?? [];
   useEffect(() => {
     if (storePlaceNames.length > 0) return;
-    const controller = new AbortController();
-    getJson<unknown>('/api/regions', undefined, { signal: controller.signal })
+    let cancelled = false;
+    fetchCachedRegionsRaw()
       .then((raw) => {
-        if (controller.signal.aborted) return;
+        if (cancelled) return;
         const parsed = parsePlaces(raw);
         setFallbackPlaces(parsed.places.filter((p) => p.rows === 'firms').map((p) => p.name));
       })
       .catch(() => {});
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, [storePlaceNames.length]);
 
   const calForRegion = calFields?.regionId === regionId ? calFields : null;
@@ -388,11 +428,13 @@ export function MethodDocument({
           <h3 className="iso-doc-section__title">Times</h3>
           <div className="iso-doc-spec__body">
             <p className="iso-doc-section__p">
-              On the page a time is local at the fire, by the sun: the instant moved by the fire&apos;s longitude, which
-              can stand an hour or more from the clock of its time zone.
+              Days and pass times on the page, on This Fire, and on The Scores follow local solar time at the fire: the
+              instant moved by the fire&apos;s longitude, which can stand an hour or more from the clock of its time
+              zone.
             </p>
             <p className="iso-doc-section__p">
-              In this viewer days and times are in UTC, as NASA&apos;s record lists them.
+              In Every Test on Record, the archived dates of the three closed test fires follow Greenwich time, as
+              NASA&apos;s archive lists them.
             </p>
           </div>
         </section>
@@ -455,7 +497,11 @@ export function ThisFireDocument({
 
   const epochs = Array.isArray(run.epoch_summaries) ? run.epoch_summaries : [];
   const totalPasses = win?.overpasses ?? epochs.length;
-  const span = store.run.span ?? (win ? utcSpan(win.first, win.last) : null);
+  const fireLon = midLon(run.region.bbox);
+  const span =
+    (win ? localDayRange(win.first, win.last, fireLon) : null) ??
+    store.run.span ??
+    (win ? utcSpan(win.first, win.last) : null);
   const blindActive = store.test.hidden && !store.test.revealed;
   const sharpSquareM = formatMetresFromKm(readSharpSquareKm(run));
 
@@ -530,7 +576,11 @@ export function ThisFireDocument({
                 Coarse pass ({coarsePasses})
               </span>
               <span className="iso-doc-legend__item">
-                <span className="iso-doc-swatch iso-doc-swatch--detection" />
+                <span
+                  className={`iso-doc-swatch ${
+                    blindActive ? 'iso-doc-swatch--withheld' : 'iso-doc-swatch--detection'
+                  }`}
+                />
                 {blindActive ? `Sharp pass withheld (${sharpPasses})` : `Sharp pass (${sharpPasses})`}
               </span>
             </span>
@@ -576,7 +626,7 @@ export function ThisFireDocument({
                   <span className="iso-doc-table__row-desc">Each square tracked forward and backward across passes</span>
                 </th>
                 <td className="is-num">
-                  <AlignedNumber intPart={sharpSquareM} unit="m" />
+                  <AlignedNumber intPart={sharpSquareM} unit="m" flush />
                 </td>
               </tr>
             )}
@@ -587,7 +637,7 @@ export function ThisFireDocument({
                   <span className="iso-doc-table__row-desc">Total fire power stated by the estimate at this moment</span>
                 </th>
                 <td className="is-num">
-                  <AlignedNumber intPart={Math.round(store.time.powerMw).toLocaleString('en-US')} unit="MW" />
+                  <AlignedNumber intPart={Math.round(store.time.powerMw).toLocaleString('en-US')} unit="MW" flush />
                 </td>
               </tr>
             )}

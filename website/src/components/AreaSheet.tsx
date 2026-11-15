@@ -135,7 +135,7 @@ export function AreaSheet({ open, onClose, apiBase, centre, onOpenMonth }: AreaS
           Draw a box on the map, or enter its four edges in degrees, to open its monthly fire record since 2000.
         </p>
         <p className="iso-doc-lead__p">
-          Dashed boxes show the three places stored on the server. Any box inside one reads its real NASA FIRMS record.
+          Dashed boxes show the three places stored here. Any box inside one reads its real NASA FIRMS record.
         </p>
       </section>
 

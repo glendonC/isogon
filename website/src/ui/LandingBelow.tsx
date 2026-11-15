@@ -1579,8 +1579,12 @@ export function LandingBelow({
       (m) => typeof m.label === 'string' && m.label.startsWith('VIIRS'),
     );
 
+    const rawPlaces =
+      regionsSlice?.places && regionsSlice.places.length > 0
+        ? regionsSlice.places
+        : store?.places.places ?? null;
     const firmsPlaces =
-      regionsSlice?.places?.filter((p) => p.rows === 'firms' && typeof p.name === 'string') ?? null;
+      rawPlaces?.filter((p) => p.rows === 'firms' && typeof p.name === 'string') ?? null;
 
     const testFires = evidenceDoc?.test_fires?.fires ?? null;
     const scoresJudgedNum = testFires && testFires[0] ? testFires[0].new.scores_judged : null;

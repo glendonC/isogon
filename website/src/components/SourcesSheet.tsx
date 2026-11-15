@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import type { WorkspaceStore } from '../app/store';
 import { THEATER_DISPLAY, THEATER_ORDER } from '../content/theaters';
 import type { TheaterId } from '../stage/earthCutawayTypes';
 import {
@@ -14,9 +15,10 @@ import {
   plain,
   type CalendarSources,
   type HealthCounts,
+  type SourceRow,
 } from '../content/sources';
 import { Loader } from '../ui/Loader';
-import { AlignedNumber, SideSheet } from './BlindScoreTable';
+import { AlignedNumber, SideSheet, useOptionalWorkspace } from './BlindScoreTable';
 import '../styles/sources.css';
 
 export interface SourcesSheetProps {
@@ -42,8 +44,94 @@ type Load<T> =
 
 const isTheater = (id: string): id is TheaterId => Object.prototype.hasOwnProperty.call(THEATER_DISPLAY, id);
 
-function regionLabel(id: string): string {
-  return isTheater(id) ? THEATER_DISPLAY[id].name : id;
+const CANONICAL_PLACE_NAMES: Record<string, string> = {
+  plumas_ca: 'Feather River & Plumas, CA',
+  lytton_bc: 'Lytton & Thompson Canyon, BC',
+  evia_gr: 'Northern Evia Island, Greece',
+  evia_greece: 'Northern Evia Island, Greece',
+  blue_mountains_au: 'Grose Valley & Blue Mountains, NSW',
+  novo_progresso_br: 'Serra do Cachimbo, Amazonia',
+  ventura_ca: 'Ojai & Ventura River, CA',
+  kakisa_nt: 'Kakisa & Enterprise, NT',
+  okefenokee_ga: 'Okefenokee Swamp, GA and FL',
+  evros_greece: 'Dadia Forest & Soufli, Evros',
+  serra_acor_pt: 'Serra do Açor & Covilhã, Portugal',
+  maule_cl: 'Empedrado & Maule Coast Range, Chile',
+  ljusdal_se: 'Kårböle & Ljusdal, Sweden',
+  semey_kz: 'Semey Ormany, Kazakhstan',
+  manavgat_tr: 'Manavgat & the Taurus Foothills, Turkey',
+  fort_mcmurray_ab: 'Fort McMurray, AB',
+  jur_river_ss: 'Jur River, South Sudan',
+  wollemi_au: 'Wollemi & Gospers Mountain, NSW',
+};
+
+function humanizeRegionId(id: string): string {
+  const parts = id.split('_').filter(Boolean);
+  if (parts.length === 0) return id;
+  if (parts.length >= 2 && parts[parts.length - 1].length === 2) {
+    const code = parts[parts.length - 1].toUpperCase();
+    const words = parts
+      .slice(0, -1)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+    return `${words}, ${code}`;
+  }
+  return parts.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function regionLabel(id: string, store: WorkspaceStore | null): string {
+  const fromStore = store?.places.places.find((p) => p.id === id)?.name;
+  if (fromStore) return fromStore;
+  if (CANONICAL_PLACE_NAMES[id]) return CANONICAL_PLACE_NAMES[id];
+  return isTheater(id) ? THEATER_DISPLAY[id].name : humanizeRegionId(id);
+}
+
+function plainRule(t: string): string {
+  return plain(t)
+    .replace(/\bstatic rows left out\b/gi, 'static detections left out')
+    .replace(/\bFIRMS area API\b/gi, "NASA's public fire archive feed")
+    .replace(/\barea API\b/gi, 'public fire archive feed')
+    .replace(/\bstandard processing\b/gi, 'final-review archive')
+    .replace(/\bnear real time\b/gi, 'preliminary passes');
+}
+
+function plainProductRow(row: SourceRow): SourceRow {
+  const label = row.label === 'One row' ? 'One detection' : row.label;
+  const value = row.value === 'standard processing' ? 'final-review archive' : row.value;
+  const context = row.context
+    .replace(
+      '2026 rows come from the area API and turn near real time where standard processing ends',
+      "2026 detections come from NASA's public fire archive feed and use preliminary passes where final review ends",
+    )
+    .replace('FIRMS area API, from 2023-03', "NASA's public fire archive feed, from March 2023")
+    .replace(/\bFIRMS country files\b/g, 'NASA FIRMS country archives')
+    .replace(/\brows labelled\b/g, 'detections labelled');
+  return { label, value, context };
+}
+
+const cachedHealthPromises = new Map<string, Promise<HealthCounts>>();
+const cachedCalSourcesPromises = new Map<string, Promise<CalendarSources | null>>();
+
+function getCachedHealthCounts(key: string): Promise<HealthCounts> {
+  const existing = cachedHealthPromises.get(key);
+  if (existing) return existing;
+  const req = fetchHealthCounts(new AbortController().signal).catch((err) => {
+    cachedHealthPromises.delete(key);
+    throw err;
+  });
+  cachedHealthPromises.set(key, req);
+  return req;
+}
+
+function getCachedCalendarSources(key: string, regionId: string): Promise<CalendarSources | null> {
+  const existing = cachedCalSourcesPromises.get(key);
+  if (existing) return existing;
+  const req = fetchCalendarSources(regionId, new AbortController().signal).catch((err) => {
+    cachedCalSourcesPromises.delete(key);
+    throw err;
+  });
+  cachedCalSourcesPromises.set(key, req);
+  return req;
 }
 
 function regionRank(id: string): number {
@@ -146,16 +234,18 @@ function SourcesMediaPane({
   counts,
   regionId,
   regionName,
+  store,
 }: {
   counts: HealthCounts;
   regionId: string;
   regionName: string;
+  store: WorkspaceStore | null;
 }) {
   const current = counts.regions.find((r) => r.regionId === regionId) ?? counts.regions[0] ?? null;
   if (!current || current.total <= 0) return null;
 
   const sortedRows = [...current.rows].sort((a, b) => comparePlatforms(a.platform, b.platform));
-  const label = current.regionId === regionId ? regionName : regionLabel(current.regionId);
+  const label = current.regionId === regionId ? regionName : regionLabel(current.regionId, store);
 
   return (
     <figure className="iso-doc-media" aria-label={`Stored detections by satellite in ${label}`}>
@@ -203,7 +293,15 @@ function SourcesMediaPane({
   );
 }
 
-function RowCountsSection({ counts, regionId }: { counts: HealthCounts; regionId: string }) {
+function RowCountsSection({
+  counts,
+  regionId,
+  store,
+}: {
+  counts: HealthCounts;
+  regionId: string;
+  store: WorkspaceStore | null;
+}) {
   const regions = [...counts.regions].sort(
     (a, b) => regionRank(a.regionId) - regionRank(b.regionId) || a.regionId.localeCompare(b.regionId),
   );
@@ -214,7 +312,7 @@ function RowCountsSection({ counts, regionId }: { counts: HealthCounts; regionId
   return (
     <DocSection title="Stored Detections by Place and Satellite">
       <p className="iso-doc-section__p">
-        Every row inside each place&apos;s context box, across all cached years including 2026.
+        Every detection inside each place&apos;s surrounding area, across all stored years including 2026.
       </p>
       <div className="iso-doc-table-wrap">
         <table className="iso-doc-table">
@@ -237,7 +335,7 @@ function RowCountsSection({ counts, regionId }: { counts: HealthCounts; regionId
               return (
                 <tr key={r.regionId} className={active ? 'iso-sources__row-active' : undefined}>
                   <th scope="row">
-                    <span className="iso-doc-table__row-name">{regionLabel(r.regionId)}</span>
+                    <span className="iso-doc-table__row-name">{regionLabel(r.regionId, store)}</span>
                   </th>
                   {platforms.map((p) => {
                     const v = r.rows.find((x) => x.platform === p)?.value;
@@ -269,19 +367,22 @@ function ProductsSection() {
             <tr>
               <th scope="col">Instrument or rule</th>
               <th scope="col">Product</th>
-              <th scope="col">Where the rows come from</th>
+              <th scope="col">Where the detections come from</th>
             </tr>
           </thead>
           <tbody>
-            {PRODUCT_ROWS.map((row) => (
-              <tr key={row.label}>
-                <th scope="row">
-                  <span className="iso-doc-table__row-name">{row.label}</span>
-                </th>
-                <td>{row.value}</td>
-                <td>{row.context}</td>
-              </tr>
-            ))}
+            {PRODUCT_ROWS.map((rawRow) => {
+              const row = plainProductRow(rawRow);
+              return (
+                <tr key={rawRow.label}>
+                  <th scope="row">
+                    <span className="iso-doc-table__row-name">{row.label}</span>
+                  </th>
+                  <td>{row.value}</td>
+                  <td>{row.context}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -334,7 +435,7 @@ function CalendarSourcesSection({
   return (
     <>
       <DocSection title={title}>
-        {cal.countingRule && <p className="iso-doc-section__p">{plain(cal.countingRule)}</p>}
+        {cal.countingRule && <p className="iso-doc-section__p">{plainRule(cal.countingRule)}</p>}
         <div className="iso-doc-table-wrap">
           <table className="iso-doc-table">
             <thead>
@@ -353,7 +454,7 @@ function CalendarSourcesSection({
                     <span className="iso-doc-table__row-name">Static land sources</span>
                   </th>
                   <td className="is-num">
-                    {formatCount(staticTotal)} {staticTotal === 1 ? 'row' : 'rows'}
+                    {formatCount(staticTotal)} {staticTotal === 1 ? 'detection' : 'detections'}
                   </td>
                   <td>{cal.staticExcluded.map((s) => `${s.platform} ${formatCount(s.value)}`).join(', ')}</td>
                 </tr>
@@ -378,7 +479,7 @@ function CalendarSourcesSection({
                     <span className="iso-doc-table__row-name">{n.platform}</span>
                   </th>
                   <td className="is-num">Counted only</td>
-                  <td>{plain(n.why)}</td>
+                  <td>{plainRule(n.why)}</td>
                 </tr>
               ))}
               {cal.notInCalendar && (
@@ -387,7 +488,7 @@ function CalendarSourcesSection({
                     <span className="iso-doc-table__row-name">{cal.notInCalendar.what}</span>
                   </th>
                   <td className="is-num">Omitted</td>
-                  <td>{plain(cal.notInCalendar.why)}</td>
+                  <td>{plainRule(cal.notInCalendar.why)}</td>
                 </tr>
               )}
             </tbody>
@@ -396,7 +497,7 @@ function CalendarSourcesSection({
       </DocSection>
 
       <DocSection title="Known Outages and Orbit Milestones">
-        {cal.outageRule && <p className="iso-doc-section__p">{plain(cal.outageRule)}</p>}
+        {cal.outageRule && <p className="iso-doc-section__p">{plainRule(cal.outageRule)}</p>}
         {platforms.length > 0 && (
           <div className="iso-doc-table-wrap">
             <table className="iso-doc-table">
@@ -468,6 +569,7 @@ export function SourcesSheet({
   embedded = false,
   includeCredits = true,
 }: SourcesSheetProps) {
+  const store = useOptionalWorkspace();
   const healthKey = apiBase;
   const calendarKey = `${apiBase} ${regionId}`;
   const [health, setHealth] = useState<Load<HealthCounts>>({ key: '', state: 'loading' });
@@ -475,33 +577,37 @@ export function SourcesSheet({
 
   useEffect(() => {
     if (!open) return;
-    const controller = new AbortController();
+    let cancelled = false;
     setHealth({ key: healthKey, state: 'loading' });
-    fetchHealthCounts(controller.signal).then(
+    getCachedHealthCounts(healthKey).then(
       (data) => {
-        if (!controller.signal.aborted) setHealth({ key: healthKey, state: 'ready', data });
+        if (!cancelled) setHealth({ key: healthKey, state: 'ready', data });
       },
       () => {
-        if (!controller.signal.aborted) setHealth({ key: healthKey, state: 'failed' });
+        if (!cancelled) setHealth({ key: healthKey, state: 'failed' });
       },
     );
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, [open, healthKey]);
 
   useEffect(() => {
     if (!open) return;
-    const controller = new AbortController();
+    let cancelled = false;
     setCalendar({ key: calendarKey, state: 'loading' });
-    fetchCalendarSources(regionId, controller.signal).then(
+    getCachedCalendarSources(calendarKey, regionId).then(
       (data) => {
-        if (controller.signal.aborted) return;
+        if (cancelled) return;
         setCalendar(data ? { key: calendarKey, state: 'ready', data } : { key: calendarKey, state: 'missing' });
       },
       () => {
-        if (!controller.signal.aborted) setCalendar({ key: calendarKey, state: 'failed' });
+        if (!cancelled) setCalendar({ key: calendarKey, state: 'failed' });
       },
     );
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, [open, apiBase, regionId, calendarKey]);
 
   if (!open) return null;
@@ -529,8 +635,8 @@ export function SourcesSheet({
           </div>
         )}
         <p className="iso-doc-lead__p iso-doc-lead__p--strong">
-          Every count on this sheet is read live from the NASA FIRMS files stored on the server and from the open
-          place&apos;s fire record.
+          Every count on this sheet is read live from the NASA FIRMS files stored here and from the open place&apos;s
+          fire record.
         </p>
       </section>
 
@@ -539,8 +645,10 @@ export function SourcesSheet({
         <p className="iso-doc-section__p">The stored detection counts did not answer, so no count is shown.</p>
       )}
 
-      {readyHealth && <SourcesMediaPane counts={readyHealth} regionId={regionId} regionName={regionName} />}
-      {readyHealth && <RowCountsSection counts={readyHealth} regionId={regionId} />}
+      {readyHealth && (
+        <SourcesMediaPane counts={readyHealth} regionId={regionId} regionName={regionName} store={store} />
+      )}
+      {readyHealth && <RowCountsSection counts={readyHealth} regionId={regionId} store={store} />}
       <ProductsSection />
       <CalendarSourcesSection load={calendarNow} regionName={regionName} />
       {includeCredits && <Credits imageryCredit={imageryCredit} />}

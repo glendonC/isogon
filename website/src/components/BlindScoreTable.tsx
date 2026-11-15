@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useWorkspace, type WorkspaceStore } from '../app/store';
+import { localDayRange, midLon } from '../guide/formats';
 import { useDialogFocus } from '../ui/useDialogFocus';
 import {
   platformName,
@@ -153,12 +154,14 @@ export function AlignedNumber({
   fracPart = '',
   unit = '',
   compact = false,
+  flush = false,
   integerOnly = false,
 }: {
   intPart: string;
   fracPart?: string;
   unit?: string;
   compact?: boolean;
+  flush?: boolean;
   integerOnly?: boolean;
 }) {
   if (integerOnly) {
@@ -168,12 +171,14 @@ export function AlignedNumber({
       </span>
     );
   }
+  const displayUnit = unit ? (/^[%°]/.test(unit) ? unit : ` ${unit}`) : '';
+  const mod = flush ? ' iso-num--flush' : compact ? ' iso-num--compact' : '';
   return (
-    <span className={`iso-num${compact ? ' iso-num--compact' : ''}`}>
+    <span className={`iso-num${mod}`}>
       <span className="iso-num__int">{intPart}</span>
       <span className="iso-num__frac">
         {fracPart}
-        {unit && <span className="iso-num__unit">{unit}</span>}
+        {displayUnit && <span className="iso-num__unit">{displayUnit}</span>}
       </span>
     </span>
   );
@@ -519,7 +524,7 @@ function formatScoreCell(spec: ScoreRowSpec, raw: number | undefined): {
     return {
       intPart: i,
       fracPart: f ? `.${f}` : '',
-      unit: '',
+      unit: 'gap',
       comparable: Math.round(raw * 1000),
     };
   }
@@ -672,7 +677,13 @@ export function ScoresDocument({
   const limitHeld = formatSheetCount(reconMethod?.intervalCovered);
   const limitOf = formatSheetCount(reconMethod?.intervalN);
 
-  const spanText = score.firstUtc && score.lastUtc ? utcSpan(score.firstUtc, score.lastUtc) : null;
+  const fireLon =
+    midLon(store?.run.active?.region.bbox) ??
+    midLon(store?.places.places.find((p) => p.id === store?.place.regionId)?.box);
+  const spanText =
+    score.firstUtc && score.lastUtc
+      ? (localDayRange(score.firstUtc, score.lastUtc, fireLon) ?? utcSpan(score.firstUtc, score.lastUtc))
+      : null;
   const methodIds = ['reconstruction', 'painted_modis', 'overlap_ratio'] as const;
 
   return (
@@ -724,7 +735,7 @@ export function ScoresDocument({
         </div>
         <div className="iso-method-key__item">
           <span className="iso-method-key__head">
-            <span className="iso-doc-swatch iso-doc-swatch--modis" />
+            <span className="iso-doc-swatch iso-doc-swatch--modis-hollow" />
             Coarse squares as they are
           </span>
           <p className="iso-method-key__desc">
@@ -733,7 +744,7 @@ export function ScoresDocument({
         </div>
         <div className="iso-method-key__item">
           <span className="iso-method-key__head">
-            <span className="iso-doc-swatch iso-doc-swatch--detection" />
+            <span className="iso-doc-swatch iso-doc-swatch--modis" />
             Coarse squares, scaled up
           </span>
           <p className="iso-method-key__desc">
@@ -972,9 +983,16 @@ export function BlindScoreTable({
   corner?: string;
   hiddenText?: string;
 }) {
+  const store = useOptionalWorkspace();
+  const fireLon =
+    midLon(store?.run.active?.region.bbox) ??
+    midLon(store?.places.places.find((p) => p.id === store?.place.regionId)?.box);
   const hidden =
     score.hiddenPlatforms.length > 0 ? formatListAnd(score.hiddenPlatforms.map(platformName)) : 'the sharp satellite';
-  const span = score.firstUtc && score.lastUtc ? `, ${utcSpan(score.firstUtc, score.lastUtc)}` : '';
+  const span =
+    score.firstUtc && score.lastUtc
+      ? `, ${localDayRange(score.firstUtc, score.lastUtc, fireLon) ?? utcSpan(score.firstUtc, score.lastUtc)}`
+      : '';
   const count = score.scoredOverpasses !== null ? `, ${score.scoredOverpasses} passes` : '';
 
   return (

@@ -476,6 +476,11 @@ body:has(.iso-viewer-layer) button.iso-credit {
   background: transparent;
 }
 
+.iso-doc-swatch--withheld {
+  border: 1px dashed var(--sys-edge);
+  background: transparent;
+}
+
 .iso-doc-swatch--rule {
   background: var(--sys-rule);
 }
@@ -706,34 +711,42 @@ body:has(.iso-viewer-layer) button.iso-credit {
   font-weight: var(--sys-weight-strong);
 }
 
-/* Decimal-aligned numeric cell: integer part right-aligned, fractional part left-aligned at the decimal point */
+/* Decimal-aligned numeric cell: integer part right-aligned, fractional part left-aligned at the decimal point.
+   Uses inline-block tracks inside an inline wrapper so copy-paste and screen readers keep each value on one line. */
 .iso-num {
-  display: inline-grid;
-  grid-template-columns: 4.5ch 4.2ch;
-  align-items: baseline;
+  display: inline;
+  white-space: nowrap;
   font: inherit;
   font-family: var(--sys-mono);
   font-variant-numeric: tabular-nums;
 }
 
-.iso-num--compact {
-  grid-template-columns: 4ch 4ch;
-}
-
-.iso-num--int {
-  grid-template-columns: 7ch;
-}
-
 .iso-num__int {
+  display: inline-block;
+  min-width: 3.2ch;
   text-align: right;
 }
 
 .iso-num__frac {
+  display: inline-block;
+  width: 7.4ch;
   text-align: left;
 }
 
+.iso-num--compact .iso-num__frac {
+  width: 5.8ch;
+}
+
+.iso-num--flush .iso-num__int,
+.iso-num--flush .iso-num__frac,
+.iso-num--int .iso-num__int {
+  display: inline;
+  min-width: 0;
+  width: auto;
+}
+
 .iso-num__unit {
-  padding-left: 0.1ch;
+  padding-left: 0;
   font-size: var(--sys-size-fine);
   line-height: var(--sys-lh-fine);
   color: var(--sys-ink-3);
@@ -1404,9 +1417,12 @@ body:has(.iso-viewer-layer) button.iso-credit {
     min-width: 56px;
   }
 
-  .iso-num,
-  .iso-num--compact {
-    grid-template-columns: 3.4ch 3.6ch;
+  .iso-num__int,
+  .iso-num__frac,
+  .iso-num--compact .iso-num__frac {
+    display: inline;
+    min-width: 0;
+    width: auto;
   }
 
   .iso-finder__item {
