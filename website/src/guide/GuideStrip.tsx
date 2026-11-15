@@ -19,6 +19,8 @@ export function GuideStrip({
   onAction: (command: string) => void;
   results?: { line: string; rows: ResultRow[] } | null;
 }) {
+  const main = actions.filter((a, n) => n === 0 || !a.quiet);
+  const quiet = actions.filter((a, n) => n > 0 && a.quiet);
   return (
     <div className="guide-strip" role="region" aria-label="Guide">
       {results && <Results line={results.line} rows={results.rows} />}
@@ -31,21 +33,34 @@ export function GuideStrip({
           </Fragment>
         ))}
       </p>
-      {actions.length > 0 && (
+      {main.length > 0 && (
         <div className="guide-strip__acts">
-          {actions.map((a, n) => (
-            <button
-              key={a.command + a.label}
-              type="button"
-              className={n === 0 ? 'guide-act guide-act--next' : a.quiet ? 'guide-act guide-act--quiet' : 'guide-act'}
-              onClick={() => onAction(a.command)}
-            >
-              {a.key && <kbd className="guide-key">{a.key}</kbd>}
-              <span className="guide-act__label">{a.label}</span>
-            </button>
+          {main.map((a, n) => (
+            <Act key={a.command + a.label} a={a} next={n === 0} onAction={onAction} />
+          ))}
+        </div>
+      )}
+      {/* The quiet actions in a row of their own under the step's, smaller. */}
+      {quiet.length > 0 && (
+        <div className="guide-strip__acts guide-strip__acts--quiet">
+          {quiet.map((a) => (
+            <Act key={a.command + a.label} a={a} next={false} onAction={onAction} />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function Act({ a, next, onAction }: { a: ScriptAction; next: boolean; onAction: (command: string) => void }) {
+  return (
+    <button
+      type="button"
+      className={next ? 'guide-act guide-act--next' : a.quiet ? 'guide-act guide-act--quiet' : 'guide-act'}
+      onClick={() => onAction(a.command)}
+    >
+      {a.key && <kbd className="guide-key">{a.key}</kbd>}
+      <span className="guide-act__label">{a.label}</span>
+    </button>
   );
 }

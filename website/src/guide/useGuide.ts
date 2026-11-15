@@ -31,7 +31,7 @@ import {
 
 export interface Guide {
   /** The script's step and state on show; null where the guide does not speak (Choose a Place). */
-  step: 'place' | 'record' | 'years' | 'estimate' | 'test' | 'play' | 'finish' | null;
+  step: 'place' | 'record' | 'estimate' | 'test' | 'play' | 'finish' | null;
   stateId: string | null;
   state: ScriptState | null;
   /** Top left: what the visitor is doing now, and the fainter line of the place and the days. */
@@ -63,6 +63,15 @@ export interface Guide {
 /** How many of a state's lines stand together in the guide. */
 const STANDING = 2;
 
+/**
+ * The pictures of the world opened from Test, in the product's words for them until the script carries them:
+ * step-wide on the reveal and on its other passes, and quiet at the end of the guide's row.
+ */
+const WORLD_ENTRIES: ScriptAction[] = [
+  { label: 'See the test on fires across the world', command: 'world:test', key: 'A', quiet: true },
+  { label: 'See predictions sealed before the pass', command: 'world:sealed', key: 'J', quiet: true },
+];
+
 /** What is running now, for the actions that read otherwise while it runs (`label_while_on`) and the short labels. */
 export interface GuideLive {
   /** The passes are playing. */
@@ -82,8 +91,7 @@ export interface GuideLive {
   recordedNow?: string | false;
   /** The day's photograph on Estimate and Test (guide/dayPicture.ts): what is asked for and what the stage shows. */
   day?: { asked: DayPictureKind | null; shown: EarthStageTelemetry['dayPicture'] | null; pixelKm: number | null };
-  /** The Earth's years on screen (world/EarthYears.tsx): the year and view on show, and the world's figures. */
-  years?: { year: number | null; mode: 'detected' | 'harmonized' } | null;
+  /** The Earth's yearly figures (GET /api/cube/years), for the first year the world's record names. */
   worldYears?: WorldYears | null;
 }
 
@@ -188,47 +196,6 @@ export function useGuide(
   const model = ws.step === 'fire' || ws.step === 'test';
   const { fields, conds } = guideFields(ws);
   const on = onOf(live, record);
-
-  if (live.years) {
-    // The Earth's years (a step under the Record): the script's objective and sentence by the view on show, and Back;
-    // the screen's own controls (play, a year, the switch) are its own, so the guide does not repeat them.
-    entry.current = { key: '', pass: -1 };
-    const w = live.worldYears ?? null;
-    const one = live.years.mode === 'harmonized';
-    const yr = live.years.year;
-    const sharp = Number(fields.sharp_since ?? 2012);
-    const yf: Fields = {
-      world_first_year: live.worldFirstYear ?? (w?.first != null ? String(w.first) : null),
-      years_last: w?.last != null ? String(w.last) : null,
-      world_ratio: w?.ratio != null ? w.ratio.toFixed(1) : null,
-      world_ratio_low: w?.low != null ? w.low.toFixed(1) : null,
-      world_ratio_high: w?.high != null ? w.high.toFixed(1) : null,
-      sharp_since: fields.sharp_since ?? '2012',
-    };
-    const yc: Conditions = {
-      years_on_one_scale: one,
-      years_older_counted: !one && yr !== null && yr < sharp,
-      years_newer_counted: !one && yr !== null && yr >= sharp,
-      years_change_as_counted: !one && yr === sharp,
-      years_change_one_scale: one && yr === sharp,
-    };
-    const state = stateOf('years', 'earth_years');
-    const yfAll = { ...fields, ...yf };
-    return {
-      ...NONE,
-      step: 'years',
-      stateId: 'earth_years',
-      state,
-      objective: objectiveOf('years', state, yfAll),
-      context: contextOf('years', yfAll),
-      lines: says(state, yfAll, yc).slice(0, STANDING),
-      more: moreOf(state, yfAll, yc),
-      film: filmOf(state, yfAll, yc),
-      fields: yfAll,
-      conds: { ...conds, ...yc },
-      actions: actionsOf(state?.actions.filter((a) => a.command === 'close'), yfAll, on),
-    };
-  }
 
   if (ws.step === 'record' && ws.calendar.placesOpen) {
     // The choice of a place: what the map shows and what can be opened. Its keys are the screen's own (the list, the
@@ -351,6 +318,7 @@ export function useGuide(
   const photo = dayOffered && live.day?.asked ? photoLine(step, live.day, ws, fields) : null;
   const standing = [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)];
   const photoAct = dayOffered ? stepOf(step)?.also?.find((a) => a.command === 'photo:next') : undefined;
+  const world = step === 'test' && (id === 'revealed' || id === 'on_another_pass') ? WORLD_ENTRIES : [];
   const settled = id !== 'loading' && id !== 'failed' && id !== 'revealing';
   return {
     ...NONE,
@@ -366,14 +334,15 @@ export function useGuide(
     film: filmOf(state, fields, conds) ?? filmOf(stateOf(step, step === 'test' ? 'revealed' : 'hidden'), fields, conds),
     fields,
     conds,
-    // The day's photograph: a fourth, quiet action at the end of the row, on these two steps only.
+    // The pictures of the world on the reveal, then the day's photograph: quiet, at the end of the row.
     actions: [
       ...actionsOf(state?.actions, fields, on),
+      ...world,
       ...(photoAct
         ? [{ ...photoAct, quiet: true, label: (live.day?.asked === 'true_color' ? photoAct.label_when_true_color : live.day?.asked === 'false_color' ? photoAct.label_when_false_color : null) ?? photoAct.label }]
         : []),
     ],
-    also: actionsOf(stepOf(step)?.also, fields, on, 9),
+    also: [...actionsOf(stepOf(step)?.also, fields, on, 9), ...world],
     fireLabel: labelOn(state, 'fire', fields, conds, live.playing),
     besideFire: promptBeside(state, 'fire'),
     marks: settled ? marksOnShow(ws, fields, conds, { chance: live.chance, revealed: step === 'test' }) : [],

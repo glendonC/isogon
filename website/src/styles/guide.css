@@ -630,7 +630,20 @@
 
 /* The day's photograph: the guide's fourth action on Estimate and Test, quiet at the end of the row. */
 .guide-act--quiet {
-  opacity: 0.72;
+  opacity: 0.8;
+  gap: 6px;
+  padding: 4px 6px;
+  font-size: var(--sys-size-fine);
+}
+
+.guide-act--quiet .guide-key {
+  height: 18px;
+  min-width: 18px;
+}
+
+.guide-strip__acts--quiet {
+  margin-top: calc(var(--sys-s2) - var(--sys-s3));
+  gap: var(--sys-s2);
 }
 
 .guide-act--quiet:hover,

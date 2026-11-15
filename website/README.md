@@ -85,7 +85,7 @@ script's words (`src/guide/marks.ts`).
 | --- | --- |
 | Record | The fire record and Choose a Place (the compare-view lane's screens, mounted through the store); the guide says what a square is and offers the fire of the marked month, and beside the trail stands the record's span |
 | Estimate | The fire close up with the sharp satellite (VIIRS) hidden: the white frames are the model's estimate from the coarse satellite (MODIS) alone. The guide speaks here; Enter reveals. A recorded test fire shows its record and every satellite; before 2012 nothing is hidden |
-| Test | What the sharp satellite saw, and the verdict in the guide; `T` Side by Side, `S` the scores, `E` every test on record |
+| Test | What the sharp satellite saw, and the verdict in the guide; `T` Side by Side, `S` the scores, `E` every test on record, `A` the test across the world, `J` the sealed predictions |
 | Play | A round on the fire that is open, the whole box on its land, in the guide's words: the pass being decided on the fire, "Look here" beside the marked square, a look's finding on its square; at the end the results rows above the guide's line, then the other players and Finish. On a recorded test fire or before 2012 the guide says why no round is played |
 
 Keys: on the landing a bare Enter opens the Record of the fire on show (`P` opens Choose a Place); where the guide
@@ -97,11 +97,14 @@ when the fire's label is picked; the left and right arrows step through them, `M
 the camera tour, `N` goes to the next region, `1` opens Estimate, `2` and `3` Play, and Esc goes back. In a round the
 arrows mark a square.
 
-The Earth's years (`src/world/EarthYears.tsx`, `GET /api/cube/years`) are a screen of their own under the Record's
-step (the script's step `years`): `O` opens them from Choose a Place and from the Record's view of the years as
-counted, the address `?years` opens them at once (with `film`, they play once by themselves), and Esc goes back to
-where they were opened from. The trail carries the step's objective and the guide its sentence and Back; the screen's
-own keys are Enter and Space (play), the arrows (a year) and `Y` (the view).
+Three pictures of the world open over the page, one at a time (`src/world/WorldScreens.tsx`, opened by `openWorldScreen`
+in `src/world/screens.ts`), each with its own objective, trail and guide, and its own keys while it shows; Esc goes back
+to what was under it, which stays as it was. The Earth's years (`GET /api/cube/years`): `O` opens them from Choose a
+Place and from the Record's view of the years as counted; their keys are Enter and Space (play), the arrows (a year) and
+`Y` (the view). The test across the world (`GET /api/evidence`): `A` on Test, once the sharp satellite is revealed. The
+sealed predictions (`GET /api/live`): `J` there too. The address says the picture on show and opens it at once:
+`?world=years` (with `view`, `from`, `until` and `play`), `?world=test`, `?world=sealed`; `?years` opens the years over
+the Record (with `film`, they play once by themselves).
 
 A real run and a simulated run are kept apart. When the site asks for a real run and the answer is not one, it is refused, so modelled numbers are never shown as observations.
 

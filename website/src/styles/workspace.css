@@ -810,14 +810,3 @@ body:has(.iso-viewer-layer) .iso-ws__util {
   text-align: center;
 }
 
-/* The Earth's years: a screen of its own over the step, the night behind it; the trail and the guide stand over it
-   (their own layer), and its year sits under the trail's objective. */
-.iso-years {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  background: var(--sys-night);
-  --years-caption-top: 132px;
-  --years-top: 132px;
-}
-
