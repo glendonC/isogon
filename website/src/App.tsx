@@ -1357,6 +1357,7 @@ export function App() {
   }, [photoKey, dayShown, activeRun, photoPixel?.key]);
   const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays, finish: finishOpen }, recordView, playersView, {
     playing,
+    film: filmMode,
     chance: chanceOn,
     marksOpen,
     places: placesState.state,
