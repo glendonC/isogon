@@ -5,6 +5,12 @@ rows and the checks that keep them hidden, the tests fixed before their one look
 recording that lets the page run with no server, and the files the backend keeps. It is for engineers who read, check
 or extend the code. Every box and every arrow below names the module or file it stands for.
 
+Isogon's three parts are in the code as follows. The scientific world model is `backend/firms/` (the fire cube and the
+record) and `backend/model/` (the harmonization, the occupancy filter and the learned layer that reads it). The
+experimental environment is `backend/env/next_look.py`. The learning agent, the research direction, is the players in
+`backend/env/agents.py`, `policy.py` and `learn.py`. The tests of the model are `backend/eval/` and the sealed
+predictions are `backend/live/`.
+
 ## The data flow
 
 ```mermaid
@@ -14,6 +20,7 @@ flowchart LR
     site(["website/src/lib/api.ts<br/>TRANSPORT: live or recorded"]):::site
     index[("recorded/index.json<br/>every answer saved, for a page with no server")]:::store
     recorder[["backend/server_recorder.py<br/>Recorder, write_index"]]:::tool
+    worker["website/public/runtime/model-worker.js<br/>calls backend/browser.py held_out_run in the visitor's browser"]:::tool
   end
 
   subgraph SERVER["backend/server.py and its route files"]
@@ -40,8 +47,8 @@ flowchart LR
     run["backend/model/real_run.py<br/>solve_real_reconstruction"]:::module
     seal{"backend/eval/holdout.py<br/>seal"}:::wall
     vault[("backend/eval/holdout.py Sealed<br/>the VIIRS rows, unreadable")]:::sealed
-    est["backend/model/occupancy.py<br/>OccupancyReconstruction<br/>the first model"]:::model
-    chal["backend/model/challenger/methods.py<br/>default_challenger_factory<br/>the second model"]:::model
+    est["backend/model/occupancy.py<br/>OccupancyReconstruction<br/>the occupancy filter"]:::model
+    chal["backend/model/challenger/methods.py<br/>default_challenger_factory<br/>the learned layer"]:::model
     bt["backend/eval/blind_test.py<br/>blind_test_sealed, verdict"]:::test
     look["backend/model/fresh_world_run.py<br/>main: one look per test"]:::test
     recs[("backend/model/fitted_values/<br/>fresh_world_test_a.json, fresh_world_test_b.json")]:::store
@@ -67,6 +74,8 @@ flowchart LR
 
   site ==>|"live"| SERVER
   site -->|"recorded"| index
+  site -->|"in the visitor's browser"| worker
+  worker -->|"solve_real_reconstruction"| run
   recorder -->|"HTTP requests"| SERVER
   recorder -->|"writes"| index
 
@@ -135,9 +144,10 @@ flowchart LR
 | White box | A Python module and the function that does the work |
 | Amber cylinder | A file kept on disk |
 | Purple hexagon | An HTTP route of the backend |
-| Green box | A model that makes predictions: the first model, the second model, the live predictions |
+| Green box | A model that makes predictions: the occupancy filter, the learned layer, the live predictions |
 | Pink box | A scorer or a test |
 | Red diamond and red dashed cylinder | The wall: `seal` parts the rows, and the sealed VIIRS rows reach nothing but the scorer |
+| Grey box | A tool, or the page's own code that calls the backend |
 | Thick arrow, solid arrow, dotted arrow | The page's request; a call or a read, labelled with what it carries; the sealed rows' only way out |
 
 ## Processes
@@ -153,7 +163,7 @@ Isogon runs as two local processes. There is no database and no queue.
 
 A fresh clone runs both with no data cache: the backend serves simulated runs, and the site draws the tracked files
 under `website/public/generated/`. Real runs, the record and the tests need the local cache that [data.md](data.md)
-describes. The backend's tests are run with `python3 -m unittest discover -s backend/tests`; the suite holds 835
+describes. The backend's tests are run with `python3 -m unittest discover -s backend/tests`; the suite holds 886
 tests, counted by the test loader, and the tests that need the data cache skip themselves without it.
 
 ### Two kinds of run, never mixed
@@ -169,7 +179,7 @@ or scores, and every answer says which kind it is.
 ## The server and its route files
 
 `backend/server.py` holds the request handler (`do_GET`, `do_POST`) and the store, `IsogonDataStore`. The route files
-are plain modules it imports; `do_GET` tries the cube's routes, then the photographs', then its own.
+are plain modules it imports; `do_GET` tries the cube's routes, then the photographs', then the burned-area route, then its own.
 
 | File | What it answers | What it calls |
 | --- | --- | --- |
@@ -178,7 +188,7 @@ are plain modules it imports; `do_GET` tries the cube's routes, then the photogr
 | `backend/server_live.py` | `GET /api/live`, also as a read-only server of its own | `build` (`live/answer.py`) |
 | `backend/server_next_look.py` | `POST /api/env/next_look/reset`, `step`, `play`; `GET /api/env/next_look/state`, `players` (served by `server.py`) | `NextLookEnv` (`env/next_look.py`), `play_reference` (`env/agents.py`), `load_policy` (`env/policy.py`) |
 | `backend/server_gibs.py` | `GET /api/gibs/day`, `/cloud`, `/live` | `build_day_image` (`terrain/gibs_day.py`); the main server reads the photograph cache only |
-| `backend/server_burned.py` | `GET /api/burned`, NASA's burned-area map (MCD64A1) over a box and window | `mask` (`firms/burned.py`). `server.py` does not mount this route: only its test calls it |
+| `backend/server_burned.py` | `GET /api/burned`, NASA's burned-area map (MCD64A1) over a box and window | `mask` (`firms/burned.py`); it answers 404 "not fetched" where the world store holds no burned-area files |
 | `backend/server_recorder.py` | no route: a tool that records the server's answers | a running backend, over HTTP |
 
 The store holds the simulated field read at start, the 24 most recently used runs, the real calendars and start lists,
@@ -194,12 +204,13 @@ finite. A client may hold a socket idle for at most 60 seconds.
 
 | Package | What it does |
 | --- | --- |
-| `backend/firms/` | NASA's fire rows and what is built from them. `world_fetch.py` downloads every country's yearly FIRMS files; `archive.py` keeps them with their manifests and holds `read_firms`, the reader of a region's rows. `cube_build.py` builds the fire cube and `cube.py` reads it (`Cube`). `real_calendar.py` makes a place's monthly record. `box_index.py` counts any box from the country files. `area_api.py` asks the FIRMS area API, `current_month.py` counts this month so far, `cmr_passes.py` lists every satellite pass from NASA CMR, `pass_timeline.py` joins passes with the detections on them, `burned.py` reads NASA's burned-area maps, `places.py` and `places.json` hold the places and their featured fires. |
-| `backend/model/` | The record's harmonization (`harmonize.py`, with its fitted values in `harmonize_fitted.py`; the other `harmonize_*.py` modules build the figures and maps of [harmonization.md](harmonization.md)). The estimate for real rows: `real_run.py` (a run), `occupancy.py` (the forward and backward filter), `belief.py` (the belief every 30 minutes), `encoding.py` (the log byte scale), `platforms.py` and `real_geometry.py` (platform facts and pass geometry), `fitted.py` and `fitted_values/` (the values in use and the records of every look). The second model: `challenger/`. The tests fixed before the look: `fresh_test.py`, `fresh_world.py`, `fresh_world_run.py`. The evidence document: `evidence.py`. Simulated runs: `world_model.py`, `sensor_physics.py`, `calibrator.py`, `solver.py`, `reconstruct.py`, `gates.py`. |
+| `backend/firms/` | NASA's fire rows and what is built from them. `world_fetch.py` downloads every country's yearly FIRMS files; `archive.py` keeps them with their manifests and holds `read_firms`, the reader of a region's rows. `cube_build.py` builds the fire cube and `cube.py` reads it (`Cube`). `real_calendar.py` makes a place's monthly record. `box_index.py` counts any box from the country files. `area_api.py` asks the FIRMS area API, `current_month.py` counts this month so far, `cmr_passes.py` lists every satellite pass from NASA CMR, `pass_timeline.py` joins passes with the detections on them, `burned.py` reads NASA's burned-area maps, `places.py` and `places.json` hold the places and their featured fires. `cube_years.py` and `cube_countries.py` make the yearly layers and each country's years, `cube_public.py` and `calendar_pack.py` the small files a page with no server sums a box or a place from, `cube_figure.py` the picture of the Earth in the README, `gibs_cloud.py` the cloud share beside a pass, and `passmask.py` with `passmask_fetch.py` NASA's per-pass fire and cloud masks. |
+| `backend/model/` | The record's harmonization (`harmonize.py`, with its fitted values in `harmonize_fitted.py`; the other `harmonize_*.py` modules measure, fit and draw: `harmonize_eval.py` the held-out measurement, `harmonize_cells.py`, `harmonize_places.py`, `harmonize_dataset.py`, `harmonize_years.py`, `harmonize_countries.py`, `harmonize_maps.py` and `harmonize_figure.py`, all of [harmonization.md](harmonization.md)). The estimate for real rows: `real_run.py` (a run), `occupancy.py` (the forward and backward filter), `belief.py` (the belief every 30 minutes), `encoding.py` (the log byte scale), `platforms.py` and `real_geometry.py` (platform facts and pass geometry), `fitted.py` and `fitted_values/` (the values in use and the records of every look). The learned layer, the challenger: `challenger/` (`features.py` the features of a cell and of a pass, `linear_mlp.py` the logistic model, the small network and the stacker, `gbdt.py` the boosted trees, `heads.py` the total power and the pixel count, `declarations.py` the declared cells, `terrain_features.py`, `runner.py` the fit and the validation, `world_split.py`, `provenance.py`, `guard.py`), with `challenger_standing.py` and `fire_roles.py` saying what a place and window are to each model. Which rows may be learned from: `training.py`; `fit_real.py` fits the values, `real_blind.py` and `withhold.py` and `cached_platforms.py` make the run's test; `terra_morning.py` is the other direction, experimental. `calendar_model.py` is the simulated calendar and `calendar_ratio.py` the real calendar's ratio for the baseline. `numbers_build.py` says which build of numpy made an answer. The tests fixed before the look: `fresh_test.py`, `fresh_world.py`, `fresh_world_run.py`. The evidence document: `evidence.py`. Simulated runs: `world_model.py`, `sensor_physics.py`, `calibrator.py`, `solver.py`, `reconstruct.py`, `gates.py`. |
 | `backend/eval/` | The blind test. `holdout.py` seals the hidden rows; `schedule.py` says when predictions are published, without reading a hidden row; `rows.py`, `overpass.py` and `grid.py` turn rows into overpasses on a 375 m grid; `baselines.py`, `metrics.py` and `blind_test.py` score the estimate beside the two simple methods. |
-| `backend/env/` | The game: `next_look.py` (the environment), `agents.py` and `policy.py` (the reference players and the learned player, whose weights are `fitted/next_look.json`), `play.py`, `episodes.py`, `learn.py`, `report.py`, and `fresh_world_players.py` (the players measured on the fresh test's fires). |
-| `backend/live/` | The live test: `choose.py` (fires), `passes.py` (coming passes), `seal.py` and `sealer.py` (predictions and their seals), `ledger.py` (the chained logs), `scorer.py`, `answer.py` (the route's answer), `record.py` (the tracked record of seals), `protocol.py`, `run.py`, `rehearse.py`. [live.md](live.md) describes it. |
-| `backend/terrain/` | Elevation and imagery: `tile_store.py` (the tile cache), `terrain_pack.py` (the higher resolution pack and the context terrain), `live_region.py` (a region from a preset, a place name or coordinates), `gibs_day.py` (the day's photograph from NASA GIBS), `projections.py` and `resample.py`. |
+| `backend/env/` | The game: `next_look.py` (the environment), `agents.py` and `policy.py` (the reference players and the learned player, whose weights are `fitted/next_look.json`), `play.py`, `episodes.py`, `terrain.py` (elevation on an episode's 375 m grid), `learn.py`, `report.py`, and `fresh_world_players.py` (the players measured on the fresh test's fires). |
+| `backend/live/` | The live test: `choose.py` (fires), `passes.py` (coming passes), `seal.py` and `sealer.py` (predictions and their seals), `ledger.py` (the chained logs), `scorer.py`, `answer.py` (the route's answer), `finals.py` (which line of the scores stands for each seal), `record.py` (the tracked seal log), `protocol.py`, `run.py`, `rehearse.py`. [live.md](live.md) describes it. |
+| `backend/terrain/` | Elevation and imagery: `tile_store.py` (the tile cache), `terrain_pack.py` (the higher resolution pack and the context terrain), `live_region.py` (a region from a preset, a place name or coordinates), `gibs_day.py` (the day's photograph from NASA GIBS), `projections.py` and `resample.py`; `build_terrain.py`, `tile_fetcher.py`, `verify_terrain.py`, `pack_preview.py` and `glb_tools.py` are build and check tools. |
+| `backend/` (top level) | `server.py` and its route files; `browser.py`, the page's entry point when the model runs in a visitor's browser, and `browser_pack.py`, the archive it unpacks; `public_lite.py`, small copies of every terrain pack so that a public page draws its first screen from a few megabytes; `server_recorder.py`, the recorder. |
 | `backend/openspace/` | The exporter that writes an OpenSpace scene from one held-out run. Nothing else in the backend imports it. |
 
 ## The fire record
@@ -228,16 +239,38 @@ A real run with VIIRS hidden is a blind test, and the code is arranged so that t
 - `blind_test_sealed` publishes every method's predictions before it opens the box, then scores them; `verdict` says,
   score by score, whether the estimate beat both simple methods.
 - The server adds one step: a held-out run's first answer leaves out every key the scorer wrote
-  (`withhold_scorer_keys` in `backend/server.py`) and names them in `withheld_until_reveal`; the same request with
+  (`withhold_scorer_keys` in `backend/model/withhold.py`) and names them in `withheld_until_reveal`; the same request with
   `"reveal": true` returns them. A run on a window of the closed test fires is refused before anything is estimated.
 
-### The second model
+### The learned layer
 
-When the server runs with `ISOGON_RUN_ESTIMATE=challenger`, a held-out run's hidden passes are answered by the second
-model (`backend/model/challenger/`), the variant named in `challenger/fitted/default_challenger.json` and built by
-`default_challenger_factory` (`challenger/methods.py`) from the visible rows. It is scored beside the estimate in use in
-the same blind test, and the run's answer names it (`held_out_passes_answered_by`). The visible passes, the spread,
-the belief frames and the exports stay with the estimate in use. `challenger/guard.py` refuses a hidden row.
+The model is two layers. The occupancy filter (`OccupancyReconstruction`) keeps three numbers per 375 m cell and runs
+forward and backward through the passes. The learned layer (`backend/model/challenger/`, numpy only) reads the filter's
+fields and the visible detections near each cell, and gives each cell's chance of being detected through a small
+neural network and boosted decision trees, blended. Which variant answers is named in
+`challenger/fitted/default_challenger.json` and built by `default_challenger_factory` (`challenger/methods.py`) from
+the visible rows. `challenger/guard.py` refuses a hidden row.
+
+Which of the two answers a held-out run is one switch, `ISOGON_RUN_ESTIMATE` (`run_estimate` in
+`backend/model/real_run.py`). In the code it is off, and the filter answers. With `challenger` set, the learned layer
+answers the hidden passes and is scored beside the filter in the same blind test, and the run's answer names the model
+that answered (`held_out_passes_answered_by`). The model in a visitor's browser sets it (`backend/browser.py`), so the
+page's hidden passes are the learned layer's. The visible MODIS passes, the spread, the belief frames and the exports
+stay with the filter. The sealed live predictions are the filter's alone (`backend/live/protocol.py` pins the filter's
+values and the baseline's, and nothing there reads the learned layer).
+
+### The model in a visitor's browser
+
+A held-out run and a round of the game can be computed in the visitor's browser, with no server. `backend/browser.py` is
+the entry point: Python compiled to WebAssembly, with numpy and Pillow, calling the functions the server calls
+(`solve_real_reconstruction` for a run, `NextLookRounds` for a round). `backend/browser_pack.py` packs the modules a run imports and each
+place's files into archives with a manifest of their sizes and digests, and `website/public/runtime/model-worker.js` loads
+them. `withhold_scorer_keys` is the same function in both entry points (`backend/model/withhold.py`), so the two first
+answers hold the same keys. The hidden rows are in the visitor's files and are public FIRMS rows; they are kept from the
+estimate by the sealed box, not by their absence ([method.md](method.md)). Two builds of numpy differ in the last
+decimals, so an answer names its build (`backend/model/numbers_build.py`) and two answers are compared figure by
+figure, never by digest. A place the pack does not hold, and a browser where the runtime does not load, replay the
+recording.
 
 ### The checks that delete and alter the hidden rows
 
@@ -249,8 +282,8 @@ No byte of an answer may depend on a hidden row until the reveal. The tests chec
 - `backend/tests/test_env_hidden_rows.py` does the same for the game's observations, and
   `backend/tests/test_server_next_look.py` plays a round twice, the second time with every unrevealed hidden row
   deleted, and requires every other field to be equal.
-- `backend/tests/test_model_run_challenger.py` and `backend/tests/test_model_challenger_safety.py` hold the second
-  model to the same rule.
+- `backend/tests/test_model_run_challenger.py` and `backend/tests/test_model_challenger_safety.py` hold the learned
+  layer to the same rule.
 
 ## The tests fixed before the look
 
@@ -295,7 +328,9 @@ every hidden detection of the episode. `NextLookRounds` (`backend/server_next_lo
 A page with no backend reads a recording instead. `backend/server_recorder.py` asks a running backend for every answer
 on a plan of requests (by default the demo path of the featured fires), each built with the body the page builds, and
 writes the answers and assets into one folder with an `index.json` keyed by method, path with its query sorted, and
-body. Imagery whose licence does not allow a copy is left out and listed as withheld. After writing, the tool checks
+body. Imagery whose licence does not allow a copy is left out and listed as withheld. For the public page the terrain
+packs also get small copies (`backend/public_lite.py`), so the first screen comes in a few megabytes and the full pack
+follows, and the cube's monthly counts become one small file a browser sums any box from (`backend/firms/cube_public.py`). After writing, the tool checks
 every file for the FIRMS key, `MAP_KEY=` and local paths, and fails if one holds any. The site reads the folder when it
 is built with `VITE_TRANSPORT=recorded` (`website/src/lib/api.ts`); a request with no recorded answer says so in one
 line.
@@ -308,7 +343,7 @@ Isogon keeps flat files. Each downloaded file has a manifest beside it with its 
 | --- | --- | --- |
 | `backend/model/fitted_values/` | Yes | The estimate's fitted values, the records of every look at the test fires, the fresh test's plan, looks, refit and players |
 | `backend/model/harmonize_fitted.py` | Yes | The harmonization's fitted values and the method served |
-| `backend/model/challenger/fitted/` | Yes | The second model's fitted variants and the pointer to the default one |
+| `backend/model/challenger/fitted/` | Yes | The learned layer's fitted variants and the pointer to the default one |
 | `backend/env/fitted/` | Yes | The learned player and its reference tables |
 | `data/live_seals.csv` | Yes | One line per live seal, never changed once written |
 | `website/public/generated/` | Yes | The Feather River terrain and one simulated field, for running without a backend |
