@@ -48,9 +48,9 @@ const PARTS: Record<string, string> = {
 };
 
 export const SEAL_WORDS = {
-  // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open).
+  // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open; version 7 for the film's caption).
   objective: 'See predictions written before the pass',
-  film: (ahead: number, behind: number) => `Sealed before NASA published the pass: ahead on ${ahead}, behind on ${behind}.`,
+  film: (ahead: number, behind: number) => `Sealed before the pass: ahead on ${ahead}, behind on ${behind}.`,
   label: 'The Earth, with the fires whose predictions are sealed tonight',
   loading: "Loading tonight's sealed predictions.",
   failed: "Tonight's sealed predictions did not load.",
