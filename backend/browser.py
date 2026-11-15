@@ -81,3 +81,93 @@ def pictures(run_id: str) -> dict[str, bytes]:
     solved = _solved(run_id)
     return {"reconstruction_u8.bin": solved.reconstruction_u8_bytes, "belief_u8.bin": solved.belief_u8_bytes,
             "export.geojson": solved.export_geojson_bytes, "export.csv": solved.export_csv_bytes}
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# The files a held-out run of a place reads here, from the code: what the build puts in the browser's file system
+# ----------------------------------------------------------------------------------------------------------------
+
+# Days the frames of a run may take after its search for a first pass; the years touched are those of the search,
+# with this margin, so a list may hold a year more than a run reads, never less.
+_TAIL_S: float = 10.0 * 86400.0
+
+
+def python_files() -> list[str]:
+    """Every Python file of the backend a page may import here: all but the tests, relative to the repository."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    return sorted(str(p.relative_to(root)) for p in (root / "backend").rglob("*.py") if "tests" not in p.parts)
+
+
+def files_for_a_run(region_id: str, start: str) -> list[str]:
+    """Every data file a held-out run of `region_id` from `start` reads here, the second model answering, the
+    calendar's ratio read from the place's file (relative to the repository; a file the cache lacks is left out,
+    as the run does without it):
+
+    - the tracked fitted values and the challenger's bundles;
+    - the rows of the years the run's search and frames touch, and their manifests;
+    - the place's file of the calendar's monthly counts (`backend.model.calendar_ratio.write_ratio_inputs`);
+    - the pass files of those years;
+    - the terrain the run loads: the place's DEMs, picture and metadata, and the zoom 11 elevation tiles the
+      challenger reads for the run's box when every one of them is cached.
+
+    `backend/tests/test_browser_files.py` runs a held-out run and fails when it opens a file this list lacks."""
+    import json
+    from pathlib import Path
+
+    import numpy as np
+
+    from backend.eval.grid import EvalGrid
+    from backend.firms import cmr_passes as CP
+    from backend.firms.archive import FIRMS_CACHE_DIR, LISTING_NAME
+    from backend.firms.places import PLACES_FILE
+    from backend.model import fitted as FT
+    from backend.model.calendar_ratio import ratio_inputs_dir
+    from backend.model.challenger import FITTED_DIR as CHALLENGER_DIR, VARIANT_FILES, default_variant
+    from backend.model.challenger.methods import DEFAULT_POINTER_FILE
+    from backend.model.challenger_standing import PLAN_FILE
+    from backend.model.real_run import PAD_S, SEARCH_S, parse_start_s
+    from backend.terrain.live_region import HIRES_REGION_CACHE_DIR, PRESET_BY_ID, region_cache_stem
+    from backend.terrain.projections import BoundingBox, tile_bounds_for_bbox
+    from backend.terrain.tile_store import TERRARIUM, TILE_SIZE, TileStore
+
+    root = Path(__file__).resolve().parent.parent
+    t0 = parse_start_s(str(start))
+    years = sorted({int(str(np.datetime64(int(t), "s"))[:4]) for t in (t0 - PAD_S, t0 + SEARCH_S + _TAIL_S)})
+    years = list(range(years[0], years[-1] + 1))
+    out: list[Path] = [FT.FITTED_DIR / FT.PARAMS_FILE, FT.FITTED_DIR / FT.RATIO_FILE, PLAN_FILE, PLACES_FILE,
+                       CHALLENGER_DIR / DEFAULT_POINTER_FILE]
+    bundle = CHALLENGER_DIR / VARIANT_FILES[default_variant()]
+    out.append(bundle)
+    out += [CHALLENGER_DIR / name for name in (json.loads(bundle.read_text(encoding="utf-8")).get("component_files") or {}).values()]
+    out.append(FIRMS_CACHE_DIR / "listing" / LISTING_NAME)
+    extract = FIRMS_CACHE_DIR / "extract" / region_id
+    for y in years:
+        out += sorted(extract.glob(f"*_{y}.csv")) + sorted(extract.glob(f"*_{y}.csv.manifest.json"))
+        out += sorted((CP.CMR_CACHE_DIR / "passes" / region_id).glob(f"*_{y}.json.gz"))
+    out.append(ratio_inputs_dir() / f"{region_id}.json")
+    spec = PRESET_BY_ID[region_id]
+    stem = region_cache_stem(spec)
+    out += [HIRES_REGION_CACHE_DIR / f"{stem}_{s}" for s in ("dem_256_f32.bin", "dem_512_f32.bin", "sat_2048.jpg", "meta.json")]
+    b = spec.bbox
+    g = EvalGrid.from_bbox((b.west, b.south, b.east, b.north))
+    bounds = tile_bounds_for_bbox(BoundingBox(g.west, g.south, g.east, g.north), zoom=11, tile_size=TILE_SIZE, margin_px=2.0)
+    store = TileStore(allow_network=False)
+    tiles = [store.tile_path(TERRARIUM, 11, tx, ty) for ty in range(bounds.ty_min, bounds.ty_max + 1)
+             for tx in range(bounds.tx_min, bounds.tx_max + 1)]
+    if bounds.total_tiles <= 64 and all(p.is_file() and p.stat().st_size > 64 for p in tiles):
+        out += tiles
+    return sorted({str(p.resolve().relative_to(root)) for p in out if p.is_file()})
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+
+    # python3 -m backend.browser files <region> <start>: the data files of a held-out run, and the Python files
+    if len(sys.argv) == 4 and sys.argv[1] == "files":
+        print(json.dumps({"region_id": sys.argv[2], "start": sys.argv[3], "data": files_for_a_run(sys.argv[2], sys.argv[3]),
+                          "python": python_files()}, indent=1))
+    else:
+        raise SystemExit("usage: python3 -m backend.browser files <region> <start>")
