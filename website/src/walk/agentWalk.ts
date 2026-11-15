@@ -1,6 +1,7 @@
 import type { WorkspaceStore } from '../app/store';
 import { postJson } from '../lib/api.ts';
 import { readPlay, type PlaySummary } from '../compare/blocks.ts';
+import { controlSound } from '../identity/controlState.ts';
 
 /**
  * The agent's part of Play, after the reveal: a round opens on the fire in view, the learned player takes its looks
@@ -40,6 +41,9 @@ export const AGENT_BEAT_HOLD: Record<AgentBeatId, number> & { look: number } = {
   look: 1900,
   yours: 4000,
 };
+
+/** The frame's move from one square to the next; it locks when the move ends, and the identity's tick sounds then. */
+export const AGENT_FRAME = { moveMs: 520 };
 
 /** The player whose looks the walk plays. */
 export const AGENT_PLAYER = 'learned';
@@ -139,6 +143,8 @@ export async function fetchAgentPlay(regionId: string, start: string): Promise<P
 export interface AgentWalkOptions {
   /** Where the agent's play comes from; the play route by default. */
   fetchPlay?: (regionId: string, start: string) => Promise<PlaySummary | null>;
+  /** What sounds as the frame locks on a square: the identity's tick by default (silent until sound is on). */
+  onLock?: () => void;
 }
 
 /**
@@ -148,6 +154,7 @@ export interface AgentWalkOptions {
 export function startAgentWalk(page: () => WalkPage, options: AgentWalkOptions = {}): void {
   const id = ++runId;
   const fetchPlay = options.fetchPlay ?? fetchAgentPlay;
+  const onLock = options.onLock ?? (() => controlSound('hover'));
   set({ on: true, beat: null, line: null, done: false, look: null, cols: 0 });
   listenForTakeover();
 
@@ -207,7 +214,10 @@ export function startAgentWalk(page: () => WalkPage, options: AgentWalkOptions =
       for (let i = 0; i < looks.length; i += 1) {
         alive();
         set({ look: { tile: looks[i].tile, index: i + 1, of: looks.length, timeUtc: looks[i].timeUtc } });
-        await sleep(AGENT_BEAT_HOLD.look);
+        await sleep(AGENT_FRAME.moveMs);
+        alive();
+        onLock();
+        await sleep(Math.max(0, AGENT_BEAT_HOLD.look - AGENT_FRAME.moveMs));
       }
       set({ look: null });
       await say('yours');

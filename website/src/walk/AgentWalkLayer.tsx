@@ -3,12 +3,12 @@ import { useWorkspace } from '../app/store';
 import type { StageTileAnchor } from '../stage/earthCutawayTypes';
 import { sameTileAnchors, useStageValue } from '../guide/StageWords';
 import { ScenePrompt } from '../identity/ScenePrompt';
-import { AGENT_WALK_WORDS, agentWalkState, stopAgentWalk, subscribeAgentWalk } from './agentWalk';
+import { AGENT_FRAME, AGENT_WALK_WORDS, agentWalkState, stopAgentWalk, subscribeAgentWalk } from './agentWalk';
 import { insetQuad, mixQuad, passTime, quadBox, squareName, squareQuad, type Quad } from './boardFrame';
 import './walk.css';
 
-/** How long the frame takes to move from one square to the next, ms. */
-const MOVE_MS = 520;
+/** How long the frame takes to move from one square to the next, ms: the walk's own, so the tick lands as it locks. */
+const MOVE_MS = AGENT_FRAME.moveMs;
 /** How far inside the square's own lines the frame stands, as a share of the way to its centre. */
 const INSET = 0.12;
 /** The reticle pads the box it is given by this much (identity/scene.ts `reticleBox`); the walk gives it less. */

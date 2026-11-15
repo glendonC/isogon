@@ -12,9 +12,10 @@ globalThis.window = {
 };
 
 const walk = await import('./agentWalk.ts');
-const { AGENT_BEAT_HOLD, AGENT_WALK_WORDS, agentWalkDone, agentWalkState, startAgentWalk, stopAgentWalk, subscribeAgentWalk } = walk;
+const { AGENT_BEAT_HOLD, AGENT_FRAME, AGENT_WALK_WORDS, agentWalkDone, agentWalkState, startAgentWalk, stopAgentWalk, subscribeAgentWalk } = walk;
 for (const k of Object.keys(AGENT_BEAT_HOLD)) AGENT_BEAT_HOLD[k] = 0;
 AGENT_BEAT_HOLD.look = 30;
+AGENT_FRAME.moveMs = 10;
 
 /** A page that answers each command the way the shell does, and records them. */
 function fakePage({ revealed }) {
@@ -158,4 +159,24 @@ test('stopped mid-walk: no further command or look, the scene left as it is', as
   assert.equal(agentWalkState().look, null);
   assert.equal(agentWalkState().line, null);
   AGENT_BEAT_HOLD.look = 30;
+});
+
+test('the tick sounds once as the frame locks on each square, and not after a takeover', async () => {
+  const { page } = fakePage({ revealed: true });
+  let ticks = 0;
+  startAgentWalk(page, { fetchPlay: async () => play, onLock: () => (ticks += 1) });
+  await until(() => agentWalkDone());
+  assert.equal(ticks, play.looks.length);
+
+  ticks = 0;
+  AGENT_BEAT_HOLD.look = 400;
+  AGENT_FRAME.moveMs = 200;
+  const second = fakePage({ revealed: true });
+  startAgentWalk(second.page, { fetchPlay: async () => play, onLock: () => (ticks += 1) });
+  await until(() => agentWalkState().look !== null);
+  stopAgentWalk();
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal(ticks, 0);
+  AGENT_BEAT_HOLD.look = 30;
+  AGENT_FRAME.moveMs = 10;
 });
