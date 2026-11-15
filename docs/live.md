@@ -1,12 +1,15 @@
 # The live test
 
-The blind test ([method.md](method.md)) hides the sharp satellite on past fires. A test on the past can always be
-doubted. The live test predicts passes that have not happened yet: for fires burning now, it predicts what VIIRS on
-NOAA-20 and NOAA-21 will flag on each coming pass, from MODIS rows alone, and writes the prediction down with its
-digest and the time before the pass begins. When NASA publishes the pass's rows, the sealed prediction is scored.
+The blind test ([method.md](method.md)) hides VIIRS on past fires. A test on the past can always be doubted. The
+live test predicts passes that have not happened yet: for fires burning now, it predicts what VIIRS on NOAA-20 and
+NOAA-21 will detect on each coming pass, from MODIS detections alone, and writes the prediction down with a SHA-256
+fingerprint and the time before the pass begins. When NASA publishes the pass's rows, the sealed prediction is scored.
+Only a seal that was pushed to the public repository before its pass has a public timestamp ([the seal
+log](#the-seal-log-in-the-repository)).
 
 The rows are FIRMS near real time rows, with real time and ultra real time rows in the United States and Canada.
-They are not the science-quality archive the blind test reads. Every answer that shows a score says so.
+They are not the science-quality archive the blind test reads. Every answer that shows a score says so. The counts of
+seals and scores change as passes come: `GET /api/live` serves them, and this document gives none.
 
 ## What it does
 
@@ -25,11 +28,12 @@ first seal; the runner refuses to start when the protocol of its code differs fr
    box is predicted. Suomi NPP ceased production on 2 November 2026 and is not predicted.
 3. **Seal.** Between 30 and 10 minutes before a pass begins, the three methods of the blind test answer for it from
    every MODIS row of the fire's context box (five times the box on each side) acquired in the two days before:
-   `painted_modis`, `overlap_ratio` and the estimate. The record holds the protocol's digest, the code's commit,
-   the digests of the fitted values, the slot as a method is told it, the MODIS reply used with its digest, and each
-   method's published entry with the digest of its arrays. It is canonical JSON; its SHA-256 is taken; it is
-   appended to `seals.jsonl` with the digest of the line before it, so a changed line breaks the chain. A pass whose
-   deadline passes unsealed goes to `missed.jsonl` and is never sealed.
+   `painted_modis`, `overlap_ratio` and the estimate in use, the occupancy filter alone. The learned layer of
+   [method.md](method.md) is not sealed, so a live score is the filter's, not the blend's. The record holds the
+   protocol's digest, the code's commit, the digests of the fitted values, the slot as a method is told it, the MODIS
+   reply used with its digest, and each method's published entry with the digest of its arrays. It is canonical JSON;
+   its SHA-256 is taken; it is appended to `seals.jsonl` with the digest of the line before it, so a changed line
+   breaks the chain. A pass whose deadline passes unsealed goes to `missed.jsonl` and is never sealed.
 4. **The sealing path holds no way to a VIIRS row.** It is given a fetcher that serves `MODIS_NRT` only and raises on
    any other source (`backend/tests/test_live_seal.py` runs a whole cycle with a fetcher that fails on any VIIRS
    request).
@@ -57,13 +61,17 @@ says so in its reason. A page draws a stop as a stretch when the sealer was not 
 about fire. Before the first recorded cycle only the runner's starts are known, from its log, so that stretch is
 drawn as not recorded.
 
-## The record of seals in the repository
+## The seal log in the repository
 
-`data/live_seals.csv` holds one line per seal: the UTC time it was sealed, its digest, its fire, its satellite and the
-predicted minute of the pass. The runner adds a line as soon as a seal is made and commits that file alone; a line
-already written is never changed. A published copy of the repository therefore shows which seals existed when it
-was published, and so witnesses every seal whose pass came after. Each digest can be checked against `seals.jsonl`
-in the live folder, whose chain checks every line before it.
+`data/live_seals.csv` is the seal log. It holds one line per seal: the UTC time it was sealed, its fingerprint (the
+SHA-256 of the sealed record), its fire, its satellite and the predicted minute of the pass. The runner adds a line as
+soon as a seal is made and commits that file alone; a line already written is never changed.
+
+Only a seal that was pushed to the public repository before its pass has a public timestamp. A copy of the repository
+published before a pass shows that seal in the log, and so witnesses every seal whose pass came after the copy. The
+time in a line is the sealer's own clock. A seal pushed only after its pass has no public timestamp before it, whatever
+its line says. Each fingerprint can be checked against `seals.jsonl` in the live folder, whose chain checks
+every line before it.
 
 ## How a result is judged
 
