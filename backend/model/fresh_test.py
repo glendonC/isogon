@@ -52,6 +52,9 @@ PER_PLACE: int = 2
 # FIRMS types left out of both instruments before anything else: 1 active volcano, 2 other static land source,
 # 3 offshore. What is left is taken as vegetation fire, as the Record counts a box.
 LEFT_OUT_TYPES: tuple[str, ...] = ("1", "2", "3")
+# A look counts as clear in the second table when its hidden pass's own mask put at most this share of the tile
+# under cloud.
+CLEAR_SHARE: float = 0.25
 
 _FITTED_DIR: Path = Path(__file__).resolve().parent / "fitted_values"
 # The fitted values test A uses, frozen: the estimate's values with its stated interval, and the second baseline's
@@ -146,6 +149,23 @@ PROTOCOL: dict[str, str] = {
         "One look at the test B episodes with the values the decision chose. Nothing has read a test B row of "
         "VIIRS before it, apart from the second baseline's monthly counts of other years."
     ),
+    "test_b_methods": (
+        "Test B's headline is the values the decision chose. Beside it, in the same look and on the same looks, "
+        "test B also scores the other of the two values (the refit or the values in use) and every challenger model "
+        "handed over before the look (backend/model/challenger, each a Method of the blind test) whose code was "
+        "checked against these rules first: fitted on the fitting episodes and chosen on the validation episodes "
+        "only, shown no row of test A or test B before the look. Each is judged against the two baselines by the "
+        "same counts, and against the headline with an interval. None of them takes the headline's place, and "
+        "nothing is chosen from what they show."
+    ),
+    "clear_looks": (
+        "A second table, beside the main one and never in its place. If the share of each hidden pass's tile under "
+        "cloud, by that pass's own cloud mask (the shared store's passmask), is on hand when a look is taken, the "
+        "look also scores the same episodes on the looks whose hidden pass put at most a quarter of the tile under "
+        "cloud, through the blind test's target filter, counted both ways. The masks are read for scoring only; "
+        "no method is given any of them. A look taken without the masks has no second table and says so, and a "
+        "look whose masks hold no share for a pass leaves that pass out of the second table."
+    ),
     "players": (
         "The players of the round (backend/env) under the reward in use, on the same split: anything a player "
         "learns is fitted on the fitting episodes and chosen on the validation episodes, and the players are "
@@ -165,7 +185,7 @@ def protocol_sha256() -> str:
         "years": list(YEARS), "place_deg": PLACE_DEG, "tiles_per_side": TILES_PER_SIDE, "block_deg": BLOCK_DEG,
         "roles": list(ROLES), "role_shares": list(ROLE_SHARES), "continents": list(CONTINENTS), "zones": list(ZONES),
         "quota": QUOTA, "per_place": PER_PLACE, "left_out_types": list(LEFT_OUT_TYPES),
-        "frozen_values": FROZEN_VALUES, "protocol": PROTOCOL,
+        "clear_share": CLEAR_SHARE, "frozen_values": FROZEN_VALUES, "protocol": PROTOCOL,
     }
     return hashlib.sha256(json.dumps(doc, sort_keys=True).encode("utf-8")).hexdigest()
 

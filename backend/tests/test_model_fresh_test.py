@@ -23,7 +23,7 @@ from backend.model import fresh_test as F  # noqa: E402
 
 # The digest of the protocol as committed. A change to its text or constants fails here: the protocol is fixed
 # before anything is read, and a new one would be a new protocol with its own name.
-PINNED_PROTOCOL_SHA256 = "65cb2abe07c131ea24c1786db95f517fad8d440602c8f1993be074323eb635e3"
+PINNED_PROTOCOL_SHA256 = "a60a45d5f79cd51dfcd03e6da3b099922f32f154acf170fa002329994a57ca2f"
 
 FIRST = [region_box(r) for r in F.FIRST_REGIONS]
 
@@ -50,11 +50,14 @@ class ProtocolIsFixedTests(unittest.TestCase):
 
     def test_it_states_each_step_and_what_never_happens(self) -> None:
         for key in ("store", "places", "split", "episodes", "after_the_plan", "scored", "counted", "test_a",
-                    "refit", "decision", "test_b", "players", "never"):
+                    "refit", "decision", "test_b", "test_b_methods", "clear_looks", "players", "never"):
             self.assertIn(key, F.PROTOCOL)
         self.assertIn("no other continent makes up the difference", F.PROTOCOL["episodes"])
         self.assertIn("nothing takes its place", F.PROTOCOL["after_the_plan"])
         self.assertIn("committed before test B is looked at", F.PROTOCOL["decision"])
+        self.assertIn("None of them takes the headline's place", F.PROTOCOL["test_b_methods"])
+        self.assertIn("no method is given any of them", F.PROTOCOL["clear_looks"])
+        self.assertEqual(F.CLEAR_SHARE, 0.25)
 
     def test_its_text_has_no_dash_or_middle_dot(self) -> None:
         text = " ".join(F.PROTOCOL.values()) + " ".join(F.LOOK_NAMES.values())
