@@ -16,6 +16,7 @@ import { PassStrip } from './guide/PassStrip';
 import { AskField } from './guide/AskField';
 import { useGuide, type Guide } from './guide/useGuide';
 import { keyMatches, says, stateOf } from './guide/script';
+import { StageBoundary } from './ui/StageBoundary';
 import { BEATS, type BeatId } from './app/names';
 import { WorkspaceProvider, type WorkspaceBase, type WorkspaceStore } from './app/store';
 import { CalendarBeat } from './beats/calendar/CalendarBeat';
@@ -1553,43 +1554,45 @@ export function App() {
       {/* The stage comes after the interface in DOM order so Tab reaches the triggers first;
           stacking is by z-index, not order. */}
       <div className="iso-stage-clip" data-workspace={inWorkspace ? 'true' : 'false'}>
-        <EarthCutawayStage
-          apiBase={API_BASE}
-          resolveAsset={assetUrlNow}
-          inWorkspace={inWorkspace}
-          mode={round ? 'reconstruction' : effectiveMode}
-          activeTheaterId={activeTheaterId}
-          activeRun={stageRun}
-          timeProgress={timeProgress / 23}
-          observerFilter={observerFilter}
-          showUncertainty={showUncertainty}
-          holdoutViirs={round ? !round.done : holdoutViirs}
-          sensitivityThreshold={sensitivityThreshold}
-          cutawaySplit={cutawaySplit}
-          cameraPreset={cameraPreset}
-          cinemaActive={cinemaActive}
-          cleanHud={cleanHud}
-          slewRequest={slewRequest}
-          selectedFindingId={selectedFinding?.id ?? null}
-          onSelectFinding={runIsReal ? undefined : setSelectedFinding}
-          onEnterWorkspace={() => enterWorkspace('cutaway')}
-          onCinemaStepTheater={handleCinemaStepTheater}
-          onTelemetry={handleTelemetry}
-          landingView="world"
-          landingTour
-          landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
-          workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
-          regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
-          chanceSquares={chanceOn}
-          onFireAnchor={modelScene || step === 'look' ? emitAnchor : undefined}
-          tileBoard={rnd.board}
-          onTilePick={(tile) => {
-            if (rnd.canPick) playCue('look');
-            rnd.pick(tile);
-          }}
-          onTileHover={rnd.board ? rnd.onHover : undefined}
-          onTileAnchors={rnd.board ? rnd.onAnchors : undefined}
-        />
+        <StageBoundary>
+          <EarthCutawayStage
+            apiBase={API_BASE}
+            resolveAsset={assetUrlNow}
+            inWorkspace={inWorkspace}
+            mode={round ? 'reconstruction' : effectiveMode}
+            activeTheaterId={activeTheaterId}
+            activeRun={stageRun}
+            timeProgress={timeProgress / 23}
+            observerFilter={observerFilter}
+            showUncertainty={showUncertainty}
+            holdoutViirs={round ? !round.done : holdoutViirs}
+            sensitivityThreshold={sensitivityThreshold}
+            cutawaySplit={cutawaySplit}
+            cameraPreset={cameraPreset}
+            cinemaActive={cinemaActive}
+            cleanHud={cleanHud}
+            slewRequest={slewRequest}
+            selectedFindingId={selectedFinding?.id ?? null}
+            onSelectFinding={runIsReal ? undefined : setSelectedFinding}
+            onEnterWorkspace={() => enterWorkspace('cutaway')}
+            onCinemaStepTheater={handleCinemaStepTheater}
+            onTelemetry={handleTelemetry}
+            landingView="world"
+            landingTour
+            landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
+            workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
+            regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
+            chanceSquares={chanceOn}
+            onFireAnchor={modelScene || step === 'look' ? emitAnchor : undefined}
+            tileBoard={rnd.board}
+            onTilePick={(tile) => {
+              if (rnd.canPick) playCue('look');
+              rnd.pick(tile);
+            }}
+            onTileHover={rnd.board ? rnd.onHover : undefined}
+            onTileAnchors={rnd.board ? rnd.onAnchors : undefined}
+          />
+        </StageBoundary>
       </div>
 
       <CommandAskPalette

@@ -791,3 +791,21 @@ body:has(.iso-viewer-layer) .iso-ws__util {
     white-space: nowrap;
   }
 }
+
+/* When the browser cannot draw the 3D picture: one plain sentence where it would be, the page around it at work. */
+.iso-stage-failed {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 var(--iso-gutter, 24px);
+  background: var(--sys-night);
+}
+
+.iso-stage-failed p {
+  max-width: 460px;
+  margin: 0;
+  color: var(--sys-ink-2);
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  text-align: center;
+}
