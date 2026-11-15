@@ -315,11 +315,13 @@ class Recorder:
         obs = self._store(key, status, ctype, raw, headers)["observation"]
         first_obs = obs
         first_action: int | None = None
+        line: list[dict[str, int]] = []
         steps = 0
         while True:
             action = policy(obs)
             if first_action is None:
                 first_action = int(action)
+            line.append({"decision": int(obs["decision"]), "action": int(action)})
             step = self.fetch("POST", "/api/env/next_look/step",
                               body={"round_id": rec_id, "decision": obs["decision"], "action": action})
             steps += 1
@@ -337,8 +339,10 @@ class Recorder:
             self.entries.pop(state_key, None)
             self.parsed.pop(state_key, None)
         first_looks = self.record_first_looks(reset_body, rec_id, first_obs, first_action)
+        # `line` is the one path of the round recorded past its first step: a page of recorded answers is on it only
+        # while every step it took is the line's step at that decision.
         self.rounds.append({"episode_from": reset_body, "round_id": rec_id, "player": policy_name,
-                            "actions_from": actions_from, "steps": steps, "first_looks": first_looks})
+                            "actions_from": actions_from, "steps": steps, "first_looks": first_looks, "line": line})
 
     def record_first_looks(self, reset_body: dict[str, Any], rec_id: str, obs: dict[str, Any],
                            taken: int | None) -> list[int]:

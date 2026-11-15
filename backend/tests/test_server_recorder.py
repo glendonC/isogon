@@ -234,6 +234,7 @@ class RecorderTests(unittest.TestCase):
             # the visitor's first look, whatever it is: the first step for every square and for letting the pass go,
             # under the round's one recorded id
             self.assertEqual(index["rounds"][0]["first_looks"], [-1, 0, 1, 2, 3])
+            self.assertEqual(index["rounds"][0]["line"], [{"decision": 0, "action": -1}, {"decision": 1, "action": 2}])
             for a in range(4):
                 self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": a, "decision": 0, "round_id": rid}), entries)
             # the pass list as a held-out window shows it, and in full for the reveal
