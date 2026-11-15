@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useWorkspace } from '../app/store';
 import { type TheaterId } from '../stage/earthCutawayTypes';
 import { formatLat, formatLon } from '../content/theaters';
 import type { DynamicRegionRun } from '../stage/types';
@@ -60,6 +61,15 @@ export interface PalettePlace {
 /** Search offers only places with a real fire record: no searched place and no simulated fire. */
 type Option = { kind: 'region'; id: TheaterId };
 
+/** The list's last row, always in view at its foot: anywhere else on Earth, where a visitor draws an area. */
+const ANYWHERE = { id: 'anywhere', title: 'Anywhere else on Earth', sub: 'Draw an area on the Earth and read its fire record' };
+
+/** The list's head, from the data: how many places there are, what each has, and the order. */
+function listHead(shown: number, all: number): string {
+  const what = `${all === 1 ? 'place' : 'places'}, each with a fire to walk through pass by pass, newest fire first`;
+  return shown === all ? `${all} ${what}` : `${shown} of ${all} ${what}`;
+}
+
 function optionKey(o: Option): string {
   return o.id;
 }
@@ -69,10 +79,11 @@ function placeMatches(p: PalettePlace, q: string): boolean {
 }
 
 /**
- * Search as a region select: a large field, the registry's places with a real fire record one per line with
- * bracketed number keys, a preview of the place in focus on a Blue Marble locator, and a key legend. Smoked glass
- * over the scene, square corners.
- * Keys: up and down move, Enter opens, 1 to 9 pick from an empty field, Esc closes.
+ * Search as a region select: a large field, the registry's places with a real fire record one per line, every row
+ * alike, newest fire first under a head that says how many there are, and a last row always in view for anywhere else
+ * on Earth; a preview of the place in focus on a Blue Marble locator, and a key legend. The list scrolls inside its
+ * panel and ends on a whole row. Every name and date is the regions route's.
+ * Keys: up and down move, Enter opens, typing filters, Esc closes.
  */
 export function CommandAskPalette({
   open,
@@ -92,19 +103,68 @@ export function CommandAskPalette({
   const [pending, setPending] = useState<Option | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const headRef = useRef<HTMLParagraphElement | null>(null);
+  const lastRef = useRef<HTMLDivElement | null>(null);
+  const [listMax, setListMax] = useState<number | null>(null);
   useDialogFocus(open, sheetRef, inputRef);
+  const ws = useWorkspace();
+
+  // Newest fire first: each place by the last day of its newest fire that opens, as the regions route gives it
+  const newest = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const p of ws.places.places) {
+      const days = p.featured_fires.filter((f) => f.default_start).map((f) => f.last_day || f.default_start || '');
+      out.set(p.id, days.sort().at(-1) ?? '');
+    }
+    return out;
+  }, [ws.places]);
+  const sorted = useMemo(
+    () => [...places].sort((a, b) => (newest.get(b.id) ?? '').localeCompare(newest.get(a.id) ?? '')),
+    [places, newest],
+  );
 
   const options = useMemo<Option[]>(() => {
     const q = query.trim().toLowerCase();
-    return places.filter((p) => !q || placeMatches(p, q)).map((p) => ({ kind: 'region' as const, id: p.id as TheaterId }));
-  }, [query, places]);
+    return sorted.filter((p) => !q || placeMatches(p, q)).map((p) => ({ kind: 'region' as const, id: p.id as TheaterId }));
+  }, [query, sorted]);
 
   useEffect(() => {
     if (!open) return;
-    const currentIdx = places.findIndex((p) => p.id === activeTheaterId);
+    const currentIdx = sorted.findIndex((p) => p.id === activeTheaterId);
     setActiveIndex(currentIdx >= 0 ? currentIdx : 0);
     setPending(null);
-  }, [open, activeTheaterId, places]);
+  }, [open, activeTheaterId, sorted]);
+
+  // The list ends on a whole row: its height is the most whole rows the panel's height leaves it, worked out from the
+  // panel's own limit (not from the list, whose height would feed back on itself)
+  useLayoutEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      const sheet = sheetRef.current;
+      const list = listRef.current;
+      const row = list?.querySelector<HTMLElement>('.iso-finder__item');
+      if (!sheet || !list || !row) return setListMax(null);
+      const cap = Number.parseFloat(getComputedStyle(sheet).maxHeight);
+      const field = sheet.querySelector<HTMLElement>('.iso-finder__field')?.offsetHeight ?? 0;
+      const legend = sheet.querySelector<HTMLElement>('.iso-finder__legend')?.offsetHeight ?? 0;
+      const around = (headRef.current?.offsetHeight ?? 0) + (lastRef.current?.offsetHeight ?? 0);
+      const pad = Number.parseFloat(getComputedStyle(list).paddingTop) + Number.parseFloat(getComputedStyle(list).paddingBottom);
+      const room = cap - field - legend - around - pad;
+      const rows = Math.max(1, Math.floor(room / row.offsetHeight));
+      setListMax(rows * row.offsetHeight + pad);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [open, options.length]);
+
+  // The row in focus is kept in view as the arrows move
+  useEffect(() => {
+    if (!open) return;
+    const o = options[activeIndex];
+    if (o) document.getElementById(`iso-finder-${optionKey(o)}`)?.scrollIntoView({ block: 'nearest' });
+  }, [open, activeIndex, options]);
 
   useEffect(() => {
     if (!isExecuting) {
@@ -120,8 +180,16 @@ export function CommandAskPalette({
 
   if (!open) return null;
 
-  const safeIndex = Math.min(activeIndex, Math.max(0, options.length - 1));
+  // The rows are the places, then anywhere else on Earth, which is always there
+  const safeIndex = Math.min(activeIndex, options.length);
+  const onAnywhere = safeIndex === options.length && !pending;
   const focused: Option | undefined = pending ?? options[safeIndex];
+  const anywhere = () => {
+    if (isExecuting) return;
+    setQuery('');
+    onClose();
+    ws.runCommand('place:draw');
+  };
 
   const run = async (o: Option) => {
     if (isExecuting) return;
@@ -141,7 +209,8 @@ export function CommandAskPalette({
   };
 
   const submit = () => {
-    if (focused) void run(focused);
+    if (onAnywhere) anywhere();
+    else if (focused) void run(focused);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -152,23 +221,13 @@ export function CommandAskPalette({
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       setPending(null);
-      if (options.length === 0) return;
       setActiveIndex((prev) => {
-        const cur = Math.min(prev, options.length - 1);
-        return e.key === 'ArrowDown'
-          ? Math.min(options.length - 1, cur + 1)
-          : Math.max(0, cur - 1);
+        const cur = Math.min(prev, options.length);
+        return e.key === 'ArrowDown' ? Math.min(options.length, cur + 1) : Math.max(0, cur - 1);
       });
     } else if (e.key === 'Enter') {
       e.preventDefault();
       submit();
-    } else if (query === '' && /^[1-9]$/.test(e.key) && e.target === inputRef.current) {
-      const o = options[Number(e.key) - 1];
-      if (o) {
-        e.preventDefault();
-        setActiveIndex(Number(e.key) - 1);
-        void run(o);
-      }
     }
   };
 
@@ -179,7 +238,10 @@ export function CommandAskPalette({
   let lat: number | null = null;
   let lon: number | null = null;
   const placeOf = (id: string) => places.find((p) => p.id === id) ?? null;
-  if (focused) {
+  if (onAnywhere) {
+    title = ANYWHERE.title;
+    note = ANYWHERE.sub;
+  } else if (focused) {
     const t = placeOf(focused.id);
     title = t?.title ?? focused.id;
     setting = t?.sub ?? '';
@@ -216,13 +278,19 @@ export function CommandAskPalette({
             className="iso-finder__input"
             aria-label="Place name"
             aria-controls="iso-finder-list"
-            aria-activedescendant={focused ? `iso-finder-${optionKey(focused)}` : undefined}
+            aria-activedescendant={onAnywhere ? `iso-finder-${ANYWHERE.id}` : focused ? `iso-finder-${optionKey(focused)}` : undefined}
             autoComplete="off"
             spellCheck={false}
           />
         </div>
 
         <div className="iso-finder__body">
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          {places.length > 0 && (
+            <p ref={headRef} className="iso-finder__sub" style={{ margin: 0, padding: '10px 24px 0' }}>
+              {listHead(options.length, places.length)}
+            </p>
+          )}
           {options.length === 0 ? (
             <p className="iso-finder__list iso-finder__none" id="iso-finder-list">
               {query.trim() !== ''
@@ -230,9 +298,17 @@ export function CommandAskPalette({
                 : 'The places with a real fire record are still loading.'}
             </p>
           ) : (
-          <ul className="iso-finder__list" id="iso-finder-list" role="listbox" aria-label="Places">
+          <ul
+            ref={listRef}
+            className="iso-finder__list"
+            id="iso-finder-list"
+            role="listbox"
+            aria-label="Places"
+            // Scrolled by the arrows or the wheel, the list comes to rest on a whole row
+            style={{ scrollSnapType: 'y mandatory', scrollPaddingTop: 10, ...(listMax !== null ? { maxHeight: listMax } : {}) }}
+          >
             {options.map((o, idx) => {
-              const isActive = idx === safeIndex && !pending;
+              const isActive = idx === safeIndex && !pending && !onAnywhere;
               const isPending = pending !== null && optionKey(pending) === optionKey(o);
               const isOpenNow = activeRun?.region.id === o.id || (!activeRun && activeTheaterId === o.id);
               return (
@@ -242,6 +318,7 @@ export function CommandAskPalette({
                   role="option"
                   aria-selected={isActive || isPending}
                   className="iso-finder__item"
+                  style={{ scrollSnapAlign: 'start' }}
                   data-active={isActive || isPending ? 'true' : 'false'}
                   onMouseEnter={() => {
                     if (!pending) setActiveIndex(idx);
@@ -249,9 +326,7 @@ export function CommandAskPalette({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => void run(o)}
                 >
-                  <span className="iso-finder__num" aria-hidden="true">
-                    {idx < 9 ? `[${idx + 1}]` : ''}
-                  </span>
+                  <span className="iso-finder__num" aria-hidden="true" />
                   <span className="iso-finder__main">
                     <span className="iso-finder__name">{placeOf(o.id)?.title ?? o.id}</span>
                     <span className="iso-finder__sub">{placeOf(o.id)?.sub ?? ''}</span>
@@ -262,9 +337,30 @@ export function CommandAskPalette({
             })}
           </ul>
           )}
+          <div
+            ref={lastRef}
+            id={`iso-finder-${ANYWHERE.id}`}
+            role="option"
+            aria-selected={onAnywhere}
+            className="iso-finder__item"
+            data-active={onAnywhere ? 'true' : 'false'}
+            style={{ margin: '0 10px 10px' }}
+            onMouseEnter={() => {
+              if (!pending) setActiveIndex(options.length);
+            }}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={anywhere}
+          >
+            <span className="iso-finder__num" aria-hidden="true" />
+            <span className="iso-finder__main">
+              <span className="iso-finder__name">{ANYWHERE.title}</span>
+              <span className="iso-finder__sub">{ANYWHERE.sub}</span>
+            </span>
+          </div>
+          </div>
 
           <aside className="iso-finder__preview" aria-live="polite">
-            <Locator lat={lat} lon={lon} caption={caption} />
+            <Locator lat={onAnywhere ? null : lat} lon={onAnywhere ? null : lon} caption={onAnywhere ? '' : caption} />
 
             {isExecuting ? (
               <div className="iso-finder__progress">
@@ -308,19 +404,16 @@ export function CommandAskPalette({
         </div>
 
         <div className="iso-finder__legend">
-          <span className="iso-finder__legend-lead">
+          <span className="iso-finder__legend-lead" style={{ marginRight: 'auto' }}>
             Choose <kbd>&uarr;</kbd>
             <kbd>&darr;</kbd>
-          </span>
-          <span className="iso-finder__legend-lead">
-            Pick <kbd>1</kbd> to <kbd>{Math.max(1, Math.min(9, options.length))}</kbd>
           </span>
           <button
             type="button"
             className="iso-finder__action"
             onMouseDown={(e) => e.preventDefault()}
             onClick={submit}
-            disabled={isExecuting || !focused}
+            disabled={isExecuting || (!focused && !onAnywhere)}
           >
             {isExecuting ? 'Opening' : 'Open'} <kbd>&crarr;</kbd>
           </button>
