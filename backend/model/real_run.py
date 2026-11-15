@@ -146,6 +146,46 @@ def _challenger() -> tuple[Any, str, dict[str, Any]]:
     }
 
 
+class _AnsweredOnce:
+    """The challenger as a run asks it: each pass is answered once. The frames ask it at every held-out pass, and
+    the blind test asks it again at the same passes; the second ask is handed the first answer. That is the answer a
+    second call would give, because a challenger's answer at a pass is made from the visible rows, the grid and the
+    pass alone: the pass's platform, time, day or night and pixel size, never its place in a list of slots (the
+    blind test numbers the slots it is given again, `Slot.reindexed`). A pass that cannot be a key is answered
+    again."""
+
+    def __init__(self, method: Any) -> None:
+        self._method, self.name, self.label = method, method.name, method.label
+        self._answers: dict[Any, Any] = {}
+
+    @staticmethod
+    def _key(target: Any) -> Any:
+        from dataclasses import is_dataclass, replace
+
+        key = replace(target, index=0) if is_dataclass(target) and hasattr(target, "index") else target
+        hash(key)
+        return key
+
+    def predict(self, target: Any) -> Any:
+        try:
+            key = self._key(target)
+        except TypeError:
+            return self._method.predict(target)
+        if key not in self._answers:
+            self._answers[key] = self._method.predict(target)
+        return self._answers[key]
+
+
+def _given(method: Any, visible: Detections, grid: EvalGrid, factory: Callable[..., Any]) -> Callable[..., Any]:
+    """A factory that hands the blind test the method already made on these visible rows and this grid, and makes
+    a new one from `factory` for any other."""
+
+    def made(v: Detections, g: EvalGrid) -> Any:
+        return method if (v is visible and g == grid) else factory(v, g)
+
+    return made
+
+
 @dataclass(frozen=True)
 class SolvedRealRun(SolvedReconstructionRun):
     """A real-rows run: the simulated run's fields, additive response keys, and the belief frames asset."""
@@ -405,7 +445,7 @@ def solve_real_reconstruction(
     chal_factory, headline, chal_doc, chal_method = None, "reconstruction", None, None
     if holdout and run_estimate(estimate) == ESTIMATE_CHALLENGER:
         chal_factory, headline, chal_doc = _challenger()
-        chal_method = chal_factory(visible, grid375)
+        chal_method = _AnsweredOnce(chal_factory(visible, grid375))
     t_model = time.perf_counter()
 
     tensor_grid = build_any_region_grid(region_terrain.dem_m, bbox, region_terrain.terrain_source)
@@ -539,7 +579,8 @@ def solve_real_reconstruction(
     if ratio_fit is not None:
         baselines = baseline_factories(ratio_fit, count_ratio)
         if holdout:
-            methods = baselines + [reconstruction_factory(params, recon=recon)] + ([chal_factory] if chal_factory else [])
+            methods = baselines + [reconstruction_factory(params, recon=recon)] + (
+                [_given(chal_method, visible, grid375, chal_factory)] if chal_factory else [])
             held = [(k, fr.slot) for k, fr in enumerate(frames) if fr.hidden and fr.slot is not None]
             if from_list:
                 # the looks scored are the held-out frames and no other; the count of passes left out is read

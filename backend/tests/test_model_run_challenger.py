@@ -135,6 +135,41 @@ class SwitchOnTests(unittest.TestCase):
         self.assertNotIn("standing_to_the_answering_estimate", self.off.extras)
         self.assertNotIn("standing_to_the_answering_estimate", real_response(self.off, {}))
 
+    def test_the_challenger_answers_each_held_out_pass_once_and_the_run_is_what_it_was_when_asked_twice(self) -> None:
+        from backend.model.challenger.methods import ChallengerMethod
+
+        class _AskedEveryTime:
+            def __init__(self, method):
+                self._method, self.name, self.label = method, method.name, method.label
+
+            def predict(self, target):
+                return self._method.predict(target)
+
+        calls: list[float] = []
+        real = ChallengerMethod.predict
+
+        def counted(self, target):
+            calls.append(float(target.time_s))
+            return real(self, target)
+
+        with mock.patch.object(ChallengerMethod, "predict", counted):
+            once = _solve(ROWS6, estimate=RR.ESTIMATE_CHALLENGER)
+            n_once = len(calls)
+            calls.clear()
+            with mock.patch.object(RR, "_AnsweredOnce", _AskedEveryTime), \
+                    mock.patch.object(RR, "_given", lambda method, v, g, factory: factory):
+                twice = _solve(ROWS6, estimate=RR.ESTIMATE_CHALLENGER)
+            n_twice = len(calls)
+        held = [f for f in once.observer_passes["frames"] if f["held_out"]]
+        self.assertEqual(n_once, len(held))
+        self.assertEqual(len(set(calls)), len(held))
+        self.assertGreater(n_twice, n_once)
+        # the same run, byte for byte, whichever way the challenger is asked
+        self.assertEqual(json.dumps(once.extras, sort_keys=True, default=str).replace("duration_ms", ""),
+                         json.dumps(twice.extras, sort_keys=True, default=str).replace("duration_ms", ""))
+        self.assertEqual(json.dumps(once.observer_passes, sort_keys=True), json.dumps(twice.observer_passes, sort_keys=True))
+        self.assertEqual(once.reconstruction_u8_bytes, twice.reconstruction_u8_bytes)
+
     def test_a_run_answered_by_the_challenger_has_an_id_of_its_own(self) -> None:
         self.assertNotEqual(self.on.run_id, self.off.run_id)
         self.assertTrue(self.on.run_id.endswith(self.name))
