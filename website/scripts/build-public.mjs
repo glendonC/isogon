@@ -2,11 +2,13 @@
 // Build the public page: the site with the recorded transport, served under a base path, with a recording inside it
 // as `recorded/`. Node built-ins only.
 //
-//   node scripts/build-public.mjs --recording <folder> [--base /isogon/] [--out dist/public]
+//   node scripts/build-public.mjs --recording <folder> [--cube <folder>] [--base /isogon/] [--out dist/public]
 //
 // The site lands in `<out>/<base>` (for the default base, `dist/public/isogon/`), so `<out>` can be served as it is to
 // try the page under the same path it will have online. `<folder>` is a folder written by
-// `backend/server_recorder.py`; only `index.json` and the files its entries name are copied.
+// `backend/server_recorder.py`; only `index.json` and the files its entries name are copied. `--cube` names the public
+// cube's folder (`backend/firms/cube_public.py` writes it: `fire-cells.bin.gz`, `manifest.json`, `harmonize-fitted.json`
+// and the yearly layers), copied as it is to `<base>/cube/`, where the page reads a drawn box's Record.
 
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
@@ -64,7 +66,20 @@ mkdirSync(path.join(recordedDir, 'files'), { recursive: true });
 cpSync(indexFile, path.join(recordedDir, 'index.json'));
 for (const f of named) cpSync(path.join(recordingDir, f), path.join(recordedDir, f));
 
+const cube = arg('cube', null);
+let cubeLine = 'no public cube (give --cube <folder>)';
+if (cube) {
+  const cubeDir = path.resolve(cube);
+  for (const f of ['fire-cells.bin.gz', 'manifest.json']) {
+    if (!existsSync(path.join(cubeDir, f))) fail(`${cubeDir} holds no ${f}: give the folder the public cube's writer made`);
+  }
+  const cubeOut = path.join(target, 'cube');
+  rmSync(cubeOut, { recursive: true, force: true });
+  cpSync(cubeDir, cubeOut, { recursive: true });
+  cubeLine = `public cube in cube/ ${(bytesOf(cubeOut) / 1e6).toFixed(1)} MB`;
+}
+
 const mb = (n) => `${(n / 1e6).toFixed(1)} MB`;
 console.log(`build-public: the page is in ${target}`);
-console.log(`build-public: base ${base}; ${named.length} recorded files; recorded ${mb(bytesOf(recordedDir))}; page in all ${mb(bytesOf(target))}`);
+console.log(`build-public: base ${base}; ${named.length} recorded files; recorded ${mb(bytesOf(recordedDir))}; ${cubeLine}; page in all ${mb(bytesOf(target))}`);
 console.log(`build-public: try it with  python3 -m http.server 5589 --directory ${out}  and open http://127.0.0.1:5589${base}`);

@@ -9,14 +9,16 @@ the page looks answers up in:
   <folder>/index.json                      entries keyed by method, path with its query sorted, and the body
   <folder>/files/<sha256>.<ext>            one file per distinct answer, named by its content
 
-Without `--plan` it builds the demo path's plan from `GET /api/regions`: the regions, the evidence, each region's
-calendar and start list, each named fire's box calendar, and for every featured fire that is not a blind test fire
+Without `--plan` it builds the demo path's plan from `GET /api/regions`: the regions, the evidence, the live test's
+answer, the fire cube's countries and world layers (the picture of each), the Record's check of every place with each
+box place's calendar, each region's calendar and start list, each named fire's box calendar, and for every featured
+fire that is not a blind test fire (only each region's busiest with `--busiest-period-only`)
 its run held out and then revealed and its run with every satellite (the landing and the Agent part ask for it), the
 assets of each run and its readings (`GET /api/sensor-model` for the run, `GET /api/observer` at each of its frames
 with the page's default filter), its pass list as a held-out window shows it (`hidden=VIIRS`)
 and in full for the reveal, the play of each player the page shows, step by step (the one that reads the hidden rows
-with `ceiling`), and one round of next look played with the looks of the reference player `least_sure`, taken from
-its play. Rounds and plays are asked with the page's own bodies (`{region_id, start}`, the environment's own tiles
+with `ceiling`), one round of next look played with the looks of the reference player `least_sure`, taken from
+its play, and NASA's picture of the box for each day of its window as the stage asks for it. Rounds and plays are asked with the page's own bodies (`{region_id, start}`, the environment's own tiles
 and budget), so the page finds them under the same keys. A
 recorded test fire gets its run with every satellite shown on its recorded window and its full pass list; nothing of
 it is held out, revealed or played. Run bodies are built as the page builds them (`page_run_body`). Only the files
@@ -60,6 +62,11 @@ SEES_THE_ANSWER: str = "oracle"
 # The observer reading the page asks for by default (website/src/App.tsx: every sensor, the sensitivity slider at rest).
 OBSERVER_DEFAULT: dict[str, str] = {"sensor": "all", "min_frp": "8.4"}
 ROUND_PLAYER: str = "least_sure"     # the reference player whose looks the recorded round takes
+# The day's picture the stage asks for (website/src/stage/EarthCutawayStage.tsx): the UTC day of the pass on show, that
+# pass's satellite (Aqua's on a pass whose detections are hidden), true colour, then false colour.
+DAY_PICTURE_PLATFORMS: tuple[str, ...] = ("MODIS_TERRA", "MODIS_AQUA", "VIIRS_SNPP", "VIIRS_NOAA20")
+DAY_PICTURE_HIDDEN: str = "MODIS_AQUA"
+DAY_PICTURE_KINDS: tuple[str, ...] = ("true_color", "false_color")
 RECORDED_WINDOWS_NOTE: str = ("the recorded test fires' runs with every satellite shown are not recorded: such a run "
                               "still runs the scorer on its closed window until the model makes it skip the score "
                               "there; record them with --recorded-windows once it does")
@@ -118,7 +125,7 @@ def least_sure(obs: dict[str, Any]) -> int:
 
 class Recorder:
     def __init__(self, base: str, out: Path, opener: Callable[..., Any] | None = None,
-                 recorded_windows: bool = False) -> None:
+                 recorded_windows: bool = False, busiest_period_only: bool = False) -> None:
         self.base = base.rstrip("/")
         self.out = Path(out)
         (self.out / "files").mkdir(parents=True, exist_ok=True)
@@ -135,6 +142,9 @@ class Recorder:
         self.recorded_windows = bool(recorded_windows)
         self.recorded_windows_note: str | None = None
         self.plays_note: str | None = None
+        # Only each region's first open featured period (its busiest) when asked, to keep the page small
+        self.busiest_period_only = bool(busiest_period_only)
+        self.periods_left_out: list[str] = []
 
     # ---- HTTP and storage ----------------------------------------------------------------------------------------
 
@@ -226,18 +236,54 @@ class Recorder:
         for i in range(len(frames)):
             self.fetch("GET", "/api/observer", {"frame": str(i), **OBSERVER_DEFAULT, "run_id": rid})
 
-    def record_passes(self, region_id: str, run: Any, hidden: bool) -> None:
+    def record_passes(self, region_id: str, run: Any, hidden: bool) -> Any:
         """The pass list over a run's window: for a held-out run as it may be shown (`hidden=VIIRS`) and in full for
-        its reveal; for a run with every satellite shown, in full only."""
+        its reveal; for a run with every satellite shown, in full only. The full list's answer is returned."""
         window = (run.get("window") or {}) if isinstance(run, dict) else {}
         first, last = window.get("first_overpass_utc"), window.get("last_overpass_utc")
         if not (first and last):
-            return
+            return None
         end = (_dt.date.fromisoformat(last[:10]) + _dt.timedelta(days=1)).isoformat()
         q = {"region_id": region_id, "start": first[:10], "end": end}
         if hidden:
             self.fetch("GET", "/api/passes", {**q, "hidden": "VIIRS"})
-        self.fetch("GET", "/api/passes", q)
+        return self.fetch("GET", "/api/passes", q)
+
+    def record_day_pictures(self, region_id: str, passes: Any) -> None:
+        """NASA's picture of the box for each day of a run's window as the stage asks for it: each satellite that
+        passed that day, and Aqua's for a pass whose detections are hidden, in true and false colour. A day the
+        world store does not hold is recorded as the route's 404."""
+        days: dict[str, set[str]] = {}
+        for p in ((passes or {}).get("passes") or []) if isinstance(passes, dict) else []:
+            for t in (p.get("time_start"), p.get("time_mid")):
+                day = str(t or "")[:10]
+                if len(day) == 10:
+                    days.setdefault(day, {DAY_PICTURE_HIDDEN})
+                    if p.get("platform") in DAY_PICTURE_PLATFORMS:
+                        days[day].add(str(p["platform"]))
+        for day in sorted(days):
+            for plat in sorted(days[day]):
+                for kind in DAY_PICTURE_KINDS:
+                    self.fetch("GET", "/api/gibs/day", {"region_id": region_id, "day": day, "platform": plat, "kind": kind})
+
+    def record_world(self) -> None:
+        """What the page reads beyond the places: the live test's answer, the fire cube's countries and its world
+        layers (the picture of each, which is what the page draws), and the Record's check of every place with the
+        calendar of each place that is a box."""
+        self.fetch("GET", "/api/live")
+        self.fetch("GET", "/api/cube/countries")
+        layers = self.fetch("GET", "/api/cube/layers")
+        named = (layers or {}).get("layers") if isinstance(layers, dict) else None
+        for name, meta in sorted(named.items()) if isinstance(named, dict) else []:
+            png = meta.get("png") if isinstance(meta, dict) else None
+            if png:
+                path, query = split_url(str(png))
+                self.fetch("GET", path, query or None)
+        checks = self.fetch("GET", "/api/calendar/checks")
+        for place in ((checks or {}).get("places") or []) if isinstance(checks, dict) else []:
+            if place.get("kind") == "box" and place.get("calendar"):
+                path, query = split_url(str(place["calendar"]))
+                self.fetch("GET", path, query or None)
 
     def play_actions(self, episode: dict[str, Any], player: str) -> list[int] | None:
         """The looks a reference player takes on an episode, from its recorded play (None without a play route)."""
@@ -300,6 +346,7 @@ class Recorder:
         regions = self.fetch("GET", "/api/regions")
         self.fetch("GET", "/api/evidence")
         self.fetch("GET", "/api/sensor-model")          # the page's sensor curves before any run is on screen
+        self.record_world()
         for place in (regions or {}).get("places", []):
             if place.get("rows") != "firms":
                 continue
@@ -311,6 +358,7 @@ class Recorder:
             for f in place.get("named_fires", []):
                 path, query = split_url(f["calendar"])
                 self.fetch("GET", path, query)
+            open_periods = 0
             for fire in place.get("featured_fires", []):
                 start = fire["default_start"]
                 if fire.get("blind_test_fire"):
@@ -322,10 +370,15 @@ class Recorder:
                     shown = self.run_with_assets(page_run_body(rid, start, holdout=False))
                     self.record_passes(rid, shown, hidden=False)
                     continue
+                open_periods += 1
+                if self.busiest_period_only and open_periods > 1:
+                    self.periods_left_out.append(str(fire.get("id") or f"{rid}:{start}"))
+                    continue
                 held = self.run_with_assets(page_run_body(rid, start, holdout=True))
                 self.run_with_assets(page_run_body(rid, start, holdout=True, reveal=True))
                 self.run_with_assets(page_run_body(rid, start, holdout=False))
-                self.record_passes(rid, held, hidden=True)
+                full = self.record_passes(rid, held, hidden=True)
+                self.record_day_pictures(rid, full)
                 episode = {"region_id": rid, "start": start}     # the page's reset body: the environment's tiles and budget
                 self.record_plays(episode)
                 actions = self.play_actions(episode, ROUND_PLAYER)
@@ -360,6 +413,8 @@ class Recorder:
             "plays": self.plays,
             **({"recorded_windows_note": self.recorded_windows_note} if self.recorded_windows_note else {}),
             **({"plays_note": self.plays_note} if self.plays_note else {}),
+            **({"periods_left_out": {"why": "only each region's busiest open period was recorded (--busiest-period-only)",
+                                     "periods": self.periods_left_out}} if self.periods_left_out else {}),
             "withheld": self.withheld,
             "plan": self.plan_run,
         }
@@ -393,8 +448,11 @@ def _main(argv: list[str] | None = None) -> int:
     ap.add_argument("--recorded-windows", action="store_true",
                     help="also record each recorded test fire's run with every satellite shown (only once that run "
                          "no longer scores its closed window)")
+    ap.add_argument("--busiest-period-only", action="store_true",
+                    help="record only each region's first open featured period, its busiest, and list the others")
     args = ap.parse_args(argv)
-    rec = Recorder(args.base, args.out, recorded_windows=args.recorded_windows)
+    rec = Recorder(args.base, args.out, recorded_windows=args.recorded_windows,
+                   busiest_period_only=args.busiest_period_only)
     t0 = time.time()
     if args.plan is not None:
         rec.record_plan(json.loads(args.plan.read_text(encoding="utf-8")))
@@ -407,6 +465,7 @@ def _main(argv: list[str] | None = None) -> int:
     stored = [e for e in rec.entries.values() if "file" in e]
     print(json.dumps({"index": str(index.name), "entries": len(rec.entries), "stored": len(stored),
                       "withheld": len(rec.withheld), "rounds": len(rec.rounds), "plays": len(rec.plays),
+                      "periods_left_out": rec.periods_left_out,
                       "bytes": sum(e["bytes"] for e in stored), "seconds": round(time.time() - t0, 1),
                       "not_ok": [k for k, e in rec.entries.items() if e.get("status", 200) != 200],
                       "files_failing_the_check": bad}, indent=1))

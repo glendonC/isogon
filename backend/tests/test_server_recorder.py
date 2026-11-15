@@ -80,6 +80,16 @@ class StandIn:
                        "play": {"player": {"id": body["player"]}, "steps": [{"chosen_tile": -1}, {"chosen_tile": 2}]}})
         if u.path == "/api/env/next_look/state":
             return js({"round_id": LIVE_ROUND, "done": self.decision >= 2, "end": {"reference_status": "ready"}})
+        if u.path == "/api/passes":
+            return js({"passes": [{"platform": "MODIS_TERRA", "time_start": "2012-08-10T18:40:00Z", "time_mid": "2012-08-10T18:42:00Z"},
+                                  {"platform": "VIIRS_SNPP", "time_start": "2012-08-11T09:50:00Z", "time_mid": "2012-08-11T09:52:00Z"}]})
+        if u.path == "/api/cube/layers":
+            return js({"layers": {"rows_modis": {"png": "/api/cube/layers/rows_modis.png"}}})
+        if u.path.startswith("/api/cube/layers/") or u.path == "/api/gibs/day":
+            return _Reply(200, "image/png", b"\x89PNG")
+        if u.path == "/api/calendar/checks":
+            return js({"places": [{"kind": "region", "id": "plumas_ca", "calendar": "/api/calendar?source=firms&region_id=plumas_ca"},
+                                  {"kind": "box", "id": "northern_ghana", "calendar": "/api/calendar?source=firms&box=-2.5,7.25,0.1,9.15"}]})
         return js({"path": u.path})
 
     def _obs(self) -> dict:
@@ -109,6 +119,27 @@ class _PackStandIn:
                                                        "source": self.context_source}}}}}
             return _Reply(200, "application/json", json.dumps(ans).encode())
         return _Reply(200, "application/octet-stream", b"\x00\x01")
+
+
+class BusiestPeriodTests(unittest.TestCase):
+    def test_only_the_first_open_period_of_a_region_when_asked(self) -> None:
+        class TwoPeriods(StandIn):
+            def __call__(self, req, timeout=None):
+                if urllib.parse.urlsplit(req.full_url).path == "/api/regions":
+                    return _Reply(200, "application/json", json.dumps({"places": [{
+                        "id": "plumas_ca", "rows": "firms", "named_fires": [], "featured_fires": [
+                            {"id": "plumas_ca:2012-08", "default_start": "2012-08-10", "blind_test_fire": False},
+                            {"id": "plumas_ca:2020-09", "default_start": "2020-09-25", "blind_test_fire": False}]}]}).encode())
+                return super().__call__(req, timeout)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            backend = TwoPeriods()
+            rec = Recorder("http://stand.in", Path(tmp), opener=backend, busiest_period_only=True)
+            rec.record_default()
+            index = json.loads(rec.write_index().read_text())
+            starts = {(b or {}).get("start") for _, path, b in backend.seen if path == "/api/reconstruct"}
+            self.assertEqual(starts, {"2012-08-10"})
+            self.assertEqual(index["periods_left_out"]["periods"], ["plumas_ca:2020-09"])
 
 
 class PublishableImageryTests(unittest.TestCase):
@@ -217,6 +248,17 @@ class RecorderTests(unittest.TestCase):
             self.assertIn('POST /api/env/next_look/play {"ceiling":true,"player":"oracle","region_id":"plumas_ca","start":"2012-08-10"}', entries)
             self.assertIn('POST /api/env/next_look/reset {"region_id":"plumas_ca","start":"2012-08-10"}', entries)
             self.assertEqual(rec.check("not-in-any-file"), [])
+            # the world's answers: the live test, the cube's countries, its layers and the picture of each, the check of
+            # every place and the calendar of a box place
+            for key in ("GET /api/live", "GET /api/cube/countries", "GET /api/cube/layers", "GET /api/cube/layers/rows_modis.png",
+                        "GET /api/calendar/checks", "GET /api/calendar?box=-2.5%2C7.25%2C0.1%2C9.15&source=firms"):
+                self.assertIn(key, entries)
+            # the day's pictures of the open fire's window: each day, the satellites that passed and Aqua's, both kinds
+            pictures = sorted(k for k in entries if k.startswith("GET /api/gibs/day?"))
+            self.assertEqual(len(pictures), 8)
+            self.assertIn("GET /api/gibs/day?day=2012-08-10&kind=true_color&platform=MODIS_TERRA&region_id=plumas_ca", pictures)
+            self.assertIn("GET /api/gibs/day?day=2012-08-11&kind=false_color&platform=MODIS_AQUA&region_id=plumas_ca", pictures)
+            self.assertFalse(any("2021-07" in k for k in pictures))
             # a stored file holding the key is flagged
             (Path(tmp) / "files" / "planted.json").write_text('{"u": "x?MAP_KEY=abc"}')
             self.assertEqual(rec.check(""), ["files/planted.json"])
