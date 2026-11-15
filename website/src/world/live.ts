@@ -47,7 +47,7 @@ export interface Live {
   seals: LiveSeal[];
   notSealed: Array<{ fireId: string; platform: string | null; predictedUtc: string | null; reason: string | null }>;
   /** Over the fires scored, judged with an interval: how many scores were ahead, tied and behind. Null until two. */
-  overFires: { fires: number | null; ahead: number | null; tied: number | null; behind: number | null } | null;
+  overFires: { fires: number | null; ahead: number | null; tied: number | null; behind: number | null; scores: number | null } | null;
   firesScored: number | null;
   /** Said in the caution colour when the answer is an example written for a frame. */
   example: string | null;
@@ -136,7 +136,15 @@ function runningCount(v: unknown): Pick<Live, 'overFires' | 'firesScored'> {
   const cls = (over?.classes ?? null) as Obj | null;
   return {
     firesScored: num(r.fires_scored),
-    overFires: cls ? { fires: num(r.fires_scored), ahead: num(cls.ahead), tied: num(cls.tie ?? cls.tied), behind: num(cls.behind) } : null,
+    overFires: cls
+      ? {
+          fires: num(r.fires_scored),
+          ahead: num(cls.ahead),
+          tied: num(cls.tie ?? cls.tied),
+          behind: num(cls.behind),
+          scores: over?.scores && typeof over.scores === 'object' ? Object.keys(over.scores as Obj).length : null,
+        }
+      : null,
   };
 }
 

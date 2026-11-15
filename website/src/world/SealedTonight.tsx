@@ -82,8 +82,13 @@ export const SEAL_WORDS = {
   nrt: (note: string) => `Scored on ${note}.`,
   missed: (n: number, why: string | null) =>
     `${n === 1 ? 'One pass was' : `${n} passes were`} not sealed in time and will not be scored${why ? `: ${why}` : ''}.`,
-  over: (fires: number, a: number, t: number, b: number) =>
-    `Over the ${fires} fires scored, judged with an interval: ahead on ${a}, tied on ${t}, behind on ${b} of the seven scores.`,
+  // Ahead and behind as the product lane says them for a judgement against luck (WORDS-wider.json): level where the gap
+  // could be luck; the scores that could be judged counted, since a score with nothing to measure is not.
+  over: (fires: number, a: number, t: number, b: number, of: number | null) => {
+    const judged = a + t + b;
+    const counted = of !== null && judged < of ? `of the ${judged} scores that could be judged` : `of the ${of ?? judged} scores`;
+    return `Over the ${fires} fires scored, ahead or behind only where the gap is too large to be luck: ahead on ${a}, level on ${t}, behind on ${b} ${counted}.`;
+  },
 };
 
 function latest(seals: LiveSeal[]): LiveSeal | null {
@@ -325,7 +330,7 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
         </ol>
         {live.overFires && live.overFires.fires !== null && live.overFires.ahead !== null && live.overFires.tied !== null && live.overFires.behind !== null && (
           <div className="world-board__rule world-board__rule--strong">
-            {SEAL_WORDS.over(live.overFires.fires, live.overFires.ahead, live.overFires.tied, live.overFires.behind)}
+            {SEAL_WORDS.over(live.overFires.fires, live.overFires.ahead, live.overFires.tied, live.overFires.behind, live.overFires.scores)}
           </div>
         )}
         {live.notSealed.length > 0 && (
