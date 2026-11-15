@@ -289,6 +289,19 @@
   display: contents;
 }
 
+@media (max-width: 600px) {
+  .guide-results {
+    grid-template-columns: minmax(0, max-content) minmax(40px, 1fr) max-content;
+    column-gap: var(--sys-s2);
+    justify-content: stretch;
+    max-width: 100%;
+  }
+
+  .guide-results__name {
+    overflow-wrap: anywhere;
+  }
+}
+
 .guide-results__name {
   justify-self: end;
   font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
