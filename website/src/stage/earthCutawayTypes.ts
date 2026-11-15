@@ -292,6 +292,12 @@ export interface EarthCutawayStageProps {
    */
   landingTour?: boolean;
   /**
+   * The stage stands behind a screen of the page (the Record): it rests dark and calm, by night on the
+   * landing's own pass (its lights on the ground), with no estimate drawn (no frames, no dotted line)
+   * and no film move, whatever pass or step the page holds. Absent or false: as before.
+   */
+  backdrop?: boolean;
+  /**
    * Real runs. When the time on show reaches another pass, the pass arrives as a scan: a front
    * crosses the region along the pass's ground track and what the pass brought appears behind it.
    * Off by default. Never under reduced motion.

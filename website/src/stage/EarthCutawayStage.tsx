@@ -3269,6 +3269,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           ? THREE.MathUtils.clamp(p.landingPass, 0, nextBundle.frameCount - 1)
           : tourFrame ?? chosenLanding;
       if (landingFrame !== null) effectiveTimeProg = landingFrame / Math.max(1, nextBundle.frameCount - 1);
+      // Behind a screen of the page (prop backdrop): the landing's own pass, whatever the page holds
+      if (p.backdrop) {
+        const rest = landingFrameFor(nextBundle);
+        if (rest !== null) effectiveTimeProg = rest / Math.max(1, nextBundle.frameCount - 1);
+      }
       let cinemaProgress = 0.0;
       let slewActive = false;
 
@@ -3391,7 +3396,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           }
         }
         let filmWanted: StageFilmMove | null = null;
-        if (filmAsked && !filmCancelled && !morphActive && !filmHolding) {
+        if (filmAsked && !filmCancelled && !morphActive && !filmHolding && !p.backdrop) {
           filmWanted =
             filmAsked !== 'auto'
               ? filmAsked
@@ -3742,7 +3747,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       // The model's belief at the time on show. Passes are unevenly spaced: the time between two
       // frames is read off their real pass times, and the belief frames are stepped through at it.
       const beliefNow = realRun && nextBundle.runId ? beliefStore.get(nextBundle.runId) : undefined;
-      if (beliefNow) {
+      // (behind a screen of the page no estimate is drawn)
+      if (beliefNow && !p.backdrop) {
         if (frameTimesKey !== nextBundle.key) {
           frameTimesKey = nextBundle.key;
           frameTimesMs = obsFrames.map((passes) => Date.parse(passes[0]?.timeUtc ?? ''));
@@ -3885,8 +3891,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       }
       uMicroDetail.value = nextBundle.runId === null ? 0.0 : 1.0;
       // (a day's photograph is drawn by day, whatever the hour of the pass on show)
-      const nightTarget =
-        dayTex ? 0.0 : (realRun && rawPasses[0]?.isDay === false) || nextBundle.runId === null ? 1.0 : 0.0;
+      // (and behind a screen of the page, by night)
+      const nightTarget = p.backdrop
+        ? 1.0
+        : dayTex ? 0.0 : (realRun && rawPasses[0]?.isDay === false) || nextBundle.runId === null ? 1.0 : 0.0;
       uNight.value = THREE.MathUtils.lerp(uNight.value, nightTarget, 1.0 - Math.exp(-dtSec * 2.4));
       domeNight.value = uNight.value;
       const fieldScale = nextBundle.fieldScale ?? DEFAULT_FIELD_INTENSITY_SCALE;
