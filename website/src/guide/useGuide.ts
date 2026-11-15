@@ -1,14 +1,19 @@
 import { useRef } from 'react';
 import type { WorkspaceBase } from '../app/store';
 import type { RecordView } from '../beats/calendar/recordView';
+import type { PlayersView } from '../beats/agent/playersView';
+import { PLAYERS_WORDS } from '../beats/agent/AgentPicture';
 import { guideFields } from './fields';
 import { missingLine } from './missing';
+import { playStateId } from './playState';
 import { recordFields, recordStateId } from './recordFields';
+import { resultRows, type ResultRow } from './Results';
+import { roundFields } from './roundFields';
 import { contextOf, fill, labelOn, objectiveOf, promptBeside, says, stateOf, type Fields, type ScriptAction, type ScriptState } from './script';
 
 export interface Guide {
-  /** The script's step and state on show; null where the guide does not speak (Choose a Place, and Play for now). */
-  step: 'record' | 'estimate' | 'test' | null;
+  /** The script's step and state on show; null where the guide does not speak (Choose a Place). */
+  step: 'record' | 'estimate' | 'test' | 'play' | 'finish' | null;
   stateId: string | null;
   state: ScriptState | null;
   /** Top left: what the visitor is doing now, and the fainter line of the place and the days. */
@@ -19,10 +24,21 @@ export interface Guide {
   /** The label on the fire, and the action that stands beside the fire as a prompt. */
   fireLabel: string | null;
   besideFire: ScriptAction | null;
+  /** Play: the label on the square just looked at, and the action beside the marked square. */
+  squareLabel: string | null;
+  besideSquare: ScriptAction | null;
+  /** A round's end: the results' line and rows, above the guide's sentences. */
+  results: { line: string; rows: ResultRow[] } | null;
 }
 
 /** How many of a state's lines stand together in the guide. */
 const STANDING = 2;
+
+/**
+ * With the players open and what their looks found not drawn yet, the guide offers it first, in the picture's own
+ * words (the script's players_open has no such action, since there the picture opens after the visitor's round).
+ */
+const REVEAL: ScriptAction = { label: PLAYERS_WORDS.reveal, command: 'players:reveal', key: 'Enter', places: ['guide'] };
 
 /** A state's actions with their labels' fields filled; an action whose label names a field not served is left out. */
 function actionsOf(state: ScriptState | null, fields: Fields): ScriptAction[] {
@@ -45,13 +61,21 @@ const NONE: Guide = {
   actions: [],
   fireLabel: null,
   besideFire: null,
+  squareLabel: null,
+  besideSquare: null,
+  results: null,
 };
 
 /**
  * Which step and state of the script the workspace is in, and what the guide says there. A state's own pass is the one
  * on show when the state began; moving to another pass moves the guide to the script's "on another pass" states.
  */
-export function useGuide(ws: WorkspaceBase, open: { scores: boolean; sideBySide: boolean }, record: RecordView): Guide {
+export function useGuide(
+  ws: WorkspaceBase,
+  open: { scores: boolean; sideBySide: boolean; finish: boolean },
+  record: RecordView,
+  players: PlayersView,
+): Guide {
   const entry = useRef<{ key: string; pass: number }>({ key: '', pass: -1 });
   const model = ws.step === 'fire' || ws.step === 'test';
   const { fields, conds } = guideFields(ws);
@@ -75,9 +99,29 @@ export function useGuide(ws: WorkspaceBase, open: { scores: boolean; sideBySide:
     };
   }
   if (!model) {
-    // Where the guide does not speak yet, the corner still says the step's objective and context.
+    // Play, and Finish after a round: the round's own answers and the evidence route.
     entry.current = { key: '', pass: -1 };
-    return { ...NONE, objective: objectiveOf('play', null, fields), context: contextOf('play', fields) };
+    const r = roundFields(ws);
+    const f = { ...fields, ...r.fields };
+    const c = { ...conds, ...r.conds };
+    const step = open.finish ? 'finish' : 'play';
+    const id = open.finish ? 'ready' : playStateId(ws);
+    const state = stateOf(step, id);
+    const missing = step === 'play' && id !== 'loading' && id !== 'failed' ? missingLine(ws.model.missingFiles) : null;
+    return {
+      ...NONE,
+      step,
+      stateId: id,
+      state,
+      objective: objectiveOf(step, state, f),
+      context: contextOf(step, f),
+      lines: [...(missing ? [missing] : []), ...says(state, f, c).slice(0, STANDING)],
+      actions: id === 'players_open' && players.canReveal ? [REVEAL, ...actionsOf(state, f)].slice(0, 3) : actionsOf(state, f),
+      fireLabel: labelOn(state, 'fire', f, c),
+      squareLabel: labelOn(state, 'looked_square', f, c),
+      besideSquare: promptBeside(state, 'marked_square'),
+      results: state?.results ? { line: state.results.line, rows: resultRows(state.results, f, r.gains, c) } : null,
+    };
   }
   const failed = Boolean(ws.run.failed && (ws.run.failed.start === ws.run.pendingStart || !ws.run.isReal));
   let step: 'estimate' | 'test' = 'estimate';
@@ -107,6 +151,7 @@ export function useGuide(ws: WorkspaceBase, open: { scores: boolean; sideBySide:
   // sentences: its first two lines, shown together.
   const missing = id === 'loading' || id === 'failed' ? null : missingLine(ws.model.missingFiles);
   return {
+    ...NONE,
     step,
     stateId: id,
     state,

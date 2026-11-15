@@ -18,14 +18,14 @@ import { BEATS, type BeatId } from './app/names';
 import { WorkspaceProvider, type WorkspaceBase, type WorkspaceStore } from './app/store';
 import { CalendarBeat } from './beats/calendar/CalendarBeat';
 import { useRecordView } from './beats/calendar/recordView';
+import { usePlayersView } from './beats/agent/playersView';
 import { WorldModelScene } from './beats/world-model/WorldModelScene';
 import { isClosedWindow } from './beats/world-model/fire';
-import { TestWorldBeat } from './beats/test-world/TestWorldBeat';
+import { PlayScene } from './beats/test-world/PlayScene';
 import { AgentBeat } from './beats/agent/AgentBeat';
 import { revealedPassesOf, type TrackState } from './content/passTrack';
 import { partsStatus, type PartId } from './content/partsStatus';
 import { useRound, type RoundApi, type RoundFire } from './beats/test-world/useRound';
-import { TileLabels } from './beats/test-world/TileLabels';
 import { EarthCutawayStage } from './stage/EarthCutawayStage';
 import {
   THEATER_CATALOG,
@@ -188,6 +188,8 @@ export function App() {
   const stepRef = useRef<Step>('fire');
   stepRef.current = step;
   const [debriefOpen, setDebriefOpen] = useState(false);
+  /** After a round: the script's last words (step "finish") on the stage. */
+  const [finishOpen, setFinishOpen] = useState(false);
   /** A new try at the Record after it failed to load: it is mounted afresh. */
   const [recordTry, setRecordTry] = useState(0);
   const telemetryRef = useRef<EarthStageTelemetry | null>(null);
@@ -319,7 +321,10 @@ export function App() {
         if (realStartParam) setRealFailed(null);
         setSelectedFinding(null);
         // World model looks at its fire from close by; elsewhere a new run opens on the overview. A reveal keeps the camera.
-        if (!params.reveal) setCameraPreset(stepRef.current === 'fire' || stepRef.current === 'test' ? 'canyon' : 'overview');
+        if (!params.reveal)
+          setCameraPreset(
+            stepRef.current === 'fire' || stepRef.current === 'test' ? 'canyon' : stepRef.current === 'look' || stepRef.current === 'agent' ? 'region' : 'overview',
+          );
         const reported = runData.metrics?.holdout_viirs;
         const nextHoldout = params.reveal ? false : typeof reported === 'boolean' ? reported : params.holdoutViirs;
         setHoldoutViirs(nextHoldout);
@@ -581,11 +586,23 @@ export function App() {
       // While a run is on its way (the landing's, a fire just chosen), the test waits for it rather than being refused;
       // the hide refuses a closed window or a year before VIIRS by itself once the run is in.
       const runInFlight = isExecuting || !activeRun;
-      if ((next === 'look' || next === 'agent') && step !== next && nothingToHide) return;
+      if ((next === 'look' || next === 'agent') && step !== next && nothingToHide) {
+        // A recorded test fire or a window before the sharp satellite: Play opens and the guide says why no round is
+        // played. Anything else (no real run yet) stays where it is.
+        const closed = activeRun !== null && isRealRun(activeRun) && isClosedWindow(placesRef.current.places, activeRun.region.id, realStart);
+        if (next === 'look' && (closed || beforeSharpSatellite(activeRun))) {
+          setFinishOpen(false);
+          setCameraPreset('region');
+          setStep('look');
+        }
+        return;
+      }
       if (next === 'test' && step !== 'test' && !holdoutViirs && !revealed && !runInFlight && nothingToHide) return;
       if (next === step && next !== 'look') return;
       // Leaving a round for World model keeps the round's held-out run: the test opens blind on it at once.
-      if (step === 'look' && next !== 'look' && round) leaveRound(next === 'test');
+      setFinishOpen(false);
+      // The players open over the round's end and keep it; anything else leaves the round.
+      if ((step === 'look' || step === 'agent') && next !== 'look' && next !== 'agent' && round) leaveRound(next === 'test');
       if (next === 'record' || next === 'fire') {
         if (step === 'test') restoreFullRun();
       } else if (next === 'test') {
@@ -595,7 +612,11 @@ export function App() {
           else toggleHoldoutLive();
         }
       } else if (next === 'look') {
-        startRound();
+        setCameraPreset('region');
+        // Back from the players to the round's end; otherwise a new round on the fire that is open.
+        if (!(step === 'agent' && round?.done)) startRound();
+      } else if (next === 'agent') {
+        setCameraPreset('region');
       }
       setStep(next);
     },
@@ -622,7 +643,7 @@ export function App() {
       if (b === 'calendar') goStep('record');
       else if (b === 'model') openModel();
       else if (b === 'world') goStep('look');
-      else if (b === 'agent') goStep('agent');
+      else if (b === 'agent') goStep('look');
     },
     [goStep, openModel],
   );
@@ -664,7 +685,7 @@ export function App() {
   const landingParts = useMemo(() => partsStatus(evidenceLive), [evidenceLive]);
   const openPart = useCallback(
     (id: PartId) => {
-      pendingStepRef.current = id === 'model' ? 'test' : id === 'agent' ? 'agent' : 'look';
+      pendingStepRef.current = id === 'model' ? 'test' : 'look';
       enterWorkspace('cutaway');
       if (id === 'model') {
         setWorkspaceMode('reconstruction');
@@ -797,23 +818,24 @@ export function App() {
           runCommandRef.current(a.command);
           return;
         }
+        if (g.step === 'finish' && e.key === 'Escape') {
+          e.preventDefault();
+          setFinishOpen(false);
+          return;
+        }
       }
 
       if (round && inWorkspace) {
-        // The round's keys: Esc leaves, Enter passes or moves on, the arrows move over the tiles, Space looks there.
+        // The round's own keys besides the guide's: the arrows mark a square, Esc leaves (from the players, back to
+        // the round's end).
         const move: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
         if (e.key === 'Escape') {
           e.preventDefault();
-          openModel();
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          nextLook();
+          if (step === 'agent') setStep('look');
+          else openModel();
         } else if (move[e.key]) {
           e.preventDefault();
           rnd.moveFocus(...move[e.key]);
-        } else if (e.key === ' ') {
-          e.preventDefault();
-          rnd.pickFocused();
         }
         return;
       }
@@ -998,13 +1020,9 @@ export function App() {
         : closedWindow
           ? 'A recorded test fire: its test is on record and is not run again'
           : null,
-    look: round
+    look: round || closedWindow || noSharp
       ? null
-      : closedWindow
-        ? 'Closed on a recorded test fire: its looks are on record'
-        : noSharp
-          ? 'No VIIRS flew before 2012, so there is no hidden pass to look for'
-          : !runIsReal
+      : !runIsReal
             ? 'A round needs a real NASA FIRMS run'
             : null,
   };
@@ -1121,7 +1139,12 @@ export function App() {
       next: nextLook,
       focus: rnd.focus,
       canPick: rnd.canPick,
-      pickFocused: rnd.pickFocused,
+      pickFocused: rnd.pickMarked,
+      ready: rnd.run !== null,
+      hover: rnd.hover,
+      marked: rnd.marked,
+      takenTile: rnd.takenTile,
+      subscribeAnchors: rnd.subscribeAnchors,
     },
     step,
     goStep,
@@ -1130,7 +1153,8 @@ export function App() {
   };
   // What the Record publishes for the guide (the compare-view lane's view), and the guide worked out from the store.
   const recordView = useRecordView();
-  const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays }, recordView);
+  const playersView = usePlayersView();
+  const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays, finish: finishOpen }, recordView, playersView);
   guideRef.current = guide;
   /** The commands the guide's actions name (script.json, "commands"). */
   const runCommand = (command: string) => {
@@ -1163,6 +1187,21 @@ export function App() {
       setPlacesOpen(true);
     }
     else if (command === 'go:play') goStep('look');
+    else if (command === 'play:look') rnd.pickMarked();
+    else if (command === 'play:skip') {
+      if (round && !round.done && !round.awaitingNext) nextLook();
+    } else if (command === 'play:next') {
+      if (round?.awaitingNext) nextLook();
+    } else if (command === 'play:end') rnd.finish();
+    else if (command === 'play:players') goStep('agent');
+    else if (command === 'play:again') {
+      setFinishOpen(false);
+      if (step === 'agent') setStep('look');
+      if (round?.done) nextLook();
+      else startRound();
+    } else if (command === 'play:watch') playersView.watch();
+    else if (command === 'players:reveal') playersView.reveal();
+    else if (command === 'go:finish') setFinishOpen(true);
     else if (command === 'go:record') goStep('record');
     else if (command === 'place:open') {
       goStep('record');
@@ -1180,8 +1219,13 @@ export function App() {
     else if (command === 'tests:record') setEvidenceOpen(true);
     else if (command === 'method:open') setReading('method');
     else if (command === 'close') {
-      if (debriefOpen) setDebriefOpen(false);
+      if (finishOpen) setFinishOpen(false);
+      else if (debriefOpen) setDebriefOpen(false);
       else if (threeWays) setThreeWays(false);
+      else if (step === 'agent') setStep('look');
+      else if (step === 'look') openModel();
+    } else if (command === 'retry' && step === 'look') {
+      startRound();
     } else if (command === 'retry' && step === 'record') {
       setRecordTry((n) => n + 1);
     } else if (command === 'retry' && realFailed) {
@@ -1261,14 +1305,19 @@ export function App() {
             />
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
-            {step === 'record' && <CalendarBeat key={recordTry} />}
+            {step === 'record' && <CalendarBeat key={recordTry} guideSpeaks={guide.step === 'record'} />}
             {modelScene && <WorldModelScene />}
-            {step === 'agent' && <AgentBeat />}
-            {step === 'look' && <TestWorldBeat />}
+            {step === 'agent' && <AgentBeat guideSpeaks={guide.step === 'play'} />}
+            {step === 'look' && <PlayScene />}
             {guide.step && (
               <>
                 <div className="guide-scrim" aria-hidden="true" />
-                <GuideStrip lines={guide.lines} actions={guide.actions} onAction={runCommand} />
+                <GuideStrip
+                  lines={guide.lines}
+                  actions={guide.actions}
+                  onAction={runCommand}
+                  results={guide.results}
+                />
               </>
             )}
             <div className="iso-ws__dock" hidden={step === 'record' || step === 'agent'}>
@@ -1306,10 +1355,6 @@ export function App() {
             </div>
           </div>
 
-          {round && rnd.board && rnd.start && (
-            <TileLabels round={round} cols={rnd.start.episode.tiles[1]} focus={rnd.focus} subscribe={rnd.subscribeAnchors} />
-          )}
-
           <button type="button" className="iso-credit" onClick={() => setReading('credits')} title="Imagery credit and sources">
             Imagery: {credit}
           </button>
@@ -1344,10 +1389,11 @@ export function App() {
           landingView="world"
           landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
           workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
-          regionGridDivisions={modelScene ? 16 : undefined}
-          onFireAnchor={modelScene ? emitAnchor : undefined}
+          regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
+          onFireAnchor={modelScene || step === 'look' ? emitAnchor : undefined}
           tileBoard={rnd.board}
           onTilePick={rnd.pick}
+          onTileHover={rnd.board ? rnd.onHover : undefined}
           onTileAnchors={rnd.board ? rnd.onAnchors : undefined}
         />
       </div>

@@ -8,7 +8,7 @@ import type { NextLookEnd, NextLookStart } from '../content/demo/nextLook';
 import type { Step } from '../components/WorkspaceBar';
 import type { Box, FeaturedFire, Place, Places } from './places';
 import type { FireRecord, RecordPlace } from '../beats/calendar/record';
-import type { EarthStageTelemetry, StageFireAnchor, StageMissingFile } from '../stage/earthCutawayTypes';
+import type { EarthStageTelemetry, StageFireAnchor, StageMissingFile, StageTileAnchor } from '../stage/earthCutawayTypes';
 import type { EvidenceDoc } from '../content/evidence';
 import type { Guide } from '../guide/useGuide';
 
@@ -119,10 +119,18 @@ export interface WorkspaceStore {
     /** Why the round's held-out run did not load. */
     runError: string | null;
     next: () => void;
-    /** The tile under keyboard focus, whether a tile can be picked now, and a look at the focused tile. */
+    /** The tile under keyboard focus, whether a tile can be picked now, and a look at the marked tile. */
     focus: number | null;
     canPick: boolean;
     pickFocused: () => void;
+    /** The round's held-out run is on the terrain. */
+    ready: boolean;
+    /** The tile under the pointer, the tile a look would go to (pointer first), and the tile just looked at. */
+    hover: number | null;
+    marked: number | null;
+    takenTile: number | null;
+    /** The stage's tile corners on screen, as a subscription, so the shell does not redraw for them. */
+    subscribeAnchors: (fn: (anchors: StageTileAnchor[]) => void) => () => void;
   };
   step: Step;
   goStep: (s: Step) => void;

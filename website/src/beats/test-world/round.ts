@@ -7,8 +7,9 @@ export interface RoundPick {
   pixels: number;
   /** What the look's answer revealed: the hidden detections of its slot inside the tile. */
   revealed: NextLookRevealed[];
-  /** The change in the score this look made. */
+  /** The change in the score this look made, and the score after it. */
   reward?: number | null;
+  score?: number | null;
 }
 
 export interface RoundState {
@@ -18,6 +19,8 @@ export interface RoundState {
   awaitingNext: boolean;
   /** The look the last answer said comes next; null when the round is over. */
   next: number | null;
+  /** Every look is spent and the visitor moved on: the passes left go by without one, until the round is ended. */
+  ending?: boolean;
   done: boolean;
 }
 

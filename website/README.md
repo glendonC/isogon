@@ -80,12 +80,12 @@ its place and the guide says first which one and what is drawn instead (`src/gui
 | Record | The fire record and Choose a Place (the compare-view lane's screens, mounted through the store); the guide says what a square is and offers the fire of the marked month, and beside the trail stands the record's span |
 | Estimate | The fire close up with the sharp satellite (VIIRS) hidden: the white frames are the model's estimate from the coarse satellite (MODIS) alone. The guide speaks here; Enter reveals. A recorded test fire shows its record and every satellite; before 2012 nothing is hidden |
 | Test | What the sharp satellite saw, and the verdict in the guide; `T` Side by Side, `S` the scores, `E` every test on record |
-| Play | A round on the fire that is open, on the stage's tiles; after it, the other players (the Agent part) |
+| Play | A round on the fire that is open, the whole box on its land, in the guide's words: the pass being decided on the fire, "Look here" beside the marked square, a look's finding on its square; at the end the results rows above the guide's line, then the other players and Finish. On a recorded test fire or before 2012 the guide says why no round is played |
 
 Keys: on the landing a bare Enter opens the place screen; where the guide speaks, each action's key is shown beside it;
 elsewhere Space plays or pauses the passes, the left and right arrows step through them, `/` or Ctrl+K (Cmd+K) opens
-the search palette, `M` opens the sensor reading, `C` starts the camera tour, `N` goes to the next region, `1` to `3`
-open Estimate, Play and the players, and Esc goes back.
+the search palette, `M` opens the sensor reading, `C` starts the camera tour, `N` goes to the next region, `1` opens
+Estimate, `2` and `3` Play, and Esc goes back. In a round the arrows mark a square.
 
 A real run and a simulated run are kept apart. When the site asks for a real run and the answer is not one, it is refused, so modelled numbers are never shown as observations.
 

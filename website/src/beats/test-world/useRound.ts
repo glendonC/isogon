@@ -40,8 +40,12 @@ export interface RoundApi {
   /** The tiles on the terrain (the stage's `tileBoard`), and whether one can be picked now. */
   board: StageTileBoard | null;
   canPick: boolean;
-  /** The tile under keyboard focus. */
+  /** The tile under keyboard focus, the tile under the pointer, and the one a look would go to (pointer first). */
   focus: number | null;
+  hover: number | null;
+  marked: number | null;
+  /** The tile of the look just taken, while its result stands. */
+  takenTile: number | null;
   begin: (fire: RoundFire) => void;
   /** End the round; `keepRun` leaves the round's held-out run on the terrain (World model opens blind on it). */
   leave: (keepRun?: boolean) => void;
@@ -49,6 +53,12 @@ export interface RoundApi {
   next: () => void;
   moveFocus: (dRow: number, dCol: number) => void;
   pickFocused: () => void;
+  /** Look at the marked tile: the one under the pointer, else the one the keys marked. */
+  pickMarked: () => void;
+  /** The stage's report of the tile under the pointer. */
+  onHover: (tile: number | null) => void;
+  /** Every look spent: end the round now, the passes left going by without one. */
+  finish: () => void;
   /** The stage's tile anchors, passed on to whoever draws the labels, without re-rendering the shell. */
   onAnchors: (anchors: StageTileAnchor[]) => void;
   subscribeAnchors: (fn: (anchors: StageTileAnchor[]) => void) => () => void;
@@ -71,6 +81,7 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
   const [error, setError] = useState<string | null>(null);
   const [fire, setFire] = useState<RoundFire | null>(null);
   const [focus, setFocus] = useState<number | null>(null);
+  const [hover, setHover] = useState<number | null>(null);
   const seqRef = useRef(0);
   const busyRef = useRef(false);
 
@@ -127,7 +138,10 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
             r && r.decision === decision
               ? {
                   ...r,
-                  picks: [...r.picks, { decision, tile: res.tile >= 0 ? res.tile : null, pixels: res.pixels, revealed: res.revealed, reward: res.reward }],
+                  picks: [
+                    ...r.picks,
+                    { decision, tile: res.tile >= 0 ? res.tile : null, pixels: res.pixels, revealed: res.revealed, reward: res.reward, score: res.score },
+                  ],
                   awaitingNext: res.tile >= 0,
                   next: res.next_decision,
                   decision: res.tile >= 0 || res.next_decision === null ? decision : res.next_decision,
@@ -173,6 +187,12 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
       return;
     }
     if (state.next === null) {
+      const spentAll = state.picks.filter((p) => p.tile !== null).length >= (env?.start.episode.budget ?? 0);
+      const passesLeft = state.decision < (env?.start.looks.length ?? 0) - 1;
+      if (spentAll && passesLeft) {
+        setState({ ...state, awaitingNext: false, ending: true });
+        return;
+      }
       setState({ ...state, awaitingNext: false, done: true });
       void env?.end().then(setEnd).catch(() => {});
     } else {
@@ -196,6 +216,17 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
   const pickFocused = useCallback(() => {
     if (focus !== null) pick(focus);
   }, [focus, pick]);
+  const marked = canPick ? hover ?? focus : null;
+  const pickMarked = useCallback(() => {
+    if (marked !== null) pick(marked);
+  }, [marked, pick]);
+  const onHover = useCallback((t: number | null) => setHover(t), []);
+  const finish = useCallback(() => {
+    if (!state || !state.ending || state.done) return;
+    setState({ ...state, ending: false, done: true });
+    void env?.end().then(setEnd).catch(() => {});
+  }, [state, env]);
+  const takenTile = state?.awaitingNext ? state.picks.find((p) => p.decision === state.decision)?.tile ?? null : null;
 
   // The reference players are computed on the server from the round's start; when the end arrived before them, ask
   // once more (the ask waits up to two more minutes on the state route) and show them when they come.
@@ -292,12 +323,18 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
     board,
     canPick,
     focus,
+    hover,
+    marked,
+    takenTile,
     begin,
     leave,
     pick,
     next,
     moveFocus,
     pickFocused,
+    pickMarked,
+    onHover,
+    finish,
     onAnchors,
     subscribeAnchors,
   };

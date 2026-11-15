@@ -177,3 +177,96 @@
 .iso-ws[data-guide='true'] .rec {
   --rec-guide: 190px;
 }
+
+/* A label on a thing of the stage (guide/StageWords.tsx): the plate sizes to its words up to a measure. */
+.guide-pin .sys-pin__plate {
+  width: max-content;
+  max-width: 440px;
+  padding: var(--sys-s3) var(--sys-s4);
+  gap: var(--sys-s1);
+  white-space: normal;
+  pointer-events: auto;
+}
+
+.guide-pin[data-side='left'] .sys-pin__plate {
+  left: auto;
+  right: 0;
+}
+
+/* A round's end (guide/Results.tsx): rows on one scale, centred above the guide's sentence, the visitor's row strong.
+   Text on the scene, no plate; a bar is a thin rule from zero. */
+.guide-results {
+  display: grid;
+  grid-template-columns: max-content minmax(160px, 260px) max-content;
+  column-gap: var(--sys-s4);
+  row-gap: 6px;
+  align-items: baseline;
+  justify-content: center;
+  margin-bottom: var(--sys-s3);
+  text-align: left;
+}
+
+.guide-results__line {
+  grid-column: 1 / -1;
+  justify-self: center;
+  margin: 0 0 var(--sys-s1);
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.guide-results__row {
+  display: contents;
+}
+
+.guide-results__name {
+  justify-self: end;
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.guide-results__track {
+  position: relative;
+  align-self: center;
+  height: 6px;
+}
+
+.guide-results__zero {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--sys-ink-3);
+}
+
+.guide-results__bar {
+  position: absolute;
+  top: 2px;
+  height: 2px;
+  background: var(--sys-ink-3);
+}
+
+.guide-results__value {
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-mono);
+  color: var(--sys-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.guide-results__note {
+  grid-column: 2 / -1;
+  margin-top: -4px;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.guide-results__row[data-strong='true'] .guide-results__name,
+.guide-results__row[data-strong='true'] .guide-results__value {
+  color: var(--sys-ink);
+  font-weight: 600;
+}
+
+.guide-results__row[data-strong='true'] .guide-results__bar {
+  top: 1px;
+  height: 4px;
+  background: var(--sys-ink);
+}
