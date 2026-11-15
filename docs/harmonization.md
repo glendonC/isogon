@@ -198,12 +198,12 @@ method (its surroundings from the cube):
 
 | Region | median annual error | used before | without correction | interval, months | interval, years | interval used before, months (2021 included) |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plumas_ca` | 0.116 | 0.113 | 0.731 | 0.81 | 0.92 | 0.41 |
-| `lytton_bc` | 0.080 | 0.087 | 0.733 | 0.85 | 1.00 | 0.15 |
-| `evia_greece` | 0.081 | 0.058 | 0.716 | 0.90 | 0.92 | 0.20 |
+| `plumas_ca` | 0.115 | 0.112 | 0.731 | 0.81 | 0.92 | 0.41 |
+| `lytton_bc` | 0.088 | 0.086 | 0.733 | 0.85 | 1.00 | 0.15 |
+| `evia_greece` | 0.083 | 0.063 | 0.716 | 0.90 | 0.92 | 0.20 |
 
-Thirteen years at one place decide nothing; on two of these three the served method's annual error is a little
-higher than before.
+Thirteen years at one place decide nothing; on all three the served method's annual error is higher than before, a
+little at `plumas_ca` and `lytton_bc` and by a third at `evia_greece`, while its interval holds far more often.
 
 ## The harmonized record as a dataset
 
@@ -237,6 +237,11 @@ harmonized. A cell's continent is that of the country files with a row in it (th
 Americas cut at Panama's border with Colombia, the Russian Federation at 60 E). In 2021 the cells that meet a test
 fire region's context box are left out of every layer and total.
 
+Suomi NPP's rows begin on 20 January 2012, so its total for 2012 holds 591,488 rows in January against 1.6 million
+in January 2013. Over the world its rows are 4.04 times MODIS's in 2012 as summed, 4.25 times from February, and
+from 4.24 (2024) to 4.86 (2025) in the whole years after; summed over 2012 to 2025 it is 4.41 (261,995,596 over
+59,386,593), and 4.43 from February 2012.
+
 Each total's held-out error is measured as the cells' was: every overlap year left out in turn over every cell at
 once, the method fitted on the other years, the year's total predicted over its clean months and compared with
 Suomi NPP's. No interval is given on a total: fourteen held-out years are too few to set an 80 percent interval and
@@ -263,8 +268,8 @@ method wins on the monthly value of a cell (above), but its world curve for smal
 MODIS saw nothing add rows where fires are small: over the overlap years, summed in sample, the harmonized record
 runs above Suomi NPP's own count in Europe by a median 13 percent, in North America 5, in Asia 4, and level in Africa,
 which holds more than half the world's rows. The world's total is within 3 percent in 2013 to 2023. Antarctica's few
-rows are seen by Suomi NPP only (35 to 108 a year), so its harmonized value is the mean of such months and says
-nothing about any one year. Four cell-years before 2012 go above the largest cell-year Suomi NPP ever counted, all
+rows are seen almost only by Suomi NPP (34 to 108 a year; MODIS 3 in 2022 and none in any other year), so its
+harmonized value is the mean of such months and says nothing about any one year. Four cell-years before 2012 go above the largest cell-year Suomi NPP ever counted, all
 volcanic eruptions.
 
 ## World maps
