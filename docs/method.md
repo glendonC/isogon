@@ -4,6 +4,14 @@ This document explains what Isogon computes and how it is tested: why the two in
 
 Every figure below is read from a tracked file, named beside it, or from `backend.model.evidence.evidence()`, which reads the same files and is served at `GET /api/evidence`. Negative and mixed results are stated as they are.
 
+Isogon has three parts, and each has its section here: a scientific world model (the burning calendar and the fire model, tested blind), an experimental environment (the next-look environment), and a learning agent, which is the research direction (the players, and the learned player among them). In short:
+
+- **The record.** With each overlap year held out in turn, over 5,227 places of two degrees in all 238 countries, the disagreement between MODIS's and VIIRS's monthly detection counts is cut from 77.7 percent to 14.1. One ratio per place leaves 18.3 ([harmonization.md](harmonization.md)).
+- **The fire model.** On 57 fires it had never seen, chosen by a rule before any was read and looked at once (test B), the model overlaps VIIRS's detections about 40 percent better than MODIS alone: 36.9 against 26.4 percent within one square. The result is the blend's, a learned layer reading the occupancy filter. The look's headline, fixed before it, was the filter alone, and the filter alone lost to MODIS alone on exact overlap, 13.1 against 15.8 percent, and was level within one square, 26.6 against 26.4. The blend was scored beside it in the same look.
+- **The agent.** Looking where the model is least sure beats random looks on 13 of 13 rounds. The learned player does not beat that rule.
+
+Overlap is the critical success index: the 375 m squares both mark as detections, out of the squares either marks. Counts and scores are of detections, what an instrument flagged. An estimate is scored against another instrument, not against the fire, and it is an estimate, not ground truth.
+
 ```bash
 uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.model.evidence
 ```
@@ -78,6 +86,8 @@ A real run (`backend/model/real_run.py`) reads the cached FIRMS rows of a region
 
 The same model, run forward only, gives the belief frames a run serves every 30 minutes (`backend/model/belief.py`): each step uses only the passes up to its time.
 
+This filter is what the rest of this document calls the estimate in use. A learned layer that reads its fields, the challenger, is described under the results; the two together are the model.
+
 ## The blind test
 
 The test hides one instrument, predicts it from the other, and scores the prediction against what was hidden (`backend/eval/blind_test.py`). In the direction that matters here, VIIRS is hidden and the estimate is made from MODIS alone.
@@ -132,6 +142,8 @@ Beside them, the share of looks whose hidden total lies inside the stated 90 per
 | Training | 22 episodes of 2018 to 2023 in the three context boxes; of 2021, only rows away from the test fires | Fitting the model's values |
 | Validation | 7 episodes of 2024 and 2025 | Deciding what is switched on |
 | Test | The three 2021 fires: Dixie (`plumas_ca`), Lytton Creek (`lytton_bc`), northern Evia (`evia_greece`) | The recorded looks below, and nothing else |
+
+For the tests across the world, described after the recorded looks, and for the challenger, the sets are others, chosen by rule from the places' coordinates: 300 fitting fires, 83 validation fires, 73 in test A and 57 in test B, from 2018 to 2022 (`backend/model/fitted_values/fresh_world_plan.json`).
 
 Nothing that happened in a test box in 2021 is learned from, before or after the fire's own dates, and around each fire a wider area and span is closed as well (`backend/model/training.py`). The counts are `trained_on` and `validated_on` in `backend/model/fitted_values/occupancy_params.json`.
 
@@ -208,9 +220,9 @@ The plan was made once, on all 238 countries of FIRMS's files: 21,376,580 MODIS 
 
 The record hides nothing else: `test_fires.also_scored` lists every other time rows of these fires were scored (untuned priors, one platform hidden at a time, the other direction, runs from each default start), none of which is the test. A run of one of these fires with VIIRS hidden, asked for from the page, computes the score of its own window each time; that is a payload, not a look.
 
-### The challenger
+### The learned layer, the challenger
 
-**What it is.** A second estimate of the hidden passes, made from the same visible rows (`backend/model/challenger`, numpy only). It does not replace the occupancy filter; it reads it.
+**What it is.** A second estimate of the hidden passes, made from the same visible rows (`backend/model/challenger`, numpy only). It does not replace the occupancy filter; it reads it. Its fourth variant, the blend of a small neural network and boosted decision trees, is the model whose result leads this document.
 
 - **Features.** For each 375 m cell at a hidden pass it builds 48 features, and for the pass as a whole 25 more. They come from three things only: the occupancy filter's own fields under the values in use, the visible pixels near the cell before and after the pass (MODIS in the tests below), and the pass's time, platform and pixel size from the pass list.
 - **The chance a cell is flagged.** Three models give it: a logistic model with interaction terms, a small neural network, and boosted decision trees (two sets, of 340 trees of depth 5 and 260 of depth 6, weighed 0.55 and 0.45).
@@ -245,7 +257,7 @@ The blend's scores, with the better baseline's in brackets:
 
 Its stated 90 percent interval for total power held on 89.0 percent of looks, and on 87.7 percent of the validation looks.
 
-**Where the page can run it.** A run with a satellite held out is answered by the estimate in use. With `ISOGON_RUN_ESTIMATE=challenger` set on the backend, the default challenger answers the held-out passes, and the estimate in use is scored beside it. The switch is off by default. Such a run names the model that answered in `held_out_passes_answered_by`. Beside it, `standing_to_the_answering_estimate` says what the window is to that model (`backend/model/challenger_standing.py`). The rule is the page's, by place and year from the plan's file and the bundles alone:
+**Where the page runs it.** In the code the switch is off, and a run with a satellite held out is answered by the estimate in use. With `ISOGON_RUN_ESTIMATE=challenger` set, the default challenger answers the held-out passes, and the estimate in use is scored beside it. The model that runs in a visitor's browser sets it (`backend/browser.py`), and a backend started with it set answers the same way, so the page's hidden passes are answered by the blend. A run names the model that answered in `held_out_passes_answered_by`. Beside it, `standing_to_the_answering_estimate` says what the window is to that model (`backend/model/challenger_standing.py`). The rule is the page's, by place and year from the plan's file and the bundles alone:
 - a window that touches a test fire's dates is a recorded test fire;
 - then it is fitted on, when a fitting fire lies in a place the run's context box meets in a year the window touches, or the occupancy values were fitted there in such a year;
 - then validated on, by the same rule;
@@ -278,7 +290,7 @@ So the challenger has never seen nine of them, two are the recorded test fires, 
 
 `ljusdal_se` offers the Record only, and no run.
 
-**What it is not.** It is not in use, and no figure on this page is the challenger's unless a run names it. Its fit, its validation and test B are all on half-degree tiles. A run on the page is on a region's box, about four times as wide each way, and no figure of the challenger is measured at that size.
+**What it is not.** It answers the hidden passes only. The MODIS passes, the spread and the frames between passes are the estimate in use's. Its fit, its validation and test B are all on half-degree tiles. A run on the page is on a region's box, about four times as wide each way, and no figure of the challenger is measured at that size.
 
 ### The other direction: Terra's morning pass
 
@@ -397,7 +409,7 @@ Mean over the 21 test episodes, 4 by 4 tiles, 4 looks (`test_protocol_2`). The m
 - **Cloud is not known.** FIRMS has no cloud mask and none is fetched. A pass that flagged nothing may have been cloudy; the model stands a fixed clear-sky share of 0.8 in for it, and the stated interval for total power starts at zero for the same reason.
 - **Partial passes are not scored.** A pass whose swath held only part of the box is neither a frame nor a scored look.
 - **Small validation set.** Seven episodes from two regions decide what is switched on, and they switch nothing on.
-- **Three regions.** Real runs exist only where FIRMS rows are cached: three boxes in California, British Columbia and Greece. What holds there may not hold in other fuels or latitudes.
+- **The first fit is from three regions.** The occupancy values were fitted on episodes in California, British Columbia and Greece. The page offers 14 places, 13 with a run, and the tests across the world cover 73 and 57 fires, so a result is tied to the set it was measured on. Europe has no fire in test A, two in test B, and Oceania one in test B.
 - **The second model reads elevation it was not fitted on.** At the three first regions its slope and upslope features read cached elevation tiles, though it was fitted and tested with both at zero; elsewhere they read zero only because no tile is on hand.
 - **Truth is another instrument.** The hidden VIIRS detections are what VIIRS reported, with its own detection limit and misses, not the fire itself.
 - **The environment's looks are the passes of a list that is cached per window.** Where no pass list is cached the looks fall back to nominal half-day slots: a real pass is up to about 90 minutes from its slot, sometimes comes twice, and its pixel size is not known in advance. A round says which it played.- **An empty look teaches nothing.** With no cloud mask a tile that hands over no detection cannot be told from a cloudy one, so the environment takes it as unknown and pays nothing for it. A tile that hands over even one detection is taken as looked at in full.
