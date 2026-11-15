@@ -264,6 +264,15 @@ export function App() {
    * to what is under it, which stays as it was.
    */
   const worldScreen = useWorldScreen();
+  /** The last press came from a touch screen: a tap on the round's board marks a square before a look. */
+  const touchRef = useRef(false);
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      touchRef.current = e.pointerType === 'touch';
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    return () => window.removeEventListener('pointerdown', onDown, true);
+  }, []);
   /**
    * The stage is mounted once no picture of the world covers the page: a page opened on a picture (its address, or
    * ?years) loads and draws no ground under it until it closes. Once mounted, it stays.
@@ -1761,6 +1770,12 @@ export function App() {
                 onFireAnchor={modelScene || step === 'look' ? emitAnchor : undefined}
                 tileBoard={rnd.board}
                 onTilePick={(tile) => {
+                  // A tap marks a square first (a touch screen has no pointer that hovers to mark it); a tap on the
+                  // marked square looks. With a mouse the square under it is marked, so a click looks as before.
+                  if (touchRef.current && tile !== rnd.focus) {
+                    rnd.mark(tile);
+                    return;
+                  }
                   if (rnd.canPick) playCue('look');
                   rnd.pick(tile);
                 }}

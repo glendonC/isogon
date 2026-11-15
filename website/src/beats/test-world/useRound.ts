@@ -80,6 +80,8 @@ export interface RoundApi {
   /** End the round; `keepRun` leaves the round's held-out run on the terrain (World model opens blind on it). */
   leave: (keepRun?: boolean) => void;
   pick: (tile: number) => void;
+  /** Mark a tile without looking (a tap on a touch screen, which has no pointer that hovers). */
+  mark: (tile: number) => void;
   next: () => void;
   moveFocus: (dRow: number, dCol: number) => void;
   pickFocused: () => void;
@@ -290,6 +292,15 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
     }
   }, [state, env, fire, openEnv, answer]);
 
+  const mark = useCallback(
+    (tile: number) => {
+      if (!canPick) return;
+      setHover(null);
+      setFocus(tile);
+    },
+    [canPick],
+  );
+
   const [rows, cols] = env?.start.episode.tiles ?? [0, 0];
   const moveFocus = useCallback(
     (dRow: number, dCol: number) => {
@@ -435,6 +446,7 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
     begin,
     leave,
     pick,
+    mark,
     next,
     moveFocus,
     pickFocused,

@@ -692,7 +692,8 @@
     padding: 6px 8px;
   }
 
-  .guide-strip__acts .guide-key {
+  .guide-strip__acts .guide-key,
+  .guide-prompt .guide-key {
     display: none;
   }
 
