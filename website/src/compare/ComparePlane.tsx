@@ -92,7 +92,15 @@ export function ComparePlane({
     const engine = engineRef.current;
     if (!host || !engine) return null;
     const r = host.getBoundingClientRect();
-    return engine.pick(e.clientX - r.left, e.clientY - r.top);
+    const hit = engine.pick(e.clientX - r.left, e.clientY - r.top);
+    if (hit || !latest.current.onPick) return hit;
+    // Where a pick does something, a block's label belongs to it: the pointer on its words keeps the block, and a
+    // click on them picks it.
+    for (const el of host.querySelectorAll<HTMLElement>('.cmp-block')) {
+      const label = el.querySelector('.cmp-label')?.getBoundingClientRect();
+      if (label && e.clientX >= label.left && e.clientX <= label.right && e.clientY >= label.top && e.clientY <= label.bottom) return el.dataset.id ?? null;
+    }
+    return null;
   };
 
   const anchorOf = (id: string) => anchors.find((a) => a.id === id);
@@ -134,7 +142,7 @@ export function ComparePlane({
         if (!a) return null;
         const state = block.state ?? 'idle';
         return (
-          <div key={block.id} className="cmp-block" data-state={state} data-ready={a.ready ? 'true' : 'false'}>
+          <div key={block.id} className="cmp-block" data-id={block.id} data-state={state} data-ready={a.ready ? 'true' : 'false'}>
             <button
               type="button"
               className={state === 'withheld' ? 'cmp-stop sys-sel sys-hidden' : 'cmp-stop sys-sel'}

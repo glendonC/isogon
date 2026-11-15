@@ -218,7 +218,12 @@
   margin-top: calc(40px - var(--place-top));
 }
 
-/* The one imagery line of the screen, where the stage keeps its own: it stands on the night so only one is read. */
+/* The one imagery line of the screen. The blocks stand on more than one source of images, so the line names them
+   all, and the page's own line for the stage's imagery steps aside while this screen is open. */
+body:has(.place) .iso-credit {
+  visibility: hidden;
+}
+
 .place__credit {
   position: absolute;
   right: var(--sys-gutter);

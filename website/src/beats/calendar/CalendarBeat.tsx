@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { openingStart } from '../../app/places';
 import { useWorkspace } from '../../app/store';
 import { PlaceScreen } from './PlaceScreen';
@@ -10,13 +11,22 @@ export interface CalendarBeatProps {
 
 /**
  * The Record of a place and, over it, choosing a place. The month marked in the grid is the month of the fire the
- * stage holds or is opening; before any run it is the month of the fire the registry opens the place on.
+ * stage holds or is opening; before any run it is the month of the fire the registry opens the place on. Leaving
+ * the choice of a place without choosing returns to where it was opened from.
  */
 export function CalendarBeat({ guideSpeaks = false }: CalendarBeatProps) {
   const ws = useWorkspace();
   const c = ws.calendar;
+  // Whether the Record has been on screen since this step opened. The choice of a place opened from the Record goes
+  // back to the Record; opened from the fire, with the Record never shown, it goes back to the fire.
+  const recordSeen = useRef(false);
+  if (!c.placesOpen) recordSeen.current = true;
   if (c.placesOpen) {
-    return <PlaceScreen places={ws.places} currentFire={ws.currentFire} onFire={c.chooseFire} onBox={c.chooseBox} onClose={c.closePlaces} />;
+    const back = () => {
+      c.closePlaces();
+      if (!recordSeen.current && ws.run.active) ws.openModel();
+    };
+    return <PlaceScreen places={ws.places} currentFire={ws.currentFire} onFire={c.chooseFire} onBox={c.chooseBox} onClose={back} />;
   }
   const opensOn = c.place.kind === 'region' ? openingStart(ws.places, c.place.regionId)?.slice(0, 7) ?? null : null;
   return (

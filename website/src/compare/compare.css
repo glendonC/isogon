@@ -20,8 +20,10 @@
 }
 
 /* A block's place for the keyboard, and the frame its state is drawn on: corner brackets when selected, a dashed
-   edge when its content is withheld. A pointer goes through it to the plane, which picks by the block itself. */
-.cmp-stop {
+   edge when its content is withheld. A pointer goes through it to the plane, which picks by the block itself.
+   The rule names the plane as well, so that it holds whatever order the page loads its styles in: the selected
+   mark's own class sets a position, and a stop must stay where the plane puts it, over its block. */
+.cmp-plane .cmp-stop {
   position: absolute;
   padding: 0;
   border: 0;
