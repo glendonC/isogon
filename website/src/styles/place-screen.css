@@ -399,6 +399,19 @@ body:has(.place) .iso-credit {
     bottom: auto;
     visibility: hidden;
   }
+
+  /* A mark's card would open beside its mark and past the screen's edge: it lies across the Earth's strip instead and
+     scrolls inside it when it holds more than the strip. The Earth places the card from its script, so the place
+     wins over it here only. */
+  .place .world-card {
+    left: var(--sys-s2) !important;
+    right: var(--sys-s2);
+    top: var(--sys-s2) !important;
+    width: auto;
+    max-height: calc(100% - 2 * var(--sys-s2));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 /* In the film presentation (styles/film.css) the screen keeps the caption's room above and only the guide's line of
