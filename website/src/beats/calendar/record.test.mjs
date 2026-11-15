@@ -175,7 +175,18 @@ test("a box's grid is the cube's own: the box on whole squares, how many and how
     loaded: 0,
     complete: true,
   });
-  assert.equal(gridOf({ grid_box: [-30, -30, -29, -29], cells: 16 }, null), null);
+  // The public cube's block (a page of recorded answers) gives the squares but not how many hold rows
+  assert.deepEqual(gridOf({ grid_step_deg: 0.25, box_asked: [-9.6, 38.3, -8.1, 39.1], grid_box: [-9.75, 38.25, -8, 39.25], cells: 28 }, null), {
+    asked: [-9.6, 38.3, -8.1, 39.1],
+    box: [-9.75, 38.25, -8, 39.25],
+    step: 0.25,
+    cells: 28,
+    loaded: null,
+    complete: false,
+  });
+  const fromPublic = parseRecord({ ...body, public_cube: { grid_step_deg: 0.25, grid_box: [-9.75, 38.25, -8, 39.25], cells: 28 } }, { kind: 'box', box: [-9.6, 38.3, -8.1, 39.1], name: 'a box' });
+  assert.equal(fromPublic.grid.cells, 28);
+  assert.equal(gridOf({ grid_box: [-30, -30, -29, -29] }, null), null);
 });
 
 test("the method is named in the product lane's words, with how often a month's band held, all from the answer", () => {
@@ -224,6 +235,7 @@ test('a drawn area says the box it is read on, the share of its squares with det
     `Read on whole squares of a quarter degree (about 28 km): ${where}. 23 of its 28 squares (82 percent) have detections; the other 5 have none and count as no fire.`,
   );
   assert.match(gridLine(where, 0.25, 9, 9, true), /All 9 squares have detections\.$/);
+  assert.equal(gridLine(where, 0.25, 28, null, false), `Read on 28 whole squares of a quarter degree (about 28 km): ${where}.`);
   assert.match(gridLine(where, 0.25, 6400, 6399, false), /6,399 of its 6,400 squares \(over 99 percent\).*the other 1 has none in the countries loaded so far/);
   assert.equal(notLoadedLine(16, 0.25, true), "No fire record here: none of its 16 squares of a quarter degree (about 28 km) has a detection in NASA's files.");
   assert.match(notLoadedLine(1, 0.25, false), /^No fire record here yet: its one square .* has no detection in the countries loaded so far\.$/);

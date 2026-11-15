@@ -39,7 +39,7 @@ export interface RecordView {
    * that box), how many squares and how many have any detection in the files, and whether every country is loaded.
    * Null for a region of the registry.
    */
-  grid: { box: string; cells: number; loaded: number; complete: boolean } | null;
+  grid: { box: string; cells: number; loaded: number | null; complete: boolean } | null;
   /**
    * The sentence the Record says where the record's check finds the two satellites' ratio does not hold here (lava or
    * gas flares can do this): the harmonized value is not meaningful. Null where the place is stable or not tested.

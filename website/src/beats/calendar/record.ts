@@ -40,7 +40,8 @@ export interface BoxGrid {
   /** The side of a square, in degrees. */
   step: number;
   cells: number;
-  loaded: number;
+  /** Null where the answer does not count them: the public cube's answer on a page of recorded answers. */
+  loaded: number | null;
   complete: boolean;
 }
 
@@ -145,7 +146,7 @@ export function gridOf(c: Obj | null, asked: Box | null): BoxGrid | null {
   const box = box4(c?.grid_box);
   const cells = num(c?.cells);
   const loaded = num(c?.cells_loaded) ?? (c?.state === 'not_loaded' ? 0 : null);
-  if (!c || !box || cells === null || loaded === null) return null;
+  if (!c || !box || cells === null) return null;
   return { asked: box4(c.box_asked) ?? asked ?? box, box, step: num(c.grid_step_deg) ?? 0.25, cells, loaded, complete: c.world_complete === true };
 }
 const PLATFORMS = ['Terra', 'Aqua', 'Suomi NPP', 'NOAA-20', 'NOAA-21'];
@@ -230,7 +231,8 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
       : [],
     runRule: typeof starts?.rule === 'string' ? starts.rule : null,
     currentRoute: typeof cur?.route === 'string' ? cur.route : null,
-    grid: place.kind === 'box' ? gridOf(obj(b.cube), place.box) : null,
+    // The cube route's block, or on a page of recorded answers the public cube's, which does not count loaded squares
+    grid: place.kind === 'box' ? gridOf(obj(b.cube), place.box) ?? gridOf(obj(b.public_cube), place.box) : null,
     method: {
       id: typeof hm.id === 'string' ? hm.id : typeof b.model_version === 'string' ? b.model_version : null,
       level: num(obj(hm.interval)?.level),

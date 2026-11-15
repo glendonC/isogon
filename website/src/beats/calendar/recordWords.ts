@@ -29,7 +29,9 @@ const squareWords = (step: number) => (step === 0.25 ? 'a quarter degree (about 
  * rates are over, and how many of those squares have any detection in NASA's files. A square with none counts in the
  * area as no fire; where not every country is loaded, it may be in a country not loaded yet.
  */
-export function gridLine(box: string, step: number, cells: number, loaded: number, complete: boolean): string {
+export function gridLine(box: string, step: number, cells: number, loaded: number | null, complete: boolean): string {
+  // Where the answer does not count the squares with detections, the box and its squares alone
+  if (loaded === null) return `Read on ${count(cells)} whole squares of ${squareWords(step)}: ${box}.`;
   const read = `Read on whole squares of ${squareWords(step)}: ${box}.`;
   if (loaded >= cells) return `${read} ${cells === 1 ? 'Its square has' : `All ${count(cells)} squares have`} detections.`;
   const share = Math.round((loaded / cells) * 100);

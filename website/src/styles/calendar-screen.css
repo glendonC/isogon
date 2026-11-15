@@ -281,7 +281,7 @@
 
 /* A month's band of its range, in its label, as wide as a short line */
 .rec__band {
-  width: min(260px, 100%);
+  width: min(320px, 100%);
   margin-top: var(--sys-s1);
 }
 
