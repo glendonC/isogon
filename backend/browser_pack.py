@@ -6,7 +6,9 @@ Every path in a list is relative to the tree (the checkout). A path outside the 
 name beginning `.env`), the world store (`ISOGON_WORLD_DIR`, and the default `data/cache/world`), `.git`, or a missing
 file stops the pack before any archive is written. So does a FIRMS row inside a closed window: the closed rule is the
 server's own (`backend.model.training.closed_for` over the test fires' regions and years), and no row of a closed
-window goes into a public archive, whichever satellite it is from. A place whose fire on the page is a closed test
+window goes into a public archive, whichever satellite it is from. Counts that summarise a closed window (an extract
+manifest's day counts, a place's monthly calendar counts) are packed: they are the observed record the page has
+always shown for those months, not rows a run could read and score. A place whose fire on the page is a closed test
 fire (`REPLAY_ONLY`), or whose start in the list lies in a closed window, is not packed: the page replays its recorded
 look. The manifest says which places are packed and which replay only. The archives are zip, deflated, with sorted
 entries and fixed times and modes, so the same files give the same bytes.
