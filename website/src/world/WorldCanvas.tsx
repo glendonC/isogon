@@ -30,6 +30,8 @@ export interface WorldCanvasProps {
   hatchLand?: boolean;
   /** The box first in view. */
   focus?: Box;
+  /** Pixels on the left kept for a panel over the map: the box first in view is fitted into the rest. */
+  padLeft?: number;
   /** True while the visitor draws a box: a drag draws instead of moving the map. */
   drawing?: boolean;
   onBox?: (box: Box) => void;
@@ -79,7 +81,7 @@ function hatchPattern(ctx: CanvasRenderingContext2D, dpr: number): CanvasPattern
   return ctx.createPattern(c, 'repeat');
 }
 
-export function WorldCanvas({ label, layers = [], hatchLand = false, focus = OPENING, drawing = false, onBox, onHover, onClickMap, children, className }: WorldCanvasProps) {
+export function WorldCanvas({ label, layers = [], hatchLand = false, focus = OPENING, padLeft = 0, drawing = false, onBox, onHover, onClickMap, children, className }: WorldCanvasProps) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -98,9 +100,12 @@ export function WorldCanvas({ label, layers = [], hatchLand = false, focus = OPE
 
   const focusKey = focus.join(',');
   useEffect(() => {
-    if (size.w > 0 && size.h > 0) setView(clampView(fitView(focus, size.w, size.h), size.w, size.h));
+    if (!(size.w > 0 && size.h > 0)) return;
+    const pad = Math.min(padLeft, size.w * 0.6);
+    const v = fitView(focus, size.w - pad, size.h);
+    setView(clampView({ ...v, cx: v.cx - (pad / 2) * v.scale }, size.w, size.h));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [size.w > 0 && size.h > 0, focusKey]);
+  }, [size.w > 0 && size.h > 0, focusKey, padLeft]);
 
   const proj = useMemo(() => (view && size.w ? projector(view, size.w, size.h) : null), [view, size.w, size.h]);
 
@@ -121,6 +126,11 @@ export function WorldCanvas({ label, layers = [], hatchLand = false, focus = OPE
     const ty = (size.h / 2) * dpr - view.cy * s;
     const { land, borders, coast } = atlas();
     ctx.setTransform(s, 0, 0, s, tx, ty);
+    // One world: nothing is drawn past the date line, so a shape copied across it shows only its own part there.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(toX(-180), toY(90), toX(180) - toX(-180), toY(-90) - toY(90));
+    ctx.clip();
     if (hatchLand) {
       const pat = hatchPattern(ctx, dpr);
       if (pat) {
@@ -161,6 +171,7 @@ export function WorldCanvas({ label, layers = [], hatchLand = false, focus = OPE
     ctx.stroke(borders);
     ctx.strokeStyle = COAST;
     ctx.stroke(coast);
+    ctx.restore();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }, [view, size.w, size.h, layers, hatchLand]);
 

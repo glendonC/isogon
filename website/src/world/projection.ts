@@ -54,7 +54,7 @@ export function projector(view: View, w: number, h: number): Projector {
 
 /** Keep the view on the world: the centre stays over it and a whole world is the farthest out. */
 export function clampView(v: View, w: number, h: number): View {
-  const maxScale = Math.max((360 * K) / Math.max(w, 1), 180 / Math.max(h, 1)) * 1.1;
+  const maxScale = Math.max((360 * K) / Math.max(w, 1), 180 / Math.max(h, 1)) * 1.8;
   const scale = Math.min(Math.max(v.scale, 0.0008), maxScale);
   const cx = Math.min(Math.max(v.cx, -180 * K), 180 * K);
   const cy = Math.min(Math.max(v.cy, -86), 86);

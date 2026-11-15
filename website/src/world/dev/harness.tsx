@@ -99,7 +99,7 @@ function Test() {
       lines={['Each square is one fire the estimate was tested on, filled by how many of seven scores it won. An empty square is a fire it lost on.']}
       actions={["Show a fire's scores", 'Back to the test']}
     >
-      <WorldTest source={Q.get('test') ?? `${SAMPLE}/test-closed.json`} />
+      <WorldTest source={Q.get('test') ?? `${SAMPLE}/test-example.json`} />
     </Frame>
   );
 }

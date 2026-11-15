@@ -758,3 +758,123 @@
     display: inline;
   }
 }
+
+/* The test across the world, grouped as the protocol groups its fires. */
+.world-gauge[data-dim='true'] {
+  opacity: 0.18;
+}
+
+.world-gauge--mini {
+  position: static;
+  width: 6px;
+  height: 6px;
+  margin: 0;
+  box-shadow: none;
+  cursor: default;
+}
+
+.world-tests {
+  top: 148px;
+  bottom: auto;
+  width: min(480px, calc(100% - 32px));
+  gap: var(--sys-s2);
+}
+
+.world-tests__row {
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr) 44px 36px 46px;
+  column-gap: var(--sys-s2);
+  align-items: center;
+}
+
+.world-tests__row--head {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-tests__row--head > span:nth-child(n + 3),
+.world-tests__num {
+  text-align: right;
+}
+
+.world-tests__num {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-ink);
+}
+
+.world-tests__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.world-tests__row {
+  padding: var(--sys-s1) 0;
+  border-top: 1px solid var(--sys-rule);
+  outline: none;
+}
+
+.world-tests__row[data-over='true'] {
+  background: rgba(243, 244, 246, 0.04);
+}
+
+.world-tests__row:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--sys-focus);
+}
+
+.world-tests__name {
+  display: block;
+  white-space: nowrap;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.world-tests__n {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-tests__strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.world-tests__cls {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  color: var(--sys-ink-2);
+  white-space: nowrap;
+}
+
+.world-tests__hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.world-tests__col {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.world-tests__bar {
+  width: 9px;
+  min-height: 1px;
+  background: var(--sys-ink-2);
+}
+
+.world-tests__bar[data-zero='true'] {
+  background: var(--sys-rule);
+}
+
+.world-tests__k {
+  font: var(--sys-weight) 10px / 12px var(--sys-mono);
+  color: var(--sys-ink-3);
+}
+
+.world-tests__kept {
+  padding-top: var(--sys-s1);
+  border-top: 1px solid var(--sys-rule);
+}
