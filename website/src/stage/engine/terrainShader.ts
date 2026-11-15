@@ -199,6 +199,7 @@ uniform float uBeliefMix;    // position between the two steps
 uniform vec4 uBeliefBox;     // the part of the region that holds any belief: (u west, v south, u east, v north)
 uniform float uHeldOut;      // 1 on a pass whose detections were kept from the estimate
 uniform vec4 uRevealArrive;  // detections laid on after scoring arrive: xy the pass's direction of travel (east, north), z the front along it (km from the box's centre), w the front's soft width (km)
+uniform float uDayJoin;       // share of the box's side over which a day's photograph blends into the land around (0: none)
 uniform float uChanceSquares; // 1 when the squares sized by chance are asked for (eased)
 uniform float uDeclaredGiven; // 1 when the run says which cells its model declares at the hidden pass on show (the low bit of a cell's intensity byte)
 // A hidden pass: above 0 the light texture holds the last visible pass, drawn as an afterglow at
@@ -699,6 +700,13 @@ void main() {
   // Over its last stretch the pack shows the context imagery, like its surface takes the context
   // elevation there: the step in detail between the two is spread over the join
   float joinK = contextJoin(vUv);
+  // A day's photograph laid on the box (dayPicture) meets the land around's own picture over a wider
+  // band, so its colours (a false-colour one above all) go into the land and do not stop at a line.
+  // Drawing: the photograph covers the box, the blend is only where they meet.
+  if (uDayJoin > 0.0) {
+    vec2 toEdge = min(vUv, 1.0 - vUv);
+    joinK = max(joinK, (1.0 - smoothstep(0.0, uDayJoin, min(toEdge.x, toEdge.y))) * uContextMix);
+  }
   // (derivatives are taken outside the branch; inside it they are undefined)
   vec2 contextUv = (vUv - 0.5) / uContextScale + 0.5;
   vec2 contextDx = dFdx(contextUv);

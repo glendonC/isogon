@@ -405,6 +405,8 @@ const FIRE_PATCH_LIMIT = 8;
  */
 const REVEAL_ARRIVE_SECONDS = 1.0;
 /** The film's moves: seconds of each, and the push's distances as shares of the close view's. */
+/** Share of the box's side over which a day's photograph blends into the land around (drawing). */
+const DAY_PICTURE_JOIN = 0.05;
 const FILM_RECORD_SECONDS = 12;
 const FILM_RECORD_TURN = 0.12;
 const FILM_ESTIMATE_SECONDS = 9;
@@ -1063,6 +1065,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const uLightModis = { value: 0.0 };
     const uRevealed = new THREE.Vector2(0, 0);
     // The day's photograph of the box (prop dayPicture): textures by address, and the one on show
+    const uDayJoin = { value: 0.0 };
     const dayTextures = new Map<string, THREE.Texture | 'loading' | 'missing'>();
     let dayApplied = false;
     let dayNow: EarthStageTelemetry['dayPicture'];
@@ -1360,6 +1363,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uHeldOut,
       uDeclaredGiven,
       uChanceSquares,
+      uDayJoin,
       uRevealArrive: { value: uRevealArrive },
       uAfterglow,
       uLightGain,
@@ -3596,12 +3600,14 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         const img = dayTex.image as { width?: number } | undefined;
         terrainUniforms.uOrthoTexelKm.value = nextBundle.widthKm / Math.max(1, img?.width ?? 256);
         dayApplied = true;
+        uDayJoin.value = DAY_PICTURE_JOIN;
       } else if (dayApplied) {
         terrainUniforms.uSatNext.value = nextBundle.satTex;
         terrainUniforms.uSatPrev.value = prevBundle.satTex;
         terrainUniforms.uSatSharpen.value = nextBundle.sharpen;
         terrainUniforms.uOrthoTexelKm.value = nextBundle.orthoTexelKm;
         dayApplied = false;
+        uDayJoin.value = 0;
       }
       // (a day's photograph is drawn by day, whatever the hour of the pass on show)
       const nightTarget =
