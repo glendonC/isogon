@@ -87,6 +87,9 @@ export interface PlaceScreenProps {
 export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: PlaceScreenProps) {
   const rootRef = useRef<HTMLElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  // The row that was open when a pointer pressed a row: pressing gives the row the focus, which opens it, before the
+  // click lands, so the click asks what was open at the press, not after it
+  const openAtPress = useRef<string | null>(null);
   const firms = useMemo(() => places.places.filter((p) => p.rows === 'firms' && p.featured_fires.some((f) => f.default_start)), [places]);
   const fires = useMemo(() => firms.flatMap((place) => place.featured_fires.filter((f) => f.default_start).map((fire) => ({ place, fire }))), [firms]);
   // The fire whose row is open: the fire on the land first, then the one the keyboard's focus or a click moves to
@@ -261,7 +264,7 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
                   const open = chosenHit?.fire.id === fire.id;
                   return (
                     <div key={fire.id} className="place__item" data-open={open ? 'true' : 'false'}>
-                      {/* A click or the focus opens a row; on an open row a click or Enter shows the fire */}
+                      {/* A click or the focus opens a row; a click on a row already open, or Enter, shows the fire */}
                       <button
                         type="button"
                         data-fire={fire.id}
@@ -269,7 +272,15 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
                         data-selected={fire.id === currentFire ? 'true' : 'false'}
                         aria-expanded={open}
                         aria-label={[fire.label, place.name, standingOf(fire)].filter(Boolean).join(', ')}
-                        onClick={() => (open ? onFire(place, fire) : setChosen(fire.id))}
+                        onPointerDown={() => {
+                          openAtPress.current = chosenHit?.fire.id ?? null;
+                        }}
+                        onClick={(e) => {
+                          // A click from the keyboard (Enter, Space) has no press: the row is open by its focus
+                          const wasOpen = e.detail === 0 ? open : openAtPress.current === fire.id;
+                          if (wasOpen) onFire(place, fire);
+                          else setChosen(fire.id);
+                        }}
                         onFocus={() => setChosen(fire.id)}
                       >
                         <span className="place__period">{fire.label}</span>
