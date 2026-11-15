@@ -505,6 +505,8 @@ const SCORE_ROW_SPECS: readonly ScoreRowSpec[] = [
 
 const METHOD_SHORT_NAMES: Record<string, string> = {
   reconstruction: 'The estimate',
+  challenger_blend: 'Second model',
+  challenger_gbdt: 'Second model',
   painted_modis: 'Coarse as is',
   overlap_ratio: 'Coarse scaled',
   painted_viirs: 'Sharp as is',
@@ -542,12 +544,13 @@ function whoWonRow(spec: ScoreRowSpec, v: BlindVerdict, methodIds: readonly stri
   wonByEstimate: boolean;
   winners: string[];
 } {
+  const est = methodIds[0];
   const entries = methodIds
     .map((m) => ({ m, cell: formatScoreCell(spec, v.values[m]) }))
     .filter((e): e is { m: string; cell: NonNullable<ReturnType<typeof formatScoreCell>> } => e.cell !== null && e.cell.comparable !== null);
 
   if (entries.length < 2) {
-    return { label: v.ahead ? 'The estimate' : '', wonByEstimate: v.ahead, winners: v.ahead ? ['reconstruction'] : [] };
+    return { label: v.ahead ? 'The estimate' : '', wonByEstimate: v.ahead, winners: v.ahead ? [est] : [] };
   }
 
   // Use raw backend numbers when beats_every_baseline decided a narrow gap, otherwise compare at displayed precision
@@ -557,7 +560,7 @@ function whoWonRow(spec: ScoreRowSpec, v: BlindVerdict, methodIds: readonly stri
     .map((m) => ({ m, val: v.values[m] }));
 
   if (v.ahead) {
-    return { label: 'The estimate', wonByEstimate: true, winners: ['reconstruction'] };
+    return { label: 'The estimate', wonByEstimate: true, winners: [est] };
   }
 
   const bestShown =
@@ -575,8 +578,8 @@ function whoWonRow(spec: ScoreRowSpec, v: BlindVerdict, methodIds: readonly stri
     if (rawWinners.length === 1) {
       const w = rawWinners[0];
       return {
-        label: METHOD_SHORT_NAMES[w] ?? w,
-        wonByEstimate: w === 'reconstruction',
+        label: w === est ? 'The estimate' : (METHOD_SHORT_NAMES[w] ?? w),
+        wonByEstimate: w === est,
         winners: rawWinners,
       };
     }
@@ -588,12 +591,12 @@ function whoWonRow(spec: ScoreRowSpec, v: BlindVerdict, methodIds: readonly stri
     return { label: METHOD_SHORT_NAMES[w] ?? w, wonByEstimate: false, winners: shownWinners };
   }
 
-  const nonEstimate = shownWinners.every((m) => m !== 'reconstruction');
+  const nonEstimate = shownWinners.every((m) => m !== est);
   if (nonEstimate && shownWinners.length === 2) {
     return { label: 'Both simple methods', wonByEstimate: false, winners: shownWinners };
   }
   return {
-    label: formatListAnd(shownWinners.map((m) => METHOD_SHORT_NAMES[m] ?? m)),
+    label: formatListAnd(shownWinners.map((m) => (m === est ? 'The estimate' : (METHOD_SHORT_NAMES[m] ?? m)))),
     wonByEstimate: false,
     winners: shownWinners,
   };
@@ -665,7 +668,12 @@ export function ScoresDocument({
     return matched;
   }, [score.verdict]);
 
-  const baselines = score.methods.filter((m) => m.id !== 'reconstruction');
+  // The estimate on show is the method the verdict scores; the simple methods are the others but the estimate that
+  // was in use, any challenger and the sharp satellite's own.
+  const est = score.estimate;
+  const baselines = score.methods.filter(
+    (m) => m.id !== est && m.id !== 'reconstruction' && !m.id.startsWith('challenger') && !m.id.includes('viirs'),
+  );
   const simpleMethodsWord = formatCountWord(baselines.length > 0 ? baselines.length : 2) ?? 'two';
   const aheadCount = orderedRows.filter((r) => r.verdict.ahead).length;
   const scoresJudged = orderedRows.length;
@@ -673,7 +681,7 @@ export function ScoresDocument({
   const rawHiddenDetections = hiddenDetectionsFromRun(store?.run.active);
   const sharpDetectionsAll = formatSheetCount(rawHiddenDetections);
 
-  const reconMethod = score.methods.find((m) => m.id === 'reconstruction') ?? null;
+  const reconMethod = score.methods.find((m) => m.id === est) ?? null;
   const limitHeld = formatSheetCount(reconMethod?.intervalCovered);
   const limitOf = formatSheetCount(reconMethod?.intervalN);
 
@@ -684,7 +692,7 @@ export function ScoresDocument({
     score.firstUtc && score.lastUtc
       ? (localDayRange(score.firstUtc, score.lastUtc, fireLon) ?? utcSpan(score.firstUtc, score.lastUtc))
       : null;
-  const methodIds = ['reconstruction', 'painted_modis', 'overlap_ratio'] as const;
+  const methodIds = [est, 'painted_modis', 'overlap_ratio'] as const;
 
   return (
     <>
@@ -797,7 +805,7 @@ export function ScoresDocument({
                   .map((m) => verdict.values[m])
                   .filter((x): x is number => typeof x === 'number' && Number.isFinite(x));
                 const maxVal = vals.length > 0 ? Math.max(...vals) : 1;
-                const estPos = trackPosition(spec, verdict.values.reconstruction, maxVal);
+                const estPos = trackPosition(spec, verdict.values[est], maxVal);
                 const coarsePos = trackPosition(spec, verdict.values.painted_modis, maxVal);
                 const scaledPos = trackPosition(spec, verdict.values.overlap_ratio, maxVal);
                 return (

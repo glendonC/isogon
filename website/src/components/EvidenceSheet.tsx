@@ -416,7 +416,8 @@ interface FreshRefitRuntime {
 
 interface FreshPlayersRuntime {
   episodes?: number;
-  mean_gain?: Record<string, number>;
+  /** Each player's mean gain, a fraction: a number, or `{ mean_gain }` as the record gives it. */
+  mean_gain?: Record<string, number | { mean_gain?: number }>;
   differences?: Record<string, DiffIntervalRuntime>;
 }
 
@@ -656,6 +657,12 @@ function FreshWorldTestSection({
   const plan = freshTest.plan ?? null;
   const refit = freshTest.refit ?? null;
   const freshPlayers = freshTest.players ?? null;
+  const gainOf = (id: string): string | null => {
+    const g = freshPlayers?.mean_gain?.[id];
+    return formatSignedPoints(typeof g === 'number' ? g : typeof g?.mean_gain === 'number' ? g.mean_gain : null);
+  };
+  const unsureGain = gainOf('least_sure');
+  const chanceGain = gainOf('random');
 
   if (!testA) {
     return (
@@ -914,11 +921,10 @@ function FreshWorldTestSection({
         )
       )}
 
-      {freshPlayers && typeof freshPlayers.episodes === 'number' && freshPlayers.mean_gain && (
+      {freshPlayers && typeof freshPlayers.episodes === 'number' && unsureGain !== null && chanceGain !== null && (
         <p className="iso-doc-section__p">
           On {formatSheetCount(freshPlayers.episodes)} rounds of the second test&apos;s fires, Look Where Unsure gained{' '}
-          {formatSignedPoints(freshPlayers.mean_gain.least_sure) ?? '0.0'} points on average and Chance{' '}
-          {formatSignedPoints(freshPlayers.mean_gain.random) ?? '0.0'}.
+          {unsureGain} points on average and Chance {chanceGain}.
         </p>
       )}
     </section>

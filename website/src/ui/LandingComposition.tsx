@@ -181,8 +181,11 @@ export function LandingComposition({
             )}
           </div>
 
-          {recorded && <p className="iso-land__recorded">{recorded}</p>}
-          <p className="iso-land__credit">Imagery: {imageryCredit}</p>
+          {/* Bottom left, one block: a long credit wraps upward and lifts the recorded line with it. */}
+          <div className="iso-land__foot">
+            {recorded && <p className="iso-land__recorded">{recorded}</p>}
+            <p className="iso-land__credit">Imagery: {imageryCredit}</p>
+          </div>
 
           {/* The one hint that there is more below: the first application, a click or a scroll away. */}
           <button

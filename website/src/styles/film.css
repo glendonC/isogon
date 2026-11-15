@@ -107,14 +107,19 @@
 
 /* The imagery credit: kept, bottom right, at its smallest legible size, away from the guide's line. */
 .iso-film .iso-credit,
-.iso-film .iso-land__credit {
+.iso-film .iso-land__foot {
   left: auto;
   right: 12px;
   bottom: 8px;
   max-width: 46vw;
+  text-align: right;
+}
+
+.iso-film .iso-credit,
+.iso-film .iso-land__credit,
+.iso-film .iso-land__recorded {
   font-size: 10px;
   line-height: 12px;
-  text-align: right;
   color: rgba(243, 244, 246, 0.55);
 }
 

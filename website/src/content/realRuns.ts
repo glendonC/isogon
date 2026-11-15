@@ -167,6 +167,11 @@ export interface BlindTest {
   lastUtc: string | null;
   methods: BlindMethod[];
   verdict: BlindVerdict[];
+  /**
+   * The method the verdict scores (`blind_test.verdict.method`): the estimate on show. A challenger answering the
+   * hidden passes keys the verdict's scores by its own name; with no name given, the estimate in use.
+   */
+  estimate: string;
   definitions: Record<string, string>;
   /**
    * `blind_test.protocol.version`: 2 or more for a test whose hidden rows stay sealed until scoring. Null: the
@@ -244,6 +249,7 @@ export function parseBlindBlock(block: unknown, key: string): BlindTest | null {
     lastUtc: str(win[1]),
     methods,
     verdict,
+    estimate: str(obj(bt.verdict)?.method) ?? 'reconstruction',
     definitions,
     protocolVersion: ((v) => (Number.isFinite(v) ? v : null))(Number(obj(bt.protocol)?.version ?? NaN)),
     protocolNote: str(obj(bt.protocol)?.note),

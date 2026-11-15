@@ -2148,7 +2148,7 @@ export function LandingBelow({
           fields,
         ),
         fillTemplate(
-          'The newer satellite makes about {sharp_to_coarse} times as many detections of the same fires, so the jump of {sharp_since} is taken out and every year is on one scale.',
+          'The newer satellite sees smaller fires too and makes about {sharp_to_coarse} times as many detections, so the jump of {sharp_since} is taken out and every year is on one scale.',
           fields,
         ),
       ].filter((s): s is string => s !== null),
