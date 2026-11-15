@@ -45,7 +45,7 @@ NOT_FETCHED: str = "not fetched"
 
 CELL_KM: float = 0.375
 DEG_TO_KM_LAT: float = 111.132
-MATCH_TOL_S: float = 300.0
+MATCH_TOL_S: float = 420.0  # covers one adjacent 6 min VIIRS or 5 min MODIS context-box granule
 BOX_MATCH_TOL_DEG: float = 1.5e-4
 
 COARSE_PLATFORMS: tuple[str, ...] = ("MODIS_TERRA", "MODIS_AQUA")

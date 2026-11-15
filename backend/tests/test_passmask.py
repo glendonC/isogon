@@ -182,6 +182,20 @@ class PassMaskReaderTests(unittest.TestCase):
                 "not fetched",
             )
 
+            # Adjacent 6-minute VIIRS context-box granule start (360 s before inner-box granule) still matches.
+            _write_saved_pass(
+                root,
+                self.PLUMAS_BOX,
+                "VIIRS_SNPP",
+                "2012-08-12T22:00:00Z",
+                "2012-08-12T22:06:00Z",
+                mask,
+            )
+            v_sh = PM.shares(self.PLUMAS_BOX, "2012-08-12T21:54:00Z", "VIIRS_SNPP", root=root)
+            self.assertIsInstance(v_sh, dict)
+            assert isinstance(v_sh, dict)
+            self.assertEqual(v_sh["time_start"], "2012-08-12T22:00:00Z")
+
     def test_coarse_and_sharp_masks_are_separated_and_guarded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
