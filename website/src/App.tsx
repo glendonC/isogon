@@ -1922,6 +1922,7 @@ export function App() {
                 <GuideStrip
                   title={filmMode && guide.film ? guide.film : guide.objective}
                   lines={filmMode ? [] : said && said.key === guideKey ? said.lines : guide.lines}
+                  more={filmMode || (said && said.key === guideKey) ? [] : guide.more}
                   // In the film only the step's strong action stands, so nothing else competes with the caption.
                   // Where the next step stands on a thing (the fire, the round's square), the guide holds no action:
                   // it is on the thing; the other actions keep their keys.

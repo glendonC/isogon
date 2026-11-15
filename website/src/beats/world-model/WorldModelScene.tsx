@@ -105,7 +105,7 @@ export function WorldModelScene() {
         <ScenePrompt
           box={beside}
           label={act.label}
-          readout={guide.fireLabel ?? undefined}
+          readout={guide.fireReadout ?? guide.fireLabel ?? undefined}
           onSelect={() => ws.runCommand(act.command)}
           shortcut={act.key ?? undefined}
           invite={!test.revealed}

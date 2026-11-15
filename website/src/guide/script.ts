@@ -48,6 +48,8 @@ export interface ScriptLabel extends When {
   short?: string;
   /** The film presentation's form (eight words at most); null: no label there. Absent: the line, as on the page. */
   film?: string | null;
+  /** The live readout under the action that stands on the thing, in capitals: what the frame is on, exactly. */
+  readout?: string;
 }
 
 export interface ScriptResultRow {
@@ -206,6 +208,16 @@ export function labelOn(state: ScriptState | null, thing: string, fields: Fields
 /** The action a state offers as a prompt beside one thing of the stage. */
 export function promptBeside(state: ScriptState | null, thing: string): ScriptAction | null {
   return state?.actions.find((a) => a.beside === thing && (a.places === undefined || a.places.includes('prompt'))) ?? null;
+}
+
+/** The readout a state gives one thing (the first of its labels there whose conditions hold and that has one), filled. */
+export function readoutOn(state: ScriptState | null, thing: string, fields: Fields, conds: Conditions): string | null {
+  for (const l of state?.labels ?? []) {
+    if (l.on !== thing || !l.readout || !holds(l, conds)) continue;
+    const said = fill(l.readout, fields);
+    if (said) return said;
+  }
+  return null;
 }
 
 /** The key as the keyboard names it, for matching a key press against an action's key. */

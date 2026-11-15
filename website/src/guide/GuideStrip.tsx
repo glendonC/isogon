@@ -16,20 +16,24 @@ const LESS = 'Less';
 export function GuideStrip({
   title = null,
   lines,
+  more = [],
   actions,
   onAction,
   results = null,
 }: {
   title?: string | null;
   lines: string[];
+  /** What the state says on demand (the script's `more`), opened in place with the rest. */
+  more?: string[];
   actions: ScriptAction[];
   onAction: (command: string) => void;
   results?: { line: string; rows: ResultRow[] } | null;
 }) {
-  const [first, ...rest] = lines;
-  const [more, setMore] = useState(false);
+  const [first, ...standingRest] = lines;
+  const rest = [...standingRest, ...more];
+  const [open, setOpen] = useState(false);
   const said = lines.join(' ');
-  useEffect(() => setMore(false), [said]);
+  useEffect(() => setOpen(false), [said]);
   // The next step, and the first action after it that is not quiet: no more than two stand.
   const shown = actions.filter((a, n) => n === 0 || !a.quiet).slice(0, 2);
   return (
@@ -42,10 +46,10 @@ export function GuideStrip({
             {first}
           </p>
         )}
-        {rest.length > 0 && more && <p className="guide-say__more">{rest.join(' ')}</p>}
+        {rest.length > 0 && open && <p className="guide-say__more">{rest.join(' ')}</p>}
         {rest.length > 0 && (
-          <button type="button" className="guide-say__toggle" aria-expanded={more} onClick={() => setMore((m) => !m)}>
-            {more ? LESS : MORE}
+          <button type="button" className="guide-say__toggle" aria-expanded={open} onClick={() => setOpen((m) => !m)}>
+            {open ? LESS : MORE}
           </button>
         )}
       </div>

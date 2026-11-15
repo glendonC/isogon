@@ -43,6 +43,7 @@ export function roundFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     round_passes_n: lengthDigits(looks),
     looks_to_spend: countWord(ep?.budget ?? null),
     looks_left: ep && spent !== null ? countWord(ep.budget - spent) : null,
+    looks_left_n: ep && spent !== null ? count(ep.budget - spent) : null,
     look_number: ordinal(slot?.index ?? null),
     look_when: localDayTime(slot?.time_utc, midLon(ep?.box)),
     look_found: taken ? count(taken.pixels) : null,

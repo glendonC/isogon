@@ -58,6 +58,12 @@ function atFire(iso: string | null | undefined, lon: number | null): Date | null
 const partOfDay = (h: number) => (h >= 5 && h < 12 ? 'in the morning' : h >= 12 && h < 18 ? 'in the afternoon' : h >= 18 && h < 21 ? 'in the evening' : 'at night');
 
 /** local_day_time: "11 August, 1:11 at night", by the sun at the fire. One function for every line. */
+/** The local time at the fire as HH:MM (`local_hhmm`): the pass's time, the hour from the fire's longitude. */
+export function localHhmm(iso: string | null | undefined, lon: number | null): string | null {
+  const d = atFire(iso, lon);
+  return d ? `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` : null;
+}
+
 export function localDayTime(iso: string | null | undefined, lon: number | null): string | null {
   const d = atFire(iso, lon);
   if (!d) return null;

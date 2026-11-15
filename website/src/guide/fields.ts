@@ -1,6 +1,6 @@
 import type { WorkspaceBase } from '../app/store';
 import type { Conditions, Fields } from './script';
-import { count, countNo, countNone, countWord, lengthDigits, listAnd, localDayRange, localDayTime, midLon, ordinal, percent, times, year } from './formats';
+import { count, countNo, countNone, countWord, lengthDigits, listAnd, localDayRange, localDayTime, localHhmm, midLon, ordinal, percent, percent1, points, times, year } from './formats';
 import { SCRIPT } from './script';
 
 /**
@@ -106,6 +106,23 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   const bChal = byChallenger ? obj(obj(obj(testB?.beside_the_headline)?.[headline])?.against_the_baselines) : null;
   const bChalClasses = obj(bChal?.classes);
   const continentFires = (name: string) => num(obj(aByContinent?.[name])?.episodes) ?? (aByContinent ? 0 : null);
+  // The overlap with VIIRS fire pixels over test A and test B, exact and within one pixel, of MODIS alone, of the first
+  // model and of the new one (the challenger blend), as the record gives them (`all.scores`).
+  const overlap = (scores: Obj | null, score: string, method: string) => percent1(num(obj(scores?.[score])?.[method]));
+  const aScores = obj(aAll?.scores);
+  const bScores = obj(bAll?.scores);
+  const newScores = obj(obj(obj(beside?.challenger_blend)?.against_the_baselines)?.scores);
+  // The learned player beside the simple rule on the validation rounds (next_look.on_validation), and the stated upper
+  // limit on the other fires of the validation (validation.frp_interval).
+  const evAny = obj(ev as unknown);
+  const learnedDiff = obj(obj(obj(obj(evAny?.next_look)?.on_validation)?.differences)?.learned_minus_least_sure);
+  const otherLimit = obj(obj(evAny?.validation)?.frp_interval);
+  const limitMethod = score?.methods.find((m) => m.id === 'reconstruction') ?? null;
+  // The fire on show, as the registry names it (places[id].featured_fires[fire]).
+  const fireShown =
+    ws.places.places.find((p) => p.id === ws.run.active?.region.id)?.featured_fires.find((x) => x.id === ws.currentFire) ?? null;
+  const fireClosed = fireShown ? ((fireShown as unknown as Obj).closed === true || fireShown.blind_test_fire === true) : null;
+
   // The squares the model says are burning at the pass on show (the frames on the terrain).
   const looks = obj(r?.declared_cells)?.looks;
   const declared = Array.isArray(looks) ? looks.map((x) => obj(x)).find((x) => x && num(x.frame) === (num(f?.frame) ?? pass)) ?? null : null;
@@ -167,6 +184,28 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_a_oceania_n: countWord(continentFires('Oceania')),
   };
   fields.answered_by = byChallenger && typeof answered?.words === 'string' ? answered.words : null;
+  Object.assign(fields, {
+    tb_modis_exact: overlap(bScores, 'csi_strict_375m', 'painted_modis'),
+    tb_modis_within: overlap(bScores, 'csi_one_cell_tolerance', 'painted_modis'),
+    tb_first_exact: overlap(bScores, 'csi_strict_375m', 'value'),
+    tb_first_within: overlap(bScores, 'csi_one_cell_tolerance', 'value'),
+    tb_new_exact: overlap(newScores, 'csi_strict_375m', 'value'),
+    tb_new_within: overlap(newScores, 'csi_one_cell_tolerance', 'value'),
+    ta_modis_exact: overlap(aScores, 'csi_strict_375m', 'painted_modis'),
+    ta_modis_within: overlap(aScores, 'csi_one_cell_tolerance', 'painted_modis'),
+    ta_first_exact: overlap(aScores, 'csi_strict_375m', 'value'),
+    ta_first_within: overlap(aScores, 'csi_one_cell_tolerance', 'value'),
+    learned_low: points(num(learnedDiff?.p05)),
+    learned_high: points(num(learnedDiff?.p95)),
+    other_limit_held: count(num(otherLimit?.held)),
+    other_limit_of: count(num(otherLimit?.of)),
+    limit_held: count(limitMethod?.intervalCovered ?? null),
+    limit_of: count(limitMethod?.intervalN ?? null),
+    pass_clock: localHhmm(str(f?.timestamp_utc), lon),
+    fire_month: fireShown?.label ?? null,
+    fire_name: fireShown?.name || null,
+    fire_to_model: fireShown?.to_the_world_model ? (SCRIPT.fields?.fire_to_model?.said_as?.[fireShown.to_the_world_model] ?? null) : null,
+  });
   const conds: Conditions = {
     answered_by_challenger: byChallenger,
     model_is_experimental: ws.run.model ? ws.run.model.status === 'experimental' : null,
@@ -185,6 +224,9 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_a_strict_behind: ev ? testA !== null && aClasses?.csi_strict_375m === 'behind' : null,
     test_a_strict_not_behind: ev ? testA !== null && aClasses !== null && aClasses.csi_strict_375m !== 'behind' : null,
     test_a_interval_short: ev ? testA !== null && aHeld !== null && aStated !== null && aHeld < aStated : null,
+    fire_is_named: fireShown ? Boolean(fireShown.name) : null,
+    fire_never_seen: fireShown ? fireShown.to_the_world_model === 'never seen' : null,
+    block_is_test_fire: fireClosed,
   };
   return { fields, conds };
 }

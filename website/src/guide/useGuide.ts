@@ -21,6 +21,7 @@ import {
   labelOn,
   objectiveOf,
   promptBeside,
+  readoutOn,
   says,
   stateOf,
   stepOf,
@@ -44,9 +45,13 @@ export interface Guide {
   also: ScriptAction[];
   /** The label on the fire, and the action that stands beside the fire as a prompt. */
   fireLabel: string | null;
+  /** The readout under the action on the fire (the label's `readout`), in capitals; null without one. */
+  fireReadout: string | null;
   besideFire: ScriptAction | null;
   /** Play: the label on the square just looked at, and the action beside the marked square. */
   squareLabel: string | null;
+  /** The readout under the look on the marked square; null without one. */
+  squareReadout: string | null;
   besideSquare: ScriptAction | null;
   /** A round's end: the results' line and rows, above the guide's sentences. */
   results: { line: string; rows: ResultRow[] } | null;
@@ -63,38 +68,6 @@ export interface Guide {
 
 /** How many of a state's lines stand together in the guide. */
 const STANDING = 2;
-
-/** The script's own sentence on the Record's check of its method (an answer to a question there), its fields filled. */
-function recordCheckLine(fields: Fields): string | null {
-  const questions = (SCRIPT as unknown as { questions?: { answer?: { line?: string }[] }[] }).questions ?? [];
-  for (const q of questions) {
-    for (const a of q.answer ?? []) {
-      if (typeof a.line === 'string' && a.line.includes('{record_error}')) return fill(a.line, fields);
-    }
-  }
-  return null;
-}
-
-/**
- * A held-out run whose hidden passes a challenger answered (the backend's switch, off by default), in the page's words
- * until the script carries them: which model answered, in the run's own words, and the fire's standing as its own.
- */
-/**
- * A challenger answering the hidden passes (the owner's choice), in the page's words until the script carries them: the
- * test that counts for it is its own on test B, with the estimate shown before in one clause. Said in place of the
- * script's test B sentence, which speaks for the estimate in use.
- */
-function challengerTestBLine(f: Fields, c: Conditions): string | null {
-  if (!c.answered_by_challenger || !c.test_b_taken || !f.test_b_fires_n || !f.test_b_challenger_ahead || !f.test_b_challenger_level || !f.test_b_challenger_behind || !f.test_scores_n) return null;
-  const loss = c.test_b_challenger_strict_behind ? ", though it does not place fire square for square better than painting the coarse satellite's detections" : '';
-  const before = f.test_b_ahead && f.test_b_behind ? `; the estimate shown before was ahead on ${f.test_b_ahead} and behind on ${f.test_b_behind} there` : '';
-  return `On ${f.test_b_fires_n} fires that nothing had touched, the challenger was ahead of the simple methods on ${f.test_b_challenger_ahead} of ${f.test_scores_n} scores, level on ${f.test_b_challenger_level} and behind on ${f.test_b_challenger_behind}${loss}${before}.`;
-}
-
-const CHALLENGER_WORDS = {
-  named: (words: string) => `The hidden passes are answered by ${words}.`,
-  standing: (simple: string, ahead: string, of: string) => `On this fire the challenger beat ${simple} simple methods on ${ahead} of ${of} scores, by any margin.`,
-};
 
 /**
  * The pictures of the world opened from Test, in the product's words for them until the script carries them:
@@ -153,6 +126,12 @@ function actionsOf(list: ScriptAction[] | undefined, fields: Fields, on: Record<
     .slice(0, most);
 }
 
+/** The action that stands on a thing (`beside`), its label filled like every other action's; null without one. */
+function besideOf(state: ScriptState | null, thing: string, fields: Fields, on: Record<string, boolean>): ScriptAction | null {
+  const a = promptBeside(state, thing);
+  return a ? (actionsOf([a], fields, on)[0] ?? null) : null;
+}
+
 /**
  * The day's photograph's sentence, in the step's words (`photo`): by the pass on show (by day, at night, or hidden, so
  * the coarse satellite's), with the photograph's satellite and pixel from its manifest; that it is not stored, plainly.
@@ -199,8 +178,10 @@ const NONE: Guide = {
   actions: [],
   also: [],
   fireLabel: null,
+  fireReadout: null,
   besideFire: null,
   squareLabel: null,
+  squareReadout: null,
   besideSquare: null,
   results: null,
   marks: [],
@@ -265,6 +246,10 @@ export function useGuide(
     const r = recordFields(ws, record);
     // The whole Earth's factor (GET /api/cube/years), for the Record's line on demand beside the place's own.
     r.fields.world_ratio = live.worldYears?.ratio != null ? live.worldYears.ratio.toFixed(1) : null;
+    // The same ratio year by year, its lowest and highest, and the last whole year the Earth plays.
+    r.fields.world_ratio_low = live.worldYears?.low != null ? live.worldYears.low.toFixed(1) : null;
+    r.fields.world_ratio_high = live.worldYears?.high != null ? live.worldYears.high.toFixed(1) : null;
+    r.fields.years_last = live.worldYears?.last != null ? String(live.worldYears.last) : null;
     const id = recordStateId(ws, record);
     if (!id) return NONE;
     const state = stateOf('record', id);
@@ -275,12 +260,7 @@ export function useGuide(
       state,
       objective: objectiveOf('record', state, r.fields),
       context: contextOf('record', r.fields),
-      // On the Record as it opens, its check of its own method stands beside what a square is: how far off a hidden
-      // year's count is, with the correction and without.
-      lines: [
-        ...says(state, r.fields, r.conds).slice(0, STANDING),
-        ...(id === 'ready' && !live.narrow && recordCheckLine(r.fields) ? [recordCheckLine(r.fields) as string] : []),
-      ],
+      lines: says(state, r.fields, r.conds).slice(0, STANDING),
       more: moreOf(state, r.fields, r.conds),
       film: filmOf(state, { ...fields, ...r.fields, world_first_year: live.worldFirstYear ?? (live.worldYears?.first != null ? String(live.worldYears.first) : null) }, r.conds),
       fields: { ...fields, ...r.fields },
@@ -348,7 +328,9 @@ export function useGuide(
       also: actionsOf(stepOf(step)?.also, f, on, 9),
       fireLabel: labelOn(state, 'fire', f, c, live.playing, Boolean(live.film)),
       squareLabel: labelOn(state, 'looked_square', f, c),
-      besideSquare: promptBeside(state, 'marked_square'),
+      fireReadout: readoutOn(state, 'fire', f, c),
+      squareReadout: readoutOn(state, 'marked_square', f, c) ?? readoutOn(state, 'looked_square', f, c),
+      besideSquare: besideOf(state, 'marked_square', f, on),
       results: state?.results ? { line: state.results.line, rows: resultRows(state.results, f, r.gains, c) } : null,
     };
   }
@@ -393,24 +375,8 @@ export function useGuide(
   const dayOffered = Boolean(live.day) && ws.run.isReal && id !== 'loading' && id !== 'failed' && id !== 'revealing';
   // The day's photograph, in the step's own words (`photo`): its sentence takes the place of the first standing one.
   const photo = dayOffered && live.day?.asked ? photoLine(step, live.day, ws, fields) : null;
-  let standing = [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)];
-  // A challenger answering: its own test B stands where the script's sentence for the estimate in use does.
-  const cLine = step === 'test' ? challengerTestBLine(fields, conds) : null;
-  if (cLine && fields.test_b_fires_n) {
-    const bOpens = `On ${fields.test_b_fires_n} fires that nothing had touched`;
-    standing = standing.map((l) => (l.startsWith(bOpens) ? cLine : l));
-  }
-  // A challenger answered the hidden passes: the guide names it, and the fire's standing is said as the challenger's
-  // (the run's verdict is the answering estimate's).
-  if (conds.answered_by_challenger && fields.answered_by && id !== 'loading' && id !== 'failed') {
-    const own = 'On this fire the estimate beat ';
-    standing = standing.map((l) =>
-      l.startsWith(own) && fields.simple_methods_n && fields.ahead_on && fields.scores_n
-        ? CHALLENGER_WORDS.standing(fields.simple_methods_n, fields.ahead_on, fields.scores_n)
-        : l,
-    );
-    standing.push(CHALLENGER_WORDS.named(fields.answered_by));
-  }
+  // The script says a challenger's own words where one answers the hidden passes (`answered_by_challenger`).
+  const standing = [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)];
   const photoAct = dayOffered ? stepOf(step)?.also?.find((a) => a.command === 'photo:next') : undefined;
   const world = step === 'test' && (id === 'revealed' || id === 'on_another_pass') ? WORLD_ENTRIES : [];
   const settled = id !== 'loading' && id !== 'failed' && id !== 'revealing';
@@ -446,7 +412,8 @@ export function useGuide(
       live.playing,
       Boolean(live.film),
     ),
-    besideFire: promptBeside(state, 'fire'),
+    fireReadout: readoutOn(state, 'fire', fields, conds),
+    besideFire: besideOf(state, 'fire', fields, on),
     marks: settled ? marksOnShow(ws, fields, conds, { chance: live.chance, revealed: step === 'test' }) : [],
   };
 }

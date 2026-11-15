@@ -64,7 +64,7 @@ export function PlayScene() {
         <ScenePrompt
           box={marked}
           label={act.label}
-          readout={guide.squareLabel ?? undefined}
+          readout={guide.squareReadout ?? guide.squareLabel ?? undefined}
           onSelect={() => ws.runCommand(act.command)}
           shortcut={act.key ?? undefined}
         />

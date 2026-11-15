@@ -1,5 +1,5 @@
 {
-  "version": 24,
+  "version": 30,
   "what": "The words of the guide: for each step and each state inside it, the objective, what the guide says, the labels on things, the actions, and the questions a visitor can ask. Every sentence says which of the five places it sits in. Text in braces is a field: its value comes from an answer of the backend, named under fields. No figure is typed in a line.",
   "trail": [
     "Record",
@@ -17,24 +17,24 @@
     "scores_sheet": "The Scores",
     "tests_sheet": "Every Test on Record",
     "method_sheet": "Method and Data",
-    "coarse": "the coarse satellite",
-    "coarse_first": "a coarse one (MODIS)",
-    "sharp": "the sharp satellite",
-    "sharp_first": "a sharp one (VIIRS)",
-    "estimate_marks": "the white frames",
+    "coarse": "MODIS",
+    "coarse_first": "MODIS",
+    "sharp": "VIIRS",
+    "sharp_first": "VIIRS",
+    "estimate_marks": "the white outlines",
     "square": "square",
     "look": "look",
     "pass": "pass",
     "player_chance": "Chance",
-    "player_coarse_rule": "Follow the Coarse Satellite",
-    "player_unsure_rule": "Look Where Unsure",
+    "player_coarse_rule": "Follow MODIS",
+    "player_unsure_rule": "Least Sure",
     "player_learned": "Learned Player",
     "player_answer": "Sees the Answer",
-    "score": "agreement"
+    "score": "overlap"
   },
   "score": {
-    "word": "agreement",
-    "is": "On each pass of the sharp satellite, take every square that the estimate or the satellite marks as burning. Agreement is the share of those squares, over all its passes, that both mark.",
+    "word": "overlap",
+    "is": "On each pass of VIIRS, take every pixel that the guess or VIIRS marks as fire. Overlap is the share of those pixels, over all its passes, that both mark.",
     "written": "the level in percent, a change in points; one point is one percent",
     "in_the_answers": "the round serves it as score, score_start and score_end under the name csi; a run serves the same measure as csi_strict_375m"
   },
@@ -71,7 +71,8 @@
     "photo": "On Estimate and Test, a step's photo holds the sentences said while the day's photograph is on, each replacing the first standing sentence; the action photo:next is the one fourth action of the guide's row, quiet, at its end (the lead's decision of 00:05), and reads label, then label_when_true_color, then label_when_false_color.",
     "keys_shared": "One key runs one command, but for keys_shared: a key that does the same thing for the visitor on different screens (Space plays what the screen plays). An action's also_key is a second key for the same command.",
     "film": "In the film presentation (any film= in the address) a state's film caption stands where the objective stands, one at a time, and the guide's sentences are off; thirteen words at most, every figure a field. A state with no film caption shows its objective, as now.",
-    "film_labels": "In the film presentation a label with `film` shows that form instead of its line, and a label whose `film` is null is not shown; a label with no `film` shows its line. Eight words at most."
+    "film_labels": "In the film presentation a label with `film` shows that form instead of its line, and a label whose `film` is null is not shown; a label with no `film` shows its line. Eight words at most.",
+    "readout": "A label at a thing may carry a readout: the live line under the prompt, in capitals, that says exactly what the frame is on, from the data the screen reads (INSCENE-SPEC.md, the grammar)."
   },
   "things": {
     "fire": "the fire on the land, in a round as well",
@@ -124,7 +125,10 @@
     "last_year": "the largest of the years, in digits",
     "count_keys_challenger": "the number of keys of an object that begin challenger_, written as count_word",
     "challengers_ahead_span": "against_the_baselines.ahead of each challenger_ key: one whole number when all agree, else the least and the most as 5 to 6",
-    "percent_of_method": "of an object and a name, the object's value under that name, times 100, rounded to a whole number"
+    "percent_of_method": "of an object and a name, the object's value under that name, times 100, rounded to a whole number",
+    "answering_ahead": "of test B's beside_the_headline, the entry the run's held_out_passes_answered_by.method names, its against_the_baselines.ahead, a whole number",
+    "answering_behind": "the same entry's against_the_baselines.behind, zero written as none",
+    "local_hhmm": "the local time by the sun at the fire, from the instant and the box's middle longitude, as HH:MM"
   },
   "conditions": {
     "model_is_experimental": {
@@ -254,6 +258,14 @@
     "answered_by_challenger": {
       "true_when": "the run's held_out_passes_answered_by.method is not reconstruction (a challenger answered its hidden passes)",
       "route": "POST /api/reconstruct"
+    },
+    "test_b_by_estimate": {
+      "true_when": "fresh_test.test_b is taken (episodes_scored above 0) and the run's held_out_passes_answered_by.method is reconstruction, or there is no run",
+      "route": "GET /api/evidence"
+    },
+    "test_b_by_challenger": {
+      "true_when": "fresh_test.test_b is taken and the run's held_out_passes_answered_by.method is not reconstruction",
+      "route": "POST /api/reconstruct"
     }
   },
   "state_when": {
@@ -311,7 +323,8 @@
     "photo:next": "step the day's photograph on: true colour, then false colour, then off (the stage's dayPicture); never on by default",
     "years:open": "open the Earth's years, a screen of its own with its own address, as the satellites counted them at the first year; Escape goes back to where it was opened from",
     "years:play": "play the years once from the first, or stop; in the film presentation the screen plays once by itself",
-    "years:step": "show the year before or the year after"
+    "years:step": "show the year before or the year after",
+    "world:test": "open the test across the world on its newest look"
   },
   "steps": [
     {
@@ -331,32 +344,32 @@
         },
         {
           "id": "ready",
-          "objective": "Look at one real fire, seen from space",
+          "objective": "Look at a real fire seen from space",
           "says": [
             {
               "place": "guide",
               "if": "fire_is_named",
-              "line": "This is real fire seen from space: {place}, {fire_month}, when the {fire_name} burned here."
+              "line": "A real fire seen from space: the {fire_name}, {place}, {fire_month}."
             },
             {
               "place": "guide",
               "unless": "fire_is_named",
-              "line": "This is real fire seen from space: {place}, {fire_month}."
-            },
-            {
-              "place": "guide",
-              "line": "Each light is a spot where a NASA satellite saw the heat of fire."
+              "line": "A real fire seen from space: {place}, {fire_month}."
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "Two kinds of satellite watched this fire, and they do not see the same amount."
+              "line": "Each light is a detection, a spot where a satellite saw the heat of fire."
+            },
+            {
+              "place": "guide",
+              "line": "Two NASA instruments watched this fire: MODIS since {record_first_year}, and the sharper VIIRS since {sharp_since}."
             }
           ],
           "actions": [
             {
-              "label": "See the fire record here",
+              "label": "Show the record",
               "command": "go:record",
               "key": "Enter",
               "places": [
@@ -367,7 +380,7 @@
           "film": [
             {
               "place": "objective",
-              "line": "Isogon: one fire record from two NASA satellites."
+              "line": "Fire on Earth: two NASA sensors, MODIS and VIIRS, on one scale."
             }
           ]
         },
@@ -377,7 +390,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "The fire did not load, and nothing is shown in its place."
+              "line": "The fire did not load, so nothing is shown."
             }
           ],
           "actions": [
@@ -392,13 +405,13 @@
           ]
         }
       ],
-      "objective": "Look at one real fire, seen from space",
+      "objective": "Look at a real fire seen from space",
       "context": null
     },
     {
       "id": "place",
       "name": null,
-      "objective": "Choose a Place on Earth",
+      "objective": "Choose a place on Earth",
       "context": null,
       "states": [
         {
@@ -414,15 +427,11 @@
         },
         {
           "id": "ready",
-          "objective": "Choose a Place on Earth",
+          "objective": "Choose a place on Earth",
           "says": [
             {
               "place": "guide",
-              "line": "Brighter ground on the map means more fire detected by NASA's satellites since {world_first_year}."
-            },
-            {
-              "place": "guide",
-              "line": "You can follow a fire pass by pass in {places_followed_n} places, and draw an area anywhere to read its fire record."
+              "line": "Brighter ground means more fire detections since {world_first_year}."
             }
           ],
           "labels": [
@@ -430,13 +439,13 @@
               "place": "label",
               "on": "fire_block",
               "if": "block_is_test_fire",
-              "line": "Kept as the model's test: its record can be read, and it is not tested again.",
-              "film": "Kept as the test, not tested again."
+              "line": "A test fire: you can read its record, but it is not tested again.",
+              "film": "A test fire, not tested again."
             }
           ],
           "actions": [
             {
-              "label": "Open the marked fire",
+              "label": "Choose this fire",
               "command": "place:choose",
               "key": "Enter",
               "places": [
@@ -470,6 +479,12 @@
               "place": "objective",
               "line": "Done here for one pair, this test fits any two instruments."
             }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "You can follow a fire pass by pass in {places_followed_n} places, or draw any area for its record."
+            }
           ]
         },
         {
@@ -478,7 +493,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "The places did not load, and nothing is shown in their place."
+              "line": "The places did not load, so nothing is shown."
             }
           ],
           "actions": [
@@ -503,7 +518,7 @@
       ],
       "also": [
         {
-          "label": "Play the Earth's years since {world_first_year}",
+          "label": "Play the years",
           "command": "years:open",
           "key": "O"
         }
@@ -526,41 +541,49 @@
         },
         {
           "id": "ready",
-          "objective": "Read the fire record of {place}",
+          "objective": "{place}",
           "says": [
             {
               "place": "guide",
-              "line": "Every square is one month of the fires NASA's satellites detected around {place} since {record_first_year}, and brighter means more fire."
-            },
-            {
-              "place": "guide",
-              "line": "The newer satellite sees smaller fires too and makes about {sharp_to_coarse} times as many detections here as the older ones, so that jump is taken out here and every year is on one scale.",
-              "unless": "method_replaced"
-            },
-            {
-              "place": "guide",
-              "if": "method_replaced",
-              "line": "The newer satellite sees smaller fires too and makes about {sharp_to_coarse} times as many detections here as the older ones, more in some months than in others, so that jump is taken out month by month and every year is on one scale."
+              "line": "Here a hidden year is off by {record_error} percent, against {record_error_raw} with no correction."
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "Over the whole Earth it makes about {world_ratio} times as many; each place has its own figure."
+              "line": "Each square is one month since {record_first_year}, and brighter means more fire."
             },
             {
               "place": "guide",
-              "line": "Left as counted, recent years would look worse than they were, only because the newer satellite makes more detections, smaller fires among them."
+              "line": "From {sharp_since} VIIRS makes {sharp_to_coarse} times as many detections here, so earlier years are scaled up to match.",
+              "unless": "method_replaced"
             },
             {
               "place": "guide",
               "if": "method_replaced",
-              "line": "The factor changes with the month of the year, because the share of a month's fires that the newer satellite catches changes with the dry season."
+              "line": "From {sharp_since} VIIRS makes {sharp_to_coarse} times as many detections here, so earlier years are scaled up month by month."
+            },
+            {
+              "place": "guide",
+              "line": "MODIS flies on NASA's Terra and Aqua, and VIIRS on Suomi NPP."
+            },
+            {
+              "place": "guide",
+              "line": "Over the whole Earth it makes {world_ratio} times as many, and each place has its own figure."
+            },
+            {
+              "place": "guide",
+              "line": "As counted, recent years would look worse than they were, only because VIIRS sees smaller fires too."
+            },
+            {
+              "place": "guide",
+              "if": "method_replaced",
+              "line": "The scaling changes with the month, because how many more fires VIIRS catches changes with the season."
             }
           ],
           "actions": [
             {
-              "label": "Show the fire of {default_fire_month}",
+              "label": "Open the {default_fire_month} fire",
               "command": "go:estimate",
               "key": "Enter",
               "places": [
@@ -570,21 +593,21 @@
               "beside": "fire_month"
             },
             {
-              "label": "See the years as the satellites counted them",
+              "label": "Download CSV",
+              "command": "record:csv",
+              "key": "C",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "Show as counted",
               "command": "record:as_counted",
               "key": "Y",
               "places": [
                 "guide"
               ],
-              "label_while_on": "Back to one scale"
-            },
-            {
-              "label": "See this month so far",
-              "command": "record:now",
-              "key": "U",
-              "places": [
-                "guide"
-              ]
+              "label_while_on": "Show one scale"
             }
           ],
           "on_demand": [
@@ -597,40 +620,43 @@
               "place": "label",
               "on": "fire_month",
               "if": "fire_month_stands_out",
-              "line": "{default_fire_month}: {fire_times_usual} times the fire of a usual {fire_month_name} here. The page opens on this fire.",
+              "line": "{default_fire_month}: {fire_times_usual} times a usual {fire_month_name}, the fire you will see.",
               "film": "{default_fire_month}: {fire_times_usual} times a usual {fire_month_name}."
             },
             {
               "place": "label",
               "on": "fire_month",
               "unless": "fire_month_stands_out",
-              "line": "{default_fire_month}: {fire_month_rate} detections per 1,000 square kilometres a day, where {fire_month_usual} is usual. The page opens on this fire.",
+              "line": "{default_fire_month}: {fire_month_rate} detections per 1,000 square kilometres a day, against {fire_month_usual} usually, the fire you will see.",
               "film": null
             }
           ],
           "film": [
             {
               "place": "objective",
-              "line": "Any area's record: a hidden year off by {record_error}%, not {record_error_raw}%."
+              "line": "Any place's fire record, month by month since {record_first_year}."
+            }
+          ],
+          "keys_too": [
+            {
+              "label": "Show this month",
+              "command": "record:now",
+              "key": "U"
             }
           ]
         },
         {
           "id": "as_counted",
-          "objective": "See the jump that the change of satellite makes",
+          "objective": "See the jump VIIRS makes",
           "says": [
             {
               "place": "guide",
-              "line": "These are the years as the satellites counted them, before the correction."
-            },
-            {
-              "place": "guide",
-              "line": "The newer satellite sees smaller fires too and makes about {sharp_to_coarse} times as many detections, so the years before {sharp_since} look quieter than they were."
+              "line": "These are the years as counted, before scaling."
             }
           ],
           "actions": [
             {
-              "label": "Back to one scale",
+              "label": "Show one scale",
               "command": "record:as_counted",
               "key": "Enter",
               "places": [
@@ -638,7 +664,7 @@
               ]
             },
             {
-              "label": "See this month so far",
+              "label": "Show this month",
               "command": "record:now",
               "key": "U",
               "places": [
@@ -646,7 +672,7 @@
               ]
             },
             {
-              "label": "See the same jump across the whole Earth",
+              "label": "Show the Earth",
               "command": "years:open",
               "key": "O",
               "places": [
@@ -657,31 +683,32 @@
           "on_demand": [
             "how_good_is_record",
             "why_disagree"
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "VIIRS sees smaller fires too, so years before {sharp_since} look quieter than they were."
+            }
           ]
         },
         {
           "id": "this_month",
-          "objective": "See how this month compares so far",
+          "objective": "See this month so far",
           "says": [
             {
               "place": "guide",
               "if": "this_month_is_counted",
-              "line": "The dashed square is this month so far: the full days NASA has published, with today left out."
-            },
-            {
-              "place": "guide",
-              "if": "this_month_is_counted",
-              "line": "A rate over the first days of a month is rough, and these newest detections have not had NASA's final processing."
+              "line": "The dashed square is this month so far, with today left out."
             },
             {
               "place": "guide",
               "unless": "this_month_is_counted",
-              "line": "This month so far cannot be counted now, and the label at its square says why."
+              "line": "This month cannot be counted yet, and its label says why."
             }
           ],
           "actions": [
             {
-              "label": "Show the fire of {default_fire_month}",
+              "label": "Show {default_fire_month}",
               "command": "go:estimate",
               "key": "Enter",
               "places": [
@@ -691,7 +718,7 @@
               "beside": "fire_month"
             },
             {
-              "label": "See why the figure is rough",
+              "label": "Why it is rough",
               "command": "record:now_caveats",
               "key": "Q",
               "places": [
@@ -699,28 +726,35 @@
               ]
             },
             {
-              "label": "See the years as the satellites counted them",
+              "label": "Show as counted",
               "command": "record:as_counted",
               "key": "Y",
               "places": [
                 "guide"
               ],
-              "label_while_on": "Back to one scale"
+              "label_while_on": "Show one scale"
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "if": "this_month_is_counted",
+              "line": "A few days give a rough rate, and NASA has not finished processing these detections."
             }
           ]
         },
         {
           "id": "month_picked",
-          "objective": "Compare {picked_month} with the same month in other years",
+          "objective": "Compare {picked_month} with other years",
           "says": [
             {
               "place": "guide",
-              "line": "Counting from the most fire, {picked_month} is number {month_rank} of {month_years} for its month of the year."
+              "line": "Of {month_years} years, {picked_month} ranks {month_rank} for fire in its month."
             }
           ],
           "actions": [
             {
-              "label": "Show a fire of {picked_month}",
+              "label": "Show {picked_month}",
               "command": "go:estimate",
               "key": "Enter",
               "places": [
@@ -730,7 +764,7 @@
               "beside": "month"
             },
             {
-              "label": "Pick another month",
+              "label": "Choose another month",
               "command": "record:pick",
               "key": "M",
               "places": [
@@ -738,7 +772,7 @@
               ]
             },
             {
-              "label": "Get this month's detections",
+              "label": "CSV",
               "command": "record:csv",
               "key": "C",
               "places": [
@@ -750,26 +784,22 @@
             {
               "place": "label",
               "on": "month",
-              "line": "{picked_month}: {month_rate} detections per 1,000 square kilometres a day. Usual for that month: {month_median}."
+              "line": "{picked_month}: {month_rate} detections per 1,000 square kilometres a day, against {month_median} usually."
             }
           ]
         },
         {
           "id": "no_fire_to_rebuild",
-          "objective": "Pick a month with more fire",
+          "objective": "Choose a month with more fire",
           "says": [
             {
               "place": "guide",
-              "line": "Too few satellite passes saw fire here in {picked_month} to show a fire pass by pass."
-            },
-            {
-              "place": "guide",
-              "line": "Pick a brighter month."
+              "line": "Too few passes saw fire here in {picked_month} to follow it pass by pass."
             }
           ],
           "actions": [
             {
-              "label": "Show the fire of {default_fire_month}",
+              "label": "Show {default_fire_month}",
               "command": "go:estimate",
               "key": "Enter",
               "places": [
@@ -777,7 +807,7 @@
               ]
             },
             {
-              "label": "Pick another month",
+              "label": "Choose another month",
               "command": "record:pick",
               "key": "M",
               "places": [
@@ -789,26 +819,28 @@
             {
               "place": "label",
               "on": "month",
-              "line": "{picked_month}: {month_rate} detections per 1,000 square kilometres a day. Usual for that month: {month_median}."
+              "line": "{picked_month}: {month_rate} detections per 1,000 square kilometres a day, against {month_median} usually."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Choose a brighter month."
             }
           ]
         },
         {
           "id": "no_sharp_satellite",
-          "objective": "Pick a month from {sharp_since} or later",
+          "objective": "Choose a month from {sharp_since} on",
           "says": [
             {
               "place": "guide",
-              "line": "{picked_month} is before {sharp_since}, when the sharp satellite began."
-            },
-            {
-              "place": "guide",
-              "line": "The older satellites saw this month, so the month is in the record, and there is nothing to hide and test."
+              "line": "{picked_month} is before {sharp_since}, when VIIRS began."
             }
           ],
           "actions": [
             {
-              "label": "Show the fire of {default_fire_month}",
+              "label": "Show {default_fire_month}",
               "command": "go:estimate",
               "key": "Enter",
               "places": [
@@ -816,7 +848,7 @@
               ]
             },
             {
-              "label": "Pick another month",
+              "label": "Choose another month",
               "command": "record:pick",
               "key": "M",
               "places": [
@@ -828,26 +860,28 @@
             {
               "place": "label",
               "on": "month",
-              "line": "{picked_month}: {month_rate} detections per 1,000 square kilometres a day. Usual for that month: {month_median}."
+              "line": "{picked_month}: {month_rate} detections per 1,000 square kilometres a day, against {month_median} usually."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Only MODIS saw it, so there is nothing to hide and test."
             }
           ]
         },
         {
           "id": "recorded_test_fire",
-          "objective": "Look at a fire kept as the model's test",
+          "objective": "Look at a test fire",
           "says": [
             {
               "place": "guide",
-              "line": "{picked_month} here holds one of the {test_fires_n} fires kept as the model's test."
-            },
-            {
-              "place": "guide",
-              "line": "A fire kept as the test can be looked at with every satellite shown, and is not hidden and tested again."
+              "line": "{picked_month} here holds one of the {test_fires_n} first test fires."
             }
           ],
           "actions": [
             {
-              "label": "Look at this fire",
+              "label": "Show this fire",
               "command": "go:estimate",
               "key": "Enter",
               "places": [
@@ -857,7 +891,7 @@
               "beside": "month"
             },
             {
-              "label": "Show the fire of {default_fire_month}",
+              "label": "Show {default_fire_month}",
               "command": "record:default_fire",
               "key": "Z",
               "places": [
@@ -865,7 +899,7 @@
               ]
             },
             {
-              "label": "See every test on record",
+              "label": "All tests",
               "command": "tests:record",
               "key": "E",
               "places": [
@@ -877,26 +911,28 @@
             {
               "place": "label",
               "on": "month",
-              "line": "{picked_month}: {month_rate} detections per 1,000 square kilometres a day. Usual for that month: {month_median}."
+              "line": "{picked_month}: {month_rate} detections per 1,000 square kilometres a day, against {month_median} usually."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "You can see it with every satellite shown, but it is not tested again."
             }
           ]
         },
         {
           "id": "own_area",
-          "objective": "Read the fire record of the area you drew",
+          "objective": "Read your area's fire record",
           "says": [
             {
               "place": "guide",
-              "line": "This is the fire record of the area you drew, since {record_first_year}, on one scale."
-            },
-            {
-              "place": "guide",
-              "line": "A fire can be shown pass by pass and tested only where the satellites' passes are stored: {places_with_fires}."
+              "line": "This is your area's fire record since {record_first_year}, on one scale."
             }
           ],
           "actions": [
             {
-              "label": "Choose a place with fires to test",
+              "label": "Choose a place",
               "command": "place:open",
               "key": "Enter",
               "places": [
@@ -910,6 +946,12 @@
               "places": [
                 "guide"
               ]
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Fires can be followed pass by pass and tested only in these places: {places_with_fires}."
             }
           ]
         },
@@ -934,7 +976,7 @@
           ]
         }
       ],
-      "objective": "Read the fire record of {place}",
+      "objective": "{place}",
       "context": "{record_first_year} to {record_last_year}",
       "also": [
         {
@@ -946,7 +988,7 @@
           ]
         },
         {
-          "label": "Pick a month",
+          "label": "Choose a month",
           "command": "record:pick",
           "key": "M",
           "places": [
@@ -960,40 +1002,40 @@
       "name": null,
       "under": "Record",
       "address": "a screen of its own under the Record's step, with an address of its own that the film opens directly",
-      "objective": "Watch the Earth's fire year by year since {world_first_year}",
+      "objective": "Fire detections per year",
       "context": "{world_first_year} to {years_last}",
       "states": [
         {
           "id": "earth_years",
-          "objective": "Watch the Earth's fire year by year since {world_first_year}",
+          "objective": "Fire detections per year",
           "says": [
             {
               "place": "guide",
               "unless": "years_on_one_scale",
-              "line": "Each year as the satellites counted it: the older satellites' detections before {sharp_since}, the newer one's from then, about {world_ratio} times as many, since it also sees smaller fires."
+              "line": "VIIRS starts in {sharp_since}, and the count jumps though the fire did not."
             },
             {
               "place": "guide",
               "if": "years_on_one_scale",
-              "line": "Each year on one scale: the older satellites' detections are put on the newer one's scale, so the years can be set side by side and {sharp_since} shows no jump."
+              "line": "On one scale, {sharp_since} shows no jump."
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "Year by year the newer satellite makes from {world_ratio_low} to {world_ratio_high} times as many detections as the older ones, so about {world_ratio} is the figure over all the years both flew."
+              "line": "Year by year the figure runs from {world_ratio_low} to {world_ratio_high}, and over all the years both flew it is {world_ratio}."
             },
             {
               "place": "guide",
-              "line": "The factor of a single place differs from the Earth's, which is why the Record of a place gives its own."
+              "line": "Each place has its own figure, which its fire record gives."
             },
             {
               "place": "guide",
-              "line": "Lava is listed as fire too, so a few volcanoes stand out in the years they flowed."
+              "line": "Lava counts as fire too, so a few volcanoes stand out in the years they flowed."
             },
             {
               "place": "guide",
-              "line": "The last year shown is {years_last}, the last whole year of NASA's yearly files; the months since are not in them."
+              "line": "The last year shown is {years_last}, the last whole year in NASA's yearly files."
             }
           ],
           "labels": [
@@ -1001,38 +1043,38 @@
               "place": "label",
               "on": "the_year",
               "if": "years_older_counted",
-              "line": "Counted by the older satellites (MODIS)"
+              "line": "Counted by MODIS"
             },
             {
               "place": "label",
               "on": "the_year",
               "if": "years_newer_counted",
-              "line": "Counted by the newer, sharper satellite (VIIRS)"
+              "line": "Counted by VIIRS"
             },
             {
               "place": "label",
               "on": "the_year",
               "if": "years_on_one_scale",
-              "line": "On the newer satellite's scale"
+              "line": "On the VIIRS scale"
             },
             {
               "place": "label",
               "on": "change_bar",
               "if": "years_change_as_counted",
-              "line": "{sharp_since}: the newer, sharper satellite begins and makes about {world_ratio} times as many detections, smaller fires among them, so the Earth brightens with no more fire.",
+              "line": "{sharp_since}: VIIRS begins and makes {world_ratio} times as many detections, so the Earth brightens with no more fire.",
               "film": null
             },
             {
               "place": "label",
               "on": "change_bar",
               "if": "years_change_one_scale",
-              "line": "{sharp_since}: the newer, sharper satellite begins, and on one scale there is no step, because the older satellites' detections are put on its scale.",
+              "line": "{sharp_since}: VIIRS begins, and on one scale there is no step.",
               "film": null
             },
             {
               "place": "label",
               "on": "years_views",
-              "line": "As the satellites counted"
+              "line": "As counted"
             },
             {
               "place": "label",
@@ -1047,12 +1089,12 @@
             {
               "place": "label",
               "on": "years_strip",
-              "line": "Older satellites (MODIS)"
+              "line": "MODIS"
             },
             {
               "place": "label",
               "on": "years_strip",
-              "line": "Newer satellite (VIIRS)"
+              "line": "VIIRS"
             },
             {
               "place": "label",
@@ -1072,10 +1114,10 @@
               ]
             },
             {
-              "label": "See the years on one scale",
+              "label": "Show one scale",
               "command": "record:as_counted",
               "key": "Y",
-              "label_while_on": "See the years as the satellites counted them",
+              "label_while_on": "Show as counted",
               "places": [
                 "guide"
               ],
@@ -1101,13 +1143,13 @@
           "film": [
             {
               "place": "objective",
-              "unless": "years_on_one_scale",
-              "line": "{sharp_since}: a sharper satellite begins, seeing smaller fires too: {world_ratio} times the detections."
+              "line": "VIIRS starts in {sharp_since}: the count jumps, the fire did not.",
+              "unless": "years_on_one_scale"
             },
             {
               "place": "objective",
-              "if": "years_on_one_scale",
-              "line": "On one scale, no jump."
+              "line": "On one scale, no jump.",
+              "if": "years_on_one_scale"
             }
           ]
         }
@@ -1130,31 +1172,41 @@
         },
         {
           "id": "hidden",
-          "objective": "Watch a model estimate the fire from the coarse satellite alone",
+          "objective": "Where is the fire?",
           "says": [
             {
               "place": "guide",
-              "line": "The white frames are a model's estimate of where this fire is burning, made from the coarse satellite (MODIS) alone while the sharp satellite (VIIRS) is hidden."
+              "line": "The white outlines are the model's guess, made without VIIRS.",
+              "unless": "answered_by_challenger"
             },
             {
               "place": "guide",
-              "if": "model_is_experimental",
-              "line": "The model is experimental: it is shown and tested here, and it is not switched on as a product."
+              "line": "The white outlines are a new model's guess, made without VIIRS.",
+              "if": "answered_by_challenger"
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "Two kinds of satellite passed over this fire: a coarse one (MODIS) and a sharp one (VIIRS), which sees squares {sharp_square_m} metres across."
+              "line": "The new model was chosen on other fires, and the passes MODIS made keep the first model.",
+              "if": "answered_by_challenger"
             },
             {
               "place": "guide",
-              "line": "From the {coarse_passes} coarse passes alone, the model works out where the fire is, in squares as small as the sharp satellite's."
+              "line": "The VIIRS view stays hidden until you show it."
+            },
+            {
+              "place": "guide",
+              "line": "VIIRS sees pixels {sharp_square_m} metres across, much smaller than MODIS pixels."
+            },
+            {
+              "place": "guide",
+              "line": "From {coarse_passes} MODIS passes alone, the model places the fire in pixels as small as VIIRS pixels."
             }
           ],
           "actions": [
             {
-              "label": "Reveal what the sharp satellite saw",
+              "label": "Show VIIRS",
               "command": "go:test",
               "key": "Enter",
               "places": [
@@ -1164,16 +1216,16 @@
               "beside": "fire"
             },
             {
-              "label": "Play the passes",
+              "label": "Play passes",
               "command": "passes:play",
               "key": "Space",
               "places": [
                 "guide"
               ],
-              "label_while_on": "Pause the passes"
+              "label_while_on": "Pause passes"
             },
             {
-              "label": "Explain the marks",
+              "label": "Explain marks",
               "command": "marks:key",
               "key": "K",
               "places": [
@@ -1191,73 +1243,74 @@
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Hidden.",
-              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: hidden.",
-              "film": null
+              "line": "Pass {pass_number} of {passes_total}, VIIRS, {pass_when}: hidden.",
+              "short": "Pass {pass_number} of {passes_total}. VIIRS: hidden.",
+              "film": null,
+              "readout": "VIIRS PASS {pass_number} OF {passes_total}   {pass_clock}   HIDDEN"
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
-              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections.",
-              "film": "Coarse satellite: {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections, given to the model.",
+              "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections.",
+              "film": "MODIS: {pass_detections} detections.",
+              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock}   {pass_detections} DETECTIONS"
             },
             {
               "place": "label",
               "on": "frames",
               "if": "pass_is_sharp",
-              "line": "Each white frame is one square, {sharp_square_m} metres across, that the model says is burning at this pass. The dotted line is around all the ground where the model gives fire a chance.",
-              "film": "White frames: the model's estimate."
+              "line": "Each white outline is a pixel, {sharp_square_m} metres across, that the estimate puts on fire. The dotted line rings any chance of fire.",
+              "film": "White outlines: the estimate."
             },
             {
               "place": "label",
               "on": "dotted_line",
               "unless": "pass_is_sharp",
-              "line": "The dotted line is around all the ground where the model gives fire a chance at this pass.",
+              "line": "The dotted line rings all the ground with any chance of fire at this pass.",
               "film": null
             }
           ],
           "film": [
             {
               "place": "objective",
-              "line": "Sharp satellite hidden. An experimental model estimates the fire.",
+              "line": "VIIRS hidden. The white outlines are the model's guess.",
               "unless": "answered_by_challenger"
             },
             {
               "place": "objective",
-              "if": "answered_by_challenger",
-              "line": "Sharp satellite hidden. A second experimental model estimates the fire."
+              "line": "VIIRS hidden. The white outlines are a new model's guess.",
+              "if": "answered_by_challenger"
             }
           ]
         },
         {
           "id": "on_a_coarse_pass",
-          "objective": "Watch a model estimate the fire from the coarse satellite alone",
+          "objective": "Where is the fire?",
           "says": [
             {
               "place": "guide",
-              "line": "The dotted line is around the ground a model says may be burning, worked out from the coarse satellite (MODIS) alone while the sharp satellite (VIIRS) is hidden."
-            },
-            {
-              "place": "guide",
-              "if": "model_is_experimental",
-              "line": "The model is experimental: it is shown and tested here, and it is not switched on as a product."
+              "line": "The passes play in time order, and VIIRS stays hidden."
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "Two kinds of satellite passed over this fire: a coarse one (MODIS) and a sharp one (VIIRS), which sees squares {sharp_square_m} metres across."
+              "line": "The VIIRS view stays hidden until you show it."
             },
             {
               "place": "guide",
-              "line": "From the {coarse_passes} coarse passes alone, the model works out where the fire is, in squares as small as the sharp satellite's."
+              "line": "VIIRS sees pixels {sharp_square_m} metres across, much smaller than MODIS pixels."
+            },
+            {
+              "place": "guide",
+              "line": "From {coarse_passes} MODIS passes alone, the model places the fire in pixels as small as VIIRS pixels."
             }
           ],
           "actions": [
             {
-              "label": "Reveal what the sharp satellite saw",
+              "label": "Show VIIRS",
               "command": "go:test",
               "key": "Enter",
               "places": [
@@ -1267,16 +1320,16 @@
               "beside": "fire"
             },
             {
-              "label": "Play the passes",
+              "label": "Play passes",
               "command": "passes:play",
               "key": "Space",
               "places": [
                 "guide"
               ],
-              "label_while_on": "Pause the passes"
+              "label_while_on": "Pause passes"
             },
             {
-              "label": "Go to a hidden pass",
+              "label": "Show a hidden pass",
               "command": "passes:hidden_next",
               "key": "H",
               "places": [
@@ -1289,57 +1342,69 @@
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Hidden.",
-              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: hidden."
+              "line": "Pass {pass_number} of {passes_total}, VIIRS, {pass_when}: hidden.",
+              "short": "Pass {pass_number} of {passes_total}. VIIRS: hidden.",
+              "readout": "VIIRS PASS {pass_number} OF {passes_total}   {pass_clock}   HIDDEN"
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
-              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections, given to the model.",
+              "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections.",
+              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock}   {pass_detections} DETECTIONS"
             },
             {
               "place": "label",
               "on": "frames",
               "if": "pass_is_sharp",
-              "line": "Each white frame is one square, {sharp_square_m} metres across, that the model says is burning at this pass. The dotted line is around all the ground where the model gives fire a chance."
+              "line": "Each white outline is a pixel, {sharp_square_m} metres across, that the estimate puts on fire. The dotted line rings any chance of fire."
             },
             {
               "place": "label",
               "on": "dotted_line",
               "unless": "pass_is_sharp",
-              "line": "The dotted line is around all the ground where the model gives fire a chance at this pass."
+              "line": "The dotted line rings all the ground with any chance of fire at this pass."
             }
           ]
         },
         {
           "id": "on_a_hidden_pass",
-          "objective": "Watch a model estimate the fire from the coarse satellite alone",
+          "objective": "Where is the fire?",
           "says": [
             {
               "place": "guide",
-              "line": "The white frames are a model's estimate of where this fire is burning, made from the coarse satellite (MODIS) alone while the sharp satellite (VIIRS) is hidden."
+              "line": "The white outlines are the model's guess, made without VIIRS.",
+              "unless": "answered_by_challenger"
             },
             {
               "place": "guide",
-              "if": "model_is_experimental",
-              "line": "The model is experimental: it is shown and tested here, and it is not switched on as a product."
+              "line": "The white outlines are a new model's guess, made without VIIRS.",
+              "if": "answered_by_challenger"
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "Two kinds of satellite passed over this fire: a coarse one (MODIS) and a sharp one (VIIRS), which sees squares {sharp_square_m} metres across."
+              "line": "The new model was chosen on other fires, and the passes MODIS made keep the first model.",
+              "if": "answered_by_challenger"
             },
             {
               "place": "guide",
-              "line": "From the {coarse_passes} coarse passes alone, the model works out where the fire is, in squares as small as the sharp satellite's."
+              "line": "The VIIRS view stays hidden until you show it."
+            },
+            {
+              "place": "guide",
+              "line": "VIIRS sees pixels {sharp_square_m} metres across, much smaller than MODIS pixels."
+            },
+            {
+              "place": "guide",
+              "line": "From {coarse_passes} MODIS passes alone, the model places the fire in pixels as small as VIIRS pixels."
             }
           ],
           "actions": [
             {
-              "label": "Reveal what the sharp satellite saw",
+              "label": "Show VIIRS",
               "command": "go:test",
               "key": "Enter",
               "places": [
@@ -1349,16 +1414,16 @@
               "beside": "fire"
             },
             {
-              "label": "Play the passes",
+              "label": "Play passes",
               "command": "passes:play",
               "key": "Space",
               "places": [
                 "guide"
               ],
-              "label_while_on": "Pause the passes"
+              "label_while_on": "Pause passes"
             },
             {
-              "label": "Explain the marks",
+              "label": "Explain marks",
               "command": "marks:key",
               "key": "K",
               "places": [
@@ -1371,57 +1436,55 @@
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Hidden.",
-              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: hidden."
+              "line": "Pass {pass_number} of {passes_total}, VIIRS, {pass_when}: hidden.",
+              "short": "Pass {pass_number} of {passes_total}. VIIRS: hidden.",
+              "readout": "VIIRS PASS {pass_number} OF {passes_total}   {pass_clock}   HIDDEN"
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
-              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections, given to the model.",
+              "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections.",
+              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock}   {pass_detections} DETECTIONS"
             },
             {
               "place": "label",
               "on": "frames",
               "if": "pass_is_sharp",
-              "line": "Each white frame is one square, {sharp_square_m} metres across, that the model says is burning at this pass. The dotted line is around all the ground where the model gives fire a chance."
+              "line": "Each white outline is a pixel, {sharp_square_m} metres across, that the estimate puts on fire. The dotted line rings any chance of fire."
             },
             {
               "place": "label",
               "on": "dotted_line",
               "unless": "pass_is_sharp",
-              "line": "The dotted line is around all the ground where the model gives fire a chance at this pass."
+              "line": "The dotted line rings all the ground with any chance of fire at this pass."
             }
           ]
         },
         {
           "id": "revealing",
-          "objective": "Wait for what the sharp satellite saw",
+          "objective": "Wait for what VIIRS saw",
           "says": [
             {
               "place": "guide",
-              "line": "Opening what the sharp satellite saw."
+              "line": "Opening what VIIRS saw."
             }
           ],
           "actions": []
         },
         {
           "id": "recorded_test_fire",
-          "objective": "Look at a fire kept as the model's test",
+          "objective": "Look at a test fire",
           "says": [
             {
               "place": "guide",
-              "line": "This is one of the {test_fires_n} fires kept as the model's test, so nothing is hidden here and the fire is not tested again."
-            },
-            {
-              "place": "guide",
-              "line": "At this fire's final test the estimate beat the simple methods on {this_test_fire_ahead} of {test_scores_n} scores."
+              "line": "This is one of the {test_fires_n} first test fires, so nothing is hidden and it is not tested again."
             }
           ],
           "actions": [
             {
-              "label": "Choose a fire you can test",
+              "label": "Choose a fire",
               "command": "place:open",
               "key": "Enter",
               "places": [
@@ -1429,7 +1492,7 @@
               ]
             },
             {
-              "label": "See every test on record",
+              "label": "All tests",
               "command": "tests:record",
               "key": "E",
               "places": [
@@ -1437,13 +1500,13 @@
               ]
             },
             {
-              "label": "Play the passes",
+              "label": "Play passes",
               "command": "passes:play",
               "key": "Space",
               "places": [
                 "guide"
               ],
-              "label_while_on": "Pause the passes"
+              "label_while_on": "Pause passes"
             }
           ],
           "labels": [
@@ -1451,34 +1514,36 @@
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections.",
-              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections.",
+              "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections."
             },
             {
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. {pass_detections} detections.",
-              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}, VIIRS, {pass_when}: {pass_detections} detections.",
+              "short": "Pass {pass_number} of {passes_total}. VIIRS: {pass_detections} detections."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Its test is on record under All tests."
             }
           ]
         },
         {
           "id": "no_sharp_satellite",
-          "objective": "See what the coarse satellite saw of this fire",
+          "objective": "See what MODIS saw",
           "says": [
             {
               "place": "guide",
-              "line": "These days are before {sharp_since}, when the sharp satellite began, so there is nothing to hide."
-            },
-            {
-              "place": "guide",
-              "line": "You see what the coarse satellite saw."
+              "line": "These days are before {sharp_since}, when VIIRS began, so there is nothing to hide."
             }
           ],
           "actions": [
             {
-              "label": "Choose a fire you can test",
+              "label": "Choose a fire",
               "command": "place:open",
               "key": "Enter",
               "places": [
@@ -1486,21 +1551,27 @@
               ]
             },
             {
-              "label": "Play the passes",
+              "label": "Play passes",
               "command": "passes:play",
               "key": "Space",
               "places": [
                 "guide"
               ],
-              "label_while_on": "Pause the passes"
+              "label_while_on": "Pause passes"
             }
           ],
           "labels": [
             {
               "place": "label",
               "on": "fire",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections.",
-              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections.",
+              "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "You see what MODIS saw."
             }
           ]
         },
@@ -1510,7 +1581,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "This fire's passes did not load, and nothing is shown in their place."
+              "line": "This fire's passes did not load, so nothing is shown."
             }
           ],
           "actions": [
@@ -1533,17 +1604,17 @@
           ]
         }
       ],
-      "objective": "Watch a model estimate the fire from the coarse satellite alone",
+      "objective": "Where is the fire?",
       "start_card": {
         "place": "prompt",
         "at": "fire",
-        "do": "The sharp satellite is hidden. Watch what the model makes of the coarse passes.",
-        "done": "Reveal the sharp satellite when you have looked."
+        "do": "VIIRS is hidden. Watch what the model makes of the MODIS passes.",
+        "done": "Show VIIRS when you have looked."
       },
       "context": "{place}, {run_days}",
       "also": [
         {
-          "label": "Explain the marks",
+          "label": "Explain marks",
           "command": "marks:key",
           "key": "K",
           "places": [
@@ -1551,13 +1622,13 @@
           ]
         },
         {
-          "label": "Show the less likely squares",
+          "label": "Show less likely",
           "command": "estimate:chance",
           "key": "L",
           "places": [
             "guide"
           ],
-          "label_while_on": "Hide the less likely squares"
+          "label_while_on": "Hide less likely"
         },
         {
           "label": "Choose another fire",
@@ -1568,7 +1639,7 @@
           ]
         },
         {
-          "label": "Show that day's photograph from the satellite",
+          "label": "Show the photo",
           "command": "photo:next",
           "key": "D",
           "places": [
@@ -1585,34 +1656,34 @@
           {
             "place": "guide",
             "if": "photo_day_pass",
-            "line": "This is NASA's photograph of that day from {photo_satellite}, stitched from its daytime passes at about {photo_pixel_m} metres a pixel: one picture a day, not a pass, with its smoke and cloud real."
+            "line": "This is NASA's photograph of that day from {photo_satellite}, {photo_pixel_m} metres a pixel, with real smoke and cloud."
           },
           {
             "place": "guide",
             "if": "photo_night_pass",
-            "line": "This pass crossed at night, so this is NASA's photograph of that day by daylight from {photo_satellite}, at about {photo_pixel_m} metres a pixel: one picture a day, not a pass, with its smoke and cloud real."
+            "line": "This pass was at night, so this is that day's daylight photograph from {photo_satellite}, with real smoke and cloud."
           },
           {
             "place": "guide",
             "if": "photo_instead_of_hidden",
-            "line": "This is NASA's photograph of that day by daylight from the coarse satellite, since the sharp satellite's own would show what is hidden: one picture a day, not a pass, with its smoke and cloud real."
+            "line": "This is that day's photograph from MODIS, since the VIIRS one would show what is hidden."
           }
         ],
         "false_color": [
           {
             "place": "guide",
             "if": "photo_day_pass",
-            "line": "In false colour the same photograph shows plants green, burned ground brown and smoke pale blue: one picture a day, not a pass."
+            "line": "In false colour the same photograph shows plants green, burned ground brown and smoke pale blue."
           },
           {
             "place": "guide",
             "if": "photo_night_pass",
-            "line": "This pass crossed at night, and the day's photograph by daylight shows, in false colour, plants green, burned ground brown and smoke pale blue."
+            "line": "In false colour that day's daylight photograph shows plants green, burned ground brown and smoke pale blue."
           },
           {
             "place": "guide",
             "if": "photo_instead_of_hidden",
-            "line": "In false colour the coarse satellite's photograph of that day shows plants green, burned ground brown and smoke pale blue: one picture a day, not a pass."
+            "line": "In false colour that day's MODIS photograph shows plants green, burned ground brown and smoke pale blue."
           }
         ],
         "missing": [
@@ -1629,104 +1700,77 @@
       "states": [
         {
           "id": "revealed",
-          "objective": "Check the estimate against what the sharp satellite saw",
+          "objective": "What VIIRS saw",
           "says": [
             {
               "place": "guide",
-              "line": "On this fire the estimate beat {simple_methods_n} simple methods on {ahead_on} of {scores_n} scores, by any margin."
-            },
-            {
-              "place": "guide",
-              "if": "test_b_taken",
-              "line": "On {test_b_fires_n} fires that nothing had touched, the estimate was ahead of the simple methods on {test_b_ahead} of {test_scores_n} scores, level on {test_b_level} and behind on {test_b_behind}, while {challengers_n} other models were each ahead on {challengers_ahead}."
-            },
-            {
-              "place": "guide",
-              "if": "test_a_last_strict_behind",
-              "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores and behind on {test_a_behind}: it does not place fire square for square better than painting the coarse satellite's detections."
-            },
-            {
-              "place": "guide",
-              "if": "test_a_last_strict_not_behind",
-              "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores, level on {test_a_level} and behind on {test_a_behind}."
-            },
-            {
-              "place": "guide",
-              "if": "test_a_not_taken",
-              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
+              "line": "Blue inside the white outlines: the guess was right."
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "That is one fire chosen to show, not a test: the tests on many fires count a score only when the gap is too large to be luck."
+              "line": "On {test_b_fires_n} new fires the new model overlaps VIIRS fire pixels by {tb_new_exact} percent, or {tb_new_within} within one pixel.",
+              "if": "test_b_taken"
             },
             {
               "place": "guide",
-              "if": "test_b_taken",
-              "line": "On those fires it led on {test_b_ahead_names}, and lost on {test_b_behind_names}."
+              "line": "MODIS alone overlaps by {tb_modis_exact} and {tb_modis_within} percent, and the first model by {tb_first_exact} and {tb_first_within}.",
+              "if": "test_b_taken"
+            },
+            {
+              "place": "guide",
+              "line": "On this fire, within one pixel, the guess overlaps {one_square_estimate} percent and MODIS alone {one_square_coarse}."
+            },
+            {
+              "place": "guide",
+              "line": "This fire was chosen to show, not to test."
             },
             {
               "place": "guide",
               "if": "test_b_interval_short",
-              "line": "The range it states for the total heat held on {test_b_interval_held} percent of those passes, short of the {test_b_interval_stated} percent it claims."
+              "line": "Its stated range for the total heat held on {test_b_interval_held} percent of passes, short of its {test_b_interval_stated} percent."
             },
             {
               "place": "guide",
-              "if": "test_b_taken",
-              "line": "The other models were fitted and chosen on the same fires as the estimate, so those fires were a fair test of them too."
-            },
-            {
-              "place": "guide",
-              "if": "test_b_taken",
-              "line": "Before that, on {test_a_fires_n} fires across {test_a_continents_n} continents, it was ahead on {test_a_ahead} of {test_scores_n} scores, level on {test_a_level} and behind on {test_a_behind}."
-            },
-            {
-              "place": "guide",
-              "if": "test_a_taken",
-              "line": "It led on {test_a_ahead_names}, and lost on {test_a_behind_names}."
+              "line": "On {test_a_fires_n} earlier test fires the first model overlapped by {ta_first_exact} and {ta_first_within} percent, MODIS alone by {ta_modis_exact} and {ta_modis_within}.",
+              "if": "test_a_taken"
             },
             {
               "place": "guide",
               "if": "test_a_interval_short",
-              "line": "The range it states for the total heat held on {test_a_interval_held} percent of those passes, short of the {test_a_interval_stated} percent it claims."
+              "line": "Its stated range for the total heat held on {test_a_interval_held} percent of passes, short of its {test_a_interval_stated} percent."
             },
             {
               "place": "guide",
               "if": "test_a_taken",
-              "line": "The test holds {test_a_europe_n} fires in Europe and {test_a_oceania_n} in Oceania, so it says little about those two."
+              "line": "That test held {test_a_europe_n} fires in Europe and {test_a_oceania_n} in Oceania, so it says little there."
             },
             {
               "place": "guide",
-              "if": "test_a_taken",
-              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
+              "line": "Its {test_fires_n} first test fires are on record under All tests.",
+              "if": "test_a_not_taken"
             },
             {
               "place": "guide",
-              "line": "The scores compare the estimate with the {sharp_detections_all} detections the sharp satellite made on its {hidden_passes} passes of this fire."
+              "line": "The scores compare the estimate with the {sharp_detections_all} VIIRS detections on its {hidden_passes} passes here."
             }
           ],
           "actions": [
             {
-              "label": "Now you try",
-              "command": "go:play",
+              "label": "See {test_b_fires_n} tested fires",
+              "command": "world:test",
               "key": "Enter",
               "places": [
-                "guide"
-              ]
+                "guide",
+                "prompt"
+              ],
+              "beside": "fire"
             },
             {
-              "label": "See it side by side",
+              "label": "Side by side",
               "command": "test:side_by_side",
               "key": "T",
-              "places": [
-                "guide"
-              ]
-            },
-            {
-              "label": "Show the scores",
-              "command": "test:scores",
-              "key": "S",
               "places": [
                 "guide"
               ]
@@ -1742,132 +1786,102 @@
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Its {sharp_detections_pass} detections are now shown as blue squares over the white frames of the estimate.",
-              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: {sharp_detections_pass} detections.",
-              "film": "The sharp satellite's {sharp_detections_pass} detections, in blue."
+              "line": "Pass {pass_number} of {passes_total}, {pass_when}: the {sharp_detections_pass} VIIRS detections, in blue.",
+              "short": "Pass {pass_number} of {passes_total}. VIIRS: {sharp_detections_pass} detections.",
+              "film": "The {sharp_detections_pass} VIIRS detections, in blue.",
+              "readout": "VIIRS SAW {sharp_detections_pass} DETECTIONS"
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
-              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections.",
-              "film": "Coarse satellite: {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections, given to the model.",
+              "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections.",
+              "film": "MODIS: {pass_detections} detections.",
+              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock}   {pass_detections} DETECTIONS"
             }
           ],
           "film": [
             {
               "place": "objective",
-              "line": "Revealed: within one square, the estimate matches {one_square_estimate}%; the coarse guess, {one_square_coarse}%.",
-              "unless": "answered_by_challenger"
-            },
-            {
-              "place": "objective",
-              "if": "answered_by_challenger",
-              "line": "Revealed: within one square, the second model matches {one_square_estimate}%; the coarse guess, {one_square_coarse}%."
+              "line": "What VIIRS saw: blue inside the white outlines."
             }
-          ]
+          ],
+          "keys_too": []
         },
         {
           "id": "on_another_pass",
-          "objective": "Check the estimate against what the sharp satellite saw",
+          "objective": "What VIIRS saw",
           "says": [
             {
               "place": "guide",
-              "line": "On this fire the estimate beat {simple_methods_n} simple methods on {ahead_on} of {scores_n} scores, by any margin."
-            },
-            {
-              "place": "guide",
-              "if": "test_b_taken",
-              "line": "On {test_b_fires_n} fires that nothing had touched, the estimate was ahead of the simple methods on {test_b_ahead} of {test_scores_n} scores, level on {test_b_level} and behind on {test_b_behind}, while {challengers_n} other models were each ahead on {challengers_ahead}."
-            },
-            {
-              "place": "guide",
-              "if": "test_a_last_strict_behind",
-              "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores and behind on {test_a_behind}: it does not place fire square for square better than painting the coarse satellite's detections."
-            },
-            {
-              "place": "guide",
-              "if": "test_a_last_strict_not_behind",
-              "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores, level on {test_a_level} and behind on {test_a_behind}."
-            },
-            {
-              "place": "guide",
-              "if": "test_a_not_taken",
-              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
+              "line": "Blue inside the white outlines: the guess was right."
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "That is one fire chosen to show, not a test: the tests on many fires count a score only when the gap is too large to be luck."
+              "line": "On {test_b_fires_n} new fires the new model overlaps VIIRS fire pixels by {tb_new_exact} percent, or {tb_new_within} within one pixel.",
+              "if": "test_b_taken"
             },
             {
               "place": "guide",
-              "if": "test_b_taken",
-              "line": "On those fires it led on {test_b_ahead_names}, and lost on {test_b_behind_names}."
+              "line": "MODIS alone overlaps by {tb_modis_exact} and {tb_modis_within} percent, and the first model by {tb_first_exact} and {tb_first_within}.",
+              "if": "test_b_taken"
+            },
+            {
+              "place": "guide",
+              "line": "On this fire, within one pixel, the guess overlaps {one_square_estimate} percent and MODIS alone {one_square_coarse}."
+            },
+            {
+              "place": "guide",
+              "line": "This fire was chosen to show, not to test."
             },
             {
               "place": "guide",
               "if": "test_b_interval_short",
-              "line": "The range it states for the total heat held on {test_b_interval_held} percent of those passes, short of the {test_b_interval_stated} percent it claims."
+              "line": "Its stated range for the total heat held on {test_b_interval_held} percent of passes, short of its {test_b_interval_stated} percent."
             },
             {
               "place": "guide",
-              "if": "test_b_taken",
-              "line": "The other models were fitted and chosen on the same fires as the estimate, so those fires were a fair test of them too."
-            },
-            {
-              "place": "guide",
-              "if": "test_b_taken",
-              "line": "Before that, on {test_a_fires_n} fires across {test_a_continents_n} continents, it was ahead on {test_a_ahead} of {test_scores_n} scores, level on {test_a_level} and behind on {test_a_behind}."
-            },
-            {
-              "place": "guide",
-              "if": "test_a_taken",
-              "line": "It led on {test_a_ahead_names}, and lost on {test_a_behind_names}."
+              "line": "On {test_a_fires_n} earlier test fires the first model overlapped by {ta_first_exact} and {ta_first_within} percent, MODIS alone by {ta_modis_exact} and {ta_modis_within}.",
+              "if": "test_a_taken"
             },
             {
               "place": "guide",
               "if": "test_a_interval_short",
-              "line": "The range it states for the total heat held on {test_a_interval_held} percent of those passes, short of the {test_a_interval_stated} percent it claims."
+              "line": "Its stated range for the total heat held on {test_a_interval_held} percent of passes, short of its {test_a_interval_stated} percent."
             },
             {
               "place": "guide",
               "if": "test_a_taken",
-              "line": "The test holds {test_a_europe_n} fires in Europe and {test_a_oceania_n} in Oceania, so it says little about those two."
+              "line": "That test held {test_a_europe_n} fires in Europe and {test_a_oceania_n} in Oceania, so it says little there."
             },
             {
               "place": "guide",
-              "if": "test_a_taken",
-              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
+              "line": "Its {test_fires_n} first test fires are on record under All tests.",
+              "if": "test_a_not_taken"
             },
             {
               "place": "guide",
-              "line": "The scores compare the estimate with the {sharp_detections_all} detections the sharp satellite made on its {hidden_passes} passes of this fire."
+              "line": "The scores compare the estimate with the {sharp_detections_all} VIIRS detections on its {hidden_passes} passes here."
             }
           ],
           "actions": [
             {
-              "label": "Now you try",
-              "command": "go:play",
+              "label": "See {test_b_fires_n} tested fires",
+              "command": "world:test",
               "key": "Enter",
               "places": [
-                "guide"
-              ]
+                "guide",
+                "prompt"
+              ],
+              "beside": "fire"
             },
             {
-              "label": "See it side by side",
+              "label": "Side by side",
               "command": "test:side_by_side",
               "key": "T",
-              "places": [
-                "guide"
-              ]
-            },
-            {
-              "label": "Show the scores",
-              "command": "test:scores",
-              "key": "S",
               "places": [
                 "guide"
               ]
@@ -1878,32 +1892,35 @@
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Its {sharp_detections_pass} detections are now shown as blue squares over the white frames of the estimate.",
-              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: {sharp_detections_pass} detections.",
-              "film": "The sharp satellite's {sharp_detections_pass} detections, in blue."
+              "line": "Pass {pass_number} of {passes_total}, {pass_when}: the {sharp_detections_pass} VIIRS detections, in blue.",
+              "short": "Pass {pass_number} of {passes_total}. VIIRS: {sharp_detections_pass} detections.",
+              "film": "The {sharp_detections_pass} VIIRS detections, in blue.",
+              "readout": "VIIRS SAW {sharp_detections_pass} DETECTIONS"
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
-              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections.",
-              "film": "Coarse satellite: {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections, given to the model.",
+              "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections.",
+              "film": "MODIS: {pass_detections} detections.",
+              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock}   {pass_detections} DETECTIONS"
             }
-          ]
+          ],
+          "keys_too": []
         },
         {
           "id": "side_by_side_open",
-          "objective": "Compare what each satellite saw with the estimate",
+          "objective": "Compare each satellite's view with the estimate",
           "says": [
             {
               "place": "guide",
-              "line": "The same ground three times: what the coarse satellite saw, the estimate made from that alone, and what the sharp satellite saw."
+              "line": "The same ground three times: the MODIS view, the estimate made from it, and the VIIRS view."
             }
           ],
           "actions": [
             {
-              "label": "Now you try",
+              "label": "Play a round",
               "command": "go:play",
               "key": "Enter",
               "places": [
@@ -1919,7 +1936,7 @@
               ]
             },
             {
-              "label": "Back to the fire",
+              "label": "Back",
               "command": "close",
               "key": "Esc",
               "places": [
@@ -1931,36 +1948,32 @@
             {
               "place": "label",
               "on": "side_block",
-              "line": "What the coarse satellite saw on its last pass before: {coarse_before_detections} detections, {coarse_before_when}."
+              "line": "The last MODIS pass before, {coarse_before_when}: {coarse_before_detections} detections."
             },
             {
               "place": "label",
               "on": "side_block",
-              "line": "The estimate from that alone: {estimate_squares} squares the model says are burning."
+              "line": "The estimate from that alone: {estimate_squares} pixels on fire."
             },
             {
               "place": "label",
               "on": "side_block",
-              "line": "What the sharp satellite saw: {sharp_detections_pass} detections."
+              "line": "What VIIRS saw: {sharp_detections_pass} detections."
             }
           ]
         },
         {
           "id": "scores_open",
-          "objective": "Read how the estimate scored on this fire",
+          "objective": "Read the estimate's scores on this fire",
           "says": [
             {
               "place": "guide",
-              "line": "Each row is one way of comparing the estimate with what the sharp satellite saw, beside the simple methods."
-            },
-            {
-              "place": "guide",
-              "line": "The estimate was ahead on {ahead_on} of {scores_n} here, and the table shows every row, won or lost."
+              "line": "Each row sets the guess beside MODIS alone, against what VIIRS saw."
             }
           ],
           "actions": [
             {
-              "label": "Now you try",
+              "label": "Play a round",
               "command": "go:play",
               "key": "Enter",
               "places": [
@@ -1968,7 +1981,7 @@
               ]
             },
             {
-              "label": "See every test on record",
+              "label": "All tests",
               "command": "tests:record",
               "key": "E",
               "places": [
@@ -1976,26 +1989,28 @@
               ]
             },
             {
-              "label": "Back to the fire",
+              "label": "Back",
               "command": "close",
               "key": "Esc",
               "places": [
                 "guide"
               ]
             }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Every row is shown, better or worse."
+            }
           ]
         },
         {
           "id": "failed",
-          "objective": "Try the reveal again",
+          "objective": "Load the VIIRS view again",
           "says": [
             {
               "place": "guide",
-              "line": "The reveal did not load."
-            },
-            {
-              "place": "guide",
-              "line": "The sharp satellite stays hidden."
+              "line": "The VIIRS view did not load."
             }
           ],
           "actions": [
@@ -2007,14 +2022,20 @@
                 "guide"
               ]
             }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "VIIRS stays hidden."
+            }
           ]
         }
       ],
-      "objective": "Check the estimate against what the sharp satellite saw",
+      "objective": "What VIIRS saw",
       "context": "{place}, {run_days}",
       "also": [
         {
-          "label": "Explain the marks",
+          "label": "Explain marks",
           "command": "marks:key",
           "key": "K",
           "places": [
@@ -2022,25 +2043,25 @@
           ]
         },
         {
-          "label": "Show the less likely squares",
+          "label": "Show less likely",
           "command": "estimate:chance",
           "key": "L",
           "places": [
             "guide"
           ],
-          "label_while_on": "Hide the less likely squares"
+          "label_while_on": "Hide less likely"
         },
         {
-          "label": "Play the passes",
+          "label": "Play passes",
           "command": "passes:play",
           "key": "Space",
           "places": [
             "guide"
           ],
-          "label_while_on": "Pause the passes"
+          "label_while_on": "Pause passes"
         },
         {
-          "label": "Show that day's photograph from the satellite",
+          "label": "Show the photo",
           "command": "photo:next",
           "key": "D",
           "places": [
@@ -2057,34 +2078,34 @@
           {
             "place": "guide",
             "if": "photo_day_pass",
-            "line": "This is NASA's photograph of that day from {photo_satellite}, stitched from its daytime passes at about {photo_pixel_m} metres a pixel: one picture a day, not a pass, with its smoke and cloud real."
+            "line": "This is NASA's photograph of that day from {photo_satellite}, {photo_pixel_m} metres a pixel, with real smoke and cloud."
           },
           {
             "place": "guide",
             "if": "photo_night_pass",
-            "line": "This pass crossed at night, so this is NASA's photograph of that day by daylight from {photo_satellite}, at about {photo_pixel_m} metres a pixel: one picture a day, not a pass, with its smoke and cloud real."
+            "line": "This pass was at night, so this is that day's daylight photograph from {photo_satellite}, with real smoke and cloud."
           },
           {
             "place": "guide",
             "if": "photo_instead_of_hidden",
-            "line": "This is NASA's photograph of that day by daylight from the coarse satellite, since the sharp satellite's own would show what is hidden: one picture a day, not a pass, with its smoke and cloud real."
+            "line": "This is that day's photograph from MODIS, since the VIIRS one would show what is hidden."
           }
         ],
         "false_color": [
           {
             "place": "guide",
             "if": "photo_day_pass",
-            "line": "In false colour the same photograph shows plants green, burned ground brown and smoke pale blue: one picture a day, not a pass."
+            "line": "In false colour the same photograph shows plants green, burned ground brown and smoke pale blue."
           },
           {
             "place": "guide",
             "if": "photo_night_pass",
-            "line": "This pass crossed at night, and the day's photograph by daylight shows, in false colour, plants green, burned ground brown and smoke pale blue."
+            "line": "In false colour that day's daylight photograph shows plants green, burned ground brown and smoke pale blue."
           },
           {
             "place": "guide",
             "if": "photo_instead_of_hidden",
-            "line": "In false colour the coarse satellite's photograph of that day shows plants green, burned ground brown and smoke pale blue: one picture a day, not a pass."
+            "line": "In false colour that day's MODIS photograph shows plants green, burned ground brown and smoke pale blue."
           }
         ],
         "missing": [
@@ -2106,31 +2127,33 @@
             {
               "place": "guide",
               "line": "Setting up a round on this fire."
-            },
-            {
-              "place": "guide",
-              "line": "The sharp satellite is hidden again."
             }
           ],
-          "actions": []
+          "actions": [],
+          "more": [
+            {
+              "place": "guide",
+              "line": "VIIRS is hidden again."
+            }
+          ]
         },
         {
           "id": "choose",
-          "objective": "Pick the square where a look would teach the model the most",
+          "objective": "Pick where to look",
           "says": [
+            {
+              "place": "guide",
+              "line": "Each look shows VIIRS for one square."
+            }
+          ],
+          "more": [
             {
               "place": "guide",
               "line": "You have {looks_left} of {looks_to_spend} looks left."
             },
             {
               "place": "guide",
-              "line": "A look shows the model what the sharp satellite saw in one square on this pass."
-            }
-          ],
-          "more": [
-            {
-              "place": "guide",
-              "line": "The sharp satellite passes {round_passes} times in this round, and on {looks_to_spend} of those passes you may look at one square."
+              "line": "VIIRS passes {round_passes} times in this round, and on {looks_to_spend} of them you may look."
             }
           ],
           "actions": [
@@ -2145,7 +2168,7 @@
               "beside": "marked_square"
             },
             {
-              "label": "Let this pass go",
+              "label": "Skip this pass",
               "command": "play:skip",
               "key": "N",
               "places": [
@@ -2170,7 +2193,8 @@
             {
               "place": "label",
               "on": "fire",
-              "line": "Pass {look_number} of {round_passes_n}: the sharp satellite, {look_when}. Hidden."
+              "line": "Pass {look_number} of {round_passes_n}, VIIRS, {look_when}: hidden.",
+              "readout": "{looks_left_n} LOOKS LEFT"
             }
           ]
         },
@@ -2185,13 +2209,8 @@
             },
             {
               "place": "guide",
-              "if": "look_found_nothing",
-              "line": "A look that finds nothing teaches the model nothing and scores nothing."
-            },
-            {
-              "place": "guide",
               "unless": "look_found_nothing",
-              "line": "The estimate now agrees with the sharp satellite on {score_now} percent of the burning ground."
+              "line": "Overlap with VIIRS is now {score_now} percent of the burning ground."
             }
           ],
           "actions": [
@@ -2217,18 +2236,27 @@
               "place": "label",
               "on": "looked_square",
               "if": "look_found_nothing",
-              "line": "Your look found nothing here."
+              "line": "Your look found nothing here.",
+              "readout": "FOUND NOTHING: NO FIRE, OR CLOUD"
             },
             {
               "place": "label",
               "on": "looked_square",
               "unless": "look_found_nothing",
-              "line": "Your look found {look_found} detections here. It moved the estimate's agreement by {look_gain} points."
+              "line": "Your look found {look_found} detections and moved overlap by {look_gain} points, to {score_now} percent.",
+              "readout": "FOUND {look_found} DETECTIONS   OVERLAP NOW {score_now}%"
             }
           ],
           "on_demand": [
             "what_is_agreement",
             "how_is_a_look_scored"
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "if": "look_found_nothing",
+              "line": "A look that finds nothing teaches the model nothing and scores nothing."
+            }
           ]
         },
         {
@@ -2237,18 +2265,14 @@
           "says": [
             {
               "place": "guide",
-              "line": "You have used all {looks_to_spend} of your looks."
-            },
-            {
-              "place": "guide",
-              "line": "The passes the sharp satellite has left go by without a look."
+              "line": "You have used all {looks_to_spend} looks."
             }
           ],
           "labels": [
             {
               "place": "label",
               "on": "fire",
-              "line": "Pass {look_number} of {round_passes_n}: the sharp satellite, {look_when}. Hidden."
+              "line": "Pass {look_number} of {round_passes_n}, VIIRS, {look_when}: hidden."
             }
           ],
           "actions": [
@@ -2268,30 +2292,26 @@
                 "guide"
               ]
             }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "The last VIIRS passes go by without a look."
+            }
           ]
         },
         {
           "id": "round_end",
-          "objective": "Compare your looks with the other players'",
+          "objective": "Your looks",
           "says": [
             {
               "place": "guide",
-              "line": "Your looks took the estimate's agreement with the sharp satellite from {round_start} to {round_end} percent of the burning ground: {your_gain} points."
-            },
-            {
-              "place": "guide",
-              "unless": "learned_beats_rule",
-              "line": "Over {rounds_n} other rounds of fires of other years, Look Where Unsure gained more than Chance on {rule_ahead_rounds} of them, and the Learned Player does not beat Look Where Unsure."
-            },
-            {
-              "place": "guide",
-              "if": "learned_beats_rule",
-              "line": "Over {rounds_n} other rounds of fires of other years, Look Where Unsure gained more than Chance on {rule_ahead_rounds} of them, and the Learned Player gained {learned_minus_rule} points more than Look Where Unsure."
+              "line": "Your four looks beside the other players'."
             }
           ],
           "actions": [
             {
-              "label": "See where the others looked",
+              "label": "Other players",
               "command": "play:players",
               "key": "Enter",
               "places": [
@@ -2299,7 +2319,7 @@
               ]
             },
             {
-              "label": "Play again",
+              "label": "Play another round",
               "command": "play:again",
               "key": "R",
               "places": [
@@ -2324,8 +2344,9 @@
             {
               "place": "label",
               "on": "fire",
-              "line": "Everything the sharp satellite saw in this round, now shown: {round_sharp_detections} detections.",
-              "film": "All {round_sharp_detections} detections of the round, shown."
+              "line": "Everything VIIRS saw this round: {round_sharp_detections} detections.",
+              "film": "All {round_sharp_detections} detections of the round, shown.",
+              "readout": "OVERLAP {round_start}% TO {round_end}%"
             }
           ],
           "results": {
@@ -2343,17 +2364,17 @@
                 "note": "The mean of {chance_tries} rounds of random looks."
               },
               {
-                "name": "Follow the Coarse Satellite",
+                "name": "Follow MODIS",
                 "field": "coarse_rule_gain"
               },
               {
-                "name": "Look Where Unsure",
+                "name": "Least Sure",
                 "field": "unsure_rule_gain"
               },
               {
                 "name": "Learned Player",
                 "field": "learned_gain",
-                "note": "The same looks as Look Where Unsure.",
+                "note": "The same looks as Least Sure.",
                 "note_if": "learned_same_looks_as_rule"
               },
               {
@@ -2367,13 +2388,23 @@
           "film": [
             {
               "place": "objective",
-              "unless": "learned_beats_rule",
-              "line": "Pick where to look. The learned player does not beat a simple rule."
+              "line": "Your turn: pick where to look."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Your looks took overlap from {round_start} to {round_end} percent, a gain of {your_gain} points of overlap."
             },
             {
-              "place": "objective",
+              "place": "guide",
+              "unless": "learned_beats_rule",
+              "line": "Over {rounds_n} other rounds, Least Sure beat Chance on {rule_ahead_rounds}, and the Learned Player did not beat Least Sure."
+            },
+            {
+              "place": "guide",
               "if": "learned_beats_rule",
-              "line": "Pick where to look. The learned player beats a simple rule."
+              "line": "Over {rounds_n} other rounds, Least Sure beat Chance on {rule_ahead_rounds}, and the Learned Player beat it by {learned_minus_rule} points."
             }
           ]
         },
@@ -2384,23 +2415,23 @@
             {
               "place": "guide",
               "if": "players_from_round",
-              "line": "Each small terrain is one player on the round you just played, with your own looks first."
+              "line": "Each small terrain is one player on your round, with your looks first."
             },
             {
               "place": "guide",
               "unless": "players_from_round",
-              "line": "Each small terrain is one player on a round of this fire that you have not played yourself."
-            },
-            {
-              "place": "guide",
-              "line": "Lit squares are where each player looked, in order, and outlines are what the coarse satellite showed every player; filled marks, for what the looks found, appear when you reveal them."
+              "line": "Each small terrain is one player on a round of this fire you have not played."
             }
           ],
           "more": [
             {
               "place": "guide",
+              "line": "Lit squares are each player's looks, in order, and outlines are what MODIS showed everyone."
+            },
+            {
+              "place": "guide",
               "if": "learned_same_looks_as_rule",
-              "line": "On this round the Learned Player made the same looks as Look Where Unsure."
+              "line": "On this round the Learned Player made the same looks as Least Sure."
             }
           ],
           "labels": [
@@ -2413,7 +2444,7 @@
           ],
           "actions": [
             {
-              "label": "Reveal what their looks found",
+              "label": "Show their finds",
               "command": "play:players_reveal",
               "key": "Enter",
               "places": [
@@ -2445,28 +2476,28 @@
         },
         {
           "id": "players_found",
-          "objective": "See where the other players looked and what they found",
+          "objective": "See what the other players found",
           "says": [
             {
               "place": "guide",
               "if": "players_from_round",
-              "line": "Each small terrain is one player on the round you just played, with your own looks first."
+              "line": "Each small terrain is one player on your round, with your looks first."
             },
             {
               "place": "guide",
               "unless": "players_from_round",
-              "line": "Each small terrain is one player on a round of this fire that you have not played yourself."
-            },
-            {
-              "place": "guide",
-              "line": "Lit squares are where each player looked, in order, filled marks are what the looks found, and outlines are what the coarse satellite showed every player."
+              "line": "Each small terrain is one player on a round of this fire you have not played."
             }
           ],
           "more": [
             {
               "place": "guide",
+              "line": "Lit squares are each player's looks, filled marks what they found, and outlines what MODIS showed."
+            },
+            {
+              "place": "guide",
               "if": "learned_same_looks_as_rule",
-              "line": "On this round the Learned Player made the same looks as Look Where Unsure."
+              "line": "On this round the Learned Player made the same looks as Least Sure."
             }
           ],
           "labels": [
@@ -2515,7 +2546,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "The other players' looks stay hidden until your round is over, because where they looked would show you what is still hidden."
+              "line": "The other players' looks stay hidden until your round ends, since they would give away what is hidden."
             }
           ],
           "actions": [
@@ -2535,7 +2566,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "The other players are playing the same round, and their terrains appear when their plays arrive."
+              "line": "The other players are playing your round, and each terrain appears when its play arrives."
             }
           ],
           "actions": []
@@ -2546,7 +2577,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "The other players' looks did not load, and nothing is drawn in their place."
+              "line": "The other players' looks did not load, so nothing is drawn."
             }
           ],
           "actions": [
@@ -2559,7 +2590,7 @@
               ]
             },
             {
-              "label": "Back to the fire",
+              "label": "Back",
               "command": "close",
               "key": "Esc",
               "places": [
@@ -2570,16 +2601,16 @@
         },
         {
           "id": "recorded_test_fire",
-          "objective": "Choose a fire you can play",
+          "objective": "Choose a fire to play",
           "says": [
             {
               "place": "guide",
-              "line": "This fire is one of the {test_fires_n} kept as the model's test, so no round is played on it."
+              "line": "This is one of the {test_fires_n} first test fires, so no round is played on it."
             }
           ],
           "actions": [
             {
-              "label": "Choose a fire you can play",
+              "label": "Choose a fire",
               "command": "place:open",
               "key": "Enter",
               "places": [
@@ -2587,7 +2618,7 @@
               ]
             },
             {
-              "label": "See every test on record",
+              "label": "All tests",
               "command": "tests:record",
               "key": "E",
               "places": [
@@ -2598,16 +2629,16 @@
         },
         {
           "id": "no_sharp_satellite",
-          "objective": "Choose a fire you can play",
+          "objective": "Choose a fire to play",
           "says": [
             {
               "place": "guide",
-              "line": "These days are before {sharp_since}, when the sharp satellite began, so there is no hidden pass to look for."
+              "line": "These days are before {sharp_since}, when VIIRS began, so there is nothing hidden to look at."
             }
           ],
           "actions": [
             {
-              "label": "Choose a fire you can play",
+              "label": "Choose a fire",
               "command": "place:open",
               "key": "Enter",
               "places": [
@@ -2623,10 +2654,6 @@
             {
               "place": "guide",
               "line": "The round did not start."
-            },
-            {
-              "place": "guide",
-              "line": "Nothing was scored."
             }
           ],
           "actions": [
@@ -2639,21 +2666,27 @@
               ]
             },
             {
-              "label": "Back to the fire",
+              "label": "Back",
               "command": "close",
               "key": "Esc",
               "places": [
                 "guide"
               ]
             }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Nothing was scored."
+            }
           ]
         }
       ],
-      "objective": "Pick the square where a look would teach the model the most",
+      "objective": "Pick where to look",
       "start_card": {
         "place": "prompt",
         "at": "fire",
-        "do": "You have {looks_to_spend} looks over {round_passes} passes of the sharp satellite. Pick the square where a look would teach the model the most.",
+        "do": "You have {looks_to_spend} looks over {round_passes} VIIRS passes. Choose the square where a look helps most.",
         "done": "The round ends after the last pass, with your looks set beside the other players'."
       },
       "context": "{place}, {run_days}"
@@ -2664,20 +2697,16 @@
       "states": [
         {
           "id": "ready",
-          "objective": "Try another fire or your own area",
+          "objective": "Choose another fire or your own area",
           "says": [
             {
               "place": "guide",
-              "line": "What you saw: one fair fire record across two kinds of satellite, an estimate tested with the sharp satellite hidden, and a game for choosing where to look next."
-            },
-            {
-              "place": "guide",
-              "line": "The same test can be put to any two instruments that watched the same thing; here it is done for one pair."
+              "line": "You saw one fire record on one scale, an estimate tested with VIIRS hidden, and a game."
             }
           ],
           "actions": [
             {
-              "label": "Try another fire",
+              "label": "Choose another fire",
               "command": "place:open",
               "key": "Enter",
               "places": [
@@ -2700,10 +2729,16 @@
                 "guide"
               ]
             }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "The same test fits any two instruments that watched the same thing, and here it is done for one pair."
+            }
           ]
         }
       ],
-      "objective": "Try another fire or your own area",
+      "objective": "Choose another fire or your own area",
       "context": "{place}, {run_days}"
     }
   ],
@@ -2743,7 +2778,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "One light is one square of ground where a satellite saw the heat of fire as it passed. It is a reading from orbit, not a flame."
+          "line": "One light is one detection, a pixel of ground where a satellite saw the heat of fire. It is a reading from orbit, not a flame."
         }
       ],
       "where": [
@@ -2765,7 +2800,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "Two kinds of NASA instrument that spot fires from orbit by their heat. MODIS, the coarse one, is on record here since {record_first_year}; VIIRS, the sharp one, since {sharp_since}."
+          "line": "Two kinds of NASA instrument that spot fire from orbit by its heat. MODIS is on record since {record_first_year}, and the sharper VIIRS since {sharp_since}."
         }
       ],
       "where": [
@@ -2788,7 +2823,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "The sharp satellite sees smaller squares of ground, so it catches small and cool fires the coarse ones miss. Around {place} it has about {sharp_to_coarse} times as many detections in the years both flew."
+          "line": "VIIRS sees smaller pixels of ground, so it catches small, cool fires MODIS misses. Around {place} it makes {sharp_to_coarse} times as many detections."
         }
       ],
       "where": [
@@ -2811,7 +2846,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "It lets you compare any month or year with any other since {record_first_year}, although the satellites changed on the way. That is what was asked for: one record across both kinds of satellite."
+          "line": "It lets you compare any month or year since {record_first_year}, though the satellites changed. That is the challenge, one record across both kinds."
         }
       ],
       "command": "go:record",
@@ -2823,7 +2858,7 @@
     },
     {
       "id": "how_good_is_record",
-      "ask": "How well does the correction hold?",
+      "ask": "How well does the scaling hold?",
       "match": [
         "correction",
         "how good",
@@ -2836,20 +2871,16 @@
         {
           "place": "guide",
           "unless": "method_replaced",
-          "line": "The Record puts the older satellites on the newer one's scale with one ratio per place: their detections against the newer one's in the years both flew."
+          "line": "The record scales MODIS up to VIIRS with one figure per place, from the years both flew."
         },
         {
           "place": "guide",
           "if": "method_replaced",
-          "line": "The Record puts the older satellites on the newer one's scale with a factor for each month of the year and for how much fire the month had, leaning on nearby places where a place has few detections of its own."
+          "line": "The record scales MODIS up with a figure for each month and amount of fire, borrowing from nearby places where detections are few."
         },
         {
           "place": "guide",
-          "line": "Hide one year and predict it from the others: in a typical year the prediction is off by {record_error} percent, against {record_error_raw} percent with no correction."
-        },
-        {
-          "place": "guide",
-          "line": "Hiding each year in turn, the range the Record gives for a year held the newer satellite's own count in {record_held} of {record_years} years, where it is meant to hold in {record_meant} percent."
+          "line": "Hiding each year in turn, the record's range held the VIIRS count in {record_held} of {record_years} years, aiming for {record_meant} percent."
         }
       ],
       "command": "record:accuracy",
@@ -2871,7 +2902,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "Yes. Pick a month and take its detections as a table, as NASA's fire service lists them."
+          "line": "Yes. Choose a month and download its detections as a table, as NASA lists them."
         }
       ],
       "command": "record:pick",
@@ -2921,7 +2952,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "You can draw an area and get its fire record. A fire can be shown pass by pass and tested only where the satellites' passes are stored: {places_with_fires}."
+          "line": "Yes, draw an area and you get its fire record. Fires can be followed pass by pass and tested only here: {places_with_fires}."
         }
       ],
       "command": "place:draw",
@@ -2951,7 +2982,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "Each white frame is one square, {sharp_square_m} metres across, that the model says is burning at that moment. Together they are its estimate of what the sharp satellite would see."
+          "line": "Each white outline is a pixel, {sharp_square_m} metres across, that the estimate puts on fire at that pass. Together they are the estimate of what VIIRS would see."
         }
       ],
       "where": [
@@ -2974,7 +3005,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "{coarse_passes} passes of the coarse satellite with {coarse_detections} detections, and the shape of the ground. Nothing from the sharp satellite."
+          "line": "{coarse_passes} passes of MODIS, with {coarse_detections} detections, and the shape of the ground. Nothing from VIIRS."
         }
       ],
       "where": [
@@ -2997,7 +3028,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "The sharp satellite's detections are set apart before the estimate is made and are opened only to score it. Delete them and the estimate comes out the same, and a test checks that."
+          "line": "The VIIRS detections are set apart before the estimate is made and opened only to score it. Delete them and the estimate comes out the same, which a test checks."
         }
       ],
       "command": "method:open",
@@ -3009,14 +3040,14 @@
     },
     {
       "id": "hide_the_sharp_satellite",
-      "ask": "Hide the sharp satellite",
+      "ask": "Hide VIIRS",
       "match": [
         "hide"
       ],
       "answer": [
         {
           "place": "guide",
-          "line": "The sharp satellite is hidden again."
+          "line": "VIIRS is hidden again."
         }
       ],
       "command": "go:estimate",
@@ -3027,7 +3058,7 @@
     },
     {
       "id": "reveal_the_sharp_satellite",
-      "ask": "Reveal the sharp satellite",
+      "ask": "Show VIIRS",
       "match": [
         "reveal",
         "show the answer",
@@ -3042,7 +3073,7 @@
     },
     {
       "id": "what_does_the_count_mean",
-      "ask": "What does {ahead_on} of {scores_n} mean?",
+      "ask": "What does overlap mean?",
       "match": [
         "of 7",
         "of seven",
@@ -3053,7 +3084,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "The estimate and {simple_methods_n} simple methods are each compared with what the sharp satellite saw, in {scores_n} ways. On {ahead_on} of them the estimate did better than every simple method, by plain comparison of the numbers."
+          "line": "Overlap is the pixels both the guess and VIIRS mark as fire, out of the pixels either marks. Higher is better."
         }
       ],
       "command": "test:scores",
@@ -3064,7 +3095,7 @@
     },
     {
       "id": "what_are_the_simple_methods",
-      "ask": "What are the simple methods?",
+      "ask": "What is MODIS alone?",
       "match": [
         "simple method",
         "baseline",
@@ -3073,7 +3104,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "One takes the coarse satellite's squares as the fire. The other does the same and scales the amount by how much more the sharp satellite usually sees."
+          "line": "MODIS alone takes the MODIS detections as they are. Scaling them up changes the amount but not where they are, so it overlaps the same."
         }
       ],
       "where": [
@@ -3094,17 +3125,18 @@
       "answer": [
         {
           "place": "guide",
-          "if": "test_a_not_taken",
-          "line": "No. On the {test_fires_n} fires kept as its test it beat the simple methods on {test_fire_scores} of {test_scores_n} scores."
+          "line": "No. Its first test fires are on record under All tests.",
+          "if": "test_a_not_taken"
         },
         {
           "place": "guide",
-          "if": "test_a_taken",
-          "line": "No. On {test_a_fires_n} fires it had never seen it was ahead on {test_a_ahead} of {test_scores_n} scores and behind on {test_a_behind}."
+          "line": "No. On {test_a_fires_n} fires it never saw, the first model overlapped VIIRS by {ta_first_exact} percent, and MODIS alone by {ta_modis_exact}.",
+          "if": "test_a_taken"
         },
         {
           "place": "guide",
-          "line": "On {other_fires_n} fires of other years, counting a score only when the gap is too large to be luck, it was ahead on {other_ahead} of the {test_scores_n} scores, level on {other_level} and behind on {other_behind}."
+          "line": "On {test_b_fires_n} new fires the first model overlapped by {tb_first_exact}, MODIS alone by {tb_modis_exact}, and the new model by {tb_new_exact}.",
+          "if": "test_b_taken"
         }
       ],
       "command": "tests:record",
@@ -3126,7 +3158,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "Because on {other_fires_n} fires it had never seen, it was ahead by more than luck on only {other_ahead} of {test_scores_n} scores. That is not enough to switch it on, so it is shown with its tests and nothing more is claimed."
+          "line": "On fires it never saw, the first model does not beat MODIS alone pixel for pixel. So it is shown with its tests, and nothing more is claimed."
         }
       ],
       "where": [
@@ -3149,7 +3181,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "With each estimate the model states an upper limit for how much fire the sharp satellite will see. On this fire the real amount stayed under it on {limit_held} of {limit_of} hidden passes; on other fires, on {other_limit_held} of {other_limit_of}."
+          "line": "With each estimate the model states an upper limit for the fire VIIRS will see. Here it held on {limit_held} of {limit_of} hidden passes, and on other fires on {other_limit_held} of {other_limit_of}."
         }
       ],
       "where": [
@@ -3171,7 +3203,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "It is one of the {test_fires_n} fires never used to tune the model and kept as its test. Their results are on record and they are not run again, so nothing can be tuned to them."
+          "line": "It is one of the {test_fires_n} first test fires, never used to tune the model. Their results are on record and not run again, so nothing can be tuned to them."
         }
       ],
       "command": "tests:record",
@@ -3211,7 +3243,7 @@
     },
     {
       "id": "what_is_agreement",
-      "ask": "What is agreement?",
+      "ask": "What is overlap?",
       "match": [
         "agreement",
         "agree",
@@ -3221,11 +3253,11 @@
       "answer": [
         {
           "place": "guide",
-          "line": "Agreement is how far the estimate and the sharp satellite mark the same squares as burning. On each of its passes, take every square that either marks: agreement is the share of those squares that both mark."
+          "line": "Overlap is the share of pixels both the guess and VIIRS mark as fire, out of the pixels either marks, on each pass."
         },
         {
           "place": "guide",
-          "line": "Ground that neither marks is left out, so empty land cannot raise it. A point is one percent of those squares."
+          "line": "Ground neither marks is left out, so empty land cannot raise it. A point of overlap is one percent of those pixels."
         }
       ],
       "where": [
@@ -3246,7 +3278,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "A look shows the model what the sharp satellite saw in one square on one pass. It is scored by the points it adds to the estimate's agreement with the sharp satellite, over the whole round."
+          "line": "A look shows the model one square through VIIRS on one pass. It scores the points of overlap it adds over the whole round."
         },
         {
           "place": "guide",
@@ -3275,7 +3307,7 @@
         },
         {
           "place": "guide",
-          "line": "Over {rounds_n} other rounds, each a few days of one fire of other years, it gained more than random looks on {rule_ahead_rounds} of them."
+          "line": "Over {rounds_n} other rounds, each a few days of one fire, it beat random looks on {rule_ahead_rounds}."
         }
       ],
       "where": [
@@ -3297,7 +3329,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "Chance looks at random squares, Follow the Coarse Satellite looks where that satellite last saw fire, and Look Where Unsure looks where the model is least sure."
+          "line": "Chance looks at random, Follow MODIS looks where they last saw fire, and Least Sure where the model is least sure."
         },
         {
           "place": "guide",
@@ -3324,12 +3356,12 @@
         {
           "place": "guide",
           "unless": "learned_beats_rule",
-          "line": "No: over {rounds_n} rounds it had never played, its gain differed from the rule's by {learned_minus_rule} points on average, most likely between {learned_low} and {learned_high}. That is too close to call."
+          "line": "No. Over {rounds_n} rounds it never played, it differed from the rule by {learned_minus_rule} points, most likely between {learned_low} and {learned_high}, too close to call."
         },
         {
           "place": "guide",
           "if": "learned_beats_rule",
-          "line": "On the rounds measured, yes: over {rounds_n} rounds it had never played, it gained {learned_minus_rule} points more on average, most likely between {learned_low} and {learned_high}."
+          "line": "Yes. Over {rounds_n} rounds it never played, it gained {learned_minus_rule} points more, most likely between {learned_low} and {learned_high}."
         }
       ],
       "where": [
@@ -3350,7 +3382,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "One more player is allowed to see the answer and takes the best square at evenly spaced passes: {answer_gain} points on this round. A player that also chooses when to look can do better than it."
+          "line": "Sees the Answer reads the hidden detections and takes the best square at evenly spaced passes: {answer_gain} points here. Choosing when to look could do even better."
         }
       ],
       "where": [
@@ -3371,7 +3403,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "The record lists detections, not the places a satellite looked and saw nothing. So an empty pass may be cloud, and the model treats it as unknown."
+          "line": "The record lists detections, not where a satellite looked and saw nothing. So an empty pass may be cloud, and the model treats it as unknown."
         }
       ],
       "where": [
@@ -3420,7 +3452,7 @@
       "answer": [
         {
           "place": "guide",
-          "line": "A fair record shows whether a place is burning more than it used to. The same test, with one instrument hidden, can be put to any two that watched the same thing; here it is done for one pair."
+          "line": "A fair record shows whether a place burns more than it used to. The same test fits any two instruments that watched the same thing, and here it is done for one pair."
         }
       ],
       "where": [
@@ -3431,7 +3463,7 @@
     }
   ],
   "no_answer": {
-    "says": "I do not have an answer to that. I can show another fire, explain the two satellites, or explain what you are looking at.",
+    "says": "I have no answer to that. I can show another fire, explain MODIS and VIIRS, or explain what you see.",
     "offers": [
       "show_another_fire",
       "what_are_the_satellites",
@@ -4100,6 +4132,102 @@
       "key": "fresh_test.test_b.beside_the_headline",
       "format": "challengers_ahead_span",
       "is": "on how many scores each of them was ahead of both simple methods (against_the_baselines.ahead): one number when all agree, else the least to the most, as 5 to 6"
+    },
+    "second_ahead": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.beside_the_headline",
+      "format": "answering_ahead",
+      "is": "scores the model that answered the run won over test B: the entry of fresh_test.test_b.beside_the_headline named by the run's held_out_passes_answered_by.method (POST /api/reconstruct), its against_the_baselines.ahead"
+    },
+    "second_behind": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.beside_the_headline",
+      "format": "answering_behind",
+      "is": "scores it lost: the entry of fresh_test.test_b.beside_the_headline named by the run's held_out_passes_answered_by.method (POST /api/reconstruct), its against_the_baselines.behind, zero written as none"
+    },
+    "tb_modis_exact": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.scores.csi_strict_375m.painted_modis",
+      "format": "percent1",
+      "is": "MODIS alone's exact overlap with VIIRS fire pixels over test B"
+    },
+    "tb_modis_within": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.scores.csi_one_cell_tolerance.painted_modis",
+      "format": "percent1",
+      "is": "the same within one pixel"
+    },
+    "tb_first_exact": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.scores.csi_strict_375m.value",
+      "format": "percent1",
+      "is": "the first model's exact overlap over test B"
+    },
+    "tb_first_within": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.scores.csi_one_cell_tolerance.value",
+      "format": "percent1",
+      "is": "the same within one pixel"
+    },
+    "tb_new_exact": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.beside_the_headline.challenger_blend.against_the_baselines.scores.csi_strict_375m.value",
+      "format": "percent1",
+      "is": "the new model's exact overlap over test B (the challenger blend, the model the page's hidden passes answer with)"
+    },
+    "tb_new_within": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.beside_the_headline.challenger_blend.against_the_baselines.scores.csi_one_cell_tolerance.value",
+      "format": "percent1",
+      "is": "the same within one pixel"
+    },
+    "ta_modis_exact": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.scores.csi_strict_375m.painted_modis",
+      "format": "percent1",
+      "is": "MODIS alone's exact overlap over test A"
+    },
+    "ta_modis_within": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.scores.csi_one_cell_tolerance.painted_modis",
+      "format": "percent1",
+      "is": "the same within one pixel"
+    },
+    "ta_first_exact": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.scores.csi_strict_375m.value",
+      "format": "percent1",
+      "is": "the first model's exact overlap over test A"
+    },
+    "ta_first_within": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.scores.csi_one_cell_tolerance.value",
+      "format": "percent1",
+      "is": "the same within one pixel"
+    },
+    "one_pixel_exact": {
+      "route": "POST /api/reconstruct with reveal",
+      "key": "blind_test.verdict.scores.csi_strict_375m, blind_test.verdict.method",
+      "format": "percent_of_method",
+      "is": "the exact overlap on this fire of the model that answered the hidden passes"
+    },
+    "one_pixel_exact_coarse": {
+      "route": "POST /api/reconstruct with reveal",
+      "key": "blind_test.verdict.scores.csi_strict_375m.painted_modis",
+      "format": "percent",
+      "is": "MODIS alone's exact overlap on this fire"
+    },
+    "pass_clock": {
+      "route": "POST /api/reconstruct",
+      "key": "observer_passes.frames[pass].timestamp_utc, region.bbox",
+      "format": "local_hhmm",
+      "is": "the local time at the fire of the pass on show, as HH:MM"
+    },
+    "looks_left_n": {
+      "route": "POST /api/env/next_look/reset or step, the latest",
+      "key": "observation.budget_left",
+      "format": "count",
+      "is": "looks left, in digits, for the readout"
     }
   },
   "marks": {
@@ -4107,7 +4235,7 @@
     "place": "sheet",
     "how": "a short list on demand, joined to the fire by a leader: each row draws its mark, then its name and its line. Only rows whose mark is on show are listed. Where the stage gives an anchor for a mark, its row may stand at the mark as a label instead.",
     "open": {
-      "label": "Explain the marks",
+      "label": "Explain marks",
       "command": "marks:key",
       "key": "K",
       "places": [
@@ -4117,8 +4245,8 @@
     "rows": [
       {
         "id": "frames",
-        "name": "White frame",
-        "line": "One square, {sharp_square_m} metres across, that the model says is burning at this pass.",
+        "name": "White outline",
+        "line": "A pixel, {sharp_square_m} metres across, that the estimate puts on fire at this pass.",
         "on_show": "a pass of the sharp satellite, before and after the reveal",
         "from": "declared_cells.looks[frame == pass].cells, POST /api/reconstruct; a run without that list: belief_frames cells at a chance of one half or more",
         "drawing": "the frame's shape; a smaller filled square where a cell is too small on screen for a frame",
@@ -4127,7 +4255,7 @@
       {
         "id": "dotted_line",
         "name": "Dotted line",
-        "line": "Around all the ground where the model gives fire a chance at this pass.",
+        "line": "Rings all the ground with any chance of fire at this pass.",
         "on_show": "every pass",
         "from": "belief_frames.p_burning where it crosses 0.02, POST /api/reconstruct",
         "drawing": "the smoothing over neighbouring squares, the dots; by day the ground inside is drawn 30 percent darker so the line can be found",
@@ -4136,7 +4264,7 @@
       {
         "id": "darker_inside",
         "name": "Darker ground inside the line, by day",
-        "line": "The same ground shaded so the dotted line can be found by day: a drawing, not a measurement.",
+        "line": "Shaded so the dotted line shows by day. It is a drawing, not a measurement.",
         "on_show": "a pass by day",
         "from": "belief_frames.p_burning, POST /api/reconstruct",
         "drawing": "how much darker",
@@ -4144,8 +4272,8 @@
       },
       {
         "id": "chance_squares",
-        "name": "Small white square",
-        "line": "A square of ground where the model gives fire a chance: the larger it is drawn, the higher the chance, and the brighter, the more heat it expects.",
+        "name": "Small white mark",
+        "line": "A pixel with some chance of fire. Larger means a higher chance, and brighter means more expected heat.",
         "on_show": "only when asked for",
         "from": "belief_frames.p_burning (its area) and expected_frp_density (its strength), at the step after the pass, POST /api/reconstruct",
         "drawing": "the square's shape; one tone where squares are under three pixels wide",
@@ -4153,8 +4281,8 @@
       },
       {
         "id": "sharp_detections",
-        "name": "Blue square",
-        "line": "One detection by the sharp satellite at this pass, shown after the reveal or found by a look. It is drawn a little smaller than the ground it covers, so the white frame under it still shows.",
+        "name": "Blue mark",
+        "line": "A detection by VIIRS at this pass, once shown or found by a look. It is drawn small so the white outline under it shows.",
         "on_show": "a pass of the sharp satellite, after the reveal; a looked square, after a look",
         "from": "blind_test.reveal.overpasses[frame == pass].footprints, POST /api/reconstruct with reveal; the rows a look returned, POST /api/env/next_look/step",
         "drawing": "its size, six tenths of the pixel, and its blue",
@@ -4163,7 +4291,7 @@
       {
         "id": "lights",
         "name": "Warm light",
-        "line": "One detection at this pass by a satellite the model was given: the brighter, the more heat was measured.",
+        "line": "A detection at this pass by a satellite the model sees. Brighter means more heat measured.",
         "on_show": "a pass of the coarse satellite; on a fire kept as the test, every pass",
         "from": "observer_passes.frames[pass].footprints (lon, lat, scan_km, track_km, frp_mw), POST /api/reconstruct",
         "drawing": "the falloff inside its pixel, its warm colour, the fade between passes; by day the ground under it is darkened so it shows",
@@ -4172,7 +4300,7 @@
       {
         "id": "glow_around",
         "name": "Glow around a light",
-        "line": "The light of a detection spread on the ground around it; how far it reaches is a drawing, not a measurement.",
+        "line": "A detection's light spread on the ground. How far it reaches is a drawing, not a measurement.",
         "on_show": "with every warm light",
         "from": "the same rows as the light",
         "drawing": "its reach past the pixel, about half a kilometre and two kilometres",
@@ -4181,7 +4309,7 @@
       {
         "id": "afterglow",
         "name": "Red glow",
-        "line": "Where the coarse satellite last saw fire before this hidden pass, fading with the hours since; its red is a drawing.",
+        "line": "Where MODIS last saw fire before this hidden pass, fading with the hours. The red is a drawing.",
         "on_show": "a hidden pass, on a run that says how long a burning square stays lit",
         "from": "the rows of the last pass given to the model before it, faded by the hours since over model.parameters.tau_res_h, POST /api/reconstruct",
         "drawing": "its red colour",
@@ -4189,19 +4317,19 @@
       }
     ],
     "action": {
-      "label": "Show the less likely squares",
+      "label": "Show less likely",
       "command": "estimate:chance",
       "key": "L",
       "places": [
         "guide"
       ],
-      "label_while_on": "Hide the less likely squares"
+      "label_while_on": "Hide less likely"
     }
   },
   "score_names": {
-    "csi_strict_375m": "agreement square for square",
-    "csi_one_cell_tolerance": "agreement give or take one square",
-    "hit_rate_at_equal_area": "hits with the same number of squares",
+    "csi_strict_375m": "overlap, exact",
+    "csi_one_cell_tolerance": "overlap within one pixel",
+    "hit_rate_at_equal_area": "hits with the same number of pixels",
     "brier": "the chance of fire it states",
     "pixel_count_error_of_sums": "how many detections it expects",
     "frp_error_of_sums": "the heat summed over the passes",
@@ -4212,7 +4340,8 @@
       "test_a_not_taken",
       "test_a_last_strict_behind",
       "test_a_last_strict_not_behind",
-      "test_b_taken"
+      "test_b_by_estimate",
+      "test_b_by_challenger"
     ],
     [
       "photo_day_pass",
@@ -4234,5 +4363,14 @@
       "passes:play",
       "years:play"
     ]
-  }
+  },
+  "exhaustive": [
+    [
+      "test_a_not_taken",
+      "test_a_last_strict_behind",
+      "test_a_last_strict_not_behind",
+      "test_b_by_estimate",
+      "test_b_by_challenger"
+    ]
+  ]
 }
