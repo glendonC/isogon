@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { countryAt, countryShapeAt, pointWords } from './countryAt';
 import { placeLabels } from './labels';
 import { closeGroup, parseLive, platformWords, type Live, type LiveFire, type LiveSeal } from './live';
@@ -47,6 +47,9 @@ const PARTS: Record<string, string> = {
   asia: 'Asia',
 };
 
+/** The board's notes, in the order they give way when the board runs short of room: the least needed first. */
+const DROP = ['nrt', 'protocol', 'missed', 'listed', 'over'] as const;
+
 export const SEAL_WORDS = {
   // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open; version 14 for the film's caption).
   objective: 'See predictions written before the pass',
@@ -82,6 +85,8 @@ export const SEAL_WORDS = {
   proofLine: (minutes: number, where: string) =>
     `Written down and sealed ${Math.round(minutes)} minutes before VIIRS passed over ${where}, then scored.`,
   close: (k: number, n: number, where: string) => `${k} of the ${n} fires scored lie close together in ${where}, so they are not ${n} separate tests.`,
+  /** Sealed fires past what the board has room for, said in one line under the rows. */
+  more: (items: string[]) => `Also sealed: ${items.join(', ')}`,
   rest: (items: string[], any: boolean) => `${any ? 'Also followed' : 'Followed tonight'}, no pass sealed yet: ${items.join(', ')}`,
   restAbout: 'Each was chosen from MODIS alone, by its detections in the last 48 hours.',
   digest: 'Digest',
@@ -142,6 +147,12 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
   const [capBottom, setCapBottom] = useState(0);
   const [guideRoom, setGuideRoom] = useState(0);
   const roomRef = useGuideRoom(useCallback((px: number) => setGuideRoom(px), []));
+  // The board keeps clear of where the guide speaks: when it runs past the room left above the guide, its lesser notes
+  // give way, then its last rows join one line, then its last notes. Fitted again when the screen resizes or the answer
+  // changes.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const [fit, setFit] = useState<{ drop: number; rows: number }>({ drop: 0, rows: Infinity });
   const onCaption = useCallback((px: number) => setCapBottom(px), []);
 
   const nowMs = t(now ?? live?.writtenUtc ?? null) || Date.now();
@@ -169,6 +180,39 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
     return [w - padX, s - padY, e + padX, n + padY];
   }, [fires]);
 
+  // Fitted again from the start when the screen's size or the answer changes.
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    let w = el.clientWidth;
+    let h = el.clientHeight;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === w && el.clientHeight === h) return;
+      w = el.clientWidth;
+      h = el.clientHeight;
+      setFit({ drop: 0, rows: Infinity });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  useLayoutEffect(() => setFit({ drop: 0, rows: Infinity }), [read]);
+  // After each layout: if the board runs past the room above the guide, one more note gives way, then a row.
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    const board = boardRef.current;
+    if (!el || !board || !live) return;
+    const floor = el.getBoundingClientRect().bottom - (keep || caption ? guideRoom : 0);
+    const last = board.lastElementChild?.getBoundingClientRect().bottom ?? board.getBoundingClientRect().bottom;
+    if (last <= floor + 1) return;
+    // The three lesser notes first; then rows, down to six, join the one line; then the judge's line and the count
+    // over the scored fires; then rows down to three.
+    const rowsN = Math.min(fit.rows, live.fires.filter((f) => byFire.has(f.id)).length);
+    if (fit.drop < 3) setFit({ drop: fit.drop + 1, rows: fit.rows });
+    else if (rowsN > 6) setFit({ drop: fit.drop, rows: rowsN - 1 });
+    else if (fit.drop < DROP.length) setFit({ drop: fit.drop + 1, rows: fit.rows });
+    else if (rowsN > 3) setFit({ drop: fit.drop, rows: rowsN - 1 });
+  });
+
   if (read.state === 'loading') return <div className="world-sealed world-sealed--note">{SEAL_WORDS.loading}</div>;
   if (read.state === 'failed' || !live) return <div className="world-sealed world-sealed--note">{SEAL_WORDS.failed}</div>;
   if (!fires.length) return <div className="world-sealed world-sealed--note">{SEAL_WORDS.none}</div>;
@@ -176,8 +220,11 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
   const whereOf = (f: LiveFire) => countryAt(f.centre[0], f.centre[1]) ?? (f.part ? PARTS[f.part] ?? f.part : pointWords(f.centre[0], f.centre[1]));
   const numbered = fires.map((f, i) => ({ f, i }));
   // Fires with no seal yet share one line, so the board is the height of what has happened.
-  const shown = numbered.filter(({ f }) => byFire.has(f.id));
+  const sealedAll = numbered.filter(({ f }) => byFire.has(f.id));
+  const shown = sealedAll.slice(0, fit.rows);
+  const more = sealedAll.slice(fit.rows);
   const rest = numbered.filter(({ f }) => !byFire.has(f.id));
+  const note = (name: (typeof DROP)[number]) => DROP.indexOf(name) >= fit.drop;
 
   const ticks: Array<{ at: number; text: string; minor: boolean }> = [];
   for (let h = -before; h <= after; h += 3)
@@ -209,6 +256,7 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
   return (
     <div
       className="world-sealed"
+      ref={rootRef}
       data-captioned={caption ? 'true' : 'false'}
       data-room={keep ? 'true' : 'false'}
       style={caption ? { paddingTop: capBottom + 12, paddingBottom: guideRoom } : keep ? { paddingBottom: guideRoom } : undefined}
@@ -260,8 +308,8 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
           <div className="world-proof__line">{SEAL_WORDS.proofLine(proof.minutesBefore!, whereOf(proofFire))}</div>
         </div>
       ) : (
-      <div className="world-board">
-        {live.protocol?.sha256 && <div className="world-board__rule">{SEAL_WORDS.protocol(live.protocol.sha256, null)}</div>}
+      <div className="world-board" ref={boardRef}>
+        {live.protocol?.sha256 && note('protocol') && <div className="world-board__rule">{SEAL_WORDS.protocol(live.protocol.sha256, null)}</div>}
         {live.example && <div className="world-board__rule world-legend__caution">{live.example}</div>}
         <div className="world-board__head">
           <span />
@@ -349,6 +397,12 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
               </li>
             );
           })}
+          {more.length > 0 && (
+            <li className="world-board__row world-board__row--rest">
+              <span />
+              <span className="world-board__rest">{SEAL_WORDS.more(more.map(({ f, i }) => `${i + 1} ${whereOf(f)}`))}</span>
+            </li>
+          )}
           {rest.length > 0 && (
             <li className="world-board__row world-board__row--rest">
               <span />
@@ -362,21 +416,21 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
             </li>
           )}
         </ol>
-        {scoredFires.length > 0 && (
+        {scoredFires.length > 0 && note('listed') && (
           <div className="world-board__rule">
-            {SEAL_WORDS.listed(fires.length, shown.length, scoredFires.length)}
+            {SEAL_WORDS.listed(fires.length, sealedAll.length, scoredFires.length)}
             {group && groupWhere ? ` ${SEAL_WORDS.close(group.length, scoredFires.length, groupWhere)}` : ''}
           </div>
         )}
-        {live.overFires && live.overFires.fires !== null && live.overFires.ahead !== null && live.overFires.tied !== null && live.overFires.behind !== null && (
+        {note('over') && live.overFires && live.overFires.fires !== null && live.overFires.ahead !== null && live.overFires.tied !== null && live.overFires.behind !== null && (
           <div className="world-board__rule world-board__rule--strong">
             {SEAL_WORDS.over(live.overFires.fires, live.overFires.ahead, live.overFires.tied, live.overFires.behind, live.overFires.scores)}
           </div>
         )}
-        {live.notSealed.length > 0 && (
+        {note('missed') && live.notSealed.length > 0 && (
           <div className="world-board__rule">{SEAL_WORDS.missed(live.notSealed.length, live.notSealed.length === 1 ? live.notSealed[0].reason : null)}</div>
         )}
-        {live.rowsNote && <div className="world-board__rule">{SEAL_WORDS.nrt(live.rowsNote)}</div>}
+        {note('nrt') && live.rowsNote && <div className="world-board__rule">{SEAL_WORDS.nrt(live.rowsNote)}</div>}
       </div>
       )}
     </div>
