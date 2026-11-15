@@ -7,7 +7,6 @@
  */
 
 export type ControlVariant = 'primary' | 'secondary';
-export type ControlIcon = 'arrow' | 'play' | 'pause' | 'download' | 'none';
 export type ControlSound = 'hover' | 'press';
 
 /** The one class every control carries, so an existing button is swapped by adding it. */
@@ -37,11 +36,6 @@ export function controlAria({ selected, disabled, reason }: ControlState) {
     if (reason) aria.title = reason;
   }
   return aria;
-}
-
-/** The glyph the badge carries on hover. Every control leads on with an arrow unless its action has its own glyph. */
-export function badgeGlyph(icon: ControlIcon | undefined): Exclude<ControlIcon, 'none'> {
-  return icon && icon !== 'none' ? icon : 'arrow';
 }
 
 type SoundHook = (sound: ControlSound) => void;

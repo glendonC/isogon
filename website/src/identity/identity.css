@@ -26,296 +26,232 @@
   /* modules: a control is one coarse module high; its mark is the finer sensor's pixel at the same scale (375/1000) */
   --id-module: 56px;
   --id-module-fine: 21px;
-  --id-mark: 7px;
-  --id-badge: 36px;
 }
 
 /*
- * The control. A solid body with a lit top edge and a shadow under it. At rest a small square mark sits before the
- * label: one pixel of the finer sensor. On hover three parts move on one easing: the mark leaves, the label shifts,
- * a square badge with the action's glyph arrives. A press sweeps a scan line across the body, as a pass crosses the
- * ground, and the body sinks. Focus draws four corner ticks, the place finder's cross hairs.
+ * Actions. Every action of a screen stands in one dock: rows on a pane of dark glass, lit along its top edge. One bar
+ * of light marks the next step and glides to the row under the pointer or the keys. Labels are spaced capitals; no row
+ * carries a box, an icon or a key letter. A single action on its own uses the same parts (the control below).
  */
+.id-dock {
+  --id-row: 52px;
+  --id-pad: 6px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  padding: var(--id-pad) 0;
+  isolation: isolate;
+  background: linear-gradient(to bottom, rgba(24, 30, 41, 0.84), rgba(9, 12, 18, 0.88));
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+}
+
+/* the lit top edge, and the soft light it throws down the pane */
+.id-dock::before,
+.id-control--secondary::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.85) 18%, rgba(255, 255, 255, 0.85) 82%, rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.id-dock::after,
+.id-control--secondary::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2px;
+  height: 22px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.id-dock__light {
+  position: absolute;
+  left: var(--id-pad);
+  right: var(--id-pad);
+  top: var(--id-pad);
+  height: var(--id-row);
+  z-index: 0;
+  background: linear-gradient(to bottom, #ffffff, #e2e7ed);
+  box-shadow: 0 0 26px rgba(255, 255, 255, 0.16);
+  transform: translateY(calc(var(--id-lit, 0) * var(--id-row)));
+  transition: transform var(--id-slow) var(--id-move);
+}
+
+.id-dock[data-has-light='false'] .id-dock__light {
+  opacity: 0;
+}
+
+.id-dock__light[data-flash='true'] {
+  animation: id-flash 320ms var(--id-move);
+}
+
+@keyframes id-flash {
+  0% {
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0.6);
+    filter: brightness(1.12);
+  }
+  100% {
+    box-shadow: 0 0 26px rgba(255, 255, 255, 0.16);
+    filter: none;
+  }
+}
+
+.id-dock__row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  height: var(--id-row);
+  margin: 0 var(--id-pad);
+  padding: 0 22px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--id-font);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--id-ink-2);
+  transition: color 280ms var(--id-move);
+}
+
+.id-dock__row + .id-dock__row {
+  box-shadow: inset 0 1px 0 rgba(243, 244, 246, 0.08);
+}
+
+.id-dock__label {
+  transition: transform var(--id-slow) var(--id-move);
+}
+
+.id-dock__row[data-lit='true'] {
+  color: var(--id-ground);
+  box-shadow: none;
+}
+
+.id-dock__row[data-lit='true'] + .id-dock__row {
+  box-shadow: none;
+}
+
+.id-dock__row[data-lit='true'] .id-dock__label {
+  transform: translateX(6px);
+}
+
+.id-dock__row:focus-visible {
+  outline: none;
+}
+
+.id-dock__row:focus-visible::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--id-ground);
+}
+
+.id-dock__row[aria-disabled='true'] {
+  color: rgba(243, 244, 246, 0.3);
+  cursor: not-allowed;
+}
+
+/* one action on its own: the same light (primary) or the same lit glass (secondary) */
 .id-control {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  height: var(--id-module);
-  padding: 0 40px 0 22px;
+  height: 52px;
+  padding: 0 28px;
   border: 0;
   border-radius: 0;
-  overflow: visible;
   isolation: isolate;
-  font-family: var(--id-font);
-  font-size: 16px;
-  font-weight: 500;
-  letter-spacing: 0.005em;
-  line-height: 1;
-  white-space: nowrap;
   cursor: pointer;
-  color: var(--id-ink);
-  background: linear-gradient(to bottom, rgba(36, 44, 58, 0.9), rgba(16, 21, 30, 0.9));
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 0 0 1px rgba(243, 244, 246, 0.16),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(0, 0, 0, 0.6),
-    0 10px 24px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  font-family: var(--id-font);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   transition:
-    transform var(--id-slow) var(--id-move),
-    box-shadow var(--id-slow) var(--id-move),
+    color 280ms var(--id-move),
     background var(--id-slow) var(--id-move),
-    color var(--id-fast) var(--id-ease);
-}
-
-.id-control--primary {
-  color: var(--id-ground);
-  background: linear-gradient(to bottom, #ffffff, #dfe4ea);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-    0 1px 0 rgba(0, 0, 0, 0.6),
-    0 10px 28px rgba(0, 0, 0, 0.5),
-    0 0 0 rgba(255, 255, 255, 0);
-}
-
-.id-control__mark {
-  flex: none;
-  width: var(--id-mark);
-  height: var(--id-mark);
-  background: currentColor;
-  transition:
-    transform var(--id-slow) var(--id-move),
-    opacity 280ms var(--id-move);
+    box-shadow var(--id-slow) var(--id-move),
+    transform 120ms var(--id-move);
 }
 
 .id-control__label {
-  position: relative;
   transition: transform var(--id-slow) var(--id-move);
 }
 
-.id-control__badge {
-  position: absolute;
-  right: 10px;
-  top: calc(50% - var(--id-badge) / 2);
-  width: var(--id-badge);
-  height: var(--id-badge);
-  display: grid;
-  place-items: center;
-  background: var(--id-ink);
-  color: var(--id-ground);
-  opacity: 0;
-  transform: translateX(-8px) scale(0.6);
-  transition:
-    transform var(--id-slow) var(--id-move),
-    opacity 280ms var(--id-move);
+.id-control--secondary {
+  color: var(--id-ink-2);
+  background: linear-gradient(to bottom, rgba(24, 30, 41, 0.84), rgba(9, 12, 18, 0.88));
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
 }
 
-.id-control--primary .id-control__badge {
-  background: var(--id-ground);
+.id-control--secondary:hover {
   color: var(--id-ink);
+  background: linear-gradient(to bottom, rgba(40, 48, 62, 0.9), rgba(14, 18, 26, 0.92));
 }
 
-/* the press: a scan line crosses the body once */
-.id-control__scan {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: -1;
+.id-control--primary,
+.id-control--selected {
+  color: var(--id-ground);
+  background: linear-gradient(to bottom, #ffffff, #e2e7ed);
+  box-shadow: 0 0 26px rgba(255, 255, 255, 0.16), 0 14px 34px rgba(0, 0, 0, 0.4);
 }
 
-.id-control__scan::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -45%;
-  width: 45%;
-  background:
-    linear-gradient(var(--id-viirs), var(--id-viirs)) right / 2px 100% no-repeat,
-    linear-gradient(to right, rgba(143, 214, 245, 0), rgba(143, 214, 245, 0.55));
-  opacity: 0;
+.id-control--primary:hover {
+  box-shadow: 0 0 34px rgba(255, 255, 255, 0.28), 0 14px 34px rgba(0, 0, 0, 0.4);
 }
 
-.id-control__scan[data-run='true']::before {
-  animation: id-scan var(--id-slow) var(--id-move) both;
-}
-
-@keyframes id-scan {
-  0% {
-    left: -45%;
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    left: 100%;
-    opacity: 0;
-  }
-}
-
-/* corner ticks for keyboard focus and for a selected option */
-.id-control__ticks {
-  position: absolute;
-  inset: -6px;
-  pointer-events: none;
-  opacity: 0;
-  transform: scale(1.04);
-  transition:
-    opacity var(--id-fast) var(--id-ease),
-    transform var(--id-slow) var(--id-move);
-  --t: var(--id-focus);
-  background:
-    linear-gradient(var(--t), var(--t)) top left / 12px 2px no-repeat,
-    linear-gradient(var(--t), var(--t)) top left / 2px 12px no-repeat,
-    linear-gradient(var(--t), var(--t)) top right / 12px 2px no-repeat,
-    linear-gradient(var(--t), var(--t)) top right / 2px 12px no-repeat,
-    linear-gradient(var(--t), var(--t)) bottom left / 12px 2px no-repeat,
-    linear-gradient(var(--t), var(--t)) bottom left / 2px 12px no-repeat,
-    linear-gradient(var(--t), var(--t)) bottom right / 12px 2px no-repeat,
-    linear-gradient(var(--t), var(--t)) bottom right / 2px 12px no-repeat;
-}
-
-/* hover and keyboard focus share one movement */
-.id-control:hover,
-.id-control:focus-visible {
-  transform: translateY(-1px);
-  background: linear-gradient(to bottom, rgba(52, 62, 80, 0.94), rgba(22, 28, 40, 0.94));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 0 0 1px rgba(243, 244, 246, 0.42),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
-    0 2px 0 rgba(0, 0, 0, 0.5),
-    0 16px 34px rgba(0, 0, 0, 0.55);
-}
-
-.id-control--primary:hover,
-.id-control--primary:focus-visible {
-  background: linear-gradient(to bottom, #ffffff, #eef1f5);
-  box-shadow:
-    inset 0 1px 0 #ffffff,
-    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
-    0 2px 0 rgba(0, 0, 0, 0.5),
-    0 16px 36px rgba(0, 0, 0, 0.55),
-    0 0 28px rgba(255, 255, 255, 0.16);
-}
-
-.id-control:hover .id-control__mark,
-.id-control:focus-visible .id-control__mark {
-  transform: translateX(-8px) scale(0) rotate(45deg);
-  opacity: 0;
-}
-
-.id-control:hover .id-control__label,
-.id-control:focus-visible .id-control__label {
-  transform: translateX(-20px);
-}
-
-.id-control:hover .id-control__badge,
-.id-control:focus-visible .id-control__badge {
-  opacity: 1;
-  transform: translateX(0) scale(1);
+.id-control:hover .id-control__label {
+  transform: translateX(6px);
 }
 
 .id-control:focus-visible {
-  outline: none;
+  outline: 2px solid var(--id-focus);
+  outline-offset: 3px;
 }
 
-.id-control:focus-visible .id-control__ticks {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* the press: the body sinks and its shadow tightens */
 .id-control:active {
   transform: translateY(1px);
-  transition-duration: 80ms;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 0 0 1px rgba(243, 244, 246, 0.42),
-    inset 0 2px 8px rgba(0, 0, 0, 0.45),
-    0 1px 0 rgba(0, 0, 0, 0.6),
-    0 4px 10px rgba(0, 0, 0, 0.4);
 }
 
-.id-control--primary:active {
-  background: linear-gradient(to bottom, #e6eaef, #d3d9e0);
-  box-shadow:
-    inset 0 2px 8px rgba(0, 0, 0, 0.18),
-    0 1px 0 rgba(0, 0, 0, 0.6),
-    0 4px 10px rgba(0, 0, 0, 0.4);
-}
-
-/* selected: an option that is on is filled, its mark stays, its corners show */
-.id-control--selected,
-.id-control--selected:hover {
-  color: var(--id-ground);
-  background: linear-gradient(to bottom, #ffffff, #dfe4ea);
-}
-
-.id-control--selected .id-control__ticks {
-  opacity: 1;
-  transform: scale(1);
-  --t: var(--id-ink);
-}
-
-.id-control--selected:hover .id-control__mark {
-  transform: none;
-  opacity: 1;
-}
-
-.id-control--selected:hover .id-control__label {
-  transform: none;
-}
-
-.id-control--selected:hover .id-control__badge {
-  opacity: 0;
-}
-
-/* disabled: the hatch the page uses for what is withheld, the label faint, the reason on the control */
 .id-control--disabled,
-.id-control--disabled:hover,
-.id-control--disabled:active {
+.id-control--disabled:hover {
+  color: rgba(243, 244, 246, 0.3);
   cursor: not-allowed;
   transform: none;
-  color: rgba(243, 244, 246, 0.45);
-  background: var(--id-hatch), rgba(16, 21, 30, 0.7);
-  box-shadow: inset 0 0 0 1px rgba(243, 244, 246, 0.14);
 }
 
-.id-control--disabled:hover .id-control__mark {
+.id-control--disabled .id-control__label {
   transform: none;
-  opacity: 1;
-}
-
-.id-control--disabled:hover .id-control__label {
-  transform: none;
-}
-
-.id-control--disabled:hover .id-control__badge {
-  opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .id-dock__light,
+  .id-dock__label,
   .id-control,
-  .id-control__mark,
-  .id-control__label,
-  .id-control__badge,
-  .id-control__ticks {
+  .id-control__label {
     transition: none;
   }
-  .id-control__scan[data-run='true']::before {
+  .id-dock__light[data-flash='true'] {
     animation: none;
-  }
-  .id-control:hover,
-  .id-control:focus-visible,
-  .id-control:active {
-    transform: none;
   }
 }
 

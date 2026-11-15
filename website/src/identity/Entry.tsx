@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { Control } from './Control';
+import { ActionDock } from './ActionDock';
 import { LocatorBar } from './LocatorBar';
 import { WORDS, entryTitle } from './words.ts';
 import './identity.css';
@@ -41,12 +41,13 @@ export function Entry({ background, firstYear, lastYear, onPlay, onExplore, link
         <p className="id-entry__line">{WORDS.entryLine}</p>
       </div>
       <div className="id-entry__acts">
-        <Control onClick={onExplore} icon="arrow">
-          {WORDS.explore}
-        </Control>
-        <Control variant="primary" icon="play" onClick={onPlay} shortcut="Enter">
-          {WORDS.play}
-        </Control>
+        <ActionDock
+          label={WORDS.brand}
+          actions={[
+            { id: 'play', label: WORDS.play, onSelect: onPlay, shortcut: 'Enter' },
+            { id: 'explore', label: WORDS.explore, onSelect: onExplore },
+          ]}
+        />
       </div>
     </section>
   );
