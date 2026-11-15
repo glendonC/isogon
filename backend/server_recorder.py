@@ -18,8 +18,9 @@ assets of each run and its readings (`GET /api/sensor-model` for the run, `GET /
 with the page's default filter), its pass list as a held-out window shows it (`hidden=VIIRS`)
 and in full for the reveal, the play of each player the page shows, step by step (the one that reads the hidden rows
 with `ceiling`), one round of next look played with the looks of the reference player `least_sure`, taken from
-its play, with the round's first step for every square and for letting the pass go (the visitor's first look), and
-NASA's picture of the box for each day of its window as the stage asks for it. Rounds and plays are asked with the page's own bodies (`{region_id, start}`, the environment's own tiles
+its play, with the visitor's one scored look (at d*, the first decision at which a player the page shows spends a
+look: the passes before it let go, then one answer for every square and for letting the pass go, `one_look` in the
+index), and NASA's picture of the box for each day of its window as the stage asks for it. Rounds and plays are asked with the page's own bodies (`{region_id, start}`, the environment's own tiles
 and budget), so the page finds them under the same keys. A
 recorded test fire gets its run with every satellite shown on its recorded window and its full pass list; nothing of
 it is held out, revealed or played. Run bodies are built as the page builds them (`page_run_body`). Only the files
@@ -313,14 +314,10 @@ class Recorder:
         rec_id = "nl-rec-" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:8]
         self.round_ids[live_id] = rec_id
         obs = self._store(key, status, ctype, raw, headers)["observation"]
-        first_obs = obs
-        first_action: int | None = None
         line: list[dict[str, int]] = []
         steps = 0
         while True:
             action = policy(obs)
-            if first_action is None:
-                first_action = int(action)
             line.append({"decision": int(obs["decision"]), "action": int(action)})
             step = self.fetch("POST", "/api/env/next_look/step",
                               body={"round_id": rec_id, "decision": obs["decision"], "action": action})
@@ -338,40 +335,62 @@ class Recorder:
             time.sleep(5)
             self.entries.pop(state_key, None)
             self.parsed.pop(state_key, None)
-        first_looks = self.record_first_looks(reset_body, rec_id, first_obs, first_action)
-        # `line` is the one path of the round recorded past its first step: a page of recorded answers is on it only
+        # `line` is the one path of the round recorded past its first steps: a page of recorded answers is on it only
         # while every step it took is the line's step at that decision.
         self.rounds.append({"episode_from": reset_body, "round_id": rec_id, "player": policy_name,
-                            "actions_from": actions_from, "steps": steps, "first_looks": first_looks, "line": line})
+                            "actions_from": actions_from, "steps": steps, "line": line})
 
-    def record_first_looks(self, reset_body: dict[str, Any], rec_id: str, obs: dict[str, Any],
-                           taken: int | None) -> list[int]:
-        """The visitor's first look, whatever it is: the round's first step for every square and for letting the
-        pass go, each played on a round of its own on the live server and kept under the recorded round's one id,
-        so the page's own request (`{round_id, decision, action}`) finds its answer. Only the first step is kept for
-        each; the round's later steps are those of the recorded line."""
-        squares = len(obs.get("tile_covered") or ((obs.get("estimate") or {}).get("per_tile") or {}).get("unsure") or [])
-        decision = int(obs["decision"])
-        done = [] if taken is None else [taken]
-        for action in [-1, *range(squares)]:
-            if action in done:
-                continue
-            body = {"round_id": rec_id, "decision": decision, "action": action}
+    def look_decision(self, episode: dict[str, Any]) -> int | None:
+        """d*: the first decision at which any of the players the page shows spends a look, read from their recorded
+        plays (`play.steps[k].spending_look`); None when no play is recorded or none spends one."""
+        firsts = []
+        for pid in PAGE_PLAYERS:
+            body = {**episode, "player": pid, **({"ceiling": True} if pid == SEES_THE_ANSWER else {})}
+            play = self.parsed.get(request_key("POST", "/api/env/next_look/play", body=body))
+            steps = ((play or {}).get("play") or {}).get("steps") if isinstance(play, dict) else None
+            spent = [int(st["decision"]) for st in steps or [] if st.get("spending_look")]
+            if spent:
+                firsts.append(min(spent))
+        return min(firsts) if firsts else None
+
+    def record_one_look(self, reset_body: dict[str, Any]) -> dict[str, Any] | None:
+        """The visitor's one scored look on a page of recorded answers (the interface lane's R5): the passes before d*
+        let go, one step each, and at d* one answer for letting the pass go and for every square of the board, each
+        the live server's answer from the same round state (a fresh round with the passes before d* let go), all kept
+        under the recorded round's one id. Returns the index's `one_look`, or None when there is no d*."""
+        rec_id = "nl-rec-" + hashlib.sha256(request_key("POST", "/api/env/next_look/reset", body=reset_body)
+                                             .encode("utf-8")).hexdigest()[:8]
+        d_star = self.look_decision(reset_body)
+        reset = self.parsed.get(request_key("POST", "/api/env/next_look/reset", body=reset_body))
+        tiles = ((reset or {}).get("episode") or {}).get("tiles") if isinstance(reset, dict) else None
+        if d_star is None or not (isinstance(tiles, list) and len(tiles) == 2):
+            return None
+        actions = [-1, *range(int(tiles[0]) * int(tiles[1]))]
+        for action in actions:
+            body = {"round_id": rec_id, "decision": d_star, "action": action}
             key = request_key("POST", "/api/env/next_look/step", body=body)
             if key in self.entries:
-                done.append(action)
                 continue
-            status, ctype, raw, _ = self._http("POST", "/api/env/next_look/reset", None, reset_body)
+            status, _, raw, _ = self._http("POST", "/api/env/next_look/reset", None, reset_body)
             if status != 200:
-                break
+                return None
             live_id = json.loads(raw)["round_id"]
             self.round_ids[live_id] = rec_id
+            for d in range(d_star):                       # the passes before d*, let go as the visitor lets them go
+                before = {"round_id": rec_id, "decision": d, "action": -1}
+                status, ctype, raw, headers = self._http("POST", "/api/env/next_look/step", None, {**before, "round_id": live_id})
+                bkey = request_key("POST", "/api/env/next_look/step", body=before)
+                if bkey not in self.entries:
+                    self.plan_run.append({"method": "POST", "path": "/api/env/next_look/step", "body": before,
+                                          "status": status, "one_look": True})
+                    self._store(bkey, status, ctype, raw, headers)
             status, ctype, raw, headers = self._http("POST", "/api/env/next_look/step", None, {**body, "round_id": live_id})
             self.plan_run.append({"method": "POST", "path": "/api/env/next_look/step", "body": body, "status": status,
-                                  "first_look": True})
+                                  "one_look": True})
             self._store(key, status, ctype, raw, headers)
-            done.append(action)
-        return sorted(done)
+        return {"decision": d_star, "actions": actions,
+                "rule": "d* is the first decision at which any of the players the page shows spends a look, from their "
+                        "recorded plays; every answer at d* follows the passes before it let go"}
 
     def record_plays(self, episode: dict[str, Any]) -> None:
         """The play of each player the page shows on one episode, step by step (`POST /api/env/next_look/play`), with
@@ -435,6 +454,9 @@ class Recorder:
                 else:
                     self.play_round(episode, least_sure, "least_sure_every_look",
                                     actions_from="this tool: the least sure tile at every look while the budget lasts")
+                one_look = self.record_one_look(episode)
+                if one_look is not None and self.rounds and self.rounds[-1]["episode_from"] == episode:
+                    self.rounds[-1]["one_look"] = one_look
 
     def record_plan(self, plan: dict[str, Any]) -> None:
         for r in plan.get("requests", []):

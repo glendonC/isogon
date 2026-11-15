@@ -65,7 +65,7 @@ class StandIn:
             return _Reply(200, "application/octet-stream", b"\x00\x01")
         if u.path == "/api/env/next_look/reset":
             self.decision = 0
-            return js({"round_id": LIVE_ROUND, "observation": self._obs()})
+            return js({"round_id": LIVE_ROUND, "episode": {"tiles": [2, 2]}, "observation": self._obs()})
         if u.path == "/api/env/next_look/step":
             assert body["round_id"] == LIVE_ROUND
             self.decision += 1
@@ -77,7 +77,9 @@ class StandIn:
                                    {"id": "oracle", "reads": "the hidden rows"}]})
         if u.path == "/api/env/next_look/play":
             return js({"play_id": "play-" + body["player"],
-                       "play": {"player": {"id": body["player"]}, "steps": [{"chosen_tile": -1}, {"chosen_tile": 2}]}})
+                       "play": {"player": {"id": body["player"]}, "steps": [
+                           {"decision": 0, "spending_look": False, "chosen_tile": -1},
+                           {"decision": 1, "spending_look": True, "chosen_tile": 2}]}})
         if u.path == "/api/env/next_look/state":
             return js({"round_id": LIVE_ROUND, "done": self.decision >= 2, "end": {"reference_status": "ready"}})
         if u.path == "/api/passes":
@@ -231,12 +233,14 @@ class RecorderTests(unittest.TestCase):
                              ("least_sure", "POST /api/env/next_look/play, "))
             self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": -1, "decision": 0, "round_id": rid}), entries)
             self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": 2, "decision": 1, "round_id": rid}), entries)
-            # the visitor's first look, whatever it is: the first step for every square and for letting the pass go,
-            # under the round's one recorded id
-            self.assertEqual(index["rounds"][0]["first_looks"], [-1, 0, 1, 2, 3])
             self.assertEqual(index["rounds"][0]["line"], [{"decision": 0, "action": -1}, {"decision": 1, "action": 2}])
-            for a in range(4):
-                self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": a, "decision": 0, "round_id": rid}), entries)
+            # the visitor's one scored look at d*, the first decision a player spends a look at (1 here): the pass
+            # before it let go, then one answer for letting the pass go and for every square, under the round's one id
+            self.assertEqual(index["rounds"][0]["one_look"]["decision"], 1)
+            self.assertEqual(index["rounds"][0]["one_look"]["actions"], [-1, 0, 1, 2, 3])
+            for a in (-1, 0, 1, 2, 3):
+                self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": a, "decision": 1, "round_id": rid}), entries)
+            self.assertFalse(any(k.startswith("POST /api/env/next_look/step") and '"action":0,"decision":0' in k for k in entries))
             # the pass list as a held-out window shows it, and in full for the reveal
             passes = [k for k in entries if k.startswith("GET /api/passes?")]
             self.assertEqual(len(passes), 2)
