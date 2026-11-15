@@ -465,15 +465,43 @@
   bottom: 12px;
 }
 
-/* While Play tells the story: how to take it back, where the controls stand otherwise. */
+/* While Play tells the story, over every screen it shows (the pictures of the world stand at 72): the story's parts
+   along the bottom edge and, above them at the right, what they are and how to take it back. */
+.iso-play-over {
+  position: fixed;
+  inset: 0;
+  z-index: 74;
+  pointer-events: none;
+}
+
+/* A band along the bottom for the story while it plays; a picture of the world keeps clear of it. */
+.iso-play-over::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 112px;
+  background: linear-gradient(to top, rgba(5, 7, 12, 0.96) 76px, rgba(5, 7, 12, 0));
+}
+
+:root.iso-playing .world-screen {
+  bottom: 76px;
+}
+
+/* The shot's caption (the guide's title in the film presentation) stands above the band. */
+:root.iso-playing .iso-ws .guide-strip {
+  bottom: 104px;
+}
+
 .iso-play-stop {
   position: fixed;
   right: 40px;
   bottom: 64px;
   z-index: 30;
   margin: 0;
-  font: var(--sys-weight) 14px / 20px var(--sys-font);
-  color: var(--sys-ink-3);
+  font: var(--sys-weight) 16px / 22px var(--sys-font);
+  color: var(--sys-ink-2, #c3c8d1);
   text-shadow: 0 1px 8px rgba(8, 11, 17, 0.9);
   pointer-events: none;
 }
@@ -486,10 +514,34 @@
 /* The first screen's three ways in, of equal weight: plain words, white, with the interface's one colour (cyan) as a
    rule under the one pointed at or reached by the keys. */
 .iso-land__ways {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px 44px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 220px));
+  gap: 14px 40px;
   margin-top: 36px;
+}
+
+/* Each way in with its one line under it: which of the two ways it is (watched, or gone through by the visitor). */
+.iso-way-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.iso-way__line {
+  margin: 0;
+  font: 400 16px / 1.4 var(--font-sans);
+  color: rgba(243, 244, 246, 0.72);
+  text-shadow: 0 1px 10px rgba(5, 7, 12, 0.9);
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .iso-land__ways {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    margin-top: 24px;
+  }
 }
 
 .iso-way {

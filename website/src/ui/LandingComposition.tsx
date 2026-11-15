@@ -90,8 +90,16 @@ interface LandingCompositionProps {
   subscribeFireBox?: (fn: (box: StageThingBox | null) => void) => () => void;
 }
 
-/** The three ways in, in the page's words until the product lane gives them. */
+/**
+ * The three ways in, and under each one line saying which of the page's two ways it is: Play is watched, the other
+ * two are gone through by the visitor, from the whole Earth or straight to a place.
+ */
 const WAYS = { play: 'Play', explore: 'Explore the Earth', search: 'Search a place' };
+const WAY_LINES = {
+  play: 'Watch the story by itself. Any key stops it.',
+  explore: 'Go yourself: every year of fire on the globe, then a place.',
+  search: 'Go yourself, straight to a place and its fire.',
+};
 
 export function LandingComposition({
   imageryCredit,
@@ -239,15 +247,22 @@ export function LandingComposition({
             )}
             {ways ? (
               <div className="iso-land__ways" data-landing-ui="true">
-                <button type="button" className="iso-way" onClick={ways.onPlay}>
-                  {WAYS.play}
-                </button>
-                <button type="button" className="iso-way" onClick={ways.onExplore}>
-                  {WAYS.explore}
-                </button>
-                <button type="button" className="iso-way" onClick={ways.onSearch}>
-                  {WAYS.search}
-                </button>
+                {(
+                  [
+                    ['play', ways.onPlay],
+                    ['explore', ways.onExplore],
+                    ['search', ways.onSearch],
+                  ] as const
+                ).map(([key, go]) => (
+                  <div key={key} className="iso-way-item">
+                    <button type="button" className="iso-way" onClick={go} aria-describedby={`iso-way-${key}`}>
+                      {WAYS[key]}
+                    </button>
+                    <p id={`iso-way-${key}`} className="iso-way__line" onClick={go}>
+                      {WAY_LINES[key]}
+                    </p>
+                  </div>
+                ))}
               </div>
             ) : (
             <button type="button" className="iso-entry" onClick={onEnter} data-landing-ui="true">

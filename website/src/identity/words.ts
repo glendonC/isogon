@@ -10,7 +10,7 @@ export const WORDS = {
   play: 'Play',
   explore: 'Explore',
   search: 'Search',
-  stop: 'Click or press any key to stop',
+  stop: 'The story is playing by itself, part by part along the bottom. Click or press any key to stop.',
   links: { search: 'Search', method: 'Method', sources: 'Sources', menu: 'Menu' },
   /** The one menu at the top right: the documents and the sound. */
   menu: { label: 'Menu', close: 'Close' },

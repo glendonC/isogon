@@ -1745,7 +1745,10 @@ export function App() {
       ? [{ label: WORDS.moves.otherPlace, onClick: () => setAskOpen(true) }]
       : inRound
         ? [toTested]
-        : [{ label: WORDS.moves.turnOn, onClick: () => onTrailWord('Play'), disabled: Boolean(stepBlocked.look), reason: stepBlocked.look ?? null }, toTested];
+        : guide.besideFire?.command === 'go:play'
+          ? // The round stands on the fire itself (its prompt): it is offered there only.
+            [toTested]
+          : [{ label: WORDS.moves.turnOn, onClick: () => onTrailWord('Play'), disabled: Boolean(stepBlocked.look), reason: stepBlocked.look ?? null }, toTested];
   // What lies under a picture of the world, so its way back names it.
   const underName = !inWorkspace ? WORDS.moves.start : step === 'record' ? regionTitle || WORDS.moves.earth : inRound ? WORDS.moves.turn : WORDS.moves.fire;
   useEffect(() => setPageUnder(underName), [underName]);
@@ -1827,6 +1830,7 @@ export function App() {
   // first picture opens, and a picture on show when Play ends opens again in the page's own presentation.
   const endPlay = () => {
     stopAgentWalk();
+    document.documentElement.classList.remove('iso-playing');
     setFilmMode(filmByAddress);
     if (filmByAddress) return;
     document.documentElement.classList.remove('iso-film');
@@ -1838,7 +1842,7 @@ export function App() {
   };
   const play = usePlay(playShots, endPlay);
   const startPlay = () => {
-    document.documentElement.classList.add('iso-film');
+    document.documentElement.classList.add('iso-film', 'iso-playing');
     setFilmMode(true);
     play.start();
   };
@@ -1970,7 +1974,19 @@ export function App() {
           subscribeFireBox={subscribeFireBox}
         />
       )}
-      {play.playing && <p className="iso-play-stop">{WORDS.stop}</p>}
+      {/* While Play runs, over every screen it shows (the pictures of the world too): the story's parts filling along
+          the bottom edge and the line that says what they are and how to stop. */}
+      {play.playing && (
+        <div className="iso-play-over">
+          <StoryLine
+            current={play.part ?? storyPart}
+            progress={play.progress}
+            jumpYear={storyNumber(guide.fields.sharp_since)}
+            testedFires={storyNumber(guide.fields.test_b_fires_n)}
+          />
+          <p className="iso-play-stop">{WORDS.stop}</p>
+        </div>
+      )}
 
       {inWorkspace && (
         <>
@@ -2004,10 +2020,10 @@ export function App() {
             />
             <RevealSweep run={revealRun} />
             {arrival && !play.playing && <Arrival name={arrival.name} coord={arrival.coord} landed={landed} />}
-            {play.playing || filmMode ? (
+            {play.playing ? null : filmMode ? (
               <StoryLine
-                current={play.part ?? storyPart}
-                progress={play.playing ? play.progress : null}
+                current={storyPart}
+                progress={null}
                 jumpYear={storyNumber(guide.fields.sharp_since)}
                 testedFires={storyNumber(guide.fields.test_b_fires_n)}
               />
