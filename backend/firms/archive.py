@@ -25,7 +25,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import bisect
 import collections
+from collections import OrderedDict
+import copy
 import csv
 import datetime as _dt
 import hashlib
@@ -159,14 +162,49 @@ def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
     _write_atomic(path.with_name(path.name + ".manifest.json"), (json.dumps(manifest, indent=2) + "\n").encode("utf-8"))
 
 
-def read_manifest(path: Path) -> dict[str, Any] | None:
+_ARCHIVE_CACHE_LOCK = threading.Lock()
+_MANIFEST_CACHE_MAX: int = 512
+_LISTING_CACHE_MAX: int = 32
+_EXTRACT_CACHE_MAX: int = 256
+_MANIFEST_CACHE: OrderedDict[tuple[str, int, int, int], dict[str, Any]] = OrderedDict()
+_LISTING_CACHE: OrderedDict[tuple[str, int, int, int], dict[str, dict[str, Any]]] = OrderedDict()
+_EXTRACT_CACHE: OrderedDict[
+    tuple[tuple[str, int, int, int], str],
+    tuple[list[_dt.datetime], list[tuple[_dt.datetime, float, float, str, tuple[str, ...], dict[str, str]]]],
+] = OrderedDict()
+
+
+def _stat_key(path: Path) -> tuple[str, int, int, int]:
+    st = path.stat()
+    return (str(path), st.st_ino, st.st_mtime_ns, st.st_size)
+
+
+def _read_manifest_ro(path: Path) -> dict[str, Any] | None:
     m = path.with_name(path.name + ".manifest.json")
-    if not m.is_file():
-        return None
     try:
-        return json.loads(m.read_text(encoding="utf-8"))
+        key = _stat_key(m)
+    except OSError:
+        return None
+    with _ARCHIVE_CACHE_LOCK:
+        cached = _MANIFEST_CACHE.get(key)
+        if cached is not None:
+            _MANIFEST_CACHE.move_to_end(key)
+            return cached
+    try:
+        parsed = json.loads(m.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+    with _ARCHIVE_CACHE_LOCK:
+        _MANIFEST_CACHE[key] = parsed
+        _MANIFEST_CACHE.move_to_end(key)
+        while len(_MANIFEST_CACHE) > _MANIFEST_CACHE_MAX:
+            _MANIFEST_CACHE.popitem(last=False)
+    return parsed
+
+
+def read_manifest(path: Path) -> dict[str, Any] | None:
+    doc = _read_manifest_ro(path)
+    return copy.deepcopy(doc) if doc is not None else None
 
 
 def country_file_name(product: str, year: int, country: str) -> str:
@@ -306,10 +344,17 @@ def country_files(cache_dir: Path = FIRMS_CACHE_DIR, country: str | None = None)
     return out
 
 
-def load_listing(cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, dict[str, Any]]:
+def _load_listing_ro(cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, dict[str, Any]]:
     path = cache_dir / "listing" / LISTING_NAME
-    if not path.is_file():
+    try:
+        key = _stat_key(path)
+    except OSError:
         return {}
+    with _ARCHIVE_CACHE_LOCK:
+        cached = _LISTING_CACHE.get(key)
+        if cached is not None:
+            _LISTING_CACHE.move_to_end(key)
+            return cached
     out: dict[str, dict[str, Any]] = {}
     with path.open(encoding="utf-8", newline="") as fh:
         for row in csv.DictReader(fh):
@@ -317,7 +362,16 @@ def load_listing(cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, dict[str, Any]]
                 out[row["filename"]] = {"size": int(row["size"]), "updated": row["updated"]}
             except (KeyError, ValueError):
                 continue
+    with _ARCHIVE_CACHE_LOCK:
+        _LISTING_CACHE[key] = out
+        _LISTING_CACHE.move_to_end(key)
+        while len(_LISTING_CACHE) > _LISTING_CACHE_MAX:
+            _LISTING_CACHE.popitem(last=False)
     return out
+
+
+def load_listing(cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, dict[str, Any]]:
+    return {k: dict(v) for k, v in _load_listing_ro(cache_dir).items()}
 
 
 # Extraction and the raw manifest, in one pass over a downloaded country file
@@ -519,7 +573,41 @@ def _as_utc(v: str | _dt.date | _dt.datetime) -> _dt.datetime:
         return v if v.tzinfo else v.replace(tzinfo=_dt.timezone.utc)
     if isinstance(v, _dt.date):
         return _dt.datetime(v.year, v.month, v.day, tzinfo=_dt.timezone.utc)
-    return _as_utc(_dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")))
+    dt = _dt.datetime.fromisoformat(str(v))
+    return dt if dt.tzinfo else dt.replace(tzinfo=_dt.timezone.utc)
+
+
+def _parsed_extract(
+    path: Path, product: str
+) -> tuple[list[_dt.datetime], list[tuple[_dt.datetime, float, float, str, tuple[str, ...], dict[str, str]]]]:
+    key = (_stat_key(path), product)
+    with _ARCHIVE_CACHE_LOCK:
+        cached = _EXTRACT_CACHE.get(key)
+        if cached is not None:
+            _EXTRACT_CACHE.move_to_end(key)
+            return cached
+    records: list[tuple[_dt.datetime, float, float, str, tuple[str, ...], dict[str, str]]] = []
+    with path.open(encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh):
+            lat = float(row["latitude"])
+            lon = float(row["longitude"])
+            hhmm = _norm_time(row["acq_time"])
+            ts = _dt.datetime.fromisoformat(f"{row['acq_date']}T{hhmm[:2]}:{hhmm[2:]}:00+00:00")
+            plat = _platform(product, row["satellite"])
+            k = tuple(row[f] for f in DEDUP_FIELDS)
+            row["_platform"] = plat
+            row["_product"] = product
+            row["_acq_utc"] = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+            records.append((ts, lat, lon, plat, k, row))
+    records.sort(key=lambda rec: rec[0])
+    ts_list = [rec[0] for rec in records]
+    entry = (ts_list, records)
+    with _ARCHIVE_CACHE_LOCK:
+        _EXTRACT_CACHE[key] = entry
+        _EXTRACT_CACHE.move_to_end(key)
+        while len(_EXTRACT_CACHE) > _EXTRACT_CACHE_MAX:
+            _EXTRACT_CACHE.popitem(last=False)
+    return entry
 
 
 def read_firms(
@@ -543,7 +631,7 @@ def read_firms(
     regions = [r for r in REGION_COUNTRY if _box_within(box, region_box(r))]
     if not regions:
         raise FirmsCacheMissing(f"box {box} is not inside any cached region box {[region_box(r) for r in REGION_COUNTRY]}")
-    listing = load_listing(cache_dir)  # may be empty when only area API rows are cached; the year check below decides
+    listing = _load_listing_ro(cache_dir)  # may be empty when only area API rows are cached; the year check below decides
     out: list[dict[str, str]] = []
     seen: set[tuple[str, ...]] = set()
     years = range(t0.year, (t1 - _dt.timedelta(microseconds=1)).year + 1)
@@ -551,7 +639,7 @@ def read_firms(
     for r in regions:
 
         def area_manifest(p: str, y: int) -> dict[str, Any] | None:
-            m = read_manifest(extract_path(r, p, y, cache_dir))
+            m = _read_manifest_ro(extract_path(r, p, y, cache_dir))
             return m if m is not None and (m.get("lineage") or {}).get("source") == "area_api" else None
 
         # A year no product is published for (before 2000, or after the latest country files and any area API
@@ -579,26 +667,18 @@ def read_firms(
                 path = extract_path(r, p, y, cache_dir)
                 if not path.is_file():
                     raise FirmsCacheMissing(f"{path.relative_to(cache_dir)} not cached; fetch {y} first")
-                with path.open(encoding="utf-8", newline="") as fh:
-                    for row in csv.DictReader(fh):
-                        lat, lon = float(row["latitude"]), float(row["longitude"])
-                        if not (w <= lon <= e and s <= lat <= n):
-                            continue
-                        hhmm = _norm_time(row["acq_time"])
-                        ts = _dt.datetime.fromisoformat(f"{row['acq_date']}T{hhmm[:2]}:{hhmm[2:]}:00+00:00")
-                        if not (t0 <= ts < t1):
-                            continue
-                        plat = _platform(p, row["satellite"])
-                        if want is not None and plat not in want:
-                            continue
-                        k = tuple(row[f] for f in DEDUP_FIELDS)
-                        if k in seen:
-                            continue
-                        seen.add(k)
-                        row["_platform"] = plat
-                        row["_product"] = p
-                        row["_acq_utc"] = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
-                        out.append(row)
+                ts_list, records = _parsed_extract(path, p)
+                lo = bisect.bisect_left(ts_list, t0)
+                hi = bisect.bisect_left(ts_list, t1)
+                for _ts, lat, lon, plat, k, row_template in records[lo:hi]:
+                    if not (w <= lon <= e and s <= lat <= n):
+                        continue
+                    if want is not None and plat not in want:
+                        continue
+                    if k in seen:
+                        continue
+                    seen.add(k)
+                    out.append(dict(row_template))
     out.sort(key=lambda d: (d["_acq_utc"], d["_platform"], d["latitude"], d["longitude"]))
     return out
 
