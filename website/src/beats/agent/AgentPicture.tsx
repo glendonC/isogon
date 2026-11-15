@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useWorkspace } from '../../app/store';
-import { ComparePlane } from '../../compare/ComparePlane';
+import { ComparePlane, labelWidthOf } from '../../compare/ComparePlane';
 import {
   CHANCE,
   chanceOf,
@@ -52,11 +52,13 @@ export const PLAYERS_WORDS = {
 
 /** Time between two looks while the plays are watched, ms. */
 const LOOK_MS = 1100;
-/** Room kept under a block for its label: the name, the gain on its bar, and up to three lines about the player. */
-const UNDER_BLOCK = 132;
+/** Room kept under a block for its label: the name, the gain on its bar, and up to four lines about the player. */
+const UNDER_BLOCK = 156;
 
 interface LabelProps {
   play: PlaySummary;
+  /** As wide as the block's column, so labels side by side never meet. */
+  width: number;
   /** The gain to show now, null for none yet; for Chance the mean of its rounds. */
   gain: number | null;
   /** Chance's least and most, when it stands for several rounds. */
@@ -66,10 +68,10 @@ interface LabelProps {
 }
 
 /** Under a block: the player, its gain in points on a bar of the picture's one scale, and what is to be said of it. */
-function PlayerLabel({ play, gain, range, scale, notes }: LabelProps) {
+function PlayerLabel({ play, width, gain, range, scale, notes }: LabelProps) {
   const share = (g: number) => (scale ? `${Math.min(100, Math.max(0, (g / scale) * 100))}%` : '0%');
   return (
-    <div className="agent-label">
+    <div className="agent-label" style={{ width }}>
       <span className="agent-label__name">{play.name}</span>
       <span className="agent-label__gain">
         {gain !== null && (
@@ -250,11 +252,11 @@ export function AgentPicture({ onClose = null, guideSpeaks = false }: AgentPictu
         <ComparePlane
           blocks={blocks}
           labelSpace={UNDER_BLOCK}
-          perRow={blocks.length > 3 ? 3 : blocks.length}
+          perRow="fit"
           ariaLabel={PLAYERS_WORDS.name}
-          renderLabel={(block) => {
+          renderLabel={(block, anchor) => {
             const play = summaries.find((p) => p.id === block.id);
-            return play ? <PlayerLabel play={play} {...shownGain(play)} scale={scale} notes={notesOf(play)} /> : null;
+            return play ? <PlayerLabel play={play} width={labelWidthOf(anchor, 300)} {...shownGain(play)} scale={scale} notes={notesOf(play)} /> : null;
           }}
         />
       )}

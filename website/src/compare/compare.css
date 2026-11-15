@@ -49,7 +49,6 @@
   justify-items: center;
   gap: 2px;
   text-align: center;
-  white-space: nowrap;
 }
 
 .cmp-label__text.sys-plate {

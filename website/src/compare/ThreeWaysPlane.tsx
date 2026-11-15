@@ -21,7 +21,8 @@ export function ThreeWaysPlane() {
   if (!ways) return null;
   return (
     <div className="cmp-ways">
-      <ComparePlane blocks={ways.blocks} ariaLabel="One fire, side by side" />
+      {/* As many blocks in a row as the room lets each be drawn largest: three on a wide screen, one on a phone */}
+      <ComparePlane blocks={ways.blocks} perRow="fit" labelSpace={112} ariaLabel="One fire, side by side" />
       {ways.scoreLine && <p className="cmp-ways__score sys-body">{ways.scoreLine}</p>}
     </div>
   );

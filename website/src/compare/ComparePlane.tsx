@@ -18,10 +18,13 @@ function readPalette(el: HTMLElement): MarkPalette {
   return { modis: role('--sys-modis'), detection: role('--sys-detection'), estimate: role('--sys-estimate'), ink };
 }
 
-function DefaultLabel({ block, plate }: { block: CompareBlock; plate: boolean }) {
+/** The width a label under a block may take: its block's column and no wider, so labels side by side never meet. */
+export const labelWidthOf = (a: CompareAnchor, most = 320): number => Math.max(120, Math.min(most, Math.round(a.rect.width * 1.07 - 8)));
+
+function DefaultLabel({ block, plate, width }: { block: CompareBlock; plate: boolean; width: number }) {
   const lines = block.label.lines ?? [];
   return (
-    <div className={plate ? 'cmp-label__text sys-plate' : 'cmp-label__text'}>
+    <div className={plate ? 'cmp-label__text sys-plate' : 'cmp-label__text'} style={{ width }}>
       <div className="sys-label sys-strong">{block.label.title}</div>
       {lines.map((line, i) => (
         <div key={i} className={i < 2 ? 'sys-label' : 'sys-fine'}>
@@ -161,7 +164,7 @@ export function ComparePlane({
               }}
             />
             <div className="cmp-label" style={{ left: a.x, top: a.y }}>
-              {renderLabel ? renderLabel(block, a, hovered === block.id) : <DefaultLabel block={block} plate={labelPlate} />}
+              {renderLabel ? renderLabel(block, a, hovered === block.id) : <DefaultLabel block={block} plate={labelPlate} width={labelWidthOf(a)} />}
             </div>
             {(block.pins ?? []).map((pin) => {
               const at = a.pins.find((p) => p.id === pin.id);
