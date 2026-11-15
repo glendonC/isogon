@@ -498,17 +498,17 @@
 
 /* The strip of passes, on demand (guide/PassStrip.tsx): thin ticks along the foot of the screen, under the guide's
    actions; taller for the sharp satellite, dashed where hidden, the pass on show in full ink. */
+/* The passes as ticks above the guide's words at the bottom left (the story line holds the bottom edge). */
 .guide-passes {
   position: absolute;
   z-index: 6;
-  left: 50%;
-  bottom: 6px;
+  left: 40px;
+  bottom: calc(var(--guide-room, 160px) + 4px);
   display: flex;
   align-items: flex-end;
   gap: 0;
-  width: min(860px, calc(100vw - 2 * var(--sys-gutter)));
+  width: min(860px, calc(100vw - 80px));
   height: 22px;
-  transform: translateX(-50%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 240ms var(--sys-ease);

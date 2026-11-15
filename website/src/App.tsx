@@ -21,7 +21,11 @@ const Debrief = lazy(() =>
 // The pictures of the world over the page (the Earth's years, the test across the world, the sealed predictions).
 const WorldScreens = lazy(() => import('./world/WorldScreens').then((m) => ({ default: m.WorldScreens })));
 import { type Step } from './components/WorkspaceBar';
-import { Trail, type TrailWord } from './guide/Trail';
+import type { TrailWord } from './guide/Trail';
+import { LocatorBar } from './identity/LocatorBar';
+import { StoryLine } from './identity/StoryLine';
+import type { StoryPart } from './identity/story';
+import { WORDS } from './identity/words';
 import { GuideStrip } from './guide/GuideStrip';
 import { PassStrip } from './guide/PassStrip';
 import { useGuide, type Guide } from './guide/useGuide';
@@ -57,7 +61,7 @@ import {
 import { plainText } from './ui/plainText';
 import { useSensorModel } from './ui/useSensorModel';
 import { LandingComposition } from './ui/LandingComposition';
-import { SoundControl, playCue } from './audio';
+import { playCue } from './audio';
 import { imageryCredit } from './ui/attribution';
 import { useCalendar } from './ui/useCalendar';
 import { fireOfStart, openingStart, registryStartOf, usePlaces, type Box, type FeaturedFire, type Place } from './app/places';
@@ -1587,8 +1591,30 @@ export function App() {
     else goStep('look');
   };
   const store: WorkspaceStore = { ...storeBase, guide, runCommand };
-  const trailWord: TrailWord | null =
-    step === 'record' ? 'Record' : step === 'look' || step === 'agent' ? 'Play' : revealed ? 'Test' : 'Estimate';
+  // The identity's top bar (identity/LocatorBar.tsx) in place of the four words: the path from the world to what is
+  // in view, its coordinates, and the bar's few words; and the story line along the bottom (identity/StoryLine.tsx).
+  const fireStep = step === 'fire' || step === 'test' || step === 'look' || step === 'agent';
+  const fireShown = activeRun && realStart ? fireOfStart(placesState.places, activeRun.region.id, realStart) : null;
+  const fireTitle = fireStep && fireShown ? (fireShown.name ? `${fireShown.name}, ${fireShown.label}` : fireShown.label) : null;
+  const barLat = runMatchesRegion && activeRun ? activeRun.region.center_lat : registryBox.length === 4 ? (registryBox[1] + registryBox[3]) / 2 : null;
+  const barLon = runMatchesRegion && activeRun ? activeRun.region.center_lon : registryBox.length === 4 ? (registryBox[0] + registryBox[2]) / 2 : null;
+  const barLinks = [
+    { label: WORDS.links.search, onClick: () => setAskOpen(true) },
+    { label: WORDS.links.method, onClick: () => setReading('method') },
+    { label: WORDS.links.sources, onClick: () => setReading('sources') },
+  ];
+  const storyPart: StoryPart = step === 'record' ? 'place' : 'fire';
+  const storyNumber = (v: unknown) => {
+    const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v.replace(/,/g, '')) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const goStory = (part: StoryPart) => {
+    if (part === 'world' || part === 'jump') openWorldScreen('years');
+    else if (part === 'place') goStep('record');
+    else if (part === 'fire') onTrailWord('Estimate');
+    else if (part === 'tested') openWorldScreen('test');
+    else openWorldScreen('sealed');
+  };
   /** World model on a real run: in place on the terrain (beats/world-model/WorldModelScene.tsx), no column. */
   const modelScene = inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen;
   // The day's photograph is put away when Estimate and Test are left or another run comes in.
@@ -1706,25 +1732,20 @@ export function App() {
             <div className="iso-ws__scrim iso-ws__scrim--right" aria-hidden="true" />
             <div className="iso-ws__scrim iso-ws__scrim--bottom" aria-hidden="true" />
 
-            <Trail
-              objective={null}
-              current={trailWord}
-              context={guide.context}
-              onWord={onTrailWord}
-              closed={{ Test: stepBlocked.test ?? null, Play: stepBlocked.look ?? null }}
-              onPlace={() => {
-                goStep('record');
-                setPlacesOpen(true);
-              }}
+            <LocatorBar
+              path={['World', regionTitle, fireTitle].filter((s): s is string => Boolean(s))}
+              lat={barLat}
+              lon={barLon}
+              onTrail={(i) => (i === 0 ? openWorldScreen('years') : goStep('record'))}
+              links={barLinks}
             />
-
-            <div className="iso-ws__util" role="region" aria-label="Sound and search">
-              <SoundControl />
-              <button type="button" className="iso-ws__util-btn" onClick={() => setAskOpen(true)}>
-                <kbd>/</kbd>
-                <span>Search</span>
-              </button>
-            </div>
+            <StoryLine
+              current={storyPart}
+              progress={null}
+              jumpYear={storyNumber(guide.fields.sharp_since)}
+              testedFires={storyNumber(guide.fields.test_b_fires_n)}
+              onPart={filmMode ? undefined : goStory}
+            />
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
             {step === 'record' && <CalendarBeat key={recordTry} guideSpeaks={guide.step === 'record'} />}

@@ -529,6 +529,22 @@
   background: rgba(8, 11, 17, 0.9);
 }
 
+/* The identity's story line takes its clicks inside the workspace's pass-through layer. */
+.iso-ws .id-story {
+  pointer-events: auto;
+}
+
+/* A phone: the story line stands clear of the imagery credit under it, the guide clear of the story line. */
+@media (max-width: 600px) {
+  .iso-ws .id-story {
+    bottom: 40px;
+  }
+
+  .iso-ws .guide-strip {
+    bottom: 100px;
+  }
+}
+
 /* Persistent top-right utility controls in the workspace (sound and search).
    Steps aside whenever a side-opening document viewer occupies the right edge. */
 .iso-ws__util {
