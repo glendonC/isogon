@@ -1,10 +1,11 @@
-import { getJson, type Query } from '../../lib/api';
+import { getJson, type Query } from '../../lib/api.ts';
 import type { Box } from '../../app/places';
 
 /**
- * The Calendar's data: the fire record of a place (`GET /api/calendar?source=firms&region_id=`) or of any box
+ * The Record's data: the fire record of a place (`GET /api/calendar?source=firms&region_id=`) or of any box
  * (`&box=w,s,e,n`), and this month so far against its median (`GET /api/calendar/current`). Every figure the screen
- * shows comes from these answers; nothing is computed here but sums and positions.
+ * shows comes from these answers; nothing is computed here but sums and positions. The Record does not show this month
+ * so far; its reader stays here for whoever asks for it.
  */
 
 export type RecordPlace = { kind: 'region'; regionId: string; name: string } | { kind: 'box'; box: Box; name: string };
@@ -21,6 +22,13 @@ export interface RecordMonth {
   median: number | null;
   rank: number | null;
   rankOf: number | null;
+  /** This month over the median of its calendar month, as the record serves it (2 is twice a usual one). */
+  timesUsual: number | null;
+  /**
+   * The month as the satellite of its time counted it, with no correction: the sharp satellite's rate where it flew,
+   * else the coarse one's. Same unit as `value`.
+   */
+  asCounted: number | null;
   counts: Array<{ platform: string; total: number }>;
 }
 
@@ -52,6 +60,10 @@ export interface FireRecord {
   years: RecordYear[];
   /** Median error of a year left out of the fit, harmonized and not. */
   heldOut: { harmonized: number; raw: number } | null;
+  /** The first and last month each kind of satellite has a rate here: the coarse one (MODIS) and the sharp one (VIIRS). */
+  spans: { coarse: [string, string] | null; sharp: [string, string] | null };
+  /** How many times more the sharp satellite flags than the coarse one, over the months both flew. */
+  sharpRatio: number | null;
   /** Rows the overlap fit stood on. */
   fitRows: { modis: number; viirs: number } | null;
   /** Real runs that can open, by start (a region's record only). */
@@ -94,6 +106,8 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
       median: num(r.month_median),
       rank: num(r.month_rank),
       rankOf: num(r.month_years),
+      timesUsual: num(r.anomaly_ratio),
+      asCounted: num(r.viirs_raw_rate) ?? num(r.modis_raw_rate),
       counts,
     });
   }
@@ -109,6 +123,14 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
   const starts = obj(b.real_run_starts);
   const placeObj = obj(b.place);
   const cur = obj(b.current_month);
+  const spanOf = (field: string): [string, string] | null => {
+    const with_ = (b.records as unknown[])
+      .map(obj)
+      .filter((r): r is Obj => r !== null && typeof r.year_month === 'string' && num(r[field]) !== null)
+      .map((r) => String(r.year_month))
+      .sort();
+    return with_.length ? [with_[0], with_[with_.length - 1]] : null;
+  };
   return {
     place,
     label: typeof placeObj?.label === 'string' ? placeObj.label : typeof b.region_name === 'string' ? b.region_name : place.name,
@@ -126,6 +148,8 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
       .filter((y): y is Obj => y !== null)
       .map((y) => ({ year: Number(y.year), mean: num(y.harmonized_mean), months: num(y.months) ?? 12 })),
     heldOut: h !== null && r0 !== null ? { harmonized: h, raw: r0 } : null,
+    spans: { coarse: spanOf('modis_raw_rate'), sharp: spanOf('viirs_raw_rate') },
+    sharpRatio: num(sm.viirs_to_modis_overlap_ratio),
     fitRows: fit && num(fit.modis) !== null && num(fit.viirs) !== null ? { modis: num(fit.modis)!, viirs: num(fit.viirs)! } : null,
     runStarts: Array.isArray(starts?.starts)
       ? (starts!.starts as unknown[])
@@ -200,14 +224,3 @@ export function rampBounds(rec: FireRecord): { lo: number; hi: number } {
 export const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export const monthWords = (ym: string) => `${MONTH_NAMES[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
-
-export function ordinal(n: number): string {
-  const s = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
-  return `${n}${s}`;
-}
-
-export function rateWords(v: number | null): string {
-  if (v === null) return 'no data';
-  if (v === 0) return '0';
-  return v >= 10 ? v.toFixed(1) : v >= 0.1 ? v.toFixed(2) : v.toPrecision(2);
-}

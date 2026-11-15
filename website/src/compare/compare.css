@@ -109,12 +109,50 @@
   height: 100%;
 }
 
-/* Whose imagery the blocks carry, in the plane's top right corner. */
-.cmp-fires__credit {
-  position: absolute;
-  top: 0;
-  right: var(--sys-s4);
-  z-index: 1;
-  margin: 0;
-  pointer-events: none;
+/* A featured fire's label: its period leads, then its place and what it is to the model. The sentence about it and
+   the action that shows it appear while the pointer or the keyboard's focus is on its block. */
+.cmp-fire {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: 300px;
+  text-align: center;
+}
+
+.cmp-fire__period {
+  font: var(--sys-weight-strong) 17px / 24px var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.cmp-fire__standing {
+  color: var(--sys-ink-3);
+}
+
+.cmp-fire__show {
+  padding-top: 2px;
+  font: var(--sys-weight-strong) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink);
+  visibility: hidden;
+}
+
+.cmp-fire[data-hovered='true'] .cmp-fire__show {
+  visibility: visible;
+}
+
+/* The keyboard's place on a fire's block is said at the block: its label takes the pointer's state and names the
+   key. A box drawn round the block would be a frame round an action. */
+.cmp-fires .cmp-stop:focus-visible {
+  outline: none;
+}
+
+/* The key is said only where it acts: on the block the keyboard's focus is on. */
+.cmp-fire__key {
+  display: none;
+  margin-right: var(--sys-s2);
+  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
+  color: var(--sys-ink-3);
+}
+
+.cmp-stop:focus-visible ~ .cmp-label .cmp-fire__key {
+  display: inline;
 }

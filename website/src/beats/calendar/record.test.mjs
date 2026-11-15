@@ -1,0 +1,111 @@
+// Run with: npm test. The Record shows what the record's answer holds: a month against a usual one by the answer's own
+// ratio, the years as counted from the rates each satellite has, and no figure of the correction that was typed.
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { logClass, parseRecord, rampBounds } from './record.ts';
+import { publishRecordView, readRecordView, RECORD_CLOSED } from './recordView.ts';
+import { monthLine, percent, RECORD_WORDS, times } from './recordWords.ts';
+
+const month = (ym, harmonized, modis, viirs, extra = {}) => ({
+  year_month: ym,
+  year: Number(ym.slice(0, 4)),
+  month: Number(ym.slice(5, 7)),
+  harmonized_mean: harmonized,
+  modis_raw_rate: modis,
+  viirs_raw_rate: viirs,
+  month_median: 0.5,
+  anomaly_ratio: harmonized === null ? null : harmonized / 0.5,
+  month_rank: 1,
+  month_years: 3,
+  raw_counts: { Terra: { total: 10 }, 'Suomi NPP': viirs === null ? null : { total: 40 } },
+  ...extra,
+});
+
+const body = {
+  region_name: 'Somewhere',
+  place: { label: 'Somewhere' },
+  units: { harmonized_mean: 'suomi_npp_equivalent_hotspots_per_1000km2_day' },
+  records: [month('2011-08', 4, 1, null), month('2011-09', 0, 0, null), month('2012-08', 8, 2, 9), month('2013-08', 2, 0.5, 2.2)],
+  summary_metrics: { first_month: '2011-08', last_month: '2013-08', viirs_to_modis_overlap_ratio: 4.1223 },
+  harmonization_method: {
+    validation: { median_abs_relative_error_annual: 0.1086, median_abs_relative_error_without_harmonization: 0.7347 },
+    fit_rows: { modis: 10, viirs: 40 },
+  },
+  month_climatology: [],
+  annual_summary: [],
+  real_run_starts: { starts: [{ start: '2012-08-10', label: 'a start' }], rule: 'a rule' },
+  current_month: { route: '/api/calendar/current?source=firms&region_id=x' },
+};
+const rec = parseRecord(body, { kind: 'region', regionId: 'x', name: 'Somewhere' });
+
+test('a month as counted is the sharp satellite\'s rate where it flew and the coarse one\'s before', () => {
+  assert.equal(rec.months.get('2011-08').asCounted, 1);
+  assert.equal(rec.months.get('2012-08').asCounted, 9);
+  // The corrected value is kept beside it, untouched.
+  assert.equal(rec.months.get('2011-08').value, 4);
+  assert.equal(rec.months.get('2012-08').value, 8);
+});
+
+test('which satellite was flying comes from the first and last month each has a rate', () => {
+  assert.deepEqual(rec.spans.coarse, ['2011-08', '2013-08']);
+  assert.deepEqual(rec.spans.sharp, ['2012-08', '2013-08']);
+  const coarseOnly = parseRecord({ ...body, records: [month('2011-08', 4, 1, null)] }, { kind: 'region', regionId: 'x', name: 'Somewhere' });
+  assert.equal(coarseOnly.spans.sharp, null);
+});
+
+test('the correction\'s figures are the answer\'s own', () => {
+  assert.equal(rec.sharpRatio, 4.1223);
+  assert.deepEqual(rec.heldOut, { harmonized: 0.1086, raw: 0.7347 });
+  assert.equal(rec.months.get('2012-08').timesUsual, 16);
+});
+
+test('a month is set against a usual one in plain words', () => {
+  assert.equal(monthLine('2012-08', 8, 16), '16 times the fire of a usual August here');
+  assert.equal(monthLine('2012-08', 8, 4.12), '4.1 times the fire of a usual August here');
+  assert.equal(monthLine('2014-07', 1, 1.1), 'About the fire of a usual July here');
+  assert.equal(monthLine('2014-07', 0.1, 0.2), 'Less fire than a usual July here');
+  assert.equal(monthLine('2011-09', 0, 0), 'No fire detected in this month');
+  assert.equal(monthLine('2011-09', null, null), 'No satellite counted fires in this month');
+  assert.equal(times(2349.4), '2,349');
+});
+
+test('how well the correction holds is said with the shares passed in and nothing typed', () => {
+  assert.equal(percent(0.1086), '11');
+  const line = RECORD_WORDS.holds(0.1086, 0.7347);
+  assert.match(line, /off by 11 percent/);
+  assert.match(line, /off by 73 percent/);
+  const other = RECORD_WORDS.holds(0.3, 0.5);
+  assert.match(other, /off by 30 percent/);
+  assert.match(other, /off by 50 percent/);
+  assert.match(RECORD_WORDS.asCounted(4.1223, 2012), /about 4\.1 times as many detections .* before 2012/);
+  // With no ratio served, no ratio is said.
+  assert.doesNotMatch(RECORD_WORDS.asCounted(null, null), /\d/);
+});
+
+test('no sentence of The Record carries a percent sign or a forbidden dash', () => {
+  const said = [
+    ...Object.values(RECORD_WORDS).map((w) => (typeof w === 'function' ? (w.length === 2 ? w(0.1, 0.7) : w('Somewhere')) : w)),
+    monthLine('2012-08', 8, 16),
+  ];
+  // A percent sign, an em dash, an en dash or a middle dot, named by their codes so that this file holds none.
+  const barred = new RegExp(`[%${String.fromCharCode(0x2014, 0x2013, 0xb7)}]`);
+  for (const s of said) assert.doesNotMatch(String(s), barred, String(s));
+});
+
+test('the ramp keeps quiet months low and the worst month at the top', () => {
+  const { lo, hi } = rampBounds(rec);
+  assert.equal(logClass(0, lo, hi, 8), 0);
+  assert.equal(logClass(null, lo, hi, 8), 0);
+  assert.equal(logClass(hi, lo, hi, 8), 8);
+  assert.equal(logClass(lo, lo, hi, 8), 1);
+});
+
+test('the view the guide reads is closed until The Record says otherwise', () => {
+  assert.equal(readRecordView().state, 'closed');
+  const marked = { ym: '2012-08', words: 'August 2012', opens: true, rate: 8, usual: 0.5, timesUsual: 16, rank: 1, rankOf: 3, csvPath: '/api/calendar/rows.csv' };
+  const open = { ...RECORD_CLOSED, state: 'ready', place: 'Somewhere', marked };
+  publishRecordView(open);
+  assert.equal(readRecordView().marked.words, 'August 2012');
+  publishRecordView(RECORD_CLOSED);
+  assert.equal(readRecordView().marked, null);
+});

@@ -1,151 +1,241 @@
-/* The Calendar as a full screen (beats/calendar/CalendarScreen.tsx). Sizes, inks and shapes from system.css. */
+/* The Record (beats/calendar/TheRecord.tsx): the fire record opened over the stage. Sizes and inks from system.css. */
 
-.cal-screen {
+.rec {
+  /* Room kept for the trail above and for the guide's strip below. The page may set either. */
+  --rec-top: 96px;
+  --rec-guide: 150px;
   position: absolute;
   inset: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  column-gap: var(--sys-s6);
-  row-gap: var(--sys-s5);
-  padding: 84px var(--sys-gutter) var(--sys-s5);
-  background: rgba(8, 11, 17, 0.88);
+  padding: var(--rec-top) var(--sys-gutter) var(--rec-guide);
+  /* The land stays the picture: it steps back under a soft scrim, lighter at the horizon. */
+  background: linear-gradient(180deg, rgba(8, 11, 17, 0.4) 0%, rgba(8, 11, 17, 0.62) 22%, rgba(8, 11, 17, 0.7) 100%);
   color: var(--sys-ink);
   pointer-events: auto;
+  animation: rec-open var(--sys-slow) var(--sys-ease);
 }
 
-.cal-screen__head {
-  display: grid;
-  gap: var(--sys-s2);
-  align-content: start;
-  justify-items: start;
+@keyframes rec-open {
+  from {
+    opacity: 0;
+  }
 }
 
-.cal-screen__head .sys-title,
-.cal-screen__head .sys-body {
-  margin: 0;
+@media (prefers-reduced-motion: reduce) {
+  .rec {
+    animation: none;
+  }
 }
 
-.cal-screen__place {
-  padding-left: 0;
-}
-
-.cal-screen__readouts {
-  display: grid;
-  gap: var(--sys-s3);
-  align-content: start;
-}
-
-.cal-screen__plot {
+.rec__plot {
   position: relative;
-  grid-column: 1 / -1;
   min-height: 0;
-  padding-right: 404px;
+  width: min(100%, 1240px);
+  justify-self: center;
 }
 
-.cal-screen__svg {
+/* While the record loads or when it fails: one sentence where the grid will be, on the same soft ground. */
+.rec__status {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(100%, 720px);
+  margin: 0;
+  text-align: center;
+  color: var(--sys-ink);
+  background: rgba(8, 11, 17, 0.78);
+  box-shadow: 0 0 56px 56px rgba(8, 11, 17, 0.78);
+}
+
+.rec__ground {
+  position: absolute;
+  background: rgba(8, 11, 17, 0.78);
+  box-shadow: 0 0 72px 72px rgba(8, 11, 17, 0.78);
+  pointer-events: none;
+}
+
+.rec__grid {
+  position: absolute;
+  inset: 0;
   display: block;
   overflow: visible;
 }
 
-.cal-screen__svg:focus-visible {
-  outline: 1px solid var(--sys-focus);
-  outline-offset: 4px;
-}
-
-.cal-screen__cell {
-  cursor: pointer;
-}
-
-.cal-screen__axis {
+.rec__axis {
   font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-font);
   fill: var(--sys-ink-3);
 }
 
-.cal-screen__value {
-  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
-  fill: var(--sys-ink-2);
+.rec__cell {
+  transition: fill var(--sys-slow) var(--sys-ease);
 }
 
-.cal-screen__mark path {
+/* A month the satellites watched and found no fire in: a square, so the grid stays a grid, with no light in it. */
+.rec__cell--none {
+  fill: rgba(243, 244, 246, 0.07);
+}
+
+.rec__cell[data-opens='true'] {
+  cursor: pointer;
+}
+
+/* The one selected month: corner marks, as everywhere on the page. */
+.rec__bracket {
   fill: none;
   stroke: var(--sys-ink);
-  stroke-width: var(--sys-bracket-w);
+  stroke-width: 2px;
+  pointer-events: none;
 }
 
-.cal-screen__mark line {
+/* A month that holds a fire the stage can show: a thin frame in the gap round its square. */
+.rec__fire {
+  fill: none;
+  stroke: var(--sys-ink);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.rec__leader {
   stroke: var(--sys-ink-2);
   stroke-width: 1;
+  pointer-events: none;
 }
 
-.cal-screen__median {
+.rec__span line {
+  stroke-width: 2;
+}
+
+.rec__span text {
+  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-font);
   fill: var(--sys-ink-3);
 }
 
-.cal-screen__year {
-  fill: var(--sys-ink-3);
+.rec__span--coarse line {
+  stroke: var(--sys-modis);
 }
 
-.cal-screen__year--partial {
-  fill: none;
-  stroke: var(--sys-edge);
+.rec__span--sharp line {
+  stroke: var(--sys-detection);
 }
 
-.cal-screen__card {
+/* The label over a month: its name, one sentence, and the action beside it when it has one. */
+.rec__label {
   position: absolute;
-  right: 0;
-  width: 380px;
-  max-width: none;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  width: max-content;
+  pointer-events: none;
 }
 
-.cal-screen__strong {
+.rec__label[data-side='left'] {
+  justify-items: end;
+  text-align: right;
+}
+
+.rec__label > * {
+  margin: 0;
+}
+
+/* An action is text. The next step is heavier; its key is a small quiet mark beside it. */
+.rec__act {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sys-s2);
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color var(--sys-fast) var(--sys-ease);
+}
+
+.rec__act:hover {
   color: var(--sys-ink);
 }
 
-.cal-screen__act {
-  justify-self: start;
-  padding-left: 0;
-  text-decoration: none;
+/* The keyboard's place on an action is a line under its words, never a box round it. */
+.rec__act:focus-visible {
+  outline: none;
+  color: var(--sys-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--sys-focus);
+  text-underline-offset: 5px;
 }
 
-.cal-screen__caveats {
-  grid-column: 1 / -1;
-  justify-self: start;
-  padding-left: 0;
+.rec__act--next {
+  font-size: var(--sys-size-body);
+  line-height: var(--sys-lh-body);
+  font-weight: var(--sys-weight-strong);
+  color: var(--sys-ink);
 }
 
-.cal-screen__caveat-list {
-  grid-column: 1 / -1;
-  margin: 0;
-  padding-left: var(--sys-s4);
-  display: grid;
-  gap: var(--sys-s1);
-  max-width: 340px;
+.rec__key {
+  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
+  color: var(--sys-ink-3);
 }
 
-.cal-screen__plain {
-  margin: 0;
+.rec__junction {
+  position: absolute;
 }
 
-.cal-screen__foot {
-  grid-column: 1 / -1;
+.rec__foot {
+  position: absolute;
   display: flex;
-  align-items: center;
-  gap: var(--sys-s3);
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sys-s2) var(--sys-s5);
 }
 
-.cal-screen__ramp {
+.rec__wide {
+  flex-basis: 100%;
+}
+
+.rec__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sys-s2);
+  white-space: nowrap;
+}
+
+.rec__legend-gap {
+  width: var(--sys-s3);
+}
+
+.rec__ramp {
   display: inline-flex;
   gap: 1px;
 }
 
-.cal-screen__ramp > span {
-  width: 18px;
-  height: 10px;
+.rec__swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
 }
 
-/* The workspace dock steps aside while the Calendar fills the screen. */
+.rec__swatch--fire {
+  box-sizing: border-box;
+  border: 1px solid var(--sys-ink);
+}
+
+.rec__swatch--none {
+  background: rgba(243, 244, 246, 0.07);
+}
+
+.rec__holds {
+  margin: 0;
+  color: var(--sys-ink);
+}
+
+/* The workspace dock steps aside while The Record is open. */
 .iso-ws__dock[hidden] {
   display: none;
 }

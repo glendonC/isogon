@@ -1,193 +1,239 @@
-/* Choose a place (beats/calendar/PlaceScreen.tsx): the map is the screen. Sizes, inks and shapes from system.css. */
+/* Choose a Place (beats/calendar/PlaceScreen.tsx), opened over the stage: the featured fires lead on the right, the
+   map supports them on the left. Sizes and inks from system.css. */
 
-.place-screen {
+.place {
+  /* Room kept for the trail above and for the guide's strip below. The page may set either. */
+  --place-top: 104px;
+  --place-guide: 150px;
   position: absolute;
   inset: 0;
   z-index: 2;
-  background: var(--sys-night);
+  display: grid;
+  grid-template-columns: minmax(280px, 30%) minmax(0, 1fr);
+  column-gap: var(--sys-s6);
+  padding: var(--place-top) var(--sys-gutter) var(--place-guide);
+  /* The land steps back further than under the Record: the blocks are terrain themselves and need a calm ground. */
+  background: linear-gradient(180deg, rgba(8, 11, 17, 0.72) 0%, rgba(8, 11, 17, 0.9) 18%, rgba(8, 11, 17, 0.92) 100%);
   color: var(--sys-ink);
   overflow: hidden;
   pointer-events: auto;
+  animation: place-open var(--sys-slow) var(--sys-ease);
 }
 
-.place-screen__map {
-  position: absolute;
-  inset: 0;
+@keyframes place-open {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .place {
+    animation: none;
+  }
+}
+
+.place__side {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  gap: var(--sys-s2);
+  min-height: 0;
+  align-content: start;
+}
+
+.place__map {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
   cursor: grab;
   touch-action: none;
 }
 
-.place-screen__map[data-drawing='true'] {
+.place__map[data-drawing='true'] {
   cursor: crosshair;
 }
 
-.place-screen__map svg {
+.place__map svg {
   display: block;
 }
 
-.place-screen__land {
-  fill: #11151d;
+.place__land {
+  fill: #141922;
   stroke: #2b303a;
   stroke-width: 0.6;
 }
 
-.place-screen__land--cached {
-  fill: #232b38;
+.place__land--cached {
+  fill: #252d3a;
   stroke: #4a5262;
 }
 
-.place-screen__box {
+.place__box {
   fill: none;
   stroke: var(--sys-ink);
   stroke-width: 1;
 }
 
-.place-screen__drawn {
+.place__drawn {
   fill: rgba(243, 244, 246, 0.06);
   stroke: var(--sys-ink);
   stroke-width: 1.5;
 }
 
-.place-screen__drawn--bad {
+.place__drawn--bad {
   stroke: var(--sys-fail);
   stroke-dasharray: 4 3;
 }
 
-.place-screen__leaders {
+.place__marks {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.place-screen__leaders line {
-  stroke: var(--sys-ink-2);
+.place__marks line {
+  stroke: var(--sys-ink-3);
   stroke-width: 1;
 }
 
-.place-screen__leaders rect {
+.place__marks rect {
+  fill: var(--sys-ink-2);
+}
+
+.place__marks [data-over='true'] line {
+  stroke: var(--sys-ink);
+}
+
+.place__marks [data-over='true'] rect {
   fill: var(--sys-ink);
+  outline: 1px solid var(--sys-ink);
+  outline-offset: 3px;
 }
 
-.place-screen__plate {
+.place__name {
   position: absolute;
-  display: grid;
-  padding: var(--sys-s2);
-  box-sizing: border-box;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: color var(--sys-fast) var(--sys-ease);
 }
 
-.place-screen__plate > .sys-label {
-  padding: 0 var(--sys-s2) var(--sys-s1);
-}
-
-.place-screen__fire {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: var(--sys-s4);
-  align-items: baseline;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  padding: 4px var(--sys-s2);
-  margin: 2px 0;
-}
-
-.place-screen__fire:hover .place-screen__period {
+.place__name[data-over='true'] {
   color: var(--sys-ink);
 }
 
-.place-screen__size {
-  text-align: right;
-}
-
-.place-screen__about {
-  grid-column: 1 / -1;
-}
-
-.place-screen__period {
-  color: var(--sys-ink-2);
-}
-
-.place-screen__head {
+.place__zoom {
   position: absolute;
-  left: var(--sys-gutter);
-  top: 76px;
-  width: 420px;
+  right: 0;
+  bottom: 0;
   display: grid;
-  gap: var(--sys-s2);
-  padding: var(--sys-s4);
 }
 
-.place-screen__search {
-  margin: var(--sys-s1) 0 0;
+.place__zoom .place__act {
+  justify-content: center;
+  width: 28px;
+  font-size: var(--sys-size-body);
 }
 
-.place-screen__input {
+.place__find {
+  margin: var(--sys-s2) 0 0;
+}
+
+/* A field is a line to write on, not a box. */
+.place__input {
   width: 100%;
   box-sizing: border-box;
-  padding: var(--sys-s2) var(--sys-s3);
-  border: 1px solid var(--sys-edge);
+  padding: var(--sys-s2) 0;
+  border: 0;
+  border-bottom: 1px solid var(--sys-edge);
   border-radius: 0;
   background: transparent;
   color: var(--sys-ink);
   font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
 }
 
-.place-screen__input::placeholder {
+.place__input::placeholder {
   color: var(--sys-ink-3);
 }
 
-.place-screen__input:focus-visible {
-  outline: 1px solid var(--sys-focus);
-  outline-offset: 2px;
+.place__input:focus-visible {
+  outline: none;
+  border-bottom-color: var(--sys-focus);
 }
 
-.place-screen__actions {
+.place__acts {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sys-s2) var(--sys-s4);
+  gap: var(--sys-s1) var(--sys-s5);
 }
 
-.place-screen__actions .sys-ctl {
-  padding-left: 0;
+/* An action is text. The next step is heavier; its key is a small quiet mark before it. */
+.place__act {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sys-s2);
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--sys-fast) var(--sys-ease);
 }
 
-.place-screen__note {
+.place__act:hover,
+.place__act[aria-pressed='true'] {
+  color: var(--sys-ink);
+}
+
+/* The keyboard's place on an action is a line under its words, never a box round it. */
+.place__act:focus-visible {
+  outline: none;
+  color: var(--sys-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--sys-focus);
+  text-underline-offset: 5px;
+}
+
+.place__act--next {
+  font-weight: var(--sys-weight-strong);
+  color: var(--sys-ink);
+}
+
+.place__key {
+  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
+  color: var(--sys-ink-3);
+}
+
+.place__note {
   color: var(--sys-fail);
 }
 
-.place-screen__zoom {
+/* The plane may stand higher than the map: the objective and the trail keep to the left. */
+.place__plane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  margin-top: calc(40px - var(--place-top));
+}
+
+/* The one imagery line of the screen, where the stage keeps its own: it stands on the night so only one is read. */
+.place__credit {
   position: absolute;
   right: var(--sys-gutter);
-  bottom: 56px;
-  display: grid;
+  bottom: 8px;
+  max-width: 70%;
+  margin: 0;
+  text-align: right;
+  background: var(--sys-night);
+  box-shadow: 0 0 10px 10px var(--sys-night);
 }
 
-.place-screen__zoom .sys-ctl {
-  justify-content: center;
-  width: 36px;
-  border: 1px solid var(--sys-edge);
-  background: var(--sys-plate);
-}
-
-.place-screen__caption {
-  position: absolute;
-  left: var(--sys-gutter);
-  bottom: 14px;
-}
-
-/* The featured fires as cut-outs (compare/FeaturedFiresPlane.tsx): low right, clear of the zoom and of the labels. */
-.place-screen__plane {
-  position: absolute;
-  right: calc(var(--sys-gutter) + 56px);
-  bottom: 40px;
-  width: min(46vw, 680px);
-  height: 270px;
-  pointer-events: none;
-}
-
-.place-screen__plane > * {
-  pointer-events: auto;
+@media (max-width: 900px) {
+  .place {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 34% minmax(0, 1fr);
+    row-gap: var(--sys-s4);
+  }
 }

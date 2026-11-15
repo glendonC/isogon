@@ -8,6 +8,9 @@
  *   ?use=agent    the Agent part's picture, inside a stand-in for the workspace (region, start)
  *   ?use=fires    the featured fires as the place screen mounts them, in a box the size of its slot (h, pick)
  *   ?use=reveal   one fire three ways as World model mounts it, inside a stand-in for the workspace (region, start, pass)
+ *   ?use=record   The Record over a still of the stage, with stand-ins for the trail and the guide's strip
+ *                 (region, box=w,s,e,n, marked, pick, counted=1, still=0, guide=0, events=1)
+ *   ?use=place    Choose a Place over the same still, with the same stand-ins (current, still=0, guide=0, events=1)
  */
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -17,7 +20,11 @@ import '../../styles/tokens.css';
 import '../../styles/system.css';
 import { WorkspaceProvider, type WorkspaceStore } from '../../app/store';
 import { AgentPicture } from '../../beats/agent/AgentPicture';
-import { parsePlaces, type FeaturedFire, type Places } from '../../app/places';
+import { openingStart, parsePlaces, type Box, type FeaturedFire, type Places } from '../../app/places';
+import { boxWords, PlaceScreen } from '../../beats/calendar/PlaceScreen';
+import type { FireRecord, RecordPlace } from '../../beats/calendar/record';
+import { useRecordView } from '../../beats/calendar/recordView';
+import { TheRecord } from '../../beats/calendar/TheRecord';
 import { ComparePlane } from '../ComparePlane';
 import { FeaturedFiresPlane } from '../FeaturedFiresPlane';
 import { ThreeWaysPlane } from '../ThreeWaysPlane';
@@ -228,6 +235,172 @@ function RevealHarness() {
   );
 }
 
+/**
+ * The Record over a still of the stage. The still is a capture of the stage, not the stage: a file kept out of the
+ * repository at build/dev-stills/stage-still.png, and the page does without it when it is absent. The trail and the strip
+ * are stand-ins for the page's own: the strip reads the Record's view, as the guide will, and its sentences are the
+ * first wording, not the Record's. Showing a fire asks for nothing here; the strip says what would be shown.
+ */
+function RecordHarness() {
+  const [places, setPlaces] = useState<Places | null>(null);
+  const [event, setEvent] = useState('none');
+  const view = useRecordView();
+  useEffect(() => {
+    void getJson<unknown>('/api/regions').then((body) => setPlaces(parsePlaces(body)));
+  }, []);
+  const box = Q.get('box');
+  const regionId = Q.get('region') ?? places?.default?.region_id ?? null;
+  const place: RecordPlace | null = useMemo(() => {
+    if (box) {
+      const b = box.split(',').map(Number) as Box;
+      return { kind: 'box', box: b, name: boxWords(b) };
+    }
+    const p = places?.places.find((x) => x.id === regionId);
+    return p ? { kind: 'region', regionId: p.id, name: p.name } : null;
+  }, [box, regionId, places]);
+  const marked = Q.get('marked') ?? (box || !places || !regionId ? null : openingStart(places, regionId)?.slice(0, 7) ?? null);
+  const ready = view.state === 'ready';
+  useEffect(() => {
+    if (!ready) return;
+    const pick = Q.get('pick');
+    if (pick) view.pick(pick);
+    if (Q.get('counted') === '1') view.showAsCounted(true);
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  const canOpen = (ym: string, rec: FireRecord) => rec.place.kind === 'region' && rec.runStarts.some((st) => st.start.startsWith(ym));
+  // The stand-ins below follow the page's frames: the place, the objective and the trail top left, the guide's
+  // sentences and at most three actions bottom centre. Their words are the guide script's, with the view's figures.
+  const times = view.correction.ratio === null ? null : (Math.round(view.correction.ratio * 10) / 10).toFixed(1);
+  const said: string[] = view.picked
+    ? [
+        view.picked.rank !== null && view.picked.rankOf !== null
+          ? `Counting from the most fire, ${view.picked.words} is number ${view.picked.rank} of ${view.picked.rankOf} for its month of the year.`
+          : `${view.picked.words}.`,
+      ]
+    : ready
+      ? [
+          `This is every fire NASA's satellites detected around ${view.place} since ${view.firstYear}. Each square is one month, and brighter means more fire.`,
+          ...(times ? [`The newer satellite sees about ${times} times as many fires as the older ones, so recent years would look worse than they were. Here that jump is taken out and every year is on one scale.`] : []),
+        ]
+      : view.state === 'loading'
+        ? [`Loading the fire record of ${view.place}.`]
+        : ['The record did not load.'];
+  return (
+    <StandIn
+      objective={box ? 'Read the fire record of the area you drew' : `Read the fire record of ${view.place || place?.name || ''}`}
+      said={said}
+      actions={
+        ready
+          ? [
+              ...(view.marked ? [{ id: 'show', key: 'Enter', words: `Show the fire of ${view.marked.words}`, act: () => view.show(view.marked!.ym) }] : []),
+              { id: 'browse', key: 'M', words: 'Pick a month', act: () => view.browse() },
+              { id: 'place', key: 'P', words: 'Choose another place' },
+            ]
+          : []
+      }
+      event={event}
+    >
+      {place && <TheRecord place={place} markedMonth={marked} canOpen={canOpen} onOpenMonth={(ym) => setEvent(`show ${ym}`)} onClose={() => setEvent('close')} />}
+    </StandIn>
+  );
+}
+
+interface StandInAction {
+  id: string;
+  key: string;
+  words: string;
+  act?: () => void;
+}
+
+/**
+ * What stands round a screen of this lane on the page, as stand-ins: a still of the stage under it, the objective and
+ * the trail top left, the guide's sentences and at most three actions bottom centre, the first one the next step.
+ */
+function StandIn({ objective, said, actions, event, children }: { objective: string; said: string[]; actions: StandInAction[]; event: string; children: React.ReactNode }) {
+  const quiet = { font: 'inherit', background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit' } as const;
+  const key = { font: 'var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono)', color: 'var(--sys-ink-3)', marginRight: 8 } as const;
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--sys-night)' }}>
+      {Q.get('still') !== '0' && (
+        <img
+          src="/build/dev-stills/stage-still.png"
+          alt=""
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.14)', transformOrigin: '100% 100%' }}
+          onError={(e) => (e.currentTarget.style.display = 'none')}
+        />
+      )}
+      {children}
+      {Q.get('guide') !== '0' && (
+        <>
+          <div style={{ position: 'absolute', zIndex: 3, left: 'var(--sys-gutter)', top: 28, display: 'grid', gap: 6 }}>
+            <span style={{ font: 'var(--sys-weight-strong) 20px / 26px var(--sys-font)', color: 'var(--sys-ink)' }}>{objective}</span>
+            <div style={{ display: 'flex', gap: 'var(--sys-s4)', alignItems: 'baseline' }}>
+              {['Record', 'Estimate', 'Test', 'Play'].map((w, i) => (
+                <span
+                  key={w}
+                  className="sys-label"
+                  style={i === 0 ? { color: 'var(--sys-ink)', borderBottom: '1px solid var(--sys-ink)', paddingBottom: 2 } : { color: 'var(--sys-ink-3)' }}
+                >
+                  {w}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div style={{ position: 'absolute', zIndex: 3, left: 0, right: 0, bottom: 0, padding: '0 var(--sys-gutter) 30px', display: 'grid', justifyItems: 'center', gap: 'var(--sys-s3)', pointerEvents: 'none' }}>
+            <p style={{ margin: 0, font: 'var(--sys-weight) 17px / 25px var(--sys-font)', color: 'var(--sys-ink)', maxWidth: 1040, textAlign: 'center' }}>{said.join(' ')}</p>
+            <div className="sys-body" style={{ display: 'flex', gap: 'var(--sys-s6)', alignItems: 'baseline', pointerEvents: 'auto' }}>
+              {actions.map((a, i) => (
+                <button key={a.id} id={a.id} type="button" style={i === 0 ? { ...quiet, fontWeight: 500, color: 'var(--sys-ink)' } : quiet} onClick={a.act}>
+                  <span style={key}>{a.key}</span>
+                  {a.words}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+      {Q.get('events') === '1' && (
+        <span id="events" className="sys-unit" style={{ position: 'absolute', zIndex: 3, right: 8, top: 4, opacity: 0.6 }}>
+          {event}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Choose a Place over the still of the stage. The guide script has no state for this screen yet: the objective and
+ * the sentence in the strip are this page's stand-ins, with counts taken from the registry.
+ */
+function PlaceHarness() {
+  const [places, setPlaces] = useState<Places | null>(null);
+  const [event, setEvent] = useState('none');
+  useEffect(() => {
+    void getJson<unknown>('/api/regions').then((body) => setPlaces(parsePlaces(body)));
+  }, []);
+  const withFires = places?.places.filter((p) => p.rows === 'firms' && p.featured_fires.length > 0) ?? [];
+  const fires = withFires.reduce((n, p) => n + p.featured_fires.length, 0);
+  const word = (n: number) => ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'][n] ?? String(n);
+  const cap = (w: string) => w[0].toUpperCase() + w.slice(1);
+  return (
+    <StandIn
+      objective="Choose a place and a fire"
+      said={places ? [`${cap(word(fires))} fires in ${word(withFires.length)} places can be shown pass by pass. Pick one, or draw your own area to read its fire record.`] : ['Loading the places.']}
+      actions={[]}
+      event={event}
+    >
+      {places && (
+        <PlaceScreen
+          places={places}
+          currentFire={Q.get('current') ?? places.default?.featured_fire ?? null}
+          onFire={(_, fire) => setEvent(`show ${fire.id}`)}
+          onBox={(b) => setEvent(`box ${b.join(',')}`)}
+          onClose={() => setEvent('close')}
+        />
+      )}
+    </StandIn>
+  );
+}
+
 function Harness() {
   const [revealed, setRevealed] = useState(Q.get('revealed') === '1');
   const [view, setView] = useState<View | null>(null);
@@ -284,6 +457,18 @@ function Harness() {
 const root = document.getElementById('root');
 if (root) {
   ReactDOM.createRoot(root).render(
-    USE === 'agent' ? <AgentHarness /> : USE === 'fires' ? <FiresHarness /> : USE === 'reveal' ? <RevealHarness /> : <Harness />,
+    USE === 'record' ? (
+      <RecordHarness />
+    ) : USE === 'place' ? (
+      <PlaceHarness />
+    ) : USE === 'agent' ? (
+      <AgentHarness />
+    ) : USE === 'fires' ? (
+      <FiresHarness />
+    ) : USE === 'reveal' ? (
+      <RevealHarness />
+    ) : (
+      <Harness />
+    ),
   );
 }
