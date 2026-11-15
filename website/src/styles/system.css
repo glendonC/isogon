@@ -60,8 +60,8 @@
   --sys-focus: #d6f1ff;
 
   /* Data. The same colours on the page as on the stage. */
-  --sys-detection: #f08a45; /* a satellite detection, and the sharp instrument (VIIRS) */
-  --sys-modis: #b4c3d6; /* the coarse instrument (MODIS) */
+  --sys-detection: #8fd6f5; /* VIIRS: its fire, light blue, as the stage draws it */
+  --sys-modis: #ff7a45; /* MODIS: its fire, orange */
   --sys-estimate: #f3f4f6; /* the model's estimate: white marks inside a dotted line on the terrain */
 
   /* What kind of surface this is. Only "Demo data" and "Simulated" take a colour; real data stays ink. */
