@@ -103,6 +103,8 @@ export interface WorkspaceStore {
     /** After the reveal: the hidden detections now shown at the pass on show, and over the window. */
     revealedHere: number | null;
     revealedTotal: { detections: number; passes: number } | null;
+    /** NASA's photograph of the box for the day of the pass on show: what is asked for, what the stage shows, the next. */
+    dayPicture: { asked: 'true_color' | 'false_color' | null; shown: EarthStageTelemetry['dayPicture'] | null; next: () => void };
   };
   time: {
     /** The pass on show, 0 based. */

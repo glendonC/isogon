@@ -27,6 +27,7 @@ import { useGuide, type Guide } from './guide/useGuide';
 import { keyMatches, says, stateOf } from './guide/script';
 import { StageBoundary } from './ui/StageBoundary';
 import { useWorldFirstYear } from './guide/world';
+import { DAY_PICTURE_KEY, nextDayPicture, type DayPictureKind } from './guide/dayPicture';
 import { openingHiddenPass, type OpeningFrame } from './app/openingPass';
 import { BEATS, type BeatId } from './app/names';
 import { WorkspaceProvider, type WorkspaceBase, type WorkspaceStore } from './app/store';
@@ -223,6 +224,8 @@ export function App() {
   const [said, setSaid] = useState<{ key: string; lines: string[] } | null>(null);
   /** A new try at the Record after it failed to load: it is mounted afresh. */
   const [recordTry, setRecordTry] = useState(0);
+  /** NASA's photograph of the box for the day of the pass on show, on Estimate and Test (guide/dayPicture.ts). */
+  const [dayPicture, setDayPicture] = useState<DayPictureKind | null>(null);
   const telemetryRef = useRef<EarthStageTelemetry | null>(null);
   /** How a selected item is marked, from the address (?sel=chip|square|box); chip unless it says otherwise. */
   const selStyle = useMemo(() => {
@@ -1012,6 +1015,9 @@ export function App() {
         } else if (lower === 't' && revealed && (step === 'fire' || step === 'test') && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setThreeWays((t) => !t);
+        } else if (lower === DAY_PICTURE_KEY.toLowerCase() && (step === 'fire' || step === 'test') && isRealRun(activeRun) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault();
+          setDayPicture(nextDayPicture);
         } else if (lower === 'e' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setEvidenceOpen(true);
@@ -1231,6 +1237,7 @@ export function App() {
         revealed && trackRevealed.length > 0
           ? { detections: trackRevealed.reduce((a, r) => a + r.pixels, 0), passes: trackRevealed.length }
           : null,
+      dayPicture: { asked: dayPicture, shown: stageTelemetry?.dayPicture ?? null, next: () => setDayPicture(nextDayPicture) },
     },
     time: { pass: activeEpoch, powerMw: currentMw, toggleStrip: () => setStripOpen((o) => !o) },
     round: {
@@ -1395,6 +1402,11 @@ export function App() {
     step === 'record' ? 'Record' : step === 'look' || step === 'agent' ? 'Play' : revealed ? 'Test' : 'Estimate';
   /** World model on a real run: in place on the terrain (beats/world-model/WorldModelScene.tsx), no column. */
   const modelScene = inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen;
+  // The day's photograph is put away when Estimate and Test are left or another run comes in.
+  const dayRunId = activeRun?.run_id ?? null;
+  useEffect(() => {
+    if (!modelScene) setDayPicture(null);
+  }, [modelScene, dayRunId]);
 
   // What search offers: the registry's places with a real fire to open, under the registry's names.
   const palettePlaces = placesState.places.places
@@ -1596,6 +1608,7 @@ export function App() {
               cutawaySplit={cutawaySplit}
               cameraPreset={cameraPreset}
               cinemaActive={cinemaActive}
+          dayPicture={modelScene ? dayPicture : null}
               cleanHud={cleanHud}
               slewRequest={slewRequest}
               selectedFindingId={selectedFinding?.id ?? null}

@@ -10,6 +10,7 @@ import { labelPoint } from '../../guide/anchor';
 import { MarksKey } from '../../guide/MarksKey';
 import { ClearPin, patchBoxes } from '../../guide/ClearPin';
 import { SCRIPT } from '../../guide/script';
+import { DAY_PICTURE_ACTION, DAY_PICTURE_KEY, dayPictureLine } from '../../guide/dayPicture';
 import '../../styles/world-model.css';
 import '../../styles/guide.css';
 
@@ -119,6 +120,21 @@ export function WorldModelScene() {
       {at && guide.fireLabel && !keyOpen && (
         <ClearPin at={at} avoid={avoid} className="wm-pin" plateClass="wm-label" label={guide.fireLabel} focusable onFocusChange={setFocused} onPick={time.toggleStrip}>
           <span className="guide-label">{guide.fireLabel}</span>
+          {/* That day's photograph of the box: what is on show, and the key for the next press. */}
+          {model.dayPicture.asked && dayPictureLine(model.dayPicture.shown) && (
+            <span className="guide-label guide-label--day">{dayPictureLine(model.dayPicture.shown)}</span>
+          )}
+          <button
+            type="button"
+            className="guide-day"
+            onClick={(e) => {
+              e.stopPropagation();
+              model.dayPicture.next();
+            }}
+          >
+            <kbd className="guide-key">{DAY_PICTURE_KEY}</kbd>
+            <span>{DAY_PICTURE_ACTION[model.dayPicture.asked ?? 'off']}</span>
+          </button>
         </ClearPin>
       )}
       {act && promptAt && (near || focused) && (
