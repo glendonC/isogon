@@ -259,6 +259,34 @@ class TestBInTheEvidenceTests(unittest.TestCase):
         self.assertIn("test_b", fresh["state"])
         self.assertEqual(fresh["players_fit"]["chosen_on_validation"], "player_in_use")
 
+    def test_every_model_of_both_looks_has_its_seven_scores_with_their_intervals_and_classes_as_recorded(self) -> None:
+        from backend.model import evidence as EV
+
+        fresh = EV._fresh_test()
+        self.assertEqual(fresh["class_words"], {"ahead": "ahead", "tie": "level", "behind": "behind"})
+        n_models = 0
+        for look in ("test_a", "test_b"):
+            rec = json.loads((EV.FITTED_DIR / EV.FRESH_FILES[look]).read_text(encoding="utf-8"))
+            served = fresh[look]
+            pairs = [("values in use", served["all"], rec["judged"]["all"])] + [
+                (m, served["beside_the_headline"][m]["against_the_baselines"], v["against_the_baselines"])
+                for m, v in rec.get("beside_the_headline", {}).items()]
+            for name, got, want in pairs:
+                n_models += 1
+                self.assertEqual(len(got["scores"]), 7, (look, name))
+                self.assertEqual(set(got["scores"]), set(want["classes"]), (look, name))
+                for k, s in got["scores"].items():
+                    w = want["scores"][k]
+                    self.assertEqual(s["value"], w["reconstruction"], (look, name, k))
+                    self.assertEqual((s["painted_modis"], s["overlap_ratio"]), (w["painted_modis"], w["overlap_ratio"]))
+                    self.assertEqual(s["improvement_interval"], w["improvement_interval"], (look, name, k))
+                    self.assertEqual(s["class"], want["classes"][k])
+                    self.assertEqual(s["class_word"], fresh["class_words"][s["class"]])
+                self.assertEqual([got["ahead"], got["tied"], got["behind"]], [want["ahead"], want["tied"], want["behind"]])
+                self.assertEqual(got["interval"], want["interval"])
+        # test A's headline; test B's headline, the refit and the four challengers
+        self.assertEqual(n_models, 7)
+
 
 if __name__ == "__main__":
     unittest.main()

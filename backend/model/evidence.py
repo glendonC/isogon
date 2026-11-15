@@ -677,6 +677,34 @@ FRESH_FILES: dict[str, str] = {
 }
 
 
+# The page's word for each class a judged score can have.
+CLASS_WORDS: dict[str, str] = {"ahead": "ahead", "tie": "level", "behind": "behind"}
+
+
+def _seven_scores(judged: dict[str, Any]) -> dict[str, Any] | None:
+    """Each score of one model in a set judged with an interval, in one shape for every model: its value, both
+    baselines' values, which way is better, the 90 percent interval of its improvement over each baseline (the fires
+    resampled whole, 2,000 times), its class and the page's word for it. Copied from the record, no figure made. The
+    record keeps a model beside the headline under the headline's own key, `reconstruction`; here every model's
+    value is `value`."""
+    scores = judged.get("scores")
+    if not scores:
+        return None
+    return {k: {"value": s["reconstruction"], "painted_modis": s["painted_modis"], "overlap_ratio": s["overlap_ratio"],
+                "better_is": s["better_is"], "improvement_interval": s["improvement_interval"], "class": s["class"],
+                "class_word": CLASS_WORDS.get(s["class"], s["class"])}
+            for k, s in scores.items()}
+
+
+def _scores_only(judged: dict[str, Any]) -> dict[str, Any]:
+    seven = _seven_scores(judged)
+    return {} if seven is None else {"scores": seven}
+
+
+def _with_scores(judged: dict[str, Any], keep: tuple[str, ...]) -> dict[str, Any]:
+    return {**{k: judged[k] for k in keep if k in judged}, **_scores_only(judged)}
+
+
 def _fresh_look(doc: dict[str, Any]) -> dict[str, Any]:
     keep = ("episodes", "scored_looks", "interval", "ahead", "tied", "behind", "classes", "why_no_interval")
     j = doc["judged"]
@@ -684,13 +712,14 @@ def _fresh_look(doc: dict[str, Any]) -> dict[str, Any]:
         "look_name": doc["look_name"], "values": doc["values"], "plan_sha256": doc["plan_sha256"],
         "episodes_in_plan": doc["episodes_in_plan"], "episodes_scored": doc["episodes_scored"],
         "not_scored": len(doc["unscored"]),
-        "all": {k: j["all"][k] for k in keep if k in j["all"]},
+        "all": _with_scores(j["all"], keep),
         "by_continent": {c: {k: v[k] for k in keep if k in v} for c, v in j["by_continent"].items()},
         "by_zone": {z: {k: v[k] for k in keep if k in v} for z, v in j["by_zone"].items()},
         "per_fire": [{k: e[k] for k in ("key", "continent", "zone", "scored_looks", "ahead_of_both_on", "scores_judged")}
                      for e in doc["per_episode"]],
         "beside_the_headline": {m: {"what": _beside_what(doc, m),
-                                    "against_the_baselines": {k: v["against_the_baselines"].get(k) for k in keep},
+                                    "against_the_baselines": {**{k: v["against_the_baselines"].get(k) for k in keep},
+                                                              **_scores_only(v["against_the_baselines"])},
                                     "the_headline_against_it": v["the_headline_against_it"]}
                                 for m, v in (doc.get("beside_the_headline") or {}).items()},
         "clear_looks": _clear_looks(doc.get("clear_looks"), keep),
@@ -717,10 +746,11 @@ def _clear_looks(table: Any, keep: tuple[str, ...]) -> Any:
         "cloud_share_at_most": table["cloud_share_at_most"], "passes": table["passes"],
         "passes_with_a_mask": table["passes_with_a_mask"], "clear_passes": table["clear_passes"],
         "episodes_with_a_clear_look": table["episodes_with_a_clear_look"],
-        "all": {k: j["all"][k] for k in keep if k in j["all"]},
+        "all": _with_scores(j["all"], keep),
         "by_continent": {c: {k: v[k] for k in keep if k in v} for c, v in j["by_continent"].items()},
         "by_zone": {z: {k: v[k] for k in keep if k in v} for z, v in j["by_zone"].items()},
-        "beside_the_headline": {m: {"against_the_baselines": {k: v["against_the_baselines"].get(k) for k in keep},
+        "beside_the_headline": {m: {"against_the_baselines": {**{k: v["against_the_baselines"].get(k) for k in keep},
+                                                              **_scores_only(v["against_the_baselines"])},
                                     "the_headline_against_it": v["the_headline_against_it"]}
                                 for m, v in (table.get("beside_the_headline") or {}).items()},
     }
@@ -757,7 +787,8 @@ def _fresh_test() -> dict[str, Any]:
     from backend.model import fresh_test as FT
 
     out: dict[str, Any] = {"protocol_id": FT.PROTOCOL_ID, "protocol_sha256": FT.protocol_sha256(),
-                           "look_names": dict(FT.LOOK_NAMES), "protocol": dict(FT.PROTOCOL)}
+                           "look_names": dict(FT.LOOK_NAMES), "protocol": dict(FT.PROTOCOL),
+                           "class_words": dict(CLASS_WORDS)}
     docs = {k: (_read(FITTED_DIR / f) if (FITTED_DIR / f).is_file() else None) for k, f in FRESH_FILES.items()}
     plan = docs["plan"]
     out["plan"] = None if plan is None else {
