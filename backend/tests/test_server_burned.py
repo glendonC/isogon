@@ -57,6 +57,12 @@ class BurnedRouteTest(unittest.TestCase):
         self.assertEqual((a["product"], a["version"]), ("MCD64A1", "061"))
         self.assertEqual(a["span"], {"start": "2019-08-01", "through": "2019-08-31", "months": ["2019-08"]})
         self.assertEqual((a["grid"]["ny"], a["grid"]["nx"]), self.shape)
+        w, s, e, n = a["grid"]["bounds"]
+        self.assertEqual((w, s), BOX[:2])
+        dlon, dlat = a["grid"]["cell_deg"]
+        self.assertTrue(BOX[2] <= e < BOX[2] + dlon + 1e-6 and BOX[3] <= n < BOX[3] + dlat + 1e-6)
+        self.assertAlmostEqual(e - w, a["grid"]["nx"] * dlon, places=5)
+        self.assertAlmostEqual(n - s, a["grid"]["ny"] * dlat, places=5)
         c = a["counts"]
         self.assertEqual((c["burned_before_window"], c["burned_in_window"], c["burned_after_window"], c["unmapped"]),
                          (1, 2, 1, 1))

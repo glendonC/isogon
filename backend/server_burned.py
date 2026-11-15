@@ -113,6 +113,13 @@ def classify(bw: B.BurnedWindow, start_s: float, end_s: float, span_start: _dt.d
     return cls, day, dates
 
 
+def ground_bounds(g: B.BurnedGrid) -> list[float]:
+    """[west, south, east, north] of the picture on the ground: the grid's whole cells from the box's south-west
+    corner (pixel column 0 starts at west, pixel row 0 ends at north)."""
+    return [round(g.west, 6), round(g.south, 6), round(g.west + g.nx * g.cell_km / g.km_per_deg_lon, 6),
+            round(g.south + g.ny * g.cell_km / g.km_per_deg_lat, 6)]
+
+
 def png_bytes(arr: np.ndarray, palette: bool) -> bytes:
     buf = io.BytesIO()
     if palette:
@@ -160,7 +167,11 @@ def answer(qs: dict[str, list[str]], root: Path | None = None) -> dict[str, Any]
     return {
         **head, "state": "ok",
         "grid": {"cell_km": g.cell_km, "nx": g.nx, "ny": g.ny, "rows": "north to south", "cols": "west to east",
-                 "same_as": "EvalGrid.from_bbox(box), cell for cell"},
+                 "same_as": "EvalGrid.from_bbox(box), cell for cell",
+                 "cell_deg": [round(g.cell_km / g.km_per_deg_lon, 9), round(g.cell_km / g.km_per_deg_lat, 9)],
+                 "bounds": ground_bounds(g),
+                 "anchor": "the box's south-west corner; whole cells run east and north from it, so the picture's "
+                           "east and north edges lie up to one cell beyond the box's"},
         "classes": list(CLASSES), "counts": counts,
         "burned_km2": round((counts["burned_before_window"] + counts["burned_in_window"]
                              + counts["burned_after_window"]) * g.cell_area_km2, 3),
