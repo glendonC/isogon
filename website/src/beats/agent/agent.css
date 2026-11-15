@@ -2,9 +2,10 @@
    from system.css. */
 
 .players {
-  /* Room kept for the trail above and for the guide's strip below. The page may set either. */
-  --players-top: 40px;
-  --players-guide: 150px;
+  /* Room kept for the page's top line and trail above and for the guide's strip below, as the Record keeps them
+     (calendar-screen.css, guide.css): blocks that fill the height stand clear of both. The page may set either. */
+  --players-top: 112px;
+  --players-guide: 190px;
   position: absolute;
   inset: 0;
   z-index: 2;
@@ -33,7 +34,8 @@
    (AgentPicture.tsx turns to the next two); nothing scrolls under the room's edge. */
 @media (max-width: 700px) {
   .players {
-    /* The guide's words take three lines and its actions two on a phone */
+    /* The trail takes two lines under the page's top line, and the guide's words three and its actions two */
+    --players-top: 150px;
     --players-guide: 230px;
   }
 
