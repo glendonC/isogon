@@ -25,7 +25,11 @@ export function SoundControl({ className }: SoundControlProps) {
       aria-pressed={on}
       onClick={() => setSound(!on)}
     >
-      <span className="iso-sound-ctl__mark" aria-hidden="true" />
+      <span className="iso-sound-ctl__bars" aria-hidden="true">
+        <span className="iso-sound-ctl__bar" />
+        <span className="iso-sound-ctl__bar" />
+        <span className="iso-sound-ctl__bar" />
+      </span>
       <span>{on ? 'Sound on' : 'Sound off'}</span>
     </button>
   );

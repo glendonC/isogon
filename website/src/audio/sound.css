@@ -1,16 +1,20 @@
-/* Visible one-click sound control. Built from system.css tokens: square mark, plain text action. */
+/* Visible one-click sound control for top-right navigation and footer.
+   Built strictly from system.css tokens: three square signal bars + crisp label, zero rounded corners. */
 
 .iso-sound-ctl {
   display: inline-flex;
   align-items: center;
   gap: var(--sys-s2);
-  padding: var(--sys-s1) 0;
+  padding: 6px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
-  color: var(--sys-ink-3);
+  font: var(--sys-weight-strong) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+  white-space: nowrap;
   cursor: pointer;
+  user-select: none;
+  text-shadow: 0 1px 8px rgba(8, 11, 17, 0.75);
   transition: color var(--sys-fast) var(--sys-ease);
 }
 
@@ -19,24 +23,71 @@
   color: var(--sys-ink);
 }
 
+.iso-sound-ctl:focus-visible {
+  outline: 1px solid var(--sys-focus);
+  outline-offset: 4px;
+}
+
 .iso-sound-ctl[data-on='true'] {
   color: var(--sys-ink);
-  font-weight: var(--sys-weight-strong);
 }
 
-.iso-sound-ctl__mark {
-  width: 6px;
-  height: 6px;
-  border: 1px solid var(--sys-edge);
-  border-radius: 0;
-  background: transparent;
+.iso-sound-ctl__bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
   flex-shrink: 0;
-  transition:
-    background-color var(--sys-fast) var(--sys-ease),
-    border-color var(--sys-fast) var(--sys-ease);
 }
 
-.iso-sound-ctl[data-on='true'] .iso-sound-ctl__mark {
+.iso-sound-ctl__bar {
+  width: 2px;
+  height: 3px;
+  background: var(--sys-edge);
+  border-radius: 0;
+  transition:
+    height var(--sys-fast) var(--sys-ease),
+    background-color var(--sys-fast) var(--sys-ease);
+}
+
+.iso-sound-ctl:hover .iso-sound-ctl__bar,
+.iso-sound-ctl:focus-visible .iso-sound-ctl__bar {
+  background: var(--sys-ink-2);
+}
+
+.iso-sound-ctl[data-on='true'] .iso-sound-ctl__bar {
   background: var(--sys-ink);
-  border-color: var(--sys-ink);
+}
+
+.iso-sound-ctl[data-on='true'] .iso-sound-ctl__bar:nth-child(1) {
+  height: 6px;
+  animation: iso-sound-pulse 2.2s var(--sys-ease) infinite;
+}
+
+.iso-sound-ctl[data-on='true'] .iso-sound-ctl__bar:nth-child(2) {
+  height: 11px;
+  animation: iso-sound-pulse 2.2s var(--sys-ease) 0.35s infinite;
+}
+
+.iso-sound-ctl[data-on='true'] .iso-sound-ctl__bar:nth-child(3) {
+  height: 8px;
+  animation: iso-sound-pulse 2.2s var(--sys-ease) 0.7s infinite;
+}
+
+@keyframes iso-sound-pulse {
+  0%,
+  100% {
+    transform: scaleY(1);
+    transform-origin: bottom center;
+  }
+  50% {
+    transform: scaleY(0.58);
+    transform-origin: bottom center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iso-sound-ctl[data-on='true'] .iso-sound-ctl__bar {
+    animation: none;
+  }
 }
