@@ -110,31 +110,115 @@ def overlap_factor(fam: str, track_km: float) -> float:
     return max(1.0, _VIIRS_ROWS[zone] * float(track_km) / (32.0 * _VIIRS_TRACK_NADIR_KM))
 
 
+_CORRELATE_1D = np._core.multiarray.correlate if hasattr(np, "_core") else np.core.multiarray.correlate
+_BLUR_KERNEL_CACHE: dict[float, tuple[int, NDArray[np.float64]]] = {}
+_BOX_KERNEL_CACHE: dict[int, NDArray[np.float64]] = {}
+
+
+def _correlate_rows(sub: NDArray[np.float64], pad_l: int, pad_r: int, k_rev: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Exact 1D valid correlation along axis 1 with zero padding (pad_l, pad_r) on each row."""
+    ny, nx = sub.shape
+    if ny == 0 or nx == 0:
+        return np.zeros((ny, nx), dtype=np.float64)
+    w = nx + pad_l + pad_r
+    padded = np.zeros((ny, w), dtype=np.float64)
+    padded[:, pad_l : pad_l + nx] = sub
+    raw = _CORRELATE_1D(padded.ravel(), k_rev, 0)
+    item = raw.strides[0]
+    return np.lib.stride_tricks.as_strided(raw, shape=(ny, nx), strides=(w * item, item)).copy()
+
+
+def _separable_filter(
+    field2d: NDArray[np.float64],
+    row_pad_l: int,
+    row_pad_r: int,
+    row_k_rev: NDArray[np.float64] | None,
+    col_pad_l: int,
+    col_pad_r: int,
+    col_k_rev: NDArray[np.float64] | None,
+) -> NDArray[np.float64]:
+    """Separable axis-1 then axis-0 filter matching np.convolve(np.pad(...), k, mode='valid') bit for bit."""
+    arr = np.asarray(field2d, dtype=np.float64)
+    ny, nx = arr.shape
+    if ny == 0 or nx == 0:
+        return np.zeros((ny, nx), dtype=np.float64)
+    if row_k_rev is None and col_k_rev is None:
+        return arr.copy()
+
+    if np.isfinite(arr).all():
+        nz_rows = np.flatnonzero(arr.any(axis=1))
+        if nz_rows.size == 0:
+            return np.zeros((ny, nx), dtype=np.float64)
+        nz_cols = np.flatnonzero(arr.any(axis=0))
+        r0 = max(0, int(nz_rows[0]) - col_pad_r)
+        r1 = min(ny, int(nz_rows[-1]) + col_pad_l + 1)
+        c0 = max(0, int(nz_cols[0]) - row_pad_r)
+        c1 = min(nx, int(nz_cols[-1]) + row_pad_l + 1)
+
+        if row_k_rev is not None:
+            active_h = _correlate_rows(arr[nz_rows, c0:c1], row_pad_l, row_pad_r, row_k_rev)
+            if col_k_rev is None:
+                out = np.zeros((ny, nx), dtype=np.float64)
+                out[nz_rows, c0:c1] = active_h
+                return out
+            mid = np.zeros((r1 - r0, c1 - c0), dtype=np.float64)
+            mid[nz_rows - r0, :] = active_h
+        else:
+            mid = arr[r0:r1, c0:c1]
+
+        res_sub = _correlate_rows(np.ascontiguousarray(mid.T), col_pad_l, col_pad_r, col_k_rev).T
+        if r0 == 0 and r1 == ny and c0 == 0 and c1 == nx:
+            return np.ascontiguousarray(res_sub)
+        out = np.zeros((ny, nx), dtype=np.float64)
+        out[r0:r1, c0:c1] = res_sub
+        return out
+
+    cur = _correlate_rows(arr, row_pad_l, row_pad_r, row_k_rev) if row_k_rev is not None else arr.copy()
+    if col_k_rev is not None:
+        cur = np.ascontiguousarray(_correlate_rows(np.ascontiguousarray(cur.T), col_pad_l, col_pad_r, col_k_rev).T)
+    return cur
+
+
+def _box_kernel_rev(n: int) -> NDArray[np.float64]:
+    k_rev = _BOX_KERNEL_CACHE.get(n)
+    if k_rev is None:
+        if len(_BOX_KERNEL_CACHE) >= 256:
+            _BOX_KERNEL_CACHE.clear()
+        k_rev = np.ones(n, dtype=np.float64)
+        _BOX_KERNEL_CACHE[n] = k_rev
+    return k_rev
+
+
+def _blur_kernel_rev(sigma_cells: float) -> tuple[int, NDArray[np.float64]]:
+    key = float(sigma_cells)
+    cached = _BLUR_KERNEL_CACHE.get(key)
+    if cached is None:
+        if len(_BLUR_KERNEL_CACHE) >= 256:
+            _BLUR_KERNEL_CACHE.clear()
+        radius = int(min(60, max(1, math.ceil(3.0 * key))))
+        xs = np.arange(-radius, radius + 1, dtype=np.float64)
+        k = np.exp(-0.5 * (xs / key) ** 2)
+        k /= k.sum()
+        cached = (radius, np.ascontiguousarray(k[::-1], dtype=np.float64))
+        _BLUR_KERNEL_CACHE[key] = cached
+    return cached
+
+
 def _box_sum(field2d: NDArray[np.float64], n_rows: int, n_cols: int) -> NDArray[np.float64]:
     """Sum over a window of n_rows by n_cols cells centred on each cell (zero outside the grid)."""
-    def run(v: NDArray[np.float64], n: int) -> NDArray[np.float64]:
-        if n <= 1:
-            return v
-        return np.convolve(np.pad(v, ((n - 1) // 2, n // 2)), np.ones(n), mode="valid")
-
-    out = np.apply_along_axis(run, 1, field2d, n_cols)
-    return np.apply_along_axis(run, 0, out, n_rows)
+    rk = _box_kernel_rev(n_cols) if n_cols > 1 else None
+    ck = _box_kernel_rev(n_rows) if n_rows > 1 else None
+    r_pl, r_pr = ((n_cols - 1) // 2, n_cols // 2) if n_cols > 1 else (0, 0)
+    c_pl, c_pr = ((n_rows - 1) // 2, n_rows // 2) if n_rows > 1 else (0, 0)
+    return _separable_filter(field2d, r_pl, r_pr, rk, c_pl, c_pr, ck)
 
 
 def _blur(field2d: NDArray[np.float64], sigma_cells: float) -> NDArray[np.float64]:
     """Separable Gaussian blur with zero padding (mass leaves through the box edge)."""
     if sigma_cells <= 0.05:
         return field2d.copy()
-    radius = int(min(60, max(1, math.ceil(3.0 * sigma_cells))))
-    xs = np.arange(-radius, radius + 1, dtype=np.float64)
-    k = np.exp(-0.5 * (xs / sigma_cells) ** 2)
-    k /= k.sum()
-    def conv(v: NDArray[np.float64]) -> NDArray[np.float64]:
-        # zero pad by the kernel radius so the result has the input's length whatever the kernel's
-        return np.convolve(np.pad(v, radius), k, mode="valid")
-
-    out = np.apply_along_axis(conv, 1, field2d)
-    return np.apply_along_axis(conv, 0, out)
+    radius, k_rev = _blur_kernel_rev(sigma_cells)
+    return _separable_filter(field2d, radius, radius, k_rev, radius, radius, k_rev)
 
 
 @dataclass(frozen=True)
@@ -478,10 +562,11 @@ def expected_count_cells(p_detect: NDArray[np.float64]) -> NDArray[np.bool_]:
     if n <= 0:
         return out
     flat = p_detect.ravel()
-    n = min(n, int(np.count_nonzero(flat > 0)))
+    nz = np.flatnonzero(flat > 0)
+    n = min(n, int(nz.size))
     if n <= 0:
         return out
-    order = np.argsort(-flat, kind="stable")[:n]
+    order = nz[np.argsort(-flat[nz], kind="stable")[:n]]
     out.ravel()[order] = True
     return out
 
