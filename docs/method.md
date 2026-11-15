@@ -195,7 +195,77 @@ The plan was made once, on all 238 countries of FIRMS's files: 21,376,580 MODIS 
 
 **The refit** (`fresh_world_refit.json`): the search of the fit in use, from the priors, on the 300 fitting fires and the 17 open training episodes of the three first regions, 82 passes in 33 minutes. On the 83 validation fires, judged with an interval, the refit is ahead of both baselines on 4 scores, tied on 2 and behind on 1 (strict CSI); the values in use are ahead on 2, tied on 2 and behind on 3; against the values in use the refit is ahead on 3 and behind on none. The rule written before the look takes the refit only when no score is behind a baseline, so **test B's headline is the values in use**, and the refit is scored beside it in the same look.
 
+**Test B, one look with the values in use** (`fresh_world_test_b.json`): on 57 fires and 932 scored looks, judged with an interval over the fires, **the estimate in use is behind both baselines on 3 of 7 scores**: strict CSI, 0.131 against 0.158; the error of the summed power, 0.213 against 0.058; and the median power error per look, 0.582 against 0.527. It is level on 2 (CSI within one cell, 0.266 against 0.264, and the hit rate at equal area) and ahead on 2 (the Brier score, 0.0082 against 0.0165, and the pixel count). That is worse than on test A, where it was ahead on 3 and behind on 2. The stated 90 percent interval for total power held on 87.2 percent of looks. The refit, scored beside it on the same looks, is ahead on 4, level on 2 and behind on 1 (strict CSI), and the values in use are behind it on 4 scores and ahead on none. The decision was made on validation before the look, so the values in use stay in use. No cloud mask of a hidden pass of these fires was on hand at the look, so there is no table of clear looks. Europe has two fires in test B and Oceania one, too few to judge alone.
+
 The record hides nothing else: `test_fires.also_scored` lists every other time rows of these fires were scored (untuned priors, one platform hidden at a time, the other direction, runs from each default start), none of which is the test. A run of one of these fires with VIIRS hidden, asked for from the page, computes the score of its own window each time; that is a payload, not a look.
+
+### The challenger
+
+**What it is.** A second estimate of the hidden passes, made from the same visible rows (`backend/model/challenger`, numpy only). It does not replace the occupancy filter; it reads it.
+
+- **Features.** For each 375 m cell at a hidden pass it builds 48 features, and for the pass as a whole 25 more. They come from three things only: the occupancy filter's own fields under the values in use, the visible pixels near the cell before and after the pass (MODIS in the tests below), and the pass's time, platform and pixel size from the pass list.
+- **The chance a cell is flagged.** Three models give it: a logistic model with interaction terms, a small neural network, and boosted decision trees (two sets, of 340 trees of depth 5 and 260 of depth 6, weighed 0.55 and 0.45).
+- **The blend.** The fourth challenger combines those three on the log-odds scale, with weights 0 on the logistic model, 0.41 on the network and 0.66 on the trees. So it is a blend of the network and the trees.
+- **The declared cells** come from one rule on those chances. It declares a core of cells whose smoothed chance is above a threshold, and beyond the core single cells that are a local peak of the chance, no two of them next to each other.
+- **The total power and its 90 percent interval** come from one power model that all four challengers share, and the pixel count from another. So the four differ only in the chance of each cell, and their power scores and interval are the same.
+- **Terrain.** Two of the features are terrain slope and upslope, read from cached elevation tiles. None was cached for the fitting fires. None is loaded for a box of more than 64 tiles at zoom 11, and every region the page offers needs 192 or more. So they read zero in the fit, in both looks below and on the page.
+
+**What it was fitted on.** The plan's 300 fitting fires (`fresh_world_plan.json`): 5,050 VIIRS passes of the pass list, with folds grouped by place inside the fit. Each bundle records this in `fitted_on`: plan `768e5487...`, no place of a test read, no row of validation in the fit. The occupancy values it reads were fitted on the 22 episodes of the three first regions (`occupancy_params.json`). The challenger therefore carries their standing there as well.
+
+**How it was chosen.** All four were scored once on the 83 validation fires, 1,534 looks (`backend/model/challenger/fitted/validation_results.json`). Each was ahead of both baselines on 6 of 7 scores and level on the error of the summed power. The values in use were ahead on 2, level on 2 and behind on 3 on the same looks. A rule written beside the bundles picks the default: first the most scores ahead, then the fewest behind, then the most ahead of the values in use, then the higher mean of the two CSI scores. It picked the blend (`default_challenger.json`). Against the values in use the blend was ahead on 6 and behind on 1, the pixel count.
+
+**Test B: the estimate in use against it, then it against the baselines.** It was checked against the test's rules before the look and scored beside the headline on the same 932 looks; it decided nothing.
+
+- **The estimate in use lost to it.** It is behind the challenger on 6 of 7 scores and level on the pixel count, for each of the four.
+- **Against both baselines** each challenger is ahead on 6 of 7 and level on the error of the summed power, with none behind, as on validation.
+
+The blend's scores, with the better baseline's in brackets:
+
+| Score | The blend | Its best baseline |
+| --- | --- | --- |
+| Strict CSI | 0.204 | 0.158 |
+| CSI within one cell | 0.369 | 0.264 |
+| Hit rate at equal area | 0.397 | 0.349 |
+| Brier score | 0.0074 | 0.0165 |
+| Pixel count error | 0.029 | 0.710 |
+| Median power error per look | 0.434 | 0.527 |
+
+Its stated 90 percent interval for total power held on 89.0 percent of looks, and on 87.7 percent of the validation looks.
+
+**Where the page can run it.** A run with a satellite held out is answered by the estimate in use. With `ISOGON_RUN_ESTIMATE=challenger` set on the backend, the default challenger answers the held-out passes, and the estimate in use is scored beside it. The switch is off by default. Such a run names the model that answered in `held_out_passes_answered_by`. Beside it, `standing_to_the_answering_estimate` says what the window is to that model (`backend/model/challenger_standing.py`). The rule is the page's, by place and year from the plan's file and the bundles alone:
+- a window that touches a test fire's dates is a recorded test fire;
+- then it is fitted on, when a fitting fire lies in a place the run's context box meets in a year the window touches, or the occupancy values were fitted there in such a year;
+- then validated on, by the same rule;
+- never seen otherwise.
+
+At the fire each place of the page opens on, the challenger stands as follows:
+
+| Place | Fire | The estimate in use | The challenger |
+| --- | --- | --- | --- |
+| `plumas_ca` | Chips Fire, August 2012 | never seen | never seen |
+| `lytton_bc` | Lytton Creek fire, June and July 2021 | recorded test fire | recorded test fire |
+| `evia_greece` | Northern Evia fire, August 2021 | recorded test fire | recorded test fire |
+| `ventura_ca` | Thomas Fire, December 2017 | never seen | never seen |
+| `kakisa_nt` | Hay River and Enterprise fire, August 2023 | never seen | never seen |
+| `okefenokee_ga` | April 2012 | never seen | never seen |
+| `evros_greece` | Evros fire, August 2023 | never seen | never seen |
+| `serra_acor_pt` | Piódão fire, August 2025 | never seen | never seen |
+| `maule_cl` | Las Máquinas, January 2017 | never seen | never seen |
+| `fort_mcmurray_ab` | May 2016 | never seen | never seen |
+| `manavgat_tr` | Manavgat fire, July 2021 | never seen | **fitted on** |
+| `wollemi_au` | Gospers Mountain fire, November and December 2019 | never seen | **fitted on** |
+| `jur_river_ss` | December 2016 | never seen | never seen |
+
+So the challenger has never seen nine of them, two are the recorded test fires, and it was fitted on two.
+
+- **Manavgat.** One fitting fire is the Manavgat fire itself: its tile holds the fire's origin and its days are the fire's first four, 28 to 31 July 2021.
+- **Gospers Mountain.** One fitting fire is that fire's December, 18 to 21 December 2019, in a tile that overlaps the region's own box.
+- **Fitted in other years only.** At Ventura, Serra do Açor and Jur River the places hold fitting fires of other years than the window's (2018 to 2022), and the answer lists them.
+- **No other role.** No fire of validation, test A or test B lies in a place any region's context box meets.
+
+`ljusdal_se` offers the Record only, and no run.
+
+**What it is not.** It is not in use, and no figure on this page is the challenger's unless a run names it. Its fit, its validation and test B are all on half-degree tiles. A run on the page is on a region's box, about four times as wide each way, and no figure of the challenger is measured at that size.
 
 ### The other direction: Terra's morning pass
 
