@@ -775,10 +775,12 @@
   cursor: default;
 }
 
+/* The test's panel is wide enough for the overlap chart's three rows to read: the chart keeps fixed room for its labels
+   and its readout, and its bars take what is left of the panel's inner width. */
 .world-tests {
   top: 148px;
   bottom: auto;
-  width: min(480px, calc(100% - 32px));
+  width: min(640px, max(560px, 38vw), calc(100% - 32px));
   gap: var(--sys-s2);
 }
 
@@ -1583,4 +1585,17 @@
    follows it and a drag still turns the Earth; the frame is reached by Tab and Enter, and a click on the globe picks. */
 .world-years .id-scene__frame {
   pointer-events: none;
+}
+
+/* The sealed board's table (the dataviz lane's LiveTable): a row opens its result under the table. */
+.world-ledger tbody tr {
+  cursor: pointer;
+}
+
+.world-board__opened {
+  display: grid;
+  gap: 4px;
+  padding: var(--sys-s2) 0;
+  font: var(--sys-weight) 16px / 1.4 var(--sys-font);
+  color: var(--sys-ink);
 }
