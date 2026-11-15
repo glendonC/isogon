@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 from backend.eval.rows import Detections, detections_from_rows
 from backend.model.real_blind import EPISODE_OVERPASSES, Window, pick_window
-from backend.model.training import REGIONS, excluded_mask
+from backend.model.training import EXCLUSIONS, REGIONS, excluded_mask
 
 PAD_S: float = 2.0 * 86400.0
 
@@ -89,7 +89,8 @@ def find_episodes(
             if not rows:
                 continue
             det = detections_from_rows(rows, "firms rows for fitting (test fires excluded)")
-            det = det.select(~excluded_mask(det, region, test_box))
+            if region in EXCLUSIONS:                     # a region with no test fire has nothing set aside
+                det = det.select(~excluded_mask(det, region, test_box))
             t0 = float(calendar.timegm((year, 1, 1, 0, 0, 0, 0, 0, 0)))
             t1 = float(calendar.timegm((year + 1, 1, 1, 0, 0, 0, 0, 0, 0)))
             found: list[Episode] = []
