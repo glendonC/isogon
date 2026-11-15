@@ -6,7 +6,8 @@ network, then `solve_real_reconstruction` and `real_response`, its first answer 
 as the route withholds it. The reveal is the same answer whole, from the run kept here.
 
 What is not computed here is read from files made at build time. Nothing here fetches, starts a thread or reads a
-key, and no module of the server is imported. Every import is made inside the function that needs it, so loading
+key. A run imports no module of the server; a round uses the server's own round store (`backend.server_next_look`),
+not its HTTP server. Every import is made inside the function that needs it, so loading
 this module costs nothing.
 
 The hidden rows are in the visitor's files. They are kept from the estimate and from the first answer by the same
@@ -81,6 +82,136 @@ def pictures(run_id: str) -> dict[str, bytes]:
     solved = _solved(run_id)
     return {"reconstruction_u8.bin": solved.reconstruction_u8_bytes, "belief_u8.bin": solved.belief_u8_bytes,
             "export.geojson": solved.export_geojson_bytes, "export.csv": solved.export_csv_bytes}
+
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# A round of the game: the server's own rounds (`backend.server_next_look.NextLookRounds`), the reference players read
+# from a file made at build time, since they cannot be played here in time (tens of seconds, in threads)
+# ----------------------------------------------------------------------------------------------------------------
+
+_ROUNDS: Any = None
+
+
+def rounds() -> Any:
+    """The rounds held here: the server's round store, with no reference players computed and no disk cache, so
+    nothing starts a thread. Replace it (`set_rounds`) to change its settings."""
+    global _ROUNDS
+    if _ROUNDS is None:
+        from backend.server_next_look import NextLookRounds
+
+        _ROUNDS = NextLookRounds(reference=False, reference_cache_dir=None)
+    return _ROUNDS
+
+
+def set_rounds(store: Any) -> None:
+    global _ROUNDS
+    _ROUNDS = store
+
+
+def reference_dir() -> "Any":
+    """Where the build writes the reference players' file of each round the page offers (not tracked)."""
+    from backend.firms.archive import FIRMS_CACHE_DIR
+
+    return FIRMS_CACHE_DIR.parent / "next_look_reference" / "browser"
+
+
+def reference_key(ep: Any, terrain: Any, tiles: tuple[int, int], budget: int, random_seeds: int) -> str:
+    """The name of a reference file: the episode's rows, box and window and its terrain
+    (`backend.server_next_look.episode_digest`), the tiles, the budget, the random seeds. The server's own key also
+    holds the pass files' times on disk and the code's digest, which a browser's file system does not keep."""
+    import hashlib
+    import json
+
+    from backend.server_next_look import REFERENCE_CACHE_VERSION, episode_digest
+
+    parts = {"version": REFERENCE_CACHE_VERSION, "episode": episode_digest(ep, terrain), "tiles": [int(tiles[0]), int(tiles[1])],
+             "budget": int(budget), "random_seeds": int(random_seeds)}
+    return hashlib.sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def write_round_reference(region_id: str, start: str | None = None, episode: str | None = None, tiles: Any = None,
+                          budget: int | None = None, out_dir: Any = None, store: Any = None) -> "Any":
+    """At build time, natively: play every reference player on the round's episode, as the server does
+    (`NextLookRounds._reference`), and write them to the file the page reads when the round ends."""
+    import json
+    from pathlib import Path
+
+    from backend.server_next_look import DEFAULT_BUDGET, NextLookRounds, _tiles
+
+    st = store or NextLookRounds(reference=False, reference_cache_dir=None)
+    tl, bd = _tiles(tiles), int(DEFAULT_BUDGET if budget is None else budget)
+    ep, _origin = st._episode(region_id, episode, start)
+    terrain = st._terrain(ep)
+    key = reference_key(ep, terrain, tl, bd, st.reference_seeds)
+    doc = {"key": key, "episode": ep.key, "tiles": list(tl), "budget": bd, "random_seeds": st.reference_seeds,
+           "made": "at build time, natively, by the server's own reference players (backend/server_next_look.py)",
+           "reference": st._reference(ep, tl, bd, terrain)}
+    out = Path(out_dir) if out_dir is not None else reference_dir()
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"{key}.json"
+    path.write_text(json.dumps(doc, allow_nan=False) + "\n", encoding="utf-8")
+    return path
+
+
+def _with_reference(round_id: str, out: dict[str, Any], ref_dir: Any = None) -> dict[str, Any]:
+    """Give a round that is over its reference players from the build's file, when the file is that of this
+    episode, terrain, tiles, budget and seeds; never before the round is over (they were played with the hidden
+    rows: the oracle reads them)."""
+    import json
+    from pathlib import Path
+
+    end = out.get("end")
+    if not out.get("done", True) or not isinstance(end, dict) or end.get("reference") is not None:
+        return out
+    st = rounds()
+    rnd = st._get(round_id)
+    key = reference_key(rnd.episode, st._terrain(rnd.episode), rnd.tiles, rnd.budget, st.reference_seeds)
+    path = Path(ref_dir if ref_dir is not None else reference_dir()) / f"{key}.json"
+    if not path.is_file():
+        end["reference_status"] = "not here: no file of the reference players was made for this round at build time"
+        return out
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    if doc.get("key") != key:
+        end["reference_status"] = "not here: the file found is of another round"
+        return out
+    end["reference"] = doc["reference"]
+    end["reference_status"] = "ready"
+    end["reference_cache"] = {"from": "a file made at build time", "key": key,
+                              "keyed_on": ("the episode's rows, box and window, its terrain, the tiles, the budget and "
+                                           "the random seeds")}
+    return out
+
+
+def round_start(region_id: str, start: str | None = None, episode: str | None = None, tiles: Any = None,
+                budget: int | None = None, seed: int = 0) -> dict[str, Any]:
+    """A round's start, as `POST /api/env/next_look/reset` gives it: `start` (a UTC date) or `episode` (a key of
+    the catalogue), with the tiles, the budget and the seed."""
+    body: dict[str, Any] = {"region_id": region_id, "seed": int(seed)}
+    if start is not None:
+        body["start"] = str(start)
+    if episode is not None:
+        body["episode"] = str(episode)
+    if tiles is not None:
+        body["tiles"] = tiles
+    if budget is not None:
+        body["budget"] = int(budget)
+    out = rounds().reset(body)
+    out["reference_status"] = "read from a file made at build time; given when the round ends"
+    return out
+
+
+def round_look(round_id: str, decision: int, action: int, ref_dir: Any = None) -> dict[str, Any]:
+    """One look of a round, as `POST /api/env/next_look/step` gives it: the tile to look at on the current decision,
+    or -1 for no look. The last look ends the round, with its reveal and its reference players."""
+    out = rounds().step({"round_id": round_id, "decision": int(decision), "action": int(action)})
+    return _with_reference(round_id, out, ref_dir) if out.get("done") else out
+
+
+def round_state(round_id: str, ref_dir: Any = None) -> dict[str, Any]:
+    """A round's state, as `GET /api/env/next_look/state` gives it."""
+    out = rounds().state(round_id)
+    return _with_reference(round_id, out, ref_dir) if out.get("done") else out
 
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -160,6 +291,34 @@ def files_for_a_run(region_id: str, start: str) -> list[str]:
         out += tiles
     return sorted({str(p.resolve().relative_to(root)) for p in out if p.is_file()})
 
+
+
+def files_for_a_round(region_id: str, start: str, tiles: Any = None, budget: int | None = None,
+                      store: Any = None) -> list[str]:
+    """Every data file a round of `region_id` from `start` reads here, beside a run's
+    (`files_for_a_run`): the learned player's policy, the manifest of every extract of the place (the round keys its
+    episodes on them, `region_rows_digest`), the round's context DEM, and the reference players' file of this
+    round's episode, tiles, budget and seeds (`write_round_reference`). Making the list builds the episode, so it is
+    made at build time, natively."""
+    from pathlib import Path
+
+    from backend.env.policy import FITTED_FILE
+    from backend.env.terrain import CACHE_DIR, CONTEXT_SIZE
+    from backend.firms.archive import FIRMS_CACHE_DIR
+    from backend.server_next_look import DEFAULT_BUDGET, _tiles
+
+    root = Path(__file__).resolve().parent.parent
+    st = store or rounds()
+    tl, bd = _tiles(tiles), int(DEFAULT_BUDGET if budget is None else budget)
+    ep, _origin = st._episode(region_id, None, str(start))
+    key = reference_key(ep, st._terrain(ep), tl, bd, st.reference_seeds)
+    out = [FITTED_FILE, reference_dir() / f"{key}.json"]
+    out += sorted((FIRMS_CACHE_DIR / "extract" / region_id).glob("*.csv.manifest.json"))
+    out += sorted(CACHE_DIR.glob(f"{region_id}_*_context_dem_{CONTEXT_SIZE}_f32.bin"))
+    extra = {str(p.resolve().relative_to(root)) for p in out if p.is_file()}
+    # the reference file is named even before the build has made it
+    extra.add(str((reference_dir() / f"{key}.json").resolve().relative_to(root)))
+    return sorted(set(files_for_a_run(region_id, start)) | extra)
 
 if __name__ == "__main__":
     import json
