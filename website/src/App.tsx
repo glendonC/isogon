@@ -1100,8 +1100,9 @@ export function App() {
             setCleanHud(false);
           } else if (step === 'agent') {
             openModel();
-          } else if (step === 'test' && (holdoutViirs || revealed)) {
-            // A test in hand: Esc closes what is open and never leaves the workspace by itself.
+          } else if (step === 'fire' || step === 'test') {
+            // One place back on the path (World / the place / the fire): from the fire to the place's record.
+            goStep('record');
           } else {
             exitToOverview();
           }
@@ -1374,6 +1375,7 @@ export function App() {
     step,
     goStep,
     openModel,
+    toFirstScreen: exitToOverview,
     blocked: stepBlocked,
   };
   // What the Record publishes for the guide (the compare-view lane's view), and the guide worked out from the store.
