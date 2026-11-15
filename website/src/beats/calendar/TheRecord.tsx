@@ -37,6 +37,8 @@ const AXIS_H = 24;
 const SPANS_H = 56;
 /** The least room kept for the foot; it keeps the room it is measured to take, which wraps on a narrow grid. */
 const FOOT_H = 66;
+/** The foot's least width, on a screen wide enough for it. */
+const FOOT_MIN_W = 560;
 const LABEL_W = 320;
 
 function useSize<T extends HTMLElement>() {
@@ -287,10 +289,11 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
     return () => window.removeEventListener('keydown', onKey, true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The foot as it stands once drawn: the grid gives up height to it. A smaller grid only makes the foot narrower and
-  // taller, never shorter, so the two settle in a step or two.
+  // The foot as it stands once drawn: the grid gives up height to it. For one record on one screen the room only
+  // grows: a smaller grid can move an action into the foot and back out, and the two would never settle otherwise.
   const footRef = useRef<HTMLDivElement | null>(null);
   const [footSeen, setFootSeen] = useState(FOOT_H);
+  const footKey = useRef('');
   useLayoutEffect(() => {
     const el = footRef.current;
     if (!el) return;
@@ -299,11 +302,14 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
       // month cannot be counted) runs below it rather than moving the grid
       const passing = [...el.querySelectorAll<HTMLElement>(':scope > .rec__holds')].reduce((s, p) => s + p.offsetHeight + 8, 0);
       const h = Math.ceil(el.offsetHeight - passing) + 12;
-      setFootSeen((was) => (Math.abs(was - h) > 1 ? h : was));
+      const key = `${placeKey}|${size.w}|${size.h}|${guideSpeaks}`;
+      const fresh = key !== footKey.current;
+      footKey.current = key;
+      setFootSeen((was) => (fresh ? h : h > was + 1 ? h : was));
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [rec, rough]);
+  }, [rec, rough, size.w, size.h, guideSpeaks]); // eslint-disable-line react-hooks/exhaustive-deps
   const bounds = useMemo(() => (rec ? rampBounds(rec) : { lo: 1, hi: 1 }), [rec]);
   const years = rec ? Array.from({ length: rec.lastYear - rec.firstYear + 1 }, (_, i) => rec.firstYear + i) : [];
   const footH = Math.max(FOOT_H, footSeen);
@@ -358,10 +364,13 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const sharp = spanLine(rec?.spans.sharp ?? null);
   const spansY = y0 + gridH + AXIS_H;
   const footY = spansY + SPANS_H;
-  // Under a narrow grid the foot takes the plot's width from the month names, so its words wrap less
-  const narrowFoot = gridW < 480;
+  // On a narrow screen the foot takes the plot's width from the month names, so its words wrap less. It is decided by
+  // the plot's width, not the grid's, so that the grid's size does not move the foot's width back and forth.
+  const narrowFoot = size.w < 700;
   const footX = narrowFoot ? Math.max(0, x0 - NAMES_W) : x0;
-  const footW = narrowFoot ? Math.max(gridW, size.w - footX) : gridW;
+  // Never narrower than a line of the legend's width: a narrower grid would make the foot's words wrap taller, which
+  // would make the grid narrower still
+  const footW = narrowFoot ? Math.max(gridW, size.w - footX) : Math.min(Math.max(gridW, FOOT_MIN_W), size.w - x0);
   /** Room for the prompt before the sharp satellite's line begins; on a narrow screen it goes to the foot. */
   const atJunction = sharpX !== null && sharpX - x0 >= 372;
   const correctionPrompt = (
@@ -630,7 +639,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               )}
               {/* The method every year is put on one scale by, in the product lane's words, and what a month's band is.
                   Where the guide speaks, its sentence on the step names the method, and the Record leaves it to it. */}
-              {!guideSpeaks && methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld) && (
+              {!guideSpeaks && !narrowFoot && methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld) && (
                 <p className="sys-fine rec__wide rec__method">{methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld)}</p>
               )}
               {sharpX !== null && !atJunction && !guideSpeaks && <div className="rec__wide">{correctionPrompt}</div>}
