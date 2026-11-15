@@ -24,6 +24,7 @@ import { type Step } from './components/WorkspaceBar';
 import type { TrailWord } from './guide/Trail';
 import { LocatorBar } from './identity/LocatorBar';
 import { StoryLine } from './identity/StoryLine';
+import { RevealSweep } from './identity/RevealSweep';
 import { Entry } from './identity/Entry';
 import { stageReady } from './stage/stageReady';
 import { usePlay, type PlayShot } from './ui/usePlay';
@@ -893,10 +894,13 @@ export function App() {
     toggleHoldoutLive();
   }, [step, revealed, goStep, openModel, toggleHoldoutLive]);
 
+  // Each reveal runs the identity's sweep once across the screen (identity/RevealSweep.tsx).
+  const [revealRun, setRevealRun] = useState(0);
   const prevRevealedRef = useRef(revealed);
   useEffect(() => {
     if (revealed && !prevRevealedRef.current) {
       playCue('reveal');
+      setRevealRun((n) => n + 1);
     }
     prevRevealedRef.current = revealed;
   }, [revealed]);
@@ -1870,6 +1874,7 @@ export function App() {
               onTrail={(i) => (i === 0 ? openWorldScreen('years') : goStep('record'))}
               links={barLinks}
             />
+            <RevealSweep run={revealRun} />
             <StoryLine
               current={play.part ?? storyPart}
               progress={play.playing ? play.progress : null}
@@ -1903,7 +1908,9 @@ export function App() {
                   title={filmMode && guide.film ? guide.film : guide.objective}
                   lines={filmMode ? [] : said && said.key === guideKey ? said.lines : guide.lines}
                   // In the film only the step's strong action stands, so nothing else competes with the caption.
-                  actions={play.playing ? [] : filmMode ? guide.actions.slice(0, 1) : guide.actions}
+                  // Where the next step stands on a thing (the fire, the round's square), the guide holds no action:
+                  // it is on the thing; the other actions keep their keys.
+                  actions={play.playing || guide.besideFire || guide.besideSquare ? [] : filmMode ? guide.actions.slice(0, 1) : guide.actions}
                   onAction={runCommand}
                   results={guide.results}
                 />

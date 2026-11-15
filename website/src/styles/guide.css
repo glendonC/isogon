@@ -66,8 +66,7 @@
 }
 
 .guide-trail__word:focus-visible,
-.guide-trail__where:focus-visible,
-.guide-prompt:focus-visible {
+.guide-trail__where:focus-visible {
   outline: 1px solid var(--sys-focus);
   outline-offset: 3px;
 }
@@ -165,23 +164,7 @@
   gap: 12px;
 }
 
-/* The key on a prompt at a thing (guide/StageWords.tsx). */
-.guide-key {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 20px;
-  min-width: 20px;
-  padding: 0 6px;
-  background: rgba(243, 244, 246, 0.08);
-  border: 1px solid var(--sys-edge);
-  border-radius: 0;
-  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
-  color: var(--sys-ink);
-  flex-shrink: 0;
-}
-
-/* A label on a thing of the stage, joined by the scene's leader; and a prompt beside the thing's extent. */
+/* A label on a thing of the stage, joined by the scene's leader. */
 .guide-label {
   display: block;
   max-width: 420px;
@@ -189,37 +172,6 @@
   font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
   color: var(--sys-ink);
   text-shadow: 0 1px 6px rgba(8, 11, 17, 0.95), 0 0 2px rgba(8, 11, 17, 0.9);
-}
-
-.guide-prompt {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sys-s2);
-  padding: 6px 12px 6px 10px;
-  border: 0;
-  border-left: 2px solid var(--sys-ink);
-  border-radius: 0;
-  background: var(--sys-plate);
-  -webkit-backdrop-filter: var(--sys-plate-blur);
-  backdrop-filter: var(--sys-plate-blur);
-  font: var(--sys-weight-strong) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
-  color: var(--sys-ink);
-  white-space: nowrap;
-  pointer-events: auto;
-  cursor: pointer;
-  transition: background-color var(--sys-fast) var(--sys-ease);
-}
-
-.guide-prompt .guide-key {
-  background: var(--sys-ink);
-  border-color: var(--sys-ink);
-  color: var(--sys-night);
-  font-weight: var(--sys-weight-strong);
-}
-
-.guide-prompt:hover {
-  background: rgba(24, 28, 38, 0.92);
 }
 
 /* Where the guide speaks, the old scrims of the column and the track step back; its own scrim stays. */
@@ -570,71 +522,6 @@
   cursor: pointer;
 }
 
-/* Asking (guide/AskField.tsx): a line to write on at the bottom right, the step's questions above it while it has the
-   focus. Text on the scene, no box. */
-.guide-ask {
-  position: absolute;
-  z-index: 6;
-  right: var(--sys-gutter);
-  bottom: 40px;
-  width: 260px;
-  display: grid;
-  gap: var(--sys-s2);
-  /* The workspace's layer lets clicks through to the stage; the field takes its own. */
-  pointer-events: auto;
-}
-
-.guide-ask__input {
-  width: 100%;
-  padding: 0 0 6px;
-  border: 0;
-  border-bottom: 1px solid var(--sys-rule);
-  background: none;
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
-  color: var(--sys-ink);
-  border-radius: 0;
-}
-
-.guide-ask__input::placeholder {
-  color: var(--sys-ink-3);
-}
-
-.guide-ask__input:focus {
-  outline: none;
-  border-bottom-color: var(--sys-ink-2);
-}
-
-.guide-ask__list {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  text-shadow: 0 1px 8px rgba(8, 11, 17, 0.85);
-}
-
-.guide-ask__question {
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  text-align: left;
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
-  color: var(--sys-ink-2);
-  cursor: pointer;
-}
-
-.guide-ask__question:hover,
-.guide-ask__question:focus-visible {
-  color: var(--sys-ink);
-}
-
-@media (max-width: 1180px) {
-  .guide-ask {
-    display: none;
-  }
-}
-
-
 /* Search when no place with a real fire record matches what was typed. */
 .iso-finder__none {
   margin: 0;
@@ -667,9 +554,5 @@
 
   .guide-acts {
     flex-wrap: wrap;
-  }
-
-  .guide-prompt .guide-key {
-    display: none;
   }
 }

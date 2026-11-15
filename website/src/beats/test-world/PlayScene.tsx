@@ -1,16 +1,7 @@
-import { useState } from 'react';
 import { useWorkspace } from '../../app/store';
 import type { StageFireAnchor, StageTileAnchor } from '../../stage/earthCutawayTypes';
-import {
-  isCompact,
-  promptPlace,
-  sameFireAnchor,
-  sameTileAnchors,
-  StagePrompt,
-  usePointerNear,
-  useStageValue,
-  type Box,
-} from '../../guide/StageWords';
+import { sameFireAnchor, sameTileAnchors, useStageValue, type Box } from '../../guide/StageWords';
+import { ScenePrompt } from '../../identity/ScenePrompt';
 import { labelPoint } from '../../guide/anchor';
 import { ClearPin, patchBoxes } from '../../guide/ClearPin';
 import '../../styles/test-world.css';
@@ -45,7 +36,6 @@ export function PlayScene() {
   const { guide, round } = ws;
   const fire = useStageValue<StageFireAnchor | null>(ws.model.subscribeAnchor, null, sameFireAnchor);
   const anchors = useStageValue<StageTileAnchor[]>(round.subscribeAnchors, [], sameTileAnchors);
-  const [labelFocus, setLabelFocus] = useState(false);
   // The fire's label hangs on its larger patch.
   const fireAt = labelPoint(fire);
   // The labels stand clear of the fire's patches.
@@ -54,10 +44,9 @@ export function PlayScene() {
   const cols = round.start?.episode.tiles[1] ?? 0;
   const looked = round.takenTile !== null ? tileBox(anchors, round.takenTile, cols) : null;
   const marked = round.marked !== null ? tileBox(anchors, round.marked, cols) : null;
-  const markedAt = marked ? centre(marked) : null;
-  const near = usePointerNear(marked && isCompact(marked) ? marked : null, markedAt);
-  // The keyboard marks a square with the arrows; the pointer marks the square it is over.
-  const prompt = guide.besideSquare && marked && (round.hover !== null || round.focus !== null || near || labelFocus) ? promptPlace(marked, markedAt) : null;
+  // The keyboard marks a square with the arrows; the pointer marks the square it is over. The look stands on the marked
+  // square itself (the identity's ScenePrompt), with the square's label as its readout.
+  const act = guide.besideSquare;
 
   return (
     <div className="tw-scene" data-scene={guide.stateId ?? undefined}>
@@ -67,11 +56,19 @@ export function PlayScene() {
         </ClearPin>
       )}
       {looked && guide.squareLabel && (
-        <ClearPin at={centre(looked)} avoid={[looked, ...avoid]} className="tw-pin tw-pin--square" label={guide.squareLabel} focusable onFocusChange={setLabelFocus}>
+        <ClearPin at={centre(looked)} avoid={[looked, ...avoid]} className="tw-pin tw-pin--square" label={guide.squareLabel} focusable>
           <span className="guide-label">{guide.squareLabel}</span>
         </ClearPin>
       )}
-      {prompt && guide.besideSquare && <StagePrompt at={prompt} act={guide.besideSquare} onAct={ws.runCommand} />}
+      {act && marked && (
+        <ScenePrompt
+          box={marked}
+          label={act.label}
+          readout={guide.squareLabel ?? undefined}
+          onSelect={() => ws.runCommand(act.command)}
+          shortcut={act.key ?? undefined}
+        />
+      )}
     </div>
   );
 }

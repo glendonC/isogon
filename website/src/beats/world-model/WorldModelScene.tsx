@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { ScenePrompt } from '../../identity/ScenePrompt';
 import { useWorkspace } from '../../app/store';
 import type { StageFireAnchor } from '../../stage/earthCutawayTypes';
 
@@ -53,13 +54,12 @@ function anchorBox(a: StageFireAnchor | null): ScreenBox | null {
 }
 
 /** The margin round a patch inside which the pointer counts as on the fire, px. */
-const INSIDE = 12;
 
 /**
  * World model on the stage: only what belongs to the scene. One label on the fire, joined by a leader, in the script's
- * words for the state on show (the guide at the bottom says the rest); beside the fire's extent, never on its marks, the
- * action that acts on the fire, shown only while the pointer or the keyboard's focus is on or near the fire. After the
- * reveal, Side by Side takes the stage's place while it is open.
+ * words for the state on show (the guide at the bottom says the rest); the next step on the fire itself, framed by the
+ * identity's reticle with the fire's label as its readout. After the reveal, Side by Side takes the stage's place while
+ * it is open.
  */
 export function WorldModelScene() {
   const ws = useWorkspace();
@@ -75,22 +75,6 @@ export function WorldModelScene() {
   // The prompt's place: beside the larger patch, else beside the fire's extent.
   const beside = avoid[0] ?? extent;
 
-  // The prompt shows while the pointer is inside the fire's extent (a patch of it, with a small margin) or the label
-  // has the keyboard's focus; never on bare ground near the leader's foot.
-  const [near, setNear] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const insideKey = avoid.map((b) => `${Math.round(b.left)},${Math.round(b.top)},${Math.round(b.right)},${Math.round(b.bottom)}`).join(';');
-  useEffect(() => {
-    const boxes = avoid.length > 0 ? avoid : extent ? [extent] : [];
-    if (boxes.length === 0) return;
-    const onMove = (e: PointerEvent) => {
-      const inside = boxes.some((b) => e.clientX >= b.left - INSIDE && e.clientX <= b.right + INSIDE && e.clientY >= b.top - INSIDE && e.clientY <= b.bottom + INSIDE);
-      setNear((was) => (was === inside ? was : inside));
-    };
-    window.addEventListener('pointermove', onMove);
-    return () => window.removeEventListener('pointermove', onMove);
-  }, [insideKey, extent?.left, extent?.top, extent?.right, extent?.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
-
   if (test.revealed && model.threeWays) {
     return (
       <div className="wm-scene" data-scene="three-ways">
@@ -103,29 +87,29 @@ export function WorldModelScene() {
     );
   }
 
+  // The next step on the fire itself (the identity's ScenePrompt): the reticle frames the fire, the action and the fire's
+  // own label as its readout stand at the frame's corner; while it stands the label is not drawn a second time.
   const act = guide.besideFire;
-  const W = window.innerWidth;
-  const promptAt =
-    act && beside
-      ? beside.right + 16 + 320 <= W - 24
-        ? { left: beside.right + 16, top: (beside.top + beside.bottom) / 2 - 10 }
-        : { left: Math.max(24, beside.left - 16 - 320), top: (beside.top + beside.bottom) / 2 - 10 }
-      : null;
+  const onFire = Boolean(act && beside);
   const keyOpen = model.marksOpen && guide.marks.length > 0;
 
   return (
     <div className="wm-scene" data-scene={test.revealed ? 'revealed' : test.hidden ? 'blind' : 'open'}>
       {at && keyOpen && <MarksKey at={at} avoid={avoid} title={SCRIPT.marks?.name ?? 'The Marks'} rows={guide.marks} />}
-      {at && guide.fireLabel && !keyOpen && (
-        <ClearPin at={at} avoid={avoid} className="wm-pin" plateClass="wm-label" label={guide.fireLabel} focusable onFocusChange={setFocused} onPick={time.toggleStrip}>
+      {at && guide.fireLabel && !keyOpen && !onFire && (
+        <ClearPin at={at} avoid={avoid} className="wm-pin" plateClass="wm-label" label={guide.fireLabel} focusable onPick={time.toggleStrip}>
           <span className="guide-label">{guide.fireLabel}</span>
         </ClearPin>
       )}
-      {act && promptAt && (near || focused) && (
-        <button type="button" className="guide-prompt" style={{ left: promptAt.left, top: promptAt.top }} onClick={() => ws.runCommand(act.command)}>
-          {act.key && <kbd className="guide-key">{act.key}</kbd>}
-          <span>{act.label}</span>
-        </button>
+      {act && beside && (
+        <ScenePrompt
+          box={beside}
+          label={act.label}
+          readout={guide.fireLabel ?? undefined}
+          onSelect={() => ws.runCommand(act.command)}
+          shortcut={act.key ?? undefined}
+          invite={!test.revealed}
+        />
       )}
     </div>
   );

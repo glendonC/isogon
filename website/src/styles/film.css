@@ -53,7 +53,6 @@
   line-height: 1.2;
 }
 
-.iso-film .guide-key,
 .iso-film .iso-entry__key {
   display: none;
 }
@@ -77,9 +76,7 @@
 }
 
 /* Nothing a visitor would use: no sound, no search, no field to ask, no reference links on the landing. */
-.iso-film .iso-ws__util,
-.iso-film .iso-land__menu,
-.iso-film .guide-ask {
+.iso-film .iso-land__menu {
   display: none !important;
 }
 
