@@ -331,6 +331,71 @@ button.id-story__part:focus-visible {
   outline-offset: 3px;
 }
 
+/* the bottom edge while the visitor goes by themselves: the way back one level at the left, the places on at the right */
+.id-moves {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  bottom: 22px;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px 32px;
+  padding-top: 10px;
+  border-top: 1px solid var(--id-line);
+  font-family: var(--id-font);
+}
+
+.id-moves__back,
+.id-moves__on {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 32px;
+}
+
+.id-moves__on {
+  justify-content: flex-end;
+}
+
+.id-moves__move {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--id-ink-2);
+  cursor: pointer;
+  transition: color var(--id-fast) var(--id-ease);
+}
+
+.id-moves__move:hover,
+.id-moves__move:focus-visible {
+  color: var(--id-ink);
+}
+
+.id-moves__move:focus-visible {
+  outline: 2px solid var(--id-focus);
+  outline-offset: 3px;
+}
+
+.id-moves__move:disabled {
+  color: var(--id-ink-3);
+  opacity: 0.6;
+  cursor: default;
+}
+
+.id-moves__key {
+  font-family: var(--id-mono);
+  font-size: 16px;
+  color: var(--id-ink-3);
+}
+
 /* the first screen */
 .id-entry {
   position: absolute;
@@ -390,9 +455,40 @@ button.id-story__part:focus-visible {
 
 @media (max-width: 760px) {
   .id-bar,
-  .id-story {
+  .id-story,
+  .id-moves {
     left: 16px;
     right: 16px;
+  }
+  /* one row that scrolls sideways, the way back first, fading at the right where more follows */
+  .id-moves {
+    bottom: 12px;
+    padding-top: 8px;
+    gap: 20px;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .id-moves::-webkit-scrollbar {
+    display: none;
+  }
+  .id-moves__back,
+  .id-moves__on {
+    flex: none;
+    flex-wrap: nowrap;
+    gap: 20px;
+  }
+  .id-moves__on {
+    padding-right: 28px;
+  }
+  .id-moves__move {
+    font-size: 16px;
+    white-space: nowrap;
+  }
+  .id-moves__key {
+    display: none;
   }
   .id-bar {
     flex-wrap: wrap;

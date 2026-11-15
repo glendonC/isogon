@@ -234,7 +234,7 @@ export const SCREEN_WORDS = {
   test: {
     objective: 'See the fires it had never seen',
     /** The name in view in the top bar. */
-    where: (fires: number | null) => (fires ? `${fires} new fires` : 'The test across the world'),
+    where: (fires: number | null) => (fires ? `${fires} tested fires` : 'The test across the world'),
     strictBehind: (fires: number, _continents: number, ahead: number, _of: number, behind: number) =>
       `On ${fires} fires it never saw, it won ${ahead} scores and lost ${behind}, and pixel for pixel MODIS alone does better.`,
     notStrictBehind: (fires: number, _continents: number, ahead: number, of: number, level: number, behind: number) =>
@@ -261,7 +261,7 @@ export const SCREEN_WORDS = {
   sealed: {
     objective: 'See predictions written before the pass',
     /** The name in view in the top bar. */
-    where: 'Live',
+    where: 'Live predictions',
     // WORDS-wider.json version 16, world_pictures, sealed_open.
     marks: 'Predictions locked before NASA publishes the data, each with its fingerprint.',
     soFar: (fires: number) => `So far ${fires} fires are scored, and each row opens its result.`,

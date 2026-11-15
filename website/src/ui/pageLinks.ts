@@ -31,3 +31,27 @@ function subscribe(fn: () => void): () => void {
 export function usePageLinks(): PageLink[] {
   return useSyncExternalStore(subscribe, () => links, () => links);
 }
+
+/**
+ * What lies under a picture of the world, by name ("the start", a place, "the fire"), so the picture's way back says
+ * where it goes. The page sets it as the visitor moves (App.tsx).
+ */
+let under = 'the start';
+const underListeners = new Set<() => void>();
+
+export function setPageUnder(next: string): void {
+  if (next === under) return;
+  under = next;
+  underListeners.forEach((fn) => fn());
+}
+
+function subscribeUnder(fn: () => void): () => void {
+  underListeners.add(fn);
+  return () => {
+    underListeners.delete(fn);
+  };
+}
+
+export function usePageUnder(): string {
+  return useSyncExternalStore(subscribeUnder, () => under, () => under);
+}

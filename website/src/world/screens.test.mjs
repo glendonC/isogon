@@ -19,3 +19,25 @@ test("the film's address for the years: as counted, from 2010 to 2012, playing",
   assert.deepEqual(screenOfAddress('?world=years&view=onescale'), { name: 'years', years: { view: 'onescale', from: undefined, until: undefined, play: undefined } });
   assert.equal(screenOfAddress('?world=years&from=12').years.from, undefined);
 });
+
+test('back from a board opened from the Earth goes to the Earth; from anywhere else it closes', async () => {
+  const s = await import('./screens.ts');
+  s.closeWorldScreen();
+  s.openWorldScreen('years');
+  s.openWorldScreen('test');
+  assert.equal(s.backOfWorldScreen()?.name, 'years');
+  s.openWorldScreen('sealed');
+  assert.equal(s.backOfWorldScreen()?.name, 'years');
+  s.backWorldScreen();
+  assert.equal(s.worldScreenOnShow()?.name, 'years');
+  assert.equal(s.backOfWorldScreen(), null);
+  s.backWorldScreen();
+  assert.equal(s.worldScreenOnShow(), null);
+  s.openWorldScreen('test');
+  assert.equal(s.backOfWorldScreen(), null);
+  s.openWorldScreen('sealed');
+  s.closeWorldScreen();
+  s.openWorldScreen('test');
+  assert.equal(s.backOfWorldScreen(), null);
+  s.closeWorldScreen();
+});

@@ -12,6 +12,21 @@ export const WORDS = {
   search: 'Search',
   stop: 'Click or press any key to stop',
   links: { search: 'Search', method: 'Method', sources: 'Sources' },
+  /** The level above a place on the path, the Earth's years; the first screen's "Explore the Earth" goes there. */
+  earth: 'The Earth',
+  /** The bottom edge while the visitor goes by themselves: the way back one level, and the places one level on. */
+  moves: {
+    label: 'Where to go from here',
+    back: (to: string) => `Back to ${to}`,
+    start: 'the start',
+    earth: 'the Earth',
+    fire: 'the fire',
+    turn: 'your turn',
+    choosePlace: 'Choose a place',
+    otherPlace: 'Choose another place',
+    turnOn: 'Your turn',
+    key: 'Esc',
+  },
   story: {
     world: 'Start',
     jump: 'The jump',

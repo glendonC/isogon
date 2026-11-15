@@ -48,8 +48,8 @@ export function CalendarBeat({ guideSpeaks = false }: CalendarBeatProps) {
       markedMonth={c.selectedMonth ?? c.stageMonth ?? opensOn}
       canOpen={c.canOpen}
       onOpenMonth={c.openMonth}
-      // Escape, once the Record's own views are closed, steps one place back on the path: to the first screen
-      onClose={ws.toFirstScreen}
+      // Escape, once the Record's own views are closed, steps one level back on the path: to the Earth's years
+      onClose={ws.toEarth}
       guideSpeaks={guideSpeaks}
       markWaits={markWaits}
     />

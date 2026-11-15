@@ -148,8 +148,10 @@ export interface WorkspaceStore {
   goStep: (s: Step) => void;
   /** The one way into World model: VIIRS hidden where it can be, close to the fire. */
   openModel: () => void;
-  /** One place back from a place's record on the path (World / the place / the fire): the first screen. */
+  /** Back to the first screen, from anywhere (the path's first word). */
   toFirstScreen: () => void;
+  /** One level back from a place's record on the path (Isogon / The Earth / the place / the fire): the Earth's years. */
+  toEarth: () => void;
   /** What the guide says on the step on show (guide/useGuide.ts), and the commands its actions name. */
   guide: Guide;
   runCommand: (command: string) => void;

@@ -24,10 +24,12 @@ import { type Step } from './components/WorkspaceBar';
 import type { TrailWord } from './guide/Trail';
 import { LocatorBar } from './identity/LocatorBar';
 import { StoryLine } from './identity/StoryLine';
+import { Moves, type Move } from './identity/Moves';
+import { SCREEN_WORDS } from './world/words';
 import { RevealSweep } from './identity/RevealSweep';
 import { stageReady } from './stage/stageReady';
 import type { StageThing, StageThingBox } from './stage/earthCutawayTypes';
-import { setPageLinks } from './ui/pageLinks';
+import { setPageLinks, setPageUnder } from './ui/pageLinks';
 import { usePlay, type PlayShot } from './ui/usePlay';
 import { agentWalkDone, startAgentWalk, stopAgentWalk } from './walk/agentWalk';
 import { AgentWalkLine } from './walk/AgentWalkLine';
@@ -423,6 +425,11 @@ export function App() {
     setSelectedFinding(null);
     setInWorkspace(false);
   }, []);
+  /** One level back from a place on the path (Isogon / The Earth / the place): the workspace is left for the Earth's years. */
+  const toEarth = useCallback(() => {
+    exitToOverview();
+    openWorldScreen('years');
+  }, [exitToOverview]);
 
   const executeWorldModel = useCallback(
     async (asked: ReconstructRequestParams): Promise<boolean> => {
@@ -1422,6 +1429,7 @@ export function App() {
     goStep,
     openModel,
     toFirstScreen: exitToOverview,
+    toEarth,
     blocked: stepBlocked,
   };
   // What the Record publishes for the guide (the compare-view lane's view), and the guide worked out from the store.
@@ -1690,15 +1698,28 @@ export function App() {
     if (inWorkspace) exitToOverview();
   };
   toStartRef.current = toStart;
-  const goStory = (part: StoryPart) => {
-    if (part === 'world') toStart();
-    else if (part === 'jump') openWorldScreen('years');
-    else if (part === 'place') goStep('record');
-    else if (part === 'fire') onTrailWord('Estimate');
-    else if (part === 'tested') openWorldScreen('test');
-    else if (part === 'live') openWorldScreen('sealed');
-    else onTrailWord('Play');
-  };
+  // While the visitor goes by themselves, the bottom edge holds the way back one level and the places on from here, in
+  // the story line's place (FLOW: watching or going, never both). The story line stands only while Play runs.
+  const testedName = SCREEN_WORDS.test.where(storyNumber(guide.fields.test_b_fires_n));
+  const toTested: Move = { label: testedName, onClick: () => openWorldScreen('test') };
+  const inRound = step === 'look' || step === 'agent';
+  const moveBack: Move | null =
+    step === 'record'
+      ? { label: WORDS.moves.back(WORDS.moves.earth), onClick: toEarth }
+      : step === 'agent'
+        ? { label: WORDS.moves.back(WORDS.moves.turn), onClick: () => setStep('look') }
+        : step === 'look'
+          ? { label: WORDS.moves.back(WORDS.moves.fire), onClick: openModel }
+          : { label: WORDS.moves.back(regionTitle || WORDS.moves.earth), onClick: () => goStep('record') };
+  const movesOn: Move[] =
+    step === 'record'
+      ? [{ label: WORDS.moves.otherPlace, onClick: () => setAskOpen(true) }]
+      : inRound
+        ? [toTested]
+        : [{ label: WORDS.moves.turnOn, onClick: () => onTrailWord('Play'), disabled: Boolean(stepBlocked.look), reason: stepBlocked.look ?? null }, toTested];
+  // What lies under a picture of the world, so its way back names it.
+  const underName = !inWorkspace ? WORDS.moves.start : step === 'record' ? regionTitle || WORDS.moves.earth : inRound ? WORDS.moves.turn : WORDS.moves.fire;
+  useEffect(() => setPageUnder(underName), [underName]);
   // Play (identity/Entry.tsx's Play): the story by itself in the ux lane's order (MOUNT.md section 7), with the stage's
   // own moves (`filmMove: 'auto'`); any key, click or wheel hands it back where it is. It never plays the game.
   const worldIs = (name: string) => worldScreenOnShow()?.name === name;
@@ -1928,21 +1949,24 @@ export function App() {
             <div className="iso-ws__scrim iso-ws__scrim--bottom" aria-hidden="true" />
 
             <LocatorBar
-              path={['World', regionTitle, fireTitle].filter((s): s is string => Boolean(s))}
+              path={[WORDS.earth, regionTitle, fireTitle].filter((s): s is string => Boolean(s))}
               lat={barLat}
               lon={barLon}
               onHome={() => toStartRef.current()}
-              onTrail={(i) => (i === 0 ? openWorldScreen('years') : goStep('record'))}
+              onTrail={(i) => (i === 0 ? toEarth() : goStep('record'))}
               links={barLinks}
             />
             <RevealSweep run={revealRun} />
-            <StoryLine
-              current={play.part ?? storyPart}
-              progress={play.playing ? play.progress : null}
-              jumpYear={storyNumber(guide.fields.sharp_since)}
-              testedFires={storyNumber(guide.fields.test_b_fires_n)}
-              onPart={filmMode || play.playing ? undefined : goStory}
-            />
+            {play.playing || filmMode ? (
+              <StoryLine
+                current={play.part ?? storyPart}
+                progress={play.playing ? play.progress : null}
+                jumpYear={storyNumber(guide.fields.sharp_since)}
+                testedFires={storyNumber(guide.fields.test_b_fires_n)}
+              />
+            ) : (
+              <Moves back={moveBack} onward={movesOn} />
+            )}
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
             {step === 'record' && <CalendarBeat key={recordTry} guideSpeaks={guide.step === 'record'} />}

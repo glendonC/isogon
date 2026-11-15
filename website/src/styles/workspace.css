@@ -529,14 +529,16 @@
   background: rgba(8, 11, 17, 0.9);
 }
 
-/* The identity's story line takes its clicks inside the workspace's pass-through layer. */
-.iso-ws .id-story {
+/* The identity's story line and the bottom edge's moves take their clicks inside the workspace's pass-through layer. */
+.iso-ws .id-story,
+.iso-ws .id-moves {
   pointer-events: auto;
 }
 
-/* A phone: the story line stands clear of the imagery credit under it, the guide clear of the story line. */
+/* A phone: the story line and the moves stand clear of the imagery credit under them, the guide clear of them. */
 @media (max-width: 600px) {
-  .iso-ws .id-story {
+  .iso-ws .id-story,
+  .iso-ws .id-moves {
     bottom: 40px;
   }
 

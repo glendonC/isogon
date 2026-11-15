@@ -1,11 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GuideStrip } from '../guide/GuideStrip';
 import { LocatorBar } from '../identity/LocatorBar';
-import { usePageLinks } from '../ui/pageLinks';
+import { usePageLinks, usePageUnder } from '../ui/pageLinks';
 import { useWorkspace } from '../app/store';
-import { StoryLine } from '../identity/StoryLine';
-import type { StoryPart } from '../identity/story';
-import { SHARP_FROM } from './yearsData';
+import { Moves, type Move } from '../identity/Moves';
+import { WORDS } from '../identity/words';
 import type { ScriptAction } from '../guide/script';
 import { Trail, type TrailWord } from '../guide/Trail';
 import { EarthYears, type YearsControl, type YearsState } from './EarthYears';
@@ -13,7 +12,7 @@ import { parseFresh } from './freshTest';
 import { useWorldKeys } from './keys';
 import { parseLive } from './live';
 import { useRead } from './read';
-import { closeWorldScreen, useWorldScreen, type WorldScreen } from './screens';
+import { backOfWorldScreen, backWorldScreen, closeWorldScreen, openWorldScreen, useWorldScreen, type WorldScreen } from './screens';
 import { SealedTonight } from './SealedTonight';
 import { oneDecimal, percent1, SCREEN_WORDS as S } from './words';
 import { WorldTest, type WorldTestControl } from './WorldTest';
@@ -50,11 +49,12 @@ const isFilm = () => typeof document !== 'undefined' && document.documentElement
 
 function Host({ screen, onWord }: { screen: WorldScreen; onWord?: (word: TrailWord) => void }) {
   const film = useMemo(isFilm, []);
-  // Escape closes; every other key stays with the picture, so nothing under it acts.
+  // Escape goes one level back (the Earth's years from a board opened from them, else what is under); every other key
+  // stays with the picture, so nothing under it acts.
   useWorldKeys(
     (e) => {
       if (e.key === 'Escape') {
-        closeWorldScreen();
+        backWorldScreen();
         return true;
       }
       return !(e.metaKey || e.ctrlKey || e.altKey) && e.key !== 'Tab';
@@ -77,11 +77,11 @@ function Host({ screen, onWord }: { screen: WorldScreen; onWord?: (word: TrailWo
 type Part = { film: boolean; toWord: (w: TrailWord) => void };
 
 /**
- * A picture's frame. On the page, the plan's look (the ux lane's pieces, as the page itself mounts them): the top bar
- * with the path and the place finder's window (its first step closes the picture), the story along the bottom edge,
- * and the guide's title and line. In the film presentation, the shot's caption where the objective stands.
+ * A picture's frame. On the page: the top bar with the path (Isogon / The Earth / the name in view), the bottom edge
+ * with the way back one level and the places on from here, and the guide's title and line. In the film presentation,
+ * the shot's caption where the objective stands.
  */
-function Frame({ objective, word, lines, actions, onAction, film, trail = true, toWord, where, story, figures }: Part & {
+function Frame({ objective, word, lines, actions, onAction, film, trail = true, toWord, where, onward }: Part & {
   objective: string | null;
   word: TrailWord;
   /** The years a picture spans; the page's title says them. */
@@ -92,13 +92,14 @@ function Frame({ objective, word, lines, actions, onAction, film, trail = true, 
   trail?: boolean;
   /** The name in view, the last step of the top bar's path. */
   where: string;
-  /** Where the picture stands in the story. */
-  story: StoryPart;
-  figures?: { jumpYear?: number | null; testedFires?: number | null };
+  /** The places one level on or beside, by name. */
+  onward: Move[];
 }) {
   // The page's Search, Method and Sources (ui/pageLinks.ts), as on every other top bar, and its way back to the start.
   const pageLinks = usePageLinks();
   const firstScreen = useFirstScreen();
+  const under = usePageUnder();
+  const screen = useWorldScreen();
   // The pictures keep clear of this guide: its height (from the bottom of the page) is the room they keep.
   useLayoutEffect(() => {
     const host = document.querySelector<HTMLElement>('.world-screen');
@@ -122,10 +123,15 @@ function Frame({ objective, word, lines, actions, onAction, film, trail = true, 
   // The path's first part, the product's name, goes back to the first screen: the picture closes and the page leaves
   // what it had open.
   const onHome = firstScreen ? () => { closeWorldScreen(); firstScreen(); } : undefined;
+  // One level back: to the Earth's years when this board was opened from them, else to what is under the picture.
+  const backTo = backOfWorldScreen() ? WORDS.moves.earth : under;
+  const back: Move = { label: WORDS.moves.back(backTo), onClick: backWorldScreen };
+  // The path's "The Earth" opens the Earth's years (on the years themselves it is the level they stand on).
+  const onTrail = screen?.name === 'years' ? undefined : () => openWorldScreen('years');
   return (
     <>
-      <LocatorBar path={['World', where]} onHome={onHome} onTrail={() => closeWorldScreen()} links={barLinks} />
-      <StoryLine current={story} jumpYear={figures?.jumpYear ?? null} testedFires={figures?.testedFires ?? null} />
+      <LocatorBar path={[WORDS.earth, where]} onHome={onHome} onTrail={onTrail} links={barLinks} />
+      <Moves back={back} onward={onward} />
       <GuideStrip title={objective} lines={lines} actions={actions} onAction={onAction} />
     </>
   );
@@ -164,6 +170,20 @@ function useQuiet(quietMs = 700, cap = 5000): boolean {
   return quiet;
 }
 
+/**
+ * The places one level on or beside a picture, by the names their own top bars give them: from the Earth, a place
+ * (the search, which opens over the picture), the test across the world and the sealed predictions; from either board,
+ * the other.
+ */
+function useOnward(name: WorldScreen['name'], testedFires: number | null): Move[] {
+  const pageLinks = usePageLinks();
+  const search = pageLinks.find((l) => l.label === WORDS.links.search);
+  const test: Move = { label: S.test.where(testedFires), onClick: () => openWorldScreen('test') };
+  const sealed: Move = { label: S.sealed.where, onClick: () => openWorldScreen('sealed') };
+  if (name === 'years') return [...(search ? [{ label: WORDS.moves.choosePlace, onClick: search.onClick }] : []), test, sealed];
+  return name === 'test' ? [sealed] : [test];
+}
+
 function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
   const start = screen.years ?? {};
   const tested = useTestedFires(film);
@@ -173,11 +193,12 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
   const ratio = st?.ratio ? oneDecimal(st.ratio) : null;
   const oneScale = st?.mode === 'harmonized';
   const lines = st && ratio ? [oneScale ? S.years.oneScale : S.years.counted(ratio)] : [];
+  // The way back is the bottom edge's (Escape); the guide keeps the picture's own actions.
   const actions: ScriptAction[] = [
     { label: st?.playing ? S.years.stop : S.years.play, command: 'years:play', key: 'Enter' },
     ...(st?.oneScaleReady ? [{ label: oneScale ? S.years.toCounted : S.years.toOneScale, command: 'record:as_counted', key: 'Y' }] : []),
-    { label: S.years.back, command: 'close', key: 'Esc' },
   ];
+  const onward = useOnward('years', tested);
   // In the film the caption stands under the year: on one scale its line throughout; as counted, the step's line from
   // 2012, so a year before it is not captioned with 2012 (the line under the year says who counted it until then).
   const caption = film && st ? (oneScale ? S.years.filmOneScale(st.first) : ratio && st.year >= 2012 ? S.years.filmCounted(ratio) : null) : null;
@@ -206,8 +227,7 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
         trail={!film}
         objective={st ? S.years.objective(st.first) : null}
         where={S.years.where}
-        story="world"
-        figures={{ jumpYear: SHARP_FROM, testedFires: tested }}
+        onward={onward}
         word="Record"
         context={st ? S.years.context(st.first, st.last) : null}
         lines={lines}
@@ -215,7 +235,6 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
         onAction={(c) => {
           if (c === 'years:play') control.current?.play();
           else if (c === 'record:as_counted') control.current?.flip();
-          else if (c === 'close') closeWorldScreen();
         }}
       />
     </>
@@ -248,6 +267,7 @@ function Test({ film, toWord }: Part) {
   const lineB = testB && ob?.second && ob.modis && ob.first ? S.test.overlapB(testB.fires.length, percent1(ob.second.exact), percent1(ob.modis.exact), percent1(ob.first.exact)) : null;
   const lineA = testA && oa?.first && oa.modis ? S.test.overlapA(testA.fires.length, percent1(oa.first.exact), percent1(oa.modis.exact)) : null;
   const lines = [lineB, lineA].filter((l): l is string => l !== null);
+  const onward = useOnward('test', testB?.fires.length ?? testA?.fires.length ?? null);
   const caption =
     ob?.second && ob.modis && ob.first
       ? S.test.filmOverlapB(percent1(ob.second.exact), percent1(ob.modis.exact), percent1(ob.first.exact))
@@ -265,17 +285,12 @@ function Test({ film, toWord }: Part) {
         trail={!film || whole}
         objective={film ? caption ?? S.test.objective : S.test.objective}
         where={S.test.where(testB?.fires.length ?? testA?.fires.length ?? null)}
-        story="tested"
-        figures={{ jumpYear: SHARP_FROM, testedFires: testB?.fires.length ?? null }}
+        onward={onward}
         word="Test"
         lines={lines}
-        actions={[
-          { label: S.test.fireScores, command: 'world:fire_scores', key: 'Enter' },
-          { label: S.test.back, command: 'close', key: 'Esc' },
-        ]}
+        actions={[{ label: S.test.fireScores, command: 'world:fire_scores', key: 'Enter' }]}
         onAction={(cmd) => {
           if (cmd === 'world:fire_scores') control.current?.nextFire();
-          else if (cmd === 'close') closeWorldScreen();
         }}
       />
       <TestKeys onEnter={() => control.current?.nextFire()} />
@@ -301,10 +316,11 @@ function Sealed({ film, toWord }: Part) {
   const counted = o && o.ahead !== null && o.tied !== null && o.behind !== null;
   // "So far N are scored" counts fires, as the marks and the board do (the won, tied and lost are over those fires).
   const lines = live ? [S.sealed.marks, ...(scored > 0 && counted ? [S.sealed.soFar(o!.fires ?? scored)] : [])] : [];
+  const onward = useOnward('sealed', tested);
   const caption = scored > 0 && counted ? S.sealed.film : null;
   useWorldKeys((e) => {
     if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey) return false;
-    closeWorldScreen();
+    backWorldScreen();
     return true;
   });
   return (
@@ -317,12 +333,11 @@ function Sealed({ film, toWord }: Part) {
         toWord={toWord}
         objective={film ? caption ?? S.sealed.objective : S.sealed.objective}
         where={S.sealed.where}
-        story="live"
-        figures={{ jumpYear: SHARP_FROM, testedFires: tested }}
+        onward={onward}
         word="Test"
         lines={lines}
-        actions={[{ label: S.sealed.back, command: 'close', key: 'Enter' }]}
-        onAction={() => closeWorldScreen()}
+        actions={[]}
+        onAction={() => {}}
       />
     </>
   );

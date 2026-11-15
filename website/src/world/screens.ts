@@ -67,8 +67,13 @@ function writeAddress(s: WorldScreen | null) {
   if (url.href !== window.location.href) window.history.replaceState(window.history.state, '', url.href);
 }
 
+// The Earth's years are the level above the test and the sealed predictions: a board opened from the years (or from
+// another board opened from them) goes back to them; anything else goes back to what was under it.
+let earth: WorldScreen | null = null;
+
 /** Open a picture of the world over the page. */
 export function openWorldScreen(name: WorldScreenName, years?: YearsStart) {
+  earth = name === 'years' ? null : current?.name === 'years' ? current : current ? earth : null;
   current = { name, ...(name === 'years' && years ? { years } : {}) };
   writeAddress(current);
   emit();
@@ -76,9 +81,28 @@ export function openWorldScreen(name: WorldScreenName, years?: YearsStart) {
 
 /** Close the picture on show, back to what was under it. */
 export function closeWorldScreen() {
+  earth = null;
   if (!current) return;
   current = null;
   writeAddress(null);
+  emit();
+}
+
+/** Where the picture on show goes back to: the Earth's years when it was opened from them, else null (what is under). */
+export function backOfWorldScreen(): WorldScreen | null {
+  return earth;
+}
+
+/** One level back: to the Earth's years when the picture was opened from them, else closed to what was under it. */
+export function backWorldScreen() {
+  const to = earth;
+  if (!to) {
+    closeWorldScreen();
+    return;
+  }
+  earth = null;
+  current = to;
+  writeAddress(current);
   emit();
 }
 
