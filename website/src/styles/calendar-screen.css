@@ -357,13 +357,6 @@
   color: var(--sys-ink);
 }
 
-/* Where the guide speaks over the Record and the foot says how well the correction holds, the foot runs to the
-   plot's last rows: the Record keeps room for a guide's sentence of four lines and its actions below them. The film
-   (below, later in this file) keeps its own room. */
-.iso-ws[data-guide='true'] .rec:has(.rec__heldout) {
-  --rec-guide: 226px;
-}
-
 /* On a phone the trail takes two lines and the guide three: the grid keeps clear of both. */
 @media (max-width: 700px) {
   .rec {

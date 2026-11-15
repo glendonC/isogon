@@ -141,15 +141,19 @@ export const RECORD_WORDS = {
   /**
    * How well the correction holds, each year hidden in turn and predicted from the others: here from the answer (a
    * typical year's error, as the answer measures it), and over the whole Earth month by month, each said with what it
-   * is. Then how often the stated range held, here and over the Earth, both counted in months.
+   * is. Then how often the stated range held, here and over the Earth, both counted in months. Where the guide speaks
+   * it says the place's own check as the Record opens, so the line leaves that to it (`guideSaysHere`) and says what
+   * the guide does not: the whole Earth's figures and the range.
    */
-  accuracy: (here: HeldOutHere | null, level: number | null) => {
+  accuracy: (here: HeldOutHere | null, level: number | null, guideSaysHere = false) => {
     const E = EARTH_HELD_OUT;
     const earth = `worldwide, month by month, ${percent(E.monthly)} percent, ${percent(E.oneRatio)} with one ratio per place, ${percent(E.uncorrected)} uncorrected`;
     const range = level !== null ? `The ${percent(level)} percent range` : 'The range';
     const held = here?.monthsHeld
       ? ` ${range} held in ${percent(here.monthsHeld.held / here.monthsHeld.of)} percent of months here, ${percent(E.monthsHeld)} worldwide.`
       : ` ${range} held in ${percent(E.monthsHeld)} percent of months worldwide.`;
+    if (guideSaysHere)
+      return `Worldwide, month by month, a hidden year's prediction is off by ${percent(E.monthly)} percent, ${percent(E.oneRatio)} with one ratio per place, ${percent(E.uncorrected)} uncorrected.${held}`;
     return here
       ? `Hide each year and predict it from the others: here a typical year is off by ${percent(here.year)} percent, ${percent(here.uncorrected)} uncorrected; ${earth}.${held}`
       : `Hide each year and predict it from the others: ${earth}.${held}`;

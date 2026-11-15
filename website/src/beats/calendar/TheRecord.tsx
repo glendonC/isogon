@@ -405,9 +405,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   // On a narrow screen the foot takes the plot's width from the month names, so its words wrap less. It is decided by
   // the plot's width, not the grid's, so that the grid's size does not move the foot's width back and forth.
   const narrowFoot = size.w < 700;
-  // How well the correction holds, in the words' one place: the answer's own check where it has one, the Earth's beside
+  // How well the correction holds, in the words' one place: the answer's own check where it has one, the Earth's beside.
+  // Where the guide speaks it says the place's own check, and the line leaves it out rather than say it twice.
   const accuracyLine = rec
-    ? W.accuracy(rec.heldOut ? { year: rec.heldOut.harmonized, uncorrected: rec.heldOut.raw, monthsHeld: rec.method.monthsHeld } : null, rec.method.level)
+    ? W.accuracy(rec.heldOut ? { year: rec.heldOut.harmonized, uncorrected: rec.heldOut.raw, monthsHeld: rec.method.monthsHeld } : null, rec.method.level, guideSpeaks && rec.heldOut !== null)
     : '';
   const footX = narrowFoot ? Math.max(0, x0 - NAMES_W) : x0;
   // Never narrower than a line of the legend's width: a narrower grid would make the foot's words wrap taller, which

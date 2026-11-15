@@ -108,6 +108,12 @@ test("how well the correction holds: the place's shares as passed in, the whole 
   assert.match(other, /off by 30 percent, 50 uncorrected/);
   assert.match(other, /The range held in 82 percent of months worldwide\.$/);
   assert.equal(EARTH_HELD_OUT.monthly, 0.141);
+  // Where the guide says the place's check, the line says the Earth's and the range, and not the place's error again
+  const beside = RECORD_WORDS.accuracy({ year: 0.1152, uncorrected: 0.7311, monthsHeld: { held: 117, of: 144 } }, 0.8, true);
+  assert.equal(
+    beside,
+    "Worldwide, month by month, a hidden year's prediction is off by 14 percent, 18 with one ratio per place, 78 uncorrected. The 80 percent range held in 81 percent of months here, 82 worldwide.",
+  );
   // An answer with no check of its own (a drawn area) says the Earth's alone
   const earth = RECORD_WORDS.accuracy(null, 0.8);
   assert.doesNotMatch(earth, /here/);
