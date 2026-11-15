@@ -39,6 +39,7 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 | `GET /api/calendar/checks` | The held-out check of the calendar's harmonization, for every place in one answer |
 | `GET /api/cube/record`, `/api/cube/tables`, `/api/cube/countries`, `/api/cube/layers` | The Record of any box on Earth from the fire cube, its tables, the loaded countries and the world layers ([cube.md](cube.md)) |
 | `GET /api/live` | The predictions sealed before a pass on fires burning now, and their scores once the sharp satellite's rows arrive ([live.md](live.md)) |
+| `GET /api/gibs/day`, `/api/gibs/cloud`, `/api/gibs/live` | A box's satellite picture of one day and its cloud share, from NASA's keyless daily tiles held in the world store |
 | `GET /api/firms/countries` | Every country file the FIRMS listing publishes, its size and whether it is cached |
 | `GET /api/runs/starts` | The start dates worth showing for a real run |
 | `POST /api/reconstruct` | Build or fetch a run |
@@ -420,6 +421,14 @@ Shortened: `overlap_years` cut to two of 14 years, the second entry cut to a few
 ## `GET /api/live`
 
 The live test's answer, `backend.live.answer.build` of the live folder ([live.md](live.md)): every prediction sealed before its pass, with its state, times, digest and scores, the fires, the passes not sealed and the running count against the two baselines. It is built from the folder's logs at each request; the server only reads them. The folder is `ISOGON_LIVE_DIR`, else `live` in the world store (`ISOGON_WORLD_DIR`, else `data/cache/world`). Without a folder holding `protocol.json` the route answers `503` with `"state": "not_running"`.
+
+## The day's picture and cloud share
+
+`GET /api/gibs/day?region_id=<id>&day=<YYYY-MM-DD>&platform=<MODIS_TERRA|MODIS_AQUA|VIIRS_SNPP|VIIRS_NOAA20>&kind=<true_color|false_color>` returns the picture NASA's Global Imagery Browse Services (GIBS) publish for that satellite and day, cropped to the region's box, as `image/png`. A GIBS layer name may stand in for `platform` and `kind` (`layer=MODIS_Terra_CorrectedReflectance_TrueColor`); `format=json` gives the picture's manifest (its bounds, pixel size, the share of pixels the day's swath covers, its source addresses and digest), and `format=json` without a layer lists the pictures held for that day. `fire_id=<id>` names a fire of the live test in place of a region, and `box=w,s,e,n` any box. One picture a day per satellite, stitched from its daytime passes, about 250 m a pixel; its smoke and cloud are real. It is not a pass's detections.
+
+`GET /api/gibs/cloud?region_id=<id>&day=<YYYY-MM-DD>&when=<day|night>[&platform=<platform>]` returns the share of the box's pixels each satellite's cloud product marks as cloud that day or night, with the GIBS layer, the NASA product, the pixel size, the counts and the source addresses. `GET /api/gibs/live` lists the pictures held for the live test's fires.
+
+The main server reads these from the world store's `gibs` folder (`ISOGON_GIBS_DIR`, else `gibs` in `ISOGON_WORLD_DIR`, else `data/cache/world/gibs`) and never fetches: a day not held answers `404` with `"state": "not_cached"`, a day before the layer begins `404` with `"state": "before_coverage"`. The store is filled by `python -m backend.server_gibs sync` against a running server (no key). A window of a recorded test fire answers `409`, as the run routes do.
 
 ## `GET /api/firms/countries`
 

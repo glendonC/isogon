@@ -15,6 +15,9 @@ Endpoints:
   - GET  /api/cube/record?box=..., /api/cube/tables?box=..., /api/cube/countries, /api/cube/layers[/<name>]
                                                (the fire cube, backend/server_cube.py; docs/cube.md)
   - GET  /api/live                            (the sealed predictions of fires burning now, backend/server_live.py)
+  - GET  /api/gibs/day, /api/gibs/cloud, /api/gibs/live
+                                               (a day's satellite picture and cloud share from NASA's keyless
+                                               tiles, read from the world store, backend/server_gibs.py)
   - GET  /api/sensor-model
   - GET  /api/field-meta
   - POST /api/env/next_look/reset             {region_id, episode | start, tiles, budget, seed}
@@ -94,6 +97,7 @@ from backend.model.solver import (  # noqa: E402
     solve_region_reconstruction,
 )
 from backend.server_cube import cube_route  # noqa: E402
+from backend.server_gibs import gibs_route  # noqa: E402
 from backend.server_live import live_route  # noqa: E402
 from backend.server_next_look import (  # noqa: E402
     ClosedWindow,
@@ -841,6 +845,8 @@ class IsogonDataStore:
                 "/api/cube/record?box=-9.5,37,-6,42",
                 "/api/cube/layers",
                 "/api/live",
+                "/api/gibs/day?region_id=plumas_ca&day=2012-08-10&platform=MODIS_TERRA&kind=true_color",
+                "/api/gibs/cloud?region_id=plumas_ca&day=2012-08-10&when=day",
                 "/api/sensor-model",
                 "/api/field-meta",
             ],
@@ -1374,6 +1380,10 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
             if hit is not None:
                 self._send_bytes(hit[0], hit[1], hit[2])
                 return
+            hit = gibs_route(route, qs)
+            if hit is not None:
+                self._send_bytes(hit[0], hit[1], hit[2])
+                return
 
             if route == "/api/live":
                 live = live_dir()
@@ -1707,6 +1717,9 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                         "/api/cube/countries",
                         "/api/cube/layers",
                         "/api/live",
+                        "/api/gibs/day",
+                        "/api/gibs/cloud",
+                        "/api/gibs/live",
                         "/api/sensor-model",
                         "/api/field-meta",
                         "/api/env/next_look/reset (POST)",

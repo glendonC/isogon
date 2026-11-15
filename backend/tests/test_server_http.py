@@ -283,6 +283,28 @@ class LiveMountTests(unittest.TestCase):
             self.assertEqual((status, json.loads(raw)["from"]), (200, tmp))
 
 
+class GibsMountTests(unittest.TestCase):
+    def test_the_keyless_layers_answer_through_the_main_server_from_the_store_alone(self) -> None:
+        """The day's picture and the cloud share are mounted before the health route: a store with no picture answers
+        404 "not_cached" (the main server reads the store and never fetches), a closed window 409, a bad request
+        400, and the other routes are untouched."""
+        import os
+        import tempfile
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"ISOGON_GIBS_DIR": tmp}):
+            status, headers, raw = _req("/api/gibs/day?region_id=ventura_ca&day=2017-12-10&platform=MODIS_TERRA&kind=true_color")
+            self.assertEqual(status, 404, raw[:200])
+            self.assertIn("json", headers.get("Content-Type", ""))
+            self.assertEqual(json.loads(raw)["state"], "not_cached")
+            self.assertEqual(_req("/api/gibs/day?region_id=plumas_ca&day=2021-07-20&platform=MODIS_TERRA&kind=true_color")[0], 409)
+            self.assertEqual(_req("/api/gibs/day?region_id=ventura_ca")[0], 400)
+            status, _, raw = _req("/api/gibs/nothing")
+            self.assertEqual(status, 404)
+            self.assertNotIn("Unknown endpoint", raw.decode("utf-8", "replace"))
+            self.assertEqual(_req("/api/health")[0], 200)
+
+
 class DefaultStartTests(unittest.TestCase):
     def test_default_follows_the_model_and_falls_back_to_most_modis_pixels(self) -> None:
         from backend.server import with_default_start
