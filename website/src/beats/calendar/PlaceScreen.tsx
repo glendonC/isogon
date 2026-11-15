@@ -177,7 +177,11 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose, draw 
     const viewY = -cy - (top + free / 2 - h / 2) * scale;
     const halfLon = (w * scale) / FIT / K / 2;
     const halfLat = (h * scale) / FIT / 2;
-    return [cx - halfLon, -viewY - halfLat, cx + halfLon, -viewY + halfLat];
+    // The view stays on the map where it can: past the date line there is no Earth, so a view wider than the box it
+    // fits moves toward the middle of the map rather than show an empty edge; one as wide as the map stands on its middle
+    const seen = halfLon * FIT;
+    const lon = seen >= 180 ? 0 : Math.min(180 - seen, Math.max(-180 + seen, cx));
+    return [lon - halfLon, -viewY - halfLat, lon + halfLon, -viewY + halfLat];
   }, []);
 
   // The legend's height changes as its layer loads; until the visitor moves the map the first view follows it
