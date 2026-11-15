@@ -108,13 +108,24 @@ def _collect_one(job: tuple[str, str, int, str, str, str]) -> dict[str, Any]:
     path_s, product, year, country, work_s, targets_json = job
     tg: dict[str, list[tuple[str, float, float]]] = json.loads(targets_json)
     path, work = Path(path_s), Path(work_s)
-    data = path.read_bytes()
-    out: dict[str, Any] = {"file": f"{product}/{year}/{path.name}", "sha256": hashlib.sha256(data).hexdigest(),
+    out: dict[str, Any] = {"file": f"{product}/{year}/{path.name}", "sha256": None,
                            "rows_read": 0, "malformed_rows": 0, "counts": {}, "rows_kept": {}}
-    lines = data.decode("utf-8").splitlines()
-    if not lines:
+    # read line by line, hashing every byte as it is read, so that a large file never sits whole in memory
+    digest = hashlib.sha256()
+    fh = path.open("rb")
+
+    def lines_of() -> Any:
+        for raw in fh:
+            digest.update(raw)
+            yield raw.decode("utf-8").rstrip("\r\n")
+
+    lines = lines_of()
+    header = next(lines, None)
+    if header is None:
+        fh.close()
+        out["sha256"] = digest.hexdigest()
         return out
-    cols = lines[0].split(",")
+    cols = header.split(",")
     ix, iy, idate, itime, isat = (cols.index(c) for c in ("longitude", "latitude", "acq_date", "acq_time", "satellite"))
     it = cols.index("type") if "type" in cols else None
     keep_cols = [c for c in ROW_COLUMNS if c != "_platform"]
@@ -122,7 +133,7 @@ def _collect_one(job: tuple[str, str, int, str, str, str]) -> dict[str, Any]:
     kept: dict[str, list[str]] = {}
     counts: dict[str, dict[str, dict[str, int]]] = {}
     count_this = int(year) in COUNT_YEARS and product in ("modis", "viirs-snpp")
-    for line in lines[1:]:
+    for line in lines:
         if not line:
             continue
         out["rows_read"] += 1
@@ -147,6 +158,8 @@ def _collect_one(job: tuple[str, str, int, str, str, str]) -> dict[str, Any]:
             for key, t0, t1 in tg[p]:
                 if t0 <= t < t1:
                     kept.setdefault(key, []).append(",".join([v[where[c]] if c in where else "" for c in keep_cols] + [plat]))
+    fh.close()
+    out["sha256"] = digest.hexdigest()
     for key, rows in kept.items():
         dest = work / "rows" / key / f"{path.stem}.csv"
         dest.parent.mkdir(parents=True, exist_ok=True)

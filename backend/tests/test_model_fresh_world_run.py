@@ -84,6 +84,9 @@ class RowsTests(unittest.TestCase):
             mid = 0.5 * (T0 + T1)
             tg = {PID: [("early", T0 - 1.0, mid), ("late", mid, T1)]}
             out = R._collect_one((str(path), "modis", 2099, "X", tmp, json.dumps(tg)))
+            import hashlib
+
+            self.assertEqual(out["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())   # every byte read is hashed
             kept = sum(out["rows_kept"].values())
             inside = [r for r in typed[1:] if W._places_of(float(r["longitude"]), float(r["latitude"]))
                       and PID in [F.place_id(p) for p in W._places_of(float(r["longitude"]), float(r["latitude"]))]]
