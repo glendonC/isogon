@@ -13,8 +13,13 @@ Nothing here is needed to start the application. A fresh clone runs on the track
 | Every satellite pass, fire or no fire | NASA CMR granule search | No | `backend/firms/cmr_passes.py` | `data/cache/cmr/` |
 | Elevation | Terrain Tiles on AWS Open Data (Terrarium encoding) | No | `backend/terrain/tile_store.py` | `data/cache/tiles/terrarium/` |
 | Imagery | Esri World Imagery, USGS NAIP, EOX Sentinel-2 cloudless 2016 and 2020 | No | `backend/terrain/tile_store.py` | `data/cache/tiles/<source>/` |
+| Every country's yearly files, as one cube of monthly counts | NASA FIRMS country yearly summary files | No | `backend/firms/world_fetch.py`, `cube_build.py` | `data/cache/world/` ([cube.md](cube.md)) |
+| A day's picture of the ground and the share of a box under cloud | NASA GIBS daily tiles | No | `backend/terrain/gibs_day.py`, `backend/firms/gibs_cloud.py`, `backend/server_gibs.py` | the world store's `gibs` folder |
+| Burned area, MODIS (MCD64A1) | NASA LP DAAC | `EARTHDATA_TOKEN` | `backend/firms/burned_fetch.py` | the world store's `burned` folder |
+| Per-pass fire and cloud masks | NASA LP DAAC and LAADS | `EARTHDATA_TOKEN` | `backend/firms/passmask_fetch.py` | the world store's `passmask` folder |
+| Near real time MODIS and VIIRS detections, for the sealed predictions | NASA FIRMS area API | `FIRMS_MAP_KEY` | `backend/live/fetch.py` | the live folder's `cache/` ([live.md](live.md)) |
 
-FIRMS data is cached for fourteen regions, listed under [Regions](#regions) below. Each region has two boxes. The region box is the box of its terrain; the context box has the same centre and five times the span (`CONTEXT_SCALE` in `backend/terrain/terrain_pack.py`). Rows are kept for the context box. The blind test scores inside the region box.
+The world store is the folder `ISOGON_WORLD_DIR` names, `data/cache/world` by default. FIRMS rows are cached by region for fourteen regions, listed under [Regions](#regions) below, and for every country in the fire cube. Each region has two boxes. The region box is the box of its terrain; the context box has the same centre and five times the span (`CONTEXT_SCALE` in `backend/terrain/terrain_pack.py`). Rows are kept for the context box. The blind test scores inside the region box.
 
 ## Regions
 
@@ -31,7 +36,7 @@ The places registry (`backend/firms/places.json`) names each region's country fi
 | `evros_greece` | Greece | 25.97, 41.03 | the Alexandroupoli and Dadia fire, August 2023 |
 | `serra_acor_pt` | Portugal | -7.70, 40.19 | the fires of August 2025 in central Portugal |
 | `maule_cl` | Chile | -72.19, -35.52 | the fires of January 2017 in the Maule coast range |
-| `ljusdal_se` | Sweden | 15.42, 61.90 | the Kårböle and Ljusdal fires, July 2018; its Record only, no fire offered |
+| `ljusdal_se` | Sweden | 15.42, 61.90 | the Kårböle and Ljusdal fires, July 2018; its record only, no fire offered |
 | `manavgat_tr` | Turkey | 31.47, 36.90 | the Manavgat fire, July 2021 |
 | `fort_mcmurray_ab` | Canada | -110.34, 56.77 | the Horse River fire, May 2016 |
 | `wollemi_au` | Australia | 150.41, -32.75 | the Gospers Mountain fire, the summer of 2019 to 2020 |
@@ -45,7 +50,7 @@ The country files hold no NOAA-21 row. A region whose run may start on or after 
 
 A context box can reach past its country: `evros_greece` into Turkey, Bulgaria and the Aegean, `serra_acor_pt` into Spain, `maule_cl` perhaps a little into Argentina. The region's rows come from its own country file only, so that ground has no rows, and the calendar's rates per area are low by that share; the ratio and its check are counts and are not affected.
 
-A place of the Record only (`record_only_places` in the registry) has a box counted from the cached country files with the same held-out check and no run, round or play, because no start passes the rule there: northern Ghana, the hard case of many small fires. `GET /api/calendar/checks` lists the check of every region and of these places in one answer ([api.md](api.md)).
+A place of the record only (`record_only_places` in the registry) has a box counted from the cached country files with the same held-out check and no run, round or play, because no start passes the rule there: northern Ghana, the hard case of many small fires. `GET /api/calendar/checks` lists the check of every region and of these places in one answer ([api.md](api.md)).
 
 ## Fire detections from NASA FIRMS
 
@@ -149,13 +154,13 @@ The calendar ends at the last country file month, December 2025. Rows of 2026 co
 
 ### Any box
 
-A box anywhere in the cached countries (United States, Canada, Greece, Portugal, Chile, Sweden, South Africa, Kazakhstan, Ghana, Turkey, Australia and South Sudan) has a calendar too (`GET /api/calendar?source=firms&box=`). Its rows are every row of the country files inside it, read through an index built once from those files (`backend/firms/box_index.py`, `data/cache/firms/index/`: one table per country file; the first three countries' 144 files took 47 seconds on the machine the project was built on, the next six countries' 287 files 16 seconds, 497 MB for those nine). A box leaves out every row of type 1 (active volcano), 2 (static land source) and 3 (offshore), since it has no elevation model to tell an inland type 3 row from one at sea; the region calendars keep their own rule above. On a region's context box the box calendar counts the same rows per platform and month as the region extracts, once those kinds are added back.
+A box anywhere on Earth has its record from the fire cube (`GET /api/cube/record`, [cube.md](cube.md)). A box in the countries whose yearly files are cached by region (United States, Canada, Greece, Portugal, Chile, Sweden, South Africa, Kazakhstan, Ghana, Turkey, Australia and South Sudan) has a calendar from the files as well (`GET /api/calendar?source=firms&box=`). Its rows are every row of the country files inside it, read through an index built once from those files (`backend/firms/box_index.py`, `data/cache/firms/index/`: one table per country file; the first three countries' 144 files took 47 seconds on the machine the project was built on, the next six countries' 287 files 16 seconds, 497 MB for those nine). A box leaves out every row of type 1 (active volcano), 2 (static land source) and 3 (offshore), since it has no elevation model to tell an inland type 3 row from one at sea; the region calendars keep their own rule above. On a region's context box the box calendar counts the same rows per platform and month as the region extracts, once those kinds are added back.
 
 This month so far (`GET /api/calendar/current`) is read from the area API, near real time, for the box, over the full UTC days of the month, and set beside the median of the same calendar month over the years of the country files. Its rows have no `type` column, so they count what the calendar leaves out; the answer says so.
 
 ### What the rows cannot say
 
-FIRMS lists detections. A place with no row was either not burning, not passed over, or under cloud or smoke, and the rows alone cannot tell which. The pass schedule below adds the passes that flagged nothing. A cloud mask per pixel is not fetched, so a pass that flagged nothing may have looked at clear ground or at cloud.
+FIRMS lists detections. A place with no row was either not burning, not passed over, or under cloud or smoke, and the rows alone cannot tell which. The pass schedule below adds the passes that flagged nothing. The share of a box under cloud on a day is read from NASA GIBS, one value for each satellite and for day or night, and per-pass masks are a tool that needs a token and were not on hand for the tests across the world. So a pass that flagged nothing may have looked at clear ground or at cloud.
 
 ## Pass schedule from NASA CMR
 
@@ -252,6 +257,6 @@ Esri publishes World Imagery for viewing, not for export. Tiles fetched from it 
 
 ## What is not fetched
 
-- No cloud mask or per-pixel coverage product (`MOD35`, `MYD35`, the VIIRS geolocation files). The MODIS cloud cover in the pass list is a mean over a whole granule, about 2,300 by 2,000 km, and the VIIRS fire granules carry none.
-- No imagery of fire. NASA GIBS supplies one static Blue Marble image for the globe; it is not used as an observation.
+- No per-pixel cloud mask for a run or a test: the model stands in a clear-sky share of 0.8 ([method.md](method.md)). The MODIS cloud cover in the pass list is a mean over a whole granule, about 2,300 by 2,000 km, and the VIIRS fire granules carry none.
+- No picture is used as an observation. The day's photograph from NASA GIBS shows the ground and is drawn beside the detections; it is not a pass's detections.
 - No Landsat fire detections, and no rows outside the cached country files.
