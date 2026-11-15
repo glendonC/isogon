@@ -112,11 +112,16 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
   const legendRef = useRef<HTMLDivElement | null>(null);
   const toolsRef = useRef<HTMLDivElement | null>(null);
   const [overlays, setOverlays] = useState<Array<{ left: number; top: number; width: number; height: number }>>([]);
+  // On a narrow screen the legend lies across the bottom; the Earth is fitted into the room above it.
+  const [padBottom, setPadBottom] = useState(0);
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     const measure = () => {
       const r = root.getBoundingClientRect();
+      const lg = legendRef.current?.getBoundingClientRect();
+      const pb = lg && r.width < 640 ? Math.round(Math.max(0, r.bottom - lg.top + 8)) : 0;
+      setPadBottom((o) => (o === pb ? o : pb));
       setOverlays(
         [legendRef.current, toolsRef.current].flatMap((el) => {
           if (!el) return [];
@@ -140,6 +145,8 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
   const [overMark, setOverMark] = useState<string | null>(null);
 
   const featured = useMemo(() => places.filter((p) => p.featured_fires.length > 0), [places]);
+  const currentPlace = featured.find((p) => p.featured_fires.some((f) => f.id === currentFire)) ?? null;
+  const currentCentre = useMemo<[number, number] | null>(() => (currentPlace ? midOf(currentPlace.box) : null), [currentPlace]);
   const since = world.state === 'ready' ? monthYear(world.layer.meta.first_month ?? '2000-11') : null;
 
   const grid = useMemo<GridLayer[]>(() => {
@@ -406,6 +413,8 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
         label={W.label}
         layers={grid}
         focus={focus}
+        padBottom={padBottom}
+        centre={currentCentre}
         hatchLand
         drawing={drawing}
         onBox={(b) => {

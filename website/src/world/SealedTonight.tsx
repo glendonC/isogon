@@ -137,8 +137,9 @@ export function SealedTonight({ source, now = null, before = 6, after = 9 }: Sea
   const shown = numbered.filter(({ f }) => byFire.has(f.id));
   const rest = numbered.filter(({ f }) => !byFire.has(f.id));
 
-  const ticks: Array<{ at: number; text: string }> = [];
-  for (let h = -before; h <= after; h += 3) ticks.push({ at: ((h + before) / (before + after)) * 100, text: h === 0 ? SEAL_WORDS.now : h < 0 ? SEAL_WORDS.ago(-h) : SEAL_WORDS.ahead(h) });
+  const ticks: Array<{ at: number; text: string; minor: boolean }> = [];
+  for (let h = -before; h <= after; h += 3)
+    ticks.push({ at: ((h + before) / (before + after)) * 100, text: h === 0 ? SEAL_WORDS.now : h < 0 ? SEAL_WORDS.ago(-h) : SEAL_WORDS.ahead(h), minor: h % 6 !== 0 });
 
   return (
     <div className="world-sealed">
@@ -194,7 +195,7 @@ export function SealedTonight({ source, now = null, before = 6, after = 9 }: Sea
           </span>
           <span className="world-board__axis">
             {ticks.map((k) => (
-              <span key={k.at} style={{ left: `${k.at}%` }} data-now={k.text === SEAL_WORDS.now ? 'true' : 'false'}>
+              <span key={k.at} style={{ left: `${k.at}%` }} data-now={k.text === SEAL_WORDS.now ? 'true' : 'false'} data-minor={k.minor ? 'true' : 'false'}>
                 {k.text}
               </span>
             ))}

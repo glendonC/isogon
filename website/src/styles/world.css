@@ -878,3 +878,87 @@
   padding-top: var(--sys-s1);
   border-top: 1px solid var(--sys-rule);
 }
+
+/* A phone. The test's panel lies under the Earth and scrolls on its own, with a quiet scroll bar; the sealed board's
+   rows fold to two lines. A key hint is left out where there is no keyboard. */
+@container (max-width: 640px) {
+  .world-tests {
+    top: 46%;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    padding: var(--sys-s3) var(--sys-s4);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--sys-rule) transparent;
+  }
+
+  .world-tests__row {
+    grid-template-columns: 104px minmax(0, 1fr) 30px 30px 40px;
+  }
+
+  .world-tests__bar {
+    width: 6px;
+  }
+
+  .world-tests__hist {
+    gap: 2px;
+  }
+
+  .world-tests__k {
+    display: none;
+  }
+}
+
+.world-board {
+  container-type: inline-size;
+}
+
+@container (max-width: 640px) {
+  .world-board__head,
+  .world-board__row {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    row-gap: var(--sys-s1);
+  }
+
+  .world-board__head > span:first-child,
+  .world-board__head > span:last-child {
+    display: none;
+  }
+
+  .world-board__key {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+
+  .world-board__axis {
+    grid-column: 2 / -1;
+  }
+
+  .world-board__axis span[data-minor='true'] {
+    display: none;
+  }
+
+  .world-board__digest {
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  .world-board__words {
+    grid-column: 2 / -1;
+    white-space: normal;
+  }
+
+  .world-board__track {
+    grid-column: 2 / -1;
+  }
+}
+
+@media (hover: none) {
+  .world-act kbd,
+  .world-legend__key {
+    display: none;
+  }
+}
+

@@ -71,14 +71,26 @@ export function WorldTest({ source }: { source: string }) {
   const [over, setOver] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const panel = useRef<HTMLDivElement | null>(null);
-  const [panelW, setPanelW] = useState(0);
+  const root = useRef<HTMLDivElement | null>(null);
+  // The panel stands beside the Earth on a wide screen and under it on a narrow one; the Earth fits the room left.
+  const [room, setRoom] = useState({ left: 0, bottom: 0 });
   useLayoutEffect(() => {
     const el = panel.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setPanelW(el.offsetWidth + 24));
+    const rt = root.current;
+    if (!el || !rt) return;
+    const measure = () => {
+      const r = rt.getBoundingClientRect();
+      const p = el.getBoundingClientRect();
+      const stacked = p.width > r.width * 0.7;
+      const next = stacked ? { left: 0, bottom: Math.round(Math.max(0, r.bottom - p.top + 8)) } : { left: Math.round(p.right - r.left + 24), bottom: 0 };
+      setRoom((o) => (o.left === next.left && o.bottom === next.bottom ? o : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
+    ro.observe(rt);
     return () => ro.disconnect();
-  });
+  }, [read.state]);
 
   if (read.state === 'loading') return <div className="world-sealed world-sealed--note">{TEST_WORDS.loading}</div>;
   if (read.state === 'failed' || !ans) return <div className="world-sealed world-sealed--note">{TEST_WORDS.failed}</div>;
@@ -95,8 +107,8 @@ export function WorldTest({ source }: { source: string }) {
   const most = Math.max(1, ...tally);
 
   return (
-    <div className="world-earth">
-      <WorldCanvas label={TEST_WORDS.label} padLeft={panelW} onClickMap={() => setOpen(null)}>
+    <div className="world-earth" ref={root}>
+      <WorldCanvas label={TEST_WORDS.label} padLeft={room.left} padBottom={room.bottom} onClickMap={() => setOpen(null)}>
         {(p) => (
           <>
             {fires.map((f) => {

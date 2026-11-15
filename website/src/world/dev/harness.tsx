@@ -55,7 +55,19 @@ function Earth() {
       lines={[said ?? `Brighter means more fire detected since 2000. ${featured.length} places have a fire you can follow pass by pass; or draw an area anywhere to read its fire record.`]}
       actions={['Show the fire of August 2012', 'Draw an area', 'Back']}
     >
-      <div style={Q.get('w') ? { position: 'absolute', left: 40, top: 160, width: Number(Q.get('w')), height: Number(Q.get('h') ?? 600) } : { position: 'absolute', inset: 0 }}>
+      {Q.get('stage') && (
+        // The site's own page, its stage running, beside the Earth: for measuring the Earth's frames beside the stage.
+        <iframe title="stage" src={Q.get('stage') === '1' ? '/' : Q.get('stage')!} style={{ position: 'absolute', top: 0, right: 0, width: '50%', height: '100%', border: 0 }} />
+      )}
+      <div
+        style={
+          Q.get('w')
+            ? { position: 'absolute', left: 40, top: 160, width: Number(Q.get('w')), height: Number(Q.get('h') ?? 600) }
+            : Q.get('stage')
+              ? { position: 'absolute', top: 0, left: 0, width: '50%', height: '100%' }
+              : { position: 'absolute', inset: 0 }
+        }
+      >
       <ChooseOnEarth
         layers={Q.get('layers') ?? `${SAMPLE}/cube-layers/layers.json`}
         factor={Q.get('factor') ?? `${SAMPLE}/harmonize-maps/maps.json`}
