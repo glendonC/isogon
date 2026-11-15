@@ -331,6 +331,24 @@ class FetchPureNumpyHelperTests(unittest.TestCase):
         with self.assertRaises(PM.ClosedPassMaskWindow):
             PF.fetch_box_window(box, "2021-07-20", "2021-07-23")
 
+    def test_parse_split_pass_windows_orders_fit_val_and_skips_closed_2021(self) -> None:
+        from backend.firms import passmask_fetch as PF
+
+        sample_md = "\n".join([
+            "# Held-out test",
+            "| `test:1` | Europe | Med | 10.0,40.0,10.5,40.5 | 2020-07-10T00:00:00Z to 2020-07-12T00:00:00Z |",
+            "## Validation fires (2)",
+            "| `val:closed` | North America | Temperate | -121.44,39.86,-120.92,40.24 | 2021-07-15T00:00:00Z to 2021-07-18T00:00:00Z |",
+            "| `val:open` | South America | Savanna | -55.5,-15.5,-55.0,-15.0 | 2021-08-10T12:00:00Z to 2021-08-13T12:00:00Z |",
+            "## Fitting fires (2)",
+            "| `fit:2` | Africa | Savanna | 22.5,5.0,23.0,5.5 | 2021-02-06T08:47:00Z to 2021-02-09T09:17:00Z |",
+            "| `fit:1` | Asia | Steppe | 70.0,50.0,70.5,50.5 | 2019-05-01T00:00:00Z to 2019-05-04T00:00:00Z |",
+        ])
+        rows = PF.parse_split_pass_windows(sample_md)
+        self.assertEqual([r["key"] for r in rows], ["fit:2", "fit:1", "val:open", "test:1"])
+        self.assertEqual(rows[0]["start"], "2021-02-06T08:41:00Z")
+        self.assertEqual(rows[0]["end"], "2021-02-09T09:23:00Z")
+
 
 if __name__ == "__main__":
     unittest.main()

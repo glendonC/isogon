@@ -52,10 +52,12 @@ if str(_REPO_ROOT) not in sys.path:
 
 from backend.firms.passmask import (  # noqa: E402
     CLASS_NAMES,
+    ClosedPassMaskWindow,
     PLATFORMS,
     PassMaskGrid,
     box_key,
     canonical_platform,
+    closed_region_for,
     default_passmask_dir,
     format_utc,
     normalize_box,
@@ -1716,10 +1718,121 @@ def _parse_box_arg(text: str) -> tuple[float, float, float, float]:
     return normalize_box(parts)
 
 
+_SPLIT_ROW_RE = re.compile(
+    r"^\|\s*`(?P<key>[^`]+)`\s*\|\s*(?P<continent>[^|]+?)\s*\|\s*(?P<zone>[^|]+?)\s*\|\s*"
+    r"(?P<box>[-+0-9.,\s]+?)\s*\|\s*(?P<start>\d{4}-\d{2}-\d{2}[^|\s]*)\s+to\s+(?P<end>\d{4}-\d{2}-\d{2}[^|\s]*)\s*\|"
+)
+
+
+def _ensure_nice(target_nice: int = 10) -> int:
+    if not hasattr(os, "nice"):
+        return 0
+    try:
+        cur = os.nice(0)
+        if cur < target_nice:
+            return os.nice(target_nice - cur)
+        return cur
+    except OSError:
+        return 0
+
+
+def discover_featured_pass_windows(api_regions_url: str) -> list[dict[str, Any]]:
+    """Read GET /api/regions and return open featured fire pass windows (never 2021 closed fires)."""
+    req = urllib.request.Request(
+        api_regions_url,
+        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[tuple[float, float, float, float], str, str]] = set()
+
+    def _add(label: str, box: tuple[float, float, float, float], start_s: str, end_s: str, priority: int) -> None:
+        if closed_region_for(box, start_s, end_s) is not None:
+            return
+        t0 = format_utc(parse_utc_seconds(start_s))
+        t1 = format_utc(parse_utc_seconds(end_s))
+        if parse_utc_seconds(t1) <= parse_utc_seconds(t0):
+            return
+        key = (box, t0, t1)
+        if key in seen:
+            return
+        seen.add(key)
+        out.append({"label": label, "box": box, "start": t0, "end": t1, "priority": priority})
+
+    entries = payload.get("places") or payload.get("regions") or payload.get("presets") or []
+    for reg in entries:
+        rid = str(reg.get("id", ""))
+        raw_box = reg.get("bbox") or reg.get("pack_bbox") or reg.get("box")
+        if not raw_box or len(raw_box) != 4:
+            continue
+        box = normalize_box(raw_box)
+        if rid == "plumas_ca":
+            _add("plumas_ca:opening_3d", box, "2012-08-10", "2012-08-13", priority=0)
+        for ff in reg.get("featured_fires", []) or []:
+            if ff.get("closed"):
+                continue
+            fid = str(ff.get("id") or ff.get("period") or rid)
+            ds = ff.get("default_start") or ff.get("start")
+            run_starts = [r for r in (ff.get("run_starts") or []) if isinstance(r, dict) and not r.get("closed")]
+            if ds and run_starts:
+                rs = next((r for r in run_starts if r.get("start") == ds), run_starts[0])
+                if rs.get("last_overpass_utc"):
+                    last_dt = _dt.datetime.fromtimestamp(
+                        parse_utc_seconds(str(rs["last_overpass_utc"])), _dt.timezone.utc
+                    )
+                    end_date = (_dt.date(last_dt.year, last_dt.month, last_dt.day) + _dt.timedelta(days=1)).isoformat()
+                    _add(fid, box, str(ds), end_date, priority=1)
+    out.sort(key=lambda item: (item["priority"], item["label"]))
+    return out
+
+
+def parse_split_pass_windows(split_text: str) -> list[dict[str, Any]]:
+    """Parse SPLIT.md rows, ordering fitting and validation sections first."""
+    section = "other"
+    section_rank = 2
+    out: list[dict[str, Any]] = []
+    for raw_line in split_text.splitlines():
+        line = raw_line.strip()
+        if line.startswith("#"):
+            low = line.lower()
+            if "fitting" in low or "fit " in low:
+                section = "fitting"
+                section_rank = 0
+            elif "validation" in low or "val " in low:
+                section = "validation"
+                section_rank = 1
+            else:
+                section = low.lstrip("#").strip() or "other"
+                section_rank = 2
+            continue
+        m = _SPLIT_ROW_RE.match(line)
+        if not m:
+            continue
+        box = _parse_box_arg(m.group("box"))
+        s0 = parse_utc_seconds(m.group("start").strip()) - 360.0
+        s1 = parse_utc_seconds(m.group("end").strip()) + 360.0
+        if closed_region_for(box, s0, s1) is not None:
+            continue
+        out.append({
+            "key": m.group("key").strip(),
+            "section": section,
+            "priority": section_rank,
+            "order": len(out),
+            "box": box,
+            "start": format_utc(s0),
+            "end": format_utc(s1),
+        })
+    out.sort(key=lambda item: (item["priority"], item["order"]))
+    return out
+
+
 def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Fetch NASA per-pass active fire and cloud masks.")
     ap.add_argument("--env-file", type=Path, default=None, help="path to .env file holding EARTHDATA_TOKEN")
     ap.add_argument("--out-dir", type=Path, default=None, help="output passmask directory")
+    ap.add_argument("--no-nice", action="store_true", help="do not raise process niceness to 10")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("status", help="report EARTHDATA_TOKEN state (set or empty) and disk summary")
@@ -1736,7 +1849,19 @@ def _main(argv: list[str] | None = None) -> int:
     f.add_argument("--force", action="store_true")
     f.add_argument("--keep-raw-geo", action="store_true")
 
+    fr = sub.add_parser("fetch-regions", help="fetch per-pass masks for all open featured fires in /api/regions")
+    fr.add_argument("--api-url", default="http://127.0.0.1:8788/api/regions")
+    fr.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
+
+    fs = sub.add_parser("fetch-split", help="fetch per-pass masks for SPLIT.md fires (fitting and validation first)")
+    fs.add_argument("--split-md", type=Path, required=True)
+    fs.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
+    fs.add_argument("--limit", type=int, default=0, help="optional cap on windows fetched in this invocation")
+
     args = ap.parse_args(argv)
+    if not args.no_nice:
+        _ensure_nice(10)
+
     if args.cmd == "status":
         print(
             json.dumps(
@@ -1750,6 +1875,58 @@ def _main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+
+    if args.cmd == "fetch-regions":
+        targets = discover_featured_pass_windows(args.api_url)
+        print(f"EARTHDATA_TOKEN {token_state(args.env_file)}; {len(targets)} open featured windows", flush=True)
+        for idx, t in enumerate(targets, 1):
+            res = fetch_box_window(
+                t["box"],
+                t["start"],
+                t["end"],
+                env_file=args.env_file,
+                out_dir=args.out_dir,
+                workers=args.workers,
+            )
+            print(
+                f"=== [{idx}/{len(targets)}] {t['label']} passes={res['passes_total']} "
+                f"fetched={res['passes_fetched']} cached={res['passes_cached']} "
+                f"sent={res['bytes_transferred'] / 1e6:.2f} MB ===",
+                flush=True,
+            )
+        print(json.dumps(store_summary(args.out_dir), indent=2))
+        return 0
+
+    if args.cmd == "fetch-split":
+        rows = parse_split_pass_windows(args.split_md.read_text(encoding="utf-8"))
+        if args.limit and args.limit > 0:
+            rows = rows[: args.limit]
+        print(f"EARTHDATA_TOKEN {token_state(args.env_file)}; {len(rows)} split windows queued", flush=True)
+        failed: list[dict[str, str]] = []
+        for idx, r in enumerate(rows, 1):
+            try:
+                res = fetch_box_window(
+                    r["box"],
+                    r["start"],
+                    r["end"],
+                    env_file=args.env_file,
+                    out_dir=args.out_dir,
+                    workers=args.workers,
+                )
+                print(
+                    f"=== [{idx}/{len(rows)}] [{r['section']}] {r['key']} passes={res['passes_total']} "
+                    f"fetched={res['passes_fetched']} cached={res['passes_cached']} "
+                    f"sent={res['bytes_transferred'] / 1e6:.2f} MB ===",
+                    flush=True,
+                )
+            except (ClosedPassMaskWindow, TokenMissing, AuthApprovalRequired, PermissionError):
+                raise
+            except Exception as exc:  # noqa: BLE001
+                tok_val = _read_earthdata_token(args.env_file)
+                failed.append({"key": r["key"], "error": redact_token(str(exc), tok_val)})
+                print(f"=== [{idx}/{len(rows)}] [{r['section']}] {r['key']} ERROR: {failed[-1]['error']} ===", flush=True)
+        print(json.dumps({"failed": failed, **store_summary(args.out_dir)}, indent=2))
+        return 0 if not failed else 1
 
     target_box = _parse_box_arg(args.box) if args.box else _resolve_region_box(args.region_id, args.box_kind)
     summary = fetch_box_window(
