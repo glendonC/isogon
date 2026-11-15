@@ -34,6 +34,8 @@ export interface WorkspaceStore {
     place: RecordPlace;
     /** The place screen is open over the Calendar. */
     placesOpen: boolean;
+    /** It was opened to draw an area (Finish's "Draw your own area"): the Earth starts drawing. */
+    placesDraw: boolean;
     openPlaces: () => void;
     closePlaces: () => void;
     chooseFire: (place: Place, fire: FeaturedFire) => void;

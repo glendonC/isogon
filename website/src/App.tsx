@@ -258,6 +258,11 @@ export function App() {
   const [monthAsk, setMonthAsk] = useState<{ region: string; ym: string } | null>(null);
   /** The place screen over the Calendar, and a box drawn on it (its record replaces the place's). */
   const [placesOpen, setPlacesOpen] = useState(false);
+  /** The place screen was opened to draw an area (Finish's "Draw your own area"): it opens ready to draw. */
+  const [placesDraw, setPlacesDraw] = useState(false);
+  useEffect(() => {
+    if (!placesOpen) setPlacesDraw(false);
+  }, [placesOpen]);
   /**
    * The picture of the world over the page, if any (world/screens.ts): the Earth's years, the test across the world or
    * the sealed predictions. It draws its own trail and guide and takes every key while it shows; Escape closes it back
@@ -1233,6 +1238,7 @@ export function App() {
     calendar: {
       place: recordPlace,
       placesOpen,
+      placesDraw,
       openPlaces: () => setPlacesOpen(true),
       closePlaces: () => setPlacesOpen(false),
       chooseFire,
@@ -1421,6 +1427,7 @@ export function App() {
         });
     } else if (command === 'place:draw') {
       goStep('record');
+      setPlacesDraw(true);
       setPlacesOpen(true);
     }
     else if (command === 'go:play') goStep('look');
