@@ -12,6 +12,8 @@ import { parseFresh } from './freshTest';
 import { useWorldKeys } from './keys';
 import { parseLive } from './live';
 import { useRead } from './read';
+import { boxMiddle, boxRings, useDescent } from './descent';
+import { formatCoord } from '../identity/where';
 import { backOfWorldScreen, backWorldScreen, closeWorldScreen, openWorldScreen, useWorldScreen, type WorldScreen } from './screens';
 import { SealedTonight } from './SealedTonight';
 import { oneDecimal, percent1, SCREEN_WORDS as S } from './words';
@@ -65,8 +67,9 @@ function Host({ screen, onWord }: { screen: WorldScreen; onWord?: (word: TrailWo
     closeWorldScreen();
     onWord?.(w);
   };
+  const descent = useDescent();
   return (
-    <div className="world-screen" data-name={screen.name} data-film={film ? 'true' : 'false'} role="dialog" aria-modal="true">
+    <div className="world-screen" data-name={screen.name} data-film={film ? 'true' : 'false'} data-descent={descent ? 'true' : undefined} role="dialog" aria-modal="true">
       {screen.name === 'years' && <Years screen={screen} film={film} toWord={toWord} />}
       {screen.name === 'test' && <Test film={film} toWord={toWord} />}
       {screen.name === 'sealed' && <Sealed film={film} toWord={toWord} />}
@@ -199,6 +202,13 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
     ...(st?.oneScaleReady ? [{ label: oneScale ? S.years.toCounted : S.years.toOneScale, command: 'record:as_counted', key: 'Y' }] : []),
   ];
   const onward = useOnward('years', tested);
+  // A place chosen over the Earth: the globe flies into its box and frames it by name and where it is.
+  const descending = useDescent();
+  const descent = useMemo(() => {
+    if (!descending) return null;
+    const mid = boxMiddle(descending.box);
+    return { rings: boxRings(descending.box), name: descending.name, readout: formatCoord(mid.lat, mid.lon) ?? '' };
+  }, [descending]);
   // In the film the caption stands under the year: on one scale its line throughout; as counted, the step's line from
   // 2012, so a year before it is not captioned with 2012 (the line under the year says who counted it until then).
   const caption = film && st ? (oneScale ? S.years.filmOneScale(st.first) : ratio && st.year >= 2012 ? S.years.filmCounted(ratio) : null) : null;
@@ -220,6 +230,7 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
         ownPlay={false}
         control={control}
         onState={setSt}
+        descent={descent}
       />
       <Frame
         film={film}

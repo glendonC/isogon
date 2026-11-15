@@ -60,6 +60,11 @@ export interface EarthYearsProps {
   control?: MutableRefObject<YearsControl | null>;
   /** The state a host's guide says: the year, the view, whether it plays, and the figures of its sentences. */
   onState?: (s: YearsState) => void;
+  /**
+   * A place being descended into: the globe flies into its box and frames it with its name and a readout, in place of
+   * any country; null or absent, the globe is the visitor's.
+   */
+  descent?: { rings: number[][][]; name: string; readout: string } | null;
 }
 
 export interface YearsControl {
@@ -168,6 +173,7 @@ export function EarthYears({
   ownPlay = true,
   control,
   onState,
+  descent = null,
 }: EarthYearsProps) {
   const read = useRead<YearsIndex>(source);
   const idx = read.state === 'ready' ? read.value : null;
@@ -206,15 +212,18 @@ export function EarthYears({
   );
   // The pointed country's outline is the one whose screen box the globe tells, for its frame and readout.
   const globeOutlines = useMemo(
-    () => [
-      ...(chosen ? [{ rings: chosen.rings, strong: true, report: pointed?.shape.key === chosen.key }] : []),
-      ...(pointed && pointed.shape.key !== chosen?.key ? [{ rings: pointed.shape.rings, strong: false, report: true }] : []),
-    ],
-    [chosen, pointed],
+    () =>
+      descent
+        ? [{ rings: descent.rings, strong: true, report: true }]
+        : [
+            ...(chosen ? [{ rings: chosen.rings, strong: true, report: pointed?.shape.key === chosen.key }] : []),
+            ...(pointed && pointed.shape.key !== chosen?.key ? [{ rings: pointed.shape.rings, strong: false, report: true }] : []),
+          ],
+    [chosen, pointed, descent],
   );
   const [countryBox, setCountryBox] = useState<ScreenBox | null>(null);
   // The globe flies to the chosen country and back out when none is chosen (one object a choice, so it flies once).
-  const flyTo = useMemo(() => (chosen ? { rings: chosen.rings } : null), [chosen]);
+  const flyTo = useMemo(() => (descent ? { rings: descent.rings } : chosen ? { rings: chosen.rings } : null), [chosen, descent]);
   // On the globe the pointer says where it is and what the square holds, sea included.
   const [under, setUnder] = useState<{ lon: number; lat: number; x: number; y: number } | null>(null);
   const onGlobePoint = useCallback(
@@ -548,7 +557,9 @@ export function EarthYears({
       {/* The pointed country framed in the scene (the plan's in-scene look): the ux lane's ScenePrompt on its screen
           box, the action beside the frame and one live readout under it, what the frame is on. A click on the globe
           and the frame's Enter do the same. */}
-      {!flat && pick && pointed && sceneBox && under && (
+      {/* A place being descended into: its box framed with its name and where it is; no action, the page lands there. */}
+      {!flat && descent && countryBox && <ScenePrompt box={countryBox} label={descent.name} readout={descent.readout} invite />}
+      {!flat && !descent && pick && pointed && sceneBox && under && (
         <ScenePrompt
           box={sceneBox}
           label={chosen?.key === pointed.shape.key ? Y.wholeEarth : Y.countryAction}

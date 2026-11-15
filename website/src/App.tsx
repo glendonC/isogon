@@ -3,6 +3,9 @@ import type { ReconstructRequestParams } from './components/CommandAskPalette';
 import type { ReadingSection } from './components/ReadingSheet';
 import type { EvidenceDoc, EvidenceState } from './content/evidence';
 import { PassTrack } from './components/PassTrack';
+/** How long the Earth's globe flies into a chosen place before the page lands there (the globe's flight takes less). */
+const DESCENT_MS = 2600;
+
 const CommandAskPalette = lazy(() =>
   import('./components/CommandAskPalette').then((m) => ({ default: m.CommandAskPalette })),
 );
@@ -27,6 +30,9 @@ import { StoryLine } from './identity/StoryLine';
 import { Moves, type Move } from './identity/Moves';
 import { SCREEN_WORDS } from './world/words';
 import { RevealSweep } from './identity/RevealSweep';
+import { Arrival } from './identity/Arrival';
+import { formatCoord } from './identity/where';
+import { boxMiddle, setDescent } from './world/descent';
 import { stageReady } from './stage/stageReady';
 import type { StageThing, StageThingBox } from './stage/earthCutawayTypes';
 import { setPageLinks, setPageUnder } from './ui/pageLinks';
@@ -546,10 +552,28 @@ export function App() {
   );
 
   /** The palette opens a known region the same way a tab does; searches go to the backend. */
+  // The arrival at a place chosen by name: its name and where it is, over a veil until its own ground is drawn.
+  const [arrival, setArrival] = useState<{ id: string; name: string; coord: string | null } | null>(null);
+  const descentTimer = useRef<number | null>(null);
   const handlePaletteExecute = useCallback(
     async (params: ReconstructRequestParams): Promise<boolean> => {
-      // Search opened over a picture of the world keeps it under it until a place is chosen; then the picture closes.
-      if (worldScreenOnShow()) closeWorldScreen();
+      const place = params.theaterId && !params.queryText ? placesRef.current.places.places.find((p) => p.id === params.theaterId) ?? null : null;
+      if (place) {
+        const mid = boxMiddle(place.box);
+        setArrival({ id: place.id, name: place.name, coord: formatCoord(mid.lat, mid.lon) });
+      }
+      // Search opened over a picture of the world keeps it under it until a place is chosen. Over the Earth's years
+      // the globe then flies into the place and frames it by name (the descent), and the picture closes after the
+      // flight while the place's fire loads; over any other picture it closes at once.
+      if (descentTimer.current !== null) window.clearTimeout(descentTimer.current);
+      descentTimer.current = null;
+      if (place && worldScreenOnShow()?.name === 'years') {
+        setDescent({ id: place.id, name: place.name, box: place.box });
+        descentTimer.current = window.setTimeout(() => {
+          descentTimer.current = null;
+          closeWorldScreen();
+        }, DESCENT_MS);
+      } else if (worldScreenOnShow()) closeWorldScreen();
       if (params.theaterId && !params.queryText) {
         slewToTheater(params.theaterId);
         if (params.enterWorkspace) {
@@ -1673,7 +1697,9 @@ export function App() {
   // in view, its coordinates, and the bar's few words; and the story line along the bottom (identity/StoryLine.tsx).
   const fireStep = step === 'fire' || step === 'test' || step === 'look' || step === 'agent';
   const fireShown = activeRun && realStart ? fireOfStart(placesState.places, activeRun.region.id, realStart) : null;
-  const fireTitle = fireStep && fireShown ? (fireShown.name ? `${fireShown.name}, ${fireShown.label}` : fireShown.label) : null;
+  // The fire's name only once the run on show is the place's own: while a newly chosen place loads, the path names
+  // the place and not the fire still drawn from the place before.
+  const fireTitle = fireStep && fireShown && runMatchesRegion ? (fireShown.name ? `${fireShown.name}, ${fireShown.label}` : fireShown.label) : null;
   const barLat = runMatchesRegion && activeRun ? activeRun.region.center_lat : registryBox.length === 4 ? (registryBox[1] + registryBox[3]) / 2 : null;
   const barLon = runMatchesRegion && activeRun ? activeRun.region.center_lon : registryBox.length === 4 ? (registryBox[0] + registryBox[2]) / 2 : null;
   const barLinks = useMemo(
@@ -1699,7 +1725,7 @@ export function App() {
   };
   toStartRef.current = toStart;
   // While the visitor goes by themselves, the bottom edge holds the way back one level and the places on from here, in
-  // the story line's place (FLOW: watching or going, never both). The story line stands only while Play runs.
+  // the story line's place: watching or going, never both. The story line stands only while Play runs.
   const testedName = SCREEN_WORDS.test.where(storyNumber(guide.fields.test_b_fires_n));
   const toTested: Move = { label: testedName, onClick: () => openWorldScreen('test') };
   const inRound = step === 'look' || step === 'agent';
@@ -1720,6 +1746,22 @@ export function App() {
   // What lies under a picture of the world, so its way back names it.
   const underName = !inWorkspace ? WORDS.moves.start : step === 'record' ? regionTitle || WORDS.moves.earth : inRound ? WORDS.moves.turn : WORDS.moves.fire;
   useEffect(() => setPageUnder(underName), [underName]);
+  // The arrival lands when the place's own run is drawn and no picture of the world stands over it; the veil and the
+  // name go as the ground comes, then the arrival and the descent are cleared. Leaving the workspace clears them.
+  const worldOver = worldScreen;
+  const landed = Boolean(arrival && inWorkspace && !worldOver && runMatchesRegion && activeRun?.region.id === arrival.id && !isExecuting);
+  useEffect(() => {
+    if (!arrival) return;
+    if (!inWorkspace && !worldOver) {
+      setArrival(null);
+      setDescent(null);
+      return;
+    }
+    if (!landed) return;
+    setDescent(null);
+    const id = window.setTimeout(() => setArrival(null), 1200);
+    return () => window.clearTimeout(id);
+  }, [arrival, landed, inWorkspace, worldOver]);
   // Play (identity/Entry.tsx's Play): the story by itself in the ux lane's order (MOUNT.md section 7), with the stage's
   // own moves (`filmMove: 'auto'`); any key, click or wheel hands it back where it is. It never plays the game.
   const worldIs = (name: string) => worldScreenOnShow()?.name === name;
@@ -1957,6 +1999,7 @@ export function App() {
               links={barLinks}
             />
             <RevealSweep run={revealRun} />
+            {arrival && !play.playing && <Arrival name={arrival.name} coord={arrival.coord} landed={landed} />}
             {play.playing || filmMode ? (
               <StoryLine
                 current={play.part ?? storyPart}

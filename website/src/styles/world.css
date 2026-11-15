@@ -1319,6 +1319,19 @@
   background: var(--sys-night);
 }
 
+/* The descent into a chosen place: only the globe, the place's frame and its name stand while it flies in. */
+.world-screen[data-descent='true'] .guide-strip,
+.world-screen[data-descent='true'] .id-moves,
+.world-screen[data-descent='true'] .world-years > :not(.world-years__earth) {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+.world-screen[data-descent='true'] .world-years .id-scene {
+  opacity: 1;
+}
+
 .world-screen__test {
   position: absolute;
   inset: 0;

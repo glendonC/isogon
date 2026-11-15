@@ -41,3 +41,12 @@ test('back from a board opened from the Earth goes to the Earth; from anywhere e
   assert.equal(s.backOfWorldScreen(), null);
   s.closeWorldScreen();
 });
+
+test('a place box is one closed ring and its middle is the box centre', async () => {
+  const d = await import('./descent.ts');
+  const rings = d.boxRings([-121.6, 39.8, -120.8, 40.3]);
+  assert.equal(rings.length, 1);
+  assert.deepEqual(rings[0][0], rings[0][4]);
+  const m = d.boxMiddle([-121.6, 39.8, -120.8, 40.3]);
+  assert.ok(Math.abs(m.lat - 40.05) < 1e-9 && Math.abs(m.lon + 121.2) < 1e-9);
+});

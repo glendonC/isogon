@@ -396,6 +396,64 @@ button.id-story__part:focus-visible {
   color: var(--id-ink-3);
 }
 
+/* the arrival at a place: a veil until its ground is drawn, its name over it; both go as the ground comes */
+.id-arrival {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  pointer-events: none;
+  font-family: var(--id-font);
+  animation: id-arrival-out 500ms var(--id-ease) 500ms forwards paused;
+}
+
+.id-arrival[data-landed='true'] {
+  animation-play-state: running;
+}
+
+.id-arrival__veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 7, 12, 0.94);
+  transition: opacity 700ms var(--id-ease);
+}
+
+.id-arrival[data-landed='true'] .id-arrival__veil {
+  opacity: 0;
+}
+
+.id-arrival__say {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  top: 42%;
+}
+
+.id-arrival__name {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 300;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--id-ink);
+  text-shadow: 0 1px 16px rgba(5, 7, 12, 0.85);
+}
+
+.id-arrival__coord {
+  margin: 10px 0 0;
+  white-space: pre;
+  font-family: var(--id-mono);
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  color: var(--id-signal);
+}
+
+@keyframes id-arrival-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
 /* the first screen */
 .id-entry {
   position: absolute;
@@ -489,6 +547,13 @@ button.id-story__part:focus-visible {
   }
   .id-moves__key {
     display: none;
+  }
+  .id-arrival__say {
+    left: 16px;
+    right: 16px;
+  }
+  .id-arrival__name {
+    font-size: 28px;
   }
   .id-bar {
     flex-wrap: wrap;
@@ -647,6 +712,8 @@ button.id-story__part:focus-visible {
   position: absolute;
   left: var(--p-x);
   top: var(--p-y);
+  width: max-content;
+  max-width: calc(100vw - 32px);
   transform: translateY(-100%);
   padding-bottom: 30px;
 }
@@ -701,7 +768,7 @@ button.id-story__part:focus-visible {
   font-size: 16px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  white-space: pre;
+  white-space: pre-wrap;
   color: var(--id-signal);
   text-shadow: 0 1px 10px rgba(5, 7, 12, 0.9);
 }

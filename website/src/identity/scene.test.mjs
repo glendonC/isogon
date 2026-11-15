@@ -58,3 +58,8 @@ test('the prompt hangs below its frame when the top bar leaves no room above', (
   assert.equal(promptSpot(frame, phone).hang, 'above');
   assert.equal(promptSpot(frame, phone, 92, 340, 170).hang, 'below');
 });
+
+test('a wide prompt (a long readout) is moved left to stay on the screen', () => {
+  const view = { width: 1440, height: 900 };
+  assert.equal(promptSpot({ left: 1000, top: 400, right: 1100, bottom: 500 }, view, 92, 700).x, 1440 - 16 - 700);
+});

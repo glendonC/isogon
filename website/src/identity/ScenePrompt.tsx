@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { controlSound } from './controlState.ts';
 import { isNear, promptSpot, reticleBox, type ScreenBox } from './scene.ts';
 import './identity.css';
@@ -46,7 +46,16 @@ export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = 
   const [near, setNear] = useState(false);
   const [focus, setFocus] = useState(false);
   const frame = reticleBox(box, view);
-  const spot = promptSpot(frame, view, 92, 340, barClear(frame, view));
+  // The prompt's own width, measured once drawn, so a long readout (a country's name, place and count) is moved left to
+  // stay on the screen instead of running off it.
+  const promptRef = useRef<HTMLDivElement | null>(null);
+  const [promptW, setPromptW] = useState(340);
+  useLayoutEffect(() => {
+    const w = promptRef.current?.offsetWidth ?? 0;
+    if (w > 0 && Math.abs(w - promptW) > 2) setPromptW(w);
+  });
+  const width = Math.min(Math.max(promptW, 120), view.width - 32);
+  const spot = promptSpot(frame, view, 92, width, barClear(frame, view, width));
 
   useEffect(() => {
     const onResize = () => setView({ width: window.innerWidth, height: window.innerHeight });
@@ -105,7 +114,7 @@ export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = 
           <i className="id-scene__centre" />
         </div>
       )}
-      <div className="id-scene__prompt" aria-hidden="true">
+      <div className="id-scene__prompt" aria-hidden="true" ref={promptRef}>
         <span className="id-scene__label">{label}</span>
         {readout && <span className="id-scene__readout">{readout}</span>}
         <span className="id-scene__leader" />
