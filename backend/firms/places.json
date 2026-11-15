@@ -467,6 +467,34 @@
           "name_source": "https://open.alberta.ca/publications/2016-horse-river-fort-mcmurray-wildfire-review"
         }
       ]
+    },
+    "wollemi_au": {
+      "country": "Australia",
+      "terrain_tier": "hero",
+      "named_fires": [
+        {
+          "id": "gospers_mountain_2019",
+          "name": "Gospers Mountain (Wollemi National Park) Fire",
+          "first_day": "2019-10-26",
+          "last_day": "2020-02-10",
+          "burned_area": {
+            "value": 512626,
+            "unit": "hectares"
+          },
+          "point": [
+            150.385,
+            -33.068056
+          ],
+          "point_kind": "the point the coronial inquiry gives as the suspected origin area (the parks team's anchor point of 27 October 2019)",
+          "blind_test_fire": false,
+          "source": "https://coroners.nsw.gov.au/documents/reports/bushfires/2019-20-NSW-Bushfires-Coronial-Inquiry-Vol1.pdf"
+        }
+      ]
+    },
+    "jur_river_ss": {
+      "country": "South_Sudan",
+      "terrain_tier": "hero",
+      "named_fires": []
     }
   },
   "record_only_places": [

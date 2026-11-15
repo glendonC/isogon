@@ -14,7 +14,7 @@ Nothing here is needed to start the application. A fresh clone runs on the track
 | Elevation | Terrain Tiles on AWS Open Data (Terrarium encoding) | No | `backend/terrain/tile_store.py` | `data/cache/tiles/terrarium/` |
 | Imagery | Esri World Imagery, USGS NAIP, EOX Sentinel-2 cloudless 2016 and 2020 | No | `backend/terrain/tile_store.py` | `data/cache/tiles/<source>/` |
 
-FIRMS data is cached for twelve regions, listed under [Regions](#regions) below. Each region has two boxes. The region box is the box of its terrain; the context box has the same centre and five times the span (`CONTEXT_SCALE` in `backend/terrain/terrain_pack.py`). Rows are kept for the context box. The blind test scores inside the region box.
+FIRMS data is cached for fourteen regions, listed under [Regions](#regions) below. Each region has two boxes. The region box is the box of its terrain; the context box has the same centre and five times the span (`CONTEXT_SCALE` in `backend/terrain/terrain_pack.py`). Rows are kept for the context box. The blind test scores inside the region box.
 
 ## Regions
 
@@ -34,8 +34,12 @@ The places registry (`backend/firms/places.json`) names each region's country fi
 | `ljusdal_se` | Sweden | 15.42, 61.90 | the Kårböle and Ljusdal fires, July 2018; its Record only, no fire offered |
 | `manavgat_tr` | Turkey | 31.47, 36.90 | the Manavgat fire, July 2021 |
 | `fort_mcmurray_ab` | Canada | -110.34, 56.77 | the Horse River fire, May 2016 |
+| `wollemi_au` | Australia | 150.41, -32.75 | the Gospers Mountain fire, the summer of 2019 to 2020 |
+| `jur_river_ss` | South Sudan | 27.90, 6.50 | the dry season burning of December 2019 |
 
 The first three boxes were cut around their test fires. Each later box has the preset span, 0.52 by 0.38 degrees, and is placed where it holds the most MODIS rows in the dates of the fire it was chosen for, searched every 0.02 degrees within one to two degrees of the fire's reported point; the reported point only sets the search. Only MODIS rows place a box. A candidate becomes a region when the start rule in use (`real_start_dates` in `backend/model/real_run.py`) finds a start in the fire's dates; the rest were dropped (Smokehouse Creek in Texas, Pedrogao Grande and the October 2017 fires in Portugal, Knysna in South Africa, Kostanay in Kazakhstan, northern Ghana): fires that burned out in a day or two, or many small fires lit by day, give no 24 MODIS overpasses with a detection in eight days. No context box meets another region's, so no region holds a row of another's, and none holds a row of a recorded test fire's region.
+
+A region the page offers keeps its places out of the fresh test of the estimate (`backend/model/fresh_test.py`), so every box added after the first eleven was first given to that test's rule of roles (`role_of_place`, from coordinates alone): none meets a kept place of test A or test B, and one that meets a kept validation place is asked about before it is added. Countries are taken from the shared store of every country's files (`cp -c` of its files and manifests into the cache, then `reingest`), not downloaded again.
 
 A context box can reach past its country: `evros_greece` into Turkey, Bulgaria and the Aegean, `serra_acor_pt` into Spain, `maule_cl` perhaps a little into Argentina. The region's rows come from its own country file only, so that ground has no rows, and the calendar's rates per area are low by that share; the ratio and its check are counts and are not affected.
 
@@ -143,7 +147,7 @@ The calendar ends at the last country file month, December 2025. Rows of 2026 co
 
 ### Any box
 
-A box anywhere in the cached countries (United States, Canada, Greece, Portugal, Chile, Sweden, South Africa, Kazakhstan, Ghana and Turkey) has a calendar too (`GET /api/calendar?source=firms&box=`). Its rows are every row of the country files inside it, read through an index built once from those files (`backend/firms/box_index.py`, `data/cache/firms/index/`: one table per country file; the first three countries' 144 files took 47 seconds on the machine the project was built on, the next six countries' 287 files 16 seconds, 497 MB for those nine). A box leaves out every row of type 1 (active volcano), 2 (static land source) and 3 (offshore), since it has no elevation model to tell an inland type 3 row from one at sea; the region calendars keep their own rule above. On a region's context box the box calendar counts the same rows per platform and month as the region extracts, once those kinds are added back.
+A box anywhere in the cached countries (United States, Canada, Greece, Portugal, Chile, Sweden, South Africa, Kazakhstan, Ghana, Turkey, Australia and South Sudan) has a calendar too (`GET /api/calendar?source=firms&box=`). Its rows are every row of the country files inside it, read through an index built once from those files (`backend/firms/box_index.py`, `data/cache/firms/index/`: one table per country file; the first three countries' 144 files took 47 seconds on the machine the project was built on, the next six countries' 287 files 16 seconds, 497 MB for those nine). A box leaves out every row of type 1 (active volcano), 2 (static land source) and 3 (offshore), since it has no elevation model to tell an inland type 3 row from one at sea; the region calendars keep their own rule above. On a region's context box the box calendar counts the same rows per platform and month as the region extracts, once those kinds are added back.
 
 This month so far (`GET /api/calendar/current`) is read from the area API, near real time, for the box, over the full UTC days of the month, and set beside the median of the same calendar month over the years of the country files. Its rows have no `type` column, so they count what the calendar leaves out; the answer says so.
 

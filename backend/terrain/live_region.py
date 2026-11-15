@@ -260,6 +260,8 @@ _ADDED_REGIONS: tuple[tuple[str, str, str, str, float, float], ...] = (
     ("ljusdal_se", "Kårböle & Ljusdal, Sweden", "Boreal Pine Forest of Hälsingland", "boreal_montane", 61.90, 15.42),
     ("fort_mcmurray_ab", "Fort McMurray & the Athabasca, AB", "Boreal Forest of the Athabasca Plain", "boreal_montane", 56.77, -110.34),
     ("manavgat_tr", "Manavgat & the Taurus Foothills, Turkey", "Mediterranean Pine on the Taurus Slopes", "mediterranean", 36.90, 31.47),
+    ("wollemi_au", "Wollemi & Gospers Mountain, NSW", "Sandstone Gorges of Eucalypt Forest", "temperate_broadleaf", -32.75, 150.41),
+    ("jur_river_ss", "Jur River Savanna, South Sudan", "Dry Season Burning of Wooded Savanna", "tropical_moist", 6.50, 27.90),
 )
 PRESET_REGIONS += [
     RegionSpec(
