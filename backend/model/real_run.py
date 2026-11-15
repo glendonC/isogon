@@ -353,7 +353,6 @@ def solve_real_reconstruction(
     read_passes: Callable[..., list[dict[str, Any]]] | None = None,
     estimate: str | None = None,
     platforms_cached: Callable[..., tuple[tuple[str, ...], dict[str, str]]] | None = None,
-    firms_calendar: Callable[[str], dict[str, Any]] | None = None,
 ) -> SolvedRealRun:
     """Reconstruct a region from real rows, starting at `start` (UTC date or date-time).
 
@@ -365,9 +364,6 @@ def solve_real_reconstruction(
     a test fire (both feed the second baseline only). `read_passes` is the pass list's reader, by default
     `backend.firms.cmr_passes.cmr_passes`; when it has no list for the days of the run the frames
     fall back to overpasses of the visible rows and the payload says so (`window.frames_from`).
-    `firms_calendar` is what the calendar's ratio reads its monthly counts from, by default the calendar made from
-    the cached yearly extracts; a browser build gives it each place's small file of those counts
-    (`backend.model.calendar_ratio.ratio_inputs_calendar`), which gives the same ratio.
     """
     holdout = bool(holdout_viirs)
     t_begin = time.perf_counter()
@@ -574,8 +570,7 @@ def solve_real_reconstruction(
 
         try:
             # every year the run touches is left out, so a run over New Year keeps none of its own rows
-            count_ratio = calendar_ratio(spec.id, exclude_year=years_touched(win.start_s, win.end_s),
-                                         firms_calendar=firms_calendar)
+            count_ratio = calendar_ratio(spec.id, exclude_year=years_touched(win.start_s, win.end_s))
         except (KeyError, ValueError, OSError) as exc:
             # no calendar is cached for this region, or no year is left to fit on: the second baseline then
             # states no pixel count, and the payload says why

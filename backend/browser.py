@@ -60,15 +60,12 @@ def held_out_run(region_id: str, start: str, estimate: str | None = "challenger"
 
     A window the closed rule closes is refused by the run itself (`ClosedWindow`), as on the server. The run's assets
     are not routes here: `pictures(run_id)` gives their bytes."""
-    from backend.model.calendar_ratio import ratio_inputs_calendar, ratio_inputs_dir
     from backend.model.real_run import real_response, solve_real_reconstruction
     from backend.model.withhold import withhold_scorer_keys
     from backend.terrain.live_region import load_region_terrain, resolve_region_request
 
-    # the calendar's ratio from the place's small file of its inputs, made at build time, where there is one: the
-    # same ratio, without the place's yearly extracts
-    if "firms_calendar" not in solve and (ratio_inputs_dir() / f"{region_id}.json").is_file():
-        solve["firms_calendar"] = ratio_inputs_calendar()
+    # the calendar the second baseline's ratio reads answers from the place's calendar file where the place's yearly
+    # extracts are not all there, as here (backend/firms/calendar_pack.py)
     terrain = load_region_terrain(resolve_region_request(region_id=region_id), allow_network=False)
     solved = solve_real_reconstruction(terrain, str(start), holdout_viirs=True, estimate=estimate, **solve)
     _keep(solved)
@@ -277,7 +274,8 @@ def files_for_a_run(region_id: str, start: str) -> list[str]:
 
     - the tracked fitted values and the challenger's bundles;
     - the rows of the years the run's search and frames touch, and their manifests;
-    - the place's file of the calendar's monthly counts (`backend.model.calendar_ratio.write_ratio_inputs`);
+    - the place's calendar file, which the calendar answers from where the yearly extracts are not all there
+      (`backend.firms.calendar_pack`), named whether or not the build has made it yet;
     - the pass files of those years;
     - the terrain the run loads: the place's DEMs, picture and metadata, and the zoom 11 elevation tiles the
       challenger reads for the run's box when every one of them is cached.
@@ -293,7 +291,7 @@ def files_for_a_run(region_id: str, start: str) -> list[str]:
     from backend.firms.archive import FIRMS_CACHE_DIR, LISTING_NAME
     from backend.firms.places import PLACES_FILE
     from backend.model import fitted as FT
-    from backend.model.calendar_ratio import ratio_inputs_dir
+    from backend.firms.calendar_pack import pack_path
     from backend.model.challenger import FITTED_DIR as CHALLENGER_DIR, VARIANT_FILES, default_variant
     from backend.model.challenger.methods import DEFAULT_POINTER_FILE
     from backend.model.challenger_standing import PLAN_FILE
@@ -316,7 +314,6 @@ def files_for_a_run(region_id: str, start: str) -> list[str]:
     for y in years:
         out += sorted(extract.glob(f"*_{y}.csv")) + sorted(extract.glob(f"*_{y}.csv.manifest.json"))
         out += sorted((CP.CMR_CACHE_DIR / "passes" / region_id).glob(f"*_{y}.json.gz"))
-    out.append(ratio_inputs_dir() / f"{region_id}.json")
     spec = PRESET_BY_ID[region_id]
     stem = region_cache_stem(spec)
     out += [HIRES_REGION_CACHE_DIR / f"{stem}_{s}" for s in ("dem_256_f32.bin", "dem_512_f32.bin", "sat_2048.jpg", "meta.json")]
@@ -328,7 +325,9 @@ def files_for_a_run(region_id: str, start: str) -> list[str]:
              for tx in range(bounds.tx_min, bounds.tx_max + 1)]
     if bounds.total_tiles <= 64 and all(p.is_file() and p.stat().st_size > 64 for p in tiles):
         out += tiles
-    return sorted({_relative(p, root) for p in out if p.is_file()})
+    named = {_relative(p, root) for p in out if p.is_file()}
+    named.add(_relative(pack_path(region_id), root))
+    return sorted(named)
 
 
 
@@ -363,15 +362,17 @@ PACK_LIST_VERSION: int = 1
 
 
 def prepare(region_id: str, start: str) -> list[str]:
-    """At build time, natively: write the two files a place needs here that the cache does not hold, its file of the
-    calendar's monthly counts and the reference players of its round from `start` with the default tiles and
-    budget. A window the closed rule closes is refused, as on the server, and nothing is written for it."""
+    """At build time, natively, where the place's full extracts are: write the two files a place needs here that the
+    cache does not hold, its calendar file (`backend.firms.calendar_pack.build`) and the reference players of its
+    round from `start` with the default tiles and budget. A window the closed rule closes is refused, as on the
+    server, and its round's file is not written."""
     from pathlib import Path
 
-    from backend.model.calendar_ratio import write_ratio_inputs
+    from backend.firms.calendar_pack import build, pack_path
 
     root = Path(__file__).resolve().parent.parent
-    made = [write_ratio_inputs(region_id), write_round_reference(region_id, start=start)]
+    build(region_id)
+    made = [pack_path(region_id), write_round_reference(region_id, start=start)]
     return [_relative(p, root) for p in made]
 
 
