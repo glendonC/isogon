@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { Box, FeaturedFire, Places, Place } from '../../app/places';
 import { FireBlock } from '../../compare/FireBlock';
 import { ChooseOnEarth } from '../../world/ChooseOnEarth';
+import { K } from '../../world/projection';
 import '../../styles/place-screen.css';
 
 const lat = (v: number) => `${Math.abs(v).toFixed(2)} ${v < 0 ? 'S' : 'N'}`;
@@ -110,37 +111,74 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
   });
 
   /**
-   * A box widened above and below by the trail and the guide, so that what it holds is seen clear of them when the
-   * Earth fits it to its canvas, which runs from the left edge to the list and from the top to the bottom.
+   * The box to give the Earth so that a box of places is seen whole in the free part of its canvas: below the trail,
+   * above the guide and above the room kept for the Earth's legend. With featured fires on every continent no corner
+   * of the map is free of marks, so the legend's height is kept below them all. The Earth fits the box it is given to
+   * its whole canvas by a linear projection (`world/projection`), so the box is worked out from the view wanted: its
+   * scale, and its centre moved so that the places' centre falls in the middle of the free part. At the world's
+   * scale that box runs past the poles, which the projection takes as plain numbers.
    */
+  // The Earth's legend as it stands, measured once drawn; and whether the visitor has moved the map since it opened
+  const legendH = useRef<number | null>(null);
+  const [legendSeen, setLegendSeen] = useState(0);
+  const touched = useRef(false);
   const clearOf = useCallback((b: Box, pad: number): Box => {
     const el = rootRef.current;
+    const map = el?.querySelector<HTMLElement>('.place__map');
+    const w = map?.clientWidth || 1000;
+    const h = map?.clientHeight || 700;
+    const css = el ? getComputedStyle(el) : null;
+    const px = (name: string, fallback: number) => {
+      const v = Number.parseFloat(css?.getPropertyValue(name) ?? '');
+      return Number.isFinite(v) ? v : fallback;
+    };
+    // On a narrow screen the Earth has its own part of the screen, below the trail and above the list
+    const narrow = (el?.clientWidth || 1440) < 900;
+    const top = narrow ? 0 : px('--place-top', 104);
+    // Under 640 pixels the Earth fits itself above its own legend; wider, the legend's height is kept, as measured
+    const legend = w < 640 ? 0 : legendH.current !== null ? legendH.current + 16 : px('--place-legend', 0);
+    const bottom = (narrow ? 0 : px('--place-guide', 170)) + legend;
+    const free = Math.max(40, h - top - bottom);
     const dx = (b[2] - b[0]) * pad;
     const dy = (b[3] - b[1]) * pad;
     const cx = (b[0] + b[2]) / 2;
     const cy = (b[1] + b[3]) / 2;
-    // On a narrow screen the Earth has its own part of the screen, between the trail and the list
-    if ((el?.clientWidth || 1440) < 900) return [cx - dx / 2, Math.max(-85, cy - dy / 2), cx + dx / 2, Math.min(85, cy + dy / 2)];
-    const h = el?.clientHeight || 900;
-    const css = el ? getComputedStyle(el) : null;
-    const px = (name: string, fallback: number) => Number.parseFloat(css?.getPropertyValue(name) ?? '') || fallback;
-    const top = px('--place-top', 104);
-    const bottom = px('--place-guide', 170);
-    const vert = (dy * (top + bottom)) / Math.max(1, h - top - bottom);
-    return [cx - dx / 2, Math.max(-85, cy - dy / 2 - (vert * bottom) / (top + bottom)), cx + dx / 2, Math.min(85, cy + dy / 2 + (vert * top) / (top + bottom))];
+    // The Earth keeps a margin of six in a hundred round the box it fits (fitView)
+    const FIT = 1.06;
+    const scale = Math.max((dx * K) / w, dy / free) * FIT;
+    const viewY = -cy - (top + free / 2 - h / 2) * scale;
+    const halfLon = (w * scale) / FIT / K / 2;
+    const halfLat = (h * scale) / FIT / 2;
+    return [cx - halfLon, -viewY - halfLat, cx + halfLon, -viewY + halfLat];
   }, []);
 
-  // The first view: every place with a featured fire, with room round them, clear of the list, the trail and the guide
+  // The legend's height changes as its layer loads; until the visitor moves the map the first view follows it
   useEffect(() => {
-    if (earth.focus || firms.length === 0) return;
+    const lg = rootRef.current?.querySelector<HTMLElement>('.place__map .world-legend');
+    if (!lg) return;
+    const ro = new ResizeObserver(() => {
+      const h = Math.round(lg.offsetHeight);
+      if (h === legendH.current) return;
+      legendH.current = h;
+      setLegendSeen(h);
+    });
+    ro.observe(lg);
+    return () => ro.disconnect();
+  }, [earth.key, Boolean(earth.focus)]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The first view: every place with a featured fire, with room round them, clear of the list, the trail, the guide
+  // and the legend. Find opens another view (a new key), after which the first is not fitted again.
+  useEffect(() => {
+    if (firms.length === 0 || earth.key !== 0 || (earth.focus && touched.current)) return;
     const b: Box = [
       Math.min(...firms.map((p) => p.box[0])) - 8,
       Math.min(...firms.map((p) => p.box[1])) - 8,
       Math.max(...firms.map((p) => p.box[2])) + 8,
       Math.max(...firms.map((p) => p.box[3])) + 8,
     ];
-    setEarth((e) => ({ ...e, focus: clearOf(b, 1) }));
-  }, [firms, earth.focus, clearOf]);
+    const next = clearOf(b, 1);
+    setEarth((e) => (e.focus && e.focus.join(',') === next.join(',') ? e : { ...e, focus: next }));
+  }, [firms, earth.key, legendSeen, clearOf]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When the screen opens the keyboard's focus is on the fire on the land, or on the first fire: Enter shows it, the
   // arrows move between fires, and its card says what it is
@@ -217,7 +255,15 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
 
   return (
     <section className="place" aria-label={PLACE_WORDS.name} ref={rootRef}>
-      <div className="place__map">
+      <div
+        className="place__map"
+        onPointerDownCapture={() => {
+          touched.current = true;
+        }}
+        onWheelCapture={() => {
+          touched.current = true;
+        }}
+      >
         {earth.focus && (
           <ChooseOnEarth
             key={earth.key}
