@@ -23,6 +23,7 @@ import {
   sharpRatio,
   totalsOf,
   yearLut,
+  type YearLayerMeta,
   type YearsIndex,
   type YearsMode,
 } from './years';
@@ -97,6 +98,17 @@ function axisYears(years: number[], shown: number, width: number): number[] {
 }
 
 const isFilm = () => typeof document !== 'undefined' && document.documentElement.classList.contains('iso-film');
+
+/** A year's layer to read: the year (`m`), what is read for it (its twin or itself), and whether that is the twin. */
+type Q = { m: YearLayerMeta; read: YearLayerMeta; lite: boolean };
+
+/** The full layers of a year and of its two neighbours, the year first. */
+function fullAround(idx: YearsIndex, mode: YearsMode, year: number): Q[] {
+  return [year, year - 1, year + 1].flatMap((y) => {
+    const m = layerOf(idx, mode, y);
+    return m ? [{ m, read: m, lite: false }] : [];
+  });
+}
 
 /** A country's outline on the map, as an SVG path in the map's pixels. */
 function outlineOf(rings: number[][][], p: Projector): string {
@@ -274,6 +286,7 @@ export function EarthYears({
   const frames = useRef(new Map<string, Uint8Array>());
   // The years whose frame is still the lighter twin.
   const liteKeys = useRef(new Set<string>());
+  const enqueueRef = useRef<((items: Q[], first?: boolean) => void) | null>(null);
   const [ready, setReady] = useState(0);
   useEffect(() => {
     if (!idx) return;
@@ -286,24 +299,21 @@ export function EarthYears({
     const near = (y: number) => (shown === null ? 0 : Math.abs(y - shown));
     const order = [...want].sort((a, b) => Number(inPass(b.year)) - Number(inPass(a.year)) || near(a.year) - near(b.year));
     // Outside the film, every year's lighter twin first (the fire cube's F16: a quarter of the bytes), then the full
-    // layers in the same order, each taking its twin's place as it comes in. The film reads the full layers only.
-    const twins = isFilm() ? [] : order.flatMap((m) => {
-      const t = liteOf(idx, m);
-      return t ? [{ m, t }] : [];
-    });
-    const queue: Array<{ m: (typeof order)[number]; read: (typeof order)[number]; lite: boolean }> = [
-      ...twins.map(({ m, t }) => ({ m, read: t, lite: true })),
-      ...order.map((m) => ({ m, read: m, lite: false })),
-    ];
-    let i = 0;
-    const next = async (): Promise<void> => {
-      while (live && i < queue.length) {
-        const q = queue[i++];
+    // layer of the year on show and of its neighbours, each taking its twin's place as it comes in; a year with no
+    // twin, or whose twin cannot be read, is read in full. The film reads the full layers only, every year.
+    const film = isFilm();
+    const palette = idx.png.palette_rgb;
+    const queue: Q[] = [];
+    let workers = 0;
+    const run = async (): Promise<void> => {
+      workers += 1;
+      while (live && queue.length) {
+        const q = queue.shift()!;
         const k = `${q.m.family}_${q.m.year}`;
         if (q.lite ? frames.current.has(k) : frames.current.has(k) && !liteKeys.current.has(k)) continue;
         try {
           const t0 = performance.now();
-          const ix = await readIndices(q.read, idx.png.palette_rgb);
+          const ix = await readIndices(q.read, palette);
           // A full layer read while its twin was on its way stays: the twin never takes its place.
           if (q.lite && frames.current.has(k)) continue;
           frames.current.set(k, ix);
@@ -312,17 +322,41 @@ export function EarthYears({
           // Each year's load, measured where the page can read it (the fire cube's lane times them).
           performance.measure(`iso-year ${q.lite ? 'lite_' : ''}${k}`, { start: t0, end: performance.now() });
         } catch {
-          // a year that cannot be read keeps the last frame on show
+          // A twin that cannot be read gives way to its full layer; a full layer that cannot be read keeps the last
+          // frame on show.
+          if (q.lite) queue.push({ m: q.m, read: q.m, lite: false });
         }
         if (live) setReady((n) => n + 1);
       }
+      workers -= 1;
     };
-    void Promise.all([next(), next(), next(), next()]);
+    const enqueue = (items: Q[], first = false) => {
+      if (first) queue.unshift(...items);
+      else queue.push(...items);
+      while (live && workers < 4 && queue.length) void run();
+    };
+    enqueueRef.current = enqueue;
+    if (film) enqueue(order.map((m) => ({ m, read: m, lite: false })));
+    else {
+      enqueue(order.map((m) => {
+        const t = liteOf(idx, m);
+        return t ? { m, read: t, lite: true } : { m, read: m, lite: false };
+      }));
+      if (shown !== null) enqueue(fullAround(idx, mode, shown));
+    }
     return () => {
       live = false;
+      enqueueRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, mode]);
+
+  // The full layer of the year on show and of its neighbours, once it rests on show (not every year a pass runs past).
+  useEffect(() => {
+    if (!idx || shown === null || isFilm()) return;
+    const t = window.setTimeout(() => enqueueRef.current?.(fullAround(idx, mode, shown), true), playing ? 450 : 0);
+    return () => window.clearTimeout(t);
+  }, [idx, mode, shown, playing]);
 
   const keyOf = useCallback((y: number) => (idx ? `${familyOf(idx, mode, y)}_${y}` : ''), [idx, mode]);
   const have = useCallback((y: number) => frames.current.has(keyOf(y)), [keyOf]);
