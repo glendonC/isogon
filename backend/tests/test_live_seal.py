@@ -115,6 +115,30 @@ class SealTests(unittest.TestCase):
             self.assertEqual(len(list(read_chain(root / "live" / "seals.jsonl", "seal"))), 1)
             self.assertEqual((root / "SEALS.md").read_text(encoding="ascii").count(seal["sha256"]), 1)
 
+    def test_a_stop_is_recorded_as_a_stop_and_names_the_pass_it_cost(self) -> None:
+        from backend.live.answer import build
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            early = NOW - 3 * 3600.0
+            self.assertEqual(self._sealer(root, [], [], clock=early).cycle(), {"sealed": 0, "missed": 0})
+            # the runner is down until 3 minutes before the pass begins: past its deadline
+            late = GRANULE_START - 180.0
+            s2 = self._sealer(root, [], [], clock=late)
+            self.assertEqual(s2.cycle(), {"sealed": 0, "missed": 1})
+            miss = s2.missed.entries[0]
+            self.assertIn("not running in the seal window", miss["reason"])
+            run = build(root / "live", now=late + 1.0)["runner"]
+            self.assertTrue(run["running_now"])
+            self.assertEqual(len(run["stops"]), 1)
+            stop = run["stops"][0]
+            self.assertEqual((stop["from_utc"], stop["to_utc"]), (iso(early), iso(late)))
+            self.assertEqual([p["predicted_time_utc"] for p in stop["passes_not_sealed"]], [miss["predicted_time_utc"]])
+            # and with no cycle for longer than two cycles the answer says the sealer is not running now
+            later = build(root / "live", now=late + 3 * PR.CYCLE_S)["runner"]
+            self.assertFalse(later["running_now"])
+            self.assertIsNone(later["stops"][-1]["to_utc"])
+
     def test_the_modis_only_fetcher_refuses_every_sharp_source(self) -> None:
         asked: list[str] = []
         with tempfile.TemporaryDirectory() as d:

@@ -36,6 +36,64 @@ def _read(path: Path) -> dict[str, Any] | None:
         return None
 
 
+# A stretch longer than this between two cycles is a stop of the sealer, not a quiet stretch.
+STOP_AFTER_S: float = 2 * PR.CYCLE_S + 60.0
+HOW_TO_DRAW_A_STOP: str = (
+    "a stop is a stretch when the sealer was not running: draw it as such; no seal in it says nothing about fire"
+)
+
+
+def _s(utc: str) -> float:
+    import datetime as _dt
+
+    return _dt.datetime.fromisoformat(utc.replace("Z", "+00:00")).timestamp()
+
+
+def runner(live: Path, now: float, missed: list[dict[str, Any]]) -> dict[str, Any]:
+    """When the sealer ran, from its own line per cycle, and every stop with the passes whose seal window it held."""
+    cyc = _entries(live / "cycles.jsonl", "cycle")
+    beats = [e for e in cyc if e["kind"] == "cycle"]
+    starts = [e for e in cyc if e["kind"] == "start"]
+    stops = []
+    for a, b in zip(beats, beats[1:]):
+        if b["s"] - a["s"] > STOP_AFTER_S:
+            back = next((st for st in starts if a["s"] < st["s"] <= b["s"]), b)
+            stops.append({"from_utc": a["utc"], "to_utc": back["utc"], "minutes": round((back["s"] - a["s"]) / 60.0, 1)})
+    running = bool(beats) and now - beats[-1]["s"] <= STOP_AFTER_S
+    if beats and not running:
+        stops.append({"from_utc": beats[-1]["utc"], "to_utc": None, "minutes": round((now - beats[-1]["s"]) / 60.0, 1)})
+    for st in stops:
+        lo, hi = _s(st["from_utc"]), now if st["to_utc"] is None else _s(st["to_utc"])
+        st["passes_not_sealed"] = [
+            {k: m[k] for k in ("fire_id", "platform", "predicted_time_utc", "reason")} for m in missed
+            if m.get("seal_window_utc") and _s(m["seal_window_utc"][0]) < hi and _s(m["seal_window_utc"][1]) > lo
+        ]
+    first = beats[0]["s"] if beats else None
+    earlier = []
+    log = live / "run.log"
+    if log.is_file():
+        for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.endswith("FIRMS_MAP_KEY set") and (first is None or _s(line[:20]) < first):
+                earlier.append(line[:20])
+    return {
+        "running_now": running,
+        "last_cycle_utc": beats[-1]["utc"] if beats else None,
+        "cycles_recorded_from_utc": beats[0]["utc"] if beats else None,
+        "cycle_s": PR.CYCLE_S,
+        "stop_after_s": STOP_AFTER_S,
+        "starts_utc": [st["utc"] for st in starts],
+        "stops": stops,
+        "before_cycles_were_recorded": {
+            "starts_utc": earlier,
+            "note": (
+                "before cycles_recorded_from_utc no cycle was written down: the runner's starts are known from its log, "
+                "not when it stopped, so whether it ran between them is not on record; draw that stretch as not recorded"
+            ),
+        },
+        "how_to_draw": HOW_TO_DRAW_A_STOP,
+    }
+
+
 def _pred(seal: dict[str, Any]) -> dict[str, Any]:
     out = {}
     for m in PR.METHODS:
@@ -107,7 +165,9 @@ def build(live_dir: Path, now: float | None = None) -> dict[str, Any]:
         "counts": {"seals": len(seals), **counts, "passes_not_sealed": len(missed)},
         "fires": fires,
         "seals": rows,
-        "not_sealed": [{k: m[k] for k in ("fire_id", "platform", "predicted_time_utc", "reason", "noted_utc")} for m in missed],
+        "not_sealed": [{**{k: m[k] for k in ("fire_id", "platform", "predicted_time_utc", "reason", "noted_utc")},
+                        "seal_window_utc": m.get("seal_window_utc")} for m in missed],
+        "runner": runner(live, now, missed),
         "running_count": None if summary is None else {
             "fires_scored": summary["fires_scored"], "looks_scored": summary["looks_scored"],
             "over_fires": summary["over_fires"], "pooled": summary["pooled"], "per_fire": summary["per_fire"],

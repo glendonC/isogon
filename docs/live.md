@@ -41,6 +41,14 @@ first seal; the runner refuses to start when the protocol of its code differs fr
 6. **Nothing is dropped.** A seal is scored or marked with its reason: no pass listed within 12 hours, a real swath
    that held only part of the box, a real pass that began before the seal, rows not obtained within 36 hours.
 
+## When the sealer was not running
+
+The sealer writes one line per cycle (every 5 minutes) and one per start. A stretch of more than two cycles with no
+line is a stop. The answer lists every stop with the passes whose seal window it held, and a pass missed that way
+says so in its reason. A page draws a stop as a stretch when the sealer was not running: no seal in it says nothing
+about fire. Before the first recorded cycle only the runner's starts are known, from its log, so that stretch is
+drawn as not recorded.
+
 ## How a result is judged
 
 As [method.md](method.md) judges: per fire, the plain comparison of `verdict` (strictly better than both baselines);
@@ -58,7 +66,8 @@ The live folder lies outside the repository and is written only by the runner:
 | `cohorts.jsonl` | Each choice of fires with the reply it came from |
 | `seals.jsonl` | One line per sealed prediction, chained |
 | `arrays/<sha256>.bin` | The arrays of each seal's three predictions, named by their digest |
-| `missed.jsonl` | Passes that were due and not sealed, with the reason |
+| `missed.jsonl` | Passes that were due and not sealed, with the reason and the seal window |
+| `cycles.jsonl` | One line per start and per cycle of the sealer, chained |
 | `scores.jsonl` | One line per seal once it is scored or marked, chained |
 | `state.json`, `summary.json`, `live.json` | Rewritten each cycle: waiting states, the running count, the page's answer |
 | `cache/` | Every FIRMS and CMR reply as returned, with its URL (the key replaced by `<MAP_KEY>`) and digest |

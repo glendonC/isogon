@@ -7,6 +7,7 @@ It reads CMR granule metadata of passes one repeat cycle earlier (times and swat
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -41,8 +42,15 @@ class Sealer:
         self.seals = Ledger(self.dir / "seals.jsonl", "seal")
         self.cohorts = Ledger(self.dir / "cohorts.jsonl", "cohort")
         self.missed = Ledger(self.dir / "missed.jsonl", "missed")
+        # One line per cycle and per start: a stretch with no line is a stretch when the sealer was not running.
+        self.cycles = Ledger(self.dir / "cycles.jsonl", "cycle")
+        beats = [e["s"] for e in self.cycles.entries if e["kind"] == "cycle"]
+        self.prev_cycle_s: float | None = beats[-1] if beats else None
         self.protocol_sha = self._protocol()
         self._reconcile()
+        t = self.clock()
+        self.cycles.append({"kind": "start", "s": t, "utc": iso(t), "pid": os.getpid(), "code": self.code,
+                            "previous_cycle_utc": None if self.prev_cycle_s is None else iso(self.prev_cycle_s)})
 
     # -- once ---------------------------------------------------------------------------------------------------
 
@@ -83,7 +91,31 @@ class Sealer:
         now = self.clock()
         if not self.fitted_ok():
             self.log("the fitted values differ from the frozen digests: nothing is sealed")
+            self._beat(now, 0, 0, fitted_ok=False)
             return {"sealed": 0, "missed": 0}
+        try:
+            out = self._cycle(now)
+        except BaseException:
+            self._beat(now, 0, 0, failed=True)  # the sealer ran and failed: that is not a stretch without a sealer
+            raise
+        self._beat(now, out["sealed"], out["missed"])
+        return out
+
+    def _beat(self, now: float, sealed: int, missed: int, fitted_ok: bool = True, failed: bool = False) -> None:
+        self.cycles.append({"kind": "cycle", "s": now, "utc": iso(now), "sealed": sealed, "missed": missed,
+                            "fitted_ok": fitted_ok, "failed": failed})
+        self.prev_cycle_s = now
+
+    def _late_reason(self, start: float) -> str:
+        """Why a slot's deadline passed unsealed: no cycle ran in its seal window, or one ran and could not seal it."""
+        opens, closes = start - PR.SEAL_OPENS_S, start - PR.SEAL_DEADLINE_S
+        if self.prev_cycle_s is None or self.prev_cycle_s < opens:
+            last = "none recorded" if self.prev_cycle_s is None else iso(self.prev_cycle_s)
+            return (f"the sealer was not running in the seal window, {iso(opens)} to {iso(closes)} "
+                    f"(the last cycle before it: {last})")
+        return "the deadline passed before a cycle could seal it"
+
+    def _cycle(self, now: float) -> dict[str, int]:
         try:
             self._maybe_choose(now)
         except SharpRowsRefused:
@@ -118,7 +150,7 @@ class Sealer:
                 if start - now > PR.SEAL_OPENS_S:
                     continue
                 if start - now < PR.SEAL_DEADLINE_S:
-                    self._miss(key, fire, p, "the deadline passed before a cycle could seal it", now)
+                    self._miss(key, fire, p, self._late_reason(start), now)
                     missed += 1
                     continue
                 try:
@@ -154,8 +186,10 @@ class Sealer:
         self.log(f"cohort {k}: {len(fires)} fires from {len(cands)} candidates ({counted} MODIS rows counted)")
 
     def _miss(self, key: str, fire: dict[str, Any], p: dict[str, Any], reason: str, now: float) -> None:
+        start = p["predicted_time_s"] if p["slot"] is None else p["slot"].span_s[0]
         self.missed.append({"key": key, "fire_id": fire["id"], "platform": p["platform"],
                             "predicted_time_utc": iso(p["predicted_time_s"]), "reason": reason, "noted_utc": iso(now),
+                            "seal_window_utc": [iso(start - PR.SEAL_OPENS_S), iso(start - PR.SEAL_DEADLINE_S)],
                             "template": p["template"]})
 
     def _seal(self, key: str, fire: dict[str, Any], p: dict[str, Any]) -> bool:
