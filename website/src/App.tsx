@@ -27,7 +27,7 @@ import { useGuide, type Guide } from './guide/useGuide';
 import { keyMatches, says, stateOf } from './guide/script';
 import { StageBoundary } from './ui/StageBoundary';
 import { useWorldFirstYear } from './guide/world';
-import { nextDayPicture, type DayPictureKind } from './guide/dayPicture';
+import { dayPictureCredit, nextDayPicture, type DayPictureKind } from './guide/dayPicture';
 import { openingHiddenPass, type OpeningFrame } from './app/openingPass';
 import { BEATS, type BeatId } from './app/names';
 import { WorkspaceProvider, type WorkspaceBase, type WorkspaceStore } from './app/store';
@@ -1105,7 +1105,8 @@ export function App() {
   const intensity = runIsReal ? parseIntensityLegend(activeRun) : null;
 
   const effectiveMode: WorkspaceMode = inWorkspace ? workspaceMode : 'cutaway';
-  const credit = imageryCredit(activeRun);
+  // While NASA's photograph of the day lies on the box, the credit names it.
+  const credit = (dayPicture && dayPictureCredit(stageTelemetry?.dayPicture)) || imageryCredit(activeRun);
   const calendarArea = {
     name: regionTitle,
     lat: runMatchesRegion && activeRun ? activeRun.region.center_lat : activeDisplay?.centerLat ?? (registryBox.length === 4 ? (registryBox[1] + registryBox[3]) / 2 : 0),

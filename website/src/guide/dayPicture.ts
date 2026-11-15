@@ -59,3 +59,11 @@ export function dayPictureLine(t: EarthStageTelemetry['dayPicture'] | null | und
       : `This is NASA's photograph of ${day} from ${by} in false colour: burned ground shows brown and living plants green, one picture a day at about 250 m, stitched from its passes.`;
   return t.insteadOfHidden ? `${what} It is the coarse satellite's photograph, since the sharp satellite is hidden on this pass.` : what;
 }
+
+/** The imagery credit while NASA's photograph lies on the box: NASA's own name for the picture shown. */
+export function dayPictureCredit(t: EarthStageTelemetry['dayPicture'] | null | undefined): string | null {
+  if (!t || t.state !== 'shown') return null;
+  const [instrument, craft] = t.platform.startsWith('VIIRS') ? ['VIIRS', t.platform === 'VIIRS_NOAA20' ? 'NOAA-20' : 'Suomi NPP'] : ['MODIS', t.platform === 'MODIS_TERRA' ? 'Terra' : 'Aqua'];
+  const bands = t.kind === 'true_color' ? 'True Color' : instrument === 'MODIS' ? 'Bands 7-2-1' : 'Bands M11-I2-I1';
+  return `NASA GIBS, Corrected Reflectance (${bands}, ${instrument}, ${craft})`;
+}
