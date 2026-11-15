@@ -742,13 +742,17 @@ def real_start_dates(
     Everything here is made from MODIS rows. The VIIRS rows are sealed first and the sealed box is never opened:
     nothing about a start is counted from them, on an open window or a closed one."""
     bbox = (spec.bbox.west, spec.bbox.south, spec.bbox.east, spec.bbox.north)
+    default_reader = read_firms is None
     if read_firms is None or context_box is None:
         from backend.firms import read_firms as _read, region_box as _box
 
         read_firms = read_firms or _read
         context_box = context_box or _box(spec.id)
     t0, t1 = parse_start_s(first), parse_start_s(last)
-    rows = read_firms(context_box, _iso(t0)[:-1], _iso(t1 + SEARCH_S)[:-1])
+    if default_reader:
+        rows = read_firms(context_box, _iso(t0)[:-1], _iso(t1 + SEARCH_S)[:-1], platforms=("Terra", "Aqua"))
+    else:
+        rows = read_firms(context_box, _iso(t0)[:-1], _iso(t1 + SEARCH_S)[:-1])
     det, _ = seal(detections_from_rows(rows, row_source), "VIIRS")       # the sealed box is dropped unopened
 
     items = in_box_overpasses(det, bbox)
