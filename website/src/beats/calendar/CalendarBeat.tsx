@@ -36,6 +36,8 @@ export function CalendarBeat({ guideSpeaks = false }: CalendarBeatProps) {
     );
   }
   const opensOn = c.place.kind === 'region' ? openingStart(ws.places, c.place.regionId)?.slice(0, 7) ?? null : null;
+  // Before the registry answers, and with no fire on the stage or picked, the month the page opens on is not known yet
+  const markWaits = c.place.kind === 'region' && !c.selectedMonth && !c.stageMonth && opensOn === null && ws.places.places.length === 0;
   // A box's record is read from the route the registry names for any box (`box_calendar.route` of the registry's
   // answer, kept whole by the page's reader though its type does not name the field yet)
   const route = (ws.places.boxCalendar as { route?: unknown } | null)?.route;
@@ -48,6 +50,7 @@ export function CalendarBeat({ guideSpeaks = false }: CalendarBeatProps) {
       onOpenMonth={c.openMonth}
       onClose={ws.run.active ? ws.openModel : null}
       guideSpeaks={guideSpeaks}
+      markWaits={markWaits}
     />
   );
 }

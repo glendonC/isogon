@@ -86,6 +86,11 @@ export interface TheRecordProps {
    * it). Its labels on things and its legend stay. Escape still closes it, and the arrows still move.
    */
   guideSpeaks?: boolean;
+  /**
+   * The month of the fire the page opens on is not known yet (the registry has not answered): the Record waits for it
+   * and says it is loading, rather than putting its label on another month of a place.
+   */
+  markWaits?: boolean;
 }
 
 /**
@@ -96,7 +101,7 @@ export interface TheRecordProps {
  * correction, and how well the correction holds. What the step is, is the guide's to say: this component speaks only
  * as labels on its own things, and tells the guide what it holds through `recordView`.
  */
-export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, guideSpeaks = false }: TheRecordProps) {
+export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, guideSpeaks = false, markWaits = false }: TheRecordProps) {
   const [rec, setRec] = useState<FireRecord | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed' | 'not recorded' | 'not loaded'>('loading');
   const [failure, setFailure] = useState<string | null>(null);
@@ -161,7 +166,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const canOpenNow = useRef(canOpen);
   canOpenNow.current = canOpen;
   const openable = useMemo(() => new Set(rec ? [...rec.months.keys()].filter((ym) => canOpenNow.current(ym, rec)) : []), [rec]);
-  const shown = picked ?? marked ?? worst;
+  // A place's Record waits for the month the page opens on; it never stands in for it with the record's worst month,
+  // which at Feather River is the closed test fire's
+  const waiting = markWaits && marked === null && place.kind === 'region';
+  const shown = picked ?? marked ?? (waiting ? null : worst);
   const focus = hover ?? shown;
   const looking = browsing || hover !== null || picked !== null;
   // This month so far, when the route counted it; else why it could not, in words
@@ -215,7 +223,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
     };
     const grid = rec?.grid ?? empty;
     publishRecordView({
-      state,
+      state: state === 'ready' && waiting ? 'loading' : state,
       failure,
       place: rec?.label ?? place.name,
       grid: grid ? { box: boxWords(grid.box), cells: grid.cells, loaded: grid.loaded, complete: grid.complete } : null,
@@ -250,7 +258,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
       browse: () => setBrowsing(true),
       showAsCounted: setAsCounted,
     });
-  }, [state, failure, rec, empty, marked, picked, asCounted, openable, place.name, now]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, failure, rec, empty, marked, picked, asCounted, openable, place.name, now, waiting]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => publishRecordView(RECORD_CLOSED), []);
 
   // The Record's keys, while the focus is on it or on nothing: arrows move over the months, Enter shows the fire of a
@@ -387,9 +395,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   return (
     <section className="rec" aria-label={W.name} ref={rootRef} data-as-counted={asCounted ? 'true' : 'false'}>
       <div className="rec__plot" ref={plotRef}>
-        {state !== 'ready' && state !== 'not loaded' && !guideSpeaks && (
+        {(state !== 'ready' || waiting) && state !== 'not loaded' && !guideSpeaks && (
           <p className="rec__status sys-body" role="status">
-            {state === 'loading' && W.loading(place.name)}
+            {(state === 'loading' || (state === 'ready' && waiting)) && W.loading(place.name)}
             {state === 'not recorded' && NOT_RECORDED_LINE}
             {state === 'failed' && `${W.failed(place.name)} ${failure ?? ''}`}
           </p>
@@ -403,7 +411,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
           </p>
         )}
 
-        {rec && cell > 0 && (
+        {rec && cell > 0 && !waiting && (
           <>
             {/* A soft dark ground under the grid and its labels, with no edge: the land shows around it. */}
             <div className="rec__ground" style={{ left: Math.min(x0 - NAMES_W, footX), top: y0, width: Math.max(gridW + NAMES_W, footW), height: footY + footH - 12 - y0 }} />
