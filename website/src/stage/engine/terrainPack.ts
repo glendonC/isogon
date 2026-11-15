@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createDemR32FTexture } from '../earthCutawayShaders';
 import { levelIsWholeMetres, smoothTerraces } from './levelGround';
+import { medianLumaOf } from './pictureStats';
 
 /**
  * Consumer side of terrain pack v1.
@@ -85,6 +86,8 @@ export interface LoadedTerrainPack {
   auxTexture: THREE.Texture;
   attribution: string;
   /** The elevation came in whole metres (read before any smoothing): no lake is taken from its level ground. */
+  /** The picture's median brightness (linear luminance), or null where it could not be read. */
+  pictureMedianLuma: number | null;
   levelInWholeMetres: boolean;
   dispose: () => void;
 }
@@ -132,6 +135,25 @@ function bitmapTexture(bitmap: ImageBitmap): THREE.Texture {
   });
   tex.needsUpdate = true;
   return tex;
+}
+
+/** The median brightness of a decoded picture, read on a 256 by 256 sample; null where no canvas can read it. */
+function pictureMedianLuma(bitmap: ImageBitmap): number | null {
+  try {
+    const n = 256;
+    const canvas =
+      typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(n, n)
+        : Object.assign(document.createElement('canvas'), { width: n, height: n });
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+    if (!ctx) return null;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, n, n);
+    return medianLumaOf(ctx.getImageData(0, 0, n, n).data);
+  } catch {
+    return null;
+  }
 }
 
 /** Loads one pack image (for example a zoom 16 detail inset) as a mipmapped sRGB texture. */
@@ -236,6 +258,7 @@ export async function loadTerrainPack(
     smoothDemForDisplay(demRaw, manifest.dem.size);
     const demPack = createDemR32FTexture(demRaw, true);
 
+    const medianLuma = pictureMedianLuma(ortho.bitmap);
     const orthoTexture = bitmapTexture(ortho.bitmap);
     orthoTexture.colorSpace = THREE.SRGBColorSpace;
     orthoTexture.anisotropy = opts.maxAnisotropy;
@@ -256,6 +279,7 @@ export async function loadTerrainPack(
       auxTexture,
       attribution: manifest.ortho.attribution ?? '',
       levelInWholeMetres,
+      pictureMedianLuma: medianLuma,
       dispose: () => {
         demPack.texture.dispose();
         orthoTexture.dispose();

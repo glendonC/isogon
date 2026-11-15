@@ -448,6 +448,17 @@ const FIRE_PATCH_GRID_KM = 0.375;
  */
 const MOON_LIFT_CLOSE = 1.3;
 const MOON_LIFT_FAR = 1.9;
+// By night a pack whose picture is darker than Feather River's (its median brightness, linear) has its
+// moonlit ground lifted, so relief reads as it does there: by (reference / median / dead zone) to this
+// power, never below 1, at most the cap. Feather River and brighter pictures keep their night as it is.
+const NIGHT_REF_MEDIAN_LUMA = 0.044;
+const NIGHT_LIFT_DEAD_ZONE = 1.08;
+const NIGHT_LIFT_POWER = 1.8;
+const NIGHT_LIFT_MAX = 2.0;
+const nightLiftFor = (median: number | null | undefined): number =>
+  typeof median === 'number' && median > 0
+    ? THREE.MathUtils.clamp(Math.pow(Math.max(1, NIGHT_REF_MEDIAN_LUMA / median / NIGHT_LIFT_DEAD_ZONE), NIGHT_LIFT_POWER), 1, NIGHT_LIFT_MAX)
+    : 1;
 
 /** Where the smoke drifts, in region uv (east, north): the same for every place, since no payload holds a wind. */
 const SMOKE_DRIFT_UV: readonly [number, number] = [0.64, 0.76];
@@ -3805,9 +3816,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         dampFast,
       );
       uFarView.value = landingWorld ? 0.0 : THREE.MathUtils.smoothstep(orbitCurrent.distance, 8.5, 15.0);
+      // (and lifted more for a pack whose picture is dark, see nightLiftFor)
       uMoonLift.value = THREE.MathUtils.lerp(
         uMoonLift.value,
-        landingWorld ? 1.0 : THREE.MathUtils.lerp(MOON_LIFT_CLOSE, MOON_LIFT_FAR, uFarView.value),
+        (landingWorld ? 1.0 : THREE.MathUtils.lerp(MOON_LIFT_CLOSE, MOON_LIFT_FAR, uFarView.value)) *
+          nightLiftFor(nextBundle.pack?.pictureMedianLuma),
         dampMed,
       );
       passOnShowNow =
