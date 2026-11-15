@@ -148,6 +148,8 @@ export function CommandAskPalette({
       const row = list?.querySelector<HTMLElement>('.iso-finder__item');
       if (!sheet || !list || !row) return setListMax(null);
       const cap = Number.parseFloat(getComputedStyle(sheet).maxHeight);
+      // The reading view sets no limit on the panel (max-height none): the list then takes the height it needs.
+      if (!Number.isFinite(cap)) return setListMax(null);
       const field = sheet.querySelector<HTMLElement>('.iso-finder__field')?.offsetHeight ?? 0;
       const legend = sheet.querySelector<HTMLElement>('.iso-finder__legend')?.offsetHeight ?? 0;
       const around = (headRef.current?.offsetHeight ?? 0) + (lastRef.current?.offsetHeight ?? 0);
