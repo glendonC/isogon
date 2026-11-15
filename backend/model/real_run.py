@@ -34,6 +34,7 @@ from dataclasses import dataclass
 import io
 import json
 import math
+import os
 import time
 from typing import Any, Callable
 
@@ -71,6 +72,42 @@ SEARCH_S: float = 30.0 * 86400.0
 # slot, so VIIRS classes are written as the midpoints of the MODIS ranges FIRMS documents for the same three words
 # (low under 30, nominal 30 to 80, high above 80). The class itself is kept in the frame's `viirs_confidence_classes`.
 VIIRS_CLASS_NUMBER: dict[str, int] = {"l": 15, "n": 55, "h": 90, "": 0}
+
+
+# Which estimate answers the held-out passes of a run with the sharp satellite held out. Off by default: the
+# estimate in use answers everything. With "challenger" the default challenger (backend/model/challenger, chosen on
+# the fresh test's validation fires) answers the held-out passes and their declared cells, and is scored beside the
+# estimate in use; the visible passes, the spread, the belief frames and the exports stay with the estimate in use.
+# Nothing on the page changes until the owner says yes.
+RUN_ESTIMATE_ENV: str = "ISOGON_RUN_ESTIMATE"
+ESTIMATE_IN_USE: str = "in_use"
+ESTIMATE_CHALLENGER: str = "challenger"
+
+
+def run_estimate(given: str | None = None) -> str:
+    """The estimate a held-out run answers with: the one given, else the environment's, else the estimate in use."""
+    value = (given or os.environ.get(RUN_ESTIMATE_ENV, "") or ESTIMATE_IN_USE).strip()
+    if value not in (ESTIMATE_IN_USE, ESTIMATE_CHALLENGER):
+        raise ValueError(f"{RUN_ESTIMATE_ENV} is {ESTIMATE_IN_USE!r} or {ESTIMATE_CHALLENGER!r}, not {value!r}")
+    return value
+
+
+def _challenger() -> tuple[Any, str, dict[str, Any]]:
+    """The default challenger's factory, its method name and what the payload says of it."""
+    import hashlib
+
+    from backend.model.challenger import FITTED_DIR as CHALLENGER_DIR, VARIANT_FILES, default_challenger_factory, default_variant
+
+    variant = default_variant()
+    bundle = CHALLENGER_DIR / VARIANT_FILES[variant]
+    return default_challenger_factory(), f"challenger_{variant}", {
+        "method": f"challenger_{variant}",
+        "bundle": f"backend/model/challenger/fitted/{bundle.name}",
+        "bundle_sha256": hashlib.sha256(bundle.read_bytes()).hexdigest(),
+        "chosen": "on the fresh test's validation fires, by the rule written before that run (backend/model/challenger/runner.py)",
+        "answers": "the held-out passes: their declared cells, their power per cell, the run's blind test headline",
+        "stays_with_the_estimate_in_use": "the visible passes, the spread per cell, the belief frames, the exports",
+    }
 
 
 @dataclass(frozen=True)
@@ -238,6 +275,7 @@ def solve_real_reconstruction(
     learned_parts: list[dict[str, Any]] | None = None,
     row_source: str = ROW_SOURCE,
     read_passes: Callable[..., list[dict[str, Any]]] | None = None,
+    estimate: str | None = None,
 ) -> SolvedRealRun:
     """Reconstruct a region from real rows, starting at `start` (UTC date or date-time).
 
@@ -303,6 +341,11 @@ def solve_real_reconstruction(
     # which platforms are hidden follows from the archive's dates, not from the hidden rows
     hidden_platforms = list(hidden_platforms_in("VIIRS", None, win.start_s, win.end_s)) if holdout else []
     recon = OccupancyReconstruction(grid375, visible, params)
+    # the switch: only a run with the sharp satellite held out, on visible rows alone, before anything is scored
+    chal_factory, headline, chal_doc, chal_method = None, "reconstruction", None, None
+    if holdout and run_estimate(estimate) == ESTIMATE_CHALLENGER:
+        chal_factory, headline, chal_doc = _challenger()
+        chal_method = chal_factory(visible, grid375)
     t_model = time.perf_counter()
 
     tensor_grid = build_any_region_grid(region_terrain.dem_m, bbox, region_terrain.terrain_source)
@@ -330,6 +373,13 @@ def solve_real_reconstruction(
         painted = paint(grid375, d)
         is_modis = P.family(fr.platform) == "MODIS"
         z = est.F / area
+        answered_by = "reconstruction"
+        if chal_method is not None and fr.hidden and fr.slot is not None:
+            # the challenger's answer at this held-out pass; it states no spread per cell
+            pred = chal_method.predict(fr.slot)
+            z = np.asarray(pred.frp_mw, dtype=np.float64) / area
+            sig = np.zeros_like(sig)
+            answered_by = headline
         obs = painted.frp_mw / area
         tensor[k, :, :, 0] = ENC.encode_u8(z)[idx]
         tensor[k, :, :, 1] = ENC.encode_u8(sig / area)[idx]
@@ -361,8 +411,8 @@ def solve_real_reconstruction(
         rows_in_frames += len(d)
         pass_entry = {**geom, "swath_fraction": 1.0, "footprint_count": len(fps), "held_out": fr.hidden,
                       "geometry_from": "swath polygon of the pass (NASA CMR)" if fr.slot is not None else "the pass's own rows"}
-        recon_mw = float(est.F.sum())
-        peak_total = max(peak_total, recon_mw)
+        recon_mw = float(est.F.sum()) if answered_by == "reconstruction" else float(z.sum() * area)
+        peak_total = max(peak_total, float(est.F.sum()))     # the estimate in use's, as the exports are
         regime = ("modis_overpass" if is_modis else "viirs_overpass") + ("_held_out" if fr.hidden else "")
         frames_json.append({
             "frame": k,
@@ -386,6 +436,7 @@ def solve_real_reconstruction(
             "max_z_hat_mw_km2": round(float(z.max()), 2),
             "mean_sigma_mw_km2": round(float((sig / area).mean()), 3),
             "information_age_h": None if not math.isfinite(est.age_h) else round(est.age_h, 2),
+            **({} if chal_method is None else {"estimate_from": answered_by}),
             "viirs_confidence_classes": classes if not (is_modis or fr.hidden) else None,
             "passes": [pass_entry],
             "footprints": fps,
@@ -428,20 +479,20 @@ def solve_real_reconstruction(
     if ratio_fit is not None:
         baselines = baseline_factories(ratio_fit, count_ratio)
         if holdout:
-            methods = baselines + [reconstruction_factory(params, recon=recon)]
+            methods = baselines + [reconstruction_factory(params, recon=recon)] + ([chal_factory] if chal_factory else [])
             held = [(k, fr.slot) for k, fr in enumerate(frames) if fr.hidden and fr.slot is not None]
             if from_list:
                 # the looks scored are the held-out frames and no other; the count of passes left out is read
                 # from the list again for the hidden platforms alone
                 _, left = S.pass_slots(tuple(hidden_platforms), win.start_s, win.end_s, bbox, read_passes)
                 given = ([s for _, s in held], S.SOURCE_CMR, {"platforms": hidden_platforms, **left})
-                report = blind_test_sealed(visible, sealed, bbox, methods, window=span, given=given, declare="reconstruction")
+                report = blind_test_sealed(visible, sealed, bbox, methods, window=span, given=given, declare=headline)
                 for entry, (k, _) in zip(report["schedule"]["slots"], held):
                     entry["frame"] = k
                 report["schedule"]["frames_note"] = "slots[i].frame is the held-out frame of the run that slot i is; every held-out frame is a slot"
             else:
                 report = blind_test_sealed(visible, sealed, bbox, methods, window=span, read_passes=read_passes,
-                                           declare="reconstruction")
+                                           declare=headline)
             # The declared cells leave the report and go beside it in the answer: a server withholds the report
             # until the reveal, and these were fixed before the hidden rows were opened, so a page may draw them
             # from the first answer. Each published entry keeps their digest (`cells_sha256`).
@@ -465,7 +516,7 @@ def solve_real_reconstruction(
         report["overlap_ratio_fit"] = ratio_fit.as_dict()
         report["calendar_overlap_ratio"] = None if count_ratio is None else count_ratio.as_dict()
         report["calendar_overlap_ratio_missing"] = count_ratio_missing
-        report["verdict"] = verdict(report)
+        report["verdict"] = verdict(report, method=headline)
         report["blind"] = holdout
         note = _test_fire_note(spec.id, win.start_s, win.end_s)
         if note is not None:
@@ -503,7 +554,7 @@ def solve_real_reconstruction(
         metrics.update({name: None for name in METRICS_FROM_HIDDEN_ROWS})
         metrics["not_scored"] = not_scored
     if report is not None:
-        rec, raw = report["methods"]["reconstruction"], report["methods"]["painted_modis"]
+        rec, raw = report["methods"][headline], report["methods"]["painted_modis"]
         r_rmse, m_rmse = rec["cell_rmse_mw_km2"] or 0.0, raw["cell_rmse_mw_km2"] or 0.0
         cov = rec["interval"]["coverage"]
         # hidden VIIRS cells the painted MODIS pixels miss that the reconstruction's declared cells reach
@@ -670,6 +721,7 @@ def solve_real_reconstruction(
             "learned_parts": learned,
             "status": model_status,
             "status_reason": model_reason,
+            **({} if chal_doc is None else {"held_out_passes_estimated_by": chal_doc}),
             "detection_law": "Sofiev and Kouznetsov, Geosci. Model Dev. 19, 10123, 2026, Tables 1 and 2 (re-implemented)",
         },
         "encoding": {
