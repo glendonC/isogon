@@ -128,6 +128,7 @@ the grid beside the box asked for.
 | `GET /api/cube/tables?box=w,s,e,n[&snap=outer\|inner]` | the box's tables as lists: rows and fire radiative power by month, platform, day and night and kind; fire rows by scan class and by confidence class; delivering months and outage days per month |
 | `GET /api/cube/countries` | the countries loaded in the cube and not, and the download's progress |
 | `GET /api/cube/layers`, `GET /api/cube/layers/<name>.png`, `.npy` | the world layers |
+| `GET /api/cube/years`, `GET /api/cube/years/<family>_<year>.png`, `.npy` | the yearly layers (below) |
 
 A box takes the same limits as the box calendar (at most 20 degrees each way). A box in which no loaded country file
 has a row answers 404 with `"state": "not_loaded"`, never a record of zeros. The outage days of a cube Record are
@@ -167,6 +168,25 @@ NOAA-20) over every month; the same from 2012-01 for MODIS and for Suomi NPP alo
 each family. The PNGs are on a log scale from dark red to amber, so they read on a light page and on a dark one
 (`layers.json` gives the scale, the ramp and each layer's maximum); a cell that is not loaded is transparent, a
 loaded cell without the layer's rows is grey.
+
+## Yearly layers
+
+`backend/firms/cube_years.py write` draws, from the current build, one layer per year and family into
+`<world>/cube/years/` (and the PNGs with `years.json` into `<world>/cube/public/years/`):
+
+- `modis_<year>`: fire rows (kind 0, day and night) of Terra and Aqua together, 2000 to 2025;
+- `viirs_<year>`: fire rows of Suomi NPP alone, from its first year (2012); NOAA-20 is left out so that a brighter
+  year is more fire, not a second satellite;
+- `harmonized_<year>`: drawn from the harmonize lane's arrays in `<world>/harmonize/years/` when they are there, on
+  the Suomi NPP scale.
+
+The years are those of the archive: the first, 2000, holds November and December only and says so; a year not whole
+at the end of the archive, and every month after it (from 2026 on, the area API's near real time rows, not in the
+cube), are left out. Each family has one log scale through all its years (`vmax` in `years.json`), so brightness
+compares from year to year; `viirs` and `harmonized` share the Suomi NPP scale. A layer is a float32 `(720, 1440)`
+array (NaN where not loaded or closed) and an 8 bit indexed PNG: index 0 not loaded (transparent), 1 loaded with no
+fire row (grey), 2 closed (slate), 3 to 255 the ramp. Cells the closed rule closes hold no value in their closed
+years. `GET /api/cube/years` lists them; `GET /api/cube/years/<family>_<year>.png` or `.npy` serves one.
 
 ## The public cube
 

@@ -1,5 +1,5 @@
-"""Routes of the fire cube (backend/firms/cube.py): the monthly record of any box on Earth, the loaded countries, and
-the world layers.
+"""Routes of the fire cube (backend/firms/cube.py): the monthly record of any box on Earth, the loaded countries, the
+world layers and the yearly layers.
 
   GET /api/cube/record?box=w,s,e,n[&snap=outer|inner]   the Record of the box, in the shape of
                                                          GET /api/calendar?source=firms&box=, read from the cube
@@ -9,6 +9,9 @@ the world layers.
   GET /api/cube/countries                               which countries are loaded, and the download's progress
   GET /api/cube/layers                                  the world layers, with their scale
   GET /api/cube/layers/<name>.png | <name>.npy          one layer
+  GET /api/cube/years                                   the yearly layers (backend/firms/cube_years.py): years,
+                                                         scales, families, every layer with its files
+  GET /api/cube/years/<family>_<year>.png | .npy        one yearly layer
 
 `cube_route(route, qs)` answers these and returns (status, body, content type), or None for any other route, so the
 main server mounts them in a few lines. Run alone for a look:
@@ -226,6 +229,20 @@ def layers_payload(cube: C.Cube) -> dict[str, Any]:
     return info
 
 
+def years_payload(cube: C.Cube) -> dict[str, Any] | None:
+    """years.json of the yearly layers with each layer's route; None before they are written."""
+    from backend.firms.cube_years import years_dir
+
+    path = years_dir(cube.root) / "years.json"
+    if not path.is_file():
+        return None
+    info = json.loads(path.read_text(encoding="utf-8"))
+    for name, spec in info["layers"].items():
+        spec["png_route"] = f"{PREFIX}/years/{name}.png"
+        spec["npy_route"] = f"{PREFIX}/years/{name}.npy"
+    return info
+
+
 def cube_route(route: str, qs: dict[str, list[str]], cube: C.Cube | None = None) -> tuple[int, bytes, str] | None:
     """(status, body, content type) for a cube route; None for any other route."""
     if route != PREFIX and not route.startswith(PREFIX + "/"):
@@ -265,9 +282,24 @@ def cube_route(route: str, qs: dict[str, list[str]], cube: C.Cube | None = None)
             cube._open()
             path = C.current_build(cube.root) / "layers" / f"{stem}.{ext}"
             return HTTPStatus.OK, path.read_bytes(), "image/png" if ext == "png" else "application/octet-stream"
+        if route == f"{PREFIX}/years" or route.startswith(f"{PREFIX}/years/"):
+            info = years_payload(cube)
+            if info is None:
+                return _json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "the yearly layers are not written yet",
+                                                              "state": "not_built"})
+            if route == f"{PREFIX}/years":
+                return _json(HTTPStatus.OK, info)
+            name = route.rsplit("/", 1)[1]
+            stem, _, ext = name.rpartition(".")
+            if stem not in info["layers"] or ext not in ("png", "npy"):
+                return _json(HTTPStatus.NOT_FOUND, {"error": f"no yearly layer '{name}'", "layers": sorted(info["layers"])})
+            from backend.firms.cube_years import years_dir
+
+            body = (years_dir(cube.root) / f"{stem}.{ext}").read_bytes()
+            return HTTPStatus.OK, body, "image/png" if ext == "png" else "application/octet-stream"
         return _json(HTTPStatus.NOT_FOUND, {"error": f"unknown cube route '{route}'",
                                             "routes": [f"{PREFIX}/record?box=", f"{PREFIX}/tables?box=",
-                                                       f"{PREFIX}/countries", f"{PREFIX}/layers"]})
+                                                       f"{PREFIX}/countries", f"{PREFIX}/layers", f"{PREFIX}/years"]})
     except ValueError as exc:
         return _json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
     except C.CubeMissing as exc:
