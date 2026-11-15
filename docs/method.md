@@ -93,6 +93,15 @@ Where no pass list is cached for a window, the test falls back to version 2: one
 
 Tests delete hidden rows, not only change their values, and require every byte outside the scorer's keys to stay the same (`backend/tests/test_model_hidden_rows.py`, `backend/tests/test_env_hidden_rows.py`).
 
+### The same run in a visitor's browser
+
+A held-out run can also be made in the visitor's browser, by Python compiled to WebAssembly calling the functions the server calls (`backend/browser.py`).
+
+- **The hidden rows are in the visitor's files.** The estimate and the first answer are kept from them by the same code path as on the server, the sealed box that only the scorer opens, not by their absence. A visitor who opens the downloaded files can read them; they are public FIRMS rows.
+- **The leak check is the backend's.** It is made by the tests above, which delete hidden rows and require every other byte to stay the same. The browser runs the same code; the check is not made again there.
+- **The figures depend on the build of the numbers.** On the Chips Fire of 2012 and the Thomas Fire of 2017, the run in the browser (numpy 2.0.2 compiled to WebAssembly) and on the server (numpy 2.5.4) differ in 79 of 17,746 numbers and in 79 of 52,051, by at most 0.08 percent. No class, flag, count or word differs.
+- **Digests are not compared between builds.** A digest is of the bytes one build gives. So an answer says which build made it (`numbers_built_by`), two answers are compared figure by figure within 0.08 percent and never by digest, and a seal made by the server is not checked in the browser.
+
 ### Baselines
 
 The estimate is compared with two simple methods that also see MODIS only (`backend/eval/baselines.py`):
