@@ -55,7 +55,7 @@ import { imageryCredit } from './ui/attribution';
 import { useCalendar } from './ui/useCalendar';
 import { fireOfStart, openingStart, registryStartOf, usePlaces, type Box, type FeaturedFire, type Place } from './app/places';
 import type { FireRecord, RecordPlace } from './beats/calendar/record';
-import { boxWords } from './beats/calendar/PlaceScreen';
+import { boxWords } from './beats/calendar/placeWords';
 import { usePassList } from './ui/usePassList';
 import {
   isRealRun,

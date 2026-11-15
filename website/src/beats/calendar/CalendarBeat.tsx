@@ -1,8 +1,11 @@
-import { useRef } from 'react';
+import { lazy, Suspense, useRef } from 'react';
 import { openingStart } from '../../app/places';
 import { useWorkspace } from '../../app/store';
-import { PlaceScreen } from './PlaceScreen';
 import { TheRecord } from './TheRecord';
+
+const PlaceScreen = lazy(() =>
+  import('./PlaceScreen').then((m) => ({ default: m.PlaceScreen })),
+);
 
 export interface CalendarBeatProps {
   /** The guide speaks on the Record: the Record leaves its own sentences and its closing action to it. */
@@ -26,7 +29,11 @@ export function CalendarBeat({ guideSpeaks = false }: CalendarBeatProps) {
       c.closePlaces();
       if (!recordSeen.current && ws.run.active) ws.openModel();
     };
-    return <PlaceScreen places={ws.places} currentFire={ws.currentFire} onFire={c.chooseFire} onBox={c.chooseBox} onClose={back} />;
+    return (
+      <Suspense fallback={null}>
+        <PlaceScreen places={ws.places} currentFire={ws.currentFire} onFire={c.chooseFire} onBox={c.chooseBox} onClose={back} />
+      </Suspense>
+    );
   }
   const opensOn = c.place.kind === 'region' ? openingStart(ws.places, c.place.regionId)?.slice(0, 7) ?? null : null;
   // A box's record is read from the route the registry names for any box (`box_calendar.route` of the registry's
