@@ -45,7 +45,7 @@ class FileListTests(unittest.TestCase):
     def test_a_run_opens_no_file_the_list_lacks(self) -> None:
         from backend import browser as B
 
-        root = str(_REPO_ROOT.resolve())
+        root = str(_REPO_ROOT)
         py = set(B.python_files())
         for region, start in FIRES:
             listed = set(B.files_for_a_run(region, start))
@@ -54,9 +54,10 @@ class FileListTests(unittest.TestCase):
                                      capture_output=True, text=True, check=True, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
                 opened = json.loads(out.stdout.strip().splitlines()[-1])
                 tmp_real = str(Path(tmp).resolve())
-            inside = [str(Path(p).resolve().relative_to(root)) for p in opened
-                      if str(Path(p).resolve()).startswith(root + os.sep)]
-            outside = [p for p in opened if not str(Path(p).resolve()).startswith((root + os.sep, tmp_real))]
+            # paths as the code names them, without following links (a build tree may link its cache)
+            inside = [os.path.relpath(os.path.abspath(p), root) for p in opened
+                      if os.path.abspath(p).startswith(root + os.sep)]
+            outside = [p for p in opened if not os.path.abspath(p).startswith((root + os.sep, tmp_real, tmp))]
             data = [p for p in inside if not p.endswith(".py")]
             self.assertEqual(sorted(set(data) - listed), [], (region, start))
             self.assertEqual(sorted({p for p in inside if p.endswith(".py")} - py), [], (region, start))
@@ -111,15 +112,15 @@ print(json.dumps({"listed": listed, "opened": sorted(p for p in opened if os.pat
 @unittest.skipUnless(FIRES, "no cached rows of plumas_ca or ventura_ca here")
 class RoundFileListTests(unittest.TestCase):
     def test_a_round_opens_no_file_the_round_s_list_lacks(self) -> None:
-        root = str(_REPO_ROOT.resolve())
+        root = str(_REPO_ROOT)
         region, start = FIRES[0]
         with tempfile.TemporaryDirectory() as tmp:
             out = subprocess.run([sys.executable, "-c", _AUDITED_ROUND, region, start, tmp], cwd=_REPO_ROOT,
                                  capture_output=True, text=True, check=True)
             doc = json.loads(out.stdout.strip().splitlines()[-1])
         self.assertEqual(doc["status"], "ready")
-        inside = [str(Path(p).resolve().relative_to(root)) for p in doc["opened"]
-                  if str(Path(p).resolve()).startswith(root + os.sep) and not p.endswith(".py")]
+        inside = [os.path.relpath(os.path.abspath(p), root) for p in doc["opened"]
+                  if os.path.abspath(p).startswith(root + os.sep) and not p.endswith(".py")]
         self.assertEqual(sorted(set(inside) - set(doc["listed"])), [])
         self.assertTrue(any(p.endswith(".json") and "next_look_reference" in p for p in doc["listed"]))
 
@@ -140,7 +141,7 @@ class PackListTests(unittest.TestCase):
             self.assertFalse(Path(p).is_absolute() or ".." in parts, p)
             self.assertFalse(any(x.startswith(".env") or x == ".git" for x in parts), p)
             self.assertNotIn("isogon-world", p)
-            self.assertTrue(str((_REPO_ROOT / p).resolve()).startswith(str(_REPO_ROOT.resolve())), p)
+            self.assertTrue(os.path.abspath(_REPO_ROOT / p).startswith(str(_REPO_ROOT) + os.sep), p)
         self.assertTrue(set(B.files_for_a_run(region, start)) <= set(place["files"]))
 
 if __name__ == "__main__":

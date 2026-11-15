@@ -251,6 +251,17 @@ def round_state(round_id: str, ref_dir: Any = None) -> dict[str, Any]:
 _TAIL_S: float = 10.0 * 86400.0
 
 
+def _relative(path: Any, root: Any) -> str:
+    """A path relative to the repository, without following links: a build tree may link its cache from elsewhere,
+    and the path the code names is the one the browser's file system holds. A path outside the tree is refused."""
+    import os
+
+    rel = os.path.relpath(os.path.abspath(str(path)), os.path.abspath(str(root)))
+    if rel == ".." or rel.startswith(".." + os.sep) or os.path.isabs(rel):
+        raise ValueError(f"{path} is outside the repository {root}")
+    return rel
+
+
 def python_files() -> list[str]:
     """Every Python file of the backend a page may import here: all but the tests, relative to the repository."""
     from pathlib import Path
@@ -317,7 +328,7 @@ def files_for_a_run(region_id: str, start: str) -> list[str]:
              for tx in range(bounds.tx_min, bounds.tx_max + 1)]
     if bounds.total_tiles <= 64 and all(p.is_file() and p.stat().st_size > 64 for p in tiles):
         out += tiles
-    return sorted({str(p.resolve().relative_to(root)) for p in out if p.is_file()})
+    return sorted({_relative(p, root) for p in out if p.is_file()})
 
 
 
@@ -343,9 +354,9 @@ def files_for_a_round(region_id: str, start: str, tiles: Any = None, budget: int
     out = [FITTED_FILE, reference_dir() / f"{key}.json"]
     out += sorted((FIRMS_CACHE_DIR / "extract" / region_id).glob("*.csv.manifest.json"))
     out += sorted(CACHE_DIR.glob(f"{region_id}_*_context_dem_{CONTEXT_SIZE}_f32.bin"))
-    extra = {str(p.resolve().relative_to(root)) for p in out if p.is_file()}
+    extra = {_relative(p, root) for p in out if p.is_file()}
     # the reference file is named even before the build has made it
-    extra.add(str((reference_dir() / f"{key}.json").resolve().relative_to(root)))
+    extra.add(_relative(reference_dir() / f"{key}.json", root))
     return sorted(set(files_for_a_run(region_id, start)) | extra)
 
 PACK_LIST_VERSION: int = 1
@@ -361,7 +372,7 @@ def prepare(region_id: str, start: str) -> list[str]:
 
     root = Path(__file__).resolve().parent.parent
     made = [write_ratio_inputs(region_id), write_round_reference(region_id, start=start)]
-    return [str(Path(p).resolve().relative_to(root)) for p in made]
+    return [_relative(p, root) for p in made]
 
 
 def pack_list(places: dict[str, str]) -> dict[str, Any]:
