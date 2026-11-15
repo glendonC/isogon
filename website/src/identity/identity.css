@@ -1,0 +1,124 @@
+/*
+ * The page's identity: night ground, white controls, colour only for data.
+ * Data colours are the design system's own tokens (system.css), referenced here, never redefined.
+ */
+:root {
+  --id-ground: var(--sys-night, #080b11);
+  --id-ink: var(--sys-ink, #f3f4f6);
+  --id-ink-2: var(--sys-ink-2, #c3c8d1);
+  --id-ink-3: var(--sys-ink-3, #9aa1ad);
+  --id-line: rgba(243, 244, 246, 0.18);
+  --id-line-2: rgba(243, 244, 246, 0.36);
+  --id-focus: var(--sys-focus, #d6f1ff);
+  --id-ease: var(--sys-ease, cubic-bezier(0.22, 1, 0.36, 1));
+  --id-fast: var(--sys-fast, 160ms);
+  --id-font: var(--sys-font, 'Geist', -apple-system, sans-serif);
+  --id-mono: var(--sys-mono, ui-monospace, Menlo, monospace);
+
+  /* data marks */
+  --id-modis: var(--sys-modis, #b4c3d6);
+  --id-detection: var(--sys-detection, #f08a45);
+  --id-estimate: var(--sys-estimate, #f3f4f6);
+  --id-hatch: repeating-linear-gradient(45deg, rgba(243, 244, 246, 0.5) 0 1px, transparent 1px 5px);
+
+  /* modules: one control is one coarse module high; 21 px is the same module at the finer sensor's scale */
+  --id-module: 56px;
+  --id-module-fine: 21px;
+  --id-control-h: 52px;
+}
+
+.id-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--id-control-h);
+  padding: 0 22px 0 24px;
+  border: 1px solid var(--id-line-2);
+  border-radius: 0;
+  background: rgba(8, 11, 17, 0.55);
+  color: var(--id-ink);
+  font-family: var(--id-font);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--id-fast) var(--id-ease),
+    border-color var(--id-fast) var(--id-ease),
+    color var(--id-fast) var(--id-ease),
+    box-shadow var(--id-fast) var(--id-ease),
+    transform 90ms var(--id-ease);
+}
+
+.id-control__icon {
+  flex: none;
+  transition: transform var(--id-fast) var(--id-ease);
+}
+
+/* primary: the one strong action of a screen */
+.id-control--primary {
+  background: var(--id-ink);
+  border-color: var(--id-ink);
+  color: var(--id-ground);
+}
+
+.id-control:hover {
+  border-color: var(--id-ink);
+  background: rgba(243, 244, 246, 0.1);
+}
+
+.id-control--primary:hover {
+  background: #ffffff;
+  box-shadow: 0 0 0 1px #ffffff, 0 10px 30px rgba(255, 255, 255, 0.12);
+}
+
+.id-control:hover .id-control__icon--trail {
+  transform: translateX(4px);
+}
+
+.id-control:focus-visible {
+  outline: 2px solid var(--id-focus);
+  outline-offset: 3px;
+}
+
+.id-control:active {
+  transform: scale(0.98);
+  background: rgba(243, 244, 246, 0.18);
+}
+
+.id-control--primary:active {
+  background: #d9dee5;
+}
+
+/* selected: an option that is on stays filled */
+.id-control--selected,
+.id-control--selected:hover {
+  background: var(--id-ink);
+  border-color: var(--id-ink);
+  color: var(--id-ground);
+}
+
+/* disabled: dimmed, and its reason is on the control for every reader */
+.id-control--disabled,
+.id-control--disabled:hover,
+.id-control--disabled:active {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.id-control--disabled .id-control__icon--trail {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .id-control,
+  .id-control__icon {
+    transition: none;
+  }
+  .id-control:active {
+    transform: none;
+  }
+}
