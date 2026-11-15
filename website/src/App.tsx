@@ -1504,7 +1504,9 @@ export function App() {
                 />
               </>
             )}
-            <div className="iso-ws__dock" hidden={step === 'record' || step === 'agent'}>
+            {/* Under 960 px the dock is the lower half of the screen: it stands only when it holds something, so an empty
+                one never covers the board or dims the stage. */}
+            <div className="iso-ws__dock" hidden={step === 'record' || step === 'agent' || !((debriefOpen && blindTest) || (!round && !guide.step))}>
               {debriefOpen && blindTest ? (
                 <Debrief
                   score={blindTest}
