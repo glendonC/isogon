@@ -57,6 +57,11 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   const aStated = num(aInterval?.stated_level);
   const scoreNames = (which: string) =>
     aClasses ? listAnd(Object.entries(aClasses).filter(([, v]) => v === which).map(([k]) => SCRIPT.score_names?.[k] ?? k)) : null;
+  // Test B, the one look on fires nothing had touched (fresh_test.test_b), once it is on record.
+  const testB = fresh ? obj(fresh.test_b) : null;
+  const bAll = obj(testB?.all);
+  const bClasses = obj(bAll?.classes);
+  const bByContinent = obj(testB?.by_continent);
   const continentFires = (name: string) => num(obj(aByContinent?.[name])?.episodes) ?? (aByContinent ? 0 : null);
   // The squares the model says are burning at the pass on show (the frames on the terrain).
   const looks = obj(r?.declared_cells)?.looks;
@@ -94,6 +99,11 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_a_ahead: count(num(aAll?.ahead)),
     test_a_behind: countNone(num(aAll?.behind)),
     test_a_level: count(num(aAll?.tied)),
+    test_b_fires_n: count(num(testB?.episodes_scored)),
+    test_b_continents_n: bByContinent ? countWord(Object.values(bByContinent).filter((v) => (num(obj(v)?.episodes) ?? 0) > 0).length) : null,
+    test_b_ahead: count(num(bAll?.ahead)),
+    test_b_behind: countNone(num(bAll?.behind)),
+    test_b_level: count(num(bAll?.tied)),
     test_a_ahead_names: scoreNames('ahead') || null,
     test_a_behind_names: scoreNames('behind') || null,
     test_a_interval_held: percent(aHeld),
@@ -113,6 +123,8 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     not_always_ahead: ev && testScoresN !== null && testFires.length > 0 ? Math.min(...testFires.map((t) => t.new.ahead_of_both_on)) < testScoresN : null,
     // Test A taken or not, and how it came out; all false where the route answered without it.
     test_a_taken: ev ? testA !== null : null,
+    test_b_taken: ev ? testB !== null && bAll !== null : null,
+    test_b_strict_behind: ev ? testB !== null && bClasses?.csi_strict_375m === 'behind' : null,
     test_a_not_taken: ev ? testA === null : null,
     test_a_strict_behind: ev ? testA !== null && aClasses?.csi_strict_375m === 'behind' : null,
     test_a_strict_not_behind: ev ? testA !== null && aClasses !== null && aClasses.csi_strict_375m !== 'behind' : null,

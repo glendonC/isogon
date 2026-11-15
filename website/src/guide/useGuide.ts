@@ -79,6 +79,17 @@ function recordCheckLine(fields: Fields): string | null {
  * A held-out run whose hidden passes a challenger answered (the backend's switch, off by default), in the page's words
  * until the script carries them: which model answered, in the run's own words, and the fire's standing as its own.
  */
+/**
+ * Test B on record (the one look on fires nothing had touched), in the page's words until the script carries them: on
+ * Test it is said in place of test A's sentence, its loss as plainly.
+ */
+function testBLine(f: Fields, c: Conditions): string | null {
+  if (!c.test_b_taken || !f.test_b_fires_n || !f.test_b_ahead || !f.test_b_level || !f.test_b_behind || !f.test_scores_n) return null;
+  const across = f.test_b_continents_n ? `, across ${f.test_b_continents_n} continents` : '';
+  const head = `On ${f.test_b_fires_n} fires that nothing had touched${across}, the experimental model was ahead of the simple methods on ${f.test_b_ahead} of ${f.test_scores_n} scores, level on ${f.test_b_level} and behind on ${f.test_b_behind}`;
+  return c.test_b_strict_behind ? `${head}: it does not place fire square for square better than painting the coarse satellite's detections.` : `${head}.`;
+}
+
 const CHALLENGER_WORDS = {
   named: (words: string) => `The hidden passes are answered by ${words}.`,
   standing: (simple: string, ahead: string, of: string) => `On this fire the challenger beat ${simple} simple methods on ${ahead} of ${of} scores.`,
@@ -380,6 +391,12 @@ export function useGuide(
   // The day's photograph, in the step's own words (`photo`): its sentence takes the place of the first standing one.
   const photo = dayOffered && live.day?.asked ? photoLine(step, live.day, ws, fields) : null;
   let standing = [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)];
+  // Test B on record: its sentence stands where test A's did.
+  const bLine = step === 'test' ? testBLine(fields, conds) : null;
+  if (bLine && fields.test_a_fires_n) {
+    const aOpens = `On ${fields.test_a_fires_n} fires it had never seen`;
+    standing = standing.map((l) => (l.startsWith(aOpens) ? bLine : l));
+  }
   // A challenger answered the hidden passes: the guide names it, and the fire's standing is said as the challenger's
   // (the run's verdict is the answering estimate's).
   if (conds.answered_by_challenger && fields.answered_by && id !== 'loading' && id !== 'failed') {
