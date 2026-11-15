@@ -146,9 +146,14 @@ class ClosedWindowsTests(unittest.TestCase):
         self.assertIn("Feather River", starts["closed_starts"])
         status, _, raw = self.req("/api/regions")
         regions = json.loads(raw)
-        run_starts = [s for p in regions["places"] for f in p["featured_fires"] for s in f["run_starts"]]
-        self.assertTrue(all("closed" in s for s in run_starts))
-        self.assertTrue(all(s["closed"] for s in run_starts if s["start"].startswith("2021")))
+        run_starts = [(p["id"], s) for p in regions["places"] for f in p["featured_fires"] for s in f["run_starts"]]
+        self.assertTrue(all("closed" in s for _, s in run_starts))
+        # 2021 is closed in the regions with a recorded test fire, and only there: a 2021 fire elsewhere is open
+        from backend.firms.places import load_places
+
+        tested = {r for r, d in load_places()["regions"].items() if any(f["blind_test_fire"] for f in d["named_fires"])}
+        self.assertTrue(all(s["closed"] for r, s in run_starts if r in tested and s["start"].startswith("2021")))
+        self.assertFalse([(r, s["start"]) for r, s in run_starts if s["closed"] and r not in tested])
 
 
 if __name__ == "__main__":

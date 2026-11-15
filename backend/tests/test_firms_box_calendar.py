@@ -169,7 +169,9 @@ class PlacesRegistryTests(unittest.TestCase):
         from backend.firms.places import load_places, named_fire_entry
 
         blind = []
-        for region, r in load_places()["regions"].items():
+        regions = load_places()["regions"]
+        tested = {g for g, d in regions.items() if any(f["blind_test_fire"] for f in d["named_fires"])}
+        for region, r in regions.items():
             w, s, e, n = fa.region_box(region)
             for f in r["named_fires"]:
                 with self.subTest(fire=f["id"]):
@@ -184,7 +186,7 @@ class PlacesRegistryTests(unittest.TestCase):
                     self.assertIn(f["burned_area"]["unit"], ("acres", "hectares"))
                     if f["blind_test_fire"]:
                         blind.append((region, first.year))
-                    else:
+                    elif region in tested:
                         self.assertNotEqual(first.year, 2021)   # no other 2021 fire of a test region is offered
                     entry = named_fire_entry(f)
                     self.assertEqual(list(parse_box(entry["calendar"].split("box=")[1])), entry["box"])

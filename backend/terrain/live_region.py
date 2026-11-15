@@ -259,6 +259,7 @@ _ADDED_REGIONS: tuple[tuple[str, str, str, str, float, float], ...] = (
     ("maule_cl", "Empedrado & Maule Coast Range, Chile", "Pine and Eucalyptus Plantation Hills", "mediterranean", -35.52, -72.19),
     ("ljusdal_se", "Kårböle & Ljusdal, Sweden", "Boreal Pine Forest of Hälsingland", "boreal_montane", 61.90, 15.42),
     ("semey_kz", "Semey Ormany, Kazakhstan", "Pine Belt of the Irtysh Steppe", "boreal_montane", 50.48, 80.76),
+    ("manavgat_tr", "Manavgat & the Taurus Foothills, Turkey", "Mediterranean Pine on the Taurus Slopes", "mediterranean", 36.90, 31.47),
 )
 PRESET_REGIONS += [
     RegionSpec(
