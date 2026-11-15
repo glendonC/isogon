@@ -82,10 +82,14 @@ its place and the guide says first which one and what is drawn instead (`src/gui
 | Test | What the sharp satellite saw, and the verdict in the guide; `T` Side by Side, `S` the scores, `E` every test on record |
 | Play | A round on the fire that is open, the whole box on its land, in the guide's words: the pass being decided on the fire, "Look here" beside the marked square, a look's finding on its square; at the end the results rows above the guide's line, then the other players and Finish. On a recorded test fire or before 2012 the guide says why no round is played |
 
-Keys: on the landing a bare Enter opens the place screen; where the guide speaks, each action's key is shown beside it;
-elsewhere Space plays or pauses the passes, the left and right arrows step through them, `/` or Ctrl+K (Cmd+K) opens
-the search palette, `M` opens the sensor reading, `C` starts the camera tour, `N` goes to the next region, `1` opens
-Estimate, `2` and `3` Play, and Esc goes back. In a round the arrows mark a square.
+Keys: on the landing a bare Enter opens the Record of the fire on show (`P` opens Choose a Place); where the guide
+speaks, each action's key is shown beside it, a step's other actions work by their keys too (`K` the key of marks,
+`L` the squares sized by chance), and `/` puts the focus in the field for asking, bottom right, whose questions are
+answered from the guide's script; elsewhere `/` or Ctrl+K (Cmd+K) opens the search palette. Space plays or pauses the
+passes, each held about a second and a half, and the strip of passes shows while they play, at the screen's foot or
+when the fire's label is picked; the left and right arrows step through them, `M` opens the sensor reading, `C` starts
+the camera tour, `N` goes to the next region, `1` opens Estimate, `2` and `3` Play, and Esc goes back. In a round the
+arrows mark a square.
 
 A real run and a simulated run are kept apart. When the site asks for a real run and the answer is not one, it is refused, so modelled numbers are never shown as observations.
 

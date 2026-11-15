@@ -13,6 +13,7 @@ import { type Step } from './components/WorkspaceBar';
 import { Trail, type TrailWord } from './guide/Trail';
 import { GuideStrip } from './guide/GuideStrip';
 import { PassStrip } from './guide/PassStrip';
+import { AskField } from './guide/AskField';
 import { useGuide, type Guide } from './guide/useGuide';
 import { keyMatches } from './guide/script';
 import { BEATS, type BeatId } from './app/names';
@@ -235,6 +236,8 @@ export function App() {
   const guideRef = useRef<Guide | null>(null);
   const runCommandRef = useRef<(command: string) => void>(() => {});
   const marksOpenRef = useRef(false);
+  /** The guide's field for asking, for the key that puts the focus in it. */
+  const askRef = useRef<HTMLInputElement | null>(null);
   /** The round of Test world (beats/test-world/useRound.ts), for the callbacks defined before it. */
   const roundRef = useRef<RoundApi | null>(null);
   // The places registry: the default fire, each place's opening start, and the recorded test fires.
@@ -839,7 +842,8 @@ export function App() {
 
       if (e.key === '/') {
         e.preventDefault();
-        setAskOpen((prev) => !prev);
+        if (inWorkspace && guideRef.current?.step && askRef.current) askRef.current.focus();
+        else setAskOpen((prev) => !prev);
         return;
       }
 
@@ -1287,6 +1291,10 @@ export function App() {
     } else if (command === 'play:watch') playersView.watch();
     else if (command === 'play:players_reveal') playersView.reveal();
     else if (command === 'play:resume') setStep('look');
+    else if (command === 'say:more') {
+      // What the state says on demand beyond what stands, in the guide for this state.
+      if (guide.more.length > 0) setSaid({ key: guideKey, lines: guide.more });
+    }
     else if (command === 'marks:key') setMarksOpen((o) => !o);
     else if (command === 'estimate:chance') setChanceOn((o) => !o);
     else if (command === 'record:as_counted') recordView.showAsCounted(!recordView.correction.asCounted);
@@ -1415,6 +1423,18 @@ export function App() {
                 onPick={(i) => {
                   setPlaying(false);
                   setTimeProgress(i);
+                }}
+              />
+            )}
+            {guide.step && (
+              <AskField
+                step={guide.step}
+                fields={guide.fields}
+                conds={guide.conds}
+                inputRef={askRef}
+                onAnswer={(a) => {
+                  if (a.lines.length > 0) setSaid({ key: guideKey, lines: a.lines });
+                  if (a.command) runCommand(a.command);
                 }}
               />
             )}

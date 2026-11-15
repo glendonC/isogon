@@ -1,6 +1,6 @@
 import type { WorkspaceBase } from '../app/store';
 import type { Conditions, Fields } from './script';
-import { count, countWord, lengthDigits, listAnd, localDayRange, localDayTime, midLon, ordinal, year } from './formats';
+import { count, countWord, lengthDigits, listAnd, localDayRange, localDayTime, midLon, ordinal, times, year } from './formats';
 
 /**
  * The values the guide's lines name, read from the backend's answers the workspace already holds, written in the
@@ -70,6 +70,8 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_scores_n: count(testScoresN),
     this_test_fire_ahead: thisTest ? count(thisTest.new.ahead_of_both_on) : null,
     sharp_since: year(cal?.sharpSince),
+    record_first_year: cal ? String(cal.firstYear) : null,
+    sharp_to_coarse: times(cal?.overlap?.ratio ?? null),
     coarse_before_when: localDayTime(str(before?.timestamp_utc), lon),
     coarse_before_detections: before ? count(num(before.detections_in_box)) : null,
     estimate_squares: Array.isArray(declared?.cells) ? lengthDigits(declared!.cells as unknown[]) : null,

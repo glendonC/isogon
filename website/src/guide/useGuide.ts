@@ -46,6 +46,11 @@ export interface Guide {
   results: { line: string; rows: ResultRow[] } | null;
   /** The key of marks: a row for each mark now on show (Estimate and Test). */
   marks: MarkRow[];
+  /** What the state says on demand beyond what stands (`more`), filled. */
+  more: string[];
+  /** The values and conditions the state's lines were filled from, for the answers to questions asked there. */
+  fields: Fields;
+  conds: Conditions;
 }
 
 /** How many of a state's lines stand together in the guide. */
@@ -82,6 +87,11 @@ function actionsOf(list: ScriptAction[] | undefined, fields: Fields, on: Record<
     .slice(0, most);
 }
 
+/** The state's lines on demand (`more`), conditions applied and fields filled. */
+function moreOf(state: ScriptState | null, fields: Fields, conds: Conditions): string[] {
+  return state?.more ? says({ ...state, says: state.more }, fields, conds) : [];
+}
+
 const NONE: Guide = {
   step: null,
   stateId: null,
@@ -97,6 +107,9 @@ const NONE: Guide = {
   besideSquare: null,
   results: null,
   marks: [],
+  more: [],
+  fields: {},
+  conds: {},
 };
 
 /** The players' states over a round's end (or plays asked on the open fire), from what the picture publishes. */
@@ -138,6 +151,9 @@ export function useGuide(
       objective: objectiveOf('record', state, r.fields),
       context: contextOf('record', r.fields),
       lines: says(state, r.fields, r.conds).slice(0, STANDING),
+      more: moreOf(state, r.fields, r.conds),
+      fields: { ...fields, ...r.fields },
+      conds: { ...conds, ...r.conds },
       actions: actionsOf(state?.actions, r.fields, on),
       also: actionsOf(stepOf('record')?.also, r.fields, on, 9),
     };
@@ -162,6 +178,9 @@ export function useGuide(
       objective: objectiveOf(step, state, f),
       context: contextOf(step, f),
       lines: [...(missing ? [missing] : []), ...says(state, f, c).slice(0, STANDING)],
+      more: moreOf(state, f, c),
+      fields: f,
+      conds: c,
       actions: actionsOf(state?.actions, f, on).filter((a) => a.command !== 'play:players_reveal' || players.canReveal),
       also: actionsOf(stepOf(step)?.also, f, on, 9),
       fireLabel: labelOn(state, 'fire', f, c, live.playing),
@@ -206,6 +225,9 @@ export function useGuide(
     objective: objectiveOf(step, state, fields),
     context: contextOf(step, fields),
     lines: [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)],
+    more: moreOf(state, fields, conds),
+    fields,
+    conds,
     actions: actionsOf(state?.actions, fields, on),
     also: actionsOf(stepOf(step)?.also, fields, on, 9),
     fireLabel: labelOn(state, 'fire', fields, conds, live.playing),

@@ -542,3 +542,65 @@
 .guide-clear__plate[data-pick='true'] {
   cursor: pointer;
 }
+
+/* Asking (guide/AskField.tsx): a line to write on at the bottom right, the step's questions above it while it has the
+   focus. Text on the scene, no box. */
+.guide-ask {
+  position: absolute;
+  z-index: 6;
+  right: var(--sys-gutter);
+  bottom: 40px;
+  width: 260px;
+  display: grid;
+  gap: var(--sys-s2);
+}
+
+.guide-ask__input {
+  width: 100%;
+  padding: 0 0 6px;
+  border: 0;
+  border-bottom: 1px solid var(--sys-rule);
+  background: none;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+  border-radius: 0;
+}
+
+.guide-ask__input::placeholder {
+  color: var(--sys-ink-3);
+}
+
+.guide-ask__input:focus {
+  outline: none;
+  border-bottom-color: var(--sys-ink-2);
+}
+
+.guide-ask__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-shadow: 0 1px 8px rgba(8, 11, 17, 0.85);
+}
+
+.guide-ask__question {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+  cursor: pointer;
+}
+
+.guide-ask__question:hover,
+.guide-ask__question:focus-visible {
+  color: var(--sys-ink);
+}
+
+@media (max-width: 1180px) {
+  .guide-ask {
+    display: none;
+  }
+}
