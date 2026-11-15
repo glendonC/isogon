@@ -3639,7 +3639,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         effectiveMode === 'observer' ? 1.0 : 0.0,
         dampMed,
       );
-      if (!fleetModelsRequested && p.inWorkspace) {
+      if (!fleetModelsRequested && effectiveMode === 'observer') {
         fleetModelsRequested = true;
         void fleet.loadModels(import.meta.env.BASE_URL);
       }
