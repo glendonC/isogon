@@ -1,0 +1,31 @@
+/* The agents' walk: its one line, plain text and one class, so the identity reskins it in a line. */
+.walk {
+  position: fixed;
+  left: 50%;
+  bottom: 9vh;
+  transform: translateX(-50%);
+  width: min(880px, calc(100vw - 32px));
+  z-index: 40;
+  text-align: center;
+  pointer-events: none;
+  color: #f2f0ea;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.85);
+}
+
+.walk p {
+  margin: 0;
+  font-size: clamp(20px, 2.2vw, 30px);
+  line-height: 1.25;
+}
+
+/* While it plays, no figure is on the path: the players' points and bars wait, and the guide steps aside. All of
+   them come back the moment the walk hands over. */
+:root[data-walk='on'] .agent-label__gain,
+:root[data-walk='on'] .agent-label__points,
+:root[data-walk='on'] .agent-bar,
+:root[data-walk='on'] .guide-strip,
+:root[data-walk='on'] .guide-ask {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease;
+}
