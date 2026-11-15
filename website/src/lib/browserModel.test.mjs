@@ -1,0 +1,131 @@
+// The page's bridge to the model in the visitor's browser (browserModel.ts), with a worker that answers as the real
+// one does (public/runtime/model-worker.js): what it computes, when the recording answers instead, and the addresses a
+// run made there is drawn from.
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { answerSourceLine } from './api.ts';
+import { BrowserModel, BrowserModelUnavailable, BrowserRefusal, splitPythonError, withPageAssets } from './browserModel.ts';
+
+const MANIFEST = {
+  core: { file: 'core.zip', bytes: 1, sha256: 'a' },
+  places: { plumas_ca: { file: 'places/plumas_ca.zip', start: '2012-08-10', bytes: 1, sha256: 'b' } },
+  replay_only: { lytton_bc: 'its page fire is the closed test fire' },
+};
+
+/** A worker answering each op with `answer(op, args)`: a value, an Error (the worker's failure, `where` in its
+ * `where`), or undefined (no answer at all). */
+function fakeWorker(answer) {
+  const sent = [];
+  const w = {
+    sent,
+    onmessage: null,
+    onerror: null,
+    terminated: false,
+    terminate() { this.terminated = true; },
+    postMessage(msg) {
+      sent.push(msg);
+      queueMicrotask(() => {
+        w.onmessage?.({ data: { id: msg.id, step: 'running' } });
+        const v = answer(msg.op, msg.args);
+        if (v === undefined) return;
+        if (v instanceof Error) w.onmessage?.({ data: { id: msg.id, ok: false, error: v.message, where: v.where ?? 'running' } });
+        else w.onmessage?.({ data: { id: msg.id, ok: true, value: typeof v === 'string' ? v : JSON.stringify(v) } });
+      });
+    },
+  };
+  return w;
+}
+
+function model(answer, extra = {}) {
+  const w = fakeWorker(answer);
+  const m = new BrowserModel({ workerUrl: 'w.js', packUrl: 'run/browser-pack.json', makeWorker: () => w, fetchJson: async () => MANIFEST,
+                               environmentRefusal: () => null, ...extra });
+  return { m, w };
+}
+
+const RUN = { run_id: 'plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend', assets: {}, belief_frames: { steps: 2, grid: { nx: 2, ny: 2 } } };
+
+test('a held-out run and its reveal are computed by the worker, the reveal asked by the first answer\'s run id', async () => {
+  const { m, w } = model((op, a) => (op === 'held_out_run' ? RUN : op === 'reveal' ? { ...RUN, blind_test: { verdict: { scores_judged: 7 } } } : undefined));
+  assert.equal(await m.holds('plumas_ca'), true);
+  assert.equal((await m.run('plumas_ca', '2012-08-10', false)).run_id, RUN.run_id);
+  const rev = await m.run('plumas_ca', '2012-08-10', true);
+  assert.equal(rev.blind_test.verdict.scores_judged, 7);
+  assert.deepEqual(w.sent.map((s) => s.op), ['held_out_run', 'reveal']);
+  assert.equal(w.sent[1].args.run_id, RUN.run_id);
+  assert.equal(m.state, 'ready');
+});
+
+test('a reveal after the worker let the run go makes the run again, then reveals it', async () => {
+  let reveals = 0;
+  const { m, w } = model((op) => {
+    if (op === 'held_out_run') return RUN;
+    reveals += 1;
+    return reveals === 1 ? new Error(`LookupError: no run ${RUN.run_id} is kept here: ask held_out_run again`) : { ...RUN, revealed: true };
+  });
+  await m.run('plumas_ca', '2012-08-10', false);
+  assert.equal((await m.run('plumas_ca', '2012-08-10', true)).revealed, true);
+  assert.deepEqual(w.sent.map((s) => s.op), ['held_out_run', 'reveal', 'held_out_run', 'reveal']);
+});
+
+test('an answer later than the budget takes the recording, and the model is not failed for it', async () => {
+  const { m } = model(() => undefined, { budgetMs: 30 });
+  await assert.rejects(m.run('plumas_ca', '2012-08-10', false), (e) => e instanceof BrowserModelUnavailable && /took over/.test(e.why));
+  assert.notEqual(m.state, 'failed');
+});
+
+test('a runtime that does not load fails the model for the page, and every place then replays', async () => {
+  const { m, w } = model(() => Object.assign(new Error('WebAssembly.instantiate(): out of memory'), { where: 'runtime' }));
+  await assert.rejects(m.run('plumas_ca', '2012-08-10', false), BrowserModelUnavailable);
+  assert.equal(m.state, 'failed');
+  assert.match(m.why, /did not load in this browser/);
+  assert.equal(w.terminated, true);
+  assert.equal(await m.holds('plumas_ca'), false);
+});
+
+test('the closed rule\'s refusal made in the browser is the route\'s refusal, with its kind and words', async () => {
+  const { m } = model(() => new Error('backend.server_next_look.ClosedWindow: this window is closed: a test fire of 2021'));
+  await assert.rejects(m.run('plumas_ca', '2021-07-22', false), (e) => e instanceof BrowserRefusal && e.kind === 'ClosedWindow'
+    && e.message === 'this window is closed: a test fire of 2021');
+  assert.notEqual(m.state, 'failed');
+});
+
+test('a place the pack does not hold replays, with the manifest\'s reason; a device short of memory replays every place', async () => {
+  const { m } = model(() => RUN);
+  assert.equal(await m.holds('lytton_bc'), false);
+  assert.equal(await m.replayReason('lytton_bc'), 'its page fire is the closed test fire');
+  const { m: small } = model(() => RUN, { environmentRefusal: () => 'this device says it has 2 GB of memory, under the 4 GB the model needs' });
+  assert.equal(await small.holds('plumas_ca'), false);
+  assert.equal(small.state, 'failed');
+  const { m: none } = model(() => RUN, { fetchJson: async () => null });
+  assert.equal(await none.holds('plumas_ca'), false);
+  assert.equal(none.state, 'off');
+});
+
+test('a run made in the browser is drawn from its own bytes and the recording\'s terrain', () => {
+  const recorded = { assets: { dem_f32_url: '/api/runs/r/dem_f32.bin', terrain_pack: { ortho: { url: '/api/runs/r/terrain/o.jpg' } },
+                               reconstruction_u8_url: '/api/runs/r/reconstruction_u8.bin' }, imagery: { chosen: 'usgs_naip' } };
+  const files = { 'reconstruction_u8.bin': 'blob:a', 'belief_u8.bin': 'blob:b', 'export.geojson': 'blob:c', 'export.csv': 'blob:d' };
+  const page = withPageAssets(RUN, recorded, files);
+  assert.equal(page.assets.reconstruction_u8_url, 'blob:a');
+  assert.equal(page.assets.export_csv_url, 'blob:d');
+  assert.equal(page.assets.dem_f32_url, '/api/runs/r/dem_f32.bin');
+  assert.deepEqual(page.assets.terrain_pack, recorded.assets.terrain_pack);
+  assert.equal(page.belief_frames.url, 'blob:b');
+  assert.deepEqual(page.imagery, { chosen: 'usgs_naip' });
+  assert.equal(RUN.belief_frames.url, undefined);                  // the browser's answer itself is not changed
+});
+
+test('a Python error gives its kind without its module path', () => {
+  assert.deepEqual(splitPythonError('Traceback ...\nbackend.model.real_run.ClosedWindow: closed'), { kind: 'ClosedWindow', message: 'closed' });
+  assert.deepEqual(splitPythonError('LookupError: no run x'), { kind: 'LookupError', message: 'no run x' });
+});
+
+test('the page\'s one line says what answered the fire', () => {
+  const at = ' at commit 1a6698e, on 15 November 2026';
+  assert.equal(answerSourceLine(null, at), "This page replays answers recorded from the project's backend at commit 1a6698e, on 15 November 2026.");
+  assert.match(answerSourceLine({ source: 'browser', why: null, seconds: 3.26 }, at), /^This fire was computed in your browser by the project's own model in 3\.3 s; the rest/);
+  assert.match(answerSourceLine({ source: 'recording', why: 'this fire is replayed (its page fire is the closed test fire)', seconds: null }, at),
+    /15 November 2026; this fire is replayed \(its page fire is the closed test fire\)\.$/);
+});

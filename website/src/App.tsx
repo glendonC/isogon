@@ -94,7 +94,8 @@ import type {
   WorkspaceMode,
 } from './stage/types';
 
-import { API_BASE, assetUrl, assetUrlNow, getJson, postJson, recordedProvenance, runRequestBody, TRANSPORT } from './lib/api';
+import { answerSourceLine, API_BASE, assetUrl, assetUrlNow, getJson, onAnswerSource, postJson, recordedProvenance, runRequestBody, TRANSPORT } from './lib/api';
+import type { AnswerSource } from './lib/browserModel';
 
 /**
  * Landing world view: `landingSubjectFrame` names the rectangle the stage keeps calm (sky or haze) for the type.
@@ -1779,15 +1780,27 @@ export function App() {
   const [recordedLine, setRecordedLine] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
+    // The line says what answered the fire on show: the model in this browser, or the recording (and why).
+    let provenance: string | null = null;
+    let answered: AnswerSource | null = null;
+    const show = () => {
+      if (live && provenance !== null) setRecordedLine(answerSourceLine(answered, provenance));
+    };
+    const off = onAnswerSource((s) => {
+      answered = s;
+      show();
+    });
     void recordedProvenance().then((p) => {
       if (!live || !p) return;
       const d = p.recordedUtc ? new Date(p.recordedUtc) : null;
       const day = d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : null;
       const at = p.commit ? ` at commit ${p.commit.slice(0, 7)}` : '';
-      setRecordedLine(`This page replays answers recorded from the project's backend${at}${day ? `, on ${day}` : ''}.`);
+      provenance = `${at}${day ? `, on ${day}` : ''}`;
+      show();
     });
     return () => {
       live = false;
+      off();
     };
   }, []);
   // In the film presentation the start state's film caption stands in the landing's headline's place.

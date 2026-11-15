@@ -6,7 +6,7 @@ import { NEW_ROUND, type RoundPick, type RoundState } from './round';
 import { frameNearest, tileOf, withLooks } from '../../content/nextLook';
 import { fireAt } from '../world-model/fire';
 import { isRealRun, withReveal } from '../../content/realRuns';
-import { HttpError, NotRecorded, postJson, recordedRound, TRANSPORT } from '../../lib/api';
+import { fullRoundHere, HttpError, NotRecorded, postJson, recordedRound } from '../../lib/api';
 import { PLAYERS, SEES_THE_ANSWER } from '../../compare/blocks';
 import { openRound, runWithEndReveal, type NextLookEnv } from './env';
 
@@ -126,7 +126,8 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
     setOneLook(null);
     setNoLook(false);
     const open = async () => {
-      if (TRANSPORT !== 'recorded') {
+      // On a backend, or where the model runs in this browser, the whole round is played.
+      if (await fullRoundHere(f.regionId)) {
         const e = await openRound(f.regionId, f.start);
         if (seq === seqRef.current) setEnv(e);
         return;

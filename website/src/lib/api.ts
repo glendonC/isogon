@@ -12,6 +12,8 @@
  * (keys sorted at every depth, no spaces, no ASCII escaping).
  */
 
+import { type AnswerSource, BrowserModel, BrowserModelUnavailable, BrowserRefusal, withPageAssets } from './browserModel.ts';
+
 export type Transport = 'live' | 'recorded';
 
 // Outside a Vite build (a test under node) there is no `import.meta.env`: the live defaults apply.
@@ -143,6 +145,114 @@ async function readBody(resp: Response): Promise<unknown> {
   }
 }
 
+// ------------------------------------------------------------------------------------------------------------------
+// The model in the visitor's browser (`browserModel.ts`): on a page of recorded answers, a held-out run, its reveal and
+// a round of the game at a place the page's browser pack holds are computed in the page; everything else, and every
+// request when the model cannot run here, is the recording's.
+// ------------------------------------------------------------------------------------------------------------------
+
+let model: BrowserModel | null = null;
+
+/** The page's browser model, on a page of recorded answers only. */
+export function browserModel(): BrowserModel | null {
+  if (TRANSPORT !== 'recorded') return null;
+  model ??= new BrowserModel({ workerUrl: publicUrl('runtime/model-worker.js'), packUrl: publicUrl('run/browser-pack.json') });
+  return model;
+}
+
+let source: AnswerSource | null = null;
+const sourceListeners = new Set<(s: AnswerSource) => void>();
+
+function said(s: AnswerSource): void {
+  source = s;
+  for (const cb of sourceListeners) cb(s);
+}
+
+/** What answered the page's last fire (the browser or the recording, and why), now and each time it changes. */
+export function onAnswerSource(cb: (s: AnswerSource) => void): () => void {
+  sourceListeners.add(cb);
+  if (source) cb(source);
+  return () => sourceListeners.delete(cb);
+}
+
+/** The page's one line on what answered: `provenance` is where the recording comes from ("at commit ..., on ..."). */
+export function answerSourceLine(s: AnswerSource | null, provenance: string): string {
+  const replays = `This page replays answers recorded from the project's backend${provenance}.`;
+  if (!s) return replays;
+  if (s.source === 'browser') {
+    const took = s.seconds !== null ? ` in ${s.seconds.toFixed(1)} s` : '';
+    return `This fire was computed in your browser by the project's own model${took}; the rest of the page replays answers recorded from its backend${provenance}.`;
+  }
+  return s.why ? `${replays.slice(0, -1)}; ${s.why}.` : replays;
+}
+
+/** Whether a whole round of the game can be played at a place: on a backend, or by the browser's model once loaded. */
+export async function fullRoundHere(regionId: string): Promise<boolean> {
+  if (TRANSPORT === 'live') return true;
+  const m = browserModel();
+  return Boolean(m && m.state === 'ready' && (await m.holds(regionId)));
+}
+
+/** A recorded run answer of a place, for the terrain a run made in the browser is drawn on: the same request's, or any
+ * held-out run's of that place (a run's terrain does not depend on its start). */
+async function recordedRunOfPlace(regionId: string, body: unknown): Promise<Record<string, unknown> | null> {
+  const index = await recordedIndex();
+  let key: string | undefined = requestKey('POST', '/api/reconstruct', undefined, body);
+  if (!index.entries[key]?.file) {
+    key = Object.keys(index.entries).find((k) => k.startsWith('POST /api/reconstruct ') && k.includes(`"region_id":"${regionId}"`)
+      && k.includes('"holdout_viirs":true') && index.entries[k]?.file);
+  }
+  if (!key) return null;
+  try {
+    return await recorded<Record<string, unknown>>(key);
+  } catch {
+    return null;
+  }
+}
+
+const NOT_HERE = Symbol('not computed in the browser');
+
+/** The browser's answer to a request it computes, or NOT_HERE for the recording to answer. */
+async function inBrowser(method: 'GET' | 'POST', path: string, query: Query | undefined, body: unknown): Promise<unknown> {
+  const m = browserModel();
+  if (!m) return NOT_HERE;
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const roundStep = (method === 'POST' && path === '/api/env/next_look/step' && typeof b.round_id === 'string' && m.rounds.has(b.round_id))
+    || (method === 'GET' && path === '/api/env/next_look/state' && m.rounds.has(String(query?.round_id ?? '')));
+  try {
+    if (roundStep) {
+      // A round the browser started goes on there: its id and its looks are the browser's, not the recording's.
+      return method === 'POST'
+        ? await m.roundLook({ round_id: String(b.round_id), decision: Number(b.decision), action: Number(b.action) })
+        : await m.roundState(String(query?.round_id));
+    }
+    const region = typeof b.region_id === 'string' ? b.region_id : null;
+    if (method === 'POST' && path === '/api/reconstruct' && region && b.source === 'firms' && b.holdout_viirs === true && typeof b.start === 'string') {
+      if (!(await m.holds(region))) {
+        const why = await m.replayReason(region);
+        said({ source: 'recording', why: why ? `this fire is replayed (${why})` : m.why ? `the model did not run in this browser: ${m.why}` : null, seconds: null });
+        return NOT_HERE;
+      }
+      const t0 = Date.now();
+      const answer = await m.run(region, b.start, b.reveal === true);
+      const files = await m.pictures(String(answer.run_id), region);
+      const page = withPageAssets(answer, await recordedRunOfPlace(region, body), files);
+      said({ source: 'browser', why: null, seconds: (Date.now() - t0) / 1000 });
+      return page;
+    }
+    if (method === 'POST' && path === '/api/env/next_look/reset' && region && (await fullRoundHere(region))) {
+      return await m.roundStart(b);
+    }
+  } catch (err) {
+    if (err instanceof BrowserRefusal) throw new HttpError(409, { error: err.message, kind: err.kind });
+    if (roundStep) throw err;
+    const why = err instanceof BrowserModelUnavailable ? err.why : err instanceof Error ? err.message : String(err);
+    said({ source: 'recording', why: `the model did not answer in this browser (${why})`, seconds: null });
+    return NOT_HERE;
+  }
+  return NOT_HERE;
+}
+
 async function recorded<T>(key: string, signal?: AbortSignal): Promise<T> {
   const index = await recordedIndex();
   const hit = index.entries[key];
@@ -208,6 +318,10 @@ async function performGetJson<T>(path: string, query?: Query, signal?: AbortSign
   // A recorded page answers a drawn box it does not hold from the public fire cube, summed in the browser with the
   // route's figures (world/publicAnswer.ts, fetched only when a box is asked for); every other request it does not
   // hold stays not recorded.
+  if (TRANSPORT === 'recorded' && path === '/api/env/next_look/state') {
+    const own = await inBrowser('GET', path, query, undefined);
+    if (own !== NOT_HERE) return own as T;
+  }
   if (TRANSPORT === 'recorded') return recorded<T>(requestKey('GET', path, query), signal).catch(async (err) => {
     const own = err instanceof NotRecorded && (await import('../world/publicAnswer.ts'));
     if (!own || !own.isBoxRecordRequest(path, query)) throw err;
@@ -286,7 +400,11 @@ export function getJson<T>(path: string, query?: Query, init?: { signal?: AbortS
 
 /** POST a JSON body to a route. */
 export async function postJson<T>(path: string, body: unknown, init?: { signal?: AbortSignal }): Promise<T> {
-  if (TRANSPORT === 'recorded') return recorded<T>(requestKey('POST', path, undefined, body), init?.signal);
+  if (TRANSPORT === 'recorded') {
+    const own = await inBrowser('POST', path, undefined, body);
+    if (own !== NOT_HERE) return own as T;
+    return recorded<T>(requestKey('POST', path, undefined, body), init?.signal);
+  }
   const resp = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -304,7 +422,7 @@ export async function postJson<T>(path: string, body: unknown, init?: { signal?:
  * addresses are left as they are.
  */
 export async function assetUrl(path: string): Promise<string | null> {
-  if (/^https?:\/\//.test(path)) return path;
+  if (/^(https?:\/\/|blob:)/.test(path)) return path;
   if (TRANSPORT === 'live') return `${API_BASE}${path}`;
   const [p, q] = path.split('?');
   const query: Query = {};
@@ -352,7 +470,7 @@ export function runRequestBody(regionId: string, start: string, hidden: 'VIIRS' 
  * folder, which answers 404 as a withheld file should.
  */
 export function assetUrlNow(address: string): string {
-  if (/^(https?:|data:)/.test(address)) return address;
+  if (/^(https?:|data:|blob:)/.test(address)) return address;
   if (TRANSPORT === 'live') return `${API_BASE}${address.startsWith('/') ? '' : '/'}${address}`;
   const [p, q] = address.split('?');
   const query: Query = {};
