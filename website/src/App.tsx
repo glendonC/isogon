@@ -475,19 +475,6 @@ export function App() {
     [askRegion],
   );
 
-  const cycleNextTheaterSlew = useCallback(() => {
-    // The next place with a fire to open, in the registry's order (the typed catalogue's until the registry has answered).
-    // Never a typed region the registry does not serve: those have no real record, only a simulated fire.
-    const withFires = placesRef.current.places.places.filter((p) => p.featured_fires.some((f) => f.default_start));
-    if (placesRef.current.state !== 'ready' || withFires.length === 0) return;
-    const ids = withFires.map((p) => p.id);
-    const idx = ids.indexOf(activeTheaterId);
-    const nextId = ids[(idx + 1) % ids.length];
-    // On Estimate the next place opens on its hidden pass too, once its own held-out run is in.
-    if (stepRef.current === 'test') openingDueRef.current = nextId;
-    slewToTheater(nextId as TheaterId);
-  }, [activeTheaterId, slewToTheater]);
-
   const handleCinemaStepTheater = useCallback(
     (nextTheaterId: TheaterId) => {
       // The tour steps only to places with a real fire record: never a simulated region.
@@ -1100,9 +1087,6 @@ export function App() {
         } else if (lower === 'e' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setEvidenceOpen(true);
-        } else if (lower === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-          e.preventDefault();
-          cycleNextTheaterSlew();
         } else if (lower === 'u' && !e.metaKey && !e.ctrlKey && !e.altKey && !isRealRun(activeRun)) {
           // The stage draws the uncertainty layer on simulated runs only.
           e.preventDefault();
@@ -1134,7 +1118,6 @@ export function App() {
     enterWorkspace,
     exitToOverview,
     toggleHoldoutLive,
-    cycleNextTheaterSlew,
     round,
     rnd,
     leaveRound,
