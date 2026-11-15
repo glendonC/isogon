@@ -465,9 +465,10 @@ export function App() {
     if (placesRef.current.state !== 'ready' || withFires.length === 0) return;
     const ids = withFires.map((p) => p.id);
     const idx = ids.indexOf(activeTheaterId);
-    // On Estimate the next place opens on its hidden pass too, once its held-out run is in.
-    if (stepRef.current === 'test') openingDueRef.current = true;
-    slewToTheater(ids[(idx + 1) % ids.length] as TheaterId);
+    const nextId = ids[(idx + 1) % ids.length];
+    // On Estimate the next place opens on its hidden pass too, once its own held-out run is in.
+    if (stepRef.current === 'test') openingDueRef.current = nextId;
+    slewToTheater(nextId as TheaterId);
   }, [activeTheaterId, slewToTheater]);
 
   const handleCinemaStepTheater = useCallback(
@@ -493,7 +494,8 @@ export function App() {
           roundRef.current?.leave();
           enterWorkspace('cutaway');
           setStep('test');
-          openingDueRef.current = true;
+          // On a hidden pass of that place's own run, once it is in (not of the run on show while it comes).
+          openingDueRef.current = params.theaterId;
         }
         return true;
       }
@@ -810,15 +812,25 @@ export function App() {
 
   // Estimate opens on a hidden pass of the sharp satellite (app/openingPass.ts), whatever pass the landing's tour or
   // the step before stood on, once its blind run is in: the white frames are on screen from the first moment.
-  const openingDueRef = useRef(false);
+  // Due for the run on show (true), or for the run of the place named (a place opened from search or N, whose run is
+  // still to come while the one before stays on show).
+  const openingDueRef = useRef<boolean | string>(false);
   const stepBeforeRef = useRef(step);
   if (stepBeforeRef.current !== step) {
-    if (step === 'test') openingDueRef.current = true;
+    if (step !== 'test') openingDueRef.current = false;
+    else if (!openingDueRef.current) openingDueRef.current = true;
     stepBeforeRef.current = step;
   }
   useEffect(() => {
-    if (!openingDueRef.current || step !== 'test' || round || isExecuting || pendingStart || !activeRun || !isRealRun(activeRun)) return;
-    if (!holdoutViirs || revealed) return;
+    const due = openingDueRef.current;
+    if (!due || step !== 'test' || round || isExecuting || pendingStart || !activeRun || !isRealRun(activeRun)) return;
+    if (typeof due === 'string' && activeRun.region.id !== due) return;
+    if (!holdoutViirs || revealed) {
+      // That place's run came with every satellite (a recorded test fire, a year before the sharp satellite): no
+      // hidden pass to open on.
+      if (typeof due === 'string') openingDueRef.current = false;
+      return;
+    }
     openingDueRef.current = false;
     const run = activeRun as unknown as { observer_passes?: { frames?: OpeningFrame[] }; window?: { first_overpass_utc?: string } };
     const k = openingHiddenPass(run.observer_passes?.frames ?? [], run.window?.first_overpass_utc);
