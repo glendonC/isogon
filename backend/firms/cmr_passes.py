@@ -31,7 +31,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import bisect
 import calendar as _cal
+from collections import OrderedDict
 import datetime as _dt
 import gzip
 import hashlib
@@ -285,8 +287,31 @@ def pass_files_digest(region_id: str, cache_dir: Path = CMR_CACHE_DIR) -> str:
     return h.hexdigest()
 
 
+_PASS_FILE_LOCK = threading.Lock()
+_PASS_FILE_CACHE_MAX: int = 128
+_RAW_PASS_FILE_CACHE: OrderedDict[tuple[str, int, int, int], dict[str, Any]] = OrderedDict()
+_PREPARED_PASS_CACHE: OrderedDict[tuple[str, int, int, int], "_PreparedPassYear"] = OrderedDict()
+
+
+def _stat_key(path: Path) -> tuple[str, int, int, int]:
+    st = path.stat()
+    return (str(path), st.st_ino, st.st_mtime_ns, st.st_size)
+
+
 def read_pass_file(path: Path) -> dict[str, Any]:
-    return json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
+    key = _stat_key(path)
+    with _PASS_FILE_LOCK:
+        cached = _RAW_PASS_FILE_CACHE.get(key)
+        if cached is not None:
+            _RAW_PASS_FILE_CACHE.move_to_end(key)
+            return cached
+    parsed = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
+    with _PASS_FILE_LOCK:
+        _RAW_PASS_FILE_CACHE[key] = parsed
+        _RAW_PASS_FILE_CACHE.move_to_end(key)
+        while len(_RAW_PASS_FILE_CACHE) > _PASS_FILE_CACHE_MAX:
+            _RAW_PASS_FILE_CACHE.popitem(last=False)
+    return parsed
 
 
 def build_pass_file(region_id: str, platform: str, year: int, cache_dir: Path = CMR_CACHE_DIR) -> Path | None:
@@ -374,13 +399,58 @@ def _inside(lon: float, lat: float, ring: list[tuple[float, float]]) -> bool:
     return inside
 
 
+def _ring_bounds(ring: list[tuple[float, float]]) -> tuple[float, float, float, float]:
+    xs = [p[0] for p in ring]
+    ys = [p[1] for p in ring]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
 def share_inside(box: tuple[float, float, float, float], rings: list[list[tuple[float, float]]], samples: int) -> float:
     """Share of a box's sample points (samples x samples, edges included) inside any of the rings."""
+    total = samples * samples
+    if not rings:
+        return 0.0
     w, s, e, n = box
-    pts = [(w + (e - w) * i / (samples - 1), s + (n - s) * j / (samples - 1))
-           for i in range(samples) for j in range(samples)]
-    hit = sum(1 for lo, la in pts if any(_inside(lo, la, r) for r in rings))
-    return hit / len(pts)
+    active: list[tuple[list[tuple[float, float]], float, float]] = []
+    for r in rings:
+        if not r:
+            continue
+        rx0, ry0, rx1, ry1 = _ring_bounds(r)
+        if ry1 <= s - 1e-9 or ry0 > n + 1e-9 or rx1 < w - 1e-9 or rx0 > e + 1e-9:
+            continue
+        active.append((r, ry0, ry1))
+    if not active:
+        return 0.0
+    xs = [w + (e - w) * i / (samples - 1) for i in range(samples)]
+    ys = [s + (n - s) * j / (samples - 1) for j in range(samples)]
+    hit = 0
+    for la in ys:
+        ring_crosses: list[list[float]] = []
+        for r, ry0, ry1 in active:
+            if la < ry0 or la >= ry1:
+                continue
+            crosses: list[float] = []
+            k = len(r) - 1
+            for m in range(len(r)):
+                xi, yi = r[m]
+                xj, yj = r[k]
+                if (yi > la) != (yj > la):
+                    crosses.append((xj - xi) * (la - yi) / (yj - yi) + xi)
+                k = m
+            if crosses:
+                ring_crosses.append(crosses)
+        if not ring_crosses:
+            continue
+        for lo in xs:
+            for crosses in ring_crosses:
+                inside = 0
+                for xc in crosses:
+                    if lo < xc:
+                        inside ^= 1
+                if inside:
+                    hit += 1
+                    break
+    return hit / total
 
 
 # Reader
@@ -391,7 +461,66 @@ def _parse_t(v: str | _dt.date | _dt.datetime) -> _dt.datetime:
         return v if v.tzinfo else v.replace(tzinfo=_dt.timezone.utc)
     if isinstance(v, _dt.date):
         return _dt.datetime(v.year, v.month, v.day, tzinfo=_dt.timezone.utc)
-    return _parse_t(_dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")))
+    dt = _dt.datetime.fromisoformat(str(v))
+    return dt if dt.tzinfo else dt.replace(tzinfo=_dt.timezone.utc)
+
+
+class _PreparedGranule:
+    __slots__ = ("g", "ts", "te", "dense_rings")
+
+    def __init__(self, g: dict[str, Any]) -> None:
+        self.g = g
+        self.ts = _parse_t(g["time_start"])
+        self.te = _parse_t(g["time_end"])
+        self.dense_rings: list[list[tuple[float, float]]] | None = None
+
+    def get_dense_rings(self) -> list[list[tuple[float, float]]]:
+        if self.dense_rings is None:
+            self.dense_rings = [densify(r) for r in self.g["rings"]]
+        return self.dense_rings
+
+
+def _group_prepared(granules: list[_PreparedGranule]) -> list[tuple[_dt.datetime, _dt.datetime, list[_PreparedGranule]]]:
+    groups: list[list[_PreparedGranule]] = []
+    for pg in granules:
+        if groups and (pg.ts - groups[-1][-1].te).total_seconds() <= PASS_GAP_S:
+            groups[-1].append(pg)
+        else:
+            groups.append([pg])
+    return [(grp[0].ts, grp[-1].te, grp) for grp in groups]
+
+
+class _PreparedPassYear:
+    __slots__ = ("months_fetched", "granules", "groups", "group_ts", "prefix_max_te")
+
+    def __init__(self, pf: dict[str, Any]) -> None:
+        self.months_fetched: frozenset[str] = frozenset(pf["months_fetched"])
+        raw_granules = sorted(pf["granules"], key=lambda g: g["time_start"])
+        self.granules: list[_PreparedGranule] = [_PreparedGranule(g) for g in raw_granules]
+        self.groups = _group_prepared(self.granules)
+        self.group_ts: list[_dt.datetime] = [ts for ts, _te, _grp in self.groups]
+        self.prefix_max_te: list[_dt.datetime] = []
+        cur_max: _dt.datetime | None = None
+        for _ts, te, _grp in self.groups:
+            cur_max = te if cur_max is None or te > cur_max else cur_max
+            self.prefix_max_te.append(cur_max)
+
+
+def _prepared_pass_year(path: Path) -> _PreparedPassYear:
+    key = _stat_key(path)
+    with _PASS_FILE_LOCK:
+        cached = _PREPARED_PASS_CACHE.get(key)
+        if cached is not None:
+            _PREPARED_PASS_CACHE.move_to_end(key)
+            return cached
+    pf = read_pass_file(path)
+    prepared = _PreparedPassYear(pf)
+    with _PASS_FILE_LOCK:
+        _PREPARED_PASS_CACHE[key] = prepared
+        _PREPARED_PASS_CACHE.move_to_end(key)
+        while len(_PREPARED_PASS_CACHE) > _PASS_FILE_CACHE_MAX:
+            _PREPARED_PASS_CACHE.popitem(last=False)
+    return prepared
 
 
 def cmr_passes(
@@ -418,39 +547,51 @@ def cmr_passes(
     region = regions[0]
     want = list(platforms) if platforms is not None else list(COLLECTIONS)
     months = [f"{y:04d}-{m:02d}" for y, m in _months(t0.strftime("%Y-%m"), (t1 - _dt.timedelta(seconds=1)).strftime("%Y-%m"))]
+    years_sorted = sorted({int(mo[:4]) for mo in months})
     out: list[dict[str, Any]] = []
     for p in want:
         first = COLLECTIONS[p]["first_day"][:7]
-        granules: list[dict[str, Any]] = []
-        for y in sorted({int(mo[:4]) for mo in months}):
+        year_entries: list[_PreparedPassYear] = []
+        for y in years_sorted:
             need = [mo for mo in months if mo[:4] == f"{y:04d}" and mo >= first]
             if not need:
                 continue
             f = pass_file(region, p, y, cache_dir)
-            pf = read_pass_file(f) if f.is_file() else {"months_fetched": [], "granules": []}
-            missing = [mo for mo in need if mo not in set(pf["months_fetched"])]
+            if not f.is_file():
+                raise CmrCacheMissing(f"CMR {p} months {need} for {region} are not cached; fetch them first")
+            entry = _prepared_pass_year(f)
+            missing = [mo for mo in need if mo not in entry.months_fetched]
             if missing:
                 raise CmrCacheMissing(f"CMR {p} months {missing} for {region} are not cached; fetch them first")
-            granules += pf["granules"]
-        granules.sort(key=lambda g: g["time_start"])
-        for grp in _group(granules):
-            ts, te = _parse_t(grp[0]["time_start"]), _parse_t(grp[-1]["time_end"])
+            year_entries.append(entry)
+        if not year_entries:
+            continue
+        if len(year_entries) == 1:
+            ye = year_entries[0]
+            lo = bisect.bisect_right(ye.prefix_max_te, t0)
+            hi = bisect.bisect_left(ye.group_ts, t1)
+            candidate_groups = ye.groups[lo:hi]
+        else:
+            merged = [pg for ye in year_entries for pg in ye.granules]
+            merged.sort(key=lambda pg: pg.g["time_start"])
+            candidate_groups = _group_prepared(merged)
+        for ts, te, grp in candidate_groups:
             if te <= t0 or ts >= t1:
                 continue
-            rings = [densify(r) for g in grp for r in g["rings"]]
+            rings = [dr for pg in grp for dr in pg.get_dense_rings()]
             share = share_inside(box, rings, BOX_SAMPLES)
             if share <= 0.0:
                 continue
-            cc = [g["cloud_cover_pct"] for g in grp if g["cloud_cover_pct"] is not None]
-            flags = {g["day_night"] for g in grp if g["day_night"]}
+            cc = [pg.g["cloud_cover_pct"] for pg in grp if pg.g["cloud_cover_pct"] is not None]
+            flags = {pg.g["day_night"] for pg in grp if pg.g["day_night"]}
             item = {
                 "platform": p,
-                "time_start": grp[0]["time_start"],
-                "time_end": grp[-1]["time_end"],
+                "time_start": grp[0].g["time_start"],
+                "time_end": grp[-1].g["time_end"],
                 "time_mid": (ts + (te - ts) / 2).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "day_night": flags.pop() if len(flags) == 1 else ("BOTH" if flags else None),
                 "cloud_cover_pct": round(sum(cc) / len(cc), 1) if cc else None,
-                "granules": [g["id"] for g in grp],
+                "granules": [pg.g["id"] for pg in grp],
                 "box_share": round(share, 4),
                 "box_inside": share >= 1.0,
             }
