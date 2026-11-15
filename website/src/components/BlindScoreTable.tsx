@@ -222,9 +222,8 @@ export function SideSheet({
 }) {
   const store = useOptionalWorkspace();
   const viewerRef = useRef<HTMLDivElement | null>(null);
-  const closeRef = useRef<HTMLButtonElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  useDialogFocus(open, viewerRef, closeRef);
+  useDialogFocus(open, viewerRef, viewerRef);
 
   const [liveAnchor, setLiveAnchor] = useState<StageFireAnchor | null>(null);
   const [viewport, setViewport] = useState<{ w: number; h: number }>(() =>
@@ -278,10 +277,15 @@ export function SideSheet({
   if (!open || typeof document === 'undefined') return null;
 
   const single = !navItems || navItems.length === 0;
-  const estWidth = single
-    ? Math.min(680, viewport.w * 0.94)
-    : Math.max(Math.min(660, viewport.w * 0.94), Math.min(820, viewport.w * 0.6));
-  const viewerLeft = Math.max(0, viewport.w - estWidth - 12);
+  const mobile = viewport.w <= 820;
+  const gutterPx = mobile ? 0 : Math.max(18, Math.min(44, viewport.w * 0.03));
+  const maxAvail = Math.max(320, viewport.w - 2 * gutterPx);
+  const estWidth = mobile
+    ? viewport.w
+    : single
+      ? Math.min(maxAvail, Math.max(Math.min(540, maxAvail), Math.min(680, viewport.w * 0.5)))
+      : Math.min(maxAvail, Math.max(Math.min(600, maxAvail), Math.min(740, viewport.w * 0.53)));
+  const viewerLeft = Math.max(0, viewport.w - estWidth - gutterPx);
 
   let candidate: { x: number; y: number } | null = null;
   if (liveAnchor && liveAnchor.visible) {
@@ -349,7 +353,8 @@ export function SideSheet({
           <path
             d={`M ${candidate.x.toFixed(1)} ${candidate.y.toFixed(1)} L ${elbowX} ${candidate.y.toFixed(1)} L ${viewerLeft.toFixed(1)} ${attachY.toFixed(1)}`}
             fill="none"
-            stroke="var(--sys-edge)"
+            stroke="var(--sys-ink-2)"
+            strokeOpacity="0.6"
             strokeWidth="1"
           />
           <rect
@@ -373,6 +378,7 @@ export function SideSheet({
 
       <div
         ref={viewerRef}
+        tabIndex={-1}
         className={`iso-viewer${single ? ' iso-viewer--single' : ''}`}
         data-anchored={anchored ? 'true' : 'false'}
         style={viewerStyle}
@@ -381,44 +387,39 @@ export function SideSheet({
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
       >
-        {!single && navItems && (
-          <aside className="iso-viewer__rail" aria-label="Documents">
-            <div className="iso-viewer__rail-top">
-              <p className="iso-viewer__rail-heading">Documents</p>
-              <nav className="iso-viewer__list" aria-label="Open document">
-                {navItems.map((item) => {
-                  const isCurrent = item.id === activeNav;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="iso-viewer__nav-item"
-                      data-active={isCurrent ? 'true' : 'false'}
-                      aria-current={isCurrent ? 'page' : undefined}
-                      onClick={() => onSelectNav?.(item.id)}
-                    >
-                      <span>{item.label}</span>
-                      {item.meta && <span className="iso-viewer__nav-meta">{item.meta}</span>}
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-            {railFooter && <div className="iso-viewer__rail-foot">{railFooter}</div>}
-          </aside>
-        )}
+        <header className="iso-viewer__top">
+          {!single && navItems ? (
+            <nav className="iso-viewer__trail" aria-label="Documents">
+              {navItems.map((item) => {
+                const isCurrent = item.id === activeNav;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="iso-viewer__trail-btn"
+                    data-active={isCurrent ? 'true' : 'false'}
+                    aria-current={isCurrent ? 'page' : undefined}
+                    onClick={() => onSelectNav?.(item.id)}
+                  >
+                    <span>{item.label}</span>
+                    {item.meta && <span className="iso-viewer__trail-meta">{item.meta}</span>}
+                  </button>
+                );
+              })}
+            </nav>
+          ) : (
+            <span />
+          )}
+          <button type="button" className="iso-plain-action iso-viewer__close" onClick={onClose}>
+            <span className="iso-plain-action__key">Esc</span>
+            <span>Close</span>
+          </button>
+        </header>
 
-        <div className="iso-viewer__pane">
-          <header className="iso-viewer__bar">
-            <h2 className="iso-viewer__title">{title}</h2>
-            <button ref={closeRef} type="button" className="iso-plain-action" onClick={onClose}>
-              <span>Close</span>
-              <span className="iso-plain-action__key">Esc</span>
-            </button>
-          </header>
-          <div ref={scrollRef} className="iso-viewer__scroll">
-            {children}
-          </div>
+        <div ref={scrollRef} className="iso-viewer__scroll">
+          <h2 className="iso-viewer__title">{title}</h2>
+          {children}
+          {railFooter}
         </div>
       </div>
     </div>,
@@ -683,6 +684,18 @@ export function ScoresDocument({
           </span>
         </div>
 
+        {orderedRows.length > 0 && (
+          <div className="iso-doc-lead__segments" aria-hidden="true">
+            {orderedRows.map(({ spec, verdict }) => (
+              <span
+                key={spec.id}
+                className="iso-doc-lead__seg"
+                data-won={verdict.ahead ? 'true' : 'false'}
+              />
+            ))}
+          </div>
+        )}
+
         <p className="iso-doc-lead__p iso-doc-lead__p--strong">
           On this fire the estimate beat {simpleMethodsWord} simple methods on {aheadCount} of {scoresJudged} scores.
         </p>
@@ -695,66 +708,36 @@ export function ScoresDocument({
         </p>
       </section>
 
-      {orderedRows.length > 0 && (
-        <figure className="iso-doc-media" aria-label="Visual comparison across the seven scores">
-          <div className="iso-score-strip">
-            {orderedRows.map(({ spec, verdict }) => {
-              const vals = methodIds
-                .map((m) => verdict.values[m])
-                .filter((x): x is number => typeof x === 'number' && Number.isFinite(x));
-              const maxVal = vals.length > 0 ? Math.max(...vals) : 1;
-              const estPos = trackPosition(spec, verdict.values.reconstruction, maxVal);
-              const coarsePos = trackPosition(spec, verdict.values.painted_modis, maxVal);
-              const scaledPos = trackPosition(spec, verdict.values.overlap_ratio, maxVal);
-              return (
-                <div key={spec.id} className="iso-score-strip__row">
-                  <span className="iso-score-strip__name">{spec.name}</span>
-                  <div className="iso-score-strip__track">
-                    {coarsePos !== null && (
-                      <span
-                        className="iso-score-strip__mark iso-score-strip__mark--coarse"
-                        style={{ left: `${coarsePos}%` }}
-                      />
-                    )}
-                    {scaledPos !== null && (
-                      <span
-                        className="iso-score-strip__mark iso-score-strip__mark--scaled"
-                        style={{ left: `${scaledPos}%` }}
-                      />
-                    )}
-                    {estPos !== null && (
-                      <span
-                        className="iso-score-strip__mark iso-score-strip__mark--estimate"
-                        style={{ left: `${estPos}%` }}
-                      />
-                    )}
-                  </div>
-                  <span className="iso-score-strip__tag" data-won={verdict.ahead ? 'true' : 'false'}>
-                    {verdict.ahead ? 'Won' : 'Behind'}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <figcaption className="iso-doc-media__caption">
-            <span className="iso-doc-legend">
-              <span className="iso-doc-legend__item">
-                <span className="iso-doc-swatch iso-doc-swatch--estimate" />
-                The estimate
-              </span>
-              <span className="iso-doc-legend__item">
-                <span className="iso-doc-swatch iso-doc-swatch--modis" />
-                Coarse squares as they are
-              </span>
-              <span className="iso-doc-legend__item">
-                <span className="iso-doc-swatch iso-doc-swatch--detection" />
-                Coarse squares, scaled up
-              </span>
-            </span>
-            <span>Rightward is better on every bar</span>
-          </figcaption>
-        </figure>
-      )}
+      <div className="iso-method-key" role="region" aria-label="Methods compared">
+        <div className="iso-method-key__item">
+          <span className="iso-method-key__head">
+            <span className="iso-doc-swatch iso-doc-swatch--estimate" />
+            The estimate
+          </span>
+          <p className="iso-method-key__desc">
+            The model&apos;s estimate, made from the coarse satellite alone.
+          </p>
+        </div>
+        <div className="iso-method-key__item">
+          <span className="iso-method-key__head">
+            <span className="iso-doc-swatch iso-doc-swatch--modis" />
+            Coarse squares as they are
+          </span>
+          <p className="iso-method-key__desc">
+            The first simple method: every square the coarse satellite flagged counts as burning, the whole of it.
+          </p>
+        </div>
+        <div className="iso-method-key__item">
+          <span className="iso-method-key__head">
+            <span className="iso-doc-swatch iso-doc-swatch--detection" />
+            Coarse squares, scaled up
+          </span>
+          <p className="iso-method-key__desc">
+            The second simple method: the same squares, with the amount of fire multiplied by how much more the sharp
+            satellite usually sees.
+          </p>
+        </div>
+      </div>
 
       {orderedRows.length > 0 ? (
         <div className="iso-doc-table-wrap">
@@ -783,7 +766,11 @@ export function ScoresDocument({
                 >
                   Coarse squares, scaled up
                 </th>
-                <th scope="col" title="Which of the three has the best number in this row.">
+                <th
+                  scope="col"
+                  className="is-verdict"
+                  title="Which of the three has the best number in this row."
+                >
                   Won by
                 </th>
               </tr>
@@ -791,11 +778,40 @@ export function ScoresDocument({
             <tbody>
               {orderedRows.map(({ spec, verdict }) => {
                 const win = whoWonRow(spec, verdict, methodIds);
+                const vals = methodIds
+                  .map((m) => verdict.values[m])
+                  .filter((x): x is number => typeof x === 'number' && Number.isFinite(x));
+                const maxVal = vals.length > 0 ? Math.max(...vals) : 1;
+                const estPos = trackPosition(spec, verdict.values.reconstruction, maxVal);
+                const coarsePos = trackPosition(spec, verdict.values.painted_modis, maxVal);
+                const scaledPos = trackPosition(spec, verdict.values.overlap_ratio, maxVal);
                 return (
                   <tr key={spec.id} data-won={win.wonByEstimate ? 'true' : 'false'}>
                     <th scope="row">
                       <span className="iso-doc-table__row-name">{spec.name}</span>
                       <span className="iso-doc-table__row-desc">{spec.measures}</span>
+                      {(estPos !== null || coarsePos !== null || scaledPos !== null) && (
+                        <div className="iso-row-vernier" aria-hidden="true">
+                          {coarsePos !== null && (
+                            <span
+                              className="iso-row-vernier__mark iso-row-vernier__mark--coarse"
+                              style={{ left: `${coarsePos}%` }}
+                            />
+                          )}
+                          {scaledPos !== null && (
+                            <span
+                              className="iso-row-vernier__mark iso-row-vernier__mark--scaled"
+                              style={{ left: `${scaledPos}%` }}
+                            />
+                          )}
+                          {estPos !== null && (
+                            <span
+                              className="iso-row-vernier__mark iso-row-vernier__mark--estimate"
+                              style={{ left: `${estPos}%` }}
+                            />
+                          )}
+                        </div>
+                      )}
                     </th>
                     {methodIds.map((mId) => {
                       const cell = formatScoreCell(spec, verdict.values[mId]);
@@ -861,8 +877,8 @@ export function ScoresDocument({
           <div className="iso-plain-actions">
             {onNext && (
               <button type="button" className="iso-plain-action" data-primary="true" onClick={onNext}>
-                <span>Play a round on this fire</span>
                 <span className="iso-plain-action__key">Enter</span>
+                <span>Play a round on this fire</span>
               </button>
             )}
             {onEvidence && (
@@ -872,8 +888,8 @@ export function ScoresDocument({
             )}
             {terra && onToggleTerra && (
               <button type="button" className="iso-plain-action" onClick={onToggleTerra}>
-                <span>{terraOpen ? 'Hide morning pass check' : 'Morning pass check'}</span>
                 <span className="iso-plain-action__key">T</span>
+                <span>{terraOpen ? 'Hide morning pass check' : 'Morning pass check'}</span>
               </button>
             )}
           </div>

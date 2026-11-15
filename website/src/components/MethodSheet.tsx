@@ -292,115 +292,138 @@ export function MethodDocument({
         </figcaption>
       </figure>
 
-      <section className="iso-doc-section">
-        <h3 className="iso-doc-section__title">The Detections</h3>
-        <p className="iso-doc-section__p">
-          NASA FIRMS, the public record of fires seen from orbit.
-          {placeName && storedDetections && recordFirstYear && recordLastMonth
-            ? ` For ${placeName}, ${storedDetections} detections are stored here, from ${recordFirstYear} to ${recordLastMonth}.`
-            : ''}
-        </p>
-      </section>
-
-      <section className="iso-doc-section">
-        <h3 className="iso-doc-section__title">Two Kinds of Satellite</h3>
-        {recordFirstYear && (
-          <p className="iso-doc-section__p">
-            The coarse kind (the MODIS instrument, on the satellites Terra and Aqua) has been on record since{' '}
-            {recordFirstYear}.
-          </p>
-        )}
-        {(sharpSince || sharpSquareM) && (
-          <p className="iso-doc-section__p">
-            The sharp kind (VIIRS, first on the satellite Suomi NPP and later on others of the same design)
-            {sharpSince ? ` since ${sharpSince}.` : '.'}
-            {sharpSquareM ? ` It sees squares ${sharpSquareM} metres across.` : ''}
-          </p>
-        )}
-      </section>
-
-      <section className="iso-doc-section">
-        <h3 className="iso-doc-section__title">One Record</h3>
-        {sharpToCoarse && (
-          <p className="iso-doc-section__p">
-            In the years both kinds flew, the sharp one made about {sharpToCoarse} times as many detections here. The
-            earlier years are multiplied by that, so every year is on the sharp satellite&apos;s scale.
-          </p>
-        )}
-        {recordErrorPct !== null && recordErrorRawPct !== null && (
-          <p className="iso-doc-section__p">
-            Hide one year and predict it from the others: in a typical year the prediction is off by {recordErrorPct}{' '}
-            percent. Without the correction it is off by {recordErrorRawPct} percent.
-          </p>
-        )}
-      </section>
-
-      <section className="iso-doc-section">
-        <h3 className="iso-doc-section__title">The Estimate</h3>
-        <p className="iso-doc-section__p">
-          The model follows every square{sharpSquareM ? ` of ${sharpSquareM} metres` : ''} through the passes and keeps
-          the chance that it is burning. A coarse detection raises the chance in the squares under it, and between
-          passes the chance spreads and fades.
-        </p>
-        <p className="iso-doc-section__p">
-          It runs forward and then backward through the passes, so each moment also uses what was seen later.
-        </p>
-      </section>
-
-      <section className="iso-doc-section">
-        <h3 className="iso-doc-section__title">The Test</h3>
-        <p className="iso-doc-section__p">
-          The sharp satellite&apos;s detections are set apart first. The estimate is made and states what it expects at
-          each real pass of the sharp satellite, and only then are those detections opened and compared, beside simple
-          methods that use the coarse satellite as it is.
-        </p>
-        <p className="iso-doc-section__p">
-          Delete the hidden detections and the estimate comes out the same. A test checks that.
-        </p>
-      </section>
-
-      {(otherYears || testFiresCap) && (
-        <section className="iso-doc-section">
-          <h3 className="iso-doc-section__title">What It Was Tuned On</h3>
-          <p className="iso-doc-section__p">
-            {otherYears
-              ? `The model's values were tuned on other fires in the same places and checked on fires of ${otherYears}.`
-              : "The model's values were tuned on other fires in the same places."}
-            {testFiresCap ? ` ${testFiresCap} fires were kept out of all of it as the test.` : ''}
-          </p>
+      <div className="iso-doc-specs">
+        <section className="iso-doc-spec">
+          <h3 className="iso-doc-section__title">The Detections</h3>
+          <div className="iso-doc-spec__body">
+            <p className="iso-doc-section__p">
+              NASA FIRMS, the public record of fires seen from orbit.
+              {placeName && storedDetections && recordFirstYear && recordLastMonth
+                ? ` For ${placeName}, ${storedDetections} detections are stored here, from ${recordFirstYear} to ${recordLastMonth}.`
+                : ''}
+            </p>
+          </div>
         </section>
-      )}
 
-      <section className="iso-doc-section">
-        <h3 className="iso-doc-section__title">Limits</h3>
-        <p className="iso-doc-section__p">
-          The record lists detections, not the places a satellite looked and saw nothing, and it carries no cloud. An
-          empty pass may be cloud, so the model treats it as unknown.
-        </p>
-        <p className="iso-doc-section__p">
-          The estimate is compared with another instrument, not with the fire itself.
-        </p>
-        {placesWithFires && (
-          <p className="iso-doc-section__p">
-            A fire can be shown pass by pass only where the satellites&apos; passes are stored: {placesWithFires}.
-          </p>
+        <section className="iso-doc-spec">
+          <h3 className="iso-doc-section__title">Two Kinds of Satellite</h3>
+          <div className="iso-doc-spec__body">
+            {recordFirstYear && (
+              <p className="iso-doc-section__p">
+                The coarse kind (the MODIS instrument, on the satellites Terra and Aqua) has been on record since{' '}
+                {recordFirstYear}.
+              </p>
+            )}
+            {(sharpSince || sharpSquareM) && (
+              <p className="iso-doc-section__p">
+                The sharp kind (VIIRS, first on the satellite Suomi NPP and later on others of the same design)
+                {sharpSince ? ` since ${sharpSince}.` : '.'}
+                {sharpSquareM ? ` It sees squares ${sharpSquareM} metres across.` : ''}
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="iso-doc-spec">
+          <h3 className="iso-doc-section__title">One Record</h3>
+          <div className="iso-doc-spec__body">
+            {sharpToCoarse && (
+              <p className="iso-doc-section__p">
+                In the years both kinds flew, the sharp one made about {sharpToCoarse} times as many detections here.
+                The earlier years are multiplied by that, so every year is on the sharp satellite&apos;s scale.
+              </p>
+            )}
+            {recordErrorPct !== null && recordErrorRawPct !== null && (
+              <p className="iso-doc-section__p">
+                Hide one year and predict it from the others: in a typical year the prediction is off by{' '}
+                {recordErrorPct} percent. Without the correction it is off by {recordErrorRawPct} percent.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="iso-doc-spec">
+          <h3 className="iso-doc-section__title">The Estimate</h3>
+          <div className="iso-doc-spec__body">
+            <p className="iso-doc-section__p">
+              The model follows every square{sharpSquareM ? ` of ${sharpSquareM} metres` : ''} through the passes and
+              keeps the chance that it is burning. A coarse detection raises the chance in the squares under it, and
+              between passes the chance spreads and fades.
+            </p>
+            <p className="iso-doc-section__p">
+              It runs forward and then backward through the passes, so each moment also uses what was seen later.
+            </p>
+          </div>
+        </section>
+
+        <section className="iso-doc-spec">
+          <h3 className="iso-doc-section__title">The Test</h3>
+          <div className="iso-doc-spec__body">
+            <p className="iso-doc-section__p">
+              The sharp satellite&apos;s detections are set apart first. The estimate is made and states what it expects
+              at each real pass of the sharp satellite, and only then are those detections opened and compared, beside
+              simple methods that use the coarse satellite as it is.
+            </p>
+            <p className="iso-doc-section__p">
+              Delete the hidden detections and the estimate comes out the same. A test checks that.
+            </p>
+          </div>
+        </section>
+
+        {(otherYears || testFiresCap) && (
+          <section className="iso-doc-spec">
+            <h3 className="iso-doc-section__title">What It Was Tuned On</h3>
+            <div className="iso-doc-spec__body">
+              <p className="iso-doc-section__p">
+                {otherYears
+                  ? `The model's values were tuned on other fires in the same places and checked on fires of ${otherYears}.`
+                  : "The model's values were tuned on other fires in the same places."}
+                {testFiresCap ? ` ${testFiresCap} fires were kept out of all of it as the test.` : ''}
+              </p>
+            </div>
+          </section>
         )}
-      </section>
 
-      <section className="iso-doc-section">
-        <h3 className="iso-doc-section__title">Times</h3>
-        <p className="iso-doc-section__p">
-          On the terrain, pass times are local solar time at the fire&apos;s longitude with the part of the day, not the
-          legal clock of its time zone. Dates and pass instants inside these documents are UTC.
-        </p>
-      </section>
+        <section className="iso-doc-spec">
+          <h3 className="iso-doc-section__title">Times</h3>
+          <div className="iso-doc-spec__body">
+            <p className="iso-doc-section__p">
+              On the page a time is local at the fire, by the sun: the instant moved by the fire&apos;s longitude, which
+              can stand an hour or more from the clock of its time zone.
+            </p>
+            <p className="iso-doc-section__p">
+              In this viewer days and times are in UTC, as NASA&apos;s record lists them.
+            </p>
+          </div>
+        </section>
 
-      <section className="iso-doc-section">
-        <h3 className="iso-doc-section__title">Ground and Credits</h3>
-        <p className="iso-doc-section__p">
-          Elevation: public elevation data.{creditText ? ` Imagery on this fire: ${creditText}.` : ''}
-        </p>
-      </section>
+        <section className="iso-doc-spec">
+          <h3 className="iso-doc-section__title">Limits</h3>
+          <div className="iso-doc-spec__body">
+            <p className="iso-doc-section__p">
+              The record lists detections, not the places a satellite looked and saw nothing, and it carries no cloud.
+              An empty pass may be cloud, so the model treats it as unknown.
+            </p>
+            <p className="iso-doc-section__p">
+              The estimate is compared with another instrument, not with the fire itself.
+            </p>
+            {placesWithFires && (
+              <p className="iso-doc-section__p">
+                A fire can be shown pass by pass only where the satellites&apos; passes are stored: {placesWithFires}.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="iso-doc-spec">
+          <h3 className="iso-doc-section__title">Ground and Credits</h3>
+          <div className="iso-doc-spec__body">
+            <p className="iso-doc-section__p">
+              Elevation: public elevation data.{creditText ? ` Imagery on this fire: ${creditText}.` : ''}
+            </p>
+          </div>
+        </section>
+      </div>
     </>
   );
 }

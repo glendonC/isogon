@@ -248,7 +248,9 @@ function PerFireDetailTable({
                   {m.label}
                 </th>
               ))}
-              <th scope="col">Won by</th>
+              <th scope="col" className="is-verdict">
+                Won by
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -419,6 +421,7 @@ export function EvidenceDocument({
                         key={s.id}
                         className="iso-ev-fire__cell"
                         data-won={didEstimateWinScore(f.new, s) ? 'true' : 'false'}
+                        data-low={low ? 'true' : 'false'}
                       />
                     ))}
                   </div>
@@ -432,7 +435,7 @@ export function EvidenceDocument({
           <figcaption className="iso-doc-media__caption">
             <span className="iso-doc-legend">
               <span className="iso-doc-legend__item">
-                <span className="iso-doc-swatch iso-doc-swatch--estimate" />
+                <span className="iso-doc-swatch iso-doc-swatch--ink" />
                 Score won against both simple methods
               </span>
               <span className="iso-doc-legend__item">
@@ -565,6 +568,21 @@ export function EvidenceDocument({
       </section>
 
       <section className="iso-doc-section" aria-label="Validation on other fires">
+        <div className="iso-ev-val-trio" aria-hidden="true">
+          <div className="iso-ev-val-stat">
+            <span className="iso-ev-val-stat__num">{otherAhead}</span>
+            <span className="iso-ev-val-stat__label">ahead</span>
+          </div>
+          <div className="iso-ev-val-stat">
+            <span className="iso-ev-val-stat__num">{otherLevel}</span>
+            <span className="iso-ev-val-stat__label">level</span>
+          </div>
+          <div className="iso-ev-val-stat">
+            <span className="iso-ev-val-stat__num">{otherBehind}</span>
+            <span className="iso-ev-val-stat__label">behind</span>
+          </div>
+        </div>
+
         {notAlwaysAhead && <p className="iso-doc-section__p">It does not always win.</p>}
 
         <p className="iso-doc-section__p">
@@ -798,33 +816,19 @@ export function UnifiedDocumentViewer({
   const navItems = useMemo<ViewerNavItem[]>(() => {
     const items: ViewerNavItem[] = [];
     if (store?.run.active) {
-      items.push({
-        id: 'fire',
-        label: 'This Fire',
-        meta: store.run.active.epoch_summaries?.length ? String(store.run.active.epoch_summaries.length) : undefined,
-      });
+      items.push({ id: 'fire', label: 'This Fire' });
     }
     if (effectiveScore) {
-      const won = effectiveScore.verdict.filter((v) => v.ahead).length;
-      const tot = effectiveScore.verdict.length;
-      items.push({
-        id: 'scores',
-        label: 'The Scores',
-        meta: tot > 0 ? `${won}/${tot}` : undefined,
-      });
+      items.push({ id: 'scores', label: 'The Scores' });
     }
-    items.push({
-      id: 'tests',
-      label: 'Every Test on Record',
-      meta: resolvedEvDoc ? String(resolvedEvDoc.test_fires.fires.length) : undefined,
-    });
+    items.push({ id: 'tests', label: 'Every Test on Record' });
     items.push({ id: 'method', label: 'Method and Data' });
     if (sensorModel !== null || initialDoc === 'sensors') {
       items.push({ id: 'sensors', label: 'Sensor Geometry' });
     }
     items.push({ id: 'sources', label: 'Sources' });
     return items;
-  }, [store?.run.active, effectiveScore, resolvedEvDoc, sensorModel, initialDoc]);
+  }, [store?.run.active, effectiveScore, sensorModel, initialDoc]);
 
   const handleSelect = (next: ViewerDocId) => {
     setActiveDoc(next);

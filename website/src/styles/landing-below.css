@@ -1,5 +1,6 @@
 /* Below the first screen of the landing.
-   Built strictly from system.css tokens: square corners, no uppercase labels above headings, plain text actions. */
+   Built strictly from system.css tokens: square corners, corner registration marks, animated hover hairlines,
+   aligned tabular readouts, and structure carried by negative space and column edges rather than separator lines. */
 
 .iso-lb {
   position: absolute;
@@ -7,7 +8,13 @@
   left: 0;
   right: 0;
   z-index: 2;
-  background: linear-gradient(180deg, rgba(8, 11, 17, 0.9) 0%, var(--sys-night) 180px, var(--sys-night) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(8, 11, 17, 0) 0%,
+    rgba(8, 11, 17, 0.86) 96px,
+    var(--sys-night) 210px,
+    var(--sys-night) 100%
+  );
   color: var(--sys-ink);
   font-family: var(--sys-font);
   text-shadow: none;
@@ -16,40 +23,56 @@
 }
 
 .iso-lb__inner {
-  width: min(1280px, calc(100vw - 2 * var(--sys-gutter)));
+  width: min(1240px, calc(100vw - 2 * var(--sys-gutter)));
   margin: 0 auto;
-  padding: var(--sys-s8) 0;
+  padding: calc(var(--sys-s8) + var(--sys-s5)) 0 calc(var(--sys-s8) + var(--sys-s6));
   display: flex;
   flex-direction: column;
-  gap: var(--sys-s8);
+  gap: calc(var(--sys-s8) + var(--sys-s6));
 }
 
-/* Section 1: What it does in one sentence and one picture */
+/* Subtle scroll-triggered entrance when motion is permitted */
+.iso-lb [data-reveal='pending'] {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+}
+
+.iso-lb [data-reveal='shown'] {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--sys-slow) var(--sys-ease),
+    transform var(--sys-slow) var(--sys-ease);
+}
+
+/* ============================================================================
+   Act 1: What Isogon does in one sentence and one picture
+   ============================================================================ */
+
 .iso-lb-intro {
   display: flex;
   flex-direction: column;
-  gap: var(--sys-s6);
-  padding-top: var(--sys-s5);
-  border-top: 1px solid var(--sys-rule);
+  gap: var(--sys-s7);
 }
 
 .iso-lb-intro__sentence {
   margin: 0;
-  max-width: 58ch;
+  max-width: 54ch;
   font: var(--sys-weight) var(--sys-size-title) / var(--sys-lh-title) var(--sys-font);
   letter-spacing: -0.005em;
   color: var(--sys-ink);
+  text-wrap: balance;
 }
 
 .iso-lb-figure {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sys-s3);
-  background: var(--sys-night);
-  border: 1px solid var(--sys-rule);
+  gap: var(--sys-s5);
+  background: transparent;
+  border: 0;
   border-radius: 0;
-  padding: var(--sys-s5);
+  padding: 0;
 }
 
 .iso-lb-figure__img {
@@ -63,9 +86,7 @@
 .iso-lb-figure__cols {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--sys-s4);
-  padding-top: var(--sys-s3);
-  border-top: 1px solid var(--sys-rule);
+  gap: var(--sys-s6);
 }
 
 .iso-lb-figure__col {
@@ -83,6 +104,7 @@
 }
 
 .iso-lb-figure__col-meta {
+  padding-left: calc(8px + var(--sys-s2));
   font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
   font-variant-numeric: tabular-nums;
   color: var(--sys-ink-3);
@@ -109,37 +131,79 @@
   background: var(--sys-detection);
 }
 
-/* Section 2: Four feature blocks (Record, Estimate, Test, Play) */
+/* ============================================================================
+   Act 2: The four steps (Record, Estimate, Test, Play)
+   ============================================================================ */
+
 .iso-lb-blocks {
   display: flex;
   flex-direction: column;
-  gap: var(--sys-s7);
+  gap: calc(var(--sys-s8) + var(--sys-s5));
 }
 
 .iso-lb-block {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  gap: var(--sys-s6);
-  align-items: start;
-  padding-top: var(--sys-s6);
-  border-top: 1px solid var(--sys-rule);
+  grid-template-columns: minmax(0, 1.32fr) minmax(0, 0.92fr);
+  column-gap: var(--sys-s8);
+  row-gap: var(--sys-s5);
+  align-items: center;
+}
+
+.iso-lb-block--flip {
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.32fr);
+}
+
+.iso-lb-block--flip .iso-lb-block__media {
+  order: 2;
+}
+
+.iso-lb-block--flip .iso-lb-block__copy {
+  order: 1;
 }
 
 .iso-lb-block__media {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sys-s2);
+  gap: var(--sys-s3);
 }
 
+/* Frameless spatial viewport marked only by four quiet corner brackets */
 .iso-lb-visual {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 10;
   background: var(--sys-night);
-  border: 1px solid var(--sys-rule);
+  border: 0;
   border-radius: 0;
   overflow: hidden;
+}
+
+.iso-lb-visual::after {
+  --c: var(--sys-edge);
+  --b: var(--sys-bracket);
+  --w: var(--sys-bracket-w);
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.65;
+  transition: opacity var(--sys-fast) var(--sys-ease);
+  background:
+    linear-gradient(var(--c), var(--c)) top left / var(--b) var(--w) no-repeat,
+    linear-gradient(var(--c), var(--c)) top left / var(--w) var(--b) no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / var(--b) var(--w) no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / var(--w) var(--b) no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / var(--b) var(--w) no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / var(--w) var(--b) no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / var(--b) var(--w) no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / var(--w) var(--b) no-repeat;
+}
+
+.iso-lb-block:hover .iso-lb-visual::after {
+  --c: var(--sys-ink);
+  opacity: 0.95;
 }
 
 .iso-lb-visual__fallback {
@@ -162,24 +226,24 @@
 
 .iso-lb-visual__fallback[data-kind='estimate'] {
   background-image:
-    radial-gradient(circle at 46% 52%, rgba(243, 244, 246, 0.18) 0%, transparent 44%),
-    linear-gradient(90deg, rgba(180, 195, 214, 0.14) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(180, 195, 214, 0.14) 1px, transparent 1px);
-  background-size: 100% 100%, 16px 16px, 16px 16px;
+    radial-gradient(circle at 48% 52%, rgba(243, 244, 246, 0.16) 0%, transparent 48%),
+    linear-gradient(90deg, rgba(180, 195, 214, 0.12) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(180, 195, 214, 0.12) 1px, transparent 1px);
+  background-size: 100% 100%, 18px 18px, 18px 18px;
 }
 
 .iso-lb-visual__fallback[data-kind='test'] {
   background-image:
-    radial-gradient(circle at 52% 48%, rgba(240, 138, 69, 0.24) 0%, transparent 40%),
+    radial-gradient(circle at 52% 48%, rgba(240, 138, 69, 0.22) 0%, transparent 46%),
     linear-gradient(90deg, rgba(243, 244, 246, 0.1) 1px, transparent 1px),
     linear-gradient(180deg, rgba(243, 244, 246, 0.1) 1px, transparent 1px);
-  background-size: 100% 100%, 16px 16px, 16px 16px;
+  background-size: 100% 100%, 18px 18px, 18px 18px;
 }
 
 .iso-lb-visual__fallback[data-kind='play'] {
   background-image:
-    linear-gradient(90deg, rgba(124, 131, 146, 0.28) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(124, 131, 146, 0.28) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(124, 131, 146, 0.24) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(124, 131, 146, 0.24) 1px, transparent 1px);
   background-size: 25% 25%;
 }
 
@@ -222,8 +286,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--sys-s3);
-  padding-top: var(--sys-s1);
+  gap: var(--sys-s4);
 }
 
 .iso-lb-block__title {
@@ -233,27 +296,35 @@
   color: var(--sys-ink);
 }
 
+.iso-lb-block__lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-s3);
+}
+
 .iso-lb-block__line {
   margin: 0;
-  max-width: 52ch;
+  max-width: 46ch;
   font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
   color: var(--sys-ink-2);
 }
 
-/* Sections 3 & 4: Proof and Data and Method */
-.iso-lb-reading-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  gap: var(--sys-s7);
-  padding-top: var(--sys-s6);
-  border-top: 1px solid var(--sys-rule);
-}
+/* ============================================================================
+   Act 3: What the Tests Say (2x2 spatial telemetry readout + verbatim sentences)
+   ============================================================================ */
 
-.iso-lb-section {
+.iso-lb-proof {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sys-s4);
+  gap: var(--sys-s7);
+}
+
+.iso-lb-proof__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sys-s3) var(--sys-s6);
 }
 
 .iso-lb-section__title {
@@ -263,72 +334,235 @@
   color: var(--sys-ink);
 }
 
-.iso-lb-section__lines {
+.iso-lb-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--sys-s8);
+  row-gap: var(--sys-s7);
+}
+
+.iso-lb-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sys-s3);
+}
+
+.iso-lb-stat__hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sys-s2) var(--sys-s3);
+}
+
+.iso-lb-stat__figure {
+  font: var(--sys-weight-light) var(--sys-size-display) / var(--sys-lh-display) var(--sys-font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--sys-ink);
+}
+
+.iso-lb-stat__unit {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-ink-3);
+}
+
+/* Micro-bars under telemetry figures: crisp 3px segments or comparative tracks */
+.iso-lb-stat__fires {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sys-s3);
+  width: min(320px, 100%);
+}
+
+.iso-lb-stat__fire-segs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  height: 3px;
+}
+
+.iso-lb-stat__seg {
+  height: 100%;
+  background: var(--sys-rule);
+}
+
+.iso-lb-stat__seg[data-lit='ink'] {
+  background: var(--sys-ink);
+}
+
+.iso-lb-stat__seg[data-lit='muted'] {
+  background: var(--sys-edge);
+}
+
+.iso-lb-stat__seg[data-lit='fail'] {
+  background: var(--sys-fail);
+}
+
+.iso-lb-stat__rounds {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  width: min(300px, 100%);
+  height: 3px;
+}
+
+.iso-lb-stat__compare {
+  display: grid;
+  gap: 6px;
+  width: min(300px, 100%);
+}
+
+.iso-lb-stat__track {
+  height: 2px;
+  background: var(--sys-rule);
+}
+
+.iso-lb-stat__fill {
+  height: 100%;
+  background: var(--sys-ink);
+}
+
+.iso-lb-stat__fill--raw {
+  background: var(--sys-fail);
+}
+
+.iso-lb-stat__copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-s2);
+}
+
+.iso-lb-section__line {
+  margin: 0;
+  max-width: 54ch;
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.iso-lb-section__line--honest {
+  color: var(--sys-ink);
+}
+
+/* ============================================================================
+   Act 4: Data and Method (asymmetric left-spine header + right reading column)
+   ============================================================================ */
+
+.iso-lb-method {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.44fr) minmax(0, 1fr);
+  column-gap: var(--sys-s8);
+  row-gap: var(--sys-s4);
+  align-items: start;
+}
+
+.iso-lb-method__left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sys-s4);
+}
+
+.iso-lb-method__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sys-s3) var(--sys-s5);
+}
+
+.iso-lb-method__right {
   display: flex;
   flex-direction: column;
   gap: var(--sys-s3);
 }
 
-.iso-lb-section__line {
-  margin: 0;
-  max-width: 60ch;
-  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
-  color: var(--sys-ink-2);
-}
+/* ============================================================================
+   Plain triggers: nothing at rest; hairline draws across on hover/focus (matching .iso-entry)
+   ============================================================================ */
 
-.iso-lb-section__links {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sys-s3) var(--sys-s5);
-  margin-top: var(--sys-s1);
-}
-
-/* Plain actions: text only, primary heavier, small key hint beside it, no outlined box */
 .iso-lb-action {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--sys-s2);
   padding: var(--sys-s1) 0;
   border: 0;
   border-radius: 0;
   background: transparent;
-  font: var(--sys-weight-strong) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  font: var(--sys-weight-strong) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
   color: var(--sys-ink);
   cursor: pointer;
+  transition: color var(--sys-fast) var(--sys-ease);
 }
 
 .iso-lb-action--quiet {
+  font-size: var(--sys-size-label);
+  line-height: var(--sys-lh-label);
   font-weight: var(--sys-weight);
   color: var(--sys-ink-2);
 }
 
-.iso-lb-action__label {
-  border-bottom: 1px solid var(--sys-edge);
-  padding-bottom: 2px;
-  transition: border-color var(--sys-fast) var(--sys-ease), color var(--sys-fast) var(--sys-ease);
-}
-
-.iso-lb-action:hover .iso-lb-action__label,
-.iso-lb-action:focus-visible .iso-lb-action__label {
-  border-bottom-color: var(--sys-ink);
+.iso-lb-action:hover,
+.iso-lb-action:focus-visible {
+  outline: none;
   color: var(--sys-ink);
 }
 
-.iso-lb-action__key {
-  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
-  color: var(--sys-ink-3);
+.iso-lb-action__label {
+  position: relative;
 }
 
-/* Section 5: Final start strip + sound control */
+.iso-lb-action__label::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 420ms var(--sys-ease);
+}
+
+.iso-lb-action:hover .iso-lb-action__label::after,
+.iso-lb-action:focus-visible .iso-lb-action__label::after {
+  transform: scaleX(1);
+}
+
+.iso-lb-action:focus-visible .iso-lb-action__label::after {
+  background: var(--sys-focus);
+}
+
+.iso-lb-action__arrow {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  color: var(--sys-ink-3);
+  transition:
+    transform var(--sys-fast) var(--sys-ease),
+    color var(--sys-fast) var(--sys-ease);
+}
+
+.iso-lb-action:hover .iso-lb-action__arrow,
+.iso-lb-action:focus-visible .iso-lb-action__arrow {
+  color: var(--sys-ink);
+  transform: translate3d(3px, 0, 0);
+}
+
+/* ============================================================================
+   Act 5: Final start horizon + sound control
+   ============================================================================ */
+
 .iso-lb-start {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sys-s4) var(--sys-s6);
-  padding-top: var(--sys-s6);
-  border-top: 1px solid var(--sys-rule);
+  padding-top: var(--sys-s4);
 }
 
 .iso-lb-start__cta {
@@ -339,42 +573,90 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  font: var(--sys-weight-strong) var(--sys-size-title) / var(--sys-lh-title) var(--sys-font);
+  font: var(--sys-weight) var(--sys-size-title) / var(--sys-lh-title) var(--sys-font);
   letter-spacing: -0.005em;
   color: var(--sys-ink);
   cursor: pointer;
 }
 
-.iso-lb-start__cta-label {
-  border-bottom: 1px solid var(--sys-edge);
-  padding-bottom: 2px;
-  transition: border-color var(--sys-fast) var(--sys-ease);
+.iso-lb-start__cta:focus-visible {
+  outline: none;
 }
 
-.iso-lb-start__cta:hover .iso-lb-start__cta-label,
-.iso-lb-start__cta:focus-visible .iso-lb-start__cta-label {
-  border-bottom-color: var(--sys-ink);
+.iso-lb-start__cta-label {
+  position: relative;
+}
+
+.iso-lb-start__cta-label::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 420ms var(--sys-ease);
+}
+
+.iso-lb-start__cta:hover .iso-lb-start__cta-label::after,
+.iso-lb-start__cta:focus-visible .iso-lb-start__cta-label::after {
+  transform: scaleX(1);
+}
+
+.iso-lb-start__cta:focus-visible .iso-lb-start__cta-label::after {
+  background: var(--sys-focus);
 }
 
 .iso-lb-start__key {
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-mono);
+  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
   color: var(--sys-ink-3);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 920px) {
   .iso-lb__inner {
-    padding: var(--sys-s7) 0;
-    gap: var(--sys-s7);
+    padding: var(--sys-s7) 0 var(--sys-s8);
+    gap: var(--sys-s8);
+  }
+
+  .iso-lb-blocks {
+    gap: var(--sys-s8);
   }
 
   .iso-lb-block,
-  .iso-lb-reading-grid {
+  .iso-lb-block--flip,
+  .iso-lb-proof-grid,
+  .iso-lb-method {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--sys-s5);
+  }
+
+  .iso-lb-block--flip .iso-lb-block__media {
+    order: 1;
+  }
+
+  .iso-lb-block--flip .iso-lb-block__copy {
+    order: 2;
   }
 
   .iso-lb-figure__cols {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--sys-s3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iso-lb [data-reveal='pending'],
+  .iso-lb [data-reveal='shown'] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .iso-lb-action__label::after,
+  .iso-lb-start__cta-label::after,
+  .iso-lb-action__arrow {
+    transition: none;
   }
 }

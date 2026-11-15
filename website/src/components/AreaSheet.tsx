@@ -214,8 +214,8 @@ export function AreaSheet({ open, onClose, apiBase, centre, onOpenMonth }: AreaS
 
         <div className="iso-plain-actions">
           <button type="submit" className="iso-plain-action" data-primary="true">
-            <span>Get its fire record</span>
             <span className="iso-plain-action__key">Enter</span>
+            <span>Get its fire record</span>
           </button>
         </div>
 

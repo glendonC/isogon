@@ -1,14 +1,16 @@
-/* Every Test on Record and Method and Data media panes inside the side-sheet viewer. */
+/* Every Test on Record and Method and Data visual readouts inside the side-sheet viewer.
+   Sizes, weights and inks come strictly from system.css. */
 
-/* Three test fires visual strip */
+/* Three closed test fires strip */
 .iso-ev-fires {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--sys-s4);
+  gap: var(--sys-s5);
 }
 
 .iso-ev-fire {
   display: grid;
+  align-content: start;
   gap: var(--sys-s2);
 }
 
@@ -25,7 +27,7 @@
 }
 
 .iso-ev-fire__count {
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-mono);
+  font: var(--sys-weight-light) var(--sys-size-title) / var(--sys-lh-title) var(--sys-font);
   font-variant-numeric: tabular-nums;
   color: var(--sys-ink);
   white-space: nowrap;
@@ -39,36 +41,63 @@
 .iso-ev-fire__cells {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: var(--sys-s1);
-  height: 10px;
+  gap: 3px;
+  height: 3px;
 }
 
 .iso-ev-fire__cell {
   border-radius: 0;
   background: var(--sys-rule);
-  border: 1px solid var(--sys-edge);
 }
 
 .iso-ev-fire__cell[data-won='true'] {
   background: var(--sys-ink);
-  border-color: var(--sys-ink);
+}
+
+.iso-ev-fire__cell[data-won='false'][data-low='true'] {
+  background: rgba(255, 176, 138, 0.42);
 }
 
 .iso-ev-fire__meta {
-  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-ink-3);
+}
+
+/* Validation summary trio inside Every Test on Record */
+.iso-ev-val-trio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sys-s4);
+  max-width: 420px;
+}
+
+.iso-ev-val-stat {
+  display: grid;
+  gap: 2px;
+}
+
+.iso-ev-val-stat__num {
+  font: var(--sys-weight-light) var(--sys-size-title) / var(--sys-lh-title) var(--sys-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-ink);
+}
+
+.iso-ev-val-stat__label {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
   color: var(--sys-ink-3);
 }
 
 /* Player mean-gain horizontal bar inside the rounds table */
 .iso-ev-gain-cell {
   display: grid;
-  grid-template-columns: minmax(72px, 1fr) auto;
+  grid-template-columns: minmax(84px, 1fr) auto;
   align-items: center;
   column-gap: var(--sys-s3);
 }
 
 .iso-ev-gain-bar {
-  height: 6px;
+  height: 2px;
   background: var(--sys-rule);
 }
 
@@ -89,9 +118,9 @@
 /* Method and Data scale + calibration visual pane */
 .iso-method-media {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: var(--sys-s5);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--sys-s6);
+  align-items: end;
 }
 
 .iso-method-squares {
@@ -106,10 +135,10 @@
 }
 
 .iso-method-sq-coarse {
-  width: 64px;
-  height: 64px;
+  width: 60px;
+  height: 60px;
   border: 1px solid var(--sys-modis);
-  background: rgba(180, 195, 214, 0.12);
+  background: rgba(180, 195, 214, 0.08);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
@@ -122,15 +151,15 @@
 }
 
 .iso-method-sq-sharp {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border: 1px solid var(--sys-detection);
-  background: rgba(240, 138, 69, 0.24);
+  background: rgba(240, 138, 69, 0.22);
 }
 
 .iso-method-sq-label {
   font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
-  color: var(--sys-ink-2);
+  color: var(--sys-ink-3);
 }
 
 .iso-method-bars {
@@ -140,7 +169,7 @@
 
 .iso-method-bar-row {
   display: grid;
-  gap: var(--sys-s1);
+  gap: 6px;
 }
 
 .iso-method-bar-head {
@@ -158,7 +187,7 @@
 }
 
 .iso-method-bar-track {
-  height: 8px;
+  height: 2px;
   background: var(--sys-rule);
 }
 

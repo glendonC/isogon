@@ -3,9 +3,9 @@
 .iso-sources-bar {
   display: flex;
   width: 100%;
-  height: 12px;
+  height: 4px;
   gap: 2px;
-  background: var(--sys-night);
+  background: transparent;
 }
 
 .iso-sources-bar__seg {
@@ -51,11 +51,13 @@
 .iso-sources__link {
   color: var(--sys-focus);
   text-decoration: none;
-  border-bottom: 1px solid var(--sys-edge);
+  transition: color var(--sys-fast) var(--sys-ease);
 }
 
 .iso-sources__link:hover,
 .iso-sources__link:focus-visible {
+  outline: none;
   color: var(--sys-ink);
-  border-bottom-color: var(--sys-ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
