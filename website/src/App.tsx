@@ -1509,7 +1509,11 @@ export function App() {
       }
     } else if (command === 'test:side_by_side') setThreeWays(true);
     else if (command === 'test:scores') setDebriefOpen(true);
-    else if (command === 'tests:record') setEvidenceOpen(true);
+    else if (command === 'tests:record') {
+      // Every test on record takes the scores sheet's place rather than stacking over it: one sheet, one Esc.
+      setDebriefOpen(false);
+      setEvidenceOpen(true);
+    }
     else if (command === 'method:open') setReading('method');
     else if (command === 'close') {
       if (finishOpen) setFinishOpen(false);
@@ -1690,7 +1694,9 @@ export function App() {
                 }}
               />
             )}
-            {guide.step && (
+            {/* Under a sheet (the scores, every test on record, a reading) the guide steps aside: nothing of it lies under
+                the sheet's scrim; its keys still work. */}
+            {guide.step && !(debriefOpen || evidenceOpen || reading !== null || areaOpen) && (
               <>
                 <div className="guide-scrim" aria-hidden="true" />
                 <GuideStrip
@@ -1713,7 +1719,10 @@ export function App() {
                     place={regionTitle}
                     onBack={() => setDebriefOpen(false)}
                     onNext={stepBlocked.look ? null : () => goStep('look')}
-                    onEvidence={() => setEvidenceOpen(true)}
+                    onEvidence={() => {
+                      setDebriefOpen(false);
+                      setEvidenceOpen(true);
+                    }}
                     terra={null}
                     terraOpen={terraOpen}
                     onToggleTerra={() => setTerraOpen((o) => !o)}
