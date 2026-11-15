@@ -371,7 +371,7 @@ function dayPicturePlatform(sensorLabel: string): string | null {
 function filmFromAddress(): StageFilmMove | 'auto' | null {
   if (typeof window === 'undefined') return null;
   const v = new URLSearchParams(window.location.search).get('film');
-  return v === 'record' || v === 'estimate' || v === 'test' || v === 'play' || v === 'auto' ? v : null;
+  return v === 'record' || v === 'estimate' || v === 'test' || v === 'play' || v === 'turn' || v === 'auto' ? v : null;
 }
 
 /** The files of the run on show that did not load, the estimate's among them. Undefined when none is missing. */
@@ -3791,6 +3791,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         if (
           !morphActive &&
           p.inWorkspace &&
+          filmMoveNow !== 'turn' &&
           (filmPreset ?? p.cameraPreset) === 'canyon' &&
           nextBundle.observerDataset.dataSource === 'firms'
         ) {
@@ -3866,10 +3867,23 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
                 distance: orbitCurrent.distance,
                 target: [orbitCurrent.target.x, orbitCurrent.target.y, orbitCurrent.target.z],
               };
-              filmFrom = filmMoveBefore === 'estimate' ? held : near;
+              filmFrom = filmMoveBefore === 'estimate' || filmMoveBefore === 'turn' ? held : near;
               filmTo = filmFrom;
               filmSeconds = 0;
               filmPreset = 'canyon';
+            } else if (filmWanted === 'turn') {
+              // (from where the camera stands, around the point it looks at; the framing is held, see the
+              // framing watcher)
+              filmFrom = {
+                azimuth: orbitCurrent.azimuth,
+                polar: orbitCurrent.polar,
+                distance: orbitCurrent.distance,
+                target: [orbitCurrent.target.x, orbitCurrent.target.y, orbitCurrent.target.z],
+              };
+              filmTo = { ...filmFrom, azimuth: filmFrom.azimuth + FILM_RECORD_TURN };
+              filmSeconds = FILM_RECORD_SECONDS;
+              filmEase = true;
+              filmPreset = p.inWorkspace ? (filmMoveBefore === 'play' || filmMoveBefore === 'record' ? 'region' : 'canyon') : null;
             } else if (filmWanted === 'play') {
               filmFrom = near;
               filmTo = resolveLivePreset('region', true, p.mode, p.activeTheaterId);

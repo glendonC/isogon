@@ -237,8 +237,11 @@ export interface StageFirePatch {
  *             nearer, in nine seconds
  *   test      a hold on the fire, at the push's last pose, through the reveal
  *   play      from that pose, a rise to the whole box on its land in five seconds, then a hold
+ *   turn      from wherever the camera stands, a slow turn of about seven degrees in twelve seconds
+ *             around the point it looks at, its framing held while the passes play under it (the
+ *             close view does not re-aim on each pass); a `test` after it holds its last pose
  */
-export type StageFilmMove = 'record' | 'estimate' | 'test' | 'play';
+export type StageFilmMove = 'record' | 'estimate' | 'test' | 'play' | 'turn';
 
 /** Where the fire on show sits on screen (see `onFireAnchor`). */
 export interface StageFireAnchor {
