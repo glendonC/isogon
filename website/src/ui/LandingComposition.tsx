@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ENTRY } from '../app/names';
+import { SoundControl } from '../audio';
 import { IsogonMark } from './IsogonMark';
 import { LandingBelow } from './LandingBelow';
 import { SplitHeadline } from './SplitHeadline';
@@ -103,11 +104,13 @@ export function LandingComposition({
             <span>Isogon</span>
           </div>
 
-          <nav className="iso-land__menu" aria-label="Search and reference" data-landing-ui="true">
+          <nav className="iso-land__menu" aria-label="Sound, search and reference" data-landing-ui="true">
+            <SoundControl />
             <button type="button" className="iso-navlink" onClick={onOpenSearch}>
-              Search <kbd>/</kbd>
+              <kbd>/</kbd>
+              <span>Search</span>
             </button>
-            <button type="button" className="iso-navlink" onClick={onOpenSensor}>
+            <button type="button" className="iso-navlink iso-navlink--sensor" onClick={onOpenSensor}>
               Sensor physics
             </button>
             <button type="button" className="iso-navlink" onClick={onOpenMethod}>
@@ -119,8 +122,11 @@ export function LandingComposition({
             <SplitHeadline lines={HEADLINE} className="iso-land__headline" play={ready} />
             <p className="iso-land__sentence">{SENTENCE}</p>
             <button type="button" className="iso-entry" onClick={onEnter} data-landing-ui="true">
+              <kbd className="iso-entry__key">Enter</kbd>
               <span className="iso-entry__label">{entry}</span>
-              <kbd>Enter</kbd>
+              <svg className="iso-entry__arrow" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 6h7.5M6.5 3l3 3-3 3" stroke="currentColor" strokeWidth="1.35" strokeLinecap="square" />
+              </svg>
             </button>
           </div>
 

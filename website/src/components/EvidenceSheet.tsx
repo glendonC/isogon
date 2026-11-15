@@ -217,20 +217,20 @@ function PerFireDetailTable({
 
   return (
     <div className="iso-doc-section">
-      <div className="iso-plain-actions" role="group" aria-label="Choose test fire">
+      <div className="iso-viewer__trail" role="group" aria-label="Choose test fire">
         {fires.map((f) => {
           const active = f.region_id === fire.region_id;
           return (
             <button
               key={f.region_id}
               type="button"
-              className="iso-plain-action"
-              data-primary={active ? 'true' : 'false'}
+              className="iso-viewer__trail-btn"
+              data-active={active ? 'true' : 'false'}
               aria-pressed={active}
               onClick={() => setSelectedId(f.region_id)}
             >
               <span>{f.name}</span>
-              <span className="iso-plain-action__key">
+              <span className="iso-viewer__trail-meta">
                 {f.new.ahead_of_both_on}/{f.new.scores_judged ?? scores.length}
               </span>
             </button>

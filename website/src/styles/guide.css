@@ -1,6 +1,6 @@
-/* The guide (website/src/guide): the trail top left, the strip at the bottom, labels and prompts on the stage. Text on
-   the scene with a soft scrim, never a plate; actions are text, the next one heavier; a key is a small quiet mark.
-   Sizes, inks and fonts come from system.css. */
+/* The guide (website/src/guide): the trail top left, the strip at the bottom, labels and prompts on the stage.
+   Sizes, inks and fonts come from system.css. Directives pair a square keycap chip optically centred before a
+   uniform verb, with the primary next-step directive marked by a solid inverted keycap and leading bar. */
 
 .guide-trail {
   position: absolute;
@@ -9,9 +9,16 @@
   top: 22px;
   display: grid;
   gap: 6px;
-  max-width: min(640px, calc(100vw - 2 * var(--sys-gutter)));
+  max-width: min(640px, calc(100vw - 2 * var(--sys-gutter) - 180px));
   pointer-events: auto;
   text-shadow: 0 1px 8px rgba(8, 11, 17, 0.85);
+}
+
+@media (max-width: 760px) {
+  .guide-trail {
+    max-width: calc(100vw - 2 * var(--sys-gutter));
+    top: 52px;
+  }
 }
 
 /* The objective: one verb phrase, the heaviest words of the corner. */
@@ -60,7 +67,8 @@
 
 .guide-trail__word:focus-visible,
 .guide-trail__where:focus-visible,
-.guide-act:focus-visible {
+.guide-act:focus-visible,
+.guide-prompt:focus-visible {
   outline: 1px solid var(--sys-focus);
   outline-offset: 3px;
 }
@@ -73,7 +81,7 @@
   right: 0;
   bottom: 0;
   height: 230px;
-  background: linear-gradient(rgba(8, 11, 17, 0), rgba(8, 11, 17, 0.86));
+  background: linear-gradient(rgba(8, 11, 17, 0), rgba(8, 11, 17, 0.88));
   pointer-events: none;
 }
 
@@ -81,11 +89,11 @@
   position: absolute;
   z-index: 6;
   left: 50%;
-  bottom: 30px;
+  bottom: 28px;
   display: grid;
   gap: var(--sys-s3);
   justify-items: center;
-  width: min(860px, calc(100vw - 2 * var(--sys-gutter)));
+  width: min(880px, calc(100vw - 2 * var(--sys-gutter)));
   transform: translateX(-50%);
   text-align: center;
   pointer-events: auto;
@@ -102,32 +110,81 @@
 .guide-strip__acts {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: var(--sys-s5);
+  gap: var(--sys-s3) var(--sys-s4);
 }
 
 .guide-act {
-  padding: 2px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sys-s2);
+  padding: 6px 10px;
   border: 0;
-  background: none;
+  border-radius: 0;
+  background: rgba(8, 11, 17, 0.45);
   font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
   color: var(--sys-ink-2);
+  white-space: nowrap;
   cursor: pointer;
+  transition:
+    color var(--sys-fast) var(--sys-ease),
+    background-color var(--sys-fast) var(--sys-ease);
 }
 
-.guide-act--next {
+.guide-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 6px;
+  background: rgba(243, 244, 246, 0.08);
+  border: 1px solid var(--sys-edge);
+  border-radius: 0;
+  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
   color: var(--sys-ink);
-  font-weight: 600;
+  flex-shrink: 0;
+  transition:
+    background-color var(--sys-fast) var(--sys-ease),
+    border-color var(--sys-fast) var(--sys-ease),
+    color var(--sys-fast) var(--sys-ease);
 }
 
 .guide-act:hover {
   color: var(--sys-ink);
+  background: rgba(243, 244, 246, 0.08);
 }
 
-.guide-key {
-  margin-right: 6px;
-  font: var(--sys-weight) 11px / 1 var(--sys-mono);
-  color: var(--sys-ink-3);
+.guide-act:hover .guide-key {
+  background: rgba(243, 244, 246, 0.16);
+  border-color: var(--sys-ink);
+}
+
+/* Primary next-step directive: solid inverted keycap + crisp left directive bar + strong verb. */
+.guide-act--next {
+  padding: 6px 14px 6px 10px;
+  border-left: 2px solid var(--sys-ink);
+  background: rgba(243, 244, 246, 0.08);
+  color: var(--sys-ink);
+  font-weight: var(--sys-weight-strong);
+}
+
+.guide-act--next .guide-key {
+  background: var(--sys-ink);
+  border-color: var(--sys-ink);
+  color: var(--sys-night);
+  font-weight: var(--sys-weight-strong);
+}
+
+.guide-act--next:hover {
+  background: rgba(243, 244, 246, 0.15);
+}
+
+.guide-act--next:hover .guide-key {
+  background: var(--sys-ink);
+  border-color: var(--sys-ink);
+  color: var(--sys-night);
 }
 
 /* A label on a thing of the stage, joined by the scene's leader; and a prompt beside the thing's extent. */
@@ -142,19 +199,33 @@
 
 .guide-prompt {
   position: absolute;
-  padding: 2px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sys-s2);
+  padding: 6px 12px 6px 10px;
   border: 0;
-  background: none;
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  border-left: 2px solid var(--sys-ink);
+  border-radius: 0;
+  background: var(--sys-plate);
+  -webkit-backdrop-filter: var(--sys-plate-blur);
+  backdrop-filter: var(--sys-plate-blur);
+  font: var(--sys-weight-strong) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
   color: var(--sys-ink);
   white-space: nowrap;
-  text-shadow: 0 1px 6px rgba(8, 11, 17, 0.95);
   pointer-events: auto;
   cursor: pointer;
+  transition: background-color var(--sys-fast) var(--sys-ease);
 }
 
 .guide-prompt .guide-key {
-  color: var(--sys-ink-2);
+  background: var(--sys-ink);
+  border-color: var(--sys-ink);
+  color: var(--sys-night);
+  font-weight: var(--sys-weight-strong);
+}
+
+.guide-prompt:hover {
+  background: rgba(24, 28, 38, 0.92);
 }
 
 /* Where the guide speaks, the old scrims of the column and the track step back; its own scrim stays. */

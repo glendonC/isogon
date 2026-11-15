@@ -126,8 +126,8 @@ export function StageLabel({
 export function StagePrompt({ at, act, onAct }: { at: { left: number; top: number }; act: ScriptAction; onAct: (command: string) => void }) {
   return (
     <button type="button" className="guide-prompt" style={{ left: at.left, top: at.top }} onClick={() => onAct(act.command)}>
-      {act.key && <span className="guide-key">{act.key}</span>}
-      {act.label}
+      {act.key && <kbd className="guide-key">{act.key}</kbd>}
+      <span>{act.label}</span>
     </button>
   );
 }

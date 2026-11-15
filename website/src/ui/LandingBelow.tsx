@@ -1707,7 +1707,7 @@ export function LandingBelow({
                   <span className="iso-lb-swatch iso-lb-swatch--modis" aria-hidden="true" />
                   What the coarse satellite saw
                 </span>
-                <span className="iso-lb-figure__col-meta">Terra MODIS, 1 km squares, 11 Aug 2012 05:24 UTC</span>
+                <span className="iso-lb-figure__col-meta">The coarse satellite, 1 km squares, 10 August, 10:24 at night</span>
               </div>
               <div className="iso-lb-figure__col">
                 <span className="iso-lb-figure__col-title">
@@ -1721,7 +1721,7 @@ export function LandingBelow({
                   <span className="iso-lb-swatch iso-lb-swatch--detection" aria-hidden="true" />
                   What the sharp satellite saw
                 </span>
-                <span className="iso-lb-figure__col-meta">Suomi NPP VIIRS, 375 m squares, 11 Aug 2012 09:15 UTC</span>
+                <span className="iso-lb-figure__col-meta">The sharp satellite, 375 m squares, 11 August, 2:15 at night</span>
               </div>
             </figcaption>
           </figure>
@@ -1818,7 +1818,7 @@ export function LandingBelow({
                     Revealed sharp detection
                   </span>
                 </span>
-                <span>Withheld pass at 09:15 UTC on the same canyon slice</span>
+                <span>Withheld pass at 2:15 at night on the same canyon slice</span>
               </figcaption>
             </figure>
             <div className="iso-lb-block__copy">
@@ -2044,7 +2044,7 @@ export function LandingBelow({
         {/* Act 5: Final start horizon + visible sound control */}
         <footer className="iso-lb-start">
           <button type="button" className="iso-lb-start__cta" onClick={onEnter}>
-            <span className="iso-lb-start__key">Enter</span>
+            <kbd className="iso-lb-start__key">Enter</kbd>
             <span className="iso-lb-start__cta-label">Start with a real fire</span>
             <ActionArrow />
           </button>

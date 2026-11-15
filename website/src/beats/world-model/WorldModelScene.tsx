@@ -131,8 +131,8 @@ export function WorldModelScene() {
       )}
       {act && promptAt && (near || focused) && (
         <button type="button" className="guide-prompt" style={{ left: promptAt.left, top: promptAt.top }} onClick={() => ws.runCommand(act.command)}>
-          {act.key && <span className="guide-key">{act.key}</span>}
-          {act.label}
+          {act.key && <kbd className="guide-key">{act.key}</kbd>}
+          <span>{act.label}</span>
         </button>
       )}
     </div>

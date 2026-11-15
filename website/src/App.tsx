@@ -38,6 +38,7 @@ import {
 import { plainText } from './ui/plainText';
 import { useSensorModel } from './ui/useSensorModel';
 import { LandingComposition } from './ui/LandingComposition';
+import { SoundControl, playCue } from './audio';
 import { imageryCredit } from './ui/attribution';
 import { useCalendar } from './ui/useCalendar';
 import { fireOfStart, openingStart, registryStartOf, usePlaces, type Box, type FeaturedFire, type Place } from './app/places';
@@ -618,9 +619,10 @@ export function App() {
       } else if (next === 'agent') {
         setCameraPreset('region');
       }
+      if (inWorkspace && next !== step) playCue('step');
       setStep(next);
     },
-    [step, round, leaveRound, restoreFullRun, holdoutViirs, revealed, toggleHoldoutLive, startRound, hideRefused, activeRun, realStart, isExecuting],
+    [step, inWorkspace, round, leaveRound, restoreFullRun, holdoutViirs, revealed, toggleHoldoutLive, startRound, hideRefused, activeRun, realStart, isExecuting],
   );
 
   /**
@@ -708,6 +710,14 @@ export function App() {
     if (revealed) return setDebriefOpen(true);
     toggleHoldoutLive();
   }, [step, revealed, goStep, openModel, toggleHoldoutLive]);
+
+  const prevRevealedRef = useRef(revealed);
+  useEffect(() => {
+    if (revealed && !prevRevealedRef.current) {
+      playCue('reveal');
+    }
+    prevRevealedRef.current = revealed;
+  }, [revealed]);
 
 
   // Continuous 60fps time evolution when playback is active
@@ -1139,7 +1149,10 @@ export function App() {
       next: nextLook,
       focus: rnd.focus,
       canPick: rnd.canPick,
-      pickFocused: rnd.pickMarked,
+      pickFocused: () => {
+        if (rnd.canPick) playCue('look');
+        rnd.pickMarked();
+      },
       ready: rnd.run !== null,
       hover: rnd.hover,
       marked: rnd.marked,
@@ -1187,7 +1200,10 @@ export function App() {
       setPlacesOpen(true);
     }
     else if (command === 'go:play') goStep('look');
-    else if (command === 'play:look') rnd.pickMarked();
+    else if (command === 'play:look') {
+      if (rnd.canPick) playCue('look');
+      rnd.pickMarked();
+    }
     else if (command === 'play:skip') {
       if (round && !round.done && !round.awaitingNext) nextLook();
     } else if (command === 'play:next') {
@@ -1304,6 +1320,14 @@ export function App() {
               }}
             />
 
+            <div className="iso-ws__util" role="region" aria-label="Sound and search">
+              <SoundControl />
+              <button type="button" className="iso-ws__util-btn" onClick={() => setAskOpen(true)}>
+                <kbd>/</kbd>
+                <span>Search</span>
+              </button>
+            </div>
+
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
             {step === 'record' && <CalendarBeat key={recordTry} guideSpeaks={guide.step === 'record'} />}
             {modelScene && <WorldModelScene />}
@@ -1392,7 +1416,10 @@ export function App() {
           regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
           onFireAnchor={modelScene || step === 'look' ? emitAnchor : undefined}
           tileBoard={rnd.board}
-          onTilePick={rnd.pick}
+          onTilePick={(tile) => {
+            if (rnd.canPick) playCue('look');
+            rnd.pick(tile);
+          }}
           onTileHover={rnd.board ? rnd.onHover : undefined}
           onTileAnchors={rnd.board ? rnd.onAnchors : undefined}
         />

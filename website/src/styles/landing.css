@@ -82,25 +82,51 @@
   top: calc(var(--iso-gutter) - 6px);
   right: var(--iso-gutter);
   display: flex;
-  gap: 28px;
+  align-items: center;
+  gap: 24px;
 }
 
 .iso-navlink {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   padding: 6px 0;
   border: 0;
   background: none;
   color: var(--iso-ink-2);
-  font: 500 14px/18px var(--font-sans);
+  font: 500 13px/18px var(--font-sans);
   cursor: pointer;
+  text-shadow: 0 1px 8px rgba(8, 11, 17, 0.75);
   transition: color 200ms var(--ease-studio);
+}
+
+.iso-navlink kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 6px;
+  background: rgba(243, 244, 246, 0.08);
+  border: 1px solid var(--sys-edge);
+  border-radius: 0;
+  font: 400 12px/1 var(--font-mono);
+  color: var(--iso-ink);
+  text-shadow: none;
+  transition:
+    background-color 180ms var(--ease-studio),
+    border-color 180ms var(--ease-studio);
 }
 
 .iso-navlink:hover,
 .iso-navlink:focus-visible {
   color: var(--iso-ink);
+}
+
+.iso-navlink:hover kbd,
+.iso-navlink:focus-visible kbd {
+  background: rgba(243, 244, 246, 0.16);
+  border-color: var(--iso-ink);
 }
 
 /* The hero: one left axis on the logo's left edge, inside the calm band; the right of the sky stays open. */
@@ -125,42 +151,65 @@
   text-wrap: balance;
 }
 
-/* The one way in: a quiet text trigger with its key. A hairline draws under the label on hover. */
+/* The primary entry directive: solid cut-out keycap + uniform strong verb + left vertical directive bar. */
 .iso-entry {
-  margin-top: 22px;
+  margin-top: 24px;
   display: inline-flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 6px 0;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 12px;
   border: 0;
-  background: none;
+  border-left: 2px solid var(--iso-ink);
+  border-radius: 0;
+  background: rgba(243, 244, 246, 0.08);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   color: var(--iso-ink);
-  font: 400 15.5px/20px var(--font-sans);
+  font: 500 15px/20px var(--font-sans);
   letter-spacing: -0.005em;
+  text-shadow: none;
   cursor: pointer;
+  transition: background-color 180ms var(--ease-studio);
+}
+
+.iso-entry__key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 7px;
+  background: var(--iso-ink);
+  border: 1px solid var(--iso-ink);
+  border-radius: 0;
+  font: 500 12px/1 var(--font-mono);
+  color: var(--iso-night);
+  flex-shrink: 0;
 }
 
 .iso-entry__label {
   position: relative;
 }
 
-.iso-entry__label::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 1px;
-  background: currentColor;
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 420ms var(--ease-studio);
+.iso-entry__arrow {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--iso-ink-2);
+  transition:
+    transform 180ms var(--ease-studio),
+    color 180ms var(--ease-studio);
 }
 
-/* Nothing at rest; on hover or focus the hairline draws the full width of the label. */
-.iso-entry:hover .iso-entry__label::after,
-.iso-entry:focus-visible .iso-entry__label::after {
-  transform: scaleX(1);
+.iso-entry:hover,
+.iso-entry:focus-visible {
+  background: rgba(243, 244, 246, 0.15);
+}
+
+.iso-entry:hover .iso-entry__arrow,
+.iso-entry:focus-visible .iso-entry__arrow {
+  color: var(--iso-ink);
+  transform: translate3d(3px, 0, 0);
 }
 
 /* Legend for the terrain: which look is which. */
@@ -322,7 +371,7 @@
     gap: 16px;
   }
 
-  .iso-land__menu .iso-navlink:nth-child(2) {
+  .iso-land__menu .iso-navlink--sensor {
     display: none;
   }
 

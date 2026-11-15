@@ -496,22 +496,101 @@
   right: var(--iso-gutter);
   z-index: 48;
   display: inline-flex;
-  align-items: baseline;
-  gap: 7px;
-  padding: 4px 0;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
   border: 0;
-  background: none;
-  color: var(--iso-ink-3);
+  border-radius: 0;
+  background: rgba(8, 11, 17, 0.72);
+  color: var(--iso-ink-2);
   font: 500 13px/18px var(--font-sans);
-  opacity: 0.55;
+  opacity: 0.78;
   cursor: pointer;
-  transition: opacity 200ms ease, color 200ms ease;
+  transition: opacity 200ms ease, color 200ms ease, background-color 200ms ease;
+}
+
+.iso-restore kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 6px;
+  background: rgba(243, 244, 246, 0.08);
+  border: 1px solid var(--sys-edge);
+  border-radius: 0;
+  color: var(--iso-ink);
 }
 
 .iso-restore:hover,
 .iso-restore:focus-visible {
   opacity: 1;
   color: var(--iso-ink);
+  background: rgba(8, 11, 17, 0.9);
+}
+
+/* Persistent top-right utility controls in the workspace (sound and search).
+   Steps aside whenever a side-opening document viewer occupies the right edge. */
+.iso-ws__util {
+  position: absolute;
+  top: 20px;
+  right: var(--sys-gutter);
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: var(--sys-s4);
+  pointer-events: auto;
+  transition: opacity var(--sys-fast) var(--sys-ease);
+}
+
+body:has(.iso-viewer-layer) .iso-ws__util {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.iso-ws__util-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sys-s2);
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: var(--sys-weight-strong) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+  white-space: nowrap;
+  cursor: pointer;
+  text-shadow: 0 1px 8px rgba(8, 11, 17, 0.75);
+  transition: color var(--sys-fast) var(--sys-ease);
+}
+
+.iso-ws__util-btn kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 6px;
+  background: rgba(243, 244, 246, 0.08);
+  border: 1px solid var(--sys-edge);
+  border-radius: 0;
+  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
+  color: var(--sys-ink);
+  text-shadow: none;
+  transition:
+    background-color var(--sys-fast) var(--sys-ease),
+    border-color var(--sys-fast) var(--sys-ease);
+}
+
+.iso-ws__util-btn:hover,
+.iso-ws__util-btn:focus-visible {
+  color: var(--sys-ink);
+}
+
+.iso-ws__util-btn:hover kbd,
+.iso-ws__util-btn:focus-visible kbd {
+  background: rgba(243, 244, 246, 0.16);
+  border-color: var(--sys-ink);
 }
 
 @media (max-width: 1360px) {

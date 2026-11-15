@@ -316,7 +316,11 @@ export function SideSheet({
     }
   }
 
+  const inWorkspace =
+    typeof document !== 'undefined' && document.querySelector('.iso-app[data-workspace="true"]') !== null;
+
   const anchored =
+    inWorkspace &&
     viewport.w > 760 &&
     candidate !== null &&
     candidate.x >= 16 &&
@@ -411,7 +415,7 @@ export function SideSheet({
             <span />
           )}
           <button type="button" className="iso-plain-action iso-viewer__close" onClick={onClose}>
-            <span className="iso-plain-action__key">Esc</span>
+            <kbd className="iso-plain-action__key">Esc</kbd>
             <span>Close</span>
           </button>
         </header>
