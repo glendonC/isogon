@@ -48,7 +48,8 @@ export function CalendarBeat({ guideSpeaks = false }: CalendarBeatProps) {
       markedMonth={c.selectedMonth ?? c.stageMonth ?? opensOn}
       canOpen={c.canOpen}
       onOpenMonth={c.openMonth}
-      onClose={ws.run.active ? ws.openModel : null}
+      // Escape, once the Record's own views are closed, steps one place back on the path: to the first screen
+      onClose={ws.toFirstScreen}
       guideSpeaks={guideSpeaks}
       markWaits={markWaits}
     />
