@@ -1523,13 +1523,15 @@ export function App() {
   // bottom is the rows' top over the window's height, less a little room.
   const [endFrameBottom, setEndFrameBottom] = useState<number | null>(null);
   const resultsShown = Boolean(round?.done && guide.results && guide.results.rows.length > 0);
+  // The round's briefing stands its lines in full, so the board stands above them in the same way.
+  const briefShown = guide.step === 'play' && guide.shown > 1;
   useEffect(() => {
-    if (!resultsShown) {
+    if (!resultsShown && !briefShown) {
       setEndFrameBottom(null);
       return;
     }
     const measure = () => {
-      const top = document.querySelector('.guide-results')?.getBoundingClientRect().top;
+      const top = document.querySelector(resultsShown ? '.guide-results' : '.guide-say__title')?.getBoundingClientRect().top;
       if (top === undefined || window.innerHeight <= 0) return;
       const b = Math.round((top / window.innerHeight - 0.03) * 1000) / 1000;
       setEndFrameBottom((prev) => (prev === b ? prev : b));
@@ -1540,7 +1542,7 @@ export function App() {
       window.clearTimeout(t);
       window.removeEventListener('resize', measure);
     };
-  }, [resultsShown, guide.results?.rows.length, viewportWidth]);
+  }, [resultsShown, briefShown, guide.results?.rows.length, viewportWidth]);
   guideRef.current = guide;
   marksOpenRef.current = marksOpen;
   /** The commands the guide's actions name (script.json, "commands"). */
@@ -2069,6 +2071,7 @@ export function App() {
                 <GuideStrip
                   title={filmMode && guide.film ? guide.film : guide.objective}
                   lines={filmMode ? [] : said && said.key === guideKey ? said.lines : guide.lines}
+                  shown={said && said.key === guideKey ? 1 : guide.shown}
                   more={filmMode || (said && said.key === guideKey) ? [] : guide.more}
                   // In the film only the step's strong action stands, so nothing else competes with the caption.
                   // Where the next step stands on a thing (the fire, the round's square), the guide holds no action:

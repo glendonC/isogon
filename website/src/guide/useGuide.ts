@@ -40,6 +40,8 @@ export interface Guide {
   objective: string | null;
   context: string | null;
   lines: string[];
+  /** How many of the lines are shown at once, before "Read more": one, or every line of the round's briefing. */
+  shown: number;
   actions: ScriptAction[];
   /** The step's actions that work in every state by their key, not shown in the strip unless a state lists them. */
   also: ScriptAction[];
@@ -68,6 +70,8 @@ export interface Guide {
 
 /** How many of a state's lines stand together in the guide. */
 const STANDING = 2;
+/** The round's briefing: its lines, all shown at once. */
+const BRIEFING = 3;
 
 /**
  * The pictures of the world opened from Test, in the product's words for them until the script carries them:
@@ -175,6 +179,7 @@ const NONE: Guide = {
   objective: null,
   context: null,
   lines: [],
+  shown: 1,
   actions: [],
   also: [],
   fireLabel: null,
@@ -307,10 +312,13 @@ export function useGuide(
         results: end ? { line: ONE_LOOK_WORDS.resultsLine, rows: oneLookRows(one) } : null,
       };
     }
-    const state = stateOf(step, id);
+    // Before the first choice of a round the guide briefs it (the script's `briefing`): the goal, what one look is, how
+    // many there are and how the score is counted, all standing at once.
+    const briefing = step === 'play' && id === 'choose' && !one && c.first_pass_of_round === true;
+    const state = stateOf(step, briefing ? 'briefing' : id);
     const missing = step === 'play' && id !== 'loading' && id !== 'failed' ? missingLine(ws.model.missingFiles) : null;
     // While the one look is chosen, the page says it scores one look in place of the looks left.
-    const said = says(state, f, c).slice(0, STANDING);
+    const said = says(state, f, c).slice(0, briefing ? BRIEFING : STANDING);
     const standing = one && id === 'choose' ? [ONE_LOOK_WORDS.choose, ...said.slice(1)] : said;
     return {
       ...NONE,
@@ -320,6 +328,7 @@ export function useGuide(
       objective: objectiveOf(step, state, f),
       context: contextOf(step, f),
       lines: [...(missing ? [missing] : []), ...standing],
+      shown: briefing ? (missing ? 1 : 0) + standing.length : 1,
       more: moreOf(state, f, c),
       film: filmOf(state, f, c),
       fields: f,

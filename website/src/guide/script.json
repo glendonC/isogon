@@ -2138,27 +2138,31 @@
           ]
         },
         {
-          "id": "choose",
-          "objective": "Pick where to look",
+          "id": "briefing",
+          "objective": "Bring the model's estimate closer to VIIRS",
           "says": [
             {
               "place": "guide",
-              "line": "Each look shows VIIRS for one square."
+              "line": "VIIRS, the sharper of the two satellites, flies over this fire {round_passes} times, and each time is a pass. On {looks_to_spend} of those passes you may point at a square and uncover what VIIRS detected there."
+            },
+            {
+              "place": "guide",
+              "line": "White marks are the model's estimate of where VIIRS saw fire, and red is where MODIS, the coarser satellite, last saw fire. What you uncover goes into the estimate."
+            },
+            {
+              "place": "guide",
+              "line": "Your score counts the ground where the estimate and VIIRS both show fire, out of all the ground where either one does. It starts at {round_start} percent."
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "You have {looks_left} of {looks_to_spend} looks left."
-            },
-            {
-              "place": "guide",
-              "line": "VIIRS passes {round_passes} times in this round, and on {looks_to_spend} of them you may look."
+              "line": "You can look once on a pass at most. Press N to skip a pass and keep your look for later."
             }
           ],
           "actions": [
             {
-              "label": "Look here",
+              "label": "Uncover this square",
               "command": "play:look",
               "key": "Enter",
               "places": [
@@ -2181,7 +2185,8 @@
               "key": "Esc",
               "places": [
                 "guide"
-              ]
+              ],
+              "quiet": true
             }
           ],
           "on_demand": [
@@ -2194,28 +2199,96 @@
               "place": "label",
               "on": "fire",
               "line": "Pass {look_number} of {round_passes_n}, VIIRS, {look_when}: hidden.",
-              "readout": "{looks_left_n} LOOKS LEFT"
+              "readout": "{looks_left_caps} LEFT"
+            }
+          ]
+        },
+        {
+          "id": "choose",
+          "objective": "Pick a square to uncover",
+          "says": [
+            {
+              "place": "guide",
+              "line": "This is pass {look_number} of {round_passes_n}, with {looks_left_count} left. Press N to skip it and save your look."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Your score is {score_so_far} percent. It counts the ground where the estimate and VIIRS both show fire, out of all the ground where either one does."
+            }
+          ],
+          "actions": [
+            {
+              "label": "Uncover this square",
+              "command": "play:look",
+              "key": "Enter",
+              "places": [
+                "guide",
+                "prompt"
+              ],
+              "beside": "marked_square"
+            },
+            {
+              "label": "Skip this pass",
+              "command": "play:skip",
+              "key": "N",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "Leave the round",
+              "command": "close",
+              "key": "Esc",
+              "places": [
+                "guide"
+              ],
+              "quiet": true
+            }
+          ],
+          "on_demand": [
+            "how_is_a_look_scored",
+            "where_should_i_look",
+            "what_is_agreement"
+          ],
+          "labels": [
+            {
+              "place": "label",
+              "on": "fire",
+              "line": "Pass {look_number} of {round_passes_n}, VIIRS, {look_when}: hidden.",
+              "readout": "{looks_left_caps} LEFT"
             }
           ]
         },
         {
           "id": "look_taken",
-          "objective": "See what your look found",
+          "objective": "See what VIIRS detected in that square",
           "says": [
             {
               "place": "guide",
-              "if": "look_found_nothing",
-              "line": "That look found nothing: no fire in that square on this pass, or cloud."
+              "if": "look_raised",
+              "line": "VIIRS detected fire in {look_found} spots here. Your score rose to {score_now} percent; it began at {round_start}."
             },
             {
               "place": "guide",
-              "unless": "look_found_nothing",
-              "line": "Overlap with VIIRS is now {score_now} percent of the burning ground."
+              "if": "look_level",
+              "line": "VIIRS detected fire in {look_found} spots here. Your score held at {score_now} percent; it began at {round_start}."
+            },
+            {
+              "place": "guide",
+              "if": "look_lowered",
+              "line": "VIIRS detected fire in {look_found} spots here. Your score fell to {score_now} percent; it began at {round_start}."
+            },
+            {
+              "place": "guide",
+              "if": "look_found_nothing",
+              "line": "VIIRS detected no fire here. Your score stays at {score_now} percent; it began at {round_start}."
             }
           ],
           "actions": [
             {
-              "label": "Next pass",
+              "label": "Go to the next pass",
               "command": "play:next",
               "key": "Enter",
               "places": [
@@ -2228,7 +2301,8 @@
               "key": "Esc",
               "places": [
                 "guide"
-              ]
+              ],
+              "quiet": true
             }
           ],
           "labels": [
@@ -2236,15 +2310,13 @@
               "place": "label",
               "on": "looked_square",
               "if": "look_found_nothing",
-              "line": "Your look found nothing here.",
-              "readout": "FOUND NOTHING: NO FIRE, OR CLOUD"
+              "line": "VIIRS detected nothing here. You have {looks_left_no_count} left."
             },
             {
               "place": "label",
               "on": "looked_square",
               "unless": "look_found_nothing",
-              "line": "Your look found {look_found} detections and moved overlap by {look_gain} points, to {score_now} percent.",
-              "readout": "FOUND {look_found} DETECTIONS   OVERLAP NOW {score_now}%"
+              "line": "In blue, what VIIRS detected here. You have {looks_left_no_count} left."
             }
           ],
           "on_demand": [
@@ -2254,18 +2326,28 @@
           "more": [
             {
               "place": "guide",
+              "if": "look_level",
+              "line": "A look that finds fire the estimate already had moves the score little or not at all."
+            },
+            {
+              "place": "guide",
+              "if": "look_lowered",
+              "line": "The model changed its estimate with what you uncovered, and it now agrees a little less with VIIRS."
+            },
+            {
+              "place": "guide",
               "if": "look_found_nothing",
-              "line": "A look that finds nothing teaches the model nothing and scores nothing."
+              "line": "VIIRS may have seen no fire in that square on this pass, or cloud may have hidden it. Either way the model learns nothing and the score stays as it was."
             }
           ]
         },
         {
           "id": "looks_spent",
-          "objective": "Let the last passes go by",
+          "objective": "End the round to see how you did",
           "says": [
             {
               "place": "guide",
-              "line": "You have used all {looks_to_spend} looks."
+              "line": "You have used all {looks_to_spend} looks, and your score is {score_so_far} percent."
             }
           ],
           "labels": [
@@ -2290,28 +2372,50 @@
               "key": "Esc",
               "places": [
                 "guide"
-              ]
+              ],
+              "quiet": true
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "The last VIIRS passes go by without a look."
+              "line": "Ending the round sets your score beside the model's own choice of squares and beside random squares."
             }
           ]
         },
         {
           "id": "round_end",
-          "objective": "Your looks",
+          "objective": "See how your looks did",
           "says": [
             {
               "place": "guide",
-              "line": "Your four looks beside the other players'."
+              "if": "end_beat_both",
+              "line": "Your looks took the score from {round_start} to {round_end} percent, more than both the model's own choice and random squares."
+            },
+            {
+              "place": "guide",
+              "if": "end_beat_chance_only",
+              "line": "Your looks took the score from {round_start} to {round_end} percent. That beats random squares, but not the model's own choice."
+            },
+            {
+              "place": "guide",
+              "if": "end_beat_rule_only",
+              "line": "Your looks took the score from {round_start} to {round_end} percent. That beats the model's own choice, but not random squares."
+            },
+            {
+              "place": "guide",
+              "if": "end_beat_neither",
+              "line": "Your looks took the score from {round_start} to {round_end} percent, less than both the model's own choice and random squares."
+            },
+            {
+              "place": "guide",
+              "if": "end_level",
+              "line": "Your looks took the score from {round_start} to {round_end} percent. The model's own choice reached {rule_end}, and random squares {chance_end} on average."
             }
           ],
           "actions": [
             {
-              "label": "Other players",
+              "label": "See where the model looked",
               "command": "play:players",
               "key": "Enter",
               "places": [
@@ -2344,46 +2448,37 @@
             {
               "place": "label",
               "on": "fire",
-              "line": "Everything VIIRS saw this round: {round_sharp_detections} detections.",
+              "line": "Everything VIIRS detected in this round: {round_sharp_detections} spots.",
               "film": "All {round_sharp_detections} detections of the round, shown.",
-              "readout": "OVERLAP {round_start}% TO {round_end}%"
+              "readout": "SCORE {round_start}% TO {round_end}%"
             }
           ],
           "results": {
             "place": "guide",
-            "how": "rows on one scale, centred above the guide's sentences, as part of what the guide says; each row is a name and its figure in points; the visitor's row is the strong one",
+            "how": "rows on one scale, centred above the guide's sentences, as part of what the guide says; each row is a name and its score at the end of the round, in percent; its bar is how far the score moved from the start; the visitor's row is the strong one",
+            "line": "Each bar is how far the score moved from the start.",
             "rows": [
               {
                 "name": "You",
-                "field": "your_gain",
+                "field": "end_you",
                 "strong": true
               },
               {
-                "name": "Chance",
-                "field": "chance_gain",
-                "note": "The mean of {chance_tries} rounds of random looks."
+                "name": "The model's own choice",
+                "field": "end_rule",
+                "note": "It has as many looks and uncovers the square where its estimate is least sure."
               },
               {
-                "name": "Follow MODIS",
-                "field": "coarse_rule_gain"
+                "name": "Random squares",
+                "field": "end_chance",
+                "note": "The average of {chance_tries} rounds of looks at random."
               },
               {
-                "name": "Least Sure",
-                "field": "unsure_rule_gain"
-              },
-              {
-                "name": "Learned Player",
-                "field": "learned_gain",
-                "note": "The same looks as Least Sure.",
-                "note_if": "learned_same_looks_as_rule"
-              },
-              {
-                "name": "Sees the Answer",
-                "field": "answer_gain",
-                "note": "Not a fair player: it reads the hidden detections, and looks at evenly spaced passes."
+                "name": "At the start",
+                "field": "end_start"
               }
             ],
-            "unit": "points"
+            "unit": "percent"
           },
           "film": [
             {
@@ -2394,17 +2489,11 @@
           "more": [
             {
               "place": "guide",
-              "line": "Your looks took overlap from {round_start} to {round_end} percent, a gain of {your_gain} points of overlap."
+              "line": "The model's own choice uncovers the square where its estimate is least sure. Random squares are the average of {chance_tries} rounds of looks at random."
             },
             {
               "place": "guide",
-              "unless": "learned_beats_rule",
-              "line": "Over {rounds_n} other rounds, Least Sure beat Chance on {rule_ahead_rounds}, and the Learned Player did not beat Least Sure."
-            },
-            {
-              "place": "guide",
-              "if": "learned_beats_rule",
-              "line": "Over {rounds_n} other rounds, Least Sure beat Chance on {rule_ahead_rounds}, and the Learned Player beat it by {learned_minus_rule} points."
+              "line": "Over {rounds_n} other rounds, the model's own choice beat random squares on {rule_ahead_rounds}."
             }
           ]
         },
@@ -2682,12 +2771,12 @@
           ]
         }
       ],
-      "objective": "Pick where to look",
+      "objective": "Bring the model's estimate closer to VIIRS",
       "start_card": {
         "place": "prompt",
         "at": "fire",
-        "do": "You have {looks_to_spend} looks over {round_passes} VIIRS passes. Choose the square where a look helps most.",
-        "done": "The round ends after the last pass, with your looks set beside the other players'."
+        "do": "VIIRS flies over this fire {round_passes} times, and on {looks_to_spend} of those passes you may uncover one square and see what it detected there.",
+        "done": "The round ends after the last pass, with your score beside the model's own choice and random squares."
       },
       "context": "{place}, {run_days}"
     },
@@ -4228,6 +4317,66 @@
       "key": "observation.budget_left",
       "format": "count",
       "is": "looks left, in digits, for the readout"
+    },
+    "score_so_far": {
+      "route": "POST /api/env/next_look/step or reset, the latest",
+      "key": "score of the last look, else score_start",
+      "format": "percent1",
+      "is": "the round's score now, before the next look"
+    },
+    "rule_end": {
+      "route": "POST /api/env/next_look/step, the last",
+      "key": "end.reference.least_sure.final",
+      "format": "percent1",
+      "is": "the score at the end of the round of the model's own choice, the square where its estimate is least sure"
+    },
+    "chance_end": {
+      "route": "POST /api/env/next_look/step, the last",
+      "key": "end.reference.random.finals",
+      "format": "percent1 of the mean",
+      "is": "the mean score at the end of the rounds of random squares"
+    },
+    "end_you": {
+      "route": "POST /api/env/next_look/step, the last",
+      "key": "end.player.final",
+      "format": "percent1 with a percent sign",
+      "is": "the visitor's row at the round's end"
+    },
+    "end_rule": {
+      "route": "POST /api/env/next_look/step, the last",
+      "key": "end.reference.least_sure.final",
+      "format": "percent1 with a percent sign",
+      "is": "the model's own choice's row at the round's end"
+    },
+    "end_chance": {
+      "route": "POST /api/env/next_look/step, the last",
+      "key": "end.reference.random.finals",
+      "format": "percent1 of the mean with a percent sign",
+      "is": "the row of random squares at the round's end"
+    },
+    "end_start": {
+      "route": "POST /api/env/next_look/reset",
+      "key": "score_start",
+      "format": "percent1 with a percent sign",
+      "is": "the row of the start at the round's end"
+    },
+    "looks_left_count": {
+      "route": "POST /api/env/next_look/reset or step, the latest",
+      "key": "observation.budget_left",
+      "format": "count_word with look or looks",
+      "is": "looks the visitor has not spent yet, with the noun"
+    },
+    "looks_left_no_count": {
+      "route": "POST /api/env/next_look/reset or step, the latest",
+      "key": "observation.budget_left",
+      "format": "count_no with look or looks",
+      "is": "looks left after a look, no looks when none"
+    },
+    "looks_left_caps": {
+      "route": "POST /api/env/next_look/reset or step, the latest",
+      "key": "observation.budget_left",
+      "format": "count with LOOK or LOOKS",
+      "is": "the looks left in the readout's capitals"
     }
   },
   "marks": {

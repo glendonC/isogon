@@ -16,6 +16,7 @@ const LESS = 'Less';
 export function GuideStrip({
   title = null,
   lines,
+  shown: standing = 1,
   more = [],
   actions,
   onAction,
@@ -23,14 +24,16 @@ export function GuideStrip({
 }: {
   title?: string | null;
   lines: string[];
+  /** How many lines stand in full before "Read more" (the round's briefing shows all of its own). */
+  shown?: number;
   /** What the state says on demand (the script's `more`), opened in place with the rest. */
   more?: string[];
   actions: ScriptAction[];
   onAction: (command: string) => void;
   results?: { line: string; rows: ResultRow[] } | null;
 }) {
-  const [first, ...standingRest] = lines;
-  const rest = [...standingRest, ...more];
+  const firsts = lines.slice(0, Math.max(1, standing));
+  const rest = [...lines.slice(firsts.length), ...more];
   const [open, setOpen] = useState(false);
   const said = lines.join(' ');
   useEffect(() => setOpen(false), [said]);
@@ -41,11 +44,11 @@ export function GuideStrip({
       <div className="guide-say">
         {results && <Results line={results.line} rows={results.rows} />}
         {title && <h2 className="guide-say__title">{title}</h2>}
-        {first && (
-          <p className="guide-say__line" aria-live="polite">
-            {first}
+        {firsts.map((line, n) => (
+          <p key={n} className="guide-say__line" aria-live={n === 0 ? 'polite' : undefined}>
+            {line}
           </p>
-        )}
+        ))}
         {rest.length > 0 && open && <p className="guide-say__more">{rest.join(' ')}</p>}
       </div>
       {(shown.length > 0 || rest.length > 0) && (

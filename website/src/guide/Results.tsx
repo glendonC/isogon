@@ -35,7 +35,7 @@ export function Results({ line, rows }: { line: string; rows: ResultRow[] }) {
   const span = below ? 50 : 100;
   return (
     <div className="guide-results" role="table" aria-label={line}>
-      <p className="guide-results__line">{line}</p>
+      {line && <p className="guide-results__line">{line}</p>}
       {rows.map((r) => {
         const w = (Math.abs(r.gain) / most) * span;
         const left = below ? (r.gain < 0 ? 50 - w : 50) : 0;
