@@ -79,7 +79,7 @@ import {
 } from './engine/contextTerrain';
 import { FIRE_THRESHOLD_NORM, buildFireHistory, type FireHistory } from './engine/fireField';
 import { FootprintField, LIGHT_TEX_SIZE, buildDetectionSource } from './engine/footprintField';
-import { BeliefField, parseDeclaredCells } from './engine/beliefField';
+import { BeliefField, parseDeclaredCells, type DeclaredCells } from './engine/beliefField';
 import { passIsHidden } from './engine/passShown';
 import type { BeliefFrames } from './engine/beliefField';
 import { HdrPipeline, resolveStagePixelRatio } from './engine/hdrPipeline';
@@ -291,6 +291,8 @@ interface CachedTheaterBundle {
   landingFrame?: number | null;
   /** Real runs: hours a burning cell stays lit in the run's model, from the payload. Absent: 12. */
   residenceHours?: number;
+  /** The run's declared cells by frame (the estimate's frames on a hidden pass), on their own grid over the box. */
+  declared?: DeclaredCells | null;
   /** Real runs: where the run's fire is in the region (u east, v north). Worked out once. */
 }
 
@@ -417,6 +419,15 @@ const FILM_PLAY_SECONDS = 5;
 // (patches far apart), at its heaviest patch, the patches grouped on a grid of this cell
 const FIRE_CENTRE_EMPTY_KM = 5;
 const FIRE_PATCH_CELL_KM = 2;
+// The close view on Estimate and Test frames the declared cells of the pass on show: they take at
+// most this share of the page's frame (so the film's push, to 0.94 of the distance, keeps them in),
+// from a distance within these limits (stage units; the slab is about 13 across), at the
+// workspace's lens
+const CLOSE_FRAME_FILL = 0.8;
+const CLOSE_FRAME_MIN = 3.0;
+const CLOSE_FRAME_MAX = 15.0;
+const CLOSE_FRAME_SHARE = 0.75;
+const CLOSE_VIEW_FOV = 39.0;
 // The fire of the day around the pass on show (detections given within a day of it), and how near
 // its centre a detection counts as at the centre
 const FIRE_DAY_MS = 24 * 3600 * 1000;
@@ -1930,12 +1941,53 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
       // Keep the anchor away from the cut faces of the slab (a real run's close views have the
       // context terrain behind them, so its fire may sit nearer the edge)
-      const u = fire
+      let u = fire
         ? THREE.MathUtils.clamp(fire[0], 0.1, 0.9)
         : THREE.MathUtils.clamp((anchor!.lon - lonMin) / Math.max(1e-4, lonMax - lonMin), 0.2, 0.8);
-      const v = fire
+      let v = fire
         ? THREE.MathUtils.clamp(fire[1], 0.1, 0.9)
         : THREE.MathUtils.clamp((anchor!.lat - latMin) / Math.max(1e-4, latMax - latMin), 0.2, 0.8);
+      // On Estimate and Test the close view frames the estimate of the pass on show: the middle of
+      // the cells the run declares there, from a distance at which every one of them stands inside
+      // the page's frame (the room the guide takes left out), see fitCloseDistance
+      const declaredNow = preset === 'canyon' ? nextBundle.declared?.byFrame.get(frameNow) : undefined;
+      let cellCorners: number[] | null = null;
+      if (declaredNow && declaredNow.length > 0 && nextBundle.declared) {
+        const { nx, ny } = nextBundle.declared;
+        // (the largest patches of touching cells that together hold CLOSE_FRAME_SHARE of them: a few
+        // cells far off do not pull the camera back)
+        const centres = new Float32Array(declaredNow.length * 3);
+        declaredNow.forEach((cell, i) => {
+          centres[i * 3] = ((cell % nx) + 0.5) / nx;
+          centres[i * 3 + 1] = 1 - (Math.floor(cell / nx) + 0.5) / ny;
+          centres[i * 3 + 2] = 1;
+        });
+        const grouped = firePatches(centres, nx, ny);
+        let keepPatches = 0;
+        for (let held = 0; keepPatches < grouped.sizes.length && held < CLOSE_FRAME_SHARE * declaredNow.length; keepPatches++) {
+          held += grouped.sizes[keepPatches];
+        }
+        let u0 = 1;
+        let u1 = 0;
+        let v0 = 1;
+        let v1 = 0;
+        cellCorners = [];
+        for (let i = 0; i < declaredNow.length; i++) {
+          if (grouped.patchOf[i] >= keepPatches) continue;
+          const cell = declaredNow[i];
+          const cu0 = (cell % nx) / nx;
+          const cv1 = 1 - Math.floor(cell / nx) / ny;
+          const cu1 = cu0 + 1 / nx;
+          const cv0 = cv1 - 1 / ny;
+          u0 = Math.min(u0, cu0);
+          u1 = Math.max(u1, cu1);
+          v0 = Math.min(v0, cv0);
+          v1 = Math.max(v1, cv1);
+          cellCorners.push(cu0, cv0, cu1, cv0, cu0, cv1, cu1, cv1);
+        }
+        u = THREE.MathUtils.clamp((u0 + u1) / 2, 0.05, 0.95);
+        v = THREE.MathUtils.clamp((v0 + v1) / 2, 0.05, 0.95);
+      }
       const ax = worldX(u);
       const az = worldZ(v);
       // Where to stand. Three wishes, scored over the compass:
@@ -1969,11 +2021,108 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           bestAz = cand;
         }
       }
+      let target: [number, number, number] = [ax, sampleCpuTerrainY(u, v) + 0.1, az];
+      let distance = dest.distance;
+      if (cellCorners) {
+        // Seen at a low angle the near cells stand far below the middle of their area on the map:
+        // twice over, fit the distance, then aim at the ground under the middle of the cells' extent
+        // on screen
+        for (let round = 0; round < 3; round++) {
+          distance = fitCloseDistance(cellCorners, target, bestAz, dest.polar);
+          if (round === 2) break;
+          target = recentreOnCells(cellCorners, target, bestAz, dest.polar, distance);
+        }
+      }
       return {
         ...dest,
         azimuth: bestAz,
-        target: [ax, sampleCpuTerrainY(u, v) + 0.1, az],
+        distance,
+        target,
       };
+    };
+
+    /** The point on the ground (at the target's height) under the middle of the corners' extent on screen. */
+    const recentreOnCells = (
+      cornersUv: number[],
+      target: [number, number, number],
+      azimuth: number,
+      polar: number,
+      distance: number,
+    ): [number, number, number] => {
+      const dir = new THREE.Vector3().setFromSphericalCoords(1, polar, azimuth);
+      const fwd = dir.clone().negate();
+      const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+      const up = new THREE.Vector3().crossVectors(right, fwd);
+      const cam = new THREE.Vector3(target[0], target[1], target[2]).addScaledVector(dir, distance);
+      let x0 = Infinity;
+      let x1 = -Infinity;
+      let y0 = Infinity;
+      let y1 = -Infinity;
+      const rel = new THREE.Vector3();
+      for (let i = 0; i < cornersUv.length; i += 2) {
+        rel.set(worldX(cornersUv[i]), sampleCpuTerrainY(cornersUv[i], cornersUv[i + 1]), worldZ(cornersUv[i + 1])).sub(cam);
+        const zf = rel.dot(fwd);
+        if (zf <= 0.05) continue;
+        const x = rel.dot(right) / zf;
+        const y = rel.dot(up) / zf;
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x);
+        y0 = Math.min(y0, y);
+        y1 = Math.max(y1, y);
+      }
+      if (!Number.isFinite(x0)) return target;
+      const ray = fwd.clone().addScaledVector(right, (x0 + x1) / 2).addScaledVector(up, (y0 + y1) / 2);
+      if (ray.y >= -1e-4) return target;
+      const t = (target[1] - cam.y) / ray.y;
+      const hit = cam.clone().addScaledVector(ray, t);
+      const hu = THREE.MathUtils.clamp(hit.x / slabNow.width + 0.5, 0.05, 0.95);
+      const hv = THREE.MathUtils.clamp(0.5 - hit.z / slabNow.depth, 0.05, 0.95);
+      return [worldX(hu), sampleCpuTerrainY(hu, hv) + 0.1, worldZ(hv)];
+    };
+
+    /**
+     * The nearest distance (between CLOSE_FRAME_MIN and CLOSE_FRAME_MAX) at which every corner given
+     * (box uv pairs, on the terrain) stands inside CLOSE_FRAME_FILL of the page's frame, seen from the
+     * pose with the target in the frame's middle, as the close views draw it.
+     */
+    const fitCloseDistance = (cornersUv: number[], target: [number, number, number], azimuth: number, polar: number): number => {
+      const frame = sanitizeSubjectFrame(propsRef.current.workspaceSubjectFrame) ?? { left: 0, top: 0, right: 1, bottom: 1 };
+      const tanHalf = Math.tan(THREE.MathUtils.degToRad(CLOSE_VIEW_FOV / 2));
+      const halfW = (frame.right - frame.left) * tanHalf * camera.aspect * CLOSE_FRAME_FILL;
+      const halfH = (frame.bottom - frame.top) * tanHalf * CLOSE_FRAME_FILL;
+      const pts: number[] = [];
+      for (let i = 0; i < cornersUv.length; i += 2) {
+        pts.push(worldX(cornersUv[i]), sampleCpuTerrainY(cornersUv[i], cornersUv[i + 1]), worldZ(cornersUv[i + 1]));
+      }
+      const dir = new THREE.Vector3().setFromSphericalCoords(1, polar, azimuth);
+      const fwd = dir.clone().negate();
+      const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+      const up = new THREE.Vector3().crossVectors(right, fwd);
+      const fits = (d: number) => {
+        const cx = target[0] + dir.x * d;
+        const cy = target[1] + dir.y * d;
+        const cz = target[2] + dir.z * d;
+        for (let i = 0; i < pts.length; i += 3) {
+          const rx = pts[i] - cx;
+          const ry = pts[i + 1] - cy;
+          const rz = pts[i + 2] - cz;
+          const zf = rx * fwd.x + ry * fwd.y + rz * fwd.z;
+          if (zf <= 0.05) return false;
+          if (Math.abs((rx * right.x + ry * right.y + rz * right.z) / zf) > halfW) return false;
+          if (Math.abs((rx * up.x + ry * up.y + rz * up.z) / zf) > halfH) return false;
+        }
+        return true;
+      };
+      if (fits(CLOSE_FRAME_MIN)) return CLOSE_FRAME_MIN;
+      if (!fits(CLOSE_FRAME_MAX)) return CLOSE_FRAME_MAX;
+      let lo = CLOSE_FRAME_MIN;
+      let hi = CLOSE_FRAME_MAX;
+      for (let k = 0; k < 22; k++) {
+        const mid = (lo + hi) / 2;
+        if (fits(mid)) hi = mid;
+        else lo = mid;
+      }
+      return hi;
     };
 
     // Landing world view: where the camera stands. It stands low inside the landscape and looks at
@@ -3852,8 +4001,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         // Context terrain: wherever the world is shown instead of the block (landing world view and
         // the close presets), once the region's own terrain has settled
         // (and in the preset that shows the whole box with its land, from any distance)
+        // (and in the close view on a real run, which may stand back to frame a long estimate whole;
+        // see fitCloseDistance)
+        const presetShown = filmPreset ?? p.cameraPreset;
         const worldShown = p.inWorkspace
-          ? (filmPreset ?? p.cameraPreset) === 'region'
+          ? presetShown === 'region' || (presetShown === 'canyon' && nextBundle.observerDataset.dataSource === 'firms')
             ? 1.0
             : 1.0 - THREE.MathUtils.smoothstep(orbitCurrent.distance, 8.5, 11.5)
           : landingWorld
@@ -4754,6 +4906,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           callouts: found.callouts,
           fieldScale: parseFieldIntensityScale(run.encoding),
           residenceHours: parseResidenceHours(run.model) ?? undefined,
+          declared: parseDeclaredCells(run.declared_cells),
           fireHistory: null,
           ...liteShadingFields(
             Math.max(18.0, run.region.width_km || 60.0),
