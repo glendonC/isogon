@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%23080B11'/%3E%3Cpath fill='%23F7F7F4' d='M8.6 4.5h6.8l4.1 4.1v2.1L10.7 19.5H8.6l-4.1-4.1V8.6l4.1-4.1Zm6.8 15 4.1-4.1v-1.9l-6 6h1.9Z'/%3E%3C/svg%3E"
+    />
+    <title>Isogon</title>
+    <meta name="description" content="Scientific world models that reconstruct physical systems from imperfect measurements, predict what other instruments will see, and learn what to investigate next." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Isogon" />
+    <meta property="og:description" content="Scientific world models that reconstruct physical systems from imperfect measurements, predict what other instruments will see, and learn what to investigate next." />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Isogon" />
+    <meta name="twitter:description" content="Scientific world models that reconstruct physical systems from imperfect measurements, predict what other instruments will see, and learn what to investigate next." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+    <style>
+      html,
+      body {
+        overscroll-behavior: none;
+        background: #080b11;
+      }
+      .iso-first-load {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: #080b11;
+      }
+      .iso-first-load__line {
+        margin: 0;
+        font: 400 15px/22px 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: #9aa1ad;
+        text-align: center;
+        background-image: linear-gradient(105deg, #9aa1ad 0%, #9aa1ad 38%, #f3f4f6 50%, #9aa1ad 62%, #9aa1ad 100%);
+        background-size: 240% 100%;
+        background-position: 120% 50%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: iso-first-shimmer 3.2s linear infinite;
+      }
+      @keyframes iso-first-shimmer {
+        0% { background-position: 120% 50%; }
+        100% { background-position: -120% 50%; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .iso-first-load__line {
+          animation: none;
+          background-image: none;
+          -webkit-background-clip: border-box;
+          background-clip: border-box;
+          -webkit-text-fill-color: currentColor;
+          color: #c3c8d1;
+        }
+      }
+    </style>
+    <script type="module" crossorigin src="/isogon/assets/index-DZPK8DSy.js"></script>
+    <link rel="stylesheet" crossorigin href="/isogon/assets/index-BcLjG0RN.css">
+  </head>
+  <body style="background:#080B11;color:#F3F4F6;margin:0;overflow:hidden;">
+    <div id="root">
+      <div class="iso-first-load" role="status" aria-live="polite">
+        <p class="iso-first-load__line">Loading real fire detections from NASA satellites</p>
+      </div>
+    </div>
+  </body>
+</html>

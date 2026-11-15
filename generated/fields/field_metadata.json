@@ -1,0 +1,110 @@
+{
+  "schema_version": "1.0.0",
+  "model_version": "0.9.0",
+  "provenance_note": "Analytical, physics-informed simulation. No downloaded NASA FIRMS rows",
+  "data_provenance_distinction": {
+    "terrain_elevation": "Real downloaded DEM raster loaded from website/public/generated/terrain/ca_dem_f32.bin",
+    "fire_activity_and_hotspots": "Modeled physics-informed spatiotemporal fire-activity reconstruction and MODIS/VIIRS forward-operator simulation. Zero NASA FIRMS rows downloaded.",
+    "downloaded_firms_rows": 0
+  },
+  "terrain_source": "real_downloaded_dem_ca_dem_f32",
+  "dem_path_used": "website/public/generated/terrain/ca_dem_f32.bin",
+  "grid": {
+    "west": -121.6,
+    "south": 39.75,
+    "east": -120.75,
+    "north": 40.35,
+    "height": 256,
+    "width": 256,
+    "row_orientation": "north_to_south (row 0 = 40.35 N, row 255 = 39.75 N)",
+    "col_orientation": "west_to_east (col 0 = -121.60 E, col 255 = -120.75 E)",
+    "dx_km": 0.2836,
+    "dy_km": 0.2615,
+    "elevation_min_m": 313.4,
+    "elevation_max_m": 2356.8
+  },
+  "tensor": {
+    "file": "reconstruction_u8.bin",
+    "dtype": "uint8",
+    "shape": [
+      24,
+      256,
+      256,
+      4
+    ],
+    "byte_length": 6291456,
+    "sha256": "a0b866114f8e67bf41c3011c54865c18126a2b3babb8648b44be92af01e2d7d1",
+    "epoch_cadence_hours": 12,
+    "channels": [
+      {
+        "index": 0,
+        "rgba": "R",
+        "name": "z_hat_posterior_mean",
+        "units": "MW / km^2",
+        "domain": [
+          0.0,
+          80.0
+        ],
+        "epistemic_state": "Harmonized / Predicted"
+      },
+      {
+        "index": 1,
+        "rgba": "G",
+        "name": "sigma_epistemic_uncertainty",
+        "units": "MW / km^2",
+        "domain": [
+          0.0,
+          24.0
+        ],
+        "epistemic_state": "Calibrated Posterior SD"
+      },
+      {
+        "index": 2,
+        "rgba": "B",
+        "name": "modis_observed_density",
+        "units": "MW / km^2",
+        "domain": [
+          0.0,
+          80.0
+        ],
+        "epistemic_state": "Observed (1 km to 4.8x2.0 km bow-tie PSF, >=12 MW floor)"
+      },
+      {
+        "index": 3,
+        "rgba": "A",
+        "name": "viirs_observed_density",
+        "units": "MW / km^2",
+        "domain": [
+          0.0,
+          80.0
+        ],
+        "epistemic_state": "Observed (375 m 3-zone PSF, >=1.5 MW floor)"
+      }
+    ]
+  },
+  "artifacts": {
+    "reconstruction_u8_bytes": 6291456,
+    "observer_passes_bytes": 126047,
+    "calendar_2000_2026_bytes": 139526,
+    "sensor_model_diagnostics_bytes": 110762
+  },
+  "verification": {
+    "tensor_shape": [
+      24,
+      256,
+      256,
+      4
+    ],
+    "tensor_bytes": 6291456,
+    "terrain_source": "real_downloaded_dem_ca_dem_f32",
+    "total_footprints_24_frames": 2310,
+    "frame_3_modis_gap_mean_sigma": 19.525,
+    "frame_4_clear_coobs_mean_sigma": 0.982,
+    "frame_8_cloudy_mean_sigma": 9.98,
+    "frame_10_clear_coobs_mean_sigma": 1.115,
+    "frame_12_footprint_count": 126,
+    "calendar_records": 324,
+    "viirs_to_modis_step_ratio": 3.81,
+    "compute_seconds": 3.982
+  }
+}
