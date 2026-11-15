@@ -231,9 +231,9 @@ void main() {
 
   vec3 picture = texture2D(uContextOrtho, vCuv).rgb;
   vec3 albedo = pictureToScene(picture);
-  // A lake by the elevation: level ground, unless the picture plainly shows a green field there
+  // A lake: level ground in the elevation where the picture looks like water
   // (a gentler edge than the sea's: a lake is a few posts wide out here, and its shore would step)
-  float lake = smoothstep(0.30, 0.70, shade.a) * notGreenField(picture);
+  float lake = smoothstep(0.30, 0.70, shade.a) * waterLook(picture);
   float water = max(sea, lake);
 
   // The pack's light balance (see ./terrainShader.ts), without baked shadows or sky view

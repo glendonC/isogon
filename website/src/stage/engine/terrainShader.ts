@@ -53,11 +53,15 @@ const float WATER_PICTURE_LEFT = 0.14;  // share of the picture's own colour kep
 // (none on the sea: imagery at sea is tiles of other dates and brightness, and shows them)
 const float WATER_NIGHT_DIM = 0.55;     // by night water gives back a dark sky
 
-// Level ground that is plainly vegetation in the picture (bright and green) is not water
-float notGreenField(vec3 picture) {
+// Level ground is a lake only where the picture looks like water: bluer than it is red or green (a
+// glint on a lake is pale but blue), or dark, and in either case not green. A swamp or a marsh is as
+// level as a lake and covered in plants; a field on a level floodplain is green or brown.
+float waterLook(vec3 picture) {
   float luma = dot(picture, vec3(0.2126, 0.7152, 0.0722));
-  float green = picture.g / max(max(picture.r, picture.b), 1e-3);
-  return 1.0 - smoothstep(1.08, 1.25, green) * smoothstep(0.03, 0.08, luma);
+  float greenish = smoothstep(1.04, 1.12, picture.g / max(max(picture.r, picture.b), 1e-3)) * smoothstep(0.02, 0.04, luma);
+  float bluish = smoothstep(0.93, 1.0, picture.b / max(max(picture.r, picture.g), 1e-3));
+  float dark = 1.0 - smoothstep(0.04, 0.06, luma);
+  return max(bluish, dark) * (1.0 - greenish);
 }
 
 // The lit surface with water on it. glint: fresnel and sun glint, already scaled; none by night
@@ -715,9 +719,9 @@ void main() {
                     * step(photoRgb.r * 1.45, photoRgb.b)
                     * (1.0 - smoothstep(0.022, 0.042, satLuma))
                     * (1.0 - smoothstep(0.012, 0.028, slopeMag));
-  // A lake by the elevation: level ground, unless the picture plainly shows a green field there
+  // A lake: level ground in the elevation where the picture looks like water
   vec4 baked = texture2D(uShadowTex, vUv);
-  float lake = baked.g * uLakeMix * notGreenField(photoRgb);
+  float lake = baked.g * uLakeMix * waterLook(photoRgb);
   float waterMask = clamp(max(max(seaMask, inlandWater), lake), 0.0, 1.0);
 
   // --- Close-range micro detail: rock on steep walls, crown texture where canopy is high ----
