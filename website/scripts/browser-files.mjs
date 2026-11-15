@@ -29,6 +29,45 @@ export function copyRuntime(pins, from, to) {
   return n;
 }
 
+/** Why a recorded file of a run the browser computes is not in the page. */
+export const COMPUTED_IN_THE_BROWSER = "computed in the visitor's browser from the page's browser pack (run/), so not kept in the recording";
+
+const RUN_FILE = /^GET \/api\/runs\/([^/ ?]+)\/(reconstruction_u8\.bin|belief_u8\.bin|export\.geojson|export\.csv)$/;
+
+/**
+ * The recording without what the browser makes itself: for each place the pack holds, the files of every recorded
+ * held-out run there that a run in the browser gives (its frames, its belief and its exports) are marked withheld in
+ * the index, and their files are left out unless a kept entry also names them. The run answers, the terrain and every
+ * run with all the satellites shown stay. Returns {index, leftOut: files to leave out, entries: how many marked}.
+ */
+export function leaveOutComputedRuns(index, places) {
+  const entries = { ...(index.entries ?? {}) };
+  const candidates = new Set();
+  let marked = 0;
+  for (const [key, e] of Object.entries(entries)) {
+    const m = RUN_FILE.exec(key);
+    const region = m && m[1].includes('_holdoutviirs') ? m[1].split('_firms_')[0] : null;
+    if (region && places.includes(region) && e?.file) {
+      candidates.add(e.file);
+      entries[key] = { withheld: COMPUTED_IN_THE_BROWSER };
+      marked += 1;
+    }
+  }
+  const kept = new Set(Object.values(entries).map((e) => e?.file).filter(Boolean));
+  const leftOut = [...candidates].filter((f) => !kept.has(f)).sort();
+  return {
+    index: { ...index, entries, computed_in_the_browser: { why: COMPUTED_IN_THE_BROWSER, places: [...places].sort(), entries: marked } },
+    leftOut,
+    entries: marked,
+  };
+}
+
+/** The places a packer's folder holds, from its manifest, without copying anything. */
+export function packPlaces(from) {
+  const manifest = JSON.parse(readFileSync(path.join(from, 'browser-pack.json'), 'utf8'));
+  return Object.keys(manifest.places ?? {});
+}
+
 /** An archive's path as the manifest names it: relative, inside the pack, a zip. */
 function archivePath(file) {
   const norm = path.posix.normalize(String(file ?? ''));

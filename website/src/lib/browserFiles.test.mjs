@@ -74,3 +74,34 @@ test('the browser pack is copied with its manifest when every archive is the one
     rmSync(to, { recursive: true, force: true });
   }
 });
+
+test('with a pack, what the browser makes of the packed places\' held-out runs leaves the recording, and nothing else', async () => {
+  const { leaveOutComputedRuns, COMPUTED_IN_THE_BROWSER } = await import('../../scripts/browser-files.mjs');
+  const held = 'plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend';
+  const shown = 'plumas_ca_firms_20120810T0619_allsensors';
+  const other = 'lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend';
+  const index = {
+    recorded_utc: '2026-11-15T13:19:37Z',
+    entries: {
+      [`GET /api/runs/${held}/reconstruction_u8.bin`]: { file: 'files/r.bin' },
+      [`GET /api/runs/${held}/belief_u8.bin`]: { file: 'files/b.bin' },
+      [`GET /api/runs/${held}/export.csv`]: { file: 'files/shared.csv' },
+      [`GET /api/runs/${held}/dem_f32.bin`]: { file: 'files/dem.bin' },
+      [`GET /api/runs/${held}/terrain/usgs_naip_ortho_4096.jpg`]: { file: 'files/o.jpg' },
+      [`GET /api/runs/${shown}/reconstruction_u8.bin`]: { file: 'files/shown.bin' },
+      [`GET /api/runs/${shown}/export.csv`]: { file: 'files/shared.csv' },
+      [`GET /api/runs/${other}/reconstruction_u8.bin`]: { file: 'files/other.bin' },
+      'POST /api/reconstruct {"region_id":"plumas_ca"}': { file: 'files/answer.json' },
+    },
+  };
+  const got = leaveOutComputedRuns(index, ['plumas_ca']);
+  assert.equal(got.entries, 3);
+  assert.deepEqual(got.leftOut, ['files/b.bin', 'files/r.bin']);            // the shared export stays: another entry names it
+  assert.deepEqual(got.index.entries[`GET /api/runs/${held}/reconstruction_u8.bin`], { withheld: COMPUTED_IN_THE_BROWSER });
+  assert.equal(got.index.entries[`GET /api/runs/${held}/dem_f32.bin`].file, 'files/dem.bin');
+  assert.equal(got.index.entries[`GET /api/runs/${shown}/reconstruction_u8.bin`].file, 'files/shown.bin');
+  assert.equal(got.index.entries[`GET /api/runs/${other}/reconstruction_u8.bin`].file, 'files/other.bin');
+  assert.equal(got.index.recorded_utc, index.recorded_utc);
+  assert.deepEqual(got.index.computed_in_the_browser.places, ['plumas_ca']);
+  assert.equal(index.entries[`GET /api/runs/${held}/reconstruction_u8.bin`].file, 'files/r.bin');   // the input is not changed
+});

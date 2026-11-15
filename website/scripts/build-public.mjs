@@ -13,7 +13,7 @@
 // (`website/src/world/publicAnswer.ts`). The yearly layers are recorded answers (`GET /api/cube/years`).
 
 import { spawnSync } from 'node:child_process';
-import { copyPack, copyRuntime } from './browser-files.mjs';
+import { copyPack, copyRuntime, leaveOutComputedRuns, packPlaces } from './browser-files.mjs';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,8 +45,14 @@ if (!recording) fail('give --recording <folder> (a folder written by backend/ser
 const recordingDir = path.resolve(recording);
 const indexFile = path.join(recordingDir, 'index.json');
 if (!existsSync(indexFile)) fail(`${indexFile} does not exist`);
-const index = JSON.parse(readFileSync(indexFile, 'utf8'));
-const named = [...new Set(Object.values(index.entries ?? {}).map((e) => e.file).filter(Boolean))];
+const recordedIndexDoc = JSON.parse(readFileSync(indexFile, 'utf8'));
+// With a browser pack, what the browser makes itself (the frames, belief and exports of the packed places' held-out
+// runs) is left out of the page's recording and marked so in its index (scripts/browser-files.mjs).
+const packFolder = arg('pack', null);
+const leaving = packFolder ? leaveOutComputedRuns(recordedIndexDoc, packPlaces(path.resolve(packFolder))) : null;
+const index = leaving ? leaving.index : recordedIndexDoc;
+const leftOut = new Set(leaving?.leftOut ?? []);
+const named = [...new Set(Object.values(index.entries ?? {}).map((e) => e.file).filter(Boolean))].filter((f) => !leftOut.has(f));
 const missing = named.filter((f) => !existsSync(path.join(recordingDir, f)));
 if (missing.length) fail(`the index names ${missing.length} files the folder does not hold, for example ${missing[0]}`);
 
@@ -71,8 +77,10 @@ for (const [cmd, args] of [
 const recordedDir = path.join(target, 'recorded');
 rmSync(recordedDir, { recursive: true, force: true });
 mkdirSync(path.join(recordedDir, 'files'), { recursive: true });
-cpSync(indexFile, path.join(recordedDir, 'index.json'));
+if (leaving) writeFileSync(path.join(recordedDir, 'index.json'), JSON.stringify(index, null, 1));
+else cpSync(indexFile, path.join(recordedDir, 'index.json'));
 for (const f of named) cpSync(path.join(recordingDir, f), path.join(recordedDir, f));
+const leftOutBytes = [...leftOut].reduce((n, f) => n + statSync(path.join(recordingDir, f)).size, 0);
 writeFileSync(path.join(recordedDir, 'build.json'), `${JSON.stringify({
   site_commit: commit || null,
   recorded_utc: recordedUtc || null,
@@ -106,7 +114,8 @@ if (pack) {
     const rt = copyRuntime(pins, runtime, path.join(target, 'runtime', 'pyodide'));
     const pk = copyPack(path.resolve(pack), path.join(target, 'run'));
     browserLine = `runtime ${pins.runtime} ${pins.version} ${(rt / 1e6).toFixed(1)} MB in runtime/pyodide/; run/ ${(pk.bytes / 1e6).toFixed(1)} MB, `
-      + `${pk.places.length} places computed in the browser (${pk.places.join(', ')}), ${pk.replayOnly.length} replayed`;
+      + `${pk.places.length} places computed in the browser (${pk.places.join(', ')}), ${pk.replayOnly.length} replayed; `
+      + `left out of the recording, as the browser makes them: ${leaving.entries} entries, ${leftOut.size} files, ${(leftOutBytes / 1e6).toFixed(1)} MB`;
   } catch (err) {
     fail(`${err.message} (the runtime comes from node scripts/fetch-runtime.mjs)`);
   }
