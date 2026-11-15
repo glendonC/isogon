@@ -59,7 +59,7 @@ def _store(root: Path, modis: list[dict[str, str]], viirs: list[dict[str, str]] 
 
 
 def _plan(modis, viirs, opened: list[str] | None = None) -> dict:
-    """The plan of a made-up store, with every place given test A (the made-up place's own block may have none)
+    """The plan of a made-up store, with every block given test A (the made-up place's own block may have none)
     and the episodes' least number of MODIS pixels lowered to 40, as the other tests on these rows do."""
     with tempfile.TemporaryDirectory() as tmp:
         store = _store(Path(tmp), modis, viirs)
@@ -84,7 +84,7 @@ def _plan(modis, viirs, opened: list[str] | None = None) -> dict:
             return real_bytes(self)
 
         smaller = functools.partial(find_episodes, min_modis_pixels=40)
-        with mock.patch.object(F, "role_of_place", lambda place, first: "test_a"), \
+        with mock.patch.object(F, "role_of_block", lambda block: "test_a"), \
                 mock.patch.object(W, "find_episodes", smaller), mock.patch.object(builtins, "open", b_open), \
                 mock.patch.object(Path, "open", p_open), mock.patch.object(Path, "read_bytes", p_bytes):
             doc = W.build_plan(store, work, workers=1, first_boxes=FIRST, log=lambda _m: None, years=(2099,))
@@ -147,6 +147,33 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(len(W._places_of(-2.5, 40.0)), 4)
         self.assertEqual(W._places_of(-3.1, 39.2), [F.place_of(-3.1, 39.2)])
         self.assertEqual(W._places_of(180.0, 0.1), [F.place_of(180.0, 0.1)])
+
+
+class OfferedInThePlanTests(unittest.TestCase):
+    def test_the_plan_names_the_regions_offered_and_leaves_their_places_out(self) -> None:
+        place = F.place_of(-4.2, 39.0)
+        box = F.place_box(place)
+        with tempfile.TemporaryDirectory() as tmp:
+            store = _store(Path(tmp), MODIS, VIIRS)
+            work = Path(tmp) / "work"
+            work.mkdir()
+            smaller = functools.partial(find_episodes, min_modis_pixels=40)
+            with mock.patch.object(F, "role_of_block", lambda block: "test_a"), mock.patch.object(W, "find_episodes", smaller):
+                doc = W.build_plan(store, work, workers=1, first_boxes=FIRST, log=lambda _m: None, years=(2099,),
+                                   offered=[{"region_id": "made_up", "context_box": list(box), "from": "a test"}])
+        self.assertEqual(doc["offered_regions"]["regions"][0]["region_id"], "made_up")
+        self.assertEqual(doc["episodes"]["test_a"], [])
+        self.assertGreater(doc["offered_regions"]["places_with_rows_it_costs"]["test_a"], 0)
+
+    def test_the_regions_offered_are_the_registry_s_and_the_data_side_s_list(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            named = Path(tmp) / "named.json"
+            named.write_text(json.dumps([{"region_id": "made_up", "context_box": [1, 2, 3, 4]},
+                                         {"region_id": "plumas_ca", "context_box": [0, 0, 0, 0]}]))
+            got = {o["region_id"]: o for o in W.offered_regions(named)}
+        self.assertEqual(set(F.FIRST_REGIONS) | {"made_up"} <= set(got), True)
+        self.assertEqual(got["plumas_ca"]["from"], "the registry of places")       # the registry's own box wins
+        self.assertEqual(got["made_up"]["context_box"], [1.0, 2.0, 3.0, 4.0])
 
 
 if __name__ == "__main__":

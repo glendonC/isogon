@@ -92,6 +92,14 @@ PROTOCOL: dict[str, str] = {
         "corners included, is left out, so no place of those three roles is next to a place of any other role. "
         "No row of either instrument is read to split."
     ),
+    "offered_regions": (
+        "A place of validation, test A or test B that meets the context box of a region the page offers, edges "
+        "touching included, is left out of its role in every year, so that the page cannot show a row of a test "
+        "before its look; fitting places are not touched. The regions offered are every region the registry of "
+        "places holds when the plan is made and every region the data side has named for the page by then, each "
+        "by its context box, read from coordinates alone. The plan's record names each region with its box, and "
+        "how many places the rule costs each role, continent and zone (offered_cost)."
+    ),
     "episodes": (
         "By the rule in use (backend/model/episodes.py, find_episodes, with its defaults), each place standing for "
         "a region's context box: in each tile and year from 2018 to 2022, the run of 12 consecutive MODIS "
@@ -284,30 +292,69 @@ def near_first_regions(place: tuple[int, int], first_boxes: Iterable[Box]) -> bo
     return any(_meets(box, b) for b in first_boxes)
 
 
-def role_of_place(place: tuple[int, int], first_boxes: Iterable[Box]) -> str | None:
-    """The place's role, or None when it is left out: near a first region, or a place of validation, test A or
-    test B next to a place of another role (corners included)."""
+def why_left_out(place: tuple[int, int], first_boxes: Iterable[Box], offered_boxes: Iterable[Box] = ()) -> str | None:
+    """Why a place has no role, or None when it keeps the role of its block. The three reasons, in the order they
+    are asked: it meets the context box of one of the three first regions (every role); it is a place of
+    validation, test A or test B next to a place of another role, corners included; or it is such a place and it
+    meets the context box of a region the page offers. Fitting places are left out only for the first reason."""
     if near_first_regions(place, list(first_boxes)):
-        return None
+        return "meets a first region"
     role = role_of_block(block_of(place))
     if role == "fitting":
-        return role
+        return None
     i, j = place
     for di in (-1, 0, 1):
         for dj in (-1, 0, 1):
             if (di, dj) == (0, 0) or not 0 <= j + dj < _ROWS:
                 continue
             if role_of_block(block_of(((i + di) % _COLUMNS, j + dj))) != role:
-                return None
-    return role
+                return "next to a place of another role"
+    box = place_box(place)
+    if any(_meets(box, b) for b in offered_boxes):
+        return "meets a region the page offers"
+    return None
 
 
-def describe_place(place: tuple[int, int], first_boxes: Iterable[Box]) -> dict[str, Any]:
-    """A place's id, box, continent, zone, block and role (None when left out)."""
+def role_of_place(place: tuple[int, int], first_boxes: Iterable[Box], offered_boxes: Iterable[Box] = ()) -> str | None:
+    """The place's role, or None when it is left out (`why_left_out`)."""
+    if why_left_out(place, first_boxes, offered_boxes) is not None:
+        return None
+    return role_of_block(block_of(place))
+
+
+def describe_place(place: tuple[int, int], first_boxes: Iterable[Box], offered_boxes: Iterable[Box] = ()) -> dict[str, Any]:
+    """A place's id, box, continent, zone, block and role (None when left out, with the reason)."""
     w, s, e, n = place_box(place)
     lon, lat = 0.5 * (w + e), 0.5 * (s + n)
+    first_boxes, offered_boxes = list(first_boxes), list(offered_boxes)
+    why = why_left_out(place, first_boxes, offered_boxes)
     return {"place_id": place_id(place), "box": [w, s, e, n], "continent": continent_of(lon, lat),
-            "zone": zone_of(lat), "block": list(block_of(place)), "role": role_of_place(place, first_boxes)}
+            "zone": zone_of(lat), "block": list(block_of(place)),
+            "role": None if why is not None else role_of_block(block_of(place)), "left_out": why}
+
+
+def offered_cost(first_boxes: Iterable[Box], offered_boxes: Iterable[Box]) -> dict[str, dict[str, dict[str, int]]]:
+    """What leaving out the places that meet a region the page offers costs, by role, continent and zone: the
+    places that keep their role without that rule and lose it with it. From coordinates alone."""
+    first_boxes, offered_boxes = list(first_boxes), list(offered_boxes)
+    cost: dict[str, dict[str, dict[str, int]]] = {}
+    seen: set[tuple[int, int]] = set()
+    for b in offered_boxes:
+        i0, j0 = place_of(b[0], b[1])
+        i1, j1 = place_of(b[2], b[3])
+        for i in range(i0 - 1, i1 + 2):
+            for j in range(max(j0 - 1, 0), min(j1 + 2, _ROWS)):
+                place = (i % _COLUMNS, j)
+                if place in seen:
+                    continue
+                seen.add(place)
+                if why_left_out(place, first_boxes, offered_boxes) != "meets a region the page offers":
+                    continue
+                d = describe_place(place, first_boxes)
+                role = role_of_block(block_of(place))
+                by = cost.setdefault(role, {}).setdefault(d["continent"], {})
+                by[d["zone"]] = by.get(d["zone"], 0) + 1
+    return cost
 
 
 # ----------------------------------------------------------------------------------------------------------------

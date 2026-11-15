@@ -23,7 +23,7 @@ from backend.model import fresh_test as F  # noqa: E402
 
 # The digest of the protocol as committed. A change to its text or constants fails here: the protocol is fixed
 # before anything is read, and a new one would be a new protocol with its own name.
-PINNED_PROTOCOL_SHA256 = "a60a45d5f79cd51dfcd03e6da3b099922f32f154acf170fa002329994a57ca2f"
+PINNED_PROTOCOL_SHA256 = "050449de777c7b8a3d5258f554f2184c83028046fe4b7908a9390c5ab683ced3"
 
 FIRST = [region_box(r) for r in F.FIRST_REGIONS]
 
@@ -49,7 +49,7 @@ class ProtocolIsFixedTests(unittest.TestCase):
                 F.refuse_unfrozen(Path(tmp))
 
     def test_it_states_each_step_and_what_never_happens(self) -> None:
-        for key in ("store", "places", "split", "episodes", "after_the_plan", "scored", "counted", "test_a",
+        for key in ("store", "places", "split", "offered_regions", "episodes", "after_the_plan", "scored", "counted", "test_a",
                     "refit", "decision", "test_b", "test_b_methods", "clear_looks", "players", "never"):
             self.assertIn(key, F.PROTOCOL)
         self.assertIn("no other continent makes up the difference", F.PROTOCOL["episodes"])
@@ -166,6 +166,33 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(doc["test_fires"]["looks"]), 3)              # the three recorded looks stay three
         if fresh["plan"] is None:
             self.assertEqual(fresh["state"], "the protocol is on record and nothing has been read for it yet")
+
+
+LJUSDAL = (14.12, 60.95, 16.72, 62.85)        # the context box of a region the page offers, in test B places
+MAULE = (-73.49, -36.47, -70.89, -34.57)
+
+
+class OfferedRegionsTests(unittest.TestCase):
+    def test_a_place_that_meets_a_region_the_page_offers_leaves_validation_and_the_tests(self) -> None:
+        place = F.place_of(15.4, 61.9)
+        self.assertEqual(F.role_of_place(place, FIRST), "test_b")
+        self.assertIsNone(F.role_of_place(place, FIRST, [LJUSDAL]))
+        self.assertEqual(F.describe_place(place, FIRST, [LJUSDAL])["left_out"], "meets a region the page offers")
+
+    def test_fitting_places_are_not_touched(self) -> None:
+        n = 0
+        for i in range(144):
+            for j in range(16, 66):
+                if F.role_of_place((i, j), FIRST) == "fitting":
+                    box = F.place_box((i, j))
+                    self.assertEqual(F.role_of_place((i, j), FIRST, [box]), "fitting")
+                    n += 1
+        self.assertGreater(n, 1000)
+
+    def test_what_the_rule_costs_is_counted_by_role_continent_and_zone(self) -> None:
+        self.assertEqual(F.offered_cost(FIRST, [LJUSDAL]), {"test_b": {"Europe": {"boreal": 4}}})
+        self.assertEqual(F.offered_cost(FIRST, [MAULE]), {"validation": {"South America": {"subtropical": 1, "temperate": 1}}})
+        self.assertEqual(F.offered_cost(FIRST, []), {})
 
 
 if __name__ == "__main__":

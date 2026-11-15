@@ -169,10 +169,14 @@ def _map(fn: Callable[[Any], Any], jobs: list[Any], workers: int) -> list[Any]:
 
 
 def build_plan(store: Path, work: Path, workers: int, first_boxes: Iterable[F.Box], log: Callable[[str], None] = print,
-               years: Iterable[int] | None = None) -> dict[str, Any]:
-    """The plan of the fresh test from the store's MODIS files alone."""
+               years: Iterable[int] | None = None, offered: Iterable[dict[str, Any]] = ()) -> dict[str, Any]:
+    """The plan of the fresh test from the store's MODIS files alone. `offered` holds the regions the page offers,
+    each `{"region_id", "context_box"}`: a place of validation, test A or test B that meets one is left out."""
     years = tuple(F.YEARS if years is None else years)
     first_boxes = list(first_boxes)
+    offered = sorted(({"region_id": str(o["region_id"]), "context_box": [float(v) for v in o["context_box"]],
+                       "from": o.get("from")} for o in offered), key=lambda o: o["region_id"])
+    offered_boxes = [tuple(o["context_box"]) for o in offered]
     t0 = time.time()
     ready = ready_countries(store)
     listed = listed_countries(store)
@@ -193,7 +197,7 @@ def build_plan(store: Path, work: Path, workers: int, first_boxes: Iterable[F.Bo
         for pdir in year_dir.iterdir():
             places.setdefault(pdir.name, {})
     by_id = {F.place_id((i, j)): (i, j) for i in range(int(round(360.0 / F.PLACE_DEG))) for j in range(int(round(180.0 / F.PLACE_DEG)))}
-    described = {pid: F.describe_place(by_id[pid], first_boxes) for pid in sorted(places)}
+    described = {pid: F.describe_place(by_id[pid], first_boxes, offered_boxes) for pid in sorted(places)}
     for pid, info in described.items():
         if info["role"] is not None:
             jobs2.append((str(work), by_id[pid], years))
@@ -217,6 +221,14 @@ def build_plan(store: Path, work: Path, workers: int, first_boxes: Iterable[F.Bo
             "countries_left_out": sorted(set(listed) - have),
         },
         "modis_files": sorted(files, key=lambda f: f["file"]),
+        "offered_regions": {
+            "regions": offered,
+            "rule": F.PROTOCOL["offered_regions"],
+            "places_it_costs": F.offered_cost(first_boxes, offered_boxes),
+            "places_with_rows_it_costs": {
+                r: sum(1 for d in described.values() if d["left_out"] == "meets a region the page offers"
+                       and F.role_of_block(tuple(d["block"])) == r) for r in F.ROLES},
+        },
         "places": {
             "with_rows": len(described),
             "with_a_role": sum(1 for d in described.values() if d["role"] is not None),
@@ -229,6 +241,22 @@ def build_plan(store: Path, work: Path, workers: int, first_boxes: Iterable[F.Bo
         "episodes": chosen,
     }
     return doc
+
+
+def offered_regions(named: str | Path | None = None) -> list[dict[str, Any]]:
+    """The regions the page offers: every region of the registry of places, by its context box, and every region
+    in the file the data side's list was copied into (`named`), when given."""
+    from backend.firms import region_box
+    from backend.firms.places import PLACES_FILE
+
+    out = {}
+    for r in json.loads(Path(PLACES_FILE).read_text(encoding="utf-8"))["regions"]:
+        out[r] = {"region_id": r, "context_box": list(region_box(r)), "from": "the registry of places"}
+    if named is not None:
+        for o in json.loads(Path(named).read_text(encoding="utf-8")):
+            out.setdefault(o["region_id"], {"region_id": o["region_id"], "context_box": [float(v) for v in o["context_box"]],
+                                            "from": "the data side's list of regions for the page"})
+    return list(out.values())
 
 
 def write_plan(doc: dict[str, Any], out: Path = PLAN_FILE) -> str:
@@ -246,6 +274,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--work", default=str(WORK_DEFAULT))
     p.add_argument("--workers", type=int, default=16)
     p.add_argument("--out", default=str(PLAN_FILE))
+    p.add_argument("--offered", default=None,
+                   help="a JSON list of the regions the data side has named for the page, each {region_id, context_box}")
     args = ap.parse_args(argv)
     if args.cmd == "plan":
         from backend.firms import region_box
@@ -254,7 +284,8 @@ def main(argv: list[str] | None = None) -> int:
         if work.exists() and any(work.iterdir()):
             raise SystemExit(f"{work} is not empty: the plan's shards are written into an empty folder")
         work.mkdir(parents=True, exist_ok=True)
-        doc = build_plan(store_dir(args.store), work, args.workers, [region_box(r) for r in F.FIRST_REGIONS])
+        doc = build_plan(store_dir(args.store), work, args.workers, [region_box(r) for r in F.FIRST_REGIONS],
+                         offered=offered_regions(args.offered))
         sha = write_plan(doc, Path(args.out))
         print(json.dumps({"plan_sha256": sha, "counts": doc["counts"], "episodes_found": doc["episodes_found"],
                           "countries_left_out": len(doc["store"]["countries_left_out"])}, indent=1))
