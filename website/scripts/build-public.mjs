@@ -60,7 +60,9 @@ const answerOf = (key) => {
   }
 };
 const leaving = packFolder || !ortho8192
-  ? leaveOutComputedRuns(recordedIndexDoc, packFolder ? packPlaces(path.resolve(packFolder)) : {}, answerOf, { ortho8192 })
+  // The recording stays whole for every fire, the browser pack or not: it answers each fire at once and is the whole
+  // fall-back where the model cannot run (--leave-out-computed leaves out what the browser makes, as a test only).
+  ? leaveOutComputedRuns(recordedIndexDoc, packFolder && process.argv.includes('--leave-out-computed') ? packPlaces(path.resolve(packFolder)) : {}, answerOf, { ortho8192 })
   : null;
 const index = leaving ? leaving.index : recordedIndexDoc;
 const leftOut = new Set(leaving?.leftOut ?? []);

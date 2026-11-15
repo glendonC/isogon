@@ -18,7 +18,8 @@ export type ModelState = 'unknown' | 'off' | 'loading' | 'ready' | 'failed';
 
 /** What answered the page's last fire, for its one line. */
 export interface AnswerSource {
-  source: 'browser' | 'recording';
+  /** `both`: the recording answered at once, and the model computed the same fire in this browser after. */
+  source: 'browser' | 'recording' | 'both';
   /** Why the recording answered a place the browser could compute, when it did. */
   why: string | null;
   /** Seconds the browser took for its last run, when it answered one. */
@@ -106,6 +107,8 @@ export class BrowserModel {
   private readonly runIds = new Map<string, string>();
   private readonly pictureUrls = new Map<string, Promise<Record<string, string>>>();
   readonly rounds = new Set<string>();
+  /** Places the model has computed a run of here: their files are in, so a round there starts at once. */
+  readonly placesIn = new Set<string>();
   private readonly opts: BrowserModelOptions;
 
   constructor(opts: BrowserModelOptions) {
@@ -208,16 +211,17 @@ export class BrowserModel {
     });
   }
 
-  private async json<T>(op: string, args: Record<string, unknown>): Promise<T> {
-    return JSON.parse(await this.call<string>(op, args)) as T;
+  private async json<T>(op: string, args: Record<string, unknown>, budgetMs?: number): Promise<T> {
+    return JSON.parse(await this.call<string>(op, args, budgetMs)) as T;
   }
 
   /** A held-out run (`reveal` false) or its reveal, as the route answers it, without its files' addresses. */
-  async run(regionId: string, start: string, reveal: boolean): Promise<Record<string, unknown>> {
+  async run(regionId: string, start: string, reveal: boolean, budgetMs?: number): Promise<Record<string, unknown>> {
     const key = `${regionId}|${start}`;
     const first = async () => {
-      const a = await this.json<Record<string, unknown>>('held_out_run', { region_id: regionId, start });
+      const a = await this.json<Record<string, unknown>>('held_out_run', { region_id: regionId, start }, budgetMs);
       this.runIds.set(key, String(a.run_id));
+      this.placesIn.add(regionId);
       return a;
     };
     if (!reveal) return first();

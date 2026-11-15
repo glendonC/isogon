@@ -183,14 +183,19 @@ export function answerSourceLine(s: AnswerSource | null, provenance: string): st
     const took = s.seconds !== null ? ` in ${s.seconds.toFixed(1)} s` : '';
     return `This fire was computed in your browser by the project's own model${took}; the rest of the page replays answers recorded from its backend${provenance}.`;
   }
+  if (s.source === 'both') {
+    const took = s.seconds !== null ? `, in ${s.seconds.toFixed(1)} s` : '';
+    return `${replays.slice(0, -1)}; the project's own model also computed this fire in your browser${took}.`;
+  }
   return s.why ? `${replays.slice(0, -1)}; ${s.why}.` : replays;
 }
 
-/** Whether a whole round of the game can be played at a place: on a backend, or by the browser's model once loaded. */
+/** Whether a whole round of the game can be played at a place: on a backend, or by the browser's model where it has
+ * already computed a run (its files in, so the round starts at once); elsewhere the recorded look is played. */
 export async function fullRoundHere(regionId: string): Promise<boolean> {
   if (TRANSPORT === 'live') return true;
   const m = browserModel();
-  return Boolean(m && m.state === 'ready' && (await m.holds(regionId)));
+  return Boolean(m && m.state === 'ready' && m.placesIn.has(regionId) && (await m.holds(regionId)));
 }
 
 /** A recorded run answer of a place, for the terrain a run made in the browser is drawn on: the same request's, or any
@@ -212,6 +217,39 @@ async function recordedRunOfPlace(regionId: string, body: unknown): Promise<Reco
 
 const NOT_HERE = Symbol('not computed in the browser');
 
+/** How long the model may take in the background (its runtime and the place's files downloaded first). */
+const BACKGROUND_BUDGET_MS = 180_000;
+const alsoAsked = new Set<string>();
+
+/** The page's stage drawn (`data-stage="ready"` on the root), or a minute gone: the model's downloads wait for it. */
+function stageDrawn(): Promise<void> {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const look = () => {
+      const root = (globalThis as { document?: { documentElement?: { getAttribute(n: string): string | null } } }).document?.documentElement;
+      if (!root || root.getAttribute('data-stage') === 'ready' || Date.now() - t0 > 60_000) resolve();
+      else setTimeout(look, 500);
+    };
+    look();
+  });
+}
+
+/** The same held-out run computed in the browser after the recording answered it, for the line; once per fire. */
+function alsoInBrowser(m: BrowserModel, region: string, start: string): void {
+  const key = `${region}|${start}`;
+  if (alsoAsked.has(key)) return;
+  alsoAsked.add(key);
+  void stageDrawn()
+    .then(async () => {
+      const t0 = Date.now();
+      await m.run(region, start, false, BACKGROUND_BUDGET_MS);
+      said({ source: 'both', why: null, seconds: (Date.now() - t0) / 1000 });
+    })
+    .catch(() => {
+      // the recording is on show: a model that could not run here changes nothing a visitor sees
+    });
+}
+
 /** The browser's answer to a request it computes, or NOT_HERE for the recording to answer. */
 async function inBrowser(method: 'GET' | 'POST', path: string, query: Query | undefined, body: unknown): Promise<unknown> {
   const m = browserModel();
@@ -231,6 +269,12 @@ async function inBrowser(method: 'GET' | 'POST', path: string, query: Query | un
       if (!(await m.holds(region))) {
         const why = await m.replayReason(region);
         said({ source: 'recording', why: why ? `this fire is replayed (${why})` : m.why ? `the model did not run in this browser: ${m.why}` : null, seconds: null });
+        return NOT_HERE;
+      }
+      // A fire the recording holds is answered by the recording at once, so no visitor waits on the model's download
+      // to see it; the model computes the same fire in the background once the stage is drawn, and the line says so.
+      if ((await recordedIndex()).entries[requestKey('POST', path, undefined, body)]?.file) {
+        if (b.reveal !== true) alsoInBrowser(m, region, b.start);
         return NOT_HERE;
       }
       const t0 = Date.now();

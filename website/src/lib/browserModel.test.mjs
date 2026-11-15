@@ -141,3 +141,17 @@ test('a run answer whose 8192 picture the page does not hold is drawn on its 409
   const withIt = { entries: { 'GET /api/runs/r/terrain/x_ortho_8192.jpg': { file: 'files/o8.jpg' } } };
   assert.equal(servedPictures(answer, withIt), answer);
 });
+
+test('a fire the recording answered at once, then computed by the model in the background, says both', () => {
+  const at = ' at commit d4c73bd, on 15 November 2026';
+  assert.equal(answerSourceLine({ source: 'both', why: null, seconds: 24.06 }, at),
+    "This page replays answers recorded from the project's backend at commit d4c73bd, on 15 November 2026; the project's own model also computed this fire in your browser, in 24.1 s.");
+});
+
+test('a place counts as in once the model has computed a run there, and not before', async () => {
+  const { m } = model((op) => (op === 'held_out_run' ? RUN : undefined));
+  assert.equal(m.placesIn.has('plumas_ca'), false);
+  await m.run('plumas_ca', '2012-08-10', false);
+  assert.equal(m.placesIn.has('plumas_ca'), true);
+  assert.equal(m.placesIn.has('ventura_ca'), false);
+});
