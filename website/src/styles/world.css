@@ -1001,6 +1001,12 @@
   color: var(--sys-ink-2);
 }
 
+/* On the page the top bar holds the corner: the line stands under it, clear of the small Earth window. */
+.world-screen[data-film='false'] .world-years__state {
+  top: 128px;
+  left: 40px;
+}
+
 .world-years__caption {
   position: absolute;
   top: var(--years-caption-top, clamp(22px, 2.2vw, 44px));
