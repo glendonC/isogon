@@ -384,9 +384,19 @@ body:has(.place) .iso-credit {
 /* On a phone the list needs the room more than the Earth, whose marks are too small to aim at there */
 @media (max-width: 600px) {
   .place {
+    /* The trail takes two lines under the page's top line here: the Earth starts below it */
+    --place-top: 124px;
     --place-guide: 230px;
-    --place-split: 33%;
-    /* As narrow as this the Earth fits itself above its own legend */
+    --place-split: 36%;
     --place-legend: 0px;
+  }
+
+  /* The Earth's legend would take half its height, and the world fitted above it would be too small to hold every
+     place. The guide says what brighter ground is on this screen, so the legend steps out below the Earth, unseen,
+     where the Earth keeps no room for it. */
+  .place .world-legend {
+    top: 100%;
+    bottom: auto;
+    visibility: hidden;
   }
 }
