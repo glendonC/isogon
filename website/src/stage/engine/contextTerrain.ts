@@ -215,6 +215,8 @@ ${SKY_VIEW_MAPPING_GLSL}
 ${NIGHT_GLSL}
 ${TERRAIN_LOOK_GLSL}
 
+const float CONTEXT_FADE_FROM = 0.8; // share of the way to the context box's edge where the fade starts
+
 void main() {
   vec2 e = min(vPackUv, 1.0 - vPackUv);
   if (min(e.x, e.y) > 0.004) discard;
@@ -265,9 +267,14 @@ void main() {
     uSkyView, viewTrue, normalize(uSunTrue), clamp(camAltKm, 0.02, ATM_TOP - 1.0),
     uSkyExposure, uFloorColor, uFloorHaze
   );
+  // The data around the pack ends at the context box. Over its outer fifth the ground goes into what
+  // the dome draws behind it, so neither land nor an even sea stops at a straight line
+  vec2 fromCentre = abs(vCuv - 0.5) * 2.0;
+  float dataEnds = smoothstep(CONTEXT_FADE_FROM, 1.0, max(fromCentre.x, fromCentre.y));
+  trans *= 1.0 - dataEnds;
   vec3 rgb = nightGrade(capSurface(lit * trans + backdrop * (1.0 - trans)));
   // By night water gives back a dark sky: never brighter than the land beside it
-  rgb *= 1.0 - WATER_NIGHT_DIM * water * uNight;
+  rgb *= 1.0 - WATER_NIGHT_DIM * water * uNight * (1.0 - dataEnds);
   gl_FragColor = vec4(rgb, uContextMix);
 }
 `;
