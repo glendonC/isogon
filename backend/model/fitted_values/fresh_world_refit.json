@@ -1,0 +1,712 @@
+{
+ "what": "the fresh test's refit on its fitting set, both values on its validation set, and the decision for test B",
+ "protocol_id": "fresh_world_v1",
+ "protocol_sha256": "050449de777c7b8a3d5258f554f2184c83028046fe4b7908a9390c5ab683ced3",
+ "plan_sha256": "768e5487f75c906fdbedfb14325a7d277bbf6062b27398f08b104ba60da30449",
+ "parameters": {
+  "tau_res_h": 12.0,
+  "spread_km_per_h": 0.15,
+  "line_width_km": 0.375,
+  "new_cell_weight": 0.02,
+  "burned_discount": 0.5,
+  "clear_sky": 0.8,
+  "age_tau_h": 6.0,
+  "diurnal_amplitude": 0.38,
+  "process_log_sd_per_sqrt_h": 0.15,
+  "frp_scale": 0.7187930574795343,
+  "frp_scale_night": 0.4221075162328569,
+  "count_scale_day": 0.9396785351263017,
+  "count_scale_night": 1.062466638616278,
+  "tau_smolder_h": 24.0,
+  "smolder_day": 0.1,
+  "smolder_night": 0.0,
+  "smolder_frp_mw": 1.0,
+  "dedup_overlap": false,
+  "frp_interval_lo": 0.0,
+  "frp_interval_hi": 1.7899054057334354,
+  "pixel_interval_lo": 0.0,
+  "pixel_interval_hi": 2.13516144846737,
+  "hidden_pixel_scale": 1.0,
+  "fitted_on": "300 fire episodes of the fresh test's fitting places (plan 768e5487f75c) and the 17 open training episodes of plumas_ca, lytton_bc and evia_greece; no window of 2021 in those three regions"
+ },
+ "values_in_use_sha256": {
+  "occupancy_params.json": "b45e689835b4a9e175ed63877757ebe71226628d3466cb983c411fd837570eb9",
+  "overlap_ratio.json": "881d5654e1fa8638271f5ff7bc87bd3c26699e538dd1c88a098f3b00c34c1811"
+ },
+ "fitting": {
+  "world_episodes": 300,
+  "open_training_episodes": 17,
+  "left_out": {}
+ },
+ "validation": {
+  "episodes": 83,
+  "left_out": {},
+  "refit_against_the_baselines": {
+   "evaluated": true,
+   "method": "reconstruction",
+   "baselines": [
+    "painted_modis",
+    "overlap_ratio"
+   ],
+   "scores": {
+    "csi_strict_375m": {
+     "reconstruction": 0.16496006212558242,
+     "painted_modis": 0.19903335637067154,
+     "overlap_ratio": 0.19903335637067154,
+     "better_is": "higher",
+     "beats_every_baseline": false,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.04709,
+       -0.02223
+      ],
+      "overlap_ratio": [
+       -0.04709,
+       -0.02223
+      ]
+     },
+     "class": "behind"
+    },
+    "csi_one_cell_tolerance": {
+     "reconstruction": 0.372277076968399,
+     "painted_modis": 0.33691322674882435,
+     "overlap_ratio": 0.33691322674882435,
+     "better_is": "higher",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       0.01787,
+       0.0539
+      ],
+      "overlap_ratio": [
+       0.01787,
+       0.0539
+      ]
+     },
+     "class": "ahead"
+    },
+    "hit_rate_at_equal_area": {
+     "reconstruction": 0.43273162170440127,
+     "painted_modis": 0.4186279419128693,
+     "overlap_ratio": 0.4186279419128693,
+     "better_is": "higher",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       0.00797,
+       0.02069
+      ],
+      "overlap_ratio": [
+       0.00797,
+       0.02069
+      ]
+     },
+     "class": "ahead"
+    },
+    "brier": {
+     "reconstruction": 0.0062777747337142845,
+     "painted_modis": 0.012839114604548332,
+     "overlap_ratio": 0.012839114604548332,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       0.00588,
+       0.00733
+      ],
+      "overlap_ratio": [
+       0.00588,
+       0.00733
+      ]
+     },
+     "class": "ahead"
+    },
+    "pixel_count_error_of_sums": {
+     "reconstruction": 0.027433454014722747,
+     "painted_modis": 0.8217623261514917,
+     "overlap_ratio": 0.6951289118128423,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       0.68127,
+       0.81812
+      ],
+      "overlap_ratio": [
+       0.45119,
+       0.80218
+      ]
+     },
+     "class": "ahead"
+    },
+    "frp_error_of_sums": {
+     "reconstruction": 0.021452830968265446,
+     "painted_modis": 0.1674507121181943,
+     "overlap_ratio": 0.05016210588559844,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.03288,
+       0.24455
+      ],
+      "overlap_ratio": [
+       -0.04502,
+       0.08767
+      ]
+     },
+     "class": "tie"
+    },
+    "frp_median_abs_relative_error": {
+     "reconstruction": 0.5713675233434206,
+     "painted_modis": 0.5922021086134871,
+     "overlap_ratio": 0.5926783338804138,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.0301,
+       0.07035
+      ],
+      "overlap_ratio": [
+       -0.03359,
+       0.07547
+      ]
+     },
+     "class": "tie"
+    }
+   },
+   "beats_every_baseline_on": 6,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8813559322033898,
+    "overpasses": 1534
+   },
+   "beats_every_baseline_on_every_score": false,
+   "classes": {
+    "ahead": 4,
+    "tie": 2,
+    "behind": 1
+   },
+   "classes_counted_by": "judged with an interval",
+   "bootstrap": {
+    "resampled": "whole runs, with replacement",
+    "runs": 83,
+    "resamples": 2000,
+    "level": 0.9,
+    "improvement": "method minus baseline for higher-is-better scores, baseline minus method otherwise"
+   }
+  },
+  "values_in_use_against_the_baselines": {
+   "evaluated": true,
+   "method": "reconstruction",
+   "baselines": [
+    "painted_modis",
+    "overlap_ratio"
+   ],
+   "scores": {
+    "csi_strict_375m": {
+     "reconstruction": 0.1620084829990061,
+     "painted_modis": 0.19903335637067154,
+     "overlap_ratio": 0.19903335637067154,
+     "better_is": "higher",
+     "beats_every_baseline": false,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.04713,
+       -0.02585
+      ],
+      "overlap_ratio": [
+       -0.04713,
+       -0.02585
+      ]
+     },
+     "class": "behind"
+    },
+    "csi_one_cell_tolerance": {
+     "reconstruction": 0.3462420641701389,
+     "painted_modis": 0.33691322674882435,
+     "overlap_ratio": 0.33691322674882435,
+     "better_is": "higher",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.00962,
+       0.02985
+      ],
+      "overlap_ratio": [
+       -0.00962,
+       0.02985
+      ]
+     },
+     "class": "tie"
+    },
+    "hit_rate_at_equal_area": {
+     "reconstruction": 0.403376910025232,
+     "painted_modis": 0.4186279419128693,
+     "overlap_ratio": 0.4186279419128693,
+     "better_is": "higher",
+     "beats_every_baseline": false,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.02459,
+       -0.00557
+      ],
+      "overlap_ratio": [
+       -0.02459,
+       -0.00557
+      ]
+     },
+     "class": "behind"
+    },
+    "brier": {
+     "reconstruction": 0.006328123983604924,
+     "painted_modis": 0.012839114604548332,
+     "overlap_ratio": 0.012839114604548332,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       0.00585,
+       0.00725
+      ],
+      "overlap_ratio": [
+       0.00585,
+       0.00725
+      ]
+     },
+     "class": "ahead"
+    },
+    "pixel_count_error_of_sums": {
+     "reconstruction": 0.0511810008289465,
+     "painted_modis": 0.8217623261514917,
+     "overlap_ratio": 0.6951289118128423,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       0.69088,
+       0.81419
+      ],
+      "overlap_ratio": [
+       0.46175,
+       0.81959
+      ]
+     },
+     "class": "ahead"
+    },
+    "frp_error_of_sums": {
+     "reconstruction": 0.2304326224728247,
+     "painted_modis": 0.1674507121181943,
+     "overlap_ratio": 0.05016210588559844,
+     "better_is": "lower",
+     "beats_every_baseline": false,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.22698,
+       0.10345
+      ],
+      "overlap_ratio": [
+       -0.22557,
+       -0.09543
+      ]
+     },
+     "class": "behind"
+    },
+    "frp_median_abs_relative_error": {
+     "reconstruction": 0.5743921035849946,
+     "painted_modis": 0.5922021086134871,
+     "overlap_ratio": 0.5926783338804138,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.01965,
+       0.05015
+      ],
+      "overlap_ratio": [
+       -0.01026,
+       0.04605
+      ]
+     },
+     "class": "tie"
+    }
+   },
+   "beats_every_baseline_on": 4,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.863754889178618,
+    "overpasses": 1534
+   },
+   "beats_every_baseline_on_every_score": false,
+   "classes": {
+    "ahead": 2,
+    "tie": 2,
+    "behind": 3
+   },
+   "classes_counted_by": "judged with an interval",
+   "bootstrap": {
+    "resampled": "whole runs, with replacement",
+    "runs": 83,
+    "resamples": 2000,
+    "level": 0.9,
+    "improvement": "method minus baseline for higher-is-better scores, baseline minus method otherwise"
+   }
+  },
+  "refit_against_the_values_in_use": {
+   "evaluated": true,
+   "method": "reconstruction",
+   "baselines": [
+    "values_in_use"
+   ],
+   "scores": {
+    "csi_strict_375m": {
+     "reconstruction": 0.16496006212558242,
+     "values_in_use": 0.1620084829990061,
+     "better_is": "higher",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "values_in_use": [
+       -0.00735,
+       0.01226
+      ]
+     },
+     "class": "tie"
+    },
+    "csi_one_cell_tolerance": {
+     "reconstruction": 0.372277076968399,
+     "values_in_use": 0.3462420641701389,
+     "better_is": "higher",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "values_in_use": [
+       0.00907,
+       0.04153
+      ]
+     },
+     "class": "ahead"
+    },
+    "hit_rate_at_equal_area": {
+     "reconstruction": 0.43273162170440127,
+     "values_in_use": 0.403376910025232,
+     "better_is": "higher",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "values_in_use": [
+       0.02298,
+       0.03575
+      ]
+     },
+     "class": "ahead"
+    },
+    "brier": {
+     "reconstruction": 0.0062777747337142845,
+     "values_in_use": 0.006328123983604924,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "values_in_use": [
+       -0.00011,
+       0.00019
+      ]
+     },
+     "class": "tie"
+    },
+    "pixel_count_error_of_sums": {
+     "reconstruction": 0.027433454014722747,
+     "values_in_use": 0.0511810008289465,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "values_in_use": [
+       -0.07406,
+       0.07528
+      ]
+     },
+     "class": "tie"
+    },
+    "frp_error_of_sums": {
+     "reconstruction": 0.021452830968265446,
+     "values_in_use": 0.2304326224728247,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "values_in_use": [
+       0.09285,
+       0.22873
+      ]
+     },
+     "class": "ahead"
+    },
+    "frp_median_abs_relative_error": {
+     "reconstruction": 0.5713675233434206,
+     "values_in_use": 0.5743921035849946,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "values_in_use": [
+       -0.04341,
+       0.05599
+      ]
+     },
+     "class": "tie"
+    }
+   },
+   "beats_every_baseline_on": 7,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8813559322033898,
+    "overpasses": 1534
+   },
+   "beats_every_baseline_on_every_score": true,
+   "classes": {
+    "ahead": 3,
+    "tie": 4,
+    "behind": 0
+   },
+   "classes_counted_by": "judged with an interval",
+   "bootstrap": {
+    "resampled": "whole runs, with replacement",
+    "runs": 83,
+    "resamples": 2000,
+    "level": 0.9,
+    "improvement": "method minus baseline for higher-is-better scores, baseline minus method otherwise"
+   }
+  }
+ },
+ "intervals": {
+  "rule": "the interval a prediction states is the prediction times two multiples, taken from the ratios of hidden over predicted on the training looks, every look with a positive prediction counted and a look that flagged nothing counted with a ratio of zero. Two-sided, the multiples are the 5th and the 95th percentile and hold 90 percent between them. When the 5th percentile is zero, which happens as soon as more than one training look in twenty flagged nothing, nothing is cut off below, and the 95th percentile would hold 95 percent: the interval is then one-sided, from zero to the 90th percentile. It starts at zero because cloud is not known, and an interval that could not hold an empty pass would claim more than the record supports.",
+  "level": 0.9,
+  "frp": {
+   "lo": 0.0,
+   "hi": 1.7899054057334354,
+   "one_sided": true,
+   "level": 0.9,
+   "looks": 5372,
+   "looks_that_flagged_nothing": 335,
+   "given_a_detection": [
+    0.02956191817637136,
+    2.2854526168301126
+   ]
+  },
+  "pixels": {
+   "lo": 0.0,
+   "hi": 2.13516144846737,
+   "one_sided": true,
+   "level": 0.9,
+   "looks": 5372,
+   "looks_that_flagged_nothing": 335,
+   "given_a_detection": [
+    0.06461379491461991,
+    2.756405018108599
+   ]
+  }
+ },
+ "search": {
+  "grid": {
+   "dedup_overlap": [
+    false,
+    true
+   ],
+   "tau_res_h": [
+    3.0,
+    6.0,
+    12.0,
+    24.0
+   ],
+   "spread_km_per_h": [
+    0.03,
+    0.08,
+    0.15
+   ],
+   "age_tau_h": [
+    1.5,
+    3.0,
+    6.0
+   ],
+   "clear_sky": [
+    0.5,
+    0.8,
+    0.95
+   ],
+   "new_cell_weight": [
+    0.02,
+    0.05,
+    0.2
+   ],
+   "burned_discount": [
+    0.5,
+    0.9,
+    0.99
+   ],
+   "line_width_km": [
+    0.25,
+    0.375,
+    0.75
+   ],
+   "tau_smolder_h": [
+    6.0,
+    12.0,
+    24.0,
+    48.0
+   ],
+   "smolder_night": [
+    0.0,
+    0.1,
+    0.2,
+    0.4,
+    0.6
+   ],
+   "smolder_day": [
+    0.0,
+    0.05,
+    0.1,
+    0.2
+   ]
+  },
+  "history": [
+   {
+    "step": "priors",
+    "objective": 0.4785
+   },
+   {
+    "step": "sweep 1: dedup_overlap",
+    "chosen": false,
+    "objective": 0.4785
+   },
+   {
+    "step": "sweep 1: tau_res_h",
+    "chosen": 12.0,
+    "objective": 0.4785
+   },
+   {
+    "step": "sweep 1: spread_km_per_h",
+    "chosen": 0.15,
+    "objective": 0.4893
+   },
+   {
+    "step": "sweep 1: age_tau_h",
+    "chosen": 6.0,
+    "objective": 0.5024
+   },
+   {
+    "step": "sweep 1: clear_sky",
+    "chosen": 0.8,
+    "objective": 0.5024
+   },
+   {
+    "step": "sweep 1: new_cell_weight",
+    "chosen": 0.02,
+    "objective": 0.5036
+   },
+   {
+    "step": "sweep 1: burned_discount",
+    "chosen": 0.5,
+    "objective": 0.5108
+   },
+   {
+    "step": "sweep 1: line_width_km",
+    "chosen": 0.375,
+    "objective": 0.5108
+   },
+   {
+    "step": "sweep 1: tau_smolder_h",
+    "chosen": 24.0,
+    "objective": 0.5108
+   },
+   {
+    "step": "sweep 1: smolder_night",
+    "chosen": 0.0,
+    "objective": 0.5108
+   },
+   {
+    "step": "sweep 1: smolder_day",
+    "chosen": 0.1,
+    "objective": 0.512
+   },
+   {
+    "step": "sweep 1: pixel counts matched",
+    "count_scale_day": 0.958,
+    "count_scale_night": 1.028,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: dedup_overlap",
+    "chosen": false,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: tau_res_h",
+    "chosen": 12.0,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: spread_km_per_h",
+    "chosen": 0.15,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: age_tau_h",
+    "chosen": 6.0,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: clear_sky",
+    "chosen": 0.8,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: new_cell_weight",
+    "chosen": 0.02,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: burned_discount",
+    "chosen": 0.5,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: line_width_km",
+    "chosen": 0.375,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: tau_smolder_h",
+    "chosen": 24.0,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: smolder_night",
+    "chosen": 0.0,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: smolder_day",
+    "chosen": 0.1,
+    "objective": 0.5183
+   },
+   {
+    "step": "sweep 2: pixel counts matched",
+    "count_scale_day": 0.94,
+    "count_scale_night": 1.062,
+    "objective": 0.5229
+   }
+  ],
+  "blind_test_passes": 82,
+  "seconds": 1956.2
+ },
+ "decision": {
+  "test_b_values": "values in use",
+  "rule_in_use_holds": false,
+  "rule_in_use_words": "fitted values are NOT used (the priors stand): on validation fires they are ahead of both baselines on 4 scores, tied on 2 and behind a baseline on 1, beyond the noise of resampling the fires",
+  "behind_the_values_in_use_on": 0,
+  "ahead_of_the_values_in_use_on": 3,
+  "rule": "The refit is the one test B is looked at with when, on the validation episodes, judged with an interval: (1) the rule in use for fitted values holds for it, no score behind either baseline and at least one ahead of both (fit_real.decide); and (2) against the values in use, no score is behind. Otherwise test B is looked at with the values in use and the refit is kept on record, unused. The decision is committed before test B is looked at."
+ }
+}
