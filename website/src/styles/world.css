@@ -1584,3 +1584,16 @@
 .world-years .id-scene__frame {
   pointer-events: none;
 }
+
+/* The sealed board's table (the dataviz lane's LiveTable): a row opens its result under the table. */
+.world-ledger tbody tr {
+  cursor: pointer;
+}
+
+.world-board__opened {
+  display: grid;
+  gap: 4px;
+  padding: var(--sys-s2) 0;
+  font: var(--sys-weight) 16px / 1.4 var(--sys-font);
+  color: var(--sys-ink);
+}

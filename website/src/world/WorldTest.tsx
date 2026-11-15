@@ -2,8 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { count } from '../guide/formats';
 import { listAnd, percent1 } from './words';
 import { countryAt } from './countryAt';
-import { parseFresh, type FreshFire, type FreshLook, type Group } from './freshTest';
-import { CountTo } from './CountTo';
+import { parseFresh, type FreshLook } from './freshTest';
+import { OverlapBars } from '../dataviz/OverlapBars';
+import { overlapFromEvidence } from '../dataviz/overlapRows';
+import '../dataviz/dataviz.css';
 import { useRead } from './read';
 import { inFilm, useGuideRoom, WorldCaption } from './WorldCaption';
 import { useWorldLayer } from './layers';
@@ -30,11 +32,8 @@ export const TEST_WORDS = {
   // Words version 16: the overlap with VIIRS fire pixels, exact, as plain percentages.
   filmA: (first: string, modis: string) => `Unseen fires, overlap with VIIRS: model ${first}%, MODIS ${modis}%.`,
   filmB: (second: string, modis: string, first: string) => `New fires, overlap with VIIRS: new model ${second}%, MODIS ${modis}%, first model ${first}%.`,
-  /** The film's three figures: each method's overlap, exact. */
-  figSecond: 'new model',
-  figModis: 'MODIS alone',
-  figFirst: 'first model',
-  figUnder: 'overlap with VIIRS fire pixels, exact',
+  /** The overlap's three rows (words version 16, the panel's rows). */
+  overlapRows: { modis: 'MODIS alone', in_use: 'First model', new: 'New model' },
   lookNames: { test_a: 'Test A: fires it had never seen', test_b: 'Test B: fires that nothing had touched' } as Record<string, string>,
   // The panel in the product lane's words (WORDS-wider.json version 6, world_pictures, test_across_world.panel; WORDS-2).
   title: (fires: number, groups: number) =>
@@ -65,29 +64,11 @@ export const TEST_WORDS = {
   zones: { tropical: 'Tropics', subtropical: 'Subtropics', temperate: 'Middle latitudes', boreal: 'High latitudes' } as Record<string, string>,
 };
 
-const ZONE_ORDER = ['tropical', 'subtropical', 'temperate', 'boreal'];
 // The land where fires are tested, without the poles: the Earth is drawn larger and Antarctica stays out of the view.
 const TEST_VIEW: [number, number, number, number] = [-170, -48, 180, 76];
 const centre = (b: [number, number, number, number]): [number, number] => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
 const fill = (a: number, of: number): React.CSSProperties => ({ ['--fill' as string]: `${of > 0 ? (a / of) * 100 : 0}%` });
 
-type By = 'continent' | 'zone';
-
-/** A group's scores judged with an interval, in three aligned columns; read aloud as one phrase. */
-function cls(c: { ahead: number; tied: number; behind: number } | null) {
-  if (!c) return [<span key="a" />, <span key="t" />, <span key="b" />];
-  return [
-    <span key="a" className="world-tests__num" aria-label={TEST_WORDS.classes(c.ahead, c.tied, c.behind)}>
-      {c.ahead}
-    </span>,
-    <span key="t" className="world-tests__num" aria-hidden="true">
-      {c.tied}
-    </span>,
-    <span key="b" className="world-tests__num" aria-hidden="true">
-      {c.behind}
-    </span>,
-  ];
-}
 
 /** What a host's guide drives: "Show a fire's scores" opens the next fire's card. */
 export interface WorldTestControl {
@@ -111,8 +92,6 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
   const read = useRead<unknown>(source);
   const ans = useMemo(() => (read.state === 'ready' ? parseFresh(read.value) : null), [read]);
   const [lookId, setLookId] = useState<'test_a' | 'test_b' | null>(null);
-  const [by, setBy] = useState<By>('continent');
-  const [over, setOver] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const panel = useRef<HTMLDivElement | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
@@ -179,12 +158,6 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
   const look: FreshLook | null = ans.looks.find((l) => l.id === lookId) ?? ans.looks[ans.looks.length - 1] ?? null;
   const kept = ans.kept.map((k) => TEST_WORDS.keptFire(k.name, k.ahead, k.judged));
   const fires = look?.fires.filter((f) => f.box) ?? [];
-  const judged = fires.length ? Math.max(...fires.map((f) => f.judged)) : 7;
-  const groupOf = (f: FreshFire) => (by === 'continent' ? f.continent : f.zone) ?? '';
-  const groups: Group[] = look ? (by === 'continent' ? look.byContinent : [...look.byZone].sort((a, b) => ZONE_ORDER.indexOf(a.name) - ZONE_ORDER.indexOf(b.name))) : [];
-  const groupName = (g: string) => (by === 'zone' ? TEST_WORDS.zones[g] ?? g : g);
-  const tally = Array.from({ length: judged + 1 }, (_, k) => fires.filter((f) => f.ahead === k).length);
-  const most = Math.max(1, ...tally);
   if (control) {
     control.current = {
       nextFire: () => {
@@ -197,17 +170,12 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
   }
   // The overlap with VIIRS fire pixels, exact (words version 16): the new model's, MODIS alone's and the first model's.
   const ov = look?.overlap ?? null;
+  // The rows named as words version 16 names them (its panel's rows: MODIS alone, First model, New model).
+  const overlap = look && read.state === 'ready' ? overlapFromEvidence(read.value, look.id, 'challenger_blend', TEST_WORDS.overlapRows) : null;
   const filmLine = ov?.first && ov.modis
     ? ov.second
       ? TEST_WORDS.filmB(percent1(ov.second.exact), percent1(ov.modis.exact), percent1(ov.first.exact))
       : TEST_WORDS.filmA(percent1(ov.first.exact), percent1(ov.modis.exact))
-    : null;
-  const figures = ov?.first && ov.modis
-    ? [
-        ...(ov.second ? [{ key: 'second', v: ov.second.exact, label: TEST_WORDS.figSecond }] : []),
-        { key: 'modis', v: ov.modis.exact, label: TEST_WORDS.figModis },
-        { key: 'first', v: ov.first.exact, label: TEST_WORDS.figFirst },
-      ]
     : null;
   const captionLine = caption ? (film ? filmLine ?? TEST_WORDS.objective : TEST_WORDS.objective) : null;
   // With its own caption, the panel stands under it and above the guide's room, or under the Earth on a narrow screen.
@@ -229,16 +197,14 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
           <>
             {fires.map((f) => {
               const [x, y] = p.at(...centre(f.box!));
-              const dim = over !== null && groupOf(f) !== over;
               return (
                 <button
                   key={f.key}
                   type="button"
                   data-world-ui
                   className="world-gauge"
-                  data-dim={dim ? 'true' : 'false'}
                   data-open={open === f.key ? 'true' : 'false'}
-                  style={{ left: x, top: y, ...fill(f.ahead, f.judged) }}
+                  style={{ left: x, top: y, ...fill(0, 1) }}
                   aria-label={`${countryAt(...centre(f.box!)) ?? f.continent ?? ''}. ${TEST_WORDS.fireLine(f.year, f.continent, f.ahead, f.judged, f.looks)}`}
                   onClick={() => setOpen((o) => (o === f.key ? null : f.key))}
                 />
@@ -269,21 +235,11 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
         {ans.example && <div className="world-legend__fine world-legend__caution">{ans.example}</div>}
         {!look ? (
           <div className="world-legend__line">{TEST_WORDS.noLook}</div>
-        ) : film && figures ? (
-          // The film's panel: each method's overlap with VIIRS fire pixels, read at once; the rest is the page's.
+        ) : film && overlap ? (
+          // The film's panel: the dataviz lane's overlap with VIIRS fire pixels, read at once; the rest is the page's.
           <div className="world-tests__film">
             <div className="world-tests__look">{TEST_WORDS.lookNames[look.id] ?? look.name}</div>
-            <div className="world-tests__figures">
-              {figures.map((f) => (
-                <span key={f.key} className="world-tests__figure">
-                  <span className="world-tests__big">
-                    <CountTo value={f.v * 100} ms={700} format={(v) => `${(Math.round(v * 10) / 10).toFixed(1)}%`} />
-                  </span>
-                  <span>{f.label}</span>
-                </span>
-              ))}
-            </div>
-            <div className="world-tests__over">{TEST_WORDS.figUnder}</div>
+            <OverlapBars overlap={overlap} width={520} />
           </div>
         ) : (
           <>
@@ -298,65 +254,9 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
             )}
             {ans.looks.length === 1 && <div className="world-tests__look">{TEST_WORDS.lookNames[look.id] ?? look.name}</div>}
             <div className="world-legend__line">{TEST_WORDS.title(fires.length, new Set(fires.map((f) => f.continent)).size)}</div>
-            <div className="world-tests__row world-tests__row--head">
-              <span />
-              <span>{TEST_WORDS.head}</span>
-              <span>{TEST_WORDS.headAhead}</span>
-              <span>{TEST_WORDS.headTied}</span>
-              <span>{TEST_WORDS.headBehind}</span>
-            </div>
-            <div className="world-tests__row world-tests__row--all">
-              <span className="world-tests__name">
-                {TEST_WORDS.all} <span className="world-tests__n">{fires.length}</span>
-              </span>
-              <span className="world-tests__hist" aria-hidden="true">
-                {tally.map((n, k) => (
-                  <span key={k} className="world-tests__col">
-                    <span className="world-tests__bar" style={{ height: `${(n / most) * 22}px` }} data-zero={n === 0 ? 'true' : 'false'} />
-                    <span className="world-gauge world-gauge--mini" style={fill(k, judged)} />
-                    <span className="world-tests__k">{n}</span>
-                  </span>
-                ))}
-              </span>
-              {cls(look.all?.classes ?? null)}
-            </div>
-            <div className="iso-choice" role="radiogroup">
-              <button type="button" role="radio" aria-checked={by === 'continent'} className="iso-choice__opt" data-active={by === 'continent'} onClick={() => setBy('continent')}>
-                {TEST_WORDS.byContinent}
-              </button>
-              <button type="button" role="radio" aria-checked={by === 'zone'} className="iso-choice__opt" data-active={by === 'zone'} onClick={() => setBy('zone')}>
-                {TEST_WORDS.byZone}
-              </button>
-            </div>
-            <ol className="world-tests__rows">
-              {groups.map((g) => {
-                const mine = fires.filter((f) => groupOf(f) === g.name).sort((a, b) => a.ahead - b.ahead);
-                return (
-                  <li
-                    key={g.name}
-                    className="world-tests__row"
-                    data-over={over === g.name ? 'true' : 'false'}
-                    tabIndex={0}
-                    onPointerEnter={() => setOver(g.name)}
-                    onPointerLeave={() => setOver(null)}
-                    onFocus={() => setOver(g.name)}
-                    onBlur={() => setOver(null)}
-                  >
-                    <span className="world-tests__name">
-                      {groupName(g.name)} <span className="world-tests__n">{g.fires ?? mine.length}</span>
-                    </span>
-                    <span className="world-tests__strip" aria-hidden="true">
-                      {mine.map((f) => (
-                        <span key={f.key} className="world-gauge world-gauge--mini" style={fill(f.ahead, f.judged)} />
-                      ))}
-                    </span>
-                    {(g.fires ?? mine.length) === 0 ? <span className="world-tests__empty">{TEST_WORDS.emptyGroup}</span> : cls(g.classes)}
-                  </li>
-                );
-              })}
-            </ol>
-            <div className="world-legend__fine world-tests__key">{TEST_WORDS.classesKey(judged)}</div>
-            {by === 'zone' && <div className="world-legend__fine">{TEST_WORDS.zoneNote}</div>}
+            {/* The dataviz lane's overlap with VIIRS fire pixels, each method exact and within one pixel (its MOUNT.md):
+                in place of the table of scores won, tied and lost (words version 16 counts no scores). */}
+            {overlap && <OverlapBars overlap={overlap} width={440} />}
             {look.all?.interval && (
               <div className="world-legend__fine">{TEST_WORDS.held(look.all.interval.stated, look.all.interval.held, look.all.interval.looks)}</div>
             )}
