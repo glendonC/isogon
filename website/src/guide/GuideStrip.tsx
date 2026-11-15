@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Results, type ResultRow } from './Results';
 import type { ScriptAction } from './script';
 import '../styles/guide.css';
@@ -21,8 +22,14 @@ export function GuideStrip({
   return (
     <div className="guide-strip" role="region" aria-label="Guide">
       {results && <Results line={results.line} rows={results.rows} />}
+      {/* Each standing sentence in a span of its own (the film presentation keeps the first); read as one line. */}
       <p className="guide-strip__line" aria-live="polite">
-        {lines.join(' ')}
+        {lines.map((line, n) => (
+          <Fragment key={n}>
+            {n > 0 && ' '}
+            <span className="guide-strip__sentence">{line}</span>
+          </Fragment>
+        ))}
       </p>
       {actions.length > 0 && (
         <div className="guide-strip__acts">
