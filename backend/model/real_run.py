@@ -51,6 +51,7 @@ from backend.eval.rows import Detections, detections_from_rows, local_solar_time
 from backend.eval.schedule import hidden_platforms_in
 from backend.model import platforms as P
 from backend.model.belief import belief_frames
+from backend.model.challenger_standing import challenger_standing
 from backend.model import encoding as ENC
 from backend.model.grid import GRID_H, GRID_W
 from backend.model.occupancy import OccupancyParams, OccupancyReconstruction
@@ -779,6 +780,11 @@ def solve_real_reconstruction(
         "declared_cells": declared,
         # which estimate answered the held-out passes, in one field; fixed before the hidden rows are opened
         "held_out_passes_answered_by": answering_estimate(headline) if holdout else None,
+        # what the region and the run's days (with the days either side given to the estimate) are to the challenger
+        # that answered, by the plan's places and years; only when the challenger answers
+        **({} if chal_doc is None else {"standing_to_the_answering_estimate": challenger_standing(
+            spec.id, _iso(win.start_s - PAD_S)[:10], _iso(win.end_s + PAD_S - 1.0)[:10], tuple(context_box),
+            variant=headline.removeprefix("challenger_"))}),
         "model": {
             "version": REAL_MODEL_VERSION,
             "method": "forward and backward occupancy filter on the 375 m grid (backend/model/occupancy.py)",

@@ -122,6 +122,19 @@ class SwitchOnTests(unittest.TestCase):
         self.assertEqual(RR.challenger_words("gbdt"), "boosted decision trees")
         self.assertEqual(words.count(" and "), 1)
 
+    def test_the_answer_says_beside_it_what_the_fire_is_to_the_challenger_and_only_when_it_answers(self) -> None:
+        from backend.model.challenger_standing import challenger_standing
+        from backend.model.real_run import real_response
+
+        got = real_response(self.on, {})["standing_to_the_answering_estimate"]
+        self.assertEqual(got["method"], self.name)
+        self.assertEqual(got, challenger_standing("plumas_ca", got["first_day"], got["last_day"], fx.CONTEXT_BOX,
+                                                  variant=self.name.removeprefix("challenger_")))
+        self.assertLessEqual(got["first_day"], "2099-07-01")
+        self.assertEqual(got["standing"], "never seen")
+        self.assertNotIn("standing_to_the_answering_estimate", self.off.extras)
+        self.assertNotIn("standing_to_the_answering_estimate", real_response(self.off, {}))
+
     def test_a_run_answered_by_the_challenger_has_an_id_of_its_own(self) -> None:
         self.assertNotEqual(self.on.run_id, self.off.run_id)
         self.assertTrue(self.on.run_id.endswith(self.name))
@@ -132,6 +145,7 @@ class SwitchOnTests(unittest.TestCase):
         self.assertEqual(json.dumps(a.observer_passes, sort_keys=True), json.dumps(b.observer_passes, sort_keys=True))
         self.assertNotIn("held_out_passes_estimated_by", a.extras["model"])
         self.assertIsNone(a.extras["held_out_passes_answered_by"])
+        self.assertNotIn("standing_to_the_answering_estimate", a.extras)
 
 
 if __name__ == "__main__":
