@@ -1229,7 +1229,9 @@ export function App() {
   // Any key or press folds the start card back: the visitor has acted.
   useEffect(() => {
     if (!cardShown) return;
-    const fold = () => setCardsDone((d) => (d.includes(cardKey) ? d : [...d, cardKey]));
+    // Folded just after the key or press is handled: a render during it would swap the page's own key handler out
+    // before that key reached it.
+    const fold = () => window.setTimeout(() => setCardsDone((d) => (d.includes(cardKey) ? d : [...d, cardKey])), 0);
     window.addEventListener('keydown', fold);
     window.addEventListener('pointerdown', fold);
     return () => {
