@@ -125,13 +125,17 @@ class PlanOnRecordTests(unittest.TestCase):
             self.assertIsNone(C.why_not_test_c(by_id[ep["place_id"]], FIRST, offered, out_boxes), ep["key"])
 
     def test_no_tracked_record_names_a_place_of_test_c(self) -> None:
+        """Test C's own two records, its plan and its one look, are the only ones that may name its places."""
+        from backend.env.tree_fit import TEST_C_FILE
+
+        own = {C.PLAN_FILE.resolve(), TEST_C_FILE.resolve()}
         plan = C.load_plan()
         ids = {ep["place_id"] for ep in plan["episodes"][C.ROLE]}
         folders = [_REPO_ROOT / "backend" / "model" / "fitted_values", _REPO_ROOT / "backend" / "env" / "fitted",
                    _REPO_ROOT / "data"]
         for folder in folders:
             for f in folder.rglob("*"):
-                if (not f.is_file() or f == C.PLAN_FILE or f.suffix not in (".json", ".csv", ".txt", ".md")
+                if (not f.is_file() or f.resolve() in own or f.suffix not in (".json", ".csv", ".txt", ".md")
                         or "cache" in f.relative_to(_REPO_ROOT).parts):
                     continue
                 text = f.read_text(encoding="utf-8", errors="ignore")
