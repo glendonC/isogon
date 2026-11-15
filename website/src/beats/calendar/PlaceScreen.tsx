@@ -163,6 +163,16 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
     return { cx, cy, scale };
   };
 
+  // When the screen opens the keyboard's focus is on the fire on the land, or on the first fire: Enter shows it, the
+  // arrows move between fires, and its card says what it is
+  useEffect(() => {
+    const rows = listRef.current?.querySelectorAll<HTMLButtonElement>('.place__fire');
+    if (!rows || rows.length === 0) return;
+    const at = [...rows].find((r) => r.dataset.fire === currentFire) ?? rows[0];
+    at.focus({ preventScroll: true });
+    at.scrollIntoView({ block: 'nearest' });
+  }, [fires.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // First view: every place with a featured fire, with room around them
   useEffect(() => {
     if (view || firms.length === 0 || !measured) return;
