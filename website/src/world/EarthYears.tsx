@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { tOfValue, valueOfT } from './cells';
 import { countryShapeAt, pointWords, type CountryShape } from './countryAt';
-import { Globe, globeAvailable } from './Globe';
+import { Globe, globeWanted } from './Globe';
 import { countryOf, countryRatio, countryTotals, drawnInside, gridLines, heldBy, type CountriesFile } from './countryYears';
 import { FIRE_RAMP } from './layers';
 import { useWorldKeys } from './keys';
@@ -158,8 +158,9 @@ export function EarthYears({
 
   // A country picked on the Earth, outside the film: the country under the pointer, the one chosen, and its years.
   const pick = !isFilm();
-  // The Earth as a turning globe where WebGL 2 holds its frames; the flat map where it does not (or with ?globe=0).
-  const [flat, setFlat] = useState(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('globe') === '0') || !globeAvailable());
+  // The Earth as a turning globe where it is switched on (`GLOBE_ON`, or ?globe=1) and WebGL 2 holds its frames; the
+  // flat map otherwise.
+  const [flat, setFlat] = useState(() => typeof window === 'undefined' || !globeWanted(window.location.search));
   const countriesRead = useRead<CountriesFile>(pick ? '/api/cube/years/countries' : null);
   const countries = countriesRead.state === 'ready' ? countriesRead.value : null;
   const [pointed, setPointed] = useState<{ shape: CountryShape; x: number; y: number } | null>(null);
