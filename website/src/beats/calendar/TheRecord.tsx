@@ -706,10 +706,11 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   </button>
                 ))}
               {notNow && nowOn && <p className="sys-label rec__wide rec__holds">{notNow}</p>}
-              {asCounted && rec.spans.sharp && (
+              {/* Where the guide speaks, its sentence on the step says what the years as counted show */}
+              {asCounted && rec.spans.sharp && !guideSpeaks && (
                 <p className="sys-label rec__holds rec__wide">
                   {W.asCounted(rec.sharpRatio, Number(rec.spans.sharp[0].slice(0, 4)))}
-                  {rec.heldOut && !guideSpeaks && narrowFoot && ` ${W.holds(rec.heldOut.harmonized, rec.heldOut.raw)}`}
+                  {rec.heldOut && narrowFoot && ` ${W.holds(rec.heldOut.harmonized, rec.heldOut.raw)}`}
                 </p>
               )}
             </div>
