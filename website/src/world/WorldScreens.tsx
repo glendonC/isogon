@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GuideStrip } from '../guide/GuideStrip';
 import type { ScriptAction } from '../guide/script';
 import { Trail, type TrailWord } from '../guide/Trail';
@@ -70,6 +70,22 @@ function Frame({ objective, word, context, lines, actions, onAction, film, trail
   onAction: (command: string) => void;
   trail?: boolean;
 }) {
+  // The pictures keep clear of this guide: its height (from the bottom of the page) is the room they keep.
+  useLayoutEffect(() => {
+    const host = document.querySelector<HTMLElement>('.world-screen');
+    const strip = host?.querySelector<HTMLElement>('.guide-strip');
+    if (!host) return;
+    if (!strip) {
+      host.style.removeProperty('--world-guide-room');
+      return;
+    }
+    const measure = () => host.style.setProperty('--world-guide-room', `${Math.ceil(host.getBoundingClientRect().bottom - strip.getBoundingClientRect().top + 12)}px`);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(strip);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [film, lines.length, actions.length]);
   return (
     <>
       {trail && <Trail objective={objective} current={word} context={film ? null : context ?? null} onWord={toWord} closed={{}} onPlace={() => {}} />}
@@ -185,7 +201,7 @@ function Test({ film, toWord }: Part) {
   return (
     <>
       <div className="world-screen__test">
-        <WorldTest source="/api/evidence" control={control} caption={false} />
+        <WorldTest source="/api/evidence" control={control} caption={false} keepGuideRoom />
       </div>
       <Frame
         film={film}
@@ -232,7 +248,7 @@ function Sealed({ film, toWord }: Part) {
   return (
     <>
       <div className="world-screen__sealed">
-        <SealedTonight source="/api/live" caption={false} />
+        <SealedTonight source="/api/live" caption={false} keepGuideRoom />
       </div>
       <Frame
         film={film}

@@ -1313,7 +1313,7 @@
 
 .world-screen__sealed {
   position: absolute;
-  inset: var(--film-room-top, 96px) 0 var(--film-room-bottom, 150px) 0;
+  inset: var(--film-room-top, 96px) 0 0 0;
 }
 
 /* On the page the year stands under the trail, which holds the objective; the controls keep the top right. */
@@ -1321,9 +1321,11 @@
   --years-caption-top: 104px;
 }
 
-/* In the film the guide's sentence is left out, so the strip of totals goes down into its room. */
+/* In the film the guide's sentence is left out, so the strip of totals goes down into its room and the test and the
+   board keep only a small room at the bottom. On the page the host sets --world-guide-room to its guide's height. */
 .world-screen[data-film='true'] {
   --years-bottom: clamp(20px, 2vw, 40px);
+  --world-guide-room: clamp(20px, 2vw, 40px);
 }
 
 /* A picture's own caption (WorldCaption.tsx), where the page's objective stands; and the guide's room it keeps clear,
@@ -1354,7 +1356,8 @@
   visibility: hidden;
 }
 
-.world-sealed[data-captioned='true'] {
+.world-sealed[data-captioned='true'],
+.world-sealed[data-room='true'] {
   box-sizing: border-box;
 }
 

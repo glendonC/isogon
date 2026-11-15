@@ -192,10 +192,6 @@
   line-height: 1.2;
 }
 
-.iso-film .world-screen[data-name='sealed'] .world-screen__sealed {
-  bottom: clamp(20px, 2vw, 40px);
-}
-
 /* A picture's own caption is the shot's caption: as large as the objective's. */
 .iso-film .world-caption__line {
   font-size: clamp(30px, 2.3vw, 48px);

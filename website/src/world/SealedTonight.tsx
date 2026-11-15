@@ -32,6 +32,8 @@ export interface SealedTonightProps {
    * that frames the board with its own trail passes false.
    */
   caption?: boolean;
+  /** The guide's room kept clear without a caption of its own (the host draws the caption): on with `caption`. */
+  keepGuideRoom?: boolean;
 }
 
 const H = 3_600_000;
@@ -105,7 +107,8 @@ function words(f: LiveFire, s: LiveSeal | null): string {
   }
 }
 
-export function SealedTonight({ source, now = null, before = 6, after = 9, caption = true }: SealedTonightProps) {
+export function SealedTonight({ source, now = null, before = 6, after = 9, caption = true, keepGuideRoom }: SealedTonightProps) {
+  const keep = keepGuideRoom ?? caption;
   const read = useRead<unknown>(source);
   const live: Live | null = read.state === 'ready' ? parseLive(read.value) : null;
   const [open, setOpen] = useState<string | null>(null);
@@ -166,9 +169,10 @@ export function SealedTonight({ source, now = null, before = 6, after = 9, capti
     <div
       className="world-sealed"
       data-captioned={caption ? 'true' : 'false'}
-      style={caption ? { paddingTop: capBottom + 12, paddingBottom: guideRoom } : undefined}
+      data-room={keep ? 'true' : 'false'}
+      style={caption ? { paddingTop: capBottom + 12, paddingBottom: guideRoom } : keep ? { paddingBottom: guideRoom } : undefined}
     >
-      {caption && <div className="world-guide-room" ref={roomRef} aria-hidden="true" />}
+      {keep && <div className="world-guide-room" ref={roomRef} aria-hidden="true" />}
       <WorldCaption line={captionLine} onHeight={onCaption} />
       <div className="world-sealed__earth">
         <WorldCanvas label={SEAL_WORDS.label} focus={focus}>

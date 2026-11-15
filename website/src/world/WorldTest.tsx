@@ -82,10 +82,15 @@ export interface WorldTestControl {
 /**
  * `caption` (on by default) gives the picture its own caption where the page's objective stands, the objective on the
  * page and the film's caption in the film presentation, and keeps the room of the guide clear at the bottom
- * (`--world-guide-room`); a page that frames the picture with its own trail (the host of the pictures of the world)
- * passes false.
+ * (`--world-guide-room`). The host of the pictures of the world draws the caption where the page's objective stands
+ * and passes `caption={false}` with `keepGuideRoom`, so the picture keeps clear of the host's guide.
  */
-export function WorldTest({ source, control, caption = true }: { source: string; control?: MutableRefObject<WorldTestControl | null>; caption?: boolean }) {
+export function WorldTest({ source, control, caption = true, keepGuideRoom }: {
+  source: string;
+  control?: MutableRefObject<WorldTestControl | null>;
+  caption?: boolean;
+  keepGuideRoom?: boolean;
+}) {
   const read = useRead<unknown>(source);
   const ans = useMemo(() => (read.state === 'ready' ? parseFresh(read.value) : null), [read]);
   const [lookId, setLookId] = useState<'test_a' | 'test_b' | null>(null);
@@ -100,6 +105,8 @@ export function WorldTest({ source, control, caption = true }: { source: string;
   const [capBottom, setCapBottom] = useState(0);
   const [guideRoom, setGuideRoom] = useState(0);
   const roomRef = useGuideRoom(useCallback((px: number) => setGuideRoom(px), []));
+  const keep = keepGuideRoom ?? caption;
+  const [panelTop, setPanelTop] = useState(0);
   const onCaption = useCallback((px: number) => setCapBottom(px), []);
   useLayoutEffect(() => {
     const el = panel.current;
@@ -113,6 +120,7 @@ export function WorldTest({ source, control, caption = true }: { source: string;
         ? { left: 0, bottom: Math.round(Math.max(0, r.bottom - p.top + 8)), stacked }
         : { left: Math.round(p.right - r.left + 24), bottom: 0, stacked };
       setRoom((o) => (o.left === next.left && o.bottom === next.bottom && o.stacked === next.stacked ? o : next));
+      setPanelTop(el.offsetTop);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -148,15 +156,20 @@ export function WorldTest({ source, control, caption = true }: { source: string;
   const filmLine = look && c ? (look.id === 'test_b' ? TEST_WORDS.filmB : TEST_WORDS.filmA)(look.fires.length, c.ahead, judged, c.behind) : null;
   const captionLine = caption ? (film ? filmLine ?? TEST_WORDS.objective : TEST_WORDS.objective) : null;
   // With its own caption, the panel stands under it and above the guide's room, or under the Earth on a narrow screen.
-  const panelStyle: React.CSSProperties | undefined = !caption
-    ? undefined
-    : room.stacked
+  // Without its own caption but keeping the guide's room (the host), the panel keeps its place and ends above the room.
+  const panelStyle: React.CSSProperties | undefined = caption
+    ? room.stacked
       ? { bottom: guideRoom }
-      : { top: capBottom + 16, maxHeight: `calc(100% - ${capBottom + 16 + guideRoom + 8}px)`, overflowY: 'auto' };
+      : { top: capBottom + 16, maxHeight: `calc(100% - ${capBottom + 16 + guideRoom + 8}px)`, overflowY: 'auto' }
+    : keep
+      ? room.stacked
+        ? { bottom: guideRoom }
+        : { maxHeight: `calc(100% - ${panelTop + guideRoom + 8}px)`, overflowY: 'auto' }
+      : undefined;
 
   return (
     <div className="world-earth" ref={root}>
-      <WorldCanvas label={TEST_WORDS.label} focus={TEST_VIEW} padLeft={room.left} padBottom={room.bottom + (caption && !room.stacked ? guideRoom : 0)} onClickMap={() => setOpen(null)}>
+      <WorldCanvas label={TEST_WORDS.label} focus={TEST_VIEW} padLeft={room.left} padBottom={room.bottom + (keep && !room.stacked ? guideRoom : 0)} onClickMap={() => setOpen(null)}>
         {(p) => (
           <>
             {fires.map((f) => {
@@ -196,7 +209,7 @@ export function WorldTest({ source, control, caption = true }: { source: string;
           </>
         )}
       </WorldCanvas>
-      {caption && <div className="world-guide-room" ref={roomRef} aria-hidden="true" />}
+      {keep && <div className="world-guide-room" ref={roomRef} aria-hidden="true" />}
       <WorldCaption line={captionLine} onHeight={onCaption} />
       <div className="world-legend world-tests" data-world-ui data-captioned={caption ? 'true' : 'false'} ref={panel} style={panelStyle}>
         {ans.example && <div className="world-legend__fine world-legend__caution">{ans.example}</div>}
