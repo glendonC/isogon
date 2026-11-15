@@ -1,5 +1,5 @@
 {
-  "version": 23,
+  "version": 24,
   "what": "The words of the guide: for each step and each state inside it, the objective, what the guide says, the labels on things, the actions, and the questions a visitor can ask. Every sentence says which of the five places it sits in. Text in braces is a field: its value comes from an answer of the backend, named under fields. No figure is typed in a line.",
   "trail": [
     "Record",
@@ -123,7 +123,8 @@
     "yearly_ratio_high": "the highest year's ratio, one decimal place, leaving out the first year that holds the newer satellite's rows",
     "last_year": "the largest of the years, in digits",
     "count_keys_challenger": "the number of keys of an object that begin challenger_, written as count_word",
-    "challengers_ahead_span": "against_the_baselines.ahead of each challenger_ key: one whole number when all agree, else the least and the most as 5 to 6"
+    "challengers_ahead_span": "against_the_baselines.ahead of each challenger_ key: one whole number when all agree, else the least and the most as 5 to 6",
+    "percent_of_method": "of an object and a name, the object's value under that name, times 100, rounded to a whole number"
   },
   "conditions": {
     "model_is_experimental": {
@@ -249,6 +250,10 @@
     "test_a_last_strict_not_behind": {
       "true_when": "fresh_test.test_b is null, and fresh_test.test_a is not null with fresh_test.test_a.all.classes.csi_strict_375m not behind",
       "route": "GET /api/evidence"
+    },
+    "answered_by_challenger": {
+      "true_when": "the run's held_out_passes_answered_by.method is not reconstruction (a challenger answered its hidden passes)",
+      "route": "POST /api/reconstruct"
     }
   },
   "state_when": {
@@ -1216,7 +1221,13 @@
           "film": [
             {
               "place": "objective",
-              "line": "Sharp satellite hidden. An experimental model estimates the fire."
+              "line": "Sharp satellite hidden. An experimental model estimates the fire.",
+              "unless": "answered_by_challenger"
+            },
+            {
+              "place": "objective",
+              "if": "answered_by_challenger",
+              "line": "Sharp satellite hidden. A second experimental model estimates the fire."
             }
           ]
         },
@@ -1747,7 +1758,13 @@
           "film": [
             {
               "place": "objective",
-              "line": "Revealed: within one square, the estimate matches {one_square_estimate}%; the coarse guess, {one_square_coarse}%."
+              "line": "Revealed: within one square, the estimate matches {one_square_estimate}%; the coarse guess, {one_square_coarse}%.",
+              "unless": "answered_by_challenger"
+            },
+            {
+              "place": "objective",
+              "if": "answered_by_challenger",
+              "line": "Revealed: within one square, the second model matches {one_square_estimate}%; the coarse guess, {one_square_coarse}%."
             }
           ]
         },
@@ -4014,9 +4031,9 @@
     },
     "one_square_estimate": {
       "route": "POST /api/reconstruct with reveal",
-      "key": "blind_test.verdict.scores.csi_one_cell_tolerance.reconstruction",
-      "format": "percent",
-      "is": "the estimate's agreement with the sharp satellite give or take one square, on this fire"
+      "key": "blind_test.verdict.scores.csi_one_cell_tolerance, blind_test.verdict.method",
+      "format": "percent_of_method",
+      "is": "the agreement give or take one square, on this fire, of the model that answered the hidden passes: the row of the verdict's own method (reconstruction, or the challenger's name)"
     },
     "one_square_coarse": {
       "route": "POST /api/reconstruct with reveal",
