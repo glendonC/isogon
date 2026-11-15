@@ -103,6 +103,12 @@ def _context_box(region_id: str) -> tuple[float, float, float, float]:
 
 
 def make_env(ep: EnvEpisode, params: dict[str, Any], env_kw: dict[str, Any], tiles: int = TILES, budget: int = BUDGET) -> NextLookEnv:
+    """The round of an episode. An episode that carries its own settings (`env_kw`, as a place of the fresh test
+    does: its own pass list) is played with them and with no terrain, since such a place has no terrain pack."""
+    own = getattr(ep, "env_kw", None)
+    if own is not None:
+        return NextLookEnv(ep.det, ep.box, (ep.window.start_s, ep.window.end_s), tiles=(tiles, tiles), budget=budget,
+                           params=OccupancyParams(**params), terrain_m=None, **{**env_kw, **own})
     grid = EvalGrid.from_bbox(ep.box)
     terrain = context_elevation(ep.region_id, _context_box(ep.region_id), grid)
     return NextLookEnv(ep.det, ep.box, (ep.window.start_s, ep.window.end_s), tiles=(tiles, tiles), budget=budget,
@@ -440,35 +446,12 @@ def record(result_path: str) -> None:
     print(f"recorded {result_path} as the policy in {FITTED_FILE.name}")
 
 
-def main(argv: list[str]) -> int:
-    from backend.firms import read_firms, region_box
-    from backend.model.fitted import load_params
-    from backend.terrain.live_region import PRESET_BY_ID
-
-    def log(msg: str) -> None:
-        print(msg, flush=True)
-
-    measured = next((a.split("=", 1)[1] for a in argv[1:] if a.startswith("--record-from=")), None)
-    if measured:
-        record(measured)
-        return 0
-    args = [a for a in argv[1:] if not a.startswith("--")]
-    if not args:
-        log("give the path to write the result to")
-        return 2
-    out_path = args[0]
-    workers = next((int(a.split("=", 1)[1]) for a in argv[1:] if a.startswith("--workers=")), max(1, min(8, (os.cpu_count() or 2) - 1)))
-    limit = next((int(a.split("=", 1)[1]) for a in argv[1:] if a.startswith("--limit=")), None)
-    t0 = time.time()
-    episodes = catalogue(read_firms, region_box, PRESET_BY_ID)
-    train, val = fit_split(episodes)
-    if limit is not None:                 # a trial run on every k-th training episode; its result is not a fit
-        train = train[:: max(1, len(train) // limit)][:limit]
-    params = load_params().as_dict()
-    env_kw: dict[str, Any] = {}
+def fit_player(train: list[Any], params: dict[str, Any], env_kw: dict[str, Any], workers: int, log: Any,
+               t0: float, episodes_doc: dict[str, Any], trial: str | None = None) -> dict[str, Any]:
+    """The fit of the learned player on the episodes given, as the module's docstring says: where, then when, then
+    whether the when part is used, all chosen with folds of the episodes given. `episodes_doc` says what the
+    episodes are beside their number."""
     folds = fold_of(train)
-    log(f"episodes: {len(train)} train (2012 to {TRAIN_LAST_YEAR}) in {len(set(folds))} folds of fires; {len(val)} validation, not played "
-        f"here; {len(episodes) - len(train) - len(val)} closed; {TILES} by {TILES} tiles, {BUDGET} looks")
     pool = ProcessPoolExecutor(max_workers=workers)
     probe = make_env(train[0], params, env_kw)
     schedule = probe.describe()["looks"]["source"]
@@ -572,12 +555,11 @@ def main(argv: list[str]) -> int:
 
     doc = {
         "what": "the learned player of the next-look environment: tile weights, look weights, and how they were chosen",
-        **({"trial_run": f"on {len(train)} training episodes only (--limit); not a fit"} if limit is not None else {}),
+        **({"trial_run": trial} if trial else {}),
         "known_limits": KNOWN_LIMITS,
         "setting": {"tiles": f"{TILES}x{TILES}", "budget": BUDGET, "score": "csi", "reward": REWARD, "looks": schedule},
-        "episodes": {"train": len(train), "validation_not_played_here": len(val), "train_years": f"2012 to {TRAIN_LAST_YEAR}",
-                     "folds": len(set(folds)), "folds_are": "fires grouped by region and year, dealt out in turn",
-                     "test": "closed and not played"},
+        "episodes": {"train": len(train), **episodes_doc, "folds": len(set(folds)),
+                     "folds_are": "fires grouped by region and year, dealt out in turn"},
         "reconstruction_parameters": params["fitted_on"],
         "policy": {
             "kind": "a linear score per tile for where to look; a linear score per look, one look per stretch of the episode, for when",
@@ -634,6 +616,42 @@ def main(argv: list[str]) -> int:
         "seconds": round(time.time() - t0, 1),
         "generated_utc": _stamp(),
     }
+    return doc
+
+
+def main(argv: list[str]) -> int:
+    from backend.firms import read_firms, region_box
+    from backend.model.fitted import load_params
+    from backend.terrain.live_region import PRESET_BY_ID
+
+    def log(msg: str) -> None:
+        print(msg, flush=True)
+
+    measured = next((a.split("=", 1)[1] for a in argv[1:] if a.startswith("--record-from=")), None)
+    if measured:
+        record(measured)
+        return 0
+    args = [a for a in argv[1:] if not a.startswith("--")]
+    if not args:
+        log("give the path to write the result to")
+        return 2
+    out_path = args[0]
+    workers = next((int(a.split("=", 1)[1]) for a in argv[1:] if a.startswith("--workers=")), max(1, min(8, (os.cpu_count() or 2) - 1)))
+    limit = next((int(a.split("=", 1)[1]) for a in argv[1:] if a.startswith("--limit=")), None)
+    t0 = time.time()
+    episodes = catalogue(read_firms, region_box, PRESET_BY_ID)
+    train, val = fit_split(episodes)
+    if limit is not None:                 # a trial run on every k-th training episode; its result is not a fit
+        train = train[:: max(1, len(train) // limit)][:limit]
+    params = load_params().as_dict()
+    env_kw: dict[str, Any] = {}
+    folds = fold_of(train)
+    log(f"episodes: {len(train)} train (2012 to {TRAIN_LAST_YEAR}) in {len(set(folds))} folds of fires; {len(val)} validation, not played "
+        f"here; {len(episodes) - len(train) - len(val)} closed; {TILES} by {TILES} tiles, {BUDGET} looks")
+    doc = fit_player(train, params, env_kw, workers, log, t0,
+                     {"validation_not_played_here": len(val), "train_years": f"2012 to {TRAIN_LAST_YEAR}",
+                      "test": "closed and not played"},
+                     trial=f"on {len(train)} training episodes only (--limit); not a fit" if limit is not None else None)
     with open(out_path, "w", encoding="utf-8") as fh:
         fh.write(json.dumps(doc, indent=1) + "\n")
     log(f"written {out_path} in {doc['seconds']} s")
