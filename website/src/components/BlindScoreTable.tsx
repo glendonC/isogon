@@ -19,6 +19,11 @@ import {
   type ModelStatus,
 } from '../content/realRuns';
 import type { StageFireAnchor } from '../stage/earthCutawayTypes';
+import { FurtherIn } from '../dataviz/FurtherIn';
+import { OverlapBars } from '../dataviz/OverlapBars';
+import type { Overlap } from '../dataviz/overlapRows';
+import '../dataviz/dataviz.css';
+import '../dataviz/sheets.css';
 
 export type ViewerDocId = 'fire' | 'scores' | 'tests' | 'sealed' | 'method' | 'sensors' | 'sources';
 
@@ -348,7 +353,7 @@ export function SideSheet({
     shiftY !== 0 ? { transform: `translate3d(0, ${shiftY.toFixed(1)}px, 0)` } : undefined;
 
   return createPortal(
-    <div className="iso-viewer-layer" role="presentation">
+    <div className="iso-viewer-layer dv-sheet" role="presentation">
       <button
         type="button"
         className="iso-viewer-scrim"
@@ -694,8 +699,47 @@ export function ScoresDocument({
       : null;
   const methodIds = [est, 'painted_modis', 'overlap_ratio'] as const;
 
+  // The result in plain percentages: overlap with VIIRS fire pixels, exact and within one pixel, for MODIS alone and
+  // for the estimate on show. The full seven rows are one step further in.
+  const overlapValue = (id: string, m: string): number | null => {
+    const x = orderedRows.find((r) => r.spec.id === id)?.verdict.values[m];
+    return typeof x === 'number' && Number.isFinite(x) ? x : null;
+  };
+  const ov = [
+    overlapValue('csi_strict_375m', 'painted_modis'),
+    overlapValue('csi_one_cell_tolerance', 'painted_modis'),
+    overlapValue('csi_strict_375m', est),
+    overlapValue('csi_one_cell_tolerance', est),
+  ];
+  const fireOverlap: Overlap | null = ov.every((x) => x !== null)
+    ? {
+        rows: [
+          { key: 'modis', label: 'MODIS alone', exact: ov[0] as number, within: ov[1] as number },
+          { key: 'in_use', label: 'The estimate', exact: ov[2] as number, within: ov[3] as number },
+        ],
+        fires: null,
+        looks: null,
+      }
+    : null;
+
   return (
-    <>
+    <FurtherIn
+      more="all seven scores"
+      lead={
+        fireOverlap ? (
+          <OverlapBars
+            overlap={fireOverlap}
+            width={640}
+            words={{
+              title: `Overlap with VIIRS fire pixels${place ? `, ${place}` : ''}`,
+              line: 'Pixels both mark as fire, out of pixels either marks as fire. Higher is better.',
+              exact: 'Exact',
+              within: 'Within 1 pixel',
+            }}
+          />
+        ) : null
+      }
+    >
       <section className="iso-doc-lead" aria-label="Summary">
         <div className="iso-doc-lead__hero">
           <span className="iso-doc-lead__figure">
@@ -918,7 +962,7 @@ export function ScoresDocument({
           </div>
         )}
       </section>
-    </>
+    </FurtherIn>
   );
 }
 

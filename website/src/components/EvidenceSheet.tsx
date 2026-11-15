@@ -37,6 +37,9 @@ import {
   type MethodEvidence,
 } from './MethodSheet';
 import { SourcesSheet } from './SourcesSheet';
+import { FurtherIn } from '../dataviz/FurtherIn';
+import { OverlapBars } from '../dataviz/OverlapBars';
+import { overlapFromEvidence } from '../dataviz/overlapRows';
 import '../styles/evidence.css';
 
 export interface EvidenceSheetProps {
@@ -1221,6 +1224,7 @@ export function EvidenceDocument({
 
   const fires = doc.test_fires.fires;
   const scores = doc.test_fires.scores;
+  const testB = overlapFromEvidence(doc, 'test_b');
   const testFiresWord = capFirst(formatCountWord(fires.length) ?? String(fires.length));
   const testFireNames = formatListAnd(fires.map((f) => capFirst(f.name)));
   const testScoresN = fires[0]?.new.scores_judged ?? scores.length;
@@ -1280,7 +1284,23 @@ export function EvidenceDocument({
   const liveFiresTotal = liveDoc?.fires?.length ?? 0;
 
   return (
-    <>
+    <FurtherIn
+      more="every test in full"
+      lead={
+        testB ? (
+          <OverlapBars
+            overlap={testB}
+            width={640}
+            words={{
+              title: `Overlap with VIIRS fire pixels${testB.fires !== null ? `, ${testB.fires} fires nothing had touched` : ''}`,
+              line: 'Pixels both mark as fire, out of pixels either marks as fire. Higher is better.',
+              exact: 'Exact',
+              within: 'Within 1 pixel',
+            }}
+          />
+        ) : null
+      }
+    >
       <section className="iso-doc-lead" aria-label="Summary">
         {fires.length > 0 && (
           <div className="iso-doc-lead__hero">
@@ -1600,7 +1620,7 @@ export function EvidenceDocument({
           )}
         </section>
       )}
-    </>
+    </FurtherIn>
   );
 }
 

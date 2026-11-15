@@ -36,7 +36,7 @@ export function OverlapBars({ overlap, width = 860, words = DEFAULT_WORDS }: Ove
   const [hover, setHover] = useState<string | null>(null);
   const labelW = 150;
   const numW = 64;
-  const readoutW = 290;
+  const readoutW = Math.round(Math.min(290, width * 0.3));
   const axisW = width - labelW - numW - readoutW;
   const max = overlapAxisMax(overlap.rows) / 100;
   const sx = (v: number) => labelW + (v / max) * axisW;
@@ -45,7 +45,8 @@ export function OverlapBars({ overlap, width = 860, words = DEFAULT_WORDS }: Ove
   const group = MARK.bar * 2 + 6 + 26;
   const axisY = top + overlap.rows.length * group;
   const height = axisY + 26;
-  const ticks = Array.from({ length: Math.round(max * 10) + 1 }, (_, i) => i / 10);
+  const step = max <= 0.4 ? 0.1 : 0.2;
+  const ticks = Array.from({ length: Math.round(max / step) + 1 }, (_, i) => Math.round(i * step * 100) / 100);
   return (
     <div className="dv-figure">
       <p className="dv-title">{words.title}</p>
