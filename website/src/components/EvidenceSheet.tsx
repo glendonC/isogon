@@ -1295,7 +1295,7 @@ export function EvidenceDocument({
               title: `Overlap with VIIRS fire pixels${testB.fires !== null ? `, ${testB.fires} fires nothing had touched` : ''}`,
               line: 'Pixels both mark as fire, out of pixels either marks as fire. Higher is better.',
               exact: 'Exact',
-              within: 'Within 1 pixel',
+              within: 'Within one pixel',
             }}
           />
         ) : null
@@ -1604,7 +1604,7 @@ export function EvidenceDocument({
       {liveDoc && (
         <section className="iso-doc-section" aria-labelledby="iso-ev-live-seal">
           <h3 id="iso-ev-live-seal" className="iso-doc-section__title">
-            Sealed Before the Pass
+            Sealed before the pass
           </h3>
           <p className="iso-doc-section__p">
             {liveScored > 0
@@ -1614,7 +1614,7 @@ export function EvidenceDocument({
           {onOpenSealed && (
             <div className="iso-plain-actions">
               <button type="button" className="iso-plain-action" onClick={onOpenSealed}>
-                <span>Open Sealed Before the Pass</span>
+                <span>Open Sealed before the pass</span>
               </button>
             </div>
           )}
@@ -1625,12 +1625,12 @@ export function EvidenceDocument({
 }
 
 const DOC_TITLES: Record<ViewerDocId, string> = {
-  fire: 'This Fire',
-  scores: 'The Scores',
-  tests: 'Every Test on Record',
-  sealed: 'Sealed Before the Pass',
-  method: 'Method and Data',
-  sensors: 'Sensor Geometry',
+  fire: 'This fire',
+  scores: 'The scores',
+  tests: 'Every test',
+  sealed: 'Sealed before the pass',
+  method: 'Method',
+  sensors: 'Sensor geometry',
   sources: 'Sources',
 };
 
@@ -1835,15 +1835,15 @@ export function UnifiedDocumentViewer({
   const navItems = useMemo<ViewerNavItem[]>(() => {
     const items: ViewerNavItem[] = [];
     if (store?.run.active) {
-      items.push({ id: 'fire', label: 'This Fire' });
+      items.push({ id: 'fire', label: 'This fire' });
     }
     if (effectiveScore) {
-      items.push({ id: 'scores', label: 'The Scores' });
+      items.push({ id: 'scores', label: 'The scores' });
     }
-    items.push({ id: 'tests', label: 'Every Test on Record' });
-    items.push({ id: 'sealed', label: 'Sealed Before the Pass' });
-    items.push({ id: 'method', label: 'Method and Data' });
-    items.push({ id: 'sensors', label: 'Sensor Geometry' });
+    items.push({ id: 'tests', label: 'Every test' });
+    items.push({ id: 'sealed', label: 'Sealed before the pass' });
+    items.push({ id: 'method', label: 'Method' });
+    items.push({ id: 'sensors', label: 'Sensor geometry' });
     items.push({ id: 'sources', label: 'Sources' });
     return items;
   }, [store?.run.active, effectiveScore]);

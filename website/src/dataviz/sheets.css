@@ -1,64 +1,8 @@
 /*
- * The sheets in the look: type on the night ground. No panel over the scene, no blur, no shadow, no corner marks,
- * no tab in a box or underlined. A loss is drawn as plainly as a win: hatched, at full strength.
- * Scoped by `.dv-sheet` on the viewer's layer, so it overrides the older sheet styles only where it is mounted.
+ * What the sheets add to the identity's skin (`identity/sheet.css`, which draws the reading view): a sheet's result
+ * first, its full table one step further in, and a score lost drawn as plainly as a score won.
+ * Scoped by `.dv-sheet` on the viewer's layer.
  */
-.dv-sheet .iso-viewer-scrim {
-  background: var(--dv-ground);
-}
-
-.dv-sheet .iso-viewer-leader {
-  display: none;
-}
-
-.dv-sheet .iso-viewer,
-.dv-sheet .iso-viewer--single {
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  width: auto;
-  min-width: 0;
-  max-width: none;
-  padding: 28px 40px 0;
-  background: transparent;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow: none;
-  transform: none;
-  animation: none;
-}
-
-.dv-sheet .iso-viewer::after {
-  display: none;
-}
-
-.dv-sheet .iso-viewer__top,
-.dv-sheet .iso-viewer__scroll > * {
-  max-width: 820px;
-}
-
-.dv-sheet .iso-viewer__trail-btn {
-  color: var(--dv-ink-3);
-  font-size: 16px;
-  font-weight: 400;
-  background: none;
-  border: 0;
-}
-
-.dv-sheet .iso-viewer__trail-btn:hover,
-.dv-sheet .iso-viewer__trail-btn:focus-visible {
-  color: var(--dv-ink-2);
-}
-
-.dv-sheet .iso-viewer__trail-btn[data-active='true'] {
-  color: var(--dv-ink);
-  font-weight: 400;
-}
-
-.dv-sheet .iso-viewer__trail-btn[data-active='true']::after {
-  display: none;
-}
 
 /* A score lost, as plain as a score won: the page's hatch, at full strength. */
 .dv-sheet .iso-doc-lead__seg[data-won='false'],

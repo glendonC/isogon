@@ -6,13 +6,6 @@
    1. Side-sheet Document Viewer
    ============================================================================ */
 
-.iso-viewer-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 64;
-  pointer-events: auto;
-}
-
 /* While a side document or search finder is open, step back background stage controls and floating labels so text never collides. */
 body:has(.iso-viewer-layer) .guide-strip,
 body:has(.iso-viewer-layer) .guide-scrim,
@@ -56,76 +49,6 @@ body:has(.iso-viewer-layer) button.iso-credit {
   }
 }
 
-.iso-viewer-scrim {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(8, 11, 17, 0.14) 32%,
-    rgba(8, 11, 17, 0.56) 62%,
-    rgba(8, 11, 17, 0.78) 100%
-  );
-  border: 0;
-  padding: 0;
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  cursor: default;
-}
-
-.iso-viewer-leader {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.iso-viewer {
-  position: absolute;
-  top: var(--sys-gutter);
-  right: var(--sys-gutter);
-  bottom: var(--sys-gutter);
-  z-index: 2;
-  width: min(740px, 53vw);
-  min-width: min(600px, calc(100vw - 2 * var(--sys-gutter)));
-  max-width: calc(100vw - 2 * var(--sys-gutter));
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  background: rgba(8, 11, 17, 0.88);
-  -webkit-backdrop-filter: blur(22px);
-  backdrop-filter: blur(22px);
-  box-shadow: -32px 0 80px rgba(0, 0, 0, 0.52);
-  border: 0;
-  border-radius: 0;
-  color: var(--sys-ink);
-  outline: none;
-  user-select: text;
-  animation: iso-viewer-slide var(--sys-slow) var(--sys-ease) backwards;
-}
-
-/* Four quiet corner registration marks frame the floating document plane without boxing it in. */
-.iso-viewer::after {
-  --c: var(--sys-edge);
-  --b: var(--sys-bracket);
-  --w: var(--sys-bracket-w);
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(var(--c), var(--c)) top left / var(--b) var(--w) no-repeat,
-    linear-gradient(var(--c), var(--c)) top left / var(--w) var(--b) no-repeat,
-    linear-gradient(var(--c), var(--c)) top right / var(--b) var(--w) no-repeat,
-    linear-gradient(var(--c), var(--c)) top right / var(--w) var(--b) no-repeat,
-    linear-gradient(var(--c), var(--c)) bottom left / var(--b) var(--w) no-repeat,
-    linear-gradient(var(--c), var(--c)) bottom left / var(--w) var(--b) no-repeat,
-    linear-gradient(var(--c), var(--c)) bottom right / var(--b) var(--w) no-repeat,
-    linear-gradient(var(--c), var(--c)) bottom right / var(--w) var(--b) no-repeat;
-}
-
 .iso-viewer:focus,
 .iso-viewer:focus-visible {
   outline: none;
@@ -136,67 +59,8 @@ body:has(.iso-viewer-layer) button.iso-credit {
   min-width: min(540px, calc(100vw - 2 * var(--sys-gutter)));
 }
 
-@keyframes iso-viewer-slide {
-  from {
-    opacity: 0;
-    transform: translate3d(24px, 0, 0);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* Top bar: horizontal document trail on the left, Esc Close on the right, no full-width rule. */
-.iso-viewer__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sys-s4);
-  padding: var(--sys-s5) var(--sys-s6) var(--sys-s3);
-}
-
-.iso-viewer__trail {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sys-s2) var(--sys-s4);
-  min-width: 0;
-}
-
-.iso-viewer__trail-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 2px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
-  color: var(--sys-ink-3);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: color var(--sys-fast) var(--sys-ease);
-}
-
 .iso-viewer__trail-btn:hover {
   color: var(--sys-ink);
-}
-
-.iso-viewer__trail-btn[data-active='true'] {
-  color: var(--sys-ink);
-  font-weight: var(--sys-weight-strong);
-}
-
-.iso-viewer__trail-btn[data-active='true']::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -2px;
-  height: 1px;
-  background: var(--sys-ink);
 }
 
 .iso-viewer__trail-btn:focus-visible {
@@ -213,29 +77,10 @@ body:has(.iso-viewer-layer) button.iso-credit {
   color: var(--sys-ink-3);
 }
 
-.iso-viewer__close {
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
 /* Scrolling document body */
-.iso-viewer__scroll {
-  overflow-y: auto;
-  padding: var(--sys-s4) var(--sys-s6) var(--sys-s7);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sys-s7);
-}
 
 .iso-viewer__scroll > * {
   flex-shrink: 0;
-}
-
-.iso-viewer__title {
-  margin: 0 0 calc(-1 * var(--sys-s6));
-  font: var(--sys-weight) var(--sys-size-title) / var(--sys-lh-title) var(--sys-font);
-  letter-spacing: -0.005em;
-  color: var(--sys-ink);
 }
 
 /* Sheet directives: plain typographic actions, no outlined or shaded rectangle, quiet key hint beside the words. */
@@ -272,11 +117,6 @@ body:has(.iso-viewer-layer) button.iso-credit {
   height: 1px;
   background: var(--sys-rule);
   transition: background-color var(--sys-fast) var(--sys-ease);
-}
-
-.iso-viewer__close {
-  padding: 4px 0;
-  background: transparent;
 }
 
 .iso-viewer__close::after {

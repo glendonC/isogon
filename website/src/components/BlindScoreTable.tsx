@@ -2,8 +2,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
-  type CSSProperties,
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -18,12 +16,12 @@ import {
   type BlindVerdict,
   type ModelStatus,
 } from '../content/realRuns';
-import type { StageFireAnchor } from '../stage/earthCutawayTypes';
 import { FurtherIn } from '../dataviz/FurtherIn';
 import { OverlapBars } from '../dataviz/OverlapBars';
 import type { Overlap } from '../dataviz/overlapRows';
 import '../dataviz/dataviz.css';
 import '../dataviz/sheets.css';
+import '../identity/sheet.css';
 
 export type ViewerDocId = 'fire' | 'scores' | 'tests' | 'sealed' | 'method' | 'sensors' | 'sources';
 
@@ -189,22 +187,6 @@ export function AlignedNumber({
   );
 }
 
-function gridFallbackPoint(store: WorkspaceStore | null): { x: number; y: number } | null {
-  const pts = store?.model.grid?.points;
-  if (!pts || pts.length === 0) return null;
-  let sx = 0;
-  let sy = 0;
-  let n = 0;
-  for (const p of pts) {
-    if (!p) continue;
-    sx += p[0];
-    sy += p[1];
-    n += 1;
-  }
-  if (n === 0) return null;
-  return { x: sx / n, y: sy / n };
-}
-
 /**
  * Side-opening document viewer over the stage.
  * Anchors to the stage's fire projection when visible on the left terrain and moves slightly with the camera.
@@ -230,41 +212,9 @@ export function SideSheet({
   scrollKey?: string;
   children: ReactNode;
 }) {
-  const store = useOptionalWorkspace();
   const viewerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   useDialogFocus(open, viewerRef, viewerRef);
-
-  const [liveAnchor, setLiveAnchor] = useState<StageFireAnchor | null>(null);
-  const [viewport, setViewport] = useState<{ w: number; h: number }>(() =>
-    typeof window === 'undefined' ? { w: 1440, h: 900 } : { w: window.innerWidth, h: window.innerHeight },
-  );
-  const [reducedMotion, setReducedMotion] = useState<boolean>(() =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false,
-  );
-
-  useEffect(() => {
-    if (!open || !store) {
-      setLiveAnchor(null);
-      return;
-    }
-    return store.model.subscribeAnchor((a) => setLiveAnchor(a));
-  }, [open, store]);
-
-  useEffect(() => {
-    if (!open || typeof window === 'undefined') return;
-    const onResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener('resize', onResize);
-    const mq = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-    const onMotion = () => setReducedMotion(Boolean(mq?.matches));
-    mq?.addEventListener?.('change', onMotion);
-    return () => {
-      window.removeEventListener('resize', onResize);
-      mq?.removeEventListener?.('change', onMotion);
-    };
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -287,70 +237,6 @@ export function SideSheet({
   if (!open || typeof document === 'undefined') return null;
 
   const single = !navItems || navItems.length === 0;
-  const mobile = viewport.w <= 820;
-  const gutterPx = mobile ? 0 : Math.max(18, Math.min(44, viewport.w * 0.03));
-  const maxAvail = Math.max(320, viewport.w - 2 * gutterPx);
-  const estWidth = mobile
-    ? viewport.w
-    : single
-      ? Math.min(maxAvail, Math.max(Math.min(540, maxAvail), Math.min(680, viewport.w * 0.5)))
-      : Math.min(maxAvail, Math.max(Math.min(600, maxAvail), Math.min(740, viewport.w * 0.53)));
-  const viewerLeft = Math.max(0, viewport.w - estWidth - gutterPx);
-
-  let candidate: { x: number; y: number } | null = null;
-  if (liveAnchor && liveAnchor.visible) {
-    if (liveAnchor.x <= viewerLeft - 28) {
-      candidate = { x: liveAnchor.x, y: liveAnchor.y };
-    } else if (liveAnchor.left <= viewerLeft - 36) {
-      const clampedX = Math.min(liveAnchor.x, Math.max(liveAnchor.left + 24, viewerLeft - 96));
-      candidate = { x: clampedX, y: liveAnchor.y };
-    }
-  }
-  if (!candidate) {
-    const fallback = gridFallbackPoint(store);
-    if (fallback && fallback.x <= viewerLeft - 28) {
-      candidate = fallback;
-    } else if (store?.model.grid?.points) {
-      let bestX = Infinity;
-      let bestY = 0;
-      for (const p of store.model.grid.points) {
-        if (!p) continue;
-        if (p[0] >= 24 && p[0] <= viewerLeft - 40 && p[0] < bestX) {
-          bestX = p[0];
-          bestY = p[1];
-        }
-      }
-      if (Number.isFinite(bestX)) {
-        candidate = { x: Math.min(bestX + 72, viewerLeft - 72), y: bestY };
-      }
-    }
-  }
-
-  const inWorkspace =
-    typeof document !== 'undefined' && document.querySelector('.iso-app[data-workspace="true"]') !== null;
-
-  const anchored =
-    inWorkspace &&
-    viewport.w > 760 &&
-    candidate !== null &&
-    candidate.x >= 16 &&
-    candidate.x <= viewerLeft - 28 &&
-    candidate.y >= 32 &&
-    candidate.y <= viewport.h - 32;
-
-  const shiftY =
-    anchored && candidate && !reducedMotion
-      ? Math.max(-6, Math.min(6, ((candidate.y - viewport.h * 0.5) / (viewport.h * 0.5)) * 6))
-      : 0;
-
-  const attachY =
-    anchored && candidate
-      ? Math.max(64, Math.min(viewport.h - 64, candidate.y * 0.72 + viewport.h * 0.14 + shiftY))
-      : 0;
-  const elbowX = anchored && candidate ? Math.round(candidate.x + (viewerLeft - candidate.x) * 0.64) : 0;
-
-  const viewerStyle: CSSProperties | undefined =
-    shiftY !== 0 ? { transform: `translate3d(0, ${shiftY.toFixed(1)}px, 0)` } : undefined;
 
   return createPortal(
     <div className="iso-viewer-layer dv-sheet" role="presentation">
@@ -362,40 +248,10 @@ export function SideSheet({
         onClick={onClose}
       />
 
-      {anchored && candidate && (
-        <svg className="iso-viewer-leader" aria-hidden="true">
-          <path
-            d={`M ${candidate.x.toFixed(1)} ${candidate.y.toFixed(1)} L ${elbowX} ${candidate.y.toFixed(1)} L ${viewerLeft.toFixed(1)} ${attachY.toFixed(1)}`}
-            fill="none"
-            stroke="var(--sys-ink-2)"
-            strokeOpacity="0.6"
-            strokeWidth="1"
-          />
-          <rect
-            x={candidate.x - 3}
-            y={candidate.y - 3}
-            width="6"
-            height="6"
-            fill="var(--sys-night)"
-            stroke="var(--sys-ink)"
-            strokeWidth="1"
-          />
-          <rect
-            x={viewerLeft - 2.5}
-            y={attachY - 2.5}
-            width="5"
-            height="5"
-            fill="var(--sys-ink)"
-          />
-        </svg>
-      )}
-
       <div
         ref={viewerRef}
         tabIndex={-1}
         className={`iso-viewer${single ? ' iso-viewer--single' : ''}`}
-        data-anchored={anchored ? 'true' : 'false'}
-        style={viewerStyle}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -425,7 +281,6 @@ export function SideSheet({
             <span />
           )}
           <button type="button" className="iso-plain-action iso-viewer__close" onClick={onClose}>
-            <kbd className="iso-plain-action__key">Esc</kbd>
             <span>Close</span>
           </button>
         </header>
@@ -715,7 +570,7 @@ export function ScoresDocument({
     ? {
         rows: [
           { key: 'modis', label: 'MODIS alone', exact: ov[0] as number, within: ov[1] as number },
-          { key: 'in_use', label: 'The estimate', exact: ov[2] as number, within: ov[3] as number },
+          { key: 'in_use', label: est.startsWith('challenger') ? 'New model' : 'First model', exact: ov[2] as number, within: ov[3] as number },
         ],
         fires: null,
         looks: null,
@@ -734,7 +589,7 @@ export function ScoresDocument({
               title: `Overlap with VIIRS fire pixels${place ? `, ${place}` : ''}`,
               line: 'Pixels both mark as fire, out of pixels either marks as fire. Higher is better.',
               exact: 'Exact',
-              within: 'Within 1 pixel',
+              within: 'Within one pixel',
             }}
           />
         ) : null
@@ -923,10 +778,10 @@ export function ScoresDocument({
               This window belongs to one of the three closed test fires. Their recorded test is under{' '}
               {onEvidence ? (
                 <button type="button" className="iso-inline-trigger" onClick={onEvidence}>
-                  Every Test on Record
+                  Every test
                 </button>
               ) : (
-                'Every Test on Record'
+                'Every test'
               )}
               .
             </li>
@@ -950,7 +805,7 @@ export function ScoresDocument({
             )}
             {onEvidence && (
               <button type="button" className="iso-plain-action" onClick={onEvidence}>
-                <span>Every Test on Record</span>
+                <span>Every test</span>
               </button>
             )}
             {terra && onToggleTerra && (
