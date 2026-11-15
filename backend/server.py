@@ -854,7 +854,7 @@ class IsogonDataStore:
     def regions_payload(self) -> dict[str, Any]:
         return {
             "schema_version": "1.0.0",
-            "presets": [spec.to_summary_dict() for spec in PRESET_REGIONS],
+            "presets": [spec.to_summary_dict() for spec in PRESET_REGIONS if spec.id in REGION_COUNTRY],
         }
 
     def execute_reconstruct(self, body: dict[str, Any]) -> dict[str, Any]:

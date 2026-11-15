@@ -218,6 +218,33 @@ class PlacesRegistryTests(unittest.TestCase):
             self.assertEqual(list(parse_box(",".join(str(v) for v in place["box"]))), place["box"])
             self.assertTrue(place["why"])
 
+    def test_the_entry_opens_in_the_warm_region_and_a_record_only_region_offers_no_fire(self) -> None:
+        from unittest import mock
+
+        import backend.firms.places as places
+
+        def st(day: str, px: int) -> dict:
+            return {"start": day, "modis_pixels_in_box": px, "busiest_in_month": True}
+
+        starts = {"plumas_ca": [st("2012-08-10", 394)], "maule_cl": [st("2017-01-22", 2271)],
+                  "ljusdal_se": [st("2018-07-17", 170)]}
+
+        def roles(region, first, last):
+            return {"world_model": "never seen", "learned_agent": "never seen", "closed": False}
+
+        with mock.patch.object(places, "_model_roles", lambda: roles):
+            out = places.places_payload(lambda r: starts.get(r, []), recorded={})
+        self.assertEqual(places.load_places()["warm_region"], "plumas_ca")
+        self.assertEqual((out["default"]["region_id"], out["default"]["start"]), ("plumas_ca", "2012-08-10"))
+        self.assertIn("warm region", out["default"]["chosen_by"])
+        got = {p["id"]: p for p in out["places"]}
+        self.assertEqual(got["maule_cl"]["starts"]["default_start"], "2017-01-22")   # a place's own default is its own
+        lj = got["ljusdal_se"]
+        self.assertTrue(lj["record_only"])
+        self.assertEqual((lj["featured_fires"], lj["starts"]), ([], None))
+        self.assertTrue(lj["calendar"])
+        self.assertNotIn("semey_kz", got)
+
     def test_the_check_of_a_place_is_copied_from_its_calendar(self) -> None:
         from backend.firms.real_calendar import record_check
 
@@ -262,10 +289,11 @@ class PlacesRegistryTests(unittest.TestCase):
         with mock.patch.object(places, "_model_roles", lambda: None):          # a build without the model's function
             out = places_payload(lambda region: starts if region == "plumas_ca" else [], recorded=recorded)
         self.assertEqual((out["default"]["featured_fire"], out["default"]["start"]), ("plumas_ca:2012-08", "2012-08-10"))
-        self.assertEqual(out["default"]["chosen_by"], "while the standings are not served")
+        self.assertTrue(out["default"]["chosen_by"].startswith("while the standings are not served"))
         # with the model's function: the 2012 fire is the largest the world model never saw
         real = places_payload(lambda region: starts if region == "plumas_ca" else [], recorded=recorded)
-        self.assertEqual((real["default"]["featured_fire"], real["default"]["chosen_by"]), ("plumas_ca:2012-08", "the world model's standing"))
+        self.assertEqual(real["default"]["featured_fire"], "plumas_ca:2012-08")
+        self.assertTrue(real["default"]["chosen_by"].startswith("the world model's standing"))
         self.assertEqual((real["default"]["to_the_world_model"], real["default"]["to_the_learned_agent"]), ("never seen", "fitted on"))
         dixie_real = next(p for p in real["places"] if p["id"] == "plumas_ca")["featured_fires"][0]
         self.assertEqual((dixie_real["to_the_world_model"], dixie_real["closed"]), ("recorded test fire", True))
@@ -293,7 +321,7 @@ class PlacesRegistryTests(unittest.TestCase):
         with mock.patch.object(places, "_model_roles", lambda: roles):
             out = places_payload(lambda region: starts if region == "plumas_ca" else [])
         self.assertEqual(out["default"]["featured_fire"], "plumas_ca:2020-09")
-        self.assertEqual(out["default"]["chosen_by"], "the world model's standing")
+        self.assertTrue(out["default"]["chosen_by"].startswith("the world model's standing"))
         self.assertEqual(out["default"]["to_the_learned_agent"], "fitted on")
 
         # a fire the world model never saw but that is closed (a 2021 window outside the fire's dates) is never the default
@@ -358,7 +386,9 @@ class RoutesTests(unittest.TestCase):
         self.assertIn("presets", places)
         ids = {p["id"]: p for p in places["places"]}
         self.assertEqual(ids["evia_greece"]["rows"], "firms")
-        self.assertEqual(ids["blue_mountains_au"]["rows"], "simulated")
+        self.assertNotIn("blue_mountains_au", ids)                    # no path leads to a simulated fire
+        self.assertEqual({p["id"] for p in places["presets"]}, set(fa.REGION_COUNTRY))
+        self.assertIn("simulated", places["not_offered"])
         self.assertEqual(ids["evia_greece"]["years"]["country_files"][0], 2000)
         self.assertEqual(ids["evia_greece"]["starts"]["count"], len(self._get("/api/runs/starts?region_id=evia_greece&source=firms")[1]["starts"]))
         self.assertIn("default", places)

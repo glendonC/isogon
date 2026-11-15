@@ -31,13 +31,13 @@ The places registry (`backend/firms/places.json`) names each region's country fi
 | `evros_greece` | Greece | 25.97, 41.03 | the Alexandroupoli and Dadia fire, August 2023 |
 | `serra_acor_pt` | Portugal | -7.70, 40.19 | the fires of August 2025 in central Portugal |
 | `maule_cl` | Chile | -72.19, -35.52 | the fires of January 2017 in the Maule coast range |
-| `ljusdal_se` | Sweden | 15.42, 61.90 | the Kårböle and Ljusdal fires, July 2018 |
-| `semey_kz` | Kazakhstan | 80.76, 50.48 | the Abai region fire, June 2023 |
+| `ljusdal_se` | Sweden | 15.42, 61.90 | the Kårböle and Ljusdal fires, July 2018; its Record only, no fire offered |
 | `manavgat_tr` | Turkey | 31.47, 36.90 | the Manavgat fire, July 2021 |
+| `fort_mcmurray_ab` | Canada | -110.34, 56.77 | the Horse River fire, May 2016 |
 
 The first three boxes were cut around their test fires. Each later box has the preset span, 0.52 by 0.38 degrees, and is placed where it holds the most MODIS rows in the dates of the fire it was chosen for, searched every 0.02 degrees within one to two degrees of the fire's reported point; the reported point only sets the search. Only MODIS rows place a box. A candidate becomes a region when the start rule in use (`real_start_dates` in `backend/model/real_run.py`) finds a start in the fire's dates; the rest were dropped (Smokehouse Creek in Texas, Pedrogao Grande and the October 2017 fires in Portugal, Knysna in South Africa, Kostanay in Kazakhstan, northern Ghana): fires that burned out in a day or two, or many small fires lit by day, give no 24 MODIS overpasses with a detection in eight days. No context box meets another region's, so no region holds a row of another's, and none holds a row of a recorded test fire's region.
 
-A context box can reach past its country: `evros_greece` into Turkey, Bulgaria and the Aegean, `serra_acor_pt` into Spain, `semey_kz` perhaps into Russia. The region's rows come from its own country file only, so that ground has no rows, and the calendar's rates per area are low by that share; the ratio and its check are counts and are not affected.
+A context box can reach past its country: `evros_greece` into Turkey, Bulgaria and the Aegean, `serra_acor_pt` into Spain, `maule_cl` perhaps a little into Argentina. The region's rows come from its own country file only, so that ground has no rows, and the calendar's rates per area are low by that share; the ratio and its check are counts and are not affected.
 
 A place of the Record only (`record_only_places` in the registry) has a box counted from the cached country files with the same held-out check and no run, round or play, because no start passes the rule there: northern Ghana, the hard case of many small fires. `GET /api/calendar/checks` lists the check of every region and of these places in one answer ([api.md](api.md)).
 

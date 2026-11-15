@@ -1,7 +1,9 @@
-"""The places registry: every preset region with where its rows come from, its featured fires, and a default, as data.
+"""The places registry: every region with FIRMS rows, where its rows come from, its featured fires, and a default.
 
 - The regions' boxes are the presets of `backend/terrain/live_region.py`; the country each region's rows come from is
-  `backend.firms.archive.REGION_COUNTRY`.
+  `backend.firms.archive.REGION_COUNTRY`. A preset with no rows is not offered (`NOT_OFFERED`).
+- A region of the Record only (`record_only` in `places.json`, its reason as the value) has its calendar and offers no
+  fire for a run, a round or a play.
 - Featured fires are chosen by rule from the region's real run starts (`GET /api/runs/starts`, MODIS rows only):
   the starts the start search marks busiest, grouped into periods where they lie less than `PERIOD_GAP_DAYS` apart.
   Their size is the MODIS pixels in the box at their busiest start. Largest first within a region.
@@ -12,8 +14,9 @@
   never seen), comes from the model lane's function when it exists (`MODEL_ROLE_FUNCTION`): two fields,
   `to_the_world_model` and `to_the_learned_agent`, null until then.
 - The default: the largest featured fire the world model never saw; while the standings are null, the largest that
-  is not a blind test fire. The answer says which reading chose it. Each place's own default follows the same rule
-  inside the place; a place whose only fires are recorded test fires opens on its largest one.
+  is not a blind test fire. The whole entry opens in the warm region (`warm_region`) by that rule, so a larger fire
+  elsewhere does not move the first screen. The answer says which reading chose it. Each place's own default follows
+  the same rule inside the place; a place whose only fires are recorded test fires opens on its largest one.
 - A recorded test fire opens on its recorded window (the last look of `backend/model/fitted_values/test_fire_looks.json`)
   with every satellite shown: its blind test is on record and is not run, revealed or played again. Every other fire
   opens held out, at its busiest start. The learned agent's standing is served beside it
@@ -48,6 +51,11 @@ OPEN_HELD_OUT: str = "opens held out (holdout_viirs true) at its busiest start; 
 DEFAULT_RULE: str = ("the largest featured fire the world model never saw (MODIS pixels in the box at its busiest "
                      "start); while the standings are not served, the largest featured fire that is not a blind test "
                      "fire")
+# The whole entry opens in the registry's warm region (places.json `warm_region`) by the rule above; each place's own
+# default follows the rule inside the place. A larger fire elsewhere does not move the page's first screen.
+WARM_RULE: str = "inside the warm region (places.json warm_region), by the rule above"
+NOT_OFFERED: str = ("presets with no FIRMS rows are kept for the tests and not offered: no path of the page may lead "
+                    "to a simulated fire")
 
 
 def load_places(path: Path = PLACES_FILE) -> dict[str, Any]:
@@ -217,13 +225,19 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
     roles = _model_roles()
     recorded = recorded_windows() if recorded is None else recorded
     out, periods = [], []
+    warm = doc.get("warm_region")
     for spec in PRESET_REGIONS:
+        if spec.id not in REGION_COUNTRY:
+            continue   # NOT_OFFERED
         b = spec.bbox
         box = [round(b.west, 5), round(b.south, 5), round(b.east, 5), round(b.north, 5)]
-        real = spec.id in REGION_COUNTRY
-        named = [named_fire_entry(f) for f in doc.get("regions", {}).get(spec.id, {}).get("named_fires", [])] if real else []
-        starts = starts_of(spec.id) if real else []
-        featured = featured_periods(spec.id, starts, named, box) if real else []
+        entry = doc.get("regions", {}).get(spec.id, {})
+        # A region of the Record only (`record_only` in places.json, with its reason): its calendar is served and no
+        # fire of it is offered for a run, a round or a play.
+        record_only = entry.get("record_only")
+        named = [named_fire_entry(f) for f in entry.get("named_fires", [])]
+        starts = starts_of(spec.id)
+        featured = [] if record_only else featured_periods(spec.id, starts, named, box)
         if roles is not None:
             for p in featured:
                 try:
@@ -243,22 +257,24 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
         out.append({
             "id": spec.id,
             "name": spec.name,
-            "country": REGION_COUNTRY[spec.id].replace("_", " ") if real else None,
+            "country": REGION_COUNTRY[spec.id].replace("_", " "),
             "box": box,
             "context_box": list(region_box(spec.id)),
-            "rows": "firms" if real else "simulated",
-            "calendar": f"/api/calendar?source=firms&region_id={spec.id}" if real else None,
-            "years": region_years(spec.id) if real else None,
+            "rows": "firms",
+            "record_only": record_only,
+            "calendar": f"/api/calendar?source=firms&region_id={spec.id}",
+            "years": region_years(spec.id),
             "starts": ({"route": f"/api/runs/starts?region_id={spec.id}&source=firms", "count": len(starts),
                         "default_start": here["default_start"] if here else None,
                         "default_featured_fire": here["id"] if here else None,
                         "default_holdout_viirs": here["opens"]["holdout_viirs"] if here else None,
-                        "default_rule": f"{DEFAULT_RULE}, inside this place ({here_reading})"} if real else None),
+                        "default_rule": f"{DEFAULT_RULE}, inside this place ({here_reading})"} if not record_only else None),
             "featured_fires": featured,
             "named_fires": named,
         })
 
-    pick, reading = choose(periods)
+    pick, reading = choose([p for p in periods if p["region_id"] == warm] or periods)
+    reading = f"{reading}, {WARM_RULE}" if pick is not None and pick["region_id"] == warm else reading
     countries: dict[str, list[float]] = {}
     if index is not None:
         try:
@@ -268,9 +284,12 @@ def places_payload(starts_of: Callable[[str], list[dict[str, Any]]], index: Any 
     return {
         "places": out,
         "default": ({"region_id": pick["region_id"], "featured_fire": pick["id"], "start": pick["default_start"],
-                     "holdout_viirs": pick["opens"]["holdout_viirs"], "rule": DEFAULT_RULE, "chosen_by": reading,
+                     "holdout_viirs": pick["opens"]["holdout_viirs"], "rule": f"{DEFAULT_RULE}; {WARM_RULE}",
+                     "chosen_by": reading,
                      **{field: pick[field] for field in PARTS.values()}} if pick else
-                    {"region_id": None, "featured_fire": None, "start": None, "rule": DEFAULT_RULE, "chosen_by": reading}),
+                    {"region_id": None, "featured_fire": None, "start": None, "rule": f"{DEFAULT_RULE}; {WARM_RULE}",
+                     "chosen_by": reading}),
+        "not_offered": NOT_OFFERED,
         "featured_fires_rule": (f"periods of the starts the start search marks busiest, less than {PERIOD_GAP_DAYS} "
                                 "days apart, largest first by MODIS pixels in the box at the busiest start; named "
                                 f"from places.json when a named fire's dates overlap and its point lies within "

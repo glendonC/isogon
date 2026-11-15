@@ -415,31 +415,8 @@
           "source": "https://catalog.lansstyrelsen.se/store/29/resource/DX_2020_5",
           "point_source": "https://cems-mapping-website.s3.eu-west-1.amazonaws.com/static/activations/EMSR298/EMSR298_01ENSKOGEN_01DELINEATION_MONIT09_v1_vector.zip"
         }
-      ]
-    },
-    "semey_kz": {
-      "country": "Kazakhstan",
-      "terrain_tier": "hero",
-      "named_fires": [
-        {
-          "id": "semey_ormany_2023",
-          "name": "Forest fire in Borodulikha district, Abai region (Semey Ormany reserve)",
-          "first_day": "2023-06-08",
-          "last_day": "2023-07-13",
-          "burned_area": {
-            "value": 60000,
-            "unit": "hectares"
-          },
-          "point": [
-            80.821616,
-            50.524834
-          ],
-          "point_kind": "centre of the burnt area of GWIS record 12029424, computed from its polygon; GWIS gives no point and no name, and it is the only burnt area over 5,000 ha it records in east Kazakhstan first seen in June 2023, on the day this fire began; no origin is published",
-          "blind_test_fire": false,
-          "source": "https://www.gov.kz/memleket/entities/emer/press/news/details/587937?lang=ru",
-          "point_source": "https://maps.effis.emergency.copernicus.eu/gwis?service=WFS&version=1.1.0&request=GetFeature&typeName=nrt.ba.query&srsName=EPSG%3A4326&outputFormat=application%2Fjson%3B%20subtype%3Dgeojson&FILTER=%3CFilter%3E%3CPropertyIsEqualTo%3E%3CPropertyName%3Efire_id%3C%2FPropertyName%3E%3CLiteral%3E12029424%3C%2FLiteral%3E%3C%2FPropertyIsEqualTo%3E%3C%2FFilter%3E"
-        }
-      ]
+      ],
+      "record_only": "the weakest of the new fires (5 starts, 170 MODIS pixels at the busiest, 570 MODIS rows in the Record's fit): its calendar is offered, its fire is not"
     },
     "manavgat_tr": {
       "country": "Turkey",
@@ -464,6 +441,30 @@
           "point_source": "https://api.effis.emergency.copernicus.eu/rest/2/burntareas/current/51931/",
           "area_source": "https://api.effis.emergency.copernicus.eu/rest/2/burntareas/current/51931/",
           "last_day_source": "https://www.tarimorman.gov.tr/Haber/5064/Bakan-Pakdemirli-47-Ilde-Cikan-223-Orman-Yangininin-217si-Kontrol-Altinda"
+        }
+      ]
+    },
+    "fort_mcmurray_ab": {
+      "country": "Canada",
+      "terrain_tier": "hero",
+      "named_fires": [
+        {
+          "id": "horse_river_2016",
+          "name": "Horse River wildfire (MWF-009)",
+          "first_day": "2016-05-01",
+          "last_day": "2017-08-02",
+          "burned_area": {
+            "value": 485123.6,
+            "unit": "hectares"
+          },
+          "point": [
+            -111.464233,
+            56.670117
+          ],
+          "point_kind": "the fire's location as Alberta reported it to the Canadian National Fire Database",
+          "blind_test_fire": false,
+          "source": "https://cwfis.cfs.nrcan.gc.ca/geoserver/public/wfs?service=WFS&version=1.1.0&request=GetFeature&typeName=public:NFDB_point&outputFormat=application/json&CQL_FILTER=NFDBFIREID%3D%27AB-2016-MWF009%27",
+          "name_source": "https://open.alberta.ca/publications/2016-horse-river-fort-mcmurray-wildfire-review"
         }
       ]
     }
