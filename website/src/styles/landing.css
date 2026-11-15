@@ -520,3 +520,7 @@
   justify-items: start;
   text-align: left;
 }
+
+.iso-land__legend[data-side='left'] .iso-land__facts {
+  text-align: left;
+}

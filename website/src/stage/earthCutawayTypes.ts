@@ -294,6 +294,8 @@ export interface StageThingBox {
   bottom: number;
   /** False when its middle is behind the camera or off screen. */
   visible: boolean;
+  /** The fire's only: the boxes of the patches it is made of (see `StageFireAnchor`), where the box spans gaps. */
+  patches?: StageFirePatch[];
 }
 
 export interface EarthCutawayStageProps {

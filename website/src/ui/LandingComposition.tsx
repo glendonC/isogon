@@ -25,6 +25,11 @@ function facesLoaded(): boolean {
   return LANDING_FACES.every((f) => document.fonts.check(f));
 }
 
+/** A screen narrow enough that landing.css stands the legend at the left whatever the fire covers. */
+function narrowScreen(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.('(max-width: 760px)').matches === true;
+}
+
 const PLATFORM_NAMES: Record<string, string> = {
   VIIRS_SNPP: 'Suomi NPP VIIRS',
   VIIRS_NOAA20: 'NOAA-20 VIIRS',
@@ -107,14 +112,19 @@ export function LandingComposition({
   const [fontsIn, setReady] = useState(facesLoaded);
   const ready = fontsIn && (ways ? stageIn : true);
   const [showBelow, setShowBelow] = useState(false);
-  // The legend and its caption take the bottom corner the drawn fire covers less (right by default).
+  // The legend and its caption take the bottom corner the drawn fire covers less (right by default). On a narrow
+  // screen they always stand at the left over the credit.
   const legendRef = useRef<HTMLDivElement | null>(null);
   const footRef = useRef<HTMLDivElement | null>(null);
-  const [side, setSide] = useState<'right' | 'left'>('right');
+  const [side, setSide] = useState<'right' | 'left'>(() => (narrowScreen() ? 'left' : 'right'));
   useEffect(() => {
     if (!subscribeFireBox) return;
     return subscribeFireBox((box) => {
       const el = legendRef.current;
+      if (narrowScreen()) {
+        setSide('left');
+        return;
+      }
       if (!box || !el) return;
       const w = el.offsetWidth;
       const h = el.offsetHeight;
@@ -122,8 +132,18 @@ export function LandingComposition({
       const H = window.innerHeight;
       const g = parseFloat(getComputedStyle(el).getPropertyValue('--iso-gutter')) || 28;
       const footH = footRef.current?.offsetHeight ?? 0;
+      // Each patch of the fire on its own: the one box round two patches far apart spans both corners and the bare
+      // ground between them. A margin keeps the words from standing against a patch's edge.
+      const M = 16;
+      const parts = box.patches && box.patches.length > 0 ? box.patches : [box];
       const covered = (l: number, t: number) =>
-        Math.max(0, Math.min(l + w, box.right) - Math.max(l, box.left)) * Math.max(0, Math.min(t + h, box.bottom) - Math.max(t, box.top));
+        parts.reduce(
+          (sum, b) =>
+            sum +
+            Math.max(0, Math.min(l + w + M, b.right) - Math.max(l - M, b.left)) *
+              Math.max(0, Math.min(t + h + M, b.bottom) - Math.max(t - M, b.top)),
+          0,
+        );
       const right = covered(W - g - w, H - g - h);
       const left = covered(g, H - g - footH - 16 - h);
       setSide((s) => (s === 'right' ? (right > 0 && left < right * 0.5 ? 'left' : 'right') : left > 0 && right < left * 0.5 ? 'right' : 'left'));

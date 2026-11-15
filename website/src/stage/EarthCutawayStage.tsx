@@ -4833,9 +4833,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       }
 
       // Where the fire on show sits on screen, for the page's labels: the pass's own detections,
-      // or the estimate's cells on a pass whose detections are hidden
+      // or the estimate's cells on a pass whose detections are hidden. The labels' anchor is sent inside the workspace
+      // only; the fire's box is measured wherever the page names the fire (the first screen's legend asks for it).
       const wantsFireBox = Boolean(p.onThings && p.things && Object.values(p.things).some((t) => t.kind === 'fire'));
-      if ((p.onFireAnchor || wantsFireBox) && p.inWorkspace && realRun) {
+      const sendAnchor = p.inWorkspace ? p.onFireAnchor : undefined;
+      if ((sendAnchor || wantsFireBox) && realRun) {
         const own = footprintList.length > 0 ? footprintList : revealedList;
         const beliefStep = beliefNow ? Math.round(beliefField.grid.x) + ':' + beliefField.stepKey : '';
         const key = `${realPassKey}:${own.length}:${own.length === 0 ? beliefStep : ''}`;
@@ -4892,7 +4894,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         }
         const count = fireAnchorPoints.length / 3;
         if (count === 0) {
-          if (fireAnchorSent) p.onFireAnchor?.(null);
+          if (fireAnchorSent) sendAnchor?.(null);
           fireAnchorSent = false;
           fireAnchorViewKey = '';
           lastFireAnchor = null;
@@ -5048,7 +5050,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
               fireAnchorViewSig[22 + m] = pm[m];
             }
           }
-          p.onFireAnchor?.(lastFireAnchor!);
+          sendAnchor?.(lastFireAnchor!);
           fireAnchorSent = true;
         }
       } else if (fireAnchorSent) {
@@ -5068,8 +5070,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         for (const [name, thing] of Object.entries(p.things)) {
           let box: StageThingBox | null = null;
           if (thing.kind === 'fire') {
-            box = lastFireAnchor && p.inWorkspace && realRun
-              ? { x: lastFireAnchor.x, y: lastFireAnchor.y, left: lastFireAnchor.left, top: lastFireAnchor.top, right: lastFireAnchor.right, bottom: lastFireAnchor.bottom, visible: lastFireAnchor.visible }
+            box = lastFireAnchor && realRun
+              ? { x: lastFireAnchor.x, y: lastFireAnchor.y, left: lastFireAnchor.left, top: lastFireAnchor.top, right: lastFireAnchor.right, bottom: lastFireAnchor.bottom, visible: lastFireAnchor.visible, patches: lastFireAnchor.patches }
               : null;
           } else if (thing.kind === 'tile') {
             if (realBoard && thing.tile >= 0 && thing.tile < realBoard.cols * realBoard.rows) {
