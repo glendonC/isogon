@@ -45,7 +45,7 @@ export interface GlobeProps {
  * The switch: whether the Earth's years show the globe without being asked. Off until the lead has seen the globe
  * whole; flipping it is one commit. Until then `?globe=1` shows it (and `?globe=0` the flat map either way).
  */
-export const GLOBE_ON = false;
+export const GLOBE_ON = true;
 
 /** Whether the Earth's years open on the globe: the switch, or the address, and a browser that can draw it. */
 export function globeWanted(search: string): boolean {
