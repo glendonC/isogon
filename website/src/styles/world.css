@@ -1,0 +1,703 @@
+/* The pictures of the world: the Earth for choosing a place, tonight's sealed predictions, the test across the
+   world, and the band of the Record's interval. Built from the design system's tokens only; corners are square, a
+   circle is used only for a true round mark. */
+
+.world-earth {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sys-night);
+}
+
+.world-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+}
+
+.world-canvas:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--sys-focus);
+}
+
+.world-canvas:active {
+  cursor: grabbing;
+}
+
+.world-canvas--drawing,
+.world-canvas--drawing:active {
+  cursor: crosshair;
+}
+
+.world-canvas__gl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* A featured fire: a small square on the place, the selected one in corner brackets. */
+.world-mark {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  padding: 0;
+  border: 1px solid var(--sys-night);
+  border-radius: 0;
+  background: var(--sys-ink);
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(243, 244, 246, 0.35);
+}
+
+.world-mark:hover,
+.world-mark[aria-expanded='true'] {
+  background: var(--sys-detection);
+}
+
+.world-mark.sys-sel[data-selected='true']::after {
+  inset: -6px;
+}
+
+.world-mark:focus-visible {
+  outline: 1px solid var(--sys-focus);
+  outline-offset: 5px;
+}
+
+.world-leaders {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.world-leaders line {
+  stroke: var(--sys-ink-2);
+  stroke-width: 1;
+}
+
+.world-label {
+  position: absolute;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow:
+    0 0 3px var(--sys-night),
+    0 0 8px var(--sys-night);
+}
+
+/* The card a featured fire opens: its place, and one action per fire. */
+.world-card {
+  position: absolute;
+  display: grid;
+  gap: var(--sys-s2);
+  width: 300px;
+  padding: var(--sys-s3) var(--sys-s4) var(--sys-s2);
+  z-index: 3;
+}
+
+.world-card__title {
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.world-card__acts {
+  display: grid;
+}
+
+/* An action is words; the next step is heavier; a key is a quiet mark beside it. */
+.world-act {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sys-s2);
+  padding: var(--sys-s1) 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--sys-fast) var(--sys-ease);
+}
+
+.world-act:hover,
+.world-act:focus-visible {
+  color: var(--sys-ink);
+}
+
+.world-act[data-current='true'] {
+  color: var(--sys-ink);
+}
+
+.world-act--next {
+  font-weight: var(--sys-weight-strong);
+  color: var(--sys-ink);
+}
+
+.world-act--quiet {
+  color: var(--sys-ink-3);
+}
+
+.world-act--stack {
+  display: grid;
+  gap: 0;
+  padding: var(--sys-s1) 0 var(--sys-s2);
+}
+
+.world-act__sub {
+  font-size: var(--sys-size-fine);
+  color: var(--sys-ink-3);
+}
+
+.world-act kbd,
+.world-legend__key {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  color: var(--sys-ink-3);
+  background: none;
+  padding: 0;
+  min-width: 0;
+}
+
+/* A drawn box: a thin white outline; its size and its action beside its corner. */
+.world-box {
+  position: absolute;
+  border: 1px solid var(--sys-ink);
+  box-shadow: 0 0 0 1px rgba(8, 11, 17, 0.5);
+  pointer-events: none;
+}
+
+.world-box--draft {
+  border-style: dashed;
+}
+
+.world-boxlabel {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+  padding: var(--sys-s2) var(--sys-s3);
+  max-width: 360px;
+  z-index: 3;
+}
+
+.world-boxlabel__line {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.world-boxlabel__sub,
+.world-boxlabel__why {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-boxlabel__why {
+  color: var(--sys-fail);
+}
+
+/* What the square under the pointer holds. */
+.world-readout {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+  max-width: 300px;
+  padding: var(--sys-s2) var(--sys-s3);
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-2);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.world-earth__tools {
+  position: absolute;
+  top: var(--sys-s4);
+  right: var(--sys-s4);
+  display: flex;
+  align-items: baseline;
+  gap: var(--sys-s4);
+  padding: var(--sys-s1) var(--sys-s3);
+  background: rgba(8, 11, 17, 0.6);
+}
+
+.world-hint {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+/* The legend: what the colour is, its scale, and what is not drawn. A label on the map, at its corner. */
+.world-legend {
+  position: absolute;
+  left: var(--sys-s4);
+  bottom: var(--sys-s4);
+  display: grid;
+  gap: var(--sys-s1);
+  width: min(268px, calc(100% - 32px));
+  padding: var(--sys-s3) var(--sys-s3);
+  background: rgba(8, 11, 17, 0.72);
+  -webkit-backdrop-filter: var(--sys-plate-blur);
+  backdrop-filter: var(--sys-plate-blur);
+}
+
+.world-legend__choice {
+  margin-bottom: var(--sys-s1);
+}
+
+.world-legend__line {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.world-legend__fine {
+  display: flex;
+  align-items: center;
+  gap: var(--sys-s2);
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-legend__caution {
+  color: var(--sys-caution);
+}
+
+.world-ramp {
+  height: 6px;
+  margin-top: var(--sys-s1);
+}
+
+.world-ticks {
+  position: relative;
+  height: 16px;
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  color: var(--sys-ink-3);
+}
+
+.world-ticks span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.world-ticks span:first-child {
+  transform: none;
+}
+
+.world-ticks span:last-child:not(:first-child) {
+  transform: translateX(-100%);
+}
+
+.world-swatch {
+  flex-shrink: 0;
+  width: 14px;
+  height: 10px;
+}
+
+.world-swatch--hatch {
+  background:
+    repeating-linear-gradient(135deg, rgba(243, 244, 246, 0.28) 0 1px, transparent 1px 4px),
+    #161a22;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-act {
+    transition: none;
+  }
+}
+
+/* Tonight's sealed predictions: the Earth above, the board of fires below, one line of time per fire. */
+.world-sealed {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(160px, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  background: var(--sys-night);
+}
+
+.world-sealed--note {
+  display: grid;
+  place-items: center;
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.world-sealed__earth {
+  position: relative;
+  min-height: 0;
+}
+
+.world-seal-mark {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border: 1px solid var(--sys-ink);
+  background: var(--sys-night);
+  pointer-events: none;
+}
+
+.world-seal-mark[data-sealed='true'] {
+  background: var(--sys-ink);
+}
+
+.world-seal-mark[data-over='true'] {
+  outline: 1px solid var(--sys-ink);
+  outline-offset: 3px;
+}
+
+.world-label--num {
+  font-family: var(--sys-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-ink-2);
+}
+
+.world-label--num[data-over='true'] {
+  color: var(--sys-ink);
+}
+
+.world-board {
+  --board-cols: 24px minmax(120px, 0.6fr) minmax(320px, 1.7fr) minmax(300px, 2fr) 96px;
+  display: grid;
+  gap: var(--sys-s1);
+  padding: var(--sys-s3) var(--sys-gutter) var(--sys-s4);
+}
+
+.world-board__rule {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-board__head,
+.world-board__row {
+  display: grid;
+  grid-template-columns: var(--board-cols);
+  column-gap: var(--sys-s4);
+  align-items: center;
+}
+
+.world-board__head {
+  padding: var(--sys-s2) 0 var(--sys-s1);
+}
+
+.world-board__key {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  gap: var(--sys-s2);
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-board__key > span:not(:first-child) {
+  margin-left: var(--sys-s3);
+}
+
+.world-board__axis {
+  position: relative;
+  height: 16px;
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-board__axis span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.world-board__axis span:first-child {
+  transform: none;
+}
+
+.world-board__axis span:last-child {
+  transform: translateX(-100%);
+}
+
+.world-board__axis span[data-now='true'] {
+  color: var(--sys-ink);
+}
+
+.world-board__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.world-board__row {
+  position: relative;
+  padding: 6px 0;
+  border-top: 1px solid var(--sys-rule);
+}
+
+.world-board__row--rest {
+  grid-template-columns: 24px 1fr;
+}
+
+.world-board__rest {
+  display: grid;
+  gap: 2px;
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.world-board__restabout {
+  color: var(--sys-ink-3);
+}
+
+.world-board__row[data-over='true'] {
+  background: rgba(243, 244, 246, 0.03);
+}
+
+.world-board__num {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-mono);
+  color: var(--sys-ink-3);
+  text-align: right;
+}
+
+.world-board__where,
+.world-board__words {
+  overflow: hidden;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.world-board__words {
+  color: var(--sys-ink-2);
+}
+
+.world-board__sub {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-board__track {
+  position: relative;
+  height: 22px;
+  border-left: 1px solid var(--sys-rule);
+  border-right: 1px solid var(--sys-rule);
+}
+
+.world-board__now {
+  position: absolute;
+  top: -9px;
+  bottom: -9px;
+  width: 1px;
+  background: var(--sys-ink-3);
+}
+
+.world-track-seal {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  background: var(--sys-ink);
+  box-shadow: 0 0 0 2px var(--sys-night);
+}
+
+.world-track-pass {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border: 1.5px solid var(--sys-detection);
+  border-radius: 50%;
+  background: var(--sys-night);
+}
+
+.world-track-pass[data-real='false'] {
+  border-style: dashed;
+}
+
+.world-track-wait {
+  position: absolute;
+  top: 50%;
+  height: 1px;
+  background: var(--sys-ink-2);
+}
+
+.world-track-rows {
+  position: absolute;
+  top: calc(50% - 3px);
+  height: 6px;
+  background: var(--sys-detection);
+}
+
+.world-track-rows[data-done='false'] {
+  background: repeating-linear-gradient(135deg, rgba(240, 138, 69, 0.75) 0 1px, transparent 1px 4px);
+  outline: 1px dashed rgba(240, 138, 69, 0.6);
+  outline-offset: -1px;
+}
+
+.world-key-seal,
+.world-key-pass,
+.world-key-rows {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.world-key-seal {
+  width: 9px;
+  height: 9px;
+  background: var(--sys-ink);
+}
+
+.world-key-pass {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--sys-detection);
+  border-radius: 50%;
+}
+
+.world-key-rows {
+  width: 18px;
+  height: 6px;
+  background: var(--sys-detection);
+}
+
+.world-board__digest {
+  justify-self: end;
+}
+
+.world-mono {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.world-select {
+  user-select: text;
+  color: var(--sys-ink);
+  word-break: break-all;
+}
+
+.world-board__whole {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sys-s3);
+  padding-top: var(--sys-s2);
+}
+
+/* The test across the world: a square per fire, filled from the bottom by the share of scores won. */
+.world-gauge {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  padding: 0;
+  border: 1px solid var(--sys-estimate);
+  border-radius: 0;
+  background: linear-gradient(to top, var(--sys-estimate) var(--fill, 0%), var(--sys-night) var(--fill, 0%));
+  box-shadow: 0 0 0 1px rgba(8, 11, 17, 0.7);
+  cursor: pointer;
+}
+
+.world-gauge[data-open='true'] {
+  outline: 1px solid var(--sys-ink);
+  outline-offset: 4px;
+}
+
+.world-gauge:focus-visible {
+  outline: 1px solid var(--sys-focus);
+  outline-offset: 4px;
+}
+
+.world-gauge--key {
+  position: static;
+  margin: 0;
+  cursor: default;
+}
+
+.world-card__line {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.world-tally__cols {
+  display: grid;
+  align-items: end;
+  column-gap: var(--sys-s2);
+  margin-top: var(--sys-s2);
+}
+
+.world-tally__col {
+  display: grid;
+  justify-items: center;
+  gap: var(--sys-s1);
+}
+
+.world-tally__n,
+.world-tally__k {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  color: var(--sys-ink-2);
+}
+
+.world-tally__k {
+  color: var(--sys-ink-3);
+}
+
+.world-tally__bar {
+  width: 100%;
+  min-height: 1px;
+  background: var(--sys-ink-2);
+}
+
+.world-tally__bar[data-zero='true'] {
+  background: var(--sys-rule);
+}
+
+/* The band of the Record's interval. */
+.world-band {
+  display: grid;
+  gap: var(--sys-s1);
+  min-width: 180px;
+}
+
+.world-band__scale {
+  position: relative;
+  height: 12px;
+}
+
+.world-band__rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--sys-rule);
+}
+
+.world-band__range {
+  position: absolute;
+  top: 3px;
+  height: 6px;
+  background: rgba(243, 244, 246, 0.32);
+}
+
+.world-band__tick {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  background: var(--sys-ink);
+}
+
+.world-band__words {
+  display: grid;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.world-band__fine {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
