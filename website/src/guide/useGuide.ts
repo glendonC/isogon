@@ -53,6 +53,8 @@ export interface Guide {
   marks: MarkRow[];
   /** What the state says on demand beyond what stands (`more`), filled. */
   more: string[];
+  /** The state's film caption (the script's `film`), for the objective's place in the film presentation; null without one. */
+  film: string | null;
   /** The values and conditions the state's lines were filled from, for the answers to questions asked there. */
   fields: Fields;
   conds: Conditions;
@@ -131,6 +133,12 @@ function photoLine(step: string, day: NonNullable<GuideLive['day']>, ws: Workspa
   return says({ id: 'photo', says: (t.kind === 'true_color' ? words.true_color : words.false_color) ?? [], actions: [] }, f, c)[0] ?? null;
 }
 
+/** The state's film caption (`film`): the first that holds, its fields filled; null where the state has none. */
+function filmOf(state: ScriptState | null, fields: Fields, conds: Conditions): string | null {
+  // (its lines stand in the objective's place, so they are read here as lines to say)
+  return state?.film ? says({ ...state, says: state.film.map((l) => ({ ...l, place: 'guide' })) }, fields, conds)[0] ?? null : null;
+}
+
 /** The state's lines on demand (`more`), conditions applied and fields filled. */
 function moreOf(state: ScriptState | null, fields: Fields, conds: Conditions): string[] {
   return state?.more ? says({ ...state, says: state.more }, fields, conds) : [];
@@ -152,6 +160,7 @@ const NONE: Guide = {
   results: null,
   marks: [],
   more: [],
+  film: null,
   fields: {},
   conds: {},
 };
@@ -214,6 +223,7 @@ export function useGuide(
       context: contextOf('years', yfAll),
       lines: says(state, yfAll, yc).slice(0, STANDING),
       more: moreOf(state, yfAll, yc),
+      film: filmOf(state, yfAll, yc),
       fields: yfAll,
       conds: { ...conds, ...yc },
       actions: actionsOf(state?.actions.filter((a) => a.command === 'close'), yfAll, on),
@@ -237,6 +247,7 @@ export function useGuide(
       context: null,
       lines: says(state, pf, conds).slice(0, STANDING),
       more: moreOf(state, pf, conds),
+      film: filmOf(state, { ...fields, ...pf }, conds),
       fields: { ...fields, ...pf },
       conds,
       // The Earth's years, the one action of the guide's own here (the step's `also`); the screen's own keys do the rest.
@@ -260,6 +271,7 @@ export function useGuide(
       context: contextOf('record', r.fields),
       lines: says(state, r.fields, r.conds).slice(0, STANDING),
       more: moreOf(state, r.fields, r.conds),
+      film: filmOf(state, { ...fields, ...r.fields, world_first_year: live.worldFirstYear ?? (live.worldYears?.first != null ? String(live.worldYears.first) : null) }, r.conds),
       fields: { ...fields, ...r.fields },
       conds: { ...conds, ...r.conds },
       // On a recorded page this month so far is the recording's: its action says the day it stood at, or is left out.
@@ -294,6 +306,7 @@ export function useGuide(
       context: contextOf(step, f),
       lines: [...(missing ? [missing] : []), ...says(state, f, c).slice(0, STANDING)],
       more: moreOf(state, f, c),
+      film: filmOf(state, f, c),
       fields: f,
       conds: c,
       actions: actionsOf(state?.actions, f, on).filter((a) => a.command !== 'play:players_reveal' || players.canReveal),
@@ -349,6 +362,8 @@ export function useGuide(
     // While a photograph of the day is on, its sentence stands first; the label keeps saying the pass.
     lines: photo ? [photo, ...standing.slice(1)] : standing,
     more: moreOf(state, fields, conds),
+    // Another pass of the same kind shows the same picture: it takes its state's caption (hidden, or revealed).
+    film: filmOf(state, fields, conds) ?? filmOf(stateOf(step, step === 'test' ? 'revealed' : 'hidden'), fields, conds),
     fields,
     conds,
     // The day's photograph: a fourth, quiet action at the end of the row, on these two steps only.

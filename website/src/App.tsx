@@ -232,6 +232,11 @@ export function App() {
   const [dayPicture, setDayPicture] = useState<DayPictureKind | null>(null);
   const telemetryRef = useRef<EarthStageTelemetry | null>(null);
   /** How a selected item is marked, from the address (?sel=chip|square|box); chip unless it says otherwise. */
+  /**
+   * The film presentation (any `film` in the address): a state's film caption stands in the objective's place and the
+   * guide's sentences are off (the script's reading of `film`).
+   */
+  const filmMode = useMemo(() => new URLSearchParams(window.location.search).has('film'), []);
   const selStyle = useMemo(() => {
     const v = new URLSearchParams(window.location.search).get('sel');
     return v === 'square' || v === 'box' ? v : 'chip';
@@ -1548,6 +1553,9 @@ export function App() {
     const st = stateOf('start', id);
     const fields = { place: regionTitle || null, fire_month: fire?.label ?? null, fire_name: fire?.name ?? null };
     const lines = says(st, fields, { fire_is_named: fire ? Boolean(fire.name) : null }).slice(0, 2);
+    // In the film presentation the landing says the start state's film caption alone.
+    const film = filmMode && st?.film ? says({ ...st, says: st.film.map((l) => ({ ...l, place: 'guide' })) }, fields, {})[0] : undefined;
+    if (film) return [film];
     if (id !== 'ready' || !landingHidden) return lines;
     const frames = says(stateOf('estimate', 'hidden'), {}, {})[0];
     return frames ? [lines[0], frames] : lines;
@@ -1602,7 +1610,7 @@ export function App() {
             )}
 
             <Trail
-              objective={guide.objective}
+              objective={filmMode && guide.film ? guide.film : guide.objective}
               current={trailWord}
               context={guide.context}
               onWord={(w) => {
@@ -1659,7 +1667,7 @@ export function App() {
               <>
                 <div className="guide-scrim" aria-hidden="true" />
                 <GuideStrip
-                  lines={said && said.key === guideKey ? said.lines : guide.lines}
+                  lines={filmMode ? [] : said && said.key === guideKey ? said.lines : guide.lines}
                   actions={guide.actions}
                   onAction={runCommand}
                   results={guide.results}
