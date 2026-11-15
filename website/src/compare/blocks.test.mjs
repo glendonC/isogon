@@ -16,6 +16,7 @@ import {
   roundBlocks,
   roundPlays,
   roundSeen,
+  seenInWindow,
   sameLooks,
   seenRows,
   threeWays,
@@ -395,4 +396,30 @@ test('the board of a player dims the ground it did not look at', () => {
   const tiles = block.marks.find((m) => m.kind === 'tiles');
   assert.equal(tiles.veil, true);
   assert.deepEqual([...new Set(tiles.looked)], [3]);
+});
+
+test('a round as the page keeps it (its looks as player.taken, its reveal grouped by pass) gives the same blocks', () => {
+  // The same round as above, in the shape the page's round stores: no table, no square per detection
+  const pageStart = { episode: { box: BOX, tiles: [2, 2], budget: 2, first_overpass_utc: '2020-01-01T10:00:00Z', last_overpass_utc: '2020-01-01T10:30:00Z' }, looks: [], score_start: 0.2 };
+  const fp = (lon, lat) => [lon, lat, 0.4, 0.4, 0, 1, 0, 4];
+  const pageEnd = {
+    player: { taken: [{ decision: 0, tile: 1 }, { decision: 1, tile: 3 }], gain: 0.015 },
+    reveal: { overpasses: [{ look: 0, footprints: [fp(-120.9, 39.9), fp(-120.1, 39.9)] }, { look: 1, footprints: [fp(-120.9, 39.1)] }] },
+    reference: end.reference,
+  };
+  const blocks = roundBlocks(groundOfRun(run), pageStart, pageEnd);
+  assert.deepEqual(blocks.map((b) => b.label.title), ['You', 'Chance', 'Follow the Coarse Satellite', 'Look Where Unsure', 'Learned Player', 'Sees the Answer']);
+  const found = (i) => blocks[i].marks.find((m) => m.kind === 'detections' && m.instrument === 'viirs').rows;
+  // Each detection counts for the square it lies in, as the route's table says it
+  assert.deepEqual(found(0).map((r) => [r.lon, r.lat]), [[-120.1, 39.9]]);
+  assert.equal(found(1).length, 1);
+  assert.equal(found(2).length, 2);
+  assert.deepEqual(found(3).map((r) => [r.lon, r.lat]), [[-120.9, 39.1]]);
+  assert.equal(blocks[0].label.lines[1], `${guidePoints(0.015)} points`);
+  assert.deepEqual(roundPlays(pageStart, pageEnd)[0].window, { from: '2020-01-01T10:00:00Z', to: '2020-01-01T10:30:00Z' });
+});
+
+test('what every player could see is the run coarse rows inside the round window, never a sharp row', () => {
+  assert.deepEqual(seenInWindow(run, { from: '2020-01-01T09:59:00Z', to: '2020-01-01T10:30:00Z' }).map((r) => r.lon), [-120.5, -120.51]);
+  assert.deepEqual(seenInWindow(run, { from: '2020-01-02T00:00:00Z', to: '2020-01-03T00:00:00Z' }), []);
 });

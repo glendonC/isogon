@@ -13,7 +13,7 @@ import {
   roundPlays,
   roundSeen,
   sameLooks,
-  seenRows,
+  seenInWindow,
   SEES_THE_ANSWER,
   SEES_THE_ANSWER_LINE,
   twinLine,
@@ -139,7 +139,12 @@ export function AgentPicture({ onClose = null, guideSpeaks = false }: AgentPictu
       .filter((p): p is PlaySummary => p !== null)
       .map((p) => (p.id === CHANCE ? { ...p, draws: plays.draws } : p));
   }, [ended, roundReady, fromRound, plays]);
-  const seen = useMemo(() => (ended ? roundSeen(round.start) : seenRows(run)), [ended, round.start, run]);
+  // What the coarse satellite showed every player: the round's own rows where it keeps them, else the run's coarse
+  // passes inside the round's window
+  const seen = useMemo(() => {
+    const own = ended ? roundSeen(round.start) : [];
+    return own.length > 0 ? own : seenInWindow(run, summaries[0]?.window);
+  }, [ended, round.start, run, summaries]);
 
   // What the looks found is the hidden satellite's: shown once the visitor has seen it or asks to
   const [asked, setAsked] = useState(false);

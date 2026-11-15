@@ -5,7 +5,7 @@
  *   ?use=ways     one fire three ways (region, start, frame, cut=0, revealed=1)
  *   ?use=places   the featured fires of the places registry
  *   ?use=players  one block per player of a round (region, start, answer=1)
- *   ?use=agent    the players, side by side, over the still of the stage (region, start, round=1|underway, looks,
+ *   ?use=agent    the players, side by side, over the still of the stage (region, start, round=1|page|underway, looks,
  *                 revealed=1, speaks=1). speaks=1 tells a screen the guide speaks there.
  *   ?use=fires    the featured fires as the place screen mounts them, in a box the size of its slot (h, pick)
  *   ?use=reveal   one fire three ways as World model mounts it, inside a stand-in for the workspace (region, start, pass)
@@ -21,6 +21,7 @@ import '../../styles/tokens.css';
 import '../../styles/system.css';
 import { WorkspaceProvider, type WorkspaceStore } from '../../app/store';
 import { AgentBeat } from '../../beats/agent/AgentBeat';
+import { openRound } from '../../beats/test-world/env';
 import { usePlayersView } from '../../beats/agent/playersView';
 import { openingStart, parsePlaces, type Box, type FeaturedFire, type Places } from '../../app/places';
 import { boxWords, PlaceScreen } from '../../beats/calendar/PlaceScreen';
@@ -171,6 +172,18 @@ function AgentHarness() {
       const places = parsePlaces(await getJson<unknown>('/api/regions'));
       let round: Any = { state: null, start: null, end: null };
       if (Q.get('round') === 'underway') round = { state: {}, start: null, end: null };
+      else if (Q.get('round') === 'page') {
+        // The round as the page plays and keeps it: through its own round module, in its own shapes
+        const env = await openRound(regionId, start);
+        const mine = (Q.get('looks') ?? '5,6,9,10').split(',').map(Number);
+        let decision: number | null = env.start.looks[0]?.index ?? 0;
+        for (const tile of mine) {
+          if (decision === null) break;
+          const r = await env.look(decision, tile);
+          decision = r.next_decision;
+        }
+        round = { state: {}, start: env.start, end: await env.end() };
+      }
       else if (Q.get('round') === '1') {
         const state = await postJson<Any>('/api/env/next_look/reset', { region_id: regionId, start });
         const mine = (Q.get('looks') ?? '5,-1,6,-1,9,-1,10').split(',').map(Number);

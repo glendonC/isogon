@@ -414,6 +414,8 @@ export interface PlaySummary {
   tiles: [number, number] | null;
   /** Chance only: the gain of every round of random looks that was played, this one among them. */
   draws?: number[];
+  /** The round's first and last pass, where the answer gives them. */
+  window?: { from: string | null; to: string | null };
 }
 
 const isSummary = (x: unknown): x is PlaySummary => typeof obj(x).id === 'string' && Array.isArray(obj(x).looks);
@@ -455,7 +457,9 @@ export function readPlay(answer: unknown): PlaySummary | null {
   }
   const rowsN = num(tiles[0]);
   const colsN = num(tiles[1]);
+  const whole = obj(a.episode);
   return {
+    window: { from: str(episode.first_overpass_utc) ?? str(whole.first_overpass_utc), to: str(episode.last_overpass_utc) ?? str(whole.last_overpass_utc) },
     id,
     name: PLAYERS.find((x) => x.key === id)?.name ?? str(obj(p.player).label) ?? id,
     looks,
@@ -489,7 +493,16 @@ export function roundPlays(start: unknown, end: unknown, opts: RoundPlaysOptions
   const reference = obj(e.reference);
   if (!box || !rowsN || !colsN) return [];
   const passes = arr(obj(start).looks).map(obj);
+  // The reveal comes in one of two shapes: the route's own table (a row per detection, with its look and its square),
+  // or the page's round, which groups the detections by pass, each pass with its look, and keeps no square per
+  // detection (`reveal.overpasses[].look` and `footprints`). In the second a detection's square is where it lies.
   const reveal = rowsByColumns(e.reveal);
+  const byPass = arr(obj(e.reveal).overpasses).map(obj);
+  const squareOf = (lon: number, lat: number): number => {
+    const c = Math.min(colsN - 1, Math.max(0, Math.floor(((lon - box[0]) / (box[2] - box[0])) * colsN)));
+    const r = Math.min(rowsN - 1, Math.max(0, Math.floor(((box[3] - lat) / (box[3] - box[1])) * rowsN)));
+    return r * colsN + c;
+  };
   const lookOf = (decision: number, tile: number): PlayLook => {
     const pass = passes[decision] ?? {};
     const found: DetectionRow[] = [];
@@ -498,6 +511,14 @@ export function roundPlays(start: unknown, end: unknown, opts: RoundPlaysOptions
       const d = detectionOf(reveal, r);
       if (d) found.push(d);
     }
+    for (const o of byPass) {
+      if (num(o.look) !== decision) continue;
+      for (const fp of arr(o.footprints)) {
+        const [lon, lat, scanKm, trackKm] = arr(fp).map(num);
+        if (lon === null || lat === null || scanKm === null || trackKm === null || squareOf(lon, lat) !== tile) continue;
+        found.push({ lon, lat, scanKm, trackKm });
+      }
+    }
     return { decision, tile, timeUtc: str(pass.time_utc), platform: str(pass.platform), isDay: typeof pass.is_day === 'boolean' ? pass.is_day : null, why: null, found, reward: null };
   };
   const fromActions = (actions: unknown[]): PlayLook[] =>
@@ -505,15 +526,19 @@ export function roundPlays(start: unknown, end: unknown, opts: RoundPlaysOptions
       const tile = num(a);
       return tile !== null && tile >= 0 ? [lookOf(decision, tile)] : [];
     });
-  const base = { scoreStart: num(e.score_start) ?? num(reference.score_start), box, tiles: [rowsN, colsN] as [number, number] };
+  const window = { from: str(episode.first_overpass_utc), to: str(episode.last_overpass_utc) };
+  const base = { scoreStart: num(e.score_start) ?? num(reference.score_start) ?? num(obj(start).score_start), box, tiles: [rowsN, colsN] as [number, number], window };
   const out: PlaySummary[] = [];
-  if (opts.you !== false && Array.isArray(e.looks_taken)) {
-    const mine = arr(e.looks_taken).flatMap((pair) => {
-      const decision = num(arr(pair)[0]);
-      const tile = num(arr(pair)[1]);
-      return decision !== null && tile !== null && tile >= 0 ? [lookOf(decision, tile)] : [];
-    });
-    out.push({ id: YOU, name: YOU_NAME, looks: mine, gain: num(e.gain), ...base });
+  // The visitor's looks: the route's pairs of pass and square, or the page's round's `player.taken`
+  const player = obj(e.player);
+  const pairs: Array<[number | null, number | null]> = Array.isArray(e.looks_taken)
+    ? arr(e.looks_taken).map((pair) => [num(arr(pair)[0]), num(arr(pair)[1])])
+    : Array.isArray(player.taken)
+      ? arr(player.taken).map((t) => [num(obj(t).decision), num(obj(t).tile)])
+      : [];
+  if (opts.you !== false && (Array.isArray(e.looks_taken) || Array.isArray(player.taken))) {
+    const mine = pairs.flatMap(([decision, tile]) => (decision !== null && tile !== null && tile >= 0 ? [lookOf(decision, tile)] : []));
+    out.push({ id: YOU, name: YOU_NAME, looks: mine, gain: num(e.gain) ?? num(player.gain), ...base });
   }
   for (const player of PLAYERS) {
     if (player.key === SEES_THE_ANSWER && opts.seesTheAnswer === false) continue;
@@ -537,6 +562,18 @@ export function roundPlays(start: unknown, end: unknown, opts: RoundPlaysOptions
 export function roundSeen(start: unknown): DetectionRow[] {
   const modis = rowsByColumns(obj(obj(start).observation).modis);
   return modis.rows.map((r) => detectionOf(modis, r)).filter((d): d is DetectionRow => d !== null);
+}
+
+/**
+ * The coarse satellite's detections of a run's passes inside a round's window: what every player of that round could
+ * see, from the run on the land when the round's own start keeps no rows of its own.
+ */
+export function seenInWindow(run: unknown, window: { from: string | null; to: string | null } | undefined): DetectionRow[] {
+  const from = window?.from ? Date.parse(window.from) : -Infinity;
+  const to = window?.to ? Date.parse(window.to) : Infinity;
+  return framesOf(run)
+    .filter((f) => !f.heldOut && Date.parse(f.time) >= from - 60000 && Date.parse(f.time) <= to + 60000)
+    .flatMap((f) => f.rows);
 }
 
 export interface PlayBlocksOptions {
