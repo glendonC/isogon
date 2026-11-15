@@ -121,6 +121,20 @@ const float FAR_CAST_LIFT = 1.4;
 const float FIRE_CAST_NEAR = 14.0;
 const float FIRE_CAST_FAR = 9.0;
 const float FIRE_CAST_EASE = 0.8;
+// The fire's light, living (drawing: where each light is, how large and how strong stays the detection's).
+// The cores breathe by this share of their light, slowly, each at its own pace; embers twinkle inside a
+// light's halo, in cells this wide on the ground, this share of the cells holding one, seen only where a
+// cell is a few pixels across, by night; the thrown glow is this much stronger on a slope that faces the
+// fire and weaker on one that turns away
+const float FIRE_BREATH = 0.10;
+const float FIRE_FLICKER = 0.05;
+const float EMBER_CELL_KM = 0.028;
+const float EMBER_CELL_PX = 6.0;   // embers seen from far take larger cells, so each stays this many pixels wide
+const float EMBER_SHARE = 0.18;
+const float EMBER_GAIN = 3.2;
+const float FIRE_SLOPE_LIGHT = 1.15;
+const float FIRE_BED = 0.55;       // the glowing bed of ground right round each light (about 200 m), by night
+const float FIRE_CAST_NIGHT = 1.35; // the thrown glow, this much stronger by night
 
 // Display choices of the close-range look
 const float WALL_STRETCH_FROM = 1.3; // imagery stretched this much down a slope starts to count as a wall
@@ -948,9 +962,57 @@ void main() {
       vec3 castLight = textureLod(uFireHist, vUv, 4.4).rgb * FIRE_CAST_NEAR + textureLod(uFireHist, vUv, 6.2).rgb * FIRE_CAST_FAR;
       // Eased toward a ceiling: a few very strong detections light their ridge, they do not flood it
       castLight /= 1.0 + FIRE_CAST_EASE * dot(castLight, vec3(0.3, 0.5, 0.2));
+      // The glow falls on the slopes that face the fire: the way to the fire is up the light's own wide
+      // blur (four taps half a kilometre apart), and a slope turned toward it takes more of the glow,
+      // one turned away less, so the relief around a fire reads in its own light
+      float castSum = dot(castLight, vec3(0.3, 0.5, 0.2));
+      if (castSum > 1e-4) {
+        vec2 stepUv = 0.5 / uExtentKm;
+        float lE = dot(textureLod(uFireHist, vUv + vec2(stepUv.x, 0.0), 5.6).rgb, vec3(0.3, 0.5, 0.2));
+        float lW = dot(textureLod(uFireHist, vUv - vec2(stepUv.x, 0.0), 5.6).rgb, vec3(0.3, 0.5, 0.2));
+        float lN = dot(textureLod(uFireHist, vUv + vec2(0.0, stepUv.y), 5.6).rgb, vec3(0.3, 0.5, 0.2));
+        float lS = dot(textureLod(uFireHist, vUv - vec2(0.0, stepUv.y), 5.6).rgb, vec3(0.3, 0.5, 0.2));
+        // (east is +x, north is -z on the slab)
+        vec2 toFire = vec2(lE - lW, -(lN - lS));
+        float pull = length(toFire);
+        float facing = pull > 1e-6 ? dot(N.xz, toFire / pull) : 0.0;
+        castLight *= clamp(1.0 + FIRE_SLOPE_LIGHT * facing * smoothstep(0.0, 0.002, pull), 0.3, 2.2);
+      }
+      castLight *= mix(1.0, FIRE_CAST_NIGHT, uNight);
       postRgb += (satRgb + vec3(0.012)) * castLight * mix(0.3, 1.0, uNight) * (1.0 - 0.6 * waterMask) * hazeTrans * uFootMix.x * scanned * castShare;
       postRgb *= 1.0 - DAY_LIGHT_UNDER * clamp(lit.a, 0.0, 1.0) * (1.0 - uNight) * hazeTrans.g;
-      postRgb += lit.rgb * hazeTrans.g;
+      // The cores breathe, slowly, each at its own pace, with a quicker flicker over it (noise fixed to
+      // the ground, drifting in time)
+      float breath = 1.0 + FIRE_BREATH * (2.0 * valueNoise2(pKm * 2.4 + vec2(uTime * 0.31, -uTime * 0.23)) - 1.0)
+                         + FIRE_FLICKER * (2.0 * valueNoise2(pKm * 9.0 + vec2(-uTime * 2.1, uTime * 1.7)) - 1.0);
+      vec3 fireRgb = lit.rgb * breath;
+      // The bed of burning ground right round each light: its light read a little wider, deep orange, by
+      // night, breathing with it
+      fireRgb += textureLod(uFireHist, vUv, 2.6).rgb * vec3(1.0, 0.42, 0.16) * FIRE_BED * uNight * breath
+               * uFootMix.x * scanned * uLightGain * (1.0 - 0.7 * waterMask);
+      // Embers: specks of light inside a light's halo and bed, each cell's at its own place and pace, by
+      // night. Cells keep a few pixels wide at any distance (larger cells from far, two sizes crossfaded
+      // by distance so nothing pops), so they read and do not shimmer
+      float emberRoom = smoothstep(0.012, 0.10, lit.a + 0.6 * dot(textureLod(uFireHist, vUv, 2.6).rgb, vec3(0.3, 0.5, 0.2)))
+                      * (1.0 - smoothstep(1.2, 2.6, lit.a)) * uNight * uFootMix.x * scanned * uLightGain;
+      if (emberRoom > 0.002) {
+        float octave = log2(max(EMBER_CELL_PX * kmPerPx / EMBER_CELL_KM, 1.0));
+        float lo = floor(octave);
+        float ember = 0.0;
+        for (int k = 0; k < 2; k++) {
+          float level = lo + float(k);
+          float cellKm = EMBER_CELL_KM * exp2(level);
+          vec2 cell = floor(pKm / cellKm);
+          vec2 h = hash22(cell + 17.0 + level * 31.0);
+          vec2 at = (cell + 0.25 + 0.5 * h) * cellKm;
+          float dot0 = 1.0 - smoothstep(0.10, 0.26, length(pKm - at) / cellKm);
+          float twinkle = 0.5 + 0.5 * sin(uTime * (1.1 + 2.3 * h.y) + 40.0 * h.x);
+          float weight = k == 0 ? 1.0 - fract(octave) : fract(octave);
+          ember += step(1.0 - EMBER_SHARE, hash12(cell + 3.0 + level * 7.0)) * dot0 * twinkle * twinkle * weight;
+        }
+        fireRgb += vec3(1.0, 0.38, 0.09) * ember * EMBER_GAIN * emberRoom;
+      }
+      postRgb += fireRgb * hazeTrans.g;
       // The instrument's pixel around each light, when asked for: a faint warm hairline, so a
       // coarse pixel reads as coarse beside the model's finer cells
       if (uPixelOutline > 0.01) {
