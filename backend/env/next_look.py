@@ -229,6 +229,8 @@ class NextLookEnv:
         # What a set of looks makes the model predict at every scheduled look, kept under the looks that handed
         # over rows (`_predictions`); and the score before any look, which is the same at every reset.
         self._predicted: OrderedDict[tuple[tuple[int, int], ...], list[NDArray[np.float64]]] = OrderedDict()
+        self._scored_all: OrderedDict[tuple[tuple[int, int], ...], dict[str, float]] = OrderedDict()
+        self._rev_passes: OrderedDict[tuple[tuple[int, int], ...], list[PassPixels]] = OrderedDict()
         self._detail0: dict[str, float] | None = None
         self._hands_over: dict[tuple[int, int], bool] = {}
         if budget < 0 or tiles[0] < 1 or tiles[1] < 1:
@@ -290,6 +292,19 @@ class NextLookEnv:
             r, c = g.row_col(hid.lon[own], hid.lat[own])
             self._look_rows.append(own)
             self._pixel_tile.append(self.tile_of_cell[np.clip(r, 0, g.ny - 1), np.clip(c, 0, g.nx - 1)])
+        self._truth_fast: list[list[tuple[NDArray[np.bool_], NDArray[np.bool_], int]]] = [
+            [(t.mask, M.dilate(t.mask, 1), int(t.mask.sum())) for t in ts] for ts in self._truth
+        ]
+        self._modis_rows_all: NDArray[np.float64] = _rows(self._modis)
+        r_m, c_m = g.row_col(self._modis.lon, self._modis.lat)
+        self._modis_tile_all: NDArray[np.int64] = np.asarray(
+            np.where(r_m >= 0, self.tile_of_cell[np.clip(r_m, 0, g.ny - 1), np.clip(c_m, 0, g.nx - 1)], -1),
+            dtype=np.int64,
+        ).reshape(-1)
+        self._viirs_rows_all: NDArray[np.float64] = _rows(hid)
+        self._look_times_s: NDArray[np.float64] = np.array([lk.time_s for lk in self._looks], dtype=np.float64)
+        self._look_is_day: NDArray[np.bool_] = np.array([lk.is_day for lk in self._looks], dtype=bool)
+        self._set_limit: int = max(self.remember // PREDICTED_SETS_PER_LOOKS, min(self.remember, self.n_tiles + 2), 1)
         self._k = 0
         self._budget_left = self.budget
         self._revealed: list[tuple[int, int]] = []
@@ -334,10 +349,15 @@ class NextLookEnv:
         at, and a look made of such tiles only is not a pass at all. The pixel area used to judge what a pass
         could have missed is the slot's.
         """
+        key = self._taught_by(revealed)
+        if not key:
+            return []
+        if self.remember > 0 and key in self._rev_passes:
+            self._rev_passes.move_to_end(key)
+            return list(self._rev_passes[key])
         by_look: dict[int, list[int]] = {}
-        for k, t in revealed:
-            if self._revealed_rows(k, [t]).size:
-                by_look.setdefault(k, []).append(t)
+        for k, t in key:
+            by_look.setdefault(k, []).append(t)
         g, hid = self.grid, self._viirs
         out: list[PassPixels] = []
         for k, tiles in by_look.items():
@@ -364,6 +384,10 @@ class NextLookEnv:
                     pixel_area_km2=area, cells=tuple(cells), frp_mw=tuple(frp), min_side_km=tuple(side),
                     n_context=int(part.size), track_km=tuple(track), looked=looked,
                 ))
+        if self.remember > 0:
+            self._rev_passes[key] = list(out)
+            while len(self._rev_passes) > self._set_limit:
+                self._rev_passes.popitem(last=False)
         return out
 
     def _reconstruction(self, revealed: list[tuple[int, int]], upto_s: float | None = None) -> OccupancyReconstruction:
@@ -404,7 +428,7 @@ class NextLookEnv:
             ]
             if self.remember > 0:
                 self._predicted[key] = list(preds)
-                while len(self._predicted) > max(self.remember // PREDICTED_SETS_PER_LOOKS, 1):
+                while len(self._predicted) > self._set_limit:
                     self._predicted.popitem(last=False)
         if not revealed:
             self._preds0 = preds
@@ -451,6 +475,51 @@ class NextLookEnv:
     def _score_predictions(self, preds: list[NDArray[np.float64]], exclude: list[tuple[int, int]]) -> dict[str, float]:
         """The blind-test score of `preds`, leaving out the cells of the (look, tile) pairs in `exclude`. Every real
         overpass of the hidden instrument is scored against the prediction of the look it belongs to."""
+        if not exclude:
+            n_cells = self.grid.nx * self.grid.ny
+            counts_tp = counts_fp = counts_fn = counts_tn = 0
+            tol_tp = tol_fp = tol_fn = tol_tn = 0
+            brier = 0.0
+            base = 0.0
+            n = 0
+            for p, truths_fast in zip(preds, self._truth_fast):
+                if not truths_fast:
+                    continue
+                p_f = np.asarray(p, dtype=np.float64)
+                cells = expected_count_cells(p_f)
+                c_sum = int(cells.sum())
+                near_cells = M.dilate(cells, 1)
+                p_clip = np.clip(p_f, 0.0, 1.0)
+                for t_mask, near_truth, t_int in truths_fast:
+                    tp = int(np.sum(cells & t_mask))
+                    fp = c_sum - tp
+                    fn = t_int - tp
+                    tn = n_cells - tp - fp - fn
+                    counts_tp += tp
+                    counts_fp += fp
+                    counts_fn += fn
+                    counts_tn += tn
+                    ttp = int(np.sum(t_mask & near_cells))
+                    tfn = t_int - ttp
+                    tfp = int(np.sum(cells & ~near_truth))
+                    tol_tp += ttp
+                    tol_fp += tfp
+                    tol_fn += tfn
+                    tol_tn += tn
+                    brier += float(((p_clip - t_mask) ** 2).ravel().sum()) / max(n_cells, 1)
+                    base += float(t_int) / max(n_cells, 1)
+                    n += 1
+            counts = M.Counts(counts_tp, counts_fp, counts_fn, counts_tn)
+            tol = M.Counts(tol_tp, tol_fp, tol_fn, tol_tn)
+            n = max(n, 1)
+            sc = M.scores(counts)
+            return {
+                "csi": sc["csi"] or 0.0,
+                "csi_one_cell": M.scores(tol)["csi"] or 0.0,
+                "brier_skill": 1.0 - (brier / n) / max(base / n, 1e-12),
+                "hit_rate": sc["hit_rate"] or 0.0,
+                "false_alarm_ratio": sc["false_alarm_ratio"] or 0.0,
+            }
         gone: dict[int, list[int]] = {}
         for k, t in exclude:
             gone.setdefault(k, []).append(t)
@@ -482,11 +551,28 @@ class NextLookEnv:
             "false_alarm_ratio": M.scores(counts)["false_alarm_ratio"] or 0.0,
         }
 
+    def _score_all(self, revealed: list[tuple[int, int]], preds: list[NDArray[np.float64]]) -> dict[str, float]:
+        if self.remember > 0 and not self.learn_from_looks:
+            key = self._taught_by(revealed)
+            hit = self._scored_all.get(key)
+            if hit is not None:
+                self._scored_all.move_to_end(key)
+                return dict(hit)
+            res = self._score_predictions(preds, [])
+            self._scored_all[key] = dict(res)
+            while len(self._scored_all) > self._set_limit:
+                self._scored_all.popitem(last=False)
+            return res
+        return self._score_predictions(preds, [])
+
     def score_of(self, revealed: list[tuple[int, int]], exclude: list[tuple[int, int]] | None = None) -> dict[str, float]:
         """The blind-test score of the reconstruction built from all visible passes and the looks in `revealed`,
         against the real hidden detections of the episode. With `exclude` the cells of those (look, tile) pairs
         are left out: a diagnostic, never the reward, which is taken on the whole set."""
-        return self._score_predictions(self._predictions(revealed), exclude or [])
+        preds = self._predictions(revealed)
+        if not exclude:
+            return self._score_all(revealed, preds)
+        return self._score_predictions(preds, exclude)
 
     def _gain(self, revealed_after: list[tuple[int, int]]) -> tuple[float, dict[str, float], list[NDArray[np.float64]]]:
         """Reward of moving from the current looks to `revealed_after`: the score after minus the score before,
@@ -496,7 +582,7 @@ class NextLookEnv:
         if self._revealed_rows(k, [tile]).size == 0:
             return 0.0, self._detail, self._preds
         preds_after = self._predictions(revealed_after)
-        after = self._score_predictions(preds_after, [])
+        after = self._score_all(revealed_after, preds_after)
         return after[self.score_name] - self._score, after, preds_after
 
     def taught_elsewhere(self) -> dict[str, float]:
@@ -527,7 +613,7 @@ class NextLookEnv:
         self._revealed = []
         self._preds = self._predictions([])
         if self._detail0 is None or self.remember <= 0:        # the score before any look is the same every round
-            self._detail0 = self._score_predictions(self._preds, [])
+            self._detail0 = self._score_all([], self._preds)
         self._detail = dict(self._detail0)
         self._score = self._detail[self.score_name]
         self.score_start = self._score
@@ -570,9 +656,7 @@ class NextLookEnv:
         slot = self._looks[k]
         p_burning, p_detect, frp_mw, sigma_mw = self._expected_at(k)
 
-        seen_modis = self._modis.select(self._modis.time_s <= slot.time_s)
-        r, c = self.grid.row_col(seen_modis.lon, seen_modis.lat)
-        modis_tile = np.where(r >= 0, self.tile_of_cell[np.clip(r, 0, self.grid.ny - 1), np.clip(c, 0, self.grid.nx - 1)], -1)
+        mask = self._modis.time_s <= slot.time_s
         return Observation(
             decision=self._k,
             time_s=slot.time_s,
@@ -581,13 +665,13 @@ class NextLookEnv:
             pixel_km=(float(slot.scan_km), float(slot.track_km)),
             budget_left=self._budget_left,
             looks_left=self.n_looks - self._k,
-            look_times_s=np.array([lk.time_s for lk in self._looks], dtype=np.float64),
-            look_is_day=np.array([lk.is_day for lk in self._looks], dtype=bool),
+            look_times_s=self._look_times_s.copy(),
+            look_is_day=self._look_is_day.copy(),
             tiles_shape=self.tiles,
             tile_of_cell=self.tile_of_cell,
             tile_covered=np.ones(self.n_tiles, dtype=bool),
-            modis=_rows(seen_modis),
-            modis_tile=np.asarray(modis_tile, dtype=np.int64).reshape(-1),
+            modis=self._modis_rows_all[mask].copy(),
+            modis_tile=self._modis_tile_all[mask].copy(),
             viirs_revealed=self.revealed_rows(),
             revealed_tiles=tuple(self._revealed),
             p_burning=p_burning,
@@ -602,8 +686,10 @@ class NextLookEnv:
         looks were taken: what an observation shows as `viirs_revealed`. It can be asked for after the last look
         too, when there is no next observation to carry it."""
         rows = [self._revealed_rows(kk, [t]) for kk, t in self._revealed]
-        shown = self._viirs.select(np.concatenate(rows)) if rows else self._viirs.select(np.zeros(len(self._viirs), dtype=bool))
-        return _rows(shown)
+        if not rows:
+            return np.empty((0, 7))
+        idx = np.concatenate(rows)
+        return self._viirs_rows_all[idx].copy() if idx.size else np.empty((0, 7))
 
     def _apply(self, action: int) -> tuple[list[tuple[int, int]], bool]:
         if not isinstance(action, (int, np.integer)) or not (NO_LOOK <= int(action) < self.n_tiles):
