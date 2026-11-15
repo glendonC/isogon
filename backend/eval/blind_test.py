@@ -114,8 +114,10 @@ def top_cells(p_detect: NDArray[np.float64], frp_mw: NDArray[np.float64], n: int
     if n <= 0:
         return out
     p = p_detect.ravel()
-    order = np.lexsort((np.arange(p.size), -frp_mw.ravel(), -p))
-    order = order[p[order] > 0][:n]
+    nz = np.flatnonzero(p > 0)
+    if nz.size == 0:
+        return out
+    order = nz[np.lexsort((nz, -frp_mw.ravel()[nz], -p[nz]))[:n]]
     out.ravel()[order] = True
     return out
 
@@ -236,6 +238,40 @@ def run_blind_test(
     )
 
 
+@dataclass(frozen=True)
+class _StepScores:
+    equal_area: M.Counts | None
+    strict: M.Counts
+    tolerant: M.Counts
+    brier: float
+    sq_err: float
+    sq_n: int
+
+
+def _score_step(
+    pred: Prediction,
+    pmask: NDArray[np.bool_],
+    truth: Any,
+    near_truth: NDArray[np.bool_],
+    n_ref: int | None,
+    tolerance_cells: int,
+    cell_area_km2: float,
+) -> _StepScores:
+    eq = M.contingency(top_cells(pred.p_detect, pred.frp_mw, n_ref), truth.mask) if n_ref is not None else None
+    strict = M.contingency(pmask, truth.mask)
+    near_pred = M.dilate(pmask, tolerance_cells)
+    tp = int(np.sum(truth.mask & near_pred))
+    fn = int(np.sum(truth.mask & ~near_pred))
+    fp = int(np.sum(pmask & ~near_truth))
+    tn = int(np.sum(~truth.mask & ~pmask))
+    tolerant = M.Counts(tp, fp, fn, tn)
+    brier_val = M.brier(pred.p_detect, truth.mask)
+    support = (truth.frp_mw > 0) | (pred.frp_mw > 0)
+    sq_err = float((((pred.frp_mw - truth.frp_mw)[support]) ** 2).sum()) / cell_area_km2 ** 2
+    sq_n = int(support.sum())
+    return _StepScores(eq, strict, tolerant, brier_val, sq_err, sq_n)
+
+
 class _Tally:
     """Scores of one method over a set of scored looks."""
 
@@ -257,17 +293,14 @@ class _Tally:
         self.pix_level: float | None = None
         self.per_overpass: list[dict[str, Any]] = []
 
-    def add(self, pred: Prediction, pmask: NDArray[np.bool_], truth: Any, n_pixels: int, n_ref: int | None,
-            tolerance_cells: int, cell_area_km2: float, row: dict[str, Any] | None) -> None:
-        if n_ref is not None:
-            self.equal_area = self.equal_area + M.contingency(top_cells(pred.p_detect, pred.frp_mw, n_ref), truth.mask)
-        c = M.contingency(pmask, truth.mask)
-        self.strict = self.strict + c
-        self.tolerant = self.tolerant + M.contingency_tolerant(pmask, truth.mask, tolerance_cells)
-        self.brier_sum += M.brier(pred.p_detect, truth.mask)
-        support = (truth.frp_mw > 0) | (pred.frp_mw > 0)
-        self.sq_err += float((((pred.frp_mw - truth.frp_mw)[support]) ** 2).sum()) / cell_area_km2 ** 2
-        self.sq_n += int(support.sum())
+    def add_step(self, step: _StepScores, pred: Prediction, truth: Any, n_pixels: int, row: dict[str, Any] | None) -> None:
+        if step.equal_area is not None:
+            self.equal_area = self.equal_area + step.equal_area
+        self.strict = self.strict + step.strict
+        self.tolerant = self.tolerant + step.tolerant
+        self.brier_sum += step.brier
+        self.sq_err += step.sq_err
+        self.sq_n += step.sq_n
         self.pred_totals.append(float(pred.frp_total_mw))
         self.truth_totals.append(float(truth.frp_total_mw))
         self.pixel_totals.append(float(n_pixels))
@@ -282,8 +315,13 @@ class _Tally:
             self.pix_level = pred.pixels_level
         self.n += 1
         if row is not None:
-            self.per_overpass.append({**row, **c.as_dict(),
+            self.per_overpass.append({**row, **step.strict.as_dict(),
                                       "frp_relative_error": M.frp_relative_error(pred.frp_total_mw, truth.frp_total_mw)})
+
+    def add(self, pred: Prediction, pmask: NDArray[np.bool_], truth: Any, n_pixels: int, n_ref: int | None,
+            tolerance_cells: int, cell_area_km2: float, row: dict[str, Any] | None) -> None:
+        step = _score_step(pred, pmask, truth, M.dilate(truth.mask, tolerance_cells), n_ref, tolerance_cells, cell_area_km2)
+        self.add_step(step, pred, truth, n_pixels, row)
 
     def result(self, reference_method: str | None, with_rows: bool = True) -> dict[str, Any]:
         out = {
@@ -415,14 +453,17 @@ def blind_test_sealed(
             "truth_cells": int(truth.mask.sum()),
         })
         n_ref = int(masks[j][reference_method].sum()) if has_ref else None
+        near_truth = M.dilate(truth.mask, tolerance_cells)
+        n_pix = int(inside.size)
         for m in methods:
             pub = published_out[m.name][j]
             row = {"index": k, "slot": j, "predicted_cells": pub["predicted_cells"], "predicted_frp_mw": pub["predicted_frp_mw"],
                    "predicted_pixels": pub["predicted_pixels"], "pixel_interval": pub["pixel_interval"], "interval_mw": pub["interval_mw"]}
-            args = (published[j][m.name], masks[j][m.name], truth, int(inside.size), n_ref, tolerance_cells, grid.cell_area_km2)
-            tally[m.name].add(*args, row)
-            if inside.size > 0:
-                subset[m.name].add(*args, None)
+            pred_m = published[j][m.name]
+            step = _score_step(pred_m, masks[j][m.name], truth, near_truth, n_ref, tolerance_cells, grid.cell_area_km2)
+            tally[m.name].add_step(step, pred_m, truth, n_pix, row)
+            if n_pix > 0:
+                subset[m.name].add_step(step, pred_m, truth, n_pix, None)
 
     n = len(units)
     n_fire = int(sum(1 for t in targets_out if t["hidden_pixels_in_test_box"] > 0))
