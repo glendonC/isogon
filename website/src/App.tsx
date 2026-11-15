@@ -26,6 +26,7 @@ import { AskField } from './guide/AskField';
 import { useGuide, type Guide } from './guide/useGuide';
 import { keyMatches, says, stateOf } from './guide/script';
 import { StageBoundary } from './ui/StageBoundary';
+import { openingHiddenPass, type OpeningFrame } from './app/openingPass';
 import { BEATS, type BeatId } from './app/names';
 import { WorkspaceProvider, type WorkspaceBase, type WorkspaceStore } from './app/store';
 import { CalendarBeat } from './beats/calendar/CalendarBeat';
@@ -755,6 +756,25 @@ export function App() {
     pendingHideRef.current = false;
     if (!holdoutViirs && !revealed) toggleHoldoutLive();
   }, [step, round, isExecuting, activeRun, holdoutViirs, revealed, toggleHoldoutLive]);
+
+  // Estimate opens on a hidden pass of the sharp satellite (app/openingPass.ts), whatever pass the landing's tour or
+  // the step before stood on, once its blind run is in: the white frames are on screen from the first moment.
+  const openingDueRef = useRef(false);
+  const stepBeforeRef = useRef(step);
+  if (stepBeforeRef.current !== step) {
+    if (step === 'test') openingDueRef.current = true;
+    stepBeforeRef.current = step;
+  }
+  useEffect(() => {
+    if (!openingDueRef.current || step !== 'test' || round || isExecuting || pendingStart || !activeRun || !isRealRun(activeRun)) return;
+    if (!holdoutViirs || revealed) return;
+    openingDueRef.current = false;
+    const run = activeRun as unknown as { observer_passes?: { frames?: OpeningFrame[] }; window?: { first_overpass_utc?: string } };
+    const k = openingHiddenPass(run.observer_passes?.frames ?? [], run.window?.first_overpass_utc);
+    if (k === null) return;
+    setPlaying(false);
+    setTimeProgress(k);
+  }, [step, round, isExecuting, pendingStart, activeRun, holdoutViirs, revealed]);
 
   /** V: on the test step it hides, then reveals, then opens the score; elsewhere it goes to the test. */
   const testAction = useCallback(() => {
