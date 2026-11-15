@@ -460,7 +460,10 @@ class NextLookRounds:
         self._plays: dict[str, dict[str, Any]] = {}
         self._rounds: dict[str, Round] = {}
         self._lock = threading.Lock()
-        self._catalogues: dict[tuple[str, int], list[Any]] = {}
+        self._catalogues: dict[tuple[str, int, str], list[Any]] = {}
+        self._start_episodes: OrderedDict[tuple[str, float, str], Any] = OrderedDict()
+        self._terrains: OrderedDict[tuple[Any, ...], np.ndarray | None] = OrderedDict()
+        self._episode_digests: OrderedDict[tuple[int, int], tuple[Any, Any, str]] = OrderedDict()
         self._pool: cf.ThreadPoolExecutor | None = None
         self._ref_done: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._ref_running: dict[str, cf.Future] = {}
@@ -515,6 +518,7 @@ class NextLookRounds:
         from backend.env.episodes import PAD_S, EnvEpisode
         from backend.eval.rows import detections_from_rows
         from backend.firms import read_firms, region_box
+        from backend.firms.archive import region_rows_digest
         from backend.model.real_blind import EPISODE_OVERPASSES, window_from_start
         from backend.model.real_run import ROW_SOURCE, SEARCH_S, parse_start_s
         from backend.model.training import EXCLUSIONS
@@ -524,6 +528,12 @@ class NextLookRounds:
             t0 = parse_start_s(start)
         except (TypeError, ValueError) as exc:
             raise ValueError("start must be a UTC date (YYYY-MM-DD) or date-time") from exc
+        key = (region_id, float(t0), region_rows_digest(region_id))
+        with self._lock:
+            hit = self._start_episodes.get(key)
+            if hit is not None:
+                self._start_episodes.move_to_end(key)
+                return hit
         b = PRESET_BY_ID[region_id].bbox
         box = (b.west, b.south, b.east, b.north)
         rows = read_firms(region_box(region_id), _iso(t0 - PAD_S)[:-1], _iso(t0 + SEARCH_S)[:-1])
@@ -533,18 +543,53 @@ class NextLookRounds:
         e0, e1 = (parse_start_s(d) for d in EXCLUSIONS[region_id][:2]) if region_id in EXCLUSIONS else (0.0, 0.0)
         split = "test" if (w.start_s < e1 and w.end_s > e0) else "fit"
         year = int(_iso(w.start_s)[:4])
-        return EnvEpisode(region_id, year, (2, 2), box, w, det.select(keep), split)
+        sub = det.select(keep)
+        for f in fields(sub):
+            v = getattr(sub, f.name)
+            if isinstance(v, np.ndarray):
+                v.setflags(write=False)
+        ep = EnvEpisode(region_id, year, (2, 2), box, w, sub, split)
+        with self._lock:
+            self._start_episodes[key] = ep
+            self._start_episodes.move_to_end(key)
+            while len(self._start_episodes) > 32:
+                self._start_episodes.popitem(last=False)
+        return ep
 
     # ---- the environment ---------------------------------------------------------------------------------------------
 
     def _terrain(self, ep: Any) -> np.ndarray | None:
         if not self.terrain:
             return None
-        from backend.env.terrain import context_elevation
+        from backend.env.terrain import CACHE_DIR, CONTEXT_SIZE, context_elevation
         from backend.eval.grid import EvalGrid
         from backend.firms import region_box
 
-        return context_elevation(ep.region_id, region_box(ep.region_id), EvalGrid.from_bbox(ep.box))
+        key: tuple[Any, ...] | None = None
+        if self.episode_source is None:
+            dem_sig: tuple[Any, ...] | None = None
+            files = sorted(CACHE_DIR.glob(f"{ep.region_id}_*_context_dem_{CONTEXT_SIZE}_f32.bin")) if CACHE_DIR.is_dir() else []
+            if files:
+                try:
+                    st = files[0].stat()
+                    dem_sig = (str(files[0]), st.st_ino, st.st_mtime_ns, st.st_size)
+                except OSError:
+                    dem_sig = None
+            key = (ep.region_id, tuple(float(v) for v in ep.box), dem_sig)
+            with self._lock:
+                if key in self._terrains:
+                    self._terrains.move_to_end(key)
+                    return self._terrains[key]
+        arr = context_elevation(ep.region_id, region_box(ep.region_id), EvalGrid.from_bbox(ep.box))
+        if arr is not None and key is not None:
+            arr.setflags(write=False)
+        if key is not None:
+            with self._lock:
+                self._terrains[key] = arr
+                self._terrains.move_to_end(key)
+                while len(self._terrains) > 16:
+                    self._terrains.popitem(last=False)
+        return arr
 
     def _make_env(self, ep: Any, tiles: tuple[int, int], budget: int, terrain: Any = _FROM_SOURCE) -> Any:
         from backend.env.next_look import NextLookEnv
@@ -619,9 +664,30 @@ class NextLookRounds:
             from backend.firms.cmr_passes import pass_files_digest
 
             passes = pass_files_digest(ep.region_id)
+        frozen = (terrain is None or not terrain.flags.writeable) and all(
+            not isinstance(getattr(ep.det, f.name), np.ndarray) or not getattr(ep.det, f.name).flags.writeable
+            for f in fields(ep.det)
+        )
+        ep_dig: str | None = None
+        if frozen:
+            dkey = (id(ep), id(terrain))
+            with self._lock:
+                hit = self._episode_digests.get(dkey)
+                if hit is not None and hit[0] is ep and hit[1] is terrain:
+                    self._episode_digests.move_to_end(dkey)
+                    ep_dig = hit[2]
+        if ep_dig is None:
+            ep_dig = episode_digest(ep, terrain)
+            if frozen:
+                dkey = (id(ep), id(terrain))
+                with self._lock:
+                    self._episode_digests[dkey] = (ep, terrain, ep_dig)
+                    self._episode_digests.move_to_end(dkey)
+                    while len(self._episode_digests) > 32:
+                        self._episode_digests.popitem(last=False)
         parts = {
             "version": REFERENCE_CACHE_VERSION,
-            "episode": episode_digest(ep, terrain),
+            "episode": ep_dig,
             "tiles": [int(tiles[0]), int(tiles[1])],
             "budget": int(budget),
             "random_seeds": self.reference_seeds,
