@@ -1,0 +1,42 @@
+/* Visible one-click sound control. Built from system.css tokens: square mark, plain text action. */
+
+.iso-sound-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sys-s2);
+  padding: var(--sys-s1) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-3);
+  cursor: pointer;
+  transition: color var(--sys-fast) var(--sys-ease);
+}
+
+.iso-sound-ctl:hover,
+.iso-sound-ctl:focus-visible {
+  color: var(--sys-ink);
+}
+
+.iso-sound-ctl[data-on='true'] {
+  color: var(--sys-ink);
+  font-weight: var(--sys-weight-strong);
+}
+
+.iso-sound-ctl__mark {
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--sys-edge);
+  border-radius: 0;
+  background: transparent;
+  flex-shrink: 0;
+  transition:
+    background-color var(--sys-fast) var(--sys-ease),
+    border-color var(--sys-fast) var(--sys-ease);
+}
+
+.iso-sound-ctl[data-on='true'] .iso-sound-ctl__mark {
+  background: var(--sys-ink);
+  border-color: var(--sys-ink);
+}
