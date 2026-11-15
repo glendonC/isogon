@@ -40,3 +40,9 @@
   outline: 1.5px solid var(--dv-ui);
   outline-offset: 4px;
 }
+
+/* A number's column keeps a gap before the words beside it (the skin sets numbers flush right, with no padding). */
+.dv-sheet .iso-viewer .iso-doc-table td.is-num + td,
+.dv-sheet .iso-viewer .iso-doc-table th.is-num + th {
+  padding-left: 24px;
+}

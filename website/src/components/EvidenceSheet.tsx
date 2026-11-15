@@ -976,6 +976,14 @@ export function SealedDocument({
   const liveAhead = formatSheetCount(overClasses?.ahead) ?? '0';
   const liveLevel = formatSheetCount(overClasses?.tie ?? overClasses?.tied) ?? '0';
   const liveBehind = formatCountNone(overClasses?.behind) ?? 'none';
+  // The result in words: a tie on every judged score is said as level, not led by a zero.
+  const nAhead = overClasses?.ahead ?? 0;
+  const nLevel = overClasses?.tie ?? overClasses?.tied ?? 0;
+  const nBehind = overClasses?.behind ?? 0;
+  const liveResult =
+    nAhead === 0 && nBehind === 0
+      ? `level with both simple methods on all ${formatSheetCount(nLevel) ?? '0'} scores judged`
+      : `ahead of both simple methods on ${liveAhead}, level on ${liveLevel}, behind on ${liveBehind}`;
 
   const distinctPartsCount = new Set(fires.map((f) => f.part).filter(Boolean)).size;
   const partsWord = formatCountWord(distinctPartsCount) ?? String(distinctPartsCount);
@@ -988,10 +996,9 @@ export function SealedDocument({
         <div className="iso-doc-lead__hero">
           {twoFiresScored ? (
             <>
-              <span className="iso-doc-lead__figure">{liveAhead}</span>
+              <span className="iso-doc-lead__figure">{formatSheetCount(scoredCount) ?? '0'}</span>
               <span className="iso-doc-lead__unit">
-                scores ahead across {formatSheetCount(firesScored)} scored fires ({liveLevel} level, {liveBehind}{' '}
-                behind)
+                predictions scored on {formatSheetCount(firesScored)} fires: {liveResult}
               </span>
             </>
           ) : (

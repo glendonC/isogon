@@ -14,17 +14,22 @@ export interface YearBarsProps {
   oneScale?: boolean;
   /** The year picked or playing, labelled under its bar. */
   current?: number | null;
+  /** The key's words; the product lane's. */
+  keyWords?: { modis: string; viirs: string; oneScale: string };
 }
+
+const KEY_WORDS = { modis: 'MODIS, as counted', viirs: 'VIIRS, as counted', oneScale: 'On one scale' };
 
 /**
  * Detections each year: orange bars where MODIS counted, light blue from VIIRS's first year, so the jump of 2012 is
  * the change of satellite. On one scale, each year's estimate is a white outline over its bar.
  */
-export function YearBars({ series, width = 700, height = 250, upTo = null, oneScale = false, current = null }: YearBarsProps) {
+export function YearBars({ series, width = 700, height = 250, upTo = null, oneScale = false, current = null, keyWords = KEY_WORDS }: YearBarsProps) {
   const [hover, setHover] = useState<number | null>(null);
   const { years, firstViirsYear } = series;
   const head = 100;
-  const base = height - 30;
+  const keyH = 30;
+  const base = height - 30 - keyH;
   const n = years.length;
   const pitch = width / n;
   const bar = Math.max(4, pitch - Math.max(3, pitch * 0.18));
@@ -72,6 +77,25 @@ export function YearBars({ series, width = 700, height = 250, upTo = null, oneSc
               </text>
             ) : null,
           )}
+          {/* The key: which colour is which satellite, and the estimate's outline on one scale. */}
+          <g aria-hidden="true">
+            <rect x={0} y={height - 18} width={14} height={14} fill={CSS.modis} />
+            <text x={22} y={height - 6} className="dv-label">
+              {keyWords.modis}
+            </text>
+            <rect x={200} y={height - 18} width={14} height={14} fill={CSS.viirs} />
+            <text x={222} y={height - 6} className="dv-label">
+              {keyWords.viirs}
+            </text>
+            {oneScale ? (
+              <>
+                <rect x={400.75} y={height - 17.25} width={12.5} height={12.5} fill="none" stroke={CSS.estimate} strokeWidth={MARK.stroke} />
+                <text x={422} y={height - 6} className="dv-label">
+                  {keyWords.oneScale}
+                </text>
+              </>
+            ) : null}
+          </g>
           {(() => {
             const p = years.find((q) => q.year === hover && (upTo === null || q.year <= upTo));
             if (!p) return null;
