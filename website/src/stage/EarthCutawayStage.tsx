@@ -434,6 +434,17 @@ const CLOSE_FRAME_SHARE = 0.75;
 // Steeper angles (polar, from the vertical) the close view tries, in order, for an estimate that does not fit
 const CLOSE_FRAME_STEEPER = [1.1, 0.95, 0.8, 0.65];
 const CLOSE_VIEW_FOV = 39.0;
+// The whole-box views in the workspace are fitted to the page's frame by shrinking the picture, never
+// below this share of its size. A board's pose stands closer than its box needs (REGION_BOARD_POSE);
+// where the page's frame is too short even for that (the players' rows at a round's end, a narrow
+// screen), the camera stands farther back instead, by at most BOARD_PULL_MAX of its distance, until
+// the fit asks for BOARD_WINDOW_AIM
+const WORKSPACE_WINDOW_LEAST = 0.4;
+const BOARD_WINDOW_AIM = 0.43;
+const BOARD_PULL_MAX = 3.0;
+// (while the camera stands back the picture may shrink further, so the board never leaves the frame;
+// the fit itself goes no lower, see fitSubjectToFrame)
+const BOARD_GLIDE_WINDOW_LEAST = 0.3;
 // The fire of the day around the pass on show (detections given within a day of it), and how near
 // its centre a detection counts as at the centre
 const FIRE_DAY_MS = 24 * 3600 * 1000;
@@ -1942,13 +1953,18 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       return centre;
     };
 
+    // How much farther back than its pose the board's view stands, so the board fits the page's frame
+    // (see WORKSPACE_WINDOW_LEAST; set by the workspace fit)
+    let boardPull = 1;
     const resolveLivePreset = (
       preset: InspectorCameraPreset,
       inWorkspace: boolean,
       mode: EarthCutawayStageProps['mode'],
       theaterId: TheaterId,
     ): CameraPresetSpec => {
-      const dest = resolvePresetForContext(preset, inWorkspace, mode, theaterId, Boolean(propsRef.current.tileBoard));
+      const board = Boolean(propsRef.current.tileBoard);
+      const dest = resolvePresetForContext(preset, inWorkspace, mode, theaterId, board);
+      if (inWorkspace && board && preset === 'region' && boardPull > 1) return { ...dest, distance: dest.distance * boardPull };
       if (!inWorkspace || (preset !== 'canyon' && preset !== 'ridge')) return dest;
       const wantedKind = preset === 'canyon' ? 'subpixel' : 'front';
       const anchor = nextBundle.findings.find((f) => f.kind === wantedKind);
@@ -3108,6 +3124,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let workspaceFitAge = SUBJECT_REFIT_INTERVAL_FRAMES;
     let workspaceFitPreset: InspectorCameraPreset | null = null;
     let workspaceFitSky = false;
+    let workspaceFitFrame: SubjectFrame | null = null;
+    // The board's view stands at a new distance (boardPull changed): the camera goes there, and while it
+    // does the fit follows the camera's own pose every frame, so the board stays in the frame throughout
+    let boardReaim = false;
+    let boardGliding = false;
 
     // Samples the slab (live terrain surface plus the four base corners) and fits its projected
     // bounds into the frame for the nominal landing pose, including the idle azimuth drift.
@@ -3234,25 +3255,55 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           workspaceFitAge += 1;
           const fitSky = p.mode === 'observer' && presetNow === 'overview';
           const fitBoard = Boolean(p.tileBoard);
-          if (
-            workspaceFitAge >= SUBJECT_REFIT_INTERVAL_FRAMES ||
-            workspaceFitPreset !== presetNow ||
-            workspaceFitSky !== fitSky ||
-            workspaceFitBoard !== fitBoard
-          ) {
-            workspaceFitBoard = fitBoard;
+          let windowLeast = WORKSPACE_WINDOW_LEAST;
+          if (boardGliding && fitBoard && presetNow === 'region') {
             refitSubject(
               workspaceFrame,
-              resolvePresetForContext(presetNow, true, p.mode, p.activeTheaterId, fitBoard),
+              {
+                azimuth: orbitCurrent.azimuth,
+                polar: orbitCurrent.polar,
+                distance: orbitCurrent.distance,
+                target: [orbitCurrent.target.x, orbitCurrent.target.y, orbitCurrent.target.z],
+              },
               0,
               workspaceFit,
               fitSky,
             );
+            windowLeast = BOARD_GLIDE_WINDOW_LEAST;
+            const arrived =
+              filmMoveNow === 'play'
+                ? filmProgress >= 1
+                : Math.abs(orbitCurrent.distance - orbitTarget.distance) < 0.002 * orbitTarget.distance;
+            if (arrived || cameraTouched) {
+              boardGliding = false;
+              workspaceFitAge = SUBJECT_REFIT_INTERVAL_FRAMES;
+            }
+          } else if (
+            workspaceFitAge >= SUBJECT_REFIT_INTERVAL_FRAMES ||
+            workspaceFitPreset !== presetNow ||
+            workspaceFitSky !== fitSky ||
+            workspaceFitBoard !== fitBoard ||
+            !subjectFramesEqual(workspaceFitFrame, workspaceFrame)
+          ) {
+            workspaceFitBoard = fitBoard;
+            const fitPose = resolvePresetForContext(presetNow, true, p.mode, p.activeTheaterId, fitBoard);
+            refitSubject(workspaceFrame, fitPose, 0, workspaceFit, fitSky);
+            // A board too large for the frame at its pose: the camera stands back until it fits
+            let pull = 1;
+            if (fitBoard && presetNow === 'region' && workspaceFit.scale < BOARD_WINDOW_AIM) {
+              pull = Math.min(BOARD_PULL_MAX, BOARD_WINDOW_AIM / Math.max(1e-3, workspaceFit.scale));
+              refitSubject(workspaceFrame, { ...fitPose, distance: fitPose.distance * pull }, 0, workspaceFit, fitSky);
+            }
+            if (fitBoard && presetNow === 'region' && Math.abs(pull - boardPull) > 0.005) {
+              boardPull = pull;
+              boardReaim = true;
+            }
             workspaceFitAge = 0;
             workspaceFitPreset = presetNow;
             workspaceFitSky = fitSky;
+            workspaceFitFrame = { ...workspaceFrame };
           }
-          const s = THREE.MathUtils.clamp(workspaceFit.scale, 0.4, 1.0);
+          const s = THREE.MathUtils.clamp(workspaceFit.scale, windowLeast, 1.0);
           const fitScale = Math.max(1e-3, workspaceFit.scale);
           viewWindowTarget.scale = s;
           viewWindowTarget.offsetX = ((workspaceFit.offsetX + frameCx) / fitScale) * s - frameCx;
@@ -3609,6 +3660,34 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           filmSeconds = filmMoveNow === 'estimate' ? FILM_ESTIMATE_SECONDS : FILM_REAIM_SECONDS;
           filmEase = true;
           filmStartSec = elapsedSec;
+        }
+        // The board's view at a new distance (the page's frame changed, as at a round's end): during the
+        // film's rise its end moves there; after it, a glide from where the camera stands; outside the
+        // film the untouched preset is set again
+        if (boardReaim) {
+          boardReaim = false;
+          if (filmMoveNow === 'play' && filmFrom && filmTo) {
+            const to = resolveLivePreset('region', true, p.mode, p.activeTheaterId);
+            if (filmProgress < 1) {
+              filmTo = to;
+            } else {
+              filmFrom = {
+                azimuth: orbitCurrent.azimuth,
+                polar: orbitCurrent.polar,
+                distance: orbitCurrent.distance,
+                target: [orbitCurrent.target.x, orbitCurrent.target.y, orbitCurrent.target.z],
+              };
+              filmTo = to;
+              filmSeconds = FILM_REAIM_SECONDS;
+              filmEase = true;
+              filmStartSec = elapsedSec;
+              filmProgress = 0;
+              boardGliding = true;
+            }
+          } else if (!filmMoveNow && p.cameraPreset === 'region' && p.inWorkspace && !cameraTouched && !pointerDown) {
+            setOrbitTargetFromPreset(resolveLivePreset('region', true, p.mode, p.activeTheaterId));
+            boardGliding = true;
+          }
         }
         if (filmMoveNow && filmFrom && filmTo) {
           const t = filmSeconds > 0 ? THREE.MathUtils.clamp((elapsedSec - filmStartSec) / filmSeconds, 0, 1) : 1;
