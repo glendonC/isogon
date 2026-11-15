@@ -4,14 +4,17 @@ import { countryShapeAt, type CountryShape } from './countryAt';
 import { Globe, globeWanted } from './Globe';
 import { ScenePrompt } from '../identity/ScenePrompt';
 import type { ScreenBox } from '../identity/scene';
-import { countryOf, countryRatio, countryTotals, drawnInside, gridLines, heldBy, type CountriesFile } from './countryYears';
+import { countryOf, countryRatio, countryTotals, drawnInside, heldBy, type CountriesFile, type CountryYears } from './countryYears';
+import { YearBars } from '../dataviz/YearBars';
+import { seriesFromCube, type YearSeries } from '../dataviz/yearSeries';
+import '../dataviz/dataviz.css';
 import { FIRE_RAMP } from './layers';
 import { useWorldKeys } from './keys';
 import { useRead } from './read';
 import { Ticks } from './Ticks';
 import { WorldCanvas, type GridLayer } from './WorldCanvas';
 import type { Box, Projector } from './projection';
-import { EARTH_WORDS, gridWords, millions, wholeMillions, YEAR_WORDS as Y } from './words';
+import { EARTH_WORDS, millions, YEAR_WORDS as Y } from './words';
 import {
   familyOf,
   layerOf,
@@ -84,18 +87,6 @@ const beat = (year: number) => (year < SHARP_FROM ? 170 : year === SHARP_FROM ? 
 // the step (2011), so the Earth before the sharper satellite is seen before it brightens.
 const shortBeat = (year: number) => (year === SHARP_FROM - 1 ? 1100 : 600);
 
-/** The years named under the strip: the one on show first, then 2012, the ends and every fifth, none closer than 44 px. */
-function axisYears(years: number[], shown: number, width: number): number[] {
-  if (!years.length) return [];
-  const px = (y: number) => ((years.indexOf(y) + 0.5) / years.length) * width;
-  const want = [shown, SHARP_FROM, years[0], years[years.length - 1], ...years.filter((y) => y % 5 === 0)];
-  const kept: number[] = [];
-  for (const y of want) {
-    if (!years.includes(y) || kept.includes(y)) continue;
-    if (kept.every((k) => Math.abs(px(k) - px(y)) >= 44)) kept.push(y);
-  }
-  return kept;
-}
 
 const isFilm = () => typeof document !== 'undefined' && document.documentElement.classList.contains('iso-film');
 
@@ -121,6 +112,16 @@ function outlineOf(rings: number[][][], p: Projector): string {
     d += 'Z';
   }
   return d;
+}
+
+/** A country's years in the dataviz lane's shape (YearSeries), from the countries route as this screen reads it. */
+function seriesOfCountry(idx: YearsIndex, c: CountryYears): YearSeries {
+  const years = idx.years.map((y) => {
+    const v = c.years[y.year];
+    return { year: y.year, partial: y.partial, months: y.months, modis: v?.modis ?? null, viirs: v?.viirs ?? null, oneScale: v?.harmonized ?? null };
+  });
+  const first = years.find((p) => p.viirs !== null && p.viirs > 0);
+  return { years, firstViirsYear: first ? first.year : null };
 }
 
 /** The frame's readout: the country, the pointed spot's coordinates, and the country's detections in the year on show. */
@@ -497,13 +498,10 @@ export function EarthYears({
   const info = idx.years.find((y) => y.year === shown)!;
   // The strip is the whole Earth's, or the chosen country's.
   const totals = chosenYears ? countryTotals(idx, chosenYears) : totalsOf(idx);
+  const series = chosenYears ? seriesOfCountry(idx, chosenYears) : seriesFromCube(idx);
   const ratio = chosenYears ? countryRatio(idx, chosenYears) : sharpRatio(idx);
-  const top = Math.max(...totals.flatMap((t) => [t.detected ?? 0, t.harmonized ?? 0])) * 1.08 || 1;
-  const grids = noFile ? [] : chosenYears ? gridLines(top).map((v) => ({ v, label: gridWords(v) })) : [10e6, 20e6].filter((v) => v < top).map((v) => ({ v, label: wholeMillions(v) }));
   const inside = chosenYears && countries ? drawnInside(countries, chosenYears.key) : [];
   const n = totals.length;
-  const slot = (i: number) => ((i + 0.5) / n) * 100;
-  const at = years.indexOf(shown);
   const vmax = idx.scales.suomi_npp?.vmax ?? idx.scales[idx.families[familyOf(idx, mode, shown)]?.scale ?? 'suomi_npp']?.vmax ?? 1;
   const meta = layerOf(idx, mode, shown);
   const what = mode === 'harmonized' ? Y.onScale : shown >= SHARP_FROM ? Y.sharp : Y.modis;
@@ -515,11 +513,6 @@ export function EarthYears({
         ? Y.aquaJoins
         : null;
   const ticks = [1, 10, 100, 1000, 10000].filter((v) => v <= vmax).map((v) => ({ key: v, t: tOfValue(v, vmax), label: v.toLocaleString('en-US') }));
-  // The line joins whole years only: a partial year (2000 holds two months) is a hollow mark of its own.
-  const line = totals
-    .map((t, i) => (t.harmonized === null || t.partial ? null : `${(i + 0.5) / n},${1 - t.harmonized / top}`))
-    .filter(Boolean)
-    .join(' ');
   const sharpAt = totals.findIndex((t) => t.sharp);
 
   return (
@@ -655,9 +648,6 @@ export function EarthYears({
                 <span>{Y.wholeEarth}</span>
               </button>
             )}
-            {!noFile && <span className="world-years__key world-years__key--modis">{Y.barsModis}</span>}
-            {!noFile && <span className="world-years__key world-years__key--sharp">{Y.barsSharp}</span>}
-            {line && !noFile && <span className="world-years__key world-years__key--line">{Y.lineHarmonized}</span>}
             {pick && countries && !chosen && <span className="world-years__hint">{Y.pickCountry}</span>}
             {inside.length > 0 && (
               <span className="world-years__hint" title={Y.drawnInsideAll(inside)}>
@@ -672,55 +662,43 @@ export function EarthYears({
             </div>
           )}
         </div>
-        <div className="world-years__plot">
-          {noFile && <p className="world-years__nofile">{Y.noFileStrip(noFile.name, noFile.holder)}</p>}
-          {grids.map(({ v, label }) => (
-            <div key={v} className="world-years__grid" style={{ bottom: `${(v / top) * 100}%` }}>
-              <span>{label}</span>
-            </div>
-          ))}
-          {!noFile && totals.map((t, i) => (
-            <button
-              key={t.year}
-              type="button"
-              className="world-years__bar"
-              data-sharp={t.sharp}
-              data-partial={t.partial}
-              data-current={t.year === shown}
-              style={{ left: `${(i / n) * 100}%`, width: `${100 / n}%` }}
-              onClick={() => {
-                setLooping(false);
-                setPlaying(false);
-                setYear(t.year);
-              }}
-              aria-label={`${t.year}: ${t.detected === null ? 'no layer' : millions(t.detected)} as the satellites counted${t.harmonized === null ? '' : `, ${millions(t.harmonized)} on one scale`}`}
-            >
-              <span className="world-years__fill" style={{ height: `${((t.detected ?? 0) / top) * 100}%` }} />
-            </button>
-          ))}
-          {line && !noFile && (
-            <svg className="world-years__line" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
-              <polyline points={line} vectorEffect="non-scaling-stroke" />
-            </svg>
+        {/* The dataviz lane's years (its MOUNT.md): orange where MODIS counted, light blue from VIIRS's first year, the
+            estimate as a white outline on one scale; while the years play, drawn up to the year on show. A click on a
+            year shows it. */}
+        <div className="world-years__chart">
+          {noFile ? (
+            <p className="world-years__nofile">{Y.noFileStrip(noFile.name, noFile.holder)}</p>
+          ) : (
+            series && (
+              <>
+                <YearBars
+                  series={series}
+                  width={Math.max(240, stripW - 48)}
+                  // YearBars keeps its top 90 px for its pointed year's readout; its bars stand under that.
+                  height={isFilm() ? 200 : 224}
+                  upTo={playing ? shown : null}
+                  current={shown}
+                  oneScale={mode === 'harmonized'}
+                />
+                <div className="world-years__hits">
+                  {totals.map((t) => (
+                    <button
+                      key={t.year}
+                      type="button"
+                      className="world-years__hit"
+                      data-current={t.year === shown}
+                      onClick={() => {
+                        setLooping(false);
+                        setPlaying(false);
+                        setYear(t.year);
+                      }}
+                      aria-label={`${t.year}: ${t.detected === null ? 'no layer' : millions(t.detected)} as the satellites counted${t.harmonized === null ? '' : `, ${millions(t.harmonized)} on one scale`}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )
           )}
-          {!noFile && totals.map((t, i) =>
-            t.harmonized !== null && (t.partial || i === at) ? (
-              <span
-                key={`dot-${t.year}`}
-                className="world-years__dot"
-                data-partial={t.partial}
-                data-current={i === at}
-                style={{ left: `${slot(i)}%`, bottom: `${(t.harmonized / top) * 100}%` }}
-              />
-            ) : null,
-          )}
-        </div>
-        <div className="world-years__axis">
-          {axisYears(years, shown, stripW).map((y) => (
-            <span key={y} data-current={y === shown} style={{ left: `${slot(years.indexOf(y))}%` }}>
-              {y}
-            </span>
-          ))}
         </div>
       </div>
     </div>

@@ -1587,6 +1587,35 @@
   pointer-events: none;
 }
 
+/* The years' strip: its head, then the dataviz lane's years (YearBars), which name their own years; a click on a year
+   shows it. */
+.world-years__strip {
+  grid-template-rows: auto auto;
+}
+
+.world-years__chart {
+  position: relative;
+  min-height: 0;
+}
+
+.world-years__hits {
+  position: absolute;
+  left: 0;
+  top: 90px;
+  right: 48px;
+  bottom: 30px;
+  display: flex;
+}
+
+.world-years__hit {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
 /* Hosted on the page, the year stands under the top bar, on its margin. */
 .world-screen[data-film='false'] .world-years {
   --years-caption-top: 128px;
