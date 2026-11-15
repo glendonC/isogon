@@ -241,7 +241,8 @@ fire region's context box are left out of every layer and total.
 Suomi NPP's rows begin on 20 January 2012, so its total for 2012 holds 591,488 rows in January against 1.6 million
 in January 2013. Over the world its rows are 4.04 times MODIS's in 2012 as summed, 4.25 times from February, and
 from 4.24 (2024) to 4.86 (2025) in the whole years after; summed over 2012 to 2025 it is 4.41 (261,995,596 over
-59,386,593), and 4.43 from February 2012.
+59,386,593), and 4.43 from February 2012. That is not one fire counted 4.4 times: with its smaller squares Suomi NPP
+sees small and cool fires that MODIS never detects, and more squares of the large ones.
 
 Each total's held-out error is measured as the cells' was: every overlap year left out in turn over every cell at
 once, the method fitted on the other years, the year's total predicted over its clean months and compared with

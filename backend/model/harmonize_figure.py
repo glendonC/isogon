@@ -212,8 +212,8 @@ def draw(s: dict[str, Any], out: Path, totals_sha256: str | None = None) -> dict
     xs = X(x0 + band * i_step)
     d.line([xs, ypx(0), xs, ypx(vmax) - X(6)], fill=INK, width=2 * k)
     words = [
-        f"{s['sharp_from']}: the newer, sharper satellite begins and makes about {s['factor']:.1f} times as many "
-        "detections of the same fires as the older ones.",
+        f"{s['sharp_from']}: the newer, sharper satellite begins. It sees smaller fires, so it makes about "
+        f"{s['factor']:.1f} times as many detections as the older ones.",
         "On one scale there is no step, because the older satellites' detections are put on its scale.",
     ]
     block_w = 540 * k
