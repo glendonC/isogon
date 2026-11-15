@@ -668,6 +668,61 @@ def _say_the_kind(x: Any) -> Any:
     return out
 
 
+FRESH_FILES: dict[str, str] = {
+    "plan": "fresh_world_plan.json", "test_a": "fresh_world_test_a.json", "refit": "fresh_world_refit.json",
+    "test_b": "fresh_world_test_b.json", "players_fit": "fresh_world_players_fit.json",
+    "players_test_b": "fresh_world_players_test_b.json",
+}
+
+
+def _fresh_look(doc: dict[str, Any]) -> dict[str, Any]:
+    keep = ("episodes", "scored_looks", "interval", "ahead", "tied", "behind", "classes", "why_no_interval")
+    j = doc["judged"]
+    return {
+        "look_name": doc["look_name"], "values": doc["values"], "plan_sha256": doc["plan_sha256"],
+        "episodes_in_plan": doc["episodes_in_plan"], "episodes_scored": doc["episodes_scored"],
+        "not_scored": len(doc["unscored"]),
+        "all": {k: j["all"][k] for k in keep if k in j["all"]},
+        "by_continent": {c: {k: v[k] for k in keep if k in v} for c, v in j["by_continent"].items()},
+        "by_zone": {z: {k: v[k] for k in keep if k in v} for z, v in j["by_zone"].items()},
+        "per_fire": [{k: e[k] for k in ("key", "continent", "zone", "scored_looks", "ahead_of_both_on", "scores_judged")}
+                     for e in doc["per_episode"]],
+        "beside_the_headline": {m: {"against_the_baselines": {k: v["against_the_baselines"].get(k) for k in keep},
+                                    "the_headline_against_it": v["the_headline_against_it"]}
+                                for m, v in (doc.get("beside_the_headline") or {}).items()},
+        "clear_looks": doc.get("clear_looks"),
+        "fuel": doc.get("fuel"),
+    }
+
+
+def _fresh_test() -> dict[str, Any]:
+    """The fresh test across the world: its protocol, and each step's record once it exists. Beside the three
+    looks at the 2021 test fires, under its own names; it does not reopen them."""
+    from backend.model import fresh_test as FT
+
+    out: dict[str, Any] = {"protocol_id": FT.PROTOCOL_ID, "protocol_sha256": FT.protocol_sha256(),
+                           "look_names": dict(FT.LOOK_NAMES), "protocol": dict(FT.PROTOCOL)}
+    docs = {k: (_read(FITTED_DIR / f) if (FITTED_DIR / f).is_file() else None) for k, f in FRESH_FILES.items()}
+    plan = docs["plan"]
+    out["plan"] = None if plan is None else {
+        "plan_sha256": plan["plan_sha256"], "episodes_found": plan["episodes_found"], "counts": plan["counts"],
+        "countries_read": len(plan["store"]["countries_read"]), "countries_left_out": plan["store"]["countries_left_out"],
+        "places_by_role": plan["places"]["by_role"]}
+    out["test_a"] = None if docs["test_a"] is None else _fresh_look(docs["test_a"])
+    out["refit"] = None if docs["refit"] is None else {"decision": docs["refit"]["decision"],
+                                                       "fitting": docs["refit"]["fitting"],
+                                                       "validation_episodes": docs["refit"]["validation"]["episodes"]}
+    out["test_b"] = None if docs["test_b"] is None else _fresh_look(docs["test_b"])
+    pl = docs["players_test_b"]
+    out["players"] = None if pl is None else {"episodes": pl["episodes"], "mean_gain": pl["mean_gain"],
+                                              "differences": pl["differences"], "learned_player": pl["learned_player"]}
+    done = [k for k in ("plan", "test_a", "refit", "test_b", "players") if out.get(k) is not None]
+    out["state"] = ("the protocol is on record and nothing has been read for it yet" if not done
+                    else "on record: " + ", ".join(done))
+    out["files"] = {k: "backend/model/fitted_values/" + f for k, f in FRESH_FILES.items()}
+    return out
+
+
 def evidence() -> dict[str, Any]:
     """The evidence sheet as one JSON-ready dict. Reads three tracked files; runs nothing."""
     record = _read(FITTED_DIR / LOOKS_FILE)
@@ -720,6 +775,7 @@ def evidence() -> dict[str, Any]:
         "validation": _validation(params),
         "next_look": _next_look(env),
         "limits": _limits(record, params, fires),
+        "fresh_test": _fresh_test(),
         "additions": [
             "test_fires.fires[].looks, test_fires.looks, test_fires.also_scored: every look and every other scoring",
             "each fire test: pixel_interval, scores_judged, ahead_on",
@@ -730,6 +786,7 @@ def evidence() -> dict[str, Any]:
             "next_look: measured_under, reward_in_use, on_validation: which reward the tables on record were measured under, the reward in use, and the reference players under it on the validation episodes",
             "sources",
             "count_kinds, and counted_by or classes_counted_by beside every count of scores ahead: which of the two kinds the count is",
+            "fresh_test: the test across the world, its protocol and each step's record once it exists, beside the three recorded looks",
         ],
         "sources": {
             "tracked_files": ["backend/model/fitted_values/" + LOOKS_FILE, "backend/model/fitted_values/" + PARAMS_FILE,

@@ -155,5 +155,18 @@ class ChoosingTests(unittest.TestCase):
         self.assertTrue(all(e["role"] == "test_a" for e in got["test_a"]))
 
 
+class EvidenceTests(unittest.TestCase):
+    def test_the_evidence_answer_carries_the_fresh_test_beside_the_three_looks(self) -> None:
+        from backend.model.evidence import evidence
+
+        doc = evidence()
+        fresh = doc["fresh_test"]
+        self.assertEqual(fresh["protocol_sha256"], F.protocol_sha256())
+        self.assertEqual(set(fresh["look_names"]), {"test_a", "test_b"})
+        self.assertEqual(len(doc["test_fires"]["looks"]), 3)              # the three recorded looks stay three
+        if fresh["plan"] is None:
+            self.assertEqual(fresh["state"], "the protocol is on record and nothing has been read for it yet")
+
+
 if __name__ == "__main__":
     unittest.main()
