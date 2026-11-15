@@ -802,20 +802,25 @@ function getSharedWebglEngine(): SharedWebglEngine {
   const glCanvas = document.createElement('canvas');
   glCanvas.width = 640;
   glCanvas.height = 400;
-  const gl = (glCanvas.getContext('webgl', {
-    alpha: false,
-    antialias: false,
-    depth: false,
-    stencil: false,
-    preserveDrawingBuffer: false,
-  }) ||
-    glCanvas.getContext('experimental-webgl', {
+  let gl: WebGLRenderingContext | null = null;
+  try {
+    gl = (glCanvas.getContext('webgl', {
       alpha: false,
       antialias: false,
       depth: false,
       stencil: false,
       preserveDrawingBuffer: false,
-    })) as WebGLRenderingContext | null;
+    }) ||
+      glCanvas.getContext('experimental-webgl', {
+        alpha: false,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        preserveDrawingBuffer: false,
+      })) as WebGLRenderingContext | null;
+  } catch {
+    gl = null;
+  }
 
   if (!gl) {
     singletonEngine = {
@@ -1341,7 +1346,21 @@ function uploadPlayTexture(engine: SharedWebglEngine, data: PlayLandingData): vo
 }
 
 let landingStaticLoaded = false;
+let recordStaticPromise: Promise<RecordLandingData | null> | null = null;
 let estimateTestStaticPromise: Promise<EstimateTestLandingData | null> | null = null;
+let playStaticPromise: Promise<PlayLandingData | null> | null = null;
+
+function fetchRecordStatic(): Promise<RecordLandingData | null> {
+  if (recordStaticPromise) return recordStaticPromise;
+  if (typeof fetch === 'undefined') return Promise.resolve(null);
+  recordStaticPromise = fetch(publicUrl('generated/landing/record.json'))
+    .then((r) => (r.ok ? (r.json() as Promise<RecordLandingData>) : null))
+    .catch(() => {
+      recordStaticPromise = null;
+      return null;
+    });
+  return recordStaticPromise;
+}
 
 function fetchEstimateTestStatic(): Promise<EstimateTestLandingData | null> {
   if (estimateTestStaticPromise) return estimateTestStaticPromise;
@@ -1353,6 +1372,18 @@ function fetchEstimateTestStatic(): Promise<EstimateTestLandingData | null> {
       return null;
     });
   return estimateTestStaticPromise;
+}
+
+function fetchPlayStatic(): Promise<PlayLandingData | null> {
+  if (playStaticPromise) return playStaticPromise;
+  if (typeof fetch === 'undefined') return Promise.resolve(null);
+  playStaticPromise = fetch(publicUrl('generated/landing/play.json'))
+    .then((r) => (r.ok ? (r.json() as Promise<PlayLandingData>) : null))
+    .catch(() => {
+      playStaticPromise = null;
+      return null;
+    });
+  return playStaticPromise;
 }
 
 const calendarSliceCache = new Map<string, Promise<CalendarRouteSlice | null>>();
@@ -1391,12 +1422,336 @@ function capitalizeLeading(value: string): string {
   return value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
+interface StaticDiagramBundle {
+  record: RecordLandingData | null;
+  estimateTest: EstimateTestLandingData | null;
+  play: PlayLandingData | null;
+}
+
+function drawCornerBrackets2d(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  arm: number,
+  stroke: number,
+  color: string,
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = stroke;
+  ctx.beginPath();
+  // Top-left
+  ctx.moveTo(x, y + arm);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x + arm, y);
+  // Top-right
+  ctx.moveTo(x + w - arm, y);
+  ctx.lineTo(x + w, y);
+  ctx.lineTo(x + w, y + arm);
+  // Bottom-left
+  ctx.moveTo(x, y + h - arm);
+  ctx.lineTo(x, y + h);
+  ctx.lineTo(x + arm, y + h);
+  // Bottom-right
+  ctx.moveTo(x + w - arm, y + h);
+  ctx.lineTo(x + w, y + h);
+  ctx.lineTo(x + w, y + h - arm);
+  ctx.stroke();
+}
+
+function drawFlatDiagram2d(
+  kind: BlockVisualKind,
+  canvas: HTMLCanvasElement,
+  bundle: StaticDiagramBundle,
+): boolean {
+  const ctx = canvas.getContext('2d', { alpha: false });
+  if (!ctx) return false;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+  const w = Math.max(320, Math.round((rect.width || 640) * dpr));
+  const h = Math.max(200, Math.round((rect.height || 400) * dpr));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+
+  ctx.fillStyle = '#080b11';
+  ctx.fillRect(0, 0, w, h);
+
+  const padX = Math.round(w * 0.055);
+  const padY = Math.round(h * 0.075);
+  const innerW = Math.max(40, w - padX * 2);
+  const innerH = Math.max(40, h - padY * 2);
+
+  if (kind === 'record') {
+    const data = bundle.record;
+    if (!data || !Array.isArray(data.cells)) return true;
+    const maxOne = Math.max(1e-6, data.max_one_scale);
+    const monthDenom = Math.log1p(maxOne * 16);
+    const normMonth = (r: number) => (monthDenom > 0 ? Math.min(1, Math.log1p(Math.max(0, r) * 16) / monthDenom) : 0);
+
+    const yearOnes: number[] = new Array(26).fill(0);
+    for (let y = 0; y < 26; y += 1) {
+      let sum = 0;
+      let cnt = 0;
+      for (let m = 0; m < 12; m += 1) {
+        const cell = data.cells[y * 12 + m];
+        if (cell && cell[2] > 0) {
+          sum += cell[1];
+          cnt += 1;
+        }
+      }
+      yearOnes[y] = cnt > 0 ? sum / cnt : 0;
+    }
+    const maxYear = Math.max(1e-6, ...yearOnes);
+    const yearDenom = Math.log1p(maxYear * 36);
+    const normYear = (v: number) => (yearDenom > 0 ? Math.min(1, Math.log1p(Math.max(0, v) * 36) / yearDenom) : 0);
+    const barHeights = yearOnes.map(normYear);
+    const medOne = medianOf(barHeights.filter((v) => v > 0));
+
+    const barAreaH = innerH * 0.28;
+    const barBottom = padY + barAreaH;
+    const colW = innerW / 26;
+    const gapX = Math.max(1.5 * dpr, colW * 0.16);
+
+    // Baseline under annual bars
+    ctx.fillStyle = '#2b303a';
+    ctx.fillRect(padX, Math.round(barBottom), innerW, Math.max(1, Math.round(dpr)));
+
+    // Typical-year median reference line across one-scale series
+    if (medOne > 0.02) {
+      const refY = Math.round(barBottom - medOne * barAreaH * 0.92);
+      ctx.fillStyle = 'rgba(243, 244, 246, 0.36)';
+      ctx.fillRect(padX, refY, innerW, Math.max(1, Math.round(dpr)));
+    }
+
+    for (let y = 0; y < 26; y += 1) {
+      const x = padX + y * colW + gapX * 0.5;
+      const bw = Math.max(1, colW - gapX);
+      const bh = barHeights[y] * barAreaH * 0.92;
+      if (bh > 1) {
+        ctx.fillStyle = y >= 12 ? 'rgba(240, 138, 69, 0.72)' : 'rgba(180, 195, 214, 0.78)';
+        ctx.fillRect(x, barBottom - bh, bw, bh);
+        ctx.fillStyle = '#f3f4f6';
+        ctx.fillRect(x, barBottom - bh, bw, Math.max(1, Math.round(1.2 * dpr)));
+      }
+    }
+
+    // 26 x 12 monthly detection matrix
+    const matTop = padY + innerH * 0.34;
+    const matH = innerH * 0.61;
+    const rowH = matH / 12;
+    const gapY = Math.max(1.5 * dpr, rowH * 0.18);
+
+    for (let y = 0; y < 26; y += 1) {
+      for (let m = 0; m < 12; m += 1) {
+        const cell = data.cells[y * 12 + m];
+        if (!cell || cell[2] === 0) continue;
+        const v = normMonth(cell[1]);
+        const cx = padX + y * colW + gapX * 0.5;
+        const cy = matTop + m * rowH + gapY * 0.5;
+        const cw = Math.max(1, colW - gapX);
+        const ch = Math.max(1, rowH - gapY);
+        if (v > 0.035) {
+          const lift = Math.pow(v, 0.82);
+          ctx.fillStyle =
+            lift > 0.52
+              ? `rgba(240, 138, 69, ${(0.36 + lift * 0.62).toFixed(3)})`
+              : `rgba(180, 195, 214, ${(0.26 + lift * 0.66).toFixed(3)})`;
+          ctx.fillRect(cx, cy, cw, ch);
+        } else {
+          ctx.fillStyle = '#2b303a';
+          const dot = Math.max(1.5, Math.round(1.6 * dpr));
+          ctx.fillRect(cx + (cw - dot) * 0.5, cy + (ch - dot) * 0.5, dot, dot);
+        }
+
+        if (y === 12 && m === 7) {
+          drawCornerBrackets2d(
+            ctx,
+            cx - dpr,
+            cy - dpr,
+            cw + 2 * dpr,
+            ch + 2 * dpr,
+            Math.min(4 * dpr, cw * 0.42),
+            Math.max(1, dpr),
+            '#f3f4f6',
+          );
+        }
+      }
+    }
+
+    // January 2012 join hairline
+    const joinX = Math.round(padX + (12 / 26) * innerW);
+    ctx.fillStyle = 'rgba(124, 131, 146, 0.65)';
+    ctx.fillRect(joinX, padY, Math.max(1, Math.round(dpr)), Math.round(innerH * 0.95));
+    return true;
+  }
+
+  if (kind === 'estimate' || kind === 'test') {
+    const data = bundle.estimateTest;
+    if (!data || !data.grid) return true;
+    const cols = Math.max(1, data.grid.cols);
+    const rows = Math.max(1, data.grid.rows);
+    const cellPx = Math.min(innerW / cols, innerH / rows);
+    const gridW = cellPx * cols;
+    const gridH = cellPx * rows;
+    const gx = Math.round((w - gridW) * 0.5);
+    const gy = Math.round((h - gridH) * 0.5);
+
+    // Subtle 1 km (3x3 cell) orbital ground-track grid
+    ctx.strokeStyle = 'rgba(43, 48, 58, 0.72)';
+    ctx.lineWidth = Math.max(1, 0.8 * dpr);
+    ctx.beginPath();
+    for (let c = 0; c <= cols; c += 3) {
+      const x = gx + c * cellPx;
+      ctx.moveTo(x, gy);
+      ctx.lineTo(x, gy + gridH);
+    }
+    for (let r = 0; r <= rows; r += 3) {
+      const y = gy + r * cellPx;
+      ctx.moveTo(gx, y);
+      ctx.lineTo(gx + gridW, y);
+    }
+    ctx.stroke();
+
+    // Coarse 1 km Terra MODIS squares
+    for (const [c, r, wt] of data.coarse) {
+      if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+      const alpha = (wt / 255) * (kind === 'estimate' ? 0.42 : 0.12);
+      if (alpha <= 0.01) continue;
+      ctx.fillStyle = `rgba(180, 195, 214, ${alpha.toFixed(3)})`;
+      ctx.fillRect(gx + c * cellPx, gy + r * cellPx, cellPx, cellPx);
+    }
+
+    // Declared 375 m white estimate frames
+    const inset = Math.max(0.8 * dpr, cellPx * 0.1);
+    ctx.strokeStyle = 'rgba(243, 244, 246, 0.9)';
+    ctx.lineWidth = Math.max(1, 1.05 * dpr);
+    for (const [c, r] of data.estimate) {
+      if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+      ctx.strokeRect(
+        gx + c * cellPx + inset,
+        gy + r * cellPx + inset,
+        Math.max(1, cellPx - inset * 2),
+        Math.max(1, cellPx - inset * 2),
+      );
+    }
+
+    // Withheld sharp 375 m detections on Test
+    if (kind === 'test') {
+      const sharpInset = Math.max(1.6 * dpr, cellPx * 0.24);
+      for (const [c, r, wt] of data.sharp) {
+        if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+        const alpha = Math.min(1, 0.62 + (wt / 255) * 0.38);
+        ctx.fillStyle = `rgba(240, 138, 69, ${alpha.toFixed(3)})`;
+        ctx.fillRect(
+          gx + c * cellPx + sharpInset,
+          gy + r * cellPx + sharpInset,
+          Math.max(1.5, cellPx - sharpInset * 2),
+          Math.max(1.5, cellPx - sharpInset * 2),
+        );
+      }
+    }
+    return true;
+  }
+
+  // Play: 4x4 territory board + 4 looks in order
+  const data = bundle.play;
+  if (!data || !data.grid) return true;
+  const cols = Math.max(1, data.grid.cols);
+  const rows = Math.max(1, data.grid.rows);
+  const cellPx = Math.min(innerW / cols, (innerH - 16 * dpr) / rows);
+  const gridW = cellPx * cols;
+  const gridH = cellPx * rows;
+  const gx = Math.round((w - gridW) * 0.5);
+  const gy = Math.round((h - 12 * dpr - gridH) * 0.5);
+
+  // Coarse hints
+  for (const [c, r, wt] of data.coarse) {
+    if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+    const alpha = (wt / 255) * 0.36;
+    if (alpha <= 0.01) continue;
+    ctx.fillStyle = `rgba(180, 195, 214, ${alpha.toFixed(3)})`;
+    ctx.fillRect(gx + c * cellPx + 0.5, gy + r * cellPx + 0.5, Math.max(1, cellPx - 1), Math.max(1, cellPx - 1));
+  }
+
+  // Uncovered sharp detections across the 4 looks
+  for (const look of data.looks) {
+    for (const [c, r, wt] of look.cells) {
+      if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+      const alpha = Math.min(1, 0.65 + (wt / 255) * 0.35);
+      ctx.fillStyle = `rgba(240, 138, 69, ${alpha.toFixed(3)})`;
+      ctx.fillRect(gx + c * cellPx + 1, gy + r * cellPx + 1, Math.max(1.5, cellPx - 2), Math.max(1.5, cellPx - 2));
+    }
+  }
+
+  // 4x4 territory grid
+  const tileW = gridW / 4;
+  const tileH = gridH / 4;
+  ctx.strokeStyle = 'rgba(124, 131, 146, 0.58)';
+  ctx.lineWidth = Math.max(1, dpr);
+  ctx.beginPath();
+  for (let i = 0; i <= 4; i += 1) {
+    const tx = gx + i * tileW;
+    ctx.moveTo(tx, gy);
+    ctx.lineTo(tx, gy + gridH);
+    const ty = gy + i * tileH;
+    ctx.moveTo(gx, ty);
+    ctx.lineTo(gx + gridW, ty);
+  }
+  ctx.stroke();
+
+  // Trajectory line + brackets on chosen squares
+  const uniqueTiles = Array.from(new Set(data.looks.map((l) => l.tile)));
+  if (data.looks.length >= 2 && data.looks[0].tile !== data.looks[1].tile) {
+    const t0 = data.looks[0].tile;
+    const t1 = data.looks[1].tile;
+    const x0 = gx + ((t0 % 4) + 0.5) * tileW;
+    const y0 = gy + (Math.floor(t0 / 4) + 0.5) * tileH;
+    const x1 = gx + ((t1 % 4) + 0.5) * tileW;
+    const y1 = gy + (Math.floor(t1 / 4) + 0.5) * tileH;
+    ctx.strokeStyle = 'rgba(243, 244, 246, 0.52)';
+    ctx.lineWidth = Math.max(1, 1.2 * dpr);
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
+
+  for (const tileId of uniqueTiles) {
+    const tc = tileId % 4;
+    const tr = Math.floor(tileId / 4);
+    const pad = Math.max(2 * dpr, tileW * 0.05);
+    drawCornerBrackets2d(
+      ctx,
+      gx + tc * tileW + pad,
+      gy + tr * tileH + pad,
+      tileW - pad * 2,
+      tileH - pad * 2,
+      Math.min(12 * dpr, tileW * 0.2),
+      Math.max(1.2, 1.4 * dpr),
+      '#f3f4f6',
+    );
+  }
+
+  // Four pass-budget pips at bottom-left
+  const pipSize = Math.round(6 * dpr);
+  const pipGap = Math.round(5 * dpr);
+  const pipTop = h - Math.round(18 * dpr);
+  const pipLeft = Math.round(20 * dpr);
+  for (let i = 0; i < 4; i += 1) {
+    ctx.fillStyle = i === 3 ? '#f08a45' : '#f3f4f6';
+    ctx.fillRect(pipLeft + i * (pipSize + pipGap), pipTop, pipSize, pipSize);
+  }
+  return true;
+}
+
 function ensureStaticVisualTextures(engine: SharedWebglEngine): void {
   if (landingStaticLoaded || !engine.supported || typeof fetch === 'undefined') return;
   landingStaticLoaded = true;
 
-  fetch(publicUrl('generated/landing/record.json'))
-    .then((r) => (r.ok ? (r.json() as Promise<RecordLandingData>) : null))
+  fetchRecordStatic()
     .then((d) => {
       if (d && Array.isArray(d.cells)) uploadRecordTexture(engine, d);
     })
@@ -1408,8 +1763,7 @@ function ensureStaticVisualTextures(engine: SharedWebglEngine): void {
     })
     .catch(() => undefined);
 
-  fetch(publicUrl('generated/landing/play.json'))
-    .then((r) => (r.ok ? (r.json() as Promise<PlayLandingData>) : null))
+  fetchPlayStatic()
     .then((d) => {
       if (d && Array.isArray(d.looks)) uploadPlayTexture(engine, d);
     })
@@ -1419,21 +1773,58 @@ function ensureStaticVisualTextures(engine: SharedWebglEngine): void {
 function StepShaderCanvas({ kind, ariaLabel }: { kind: BlockVisualKind; ariaLabel: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [webglReady, setWebglReady] = useState(true);
+  const [canvas2dReady, setCanvas2dReady] = useState(true);
 
   useEffect(() => {
     const engine = getSharedWebglEngine();
+    const canvas = canvasRef.current;
     if (!engine.supported) {
       setWebglReady(false);
-      return;
+      if (!canvas) return;
+      let cancelled = false;
+      const bundle: StaticDiagramBundle = { record: null, estimateTest: null, play: null };
+      const redraw = () => {
+        if (cancelled || !canvasRef.current) return;
+        const ok = drawFlatDiagram2d(kind, canvasRef.current, bundle);
+        setCanvas2dReady(ok);
+      };
+      redraw();
+      if (kind === 'record') {
+        fetchRecordStatic().then((d) => {
+          bundle.record = d;
+          redraw();
+        });
+      } else if (kind === 'estimate' || kind === 'test') {
+        fetchEstimateTestStatic().then((d) => {
+          bundle.estimateTest = d;
+          redraw();
+        });
+      } else {
+        fetchPlayStatic().then((d) => {
+          bundle.play = d;
+          redraw();
+        });
+      }
+      const onResize = () => redraw();
+      window.addEventListener('resize', onResize);
+      return () => {
+        cancelled = true;
+        window.removeEventListener('resize', onResize);
+      };
     }
     ensureStaticVisualTextures(engine);
-    const canvas = canvasRef.current;
     if (!canvas) return;
     return engine.register(kind, canvas);
   }, [kind]);
 
   return (
-    <div className="iso-lb-visual" data-webgl={webglReady ? 'on' : 'off'} role="img" aria-label={ariaLabel}>
+    <div
+      className="iso-lb-visual"
+      data-webgl={webglReady ? 'on' : 'off'}
+      data-canvas2d={canvas2dReady ? 'on' : 'off'}
+      role="img"
+      aria-label={ariaLabel}
+    >
       <div className="iso-lb-visual__fallback" data-kind={kind} aria-hidden="true" />
       <canvas ref={canvasRef} className="iso-lb-visual__canvas" aria-hidden="true" />
     </div>
@@ -1494,8 +1885,13 @@ export function LandingBelow({
   const [localEvidence, setLocalEvidence] = useState<EvidenceDoc | null>(null);
   const [localEvidenceState, setLocalEvidenceState] = useState<EvidenceState>('loading');
   const [fallbackEvidenceOpen, setFallbackEvidenceOpen] = useState(false);
+  const [webglSupported, setWebglSupported] = useState(true);
 
   const evidenceDoc = store?.model.evidence ?? localEvidence;
+
+  useEffect(() => {
+    setWebglSupported(getSharedWebglEngine().supported);
+  }, []);
 
   // Scroll-reveal observer for calm section entrances when motion is allowed.
   useEffect(() => {
@@ -1819,6 +2215,13 @@ export function LandingBelow({
   return (
     <div ref={rootRef} className="iso-lb" data-landing-ui="true">
       <div className="iso-lb__inner">
+        {!webglSupported && (
+          <p className="iso-lb-webgl-note" role="status">
+            Three-dimensional terrain needs WebGL, which is off in this browser. The flat diagrams, fire record and test
+            documents below still work.
+          </p>
+        )}
+
         {/* Act 1: What Isogon does in one sentence and one picture */}
         <section className="iso-lb-intro" data-reveal-section aria-label="What Isogon does">
           <p className="iso-lb-intro__sentence">
@@ -1926,7 +2329,8 @@ export function LandingBelow({
                   </span>
                 </span>
                 <span>
-                  Simplified canyon relief and pass slice{coarsePassWhen ? `, ${coarsePassWhen}` : ''}
+                  {webglSupported ? 'Simplified canyon relief and pass slice' : 'Flat pass grid'}
+                  {coarsePassWhen ? `, ${coarsePassWhen}` : ''}
                 </span>
               </figcaption>
             </figure>
@@ -1964,7 +2368,8 @@ export function LandingBelow({
                   </span>
                 </span>
                 <span>
-                  Withheld pass{sharpPassWhen ? `, ${sharpPassWhen},` : ''} on the same canyon slice
+                  Withheld pass{sharpPassWhen ? `, ${sharpPassWhen},` : ''}{' '}
+                  {webglSupported ? 'on the same canyon slice' : 'on the same flat grid'}
                 </span>
               </figcaption>
             </figure>
@@ -2001,7 +2406,11 @@ export function LandingBelow({
                     Detections uncovered
                   </span>
                 </span>
-                <span>Four looks of the least-sure rule on simplified relief</span>
+                <span>
+                  {webglSupported
+                    ? 'Four looks of the least-sure rule on simplified relief'
+                    : 'Four looks of the least-sure rule on the flat board'}
+                </span>
               </figcaption>
             </figure>
             <div className="iso-lb-block__copy">
