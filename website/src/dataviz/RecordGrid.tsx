@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { CSS, MARK, estimateStep } from './tokens';
 import { Frame } from './Frame';
 import { grow } from './frameGeometry';
-import { MONTHS_SHORT, cellLines, cellName, cellReadout, heldOutText } from './recordCells';
+import { MONTHS_SHORT, cellLines, cellReadout, heldOutText } from './recordCells';
 import type { HeldOut, RecordCell, RecordCells } from './recordCells';
 
 export interface RecordGridProps {
@@ -26,7 +26,7 @@ export interface RecordGridProps {
   words?: { noFire: string; fewer: string; more: string; modis: string; viirs: string };
 }
 
-const DEFAULT_WORDS = { noFire: 'No fire', fewer: 'Fewer', more: 'More', modis: 'MODIS, 1 km', viirs: 'VIIRS, 375 m' };
+const DEFAULT_WORDS = { noFire: 'No fire', fewer: 'Less', more: 'More fire', modis: 'MODIS, 1 km', viirs: 'VIIRS, 375 m' };
 
 /**
  * The fire record of a place: years across, months down, one cell a month on the white ramp of the estimate. No
@@ -37,7 +37,7 @@ export function RecordGrid({ record, selected, onPick, actionFor, frame = true, 
   const [hover, setHover] = useState<string | null>(null);
   const pitch = MARK.cell + MARK.gap;
   const left = 44;
-  const head = 82;
+  const head = 100;
   const top = head;
   const years = record.lastYear - record.firstYear + 1;
   const gridW = years * pitch - MARK.gap;
@@ -110,13 +110,13 @@ export function RecordGrid({ record, selected, onPick, actionFor, frame = true, 
         <text x={left + legendCell + 8} y={legendY} className="dv-label">
           {words.noFire}
         </text>
-        <text x={left + 130} y={legendY} className="dv-label">
+        <text x={left + 150} y={legendY} className="dv-label">
           {words.fewer}
         </text>
         {Array.from({ length: record.steps }, (_, s) => (
-          <rect key={s} x={left + 188 + s * (legendCell + 2)} y={legendY - legendCell + 3} width={legendCell} height={legendCell} fill={estimateStep(s, record.steps)} />
+          <rect key={s} x={left + 192 + s * (legendCell + 2)} y={legendY - legendCell + 3} width={legendCell} height={legendCell} fill={estimateStep(s, record.steps)} />
         ))}
-        <text x={left + 188 + record.steps * (legendCell + 2) + 8} y={legendY} className="dv-label">
+        <text x={left + 192 + record.steps * (legendCell + 2) + 8} y={legendY} className="dv-label">
           {words.more}
         </text>
         {frame && framed ? (
@@ -124,7 +124,7 @@ export function RecordGrid({ record, selected, onPick, actionFor, frame = true, 
             key={framed.ym}
             box={grow({ x: x(framed.year), y: y(framed.month), w: MARK.cell, h: MARK.cell }, 5)}
             bounds={{ w: width, h: height }}
-            action={actionFor?.(framed) ?? cellName(framed)}
+            action={actionFor?.(framed) ?? undefined}
             readout={cellLines(framed)}
             maxChars={0}
             above={{ bottom: head - 14 }}

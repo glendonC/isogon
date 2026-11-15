@@ -17,7 +17,7 @@ test('one row a fire with a seal, its latest seal, newest first', () => {
   assert.equal(t.followed, 3);
   assert.equal(t.rows.length, 2);
   assert.deepEqual(t.rows.map((r) => [r.place, r.locked, r.data, r.fingerprint]), [
-    ['South Sudan', '28 minutes before the pass', 'Waiting', 'cccccccccc'],
+    ['South Sudan', '28 minutes before the pass', 'Before the pass', 'cccccccccc'],
     ['Australia', '28 minutes before the pass', 'Arrived, checked', 'bbbbbbbbbb'],
   ]);
   assert.equal(t.checked, 1);
@@ -31,4 +31,11 @@ test('no route answer gives no table', () => {
 test('without a country name, the part is said in plain words', () => {
   assert.equal(partWords({ id: 'x', part: 'south_america' }), 'South America');
   assert.equal(rowsFromLive(live).rows[0].place, 'Africa');
+});
+
+test('a pass that came but could not be scored says so, with its reason', () => {
+  const t = rowsFromLive({ fires: [{ id: 'a', part: 'africa' }], seals: [{ sha256: 'dddddddddddd', fire_id: 'a', state: 'not_scored', reason: 'no rows for the box', times: { sealed_utc: '2026-11-15T09:00:00Z' } }] });
+  assert.equal(t.rows[0].data, 'Arrived, not checked: no rows for the box');
+  const w = rowsFromLive({ fires: [{ id: 'a' }], seals: [{ sha256: 'e', fire_id: 'a', state: 'waiting_for_the_rows', times: { sealed_utc: '2026-11-15T09:00:00Z' } }] });
+  assert.equal(w.rows[0].data, 'Waiting');
 });

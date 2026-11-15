@@ -16,7 +16,7 @@ const DEFAULT_WORDS = {
   title: 'Overlap with VIIRS fire pixels',
   line: 'Pixels both mark as fire, out of pixels either marks as fire. Higher is better.',
   exact: 'Exact',
-  within: 'Within 1 pixel',
+  within: 'Within one pixel',
 };
 
 function Figure({ value, x, y }: { value: number; x: number; y: number }) {

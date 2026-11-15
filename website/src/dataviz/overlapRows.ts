@@ -21,7 +21,7 @@ type Obj = Record<string, unknown>;
 const obj = (x: unknown): Obj | null => (x && typeof x === 'object' ? (x as Obj) : null);
 const num = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 
-export const OVERLAP_LABELS = { modis: 'MODIS alone', in_use: 'Model in use', new: 'New model' };
+export const OVERLAP_LABELS = { modis: 'MODIS alone', in_use: 'First model', new: 'New model' };
 
 /**
  * The three rows, in the order the figure draws them, or null when the route does not hold every value. A model's

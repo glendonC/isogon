@@ -20,10 +20,10 @@ export interface YearBarsProps {
  * Detections each year: orange bars where MODIS counted, light blue from VIIRS's first year, so the jump of 2012 is
  * the change of satellite. On one scale, each year's estimate is a white outline over its bar.
  */
-export function YearBars({ series, width = 700, height = 240, upTo = null, oneScale = false, current = null }: YearBarsProps) {
+export function YearBars({ series, width = 700, height = 250, upTo = null, oneScale = false, current = null }: YearBarsProps) {
   const [hover, setHover] = useState<number | null>(null);
   const { years, firstViirsYear } = series;
-  const head = 90;
+  const head = 100;
   const base = height - 30;
   const n = years.length;
   const pitch = width / n;

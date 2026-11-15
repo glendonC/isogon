@@ -7,7 +7,7 @@ export interface LiveTableProps {
   heads?: { fire: string; locked: string; data: string; fingerprint: string };
 }
 
-const HEADS = { fire: 'Fire', locked: 'Prediction locked', data: 'VIIRS data', fingerprint: 'Fingerprint' };
+const HEADS = { fire: 'Fire', locked: 'Locked', data: 'VIIRS data', fingerprint: 'Fingerprint' };
 
 /**
  * Predictions locked before NASA publishes the data: one row a fire, when its latest prediction was locked, whether

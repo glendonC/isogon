@@ -90,16 +90,19 @@ export function cellName(cell: RecordCell): string {
 }
 
 /**
- * The readout's two short lines for one month: each instrument's count as counted, then the value on one scale with
- * its range. Per 1,000 km2 a day.
+ * The readout's two lines for one month, in the product lane's words: the month with each instrument's count as
+ * counted, then the value on one scale with its range. Per 1,000 km2 a day.
  */
 export function cellLines(cell: RecordCell): string[] {
-  if (cell.value === null) return ['no value'];
-  const counted = [cell.modis !== null ? `MODIS ${rateText(cell.modis)}` : null, cell.viirs !== null ? `VIIRS ${rateText(cell.viirs)}` : null]
+  const head = [cellName(cell), cell.modis !== null ? `MODIS ${rateText(cell.modis)}` : null, cell.viirs !== null ? `VIIRS ${rateText(cell.viirs)}` : null]
     .filter(Boolean)
     .join('   ');
-  const one = cell.value === 0 ? 'no fire on one scale' : `one scale ${rateText(cell.value)}` + (cell.low !== null && cell.high !== null ? `, ${rateText(cell.low)} to ${rateText(cell.high)}` : '');
-  return [counted ? `${counted} a day per 1,000 km²` : 'as counted: none', one].map((l) => l.toUpperCase());
+  if (cell.value === null) return [head, 'no value'].map((l) => l.toUpperCase());
+  const one =
+    cell.value === 0
+      ? 'no fire on one scale'
+      : `on one scale ${rateText(cell.value)}` + (cell.low !== null && cell.high !== null ? `, likely ${rateText(cell.low)} to ${rateText(cell.high)}` : '');
+  return [head, one].map((l) => l.toUpperCase());
 }
 
 /** The readout's fields for one month: its name, its value, its range. */

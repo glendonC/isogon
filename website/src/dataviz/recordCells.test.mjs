@@ -68,8 +68,8 @@ test('the prompt names the month; the readout gives each instrument as counted, 
   const aug = r.cells.find((c) => c.ym === '2012-08');
   assert.equal(cellName(aug), 'August 2012');
   const [counted, one] = cellLines(aug);
-  assert.equal(counted, 'MODIS 0.25   VIIRS 1.00 A DAY PER 1,000 KM²');
-  assert.match(one, /^ONE SCALE \d+\.\d+, \d+\.\d+ TO \d+\.\d+$/);
+  assert.equal(counted, 'AUGUST 2012   MODIS 0.25   VIIRS 1.00');
+  assert.match(one, /^ON ONE SCALE \d+\.\d+, LIKELY \d+\.\d+ TO \d+\.\d+$/);
   const nov2000 = r.cells[0];
-  assert.equal(cellLines(nov2000)[0], 'MODIS 0.25 A DAY PER 1,000 KM²');
+  assert.equal(cellLines(nov2000)[0], 'NOVEMBER 2000   MODIS 0.25');
 });

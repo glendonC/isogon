@@ -47,12 +47,12 @@ export function Frame({ box, bounds, action, readout = [], maxChars = 34, above,
       </g>
       {above && leader ? <line x1={leaderX} x2={leaderX} y1={above.bottom + 8} y2={box.y - 4} stroke={CSS.ui} strokeWidth={1} /> : null}
       {action ? (
-        <text x={at.x} y={at.y + 22} textAnchor={at.anchor} className="dv-action">
+        <text x={at.x} y={at.y + 24} textAnchor={at.anchor} className="dv-action">
           {action}
         </text>
       ) : null}
       {lines.map((l, i) => (
-        <text key={i} x={at.x} y={at.y + (action ? TEXT.actionLine : 0) + 12 + i * TEXT.readoutLine} textAnchor={at.anchor} className="dv-readout">
+        <text key={i} x={at.x} y={at.y + (action ? TEXT.actionLine : 0) + 16 + i * TEXT.readoutLine} textAnchor={at.anchor} className="dv-readout">
           {l}
         </text>
       ))}

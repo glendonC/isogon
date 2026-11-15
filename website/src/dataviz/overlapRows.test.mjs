@@ -19,7 +19,8 @@ const evidence = {
   },
 };
 
-test('test B gives MODIS alone 15.8 and 26.4, the model in use 13.1 and 26.6, the new model 20.4 and 36.9', () => {
+test('test B gives MODIS alone 15.8 and 26.4, the first model 13.1 and 26.6, the new model 20.4 and 36.9', () => {
+  assert.deepEqual(overlapFromEvidence(evidence).rows.map((r) => r.label), ['MODIS alone', 'First model', 'New model']);
   const o = overlapFromEvidence(evidence);
   assert.deepEqual(o.rows.map((r) => r.key), ['modis', 'in_use', 'new']);
   const pct = (v) => (v * 100).toFixed(1);

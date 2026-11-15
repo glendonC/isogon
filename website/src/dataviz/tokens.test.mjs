@@ -37,10 +37,9 @@ test('share breaks put an equal share of the values with fire in each step', () 
 });
 
 test('nothing a visitor reads is under 16 px, no rounded corner, nothing fades', () => {
-  assert.ok(TYPE.min >= 16 && TYPE.label >= 16 && TYPE.title >= 16 && TYPE.action >= 16);
-  assert.equal(TYPE.readout, 11, 'the readout is the instrument\'s small type');
+  assert.ok(TYPE.min >= 16 && TYPE.label >= 16 && TYPE.title >= 16 && TYPE.action >= 16 && TYPE.readout >= 16);
   const css = readFileSync(new URL('./dataviz.css', import.meta.url), 'utf8');
-  for (const m of css.replace(/\.dv-readout \{[^}]*\}/, '').matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) assert.ok(Number(m[1]) >= 16, `font-size ${m[1]}px`);
+  for (const m of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) assert.ok(Number(m[1]) >= 16, `font-size ${m[1]}px`);
   for (const m of css.matchAll(/border-radius:\s*([^;]+);/g)) assert.equal(m[1].trim(), '0');
   assert.doesNotMatch(css, /opacity\s*:/);
   assert.doesNotMatch(css, /\.dv-readout[^}]*(background|border)\s*:/, 'the readout has no box');

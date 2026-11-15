@@ -25,13 +25,14 @@ type Obj = Record<string, unknown>;
 const obj = (x: unknown): Obj | null => (x && typeof x === 'object' ? (x as Obj) : null);
 const str = (x: unknown): string | null => (typeof x === 'string' ? x : null);
 
+/** The product lane's words: the time a prediction was locked, and the state of VIIRS's data for it. */
 export const LIVE_WORDS = {
   lockedBefore: 'Before the pass',
   lockedMinutes: (m: number) => `${m} minutes before the pass`,
-  checked: 'Arrived, checked',
-  checking: 'Arrived, being checked',
+  beforePass: 'Before the pass',
   waiting: 'Waiting',
-  notChecked: 'Not checked',
+  checked: 'Arrived, checked',
+  notChecked: (reason: string) => (reason ? `Arrived, not checked: ${reason}` : 'Arrived, not checked'),
 };
 
 export interface LiveFire {
@@ -72,7 +73,13 @@ export function rowsFromLive(
     const state = str(s.state);
     const checked = state === 'scored';
     const data =
-      state === 'scored' ? words.checked : state === 'waiting_for_the_rows' ? words.checking : state === 'not_scored' ? words.notChecked : words.waiting;
+      state === 'scored'
+        ? words.checked
+        : state === 'not_scored'
+          ? words.notChecked(str(s.reason) ?? '')
+          : state === 'waiting_for_the_rows'
+            ? words.waiting
+            : words.beforePass;
     const centre = Array.isArray(f.centre) && f.centre.length === 2 ? (f.centre as [number, number]) : undefined;
     rows.push({
       fireId: f.id as string,

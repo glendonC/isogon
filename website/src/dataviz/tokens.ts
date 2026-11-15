@@ -86,7 +86,7 @@ export const MARK = {
 
 /**
  * Type: the system font; mono capitals in the signal colour for the frame's readout, coordinates and fingerprints.
- * Words a visitor reads are 16 px or more; the readout keeps the identity's small instrument type.
+ * Nothing a visitor reads is under 16 px: the page is shown on a 1920 by 1080 projector and in a film.
  */
 export const TYPE = {
   font: 'var(--dv-font)',
@@ -94,9 +94,9 @@ export const TYPE = {
   min: 16,
   label: 16,
   title: 20,
-  action: 22,
-  /** The readout is the instrument's small type (the identity's): mono capitals, the one place below 16 px. */
-  readout: 11,
+  action: 24,
+  /** The readout: mono capitals, as the identity sets it for a 1920 by 1080 projector. */
+  readout: 16,
 } as const;
 
 /** Motion: the identity's timing and ease; a figure counts to its value once. */

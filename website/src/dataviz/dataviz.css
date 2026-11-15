@@ -67,24 +67,21 @@
 }
 .dv-action {
   font-family: var(--dv-font);
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 300;
   fill: var(--dv-ink);
 }
 .dv-readout {
   font-family: var(--dv-mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  font-size: 16px;
+  letter-spacing: 0.08em;
   fill: var(--dv-ui);
   white-space: pre;
 }
-/* A halo of the ground behind the frame's words, so they read over data; a stroke, not a box. */
+/* The identity's shadow, so the words read over the scene or over data; not a box. */
 .dv-action,
 .dv-readout {
-  paint-order: stroke;
-  stroke: var(--dv-ground);
-  stroke-width: 4px;
-  stroke-linejoin: round;
+  text-shadow: 0 1px 10px rgba(5, 7, 12, 0.9);
 }
 .dv-svg {
   display: block;
