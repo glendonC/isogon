@@ -256,3 +256,5 @@ rows, are transparent. Their scales and digests are in the `maps.json` written b
   reads lava as fire.
 - The factors and interval tables are fitted on every place's Suomi NPP counts of every year. They must not be used
   to test a model that predicts Suomi NPP.
+- The fit reads the monthly Suomi NPP counts of every loaded place, the places of the estimate's fresh test
+  (`backend/model/fresh_test.py`) included, and the estimate and its baselines read none of its tables.
