@@ -14,14 +14,16 @@ body,
   overscroll-behavior: none;
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--sys-rule) transparent;
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--sys-rule) transparent;
+  }
 }
 
 *::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
 }
 
 *::-webkit-scrollbar-track {
