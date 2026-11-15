@@ -17,6 +17,7 @@ export const WORDS = {
     fire: 'One fire',
     tested: 'Tested fires',
     live: 'Live',
+    turn: 'Your turn',
   },
 };
 

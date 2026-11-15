@@ -1,7 +1,7 @@
 import { WORDS } from './words.ts';
 
 /** The story in the order Play tells it and the bottom line shows it. */
-export const STORY = ['world', 'jump', 'place', 'fire', 'tested', 'live'] as const;
+export const STORY = ['world', 'jump', 'place', 'fire', 'tested', 'live', 'turn'] as const;
 export type StoryPart = (typeof STORY)[number];
 export type PartState = 'done' | 'on' | 'ahead';
 
@@ -20,6 +20,7 @@ export function storyLabels({ jumpYear, testedFires }: StoryFigures = {}): Recor
     fire: WORDS.story.fire,
     tested: testedFires != null ? `${testedFires} fires` : WORDS.story.tested,
     live: WORDS.story.live,
+    turn: WORDS.story.turn,
   };
 }
 

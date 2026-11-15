@@ -3,8 +3,8 @@ import { test } from 'node:test';
 import { STORY, partFill, partState, storyLabels } from './story.ts';
 import { entryTitle } from './words.ts';
 
-test('the story runs from the world to the live predictions', () => {
-  assert.deepEqual([...STORY], ['world', 'jump', 'place', 'fire', 'tested', 'live']);
+test('the story runs from the world to the visitor\'s own turn', () => {
+  assert.deepEqual([...STORY], ['world', 'jump', 'place', 'fire', 'tested', 'live', 'turn']);
 });
 
 test('labels that hold a figure take it from the data and are plain without it', () => {
