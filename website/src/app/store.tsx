@@ -109,6 +109,8 @@ export interface WorkspaceStore {
     pass: number;
     /** Estimated fire power at that pass, MW; null until the run reports. */
     powerMw: number | null;
+    /** Show or hide the strip of passes (the fire's label picked). */
+    toggleStrip: () => void;
   };
   round: {
     /** The round on the open fire (beats/test-world/useRound.ts); null when none is under way. */

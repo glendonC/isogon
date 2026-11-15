@@ -112,7 +112,7 @@ export function WorldModelScene() {
     <div className="wm-scene" data-scene={test.revealed ? 'revealed' : test.hidden ? 'blind' : 'open'}>
       {at && keyOpen && <MarksKey at={at} avoid={avoid} title={SCRIPT.marks?.name ?? 'The Marks'} rows={guide.marks} />}
       {at && guide.fireLabel && !keyOpen && (
-        <ClearPin at={at} avoid={avoid} className="wm-pin" plateClass="wm-label" label={guide.fireLabel} focusable onFocusChange={setFocused}>
+        <ClearPin at={at} avoid={avoid} className="wm-pin" plateClass="wm-label" label={guide.fireLabel} focusable onFocusChange={setFocused} onPick={time.toggleStrip}>
           <span className="guide-label">{guide.fireLabel}</span>
         </ClearPin>
       )}

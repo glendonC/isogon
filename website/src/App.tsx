@@ -12,6 +12,7 @@ import { Debrief } from './components/Debrief';
 import { type Step } from './components/WorkspaceBar';
 import { Trail, type TrailWord } from './guide/Trail';
 import { GuideStrip } from './guide/GuideStrip';
+import { PassStrip } from './guide/PassStrip';
 import { useGuide, type Guide } from './guide/useGuide';
 import { keyMatches } from './guide/script';
 import { BEATS, type BeatId } from './app/names';
@@ -197,6 +198,9 @@ export function App() {
   /** The key of marks is open; the estimate's squares sized by chance are drawn (off at rest). */
   const [marksOpen, setMarksOpen] = useState(false);
   const [chanceOn, setChanceOn] = useState(false);
+  /** The strip of passes: picked open from the fire's label, and the pointer near the screen's foot. */
+  const [stripOpen, setStripOpen] = useState(false);
+  const [nearFoot, setNearFoot] = useState(false);
   /** Sentences said on demand in place of the standing ones, for the state they were asked in. */
   const [said, setSaid] = useState<{ key: string; lines: string[] } | null>(null);
   /** A new try at the Record after it failed to load: it is mounted afresh. */
@@ -625,6 +629,7 @@ export function App() {
       if (next !== 'fire' && next !== 'test') {
         setMarksOpen(false);
         setChanceOn(false);
+        setStripOpen(false);
       }
       // The players open over the round's end and keep it; anything else leaves the round.
       if ((step === 'look' || step === 'agent') && next !== 'look' && next !== 'agent' && round) leaveRound(next === 'test');
@@ -743,6 +748,22 @@ export function App() {
     prevRevealedRef.current = revealed;
   }, [revealed]);
 
+
+  // The strip of passes, from the run's own passes: the sharp satellite's taller, hidden ones dashed (until the reveal).
+  const stripPasses = useMemo(() => {
+    const fs = (activeRun as unknown as { observer_passes?: { frames?: Array<{ sensor?: string; held_out?: boolean }> } } | null)?.observer_passes?.frames ?? [];
+    return fs.map((f) => ({ sharp: typeof f.sensor === 'string' && f.sensor.startsWith('VIIRS'), hidden: f.held_out === true && !revealed }));
+  }, [activeRun, revealed]);
+  // The pointer near the screen's foot shows the strip, while the guide speaks on Estimate or Test.
+  useEffect(() => {
+    if (!inWorkspace) return;
+    const onMove = (e: PointerEvent) => {
+      const near = e.clientY > window.innerHeight - 64;
+      setNearFoot((was) => (was === near ? was : near));
+    };
+    window.addEventListener('pointermove', onMove);
+    return () => window.removeEventListener('pointermove', onMove);
+  }, [inWorkspace]);
 
   // Playing the passes: each pass holds about a second and a half, then the next one; after the run's last, its first.
   const passCount = Math.max(1, (activeRun as unknown as { observer_passes?: { frames?: unknown[] } } | null)?.observer_passes?.frames?.length ?? 24);
@@ -1162,7 +1183,7 @@ export function App() {
           ? { detections: trackRevealed.reduce((a, r) => a + r.pixels, 0), passes: trackRevealed.length }
           : null,
     },
-    time: { pass: activeEpoch, powerMw: currentMw },
+    time: { pass: activeEpoch, powerMw: currentMw, toggleStrip: () => setStripOpen((o) => !o) },
     round: {
       state: round,
       start: rnd.start,
@@ -1386,6 +1407,17 @@ export function App() {
             {modelScene && <WorldModelScene />}
             {step === 'agent' && <AgentBeat guideSpeaks={guide.step === 'play'} />}
             {step === 'look' && <PlayScene />}
+            {(guide.step === 'estimate' || guide.step === 'test') && (
+              <PassStrip
+                passes={stripPasses}
+                current={activeEpoch}
+                visible={playing || nearFoot || stripOpen}
+                onPick={(i) => {
+                  setPlaying(false);
+                  setTimeProgress(i);
+                }}
+              />
+            )}
             {guide.step && (
               <>
                 <div className="guide-scrim" aria-hidden="true" />

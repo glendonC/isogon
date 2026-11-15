@@ -19,6 +19,7 @@ export function ClearPin({
   label,
   focusable = false,
   onFocusChange,
+  onPick,
   children,
 }: {
   at: { x: number; y: number };
@@ -28,6 +29,8 @@ export function ClearPin({
   label: string;
   focusable?: boolean;
   onFocusChange?: (focused: boolean) => void;
+  /** The words picked with the pointer (Enter on them stays the guide's, as the prompt beside the fire says). */
+  onPick?: () => void;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -55,6 +58,8 @@ export function ClearPin({
         aria-label={label}
         onFocus={onFocusChange ? () => onFocusChange(true) : undefined}
         onBlur={onFocusChange ? () => onFocusChange(false) : undefined}
+        onClick={onPick}
+        data-pick={onPick ? 'true' : undefined}
       >
         {children}
       </div>

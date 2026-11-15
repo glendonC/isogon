@@ -468,3 +468,77 @@
   pointer-events: auto;
   text-shadow: 0 1px 6px rgba(8, 11, 17, 0.9);
 }
+
+/* The strip of passes, on demand (guide/PassStrip.tsx): thin ticks along the foot of the screen, under the guide's
+   actions; taller for the sharp satellite, dashed where hidden, the pass on show in full ink. */
+.guide-passes {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: 6px;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  width: min(860px, calc(100vw - 2 * var(--sys-gutter)));
+  height: 22px;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms var(--sys-ease);
+}
+
+.guide-passes[data-on='true'] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.guide-passes__tick {
+  flex: 1 1 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.guide-passes__tick i {
+  display: block;
+  width: 0;
+  height: 8px;
+  border-left: 1px solid var(--sys-ink-3);
+}
+
+.guide-passes__tick[data-sharp='true'] i {
+  height: 14px;
+}
+
+.guide-passes__tick[data-hidden='true'] i {
+  border-left-style: dashed;
+}
+
+.guide-passes__tick[data-current='true'] i {
+  height: 18px;
+  border-left: 2px solid var(--sys-ink);
+}
+
+.guide-passes__tick:hover i {
+  border-left-color: var(--sys-ink);
+}
+
+.guide-passes__tick:focus-visible {
+  outline: 1px solid var(--sys-focus);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-passes {
+    transition: none;
+  }
+}
+
+.guide-clear__plate[data-pick='true'] {
+  cursor: pointer;
+}
