@@ -32,6 +32,44 @@ def _row(lat: float, lon: float, when: dt.datetime, satellite: str, instrument: 
             "scan": "1.0", "track": "1.0", "daynight": "D", "confidence": "80", "type": typ, "version": "TEST"}
 
 
+class BoxCloudTests(unittest.TestCase):
+    """The cloud share over the box shown beside each pass: read from the store's cloud files, display only."""
+
+    def test_each_pass_reads_its_satellite_s_share_or_says_why_it_is_not_measured(self) -> None:
+        from backend.firms.pass_timeline import box_cloud, cloud_store_key
+
+        with tempfile.TemporaryDirectory() as tmp:
+            day = Path(tmp) / "cloud" / "plumas_ca" / "2012-08-10"
+            day.mkdir(parents=True)
+            shares = {"MODIS_TERRA": {"share": 0.006813, "pixel_km": 1.71}, "MODIS_AQUA": {"share": 0.002125},
+                      "VIIRS_SNPP": {"share": 0.009252}, "VIIRS_NOAA20": {"share": None}}
+            (day / "day.json").write_text(json.dumps({"box": list(PACK), "platforms": shares, "retrieved_utc": "x"}))
+            other = Path(tmp) / "cloud" / "plumas_ca" / "2012-08-11"
+            other.mkdir()
+            (other / "day.json").write_text(json.dumps({"box": [0, 0, 1, 1], "platforms": shares}))
+            p = lambda plat, t, dn="DAY": {"platform": plat, "time_mid": t, "day_night": dn}  # noqa: E731
+            got = box_cloud("plumas_ca", [
+                p("MODIS_TERRA", "2012-08-10T18:40:00Z"),                 # a share
+                p("VIIRS_NOAA20", "2012-08-10T21:00:00Z"),                # the layer has no valid pixel
+                p("VIIRS_SNPP", "2012-08-10T10:00:00Z", "NIGHT"),         # no night file
+                p("VIIRS_NOAA21", "2012-08-10T20:00:00Z"),                # no layer at all
+                p("MODIS_AQUA", "2012-08-11T21:00:00Z"),                  # a file of another box
+                p("MODIS_TERRA", "2021-07-20T18:40:00Z"),                 # a closed window: never read
+            ], Path(tmp))
+            self.assertEqual((got[0]["share"], got[0]["layer"], got[0]["when"], got[0]["day"]),
+                             (0.0068, "MODIS_Terra_Cloud_Fraction_Day", "day", "2012-08-10"))
+            self.assertTrue(all(g["share"] is None and g["state"] == "not measured" for g in got[1:]))
+            self.assertIn("no valid pixel", got[1]["why"])
+            self.assertIn("no cloud share", got[2]["why"])
+            self.assertIn("no cloud layer", got[3]["why"])
+            self.assertIn("no cloud share", got[4]["why"])
+            self.assertIn("recorded test fire", got[5]["why"])
+            key = cloud_store_key("plumas_ca", Path(tmp))
+            (Path(tmp) / "cloud" / "plumas_ca" / "2012-08-12").mkdir()
+            self.assertNotEqual(cloud_store_key("plumas_ca", Path(tmp)), key)
+            self.assertEqual(cloud_store_key("lytton_bc", Path(tmp)), ())
+
+
 class FixtureTimelineTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -93,6 +131,11 @@ class FixtureTimelineTests(unittest.TestCase):
         self.assertEqual(bare, held)
         with self.assertRaises(ValueError):
             self._timeline(hidden="SAR")
+        # the cloud of a hidden pass goes with its detections; on this closed window none is read for any pass
+        for p in held["passes"]:
+            want = "withheld" if p["platform"].startswith("VIIRS_") else "not measured"
+            self.assertEqual((p["box_cloud"]["share"], p["box_cloud"]["state"]), (None, want))
+        self.assertIn("display only", held["box_cloud_what"].replace("For display only", "display only"))
 
     def test_the_context_box_and_a_platform_filter(self) -> None:
         tl = self._timeline(box="context")

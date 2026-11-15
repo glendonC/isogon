@@ -12,6 +12,11 @@ With `hidden` (an instrument family, "VIIRS") the list is the one a held-out win
 dropped before any matching, so its passes carry the pass itself (time, coverage, granules) and no FIRMS field, its
 summary counts passes only, and no unmatched overpass of it is listed. The full list, without `hidden`, belongs to
 the reveal.
+
+Each pass also carries `box_cloud`: the share of the region's box under cloud on that pass's UTC day and half-orbit,
+from that satellite's own daily cloud layer in NASA's Global Imagery Browse Services, as the world store holds it
+(`cloud/<region>/<day>/<day|night>.json`, written by `backend.server_gibs sync`), or why it is not measured. It is for
+display only: no run, score, round or test reads it. A hidden pass's is withheld with its FIRMS fields.
 """
 
 from __future__ import annotations
@@ -39,6 +44,14 @@ KNOWN_GAPS: tuple[dict[str, str], ...] = (
     {"platform": "MODIS_AQUA", "from": "2022-04-01", "until": "2022-04-16",
      "what": "MYD14 061 has no granule over the hero boxes, and FIRMS has no Aqua row either (an outage)"},
 )
+BOX_CLOUD_WHAT: str = (
+    "box_cloud: the share of the region's box (the pack box) under cloud on the pass's UTC day and half-orbit, from "
+    "that satellite's own daily cloud layer in NASA's Global Imagery Browse Services (MODIS Cloud Fraction for Terra "
+    "and Aqua, one minus VIIRS Clear Sky Confidence for Suomi NPP and NOAA-20), as the world store holds it; "
+    "\"not measured\" with the reason where the store holds none for that day or the layer has no valid pixel over "
+    "the box. A daily composite, not the pass's own view. For display only: no run, score, round or test reads it."
+)
+NOT_MEASURED: str = "not measured"
 LIMITS: str = (
     "A pass without a FIRMS detection looked at the box and flagged nothing, or the box was under cloud: MODIS cloud "
     "cover here is the mean over the whole granule (about 2,300 by 2,000 km), not over the box, and the VIIRS fire "
@@ -66,6 +79,81 @@ def _ts(s: str) -> float:
     return _dt.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
 
 
+def cloud_store() -> Path:
+    """The world store's folder of NASA's daily pictures and cloud shares (`backend.server_gibs.gibs_dir`)."""
+    from backend.server_gibs import gibs_dir
+
+    return gibs_dir()
+
+
+def cloud_store_key(region_id: str, store: Path | None = None) -> tuple[Any, ...]:
+    """What a cached pass list's cloud shares depend on: the region's folder of cloud files and each of its days, by
+    their modification times, so a cached list is made again once the store's sync adds a day."""
+    root = (Path(store) if store is not None else cloud_store()) / "cloud" / region_id
+    try:
+        return (root.stat().st_mtime_ns, tuple(sorted((d.name, d.stat().st_mtime_ns) for d in root.iterdir() if d.is_dir())))
+    except OSError:
+        return ()
+
+
+def box_cloud(region_id: str, passes: list[dict[str, Any]], store: Path | None = None) -> list[dict[str, Any]]:
+    """For each pass, the cloud share over the region's pack box on its UTC day and half-orbit from the store's cloud
+    files, or why it is not measured. Reads no tile and fetches nothing; a recorded test fire's window is never read."""
+    import json
+
+    from backend.firms.gibs_cloud import CLOUD_LAYERS, pass_when
+    from backend.model.training import closed_for
+    from backend.terrain.live_region import PRESET_BY_ID
+
+    root = Path(store) if store is not None else cloud_store()
+    b = PRESET_BY_ID[region_id].bbox
+    pack = (round(float(b.west), 6), round(float(b.south), 6), round(float(b.east), 6), round(float(b.north), 6))
+    lon_c, lat_c = (pack[0] + pack[2]) / 2.0, (pack[1] + pack[3]) / 2.0
+    files: dict[tuple[str, str], Any] = {}
+
+    def none(why: str) -> dict[str, Any]:
+        return {"share": None, "state": NOT_MEASURED, "why": why}
+
+    out: list[dict[str, Any]] = []
+    for p in passes:
+        day = str(p["time_mid"])[:10]
+        try:
+            when = pass_when(p["day_night"], p["time_mid"], lon_c, lat_c)
+        except ValueError:
+            out.append(none(f"the pass's day or night is not known ({p['day_night']})"))
+            continue
+        spec = CLOUD_LAYERS.get((p["platform"], when))
+        if spec is None:
+            out.append(none(f"NASA's imagery services hold no cloud layer for {p['platform']}"))
+            continue
+        if (day, when) not in files:
+            t0 = _utc(day).timestamp()
+            doc: Any = "closed" if closed_for(pack, t0, t0 + 86400.0) is not None else None
+            path = root / "cloud" / region_id / day / f"{when}.json"
+            if doc is None and path.is_file():
+                try:
+                    doc = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    doc = None
+            if isinstance(doc, dict) and [round(float(v), 6) for v in doc.get("box") or []] != list(pack):
+                doc = "other box"
+            files[(day, when)] = doc
+        doc = files[(day, when)]
+        if doc == "closed":
+            out.append(none("no cloud is read on a recorded test fire's window"))
+            continue
+        if not isinstance(doc, dict):
+            out.append(none(f"the store holds no cloud share of this box for {day} ({when})"))
+            continue
+        res = (doc.get("platforms") or {}).get(p["platform"]) or {}
+        if res.get("share") is None:
+            out.append(none(f"{spec.layer} has no valid pixel over the box on {day}"))
+            continue
+        out.append({"share": round(float(res["share"]), 4), "layer": spec.layer, "day": day, "when": when,
+                    "pixel_km": res.get("pixel_km"), "retrieved_utc": res.get("retrieved_utc") or doc.get("retrieved_utc")})
+    return out
+
+
 def pass_timeline(
     region_id: str,
     start: str,
@@ -75,6 +163,7 @@ def pass_timeline(
     read_firms: Callable[..., list[dict[str, str]]] = _read_firms,
     cache_dir: Path = CMR_CACHE_DIR,
     hidden: str | None = None,
+    cloud_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Every pass over the region's `box` ("pack": the region's terrain pack box, the blind test's box; "context")
     in [start, end) UTC. Raises KeyError for an unknown region, ValueError for a bad window, CmrCacheMissing or
@@ -139,8 +228,9 @@ def pass_timeline(
     def is_hidden(platform: str) -> bool:
         return hidden is not None and family(platform) == hidden
 
+    clouds = box_cloud(region_id, passes, cloud_dir)
     out_passes = []
-    for p in passes:
+    for p, cloud in zip(passes, clouds):
         a, z = _ts(p["time_start"]) - MATCH_TOL_S, _ts(p["time_end"]) + MATCH_TOL_S
         hits = [f for f in by_plat.get(p["platform"], []) if a <= f["time_s"] <= z]
         matched.update(id(f) for f in hits)
@@ -153,6 +243,7 @@ def pass_timeline(
         }
         if is_hidden(p["platform"]):
             firms_fields = {"firms_withheld": True}
+            cloud = {"share": None, "state": "withheld", "why": "a hidden pass's cloud is shown with its detections"}
         out_passes.append({
             "platform": p["platform"],
             "time_start": p["time_start"],
@@ -163,6 +254,7 @@ def pass_timeline(
             "box_inside": p["box_inside"],
             "cloud_cover_pct": p["cloud_cover_pct"],
             "granules": p["granules"],
+            "box_cloud": cloud,
             **firms_fields,
         })
     in_window = [f for f in firms if t0.timestamp() <= f["time_s"] < t1.timestamp()]
@@ -207,5 +299,6 @@ def pass_timeline(
         "collections": {k: {"concept_id": v["concept_id"], "short_name": v["short_name"], "version": v["version"]}
                         for k, v in COLLECTIONS.items() if want is None or k in want},
         "limits": LIMITS,
+        "box_cloud_what": BOX_CLOUD_WHAT,
         "provenance": "NASA CMR granule search (keyless metadata, cached under data/cache/cmr) and NASA FIRMS rows",
     }

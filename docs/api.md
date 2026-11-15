@@ -873,7 +873,7 @@ Every satellite pass over a region's box in a window, fire or no fire, from the 
 | `start`, `end` | required | UTC dates or date-times. The window is `[start, end)`, at most 366 days. |
 | `box` | `pack` | `pack`: the region box, the box of the blind test. `context`: the context box, five times the span. |
 | `platforms` | all | Comma separated: `MODIS_TERRA`, `MODIS_AQUA`, `VIIRS_SNPP`, `VIIRS_NOAA20`, `VIIRS_NOAA21`. |
-| `hidden` | none | `VIIRS`: the list a held-out window may show. The VIIRS rows are dropped before matching, so each VIIRS pass carries its time, coverage and granules and `"firms_withheld": true` in place of every `firms_` field, its summary counts passes only, and no unmatched VIIRS overpass is listed. The answer names what was withheld. The full list, without `hidden`, belongs to the reveal. |
+| `hidden` | none | `VIIRS`: the list a held-out window may show. The VIIRS rows are dropped before matching, so each VIIRS pass carries its time, coverage and granules and `"firms_withheld": true` in place of every `firms_` field (and its `box_cloud` is withheld too), its summary counts passes only, and no unmatched VIIRS overpass is listed. The answer names what was withheld. The full list, without `hidden`, belongs to the reveal. |
 
 ```json
 {
@@ -895,6 +895,7 @@ Every satellite pass over a region's box in a window, fire or no fire, from the 
       "box_inside": true,
       "cloud_cover_pct": 21.0,
       "granules": ["G2278759782-LPCLOUD"],
+      "box_cloud": {"share": null, "state": "not measured", "why": "no cloud is read on a recorded test fire's window"},
       "firms_detection_in_box": true,
       "firms_pixels_in_box": 131,
       "firms_static_pixels_in_box": 0,
@@ -908,6 +909,7 @@ Every satellite pass over a region's box in a window, fire or no fire, from the 
   "matching": "a pass has a FIRMS detection when a FIRMS overpass of the same platform (...) with a pixel in the box lies within 5 minutes of the pass's granule span",
   "collections": {"MODIS_TERRA": {"concept_id": "C2271754179-LPCLOUD", "short_name": "MOD14", "version": "061"}},
   "limits": "...",
+  "box_cloud_what": "box_cloud: the share of the region's box (the pack box) under cloud on the pass's UTC day and half-orbit, ...",
   "provenance": "NASA CMR granule search (keyless metadata, cached under data/cache/cmr) and NASA FIRMS rows"
 }
 ```
@@ -916,9 +918,10 @@ Shortened: this window has 10 passes; `summary` and `collections` have one entry
 
 - `box_share` is the share of the box inside the swath; `box_inside` is true when the whole box is.
 - `cloud_cover_pct` is the mean over a whole MODIS granule, not over the box, and is `null` for VIIRS. A pass without a detection looked at the box and flagged nothing, or the box was under cloud.
+- `box_cloud` is the share of the region's box under cloud on the pass's UTC day and half-orbit (day or night), from that satellite's own daily cloud layer in NASA's Global Imagery Browse Services as the world store holds it (`GET /api/gibs/cloud` reads the same files): `share` (0 clear, 1 overcast), `layer`, `day`, `when`, `pixel_km`, `retrieved_utc`. Where the store holds no share for that day, the layer has no valid pixel over the box, the satellite has no cloud layer (NOAA-21) or the window is a recorded test fire's, `share` is `null`, `state` is `"not measured"` and `why` says which. It is a daily composite, not the pass's own view, and for display only: no run, score, round or test reads it. On Feather River's featured days, 10 August 2012: Terra 0.0068, Aqua 0.0021, Suomi NPP 0.0093.
 - `firms_overpasses_without_a_pass` lists FIRMS overpasses with a detection in the box that no pass matches (`platform`, `time_utc`, `pixels`), and `known_gaps` names the gaps of the NASA collections that the window meets ([data.md](data.md)).
 
-The server keeps the 32 most recent answers while the cached rows and pass files are unchanged.
+The server keeps the 32 most recent answers while the cached rows, the pass files and the region's cloud files in the store are unchanged.
 
 Errors: `400` without `region_id`, `start` or `end`, for a date that cannot be read, when `end` is not after `start`, when the window is over 366 days, or for an unknown `box` or platform; `404` for a region with no pass schedule, and when the pass list or the FIRMS rows of the window are not cached.
 

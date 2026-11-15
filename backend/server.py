@@ -60,7 +60,7 @@ from backend.firms.archive import COUNTRY_FETCH as firms_country_fetch  # noqa: 
 from backend.firms.archive import cache_summary as firms_cache_summary  # noqa: E402
 from backend.firms.archive import country_files as firms_country_files  # noqa: E402
 from backend.firms.cmr_passes import CmrCacheMissing, pass_files_digest  # noqa: E402
-from backend.firms.pass_timeline import pass_timeline  # noqa: E402
+from backend.firms.pass_timeline import cloud_store_key, pass_timeline  # noqa: E402
 from backend.firms.box_index import BoxIndex  # noqa: E402
 from backend.firms.current_month import CurrentMonth  # noqa: E402
 from backend.firms.places import load_places, places_payload  # noqa: E402
@@ -542,11 +542,12 @@ class IsogonDataStore:
 
     def pass_timeline_bytes(self, region_id: str, start: str, end: str, box: str, platforms: list[str] | None,
                             hidden: str | None = None) -> bytes:
-        """`pass_timeline` as JSON bytes, kept for the 32 latest queries while the FIRMS row count is unchanged."""
+        """`pass_timeline` as JSON bytes, kept for the 32 latest queries while the FIRMS row count, the pass files and the
+        store's cloud files of the region are unchanged."""
         if region_id not in REGION_COUNTRY:
             raise KeyError(f"no pass schedule for region '{region_id}'")
         key = (region_id, start, end, box, tuple(platforms) if platforms else None, hidden, self.region_rows_key(region_id),
-               pass_files_digest(region_id))
+               pass_files_digest(region_id), cloud_store_key(region_id))
         with self._lock:
             hit = self._pass_timelines.get(key)
             if hit is not None:
