@@ -384,9 +384,6 @@ const SMOKE_DRIFT_UV: readonly [number, number] = [0.64, 0.76];
 const LIGHT_FADE_OUT_SECONDS = 0.7;
 const LIGHT_FADE_IN_SECONDS = 1.2;
 
-/** Hours a burning cell stays lit when the run's payload does not say (the model's prior). */
-const DEFAULT_RESIDENCE_HOURS = 12;
-
 /** A cell counts as part of the estimate's fire, for the page's label, from this probability (the dotted line's level). */
 const FIRE_ANCHOR_PROBABILITY = 0.02;
 
@@ -3070,8 +3067,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       const targetCutawayMix = effectiveMode === 'cutaway' ? 1.0 : 0.0;
       const targetReconMix = effectiveMode === 'reconstruction' ? 1.0 : 0.0;
       const targetObsMix = effectiveMode === 'observer' ? 1.0 : 0.0;
+      // A real run draws no smoke: it rose where the detections were, but drifted one way for
+      // every place and spread as drawn, since no run serves a wind; seen by day it read as
+      // measured. A simulated run keeps it.
       const targetPlumeOpacity =
-        effectiveMode === 'world' || effectiveMode === 'earth'
+        effectiveMode === 'world' || effectiveMode === 'earth' || nextBundle.observerDataset.dataSource === 'firms'
           ? 0.0
           : effectiveMode === 'observer'
             ? 0.45
@@ -3222,7 +3222,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             footprintList.length === 0 &&
             rawPasses.length > 0 &&
             rawPasses.every((sp) => sp.revealed || passIsHidden(sp, p.holdoutViirs));
-          if (hiddenNow) {
+          // (only when the run gives the time a burning cell stays lit: the fade is then the run's
+          // own; without it nothing says how fast the earlier pass's fire should fade)
+          if (hiddenNow && nextBundle.residenceHours !== undefined) {
             const nowMs = Date.parse(rawPasses[0]?.timeUtc ?? '');
             for (let f = epochIdx - 1; f >= 0 && afterglowList.length === 0; f--) {
               for (const sp of obsFrames[f] ?? []) {
@@ -3230,7 +3232,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
                 for (const fp of sp.footprints) afterglowList.push(fp);
                 const thenMs = Date.parse(sp.timeUtc ?? '');
                 const hours = Number.isFinite(nowMs) && Number.isFinite(thenMs) ? Math.max(0, (nowMs - thenMs) / 3600000) : 0;
-                uAfterglow.value = Math.exp(-hours / (nextBundle.residenceHours ?? DEFAULT_RESIDENCE_HOURS));
+                uAfterglow.value = Math.exp(-hours / (nextBundle.residenceHours ?? 1));
                 lastSeenNow = { index: f, sensor: sp.sensorLabel, timeUtc: sp.timeUtc ?? '', hoursBefore: hours };
               }
             }
