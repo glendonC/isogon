@@ -134,14 +134,89 @@ async function recorded<T>(key: string, signal?: AbortSignal): Promise<T> {
   return body as T;
 }
 
-/** GET a JSON route. */
-export async function getJson<T>(path: string, query?: Query, init?: { signal?: AbortSignal }): Promise<T> {
-  if (TRANSPORT === 'recorded') return recorded<T>(requestKey('GET', path, query), init?.signal);
+interface InflightGet {
+  controller: AbortController;
+  active: number;
+  promise: Promise<unknown>;
+}
+
+const inflightGets = new Map<string, InflightGet>();
+
+function abortError(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
+}
+
+async function performGetJson<T>(path: string, query?: Query, signal?: AbortSignal): Promise<T> {
+  if (TRANSPORT === 'recorded') return recorded<T>(requestKey('GET', path, query), signal);
   const q = sortedQuery(query);
-  const resp = await fetch(`${API_BASE}${path}${q ? `?${q}` : ''}`, { signal: init?.signal });
+  const resp = await fetch(`${API_BASE}${path}${q ? `?${q}` : ''}`, { signal });
   const body = await readBody(resp);
   if (!resp.ok) throw new HttpError(resp.status, body);
   return body as T;
+}
+
+/** GET a JSON route, sharing one in-flight request across concurrent callers for the same key. */
+export function getJson<T>(path: string, query?: Query, init?: { signal?: AbortSignal }): Promise<T> {
+  const callerSignal = init?.signal;
+  if (callerSignal?.aborted) {
+    return Promise.reject(abortError(callerSignal));
+  }
+
+  const key = requestKey('GET', path, query);
+  let entry = inflightGets.get(key);
+  if (!entry) {
+    const controller = new AbortController();
+    const shared: InflightGet = {
+      controller,
+      active: 0,
+      promise: Promise.resolve(),
+    };
+    shared.promise = performGetJson<unknown>(path, query, controller.signal).finally(() => {
+      if (inflightGets.get(key) === shared) {
+        inflightGets.delete(key);
+      }
+    });
+    inflightGets.set(key, shared);
+    entry = shared;
+  }
+
+  const target = entry;
+  target.active += 1;
+
+  if (!callerSignal) {
+    return target.promise as Promise<T>;
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      target.active = Math.max(0, target.active - 1);
+      if (target.active === 0) {
+        if (inflightGets.get(key) === target) {
+          inflightGets.delete(key);
+        }
+        target.controller.abort();
+      }
+      reject(abortError(callerSignal));
+    };
+    callerSignal.addEventListener('abort', onAbort, { once: true });
+    (target.promise as Promise<T>).then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        callerSignal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (err) => {
+        if (settled) return;
+        settled = true;
+        callerSignal.removeEventListener('abort', onAbort);
+        reject(err);
+      },
+    );
+  });
 }
 
 /** POST a JSON body to a route. */
