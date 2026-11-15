@@ -67,7 +67,6 @@
 
 .guide-trail__word:focus-visible,
 .guide-trail__where:focus-visible,
-.guide-act:focus-visible,
 .guide-prompt:focus-visible {
   outline: 1px solid var(--sys-focus);
   outline-offset: 3px;
@@ -85,53 +84,88 @@
   pointer-events: none;
 }
 
+/* The guide in the identity's places (guide/GuideStrip.tsx): at the bottom left the screen's title and one line, at the
+   bottom right at most two controls (identity/Control.tsx), both above the story line along the bottom edge. */
 .guide-strip {
   position: absolute;
   z-index: 6;
-  left: 50%;
-  bottom: 28px;
-  display: grid;
-  gap: var(--sys-s3);
-  justify-items: center;
-  width: min(880px, calc(100vw - 2 * var(--sys-gutter)));
-  transform: translateX(-50%);
-  text-align: center;
+  left: 40px;
+  right: 40px;
+  bottom: 56px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  pointer-events: none;
+  font-family: var(--id-font, var(--sys-font));
+  color: var(--id-ink, var(--sys-ink));
+}
+
+.guide-say,
+.guide-acts {
   pointer-events: auto;
 }
 
-.guide-strip__line {
+.guide-say {
+  max-width: 720px;
+  text-shadow: 0 1px 12px rgba(8, 11, 17, 0.9);
+}
+
+.guide-say__title {
   margin: 0;
-  min-height: 52px;
-  font: var(--sys-weight) 17px / 26px var(--sys-font);
-  color: var(--sys-ink);
-  text-shadow: 0 1px 8px rgba(8, 11, 17, 0.9);
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
 }
 
-.guide-strip__acts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sys-s3) var(--sys-s4);
+.guide-say__line,
+.guide-say__more {
+  margin: 14px 0 0;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--id-ink-2, var(--sys-ink-2));
 }
 
-.guide-act {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sys-s2);
-  padding: 6px 10px;
+.guide-say__title + .guide-say__line {
+  margin-top: 12px;
+}
+
+.guide-say__more {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.guide-say__toggle {
+  margin: 8px 0 0;
+  padding: 0;
   border: 0;
-  border-radius: 0;
-  background: rgba(8, 11, 17, 0.45);
-  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
-  color: var(--sys-ink-2);
-  white-space: nowrap;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--id-ink-3, var(--sys-ink-3));
+  text-decoration: underline;
+  text-underline-offset: 3px;
   cursor: pointer;
-  transition:
-    color var(--sys-fast) var(--sys-ease),
-    background-color var(--sys-fast) var(--sys-ease);
 }
 
+.guide-say__toggle:hover {
+  color: var(--id-ink, var(--sys-ink));
+}
+
+.guide-say__toggle:focus-visible {
+  outline: 2px solid var(--id-focus, var(--sys-focus));
+  outline-offset: 3px;
+}
+
+.guide-acts {
+  display: flex;
+  flex: none;
+  gap: 12px;
+}
+
+/* The key on a prompt at a thing (guide/StageWords.tsx). */
 .guide-key {
   display: inline-flex;
   align-items: center;
@@ -145,46 +179,6 @@
   font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
   color: var(--sys-ink);
   flex-shrink: 0;
-  transition:
-    background-color var(--sys-fast) var(--sys-ease),
-    border-color var(--sys-fast) var(--sys-ease),
-    color var(--sys-fast) var(--sys-ease);
-}
-
-.guide-act:hover {
-  color: var(--sys-ink);
-  background: rgba(243, 244, 246, 0.08);
-}
-
-.guide-act:hover .guide-key {
-  background: rgba(243, 244, 246, 0.16);
-  border-color: var(--sys-ink);
-}
-
-/* Primary next-step directive: solid inverted keycap + crisp left directive bar + strong verb. */
-.guide-act--next {
-  padding: 6px 14px 6px 10px;
-  border-left: 2px solid var(--sys-ink);
-  background: rgba(243, 244, 246, 0.08);
-  color: var(--sys-ink);
-  font-weight: var(--sys-weight-strong);
-}
-
-.guide-act--next .guide-key {
-  background: var(--sys-ink);
-  border-color: var(--sys-ink);
-  color: var(--sys-night);
-  font-weight: var(--sys-weight-strong);
-}
-
-.guide-act--next:hover {
-  background: rgba(243, 244, 246, 0.15);
-}
-
-.guide-act--next:hover .guide-key {
-  background: var(--sys-ink);
-  border-color: var(--sys-ink);
-  color: var(--sys-night);
 }
 
 /* A label on a thing of the stage, joined by the scene's leader; and a prompt beside the thing's extent. */
@@ -640,35 +634,6 @@
   }
 }
 
-/* Where the question field stands at the bottom right, the guide's words keep clear of it on both sides. */
-@media (min-width: 1181px) {
-  .guide-strip {
-    width: min(880px, calc(100vw - 2 * (var(--sys-gutter) + 260px + var(--sys-s4))));
-  }
-}
-
-/* The day's photograph: the guide's fourth action on Estimate and Test, quiet at the end of the row. */
-.guide-act--quiet {
-  opacity: 0.8;
-  gap: 6px;
-  padding: 4px 6px;
-  font-size: var(--sys-size-fine);
-}
-
-.guide-act--quiet .guide-key {
-  height: 18px;
-  min-width: 18px;
-}
-
-.guide-strip__acts--quiet {
-  margin-top: calc(var(--sys-s2) - var(--sys-s3));
-  gap: var(--sys-s2);
-}
-
-.guide-act--quiet:hover,
-.guide-act--quiet:focus-visible {
-  opacity: 1;
-}
 
 /* Search when no place with a real fire record matches what was typed. */
 .iso-finder__none {
@@ -679,40 +644,32 @@
   line-height: 21px;
 }
 
-/* A phone: the guide keeps to the lower part, so the fire has the middle. The sentence a step smaller, the actions
-   closer, no keycaps (a phone has no keys; the next action keeps its bar), the quiet ones in a tight row, and the
-   strip clear of the imagery credit under it. */
+/* A phone: the title and its line above the controls, which take the width. */
 @media (max-width: 600px) {
   .guide-strip {
-    bottom: 40px;
-    gap: var(--sys-s2);
+    left: 16px;
+    right: 16px;
+    bottom: 48px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
 
-  .guide-strip__line {
-    min-height: 0;
+  .guide-say__title {
+    font-size: 24px;
+  }
+
+  .guide-say__line {
+    margin-top: 8px;
     font-size: 15px;
     line-height: 21px;
   }
 
-  .guide-strip__acts {
-    gap: 6px 10px;
+  .guide-acts {
+    flex-wrap: wrap;
   }
 
-  .guide-act {
-    padding: 6px 8px;
-  }
-
-  .guide-strip__acts .guide-key,
   .guide-prompt .guide-key {
     display: none;
-  }
-
-  .guide-strip__acts--quiet {
-    margin-top: -2px;
-    gap: 2px 10px;
-  }
-
-  .guide-act--quiet {
-    padding: 2px 4px;
   }
 }

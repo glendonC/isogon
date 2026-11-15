@@ -1,66 +1,68 @@
-import { Fragment } from 'react';
+import { useEffect, useState } from 'react';
+import { Control } from '../identity/Control';
 import { Results, type ResultRow } from './Results';
 import type { ScriptAction } from './script';
 import '../styles/guide.css';
 
+/** The page's own words for the toggle, until the script has them. */
+const MORE = 'Read more';
+const LESS = 'Less';
+
 /**
- * The guide at the bottom: the state's standing sentences, shown together and left in place (there is no voice, so
- * the reader sets the pace), and at most three directives, the next step first and strong with its cut-out keycap.
- * At a round's end the results rows stand above the sentences, as part of what the guide says.
+ * The guide in the identity's places: at the bottom left the screen's title and one line (the rest of what the state
+ * says one press away, never dropped), at the bottom right at most two controls, the next step first. Every other
+ * action keeps its key. At a round's end the results rows stand above the title.
  */
 export function GuideStrip({
+  title = null,
   lines,
   actions,
   onAction,
   results = null,
 }: {
+  title?: string | null;
   lines: string[];
   actions: ScriptAction[];
   onAction: (command: string) => void;
   results?: { line: string; rows: ResultRow[] } | null;
 }) {
-  const main = actions.filter((a, n) => n === 0 || !a.quiet);
-  const quiet = actions.filter((a, n) => n > 0 && a.quiet);
+  const [first, ...rest] = lines;
+  const [more, setMore] = useState(false);
+  const said = lines.join(' ');
+  useEffect(() => setMore(false), [said]);
+  // The next step, and the first action after it that is not quiet: no more than two stand.
+  const shown = actions.filter((a, n) => n === 0 || !a.quiet).slice(0, 2);
   return (
     <div className="guide-strip" role="region" aria-label="Guide">
-      {results && <Results line={results.line} rows={results.rows} />}
-      {/* Each standing sentence in a span of its own (the film presentation keeps the first); read as one line. */}
-      <p className="guide-strip__line" aria-live="polite">
-        {lines.map((line, n) => (
-          <Fragment key={n}>
-            {n > 0 && ' '}
-            <span className="guide-strip__sentence">{line}</span>
-          </Fragment>
-        ))}
-      </p>
-      {main.length > 0 && (
-        <div className="guide-strip__acts">
-          {main.map((a, n) => (
-            <Act key={a.command + a.label} a={a} next={n === 0} onAction={onAction} />
-          ))}
-        </div>
-      )}
-      {/* The quiet actions in a row of their own under the step's, smaller. */}
-      {quiet.length > 0 && (
-        <div className="guide-strip__acts guide-strip__acts--quiet">
-          {quiet.map((a) => (
-            <Act key={a.command + a.label} a={a} next={false} onAction={onAction} />
+      <div className="guide-say">
+        {results && <Results line={results.line} rows={results.rows} />}
+        {title && <h2 className="guide-say__title">{title}</h2>}
+        {first && (
+          <p className="guide-say__line" aria-live="polite">
+            {first}
+          </p>
+        )}
+        {rest.length > 0 && more && <p className="guide-say__more">{rest.join(' ')}</p>}
+        {rest.length > 0 && (
+          <button type="button" className="guide-say__toggle" aria-expanded={more} onClick={() => setMore((m) => !m)}>
+            {more ? LESS : MORE}
+          </button>
+        )}
+      </div>
+      {shown.length > 0 && (
+        <div className="guide-acts">
+          {[...shown].reverse().map((a) => (
+            <Control
+              key={a.command + a.label}
+              variant={a === shown[0] ? 'primary' : 'secondary'}
+              shortcut={a.key ?? undefined}
+              onClick={() => onAction(a.command)}
+            >
+              {a.label}
+            </Control>
           ))}
         </div>
       )}
     </div>
-  );
-}
-
-function Act({ a, next, onAction }: { a: ScriptAction; next: boolean; onAction: (command: string) => void }) {
-  return (
-    <button
-      type="button"
-      className={next ? 'guide-act guide-act--next' : a.quiet ? 'guide-act guide-act--quiet' : 'guide-act'}
-      onClick={() => onAction(a.command)}
-    >
-      {a.key && <kbd className="guide-key">{a.key}</kbd>}
-      <span className="guide-act__label">{a.label}</span>
-    </button>
   );
 }

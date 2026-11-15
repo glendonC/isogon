@@ -24,7 +24,6 @@ import { type Step } from './components/WorkspaceBar';
 import { Trail, type TrailWord } from './guide/Trail';
 import { GuideStrip } from './guide/GuideStrip';
 import { PassStrip } from './guide/PassStrip';
-import { AskField } from './guide/AskField';
 import { useGuide, type Guide } from './guide/useGuide';
 import { keyMatches, says, stateOf } from './guide/script';
 import { StageBoundary } from './ui/StageBoundary';
@@ -305,7 +304,6 @@ export function App() {
   const runCommandRef = useRef<(command: string) => void>(() => {});
   const marksOpenRef = useRef(false);
   /** The guide's field for asking, for the key that puts the focus in it. */
-  const askRef = useRef<HTMLInputElement | null>(null);
   /** The round of Test world (beats/test-world/useRound.ts), for the callbacks defined before it. */
   const roundRef = useRef<RoundApi | null>(null);
   // The places registry: the default fire, each place's opening start, and the recorded test fires.
@@ -976,8 +974,7 @@ export function App() {
 
       if (e.key === '/') {
         e.preventDefault();
-        if (inWorkspace && guideRef.current?.step && askRef.current) askRef.current.focus();
-        else setAskOpen((prev) => !prev);
+        setAskOpen((prev) => !prev);
         return;
       }
 
@@ -1710,7 +1707,7 @@ export function App() {
             <div className="iso-ws__scrim iso-ws__scrim--bottom" aria-hidden="true" />
 
             <Trail
-              objective={filmMode && guide.film ? guide.film : guide.objective}
+              objective={null}
               current={trailWord}
               context={guide.context}
               onWord={onTrailWord}
@@ -1745,24 +1742,13 @@ export function App() {
                 }}
               />
             )}
-            {guide.step && (
-              <AskField
-                step={guide.step}
-                fields={guide.fields}
-                conds={guide.conds}
-                inputRef={askRef}
-                onAnswer={(a) => {
-                  if (a.lines.length > 0) setSaid({ key: guideKey, lines: a.lines });
-                  if (a.command) runCommand(a.command);
-                }}
-              />
-            )}
             {/* Under a sheet (the scores, every test on record, a reading) the guide steps aside: nothing of it lies under
                 the sheet's scrim; its keys still work. */}
             {guide.step && !(debriefOpen || evidenceOpen || reading !== null || areaOpen) && (
               <>
                 <div className="guide-scrim" aria-hidden="true" />
                 <GuideStrip
+                  title={filmMode && guide.film ? guide.film : guide.objective}
                   lines={filmMode ? [] : said && said.key === guideKey ? said.lines : guide.lines}
                   // In the film only the step's strong action stands, so nothing else competes with the caption.
                   actions={filmMode ? guide.actions.slice(0, 1) : guide.actions}
