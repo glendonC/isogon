@@ -415,6 +415,8 @@ const FILM_ESTIMATE_SECONDS = 9;
 const FILM_PUSH_FROM = 1.22;
 const FILM_PUSH_TO = 0.94;
 const FILM_PLAY_SECONDS = 5;
+// A test hold set again on the estimate of another pass glides there in this many seconds
+const FILM_REAIM_SECONDS = 1.5;
 // The close views aim at the fire's centre; when that lies farther than this from every detection
 // (patches far apart), at its heaviest patch, the patches grouped on a grid of this cell
 const FIRE_CENTRE_EMPTY_KM = 5;
@@ -425,8 +427,10 @@ const FIRE_PATCH_CELL_KM = 2;
 // workspace's lens
 const CLOSE_FRAME_FILL = 0.8;
 const CLOSE_FRAME_MIN = 3.0;
-const CLOSE_FRAME_MAX = 15.0;
+const CLOSE_FRAME_MAX = 22.0;
 const CLOSE_FRAME_SHARE = 0.75;
+// Steeper angles (polar, from the vertical) the close view tries, in order, for an estimate that does not fit
+const CLOSE_FRAME_STEEPER = [1.1, 0.95, 0.8, 0.65];
 const CLOSE_VIEW_FOV = 39.0;
 // The fire of the day around the pass on show (detections given within a day of it), and how near
 // its centre a detection counts as at the centre
@@ -1961,10 +1965,33 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       // On Estimate and Test the close view frames the estimate of the pass on show: the middle of
       // the cells the run declares there, from a distance at which every one of them stands inside
       // the page's frame (the room the guide takes left out), see fitCloseDistance
+      // (the cells the run declares at the pass on show; where it lists none there, the estimate's own
+      // cells on show, as the page's label is anchored on them)
       const declaredNow = preset === 'canyon' ? nextBundle.declared?.byFrame.get(frameNow) : undefined;
-      let cellCorners: number[] | null = null;
+      let cellGrid: { nx: number; ny: number } | null = null;
+      let cellList: Uint32Array | null = null;
       if (declaredNow && declaredNow.length > 0 && nextBundle.declared) {
-        const { nx, ny } = nextBundle.declared;
+        cellGrid = nextBundle.declared;
+        cellList = declaredNow;
+      } else if (preset === 'canyon' && fireAnchorFrom === 'estimate' && fireAnchorPoints.length > 0 && nextBundle.runId) {
+        const belief = beliefStore.get(nextBundle.runId);
+        if (belief) {
+          const { nx, ny } = belief.info;
+          const cells = new Set<number>();
+          for (let i = 0; i < fireAnchorPoints.length; i += 3) {
+            const col = Math.min(nx - 1, Math.max(0, Math.floor(fireAnchorPoints[i] * nx)));
+            const row = Math.min(ny - 1, Math.max(0, Math.floor((1 - fireAnchorPoints[i + 1]) * ny)));
+            cells.add(row * nx + col);
+          }
+          cellGrid = { nx, ny };
+          cellList = Uint32Array.from(cells);
+        }
+      }
+      let cellCorners: number[] | null = null;
+      let allCorners: number[] | null = null;
+      if (cellGrid && cellList && cellList.length > 0) {
+        const declaredNow = cellList;
+        const { nx, ny } = cellGrid;
         // (the largest patches of touching cells that together hold CLOSE_FRAME_SHARE of them: a few
         // cells far off do not pull the camera back)
         const centres = new Float32Array(declaredNow.length * 3);
@@ -1983,13 +2010,15 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         let v0 = 1;
         let v1 = 0;
         cellCorners = [];
+        allCorners = [];
         for (let i = 0; i < declaredNow.length; i++) {
-          if (grouped.patchOf[i] >= keepPatches) continue;
           const cell = declaredNow[i];
           const cu0 = (cell % nx) / nx;
           const cv1 = 1 - Math.floor(cell / nx) / ny;
           const cu1 = cu0 + 1 / nx;
           const cv0 = cv1 - 1 / ny;
+          allCorners.push(cu0, cv0, cu1, cv0, cu0, cv1, cu1, cv1);
+          if (grouped.patchOf[i] >= keepPatches) continue;
           u0 = Math.min(u0, cu0);
           u1 = Math.max(u1, cu1);
           v0 = Math.min(v0, cv0);
@@ -2034,22 +2063,69 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       }
       let target: [number, number, number] = [ax, sampleCpuTerrainY(u, v) + 0.1, az];
       let distance = dest.distance;
-      if (cellCorners) {
+      let polar = dest.polar;
+      if (cellCorners && allCorners) {
         // Seen at a low angle the near cells stand far below the middle of their area on the map:
         // twice over, fit the distance, then aim at the ground under the middle of the cells' extent
-        // on screen
-        for (let round = 0; round < 3; round++) {
-          distance = fitCloseDistance(cellCorners, target, bestAz, dest.polar);
-          if (round === 2) break;
-          target = recentreOnCells(cellCorners, target, bestAz, dest.polar, distance);
+        // on screen. An estimate spread too wide to fit from the close view's angle is seen from
+        // higher, one step at a time, until it fits (so none of it runs under the guide)
+        const start = target;
+        const frameOn = (corners: number[]) => {
+          let pose = { target: start, distance: dest.distance, polar: dest.polar };
+          for (const tryPolar of [dest.polar, ...CLOSE_FRAME_STEEPER].filter((x) => x <= dest.polar)) {
+            let at = start;
+            let fit = { distance: dest.distance, fits: false };
+            for (let round = 0; round < 3; round++) {
+              fit = fitCloseDistance(corners, at, bestAz, tryPolar);
+              if (round === 2) break;
+              at = recentreOnCells(corners, at, bestAz, tryPolar, fit.distance);
+            }
+            pose = { target: at, distance: fit.distance, polar: tryPolar };
+            if (fit.fits) break;
+          }
+          return pose;
+        };
+        let pose = frameOn(cellCorners);
+        // (the cells left out of the main patches may stand off to the side or beyond, where no words
+        // are; one that would fall under the guide brings all of them into the frame)
+        if (allCorners.length > cellCorners.length && cornersBelowFrame(allCorners, pose.target, bestAz, pose.polar, pose.distance)) {
+          pose = frameOn(allCorners);
         }
+        target = pose.target;
+        distance = pose.distance;
+        polar = pose.polar;
       }
       return {
         ...dest,
         azimuth: bestAz,
+        polar,
         distance,
         target,
       };
+    };
+
+    /** Whether any corner stands below the page's frame (into the guide's room), seen from the pose. */
+    const cornersBelowFrame = (
+      cornersUv: number[],
+      target: [number, number, number],
+      azimuth: number,
+      polar: number,
+      distance: number,
+    ): boolean => {
+      const frame = sanitizeSubjectFrame(propsRef.current.workspaceSubjectFrame) ?? { left: 0, top: 0, right: 1, bottom: 1 };
+      const halfH = (frame.bottom - frame.top) * Math.tan(THREE.MathUtils.degToRad(CLOSE_VIEW_FOV / 2));
+      const dir = new THREE.Vector3().setFromSphericalCoords(1, polar, azimuth);
+      const fwd = dir.clone().negate();
+      const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+      const up = new THREE.Vector3().crossVectors(right, fwd);
+      const cam = new THREE.Vector3(target[0], target[1], target[2]).addScaledVector(dir, distance);
+      const rel = new THREE.Vector3();
+      for (let i = 0; i < cornersUv.length; i += 2) {
+        rel.set(worldX(cornersUv[i]), sampleCpuTerrainY(cornersUv[i], cornersUv[i + 1]), worldZ(cornersUv[i + 1])).sub(cam);
+        const zf = rel.dot(fwd);
+        if (zf > 0.05 && rel.dot(up) / zf < -halfH) return true;
+      }
+      return false;
     };
 
     /** The point on the ground (at the target's height) under the middle of the corners' extent on screen. */
@@ -2096,7 +2172,12 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
      * (box uv pairs, on the terrain) stands inside CLOSE_FRAME_FILL of the page's frame, seen from the
      * pose with the target in the frame's middle, as the close views draw it.
      */
-    const fitCloseDistance = (cornersUv: number[], target: [number, number, number], azimuth: number, polar: number): number => {
+    const fitCloseDistance = (
+      cornersUv: number[],
+      target: [number, number, number],
+      azimuth: number,
+      polar: number,
+    ): { distance: number; fits: boolean } => {
       const frame = sanitizeSubjectFrame(propsRef.current.workspaceSubjectFrame) ?? { left: 0, top: 0, right: 1, bottom: 1 };
       const tanHalf = Math.tan(THREE.MathUtils.degToRad(CLOSE_VIEW_FOV / 2));
       const halfW = (frame.right - frame.left) * tanHalf * camera.aspect * CLOSE_FRAME_FILL;
@@ -2124,8 +2205,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         }
         return true;
       };
-      if (fits(CLOSE_FRAME_MIN)) return CLOSE_FRAME_MIN;
-      if (!fits(CLOSE_FRAME_MAX)) return CLOSE_FRAME_MAX;
+      if (fits(CLOSE_FRAME_MIN)) return { distance: CLOSE_FRAME_MIN, fits: true };
+      if (!fits(CLOSE_FRAME_MAX)) return { distance: CLOSE_FRAME_MAX, fits: false };
       let lo = CLOSE_FRAME_MIN;
       let hi = CLOSE_FRAME_MAX;
       for (let k = 0; k < 22; k++) {
@@ -2133,7 +2214,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         if (fits(mid)) hi = mid;
         else lo = mid;
       }
-      return hi;
+      return { distance: hi, fits: true };
     };
 
     // Landing world view: where the camera stands. It stands low inside the landscape and looks at
@@ -2615,6 +2696,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     // The film's camera move (prop filmMove, or the address parameter film)
     const filmAddress = filmFromAddress();
     let filmMoveNow: StageFilmMove | null = null;
+    // What the close view last framed (see the framing watcher in the frame loop)
+    let closeFrameKey = '';
     let filmAskedLast: StageFilmMove | 'auto' | null = null;
     let filmHolding = Boolean(propsRef.current.filmMove ?? filmAddress) && !propsRef.current.inWorkspace;
     let filmSettledSec = 0;
@@ -3384,6 +3467,34 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
         // The film's camera move: the pose is a function of the time since the move began, aimed
         // from the fire's own centre and the presets, so a move is the same every time it runs
+        // On Estimate and Test the close view follows what it frames (see resolveLivePreset): the run,
+        // the pass on show where the run declares cells, and the frame the page gives the stage. When
+        // that changes and the visitor has not moved the camera, the view is set again: a glide, or in
+        // the film a fresh push from where the camera stands
+        let refilm = false;
+        // (not while the ground changes from one place to another: the box's size and relief are then
+        // between the two, and the framing waits for the change to finish)
+        if (
+          !morphActive &&
+          p.inWorkspace &&
+          (filmPreset ?? p.cameraPreset) === 'canyon' &&
+          nextBundle.observerDataset.dataSource === 'firms'
+        ) {
+          const nFrames = nextBundle.observerDataset.frames.length;
+          const fIdx = Math.min(nFrames - 1, Math.max(0, Math.round(THREE.MathUtils.clamp(p.timeProgress, 0, 1) * (nFrames - 1))));
+          const declaredHere = (nextBundle.declared?.byFrame.get(fIdx)?.length ?? 0) > 0;
+          if (declaredHere || (fireAnchorFrom === 'estimate' && fireAnchorPoints.length > 0)) {
+            const sf = p.workspaceSubjectFrame;
+            const key = `${nextBundle.key}:${fIdx}:${declaredHere ? 'declared' : fireAnchorKey}:${sf ? [sf.left, sf.top, sf.right, sf.bottom].map((x) => x.toFixed(3)).join(',') : ''}:${viewportW}x${viewportH}`;
+            if (key !== closeFrameKey) {
+              closeFrameKey = key;
+              if (!cameraTouched && !pointerDown) {
+                if (filmMoveNow === 'estimate' || filmMoveNow === 'test') refilm = true;
+                else presetDirty = true;
+              }
+            }
+          }
+        }
         const filmAsked = p.filmMove !== undefined ? p.filmMove : filmAddress;
         if (filmAsked !== filmAskedLast) {
           filmAskedLast = filmAsked;
@@ -3461,6 +3572,19 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
               filmPreset = p.inWorkspace ? 'region' : null;
             }
           }
+        }
+        if (refilm && filmFrom && filmTo && (filmMoveNow === 'estimate' || filmMoveNow === 'test')) {
+          const close = resolveLivePreset('canyon', true, p.mode, p.activeTheaterId);
+          filmFrom = {
+            azimuth: orbitCurrent.azimuth,
+            polar: orbitCurrent.polar,
+            distance: orbitCurrent.distance,
+            target: [orbitCurrent.target.x, orbitCurrent.target.y, orbitCurrent.target.z],
+          };
+          filmTo = { ...close, distance: close.distance * FILM_PUSH_TO, azimuth: close.azimuth + 0.04 };
+          filmSeconds = filmMoveNow === 'estimate' ? FILM_ESTIMATE_SECONDS : FILM_REAIM_SECONDS;
+          filmEase = true;
+          filmStartSec = elapsedSec;
         }
         if (filmMoveNow && filmFrom && filmTo) {
           const t = filmSeconds > 0 ? THREE.MathUtils.clamp((elapsedSec - filmStartSec) / filmSeconds, 0, 1) : 1;
