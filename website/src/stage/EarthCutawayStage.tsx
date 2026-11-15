@@ -34,6 +34,7 @@ import type {
   StageMissingFile,
   StageFilmMove,
   StageBurnedArea,
+  StageThingBox,
 } from './earthCutawayTypes';
 import { burnedBounds, burnedClasses, slabToPicture } from './engine/burnedArea';
 import { markStageLoading, markStageReady } from './stageReady';
@@ -1197,6 +1198,44 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const uTileState = Array.from({ length: 64 }, () => new THREE.Vector4(0, 0, 0, 0));
     const uTileHover = { value: -1.0 };
     let tileHoverSent: number | null = null;
+    // The named things' last boxes as sent (see onThings)
+    let thingsSig = '';
+    const groundPts: number[] = [];
+    // The screen box of a patch of ground (u west to east, v south to north), its relief included: nine points
+    // on the terrain; its middle, and whether that middle is in front of the camera and on screen
+    const groundBox = (u0: number, u1: number, v0: number, v1: number): StageThingBox | null => {
+      groundPts.length = 0;
+      let left = Infinity;
+      let top = Infinity;
+      let right = -Infinity;
+      let bottom = -Infinity;
+      let mx = 0;
+      let my = 0;
+      let midFront = false;
+      for (let j = 0; j <= 2; j++) {
+        for (let i = 0; i <= 2; i++) {
+          const u = THREE.MathUtils.clamp(u0 + ((u1 - u0) * i) / 2, 0, 1);
+          const v = THREE.MathUtils.clamp(v0 + ((v1 - v0) * j) / 2, 0, 1);
+          projVec.set(worldX(u), sampleCpuTerrainY(u, v), worldZ(v)).project(camera);
+          const front = projVec.z > -1 && projVec.z < 1;
+          const x = (projVec.x * 0.5 + 0.5) * viewportW;
+          const y = (-projVec.y * 0.5 + 0.5) * viewportH;
+          if (i === 1 && j === 1) {
+            mx = x;
+            my = y;
+            midFront = front;
+          }
+          if (!front) continue;
+          left = Math.min(left, x);
+          top = Math.min(top, y);
+          right = Math.max(right, x);
+          bottom = Math.max(bottom, y);
+        }
+      }
+      if (!Number.isFinite(left)) return null;
+      const visible = midFront && mx >= 0 && mx <= viewportW && my >= 0 && my <= viewportH;
+      return { x: mx, y: my, left, top, right, bottom, visible };
+    };
     const tileAnchors: StageTileAnchor[] = [];
     // By night the smoke is lit from below only while the pass on show has detections of its own
     let smokeFireLight = 1.0;
@@ -4693,7 +4732,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
       // Where the fire on show sits on screen, for the page's labels: the pass's own detections,
       // or the estimate's cells on a pass whose detections are hidden
-      if (p.onFireAnchor && p.inWorkspace && realRun) {
+      const wantsFireBox = Boolean(p.onThings && p.things && Object.values(p.things).some((t) => t.kind === 'fire'));
+      if ((p.onFireAnchor || wantsFireBox) && p.inWorkspace && realRun) {
         const own = footprintList.length > 0 ? footprintList : revealedList;
         const beliefStep = beliefNow ? Math.round(beliefField.grid.x) + ':' + beliefField.stepKey : '';
         const key = `${realPassKey}:${own.length}:${own.length === 0 ? beliefStep : ''}`;
@@ -4750,7 +4790,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         }
         const count = fireAnchorPoints.length / 3;
         if (count === 0) {
-          if (fireAnchorSent) p.onFireAnchor(null);
+          if (fireAnchorSent) p.onFireAnchor?.(null);
           fireAnchorSent = false;
           fireAnchorViewKey = '';
           lastFireAnchor = null;
@@ -4906,7 +4946,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
               fireAnchorViewSig[22 + m] = pm[m];
             }
           }
-          p.onFireAnchor(lastFireAnchor!);
+          p.onFireAnchor?.(lastFireAnchor!);
           fireAnchorSent = true;
         }
       } else if (fireAnchorSent) {
@@ -4915,6 +4955,48 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         fireAnchorKey = '';
         fireAnchorViewKey = '';
         lastFireAnchor = null;
+      }
+
+      // The named things' screen boxes, for the page's frames (props things, onThings): sent in the frame
+      // one changes by a pixel or more
+      if (p.onThings && p.things) {
+        const boxes: Record<string, StageThingBox | null> = {};
+        let sig = '';
+        const realBoard = p.tileBoard && p.tileBoard.cols >= 1 && p.tileBoard.rows >= 1 ? p.tileBoard : null;
+        for (const [name, thing] of Object.entries(p.things)) {
+          let box: StageThingBox | null = null;
+          if (thing.kind === 'fire') {
+            box = lastFireAnchor && p.inWorkspace && realRun
+              ? { x: lastFireAnchor.x, y: lastFireAnchor.y, left: lastFireAnchor.left, top: lastFireAnchor.top, right: lastFireAnchor.right, bottom: lastFireAnchor.bottom, visible: lastFireAnchor.visible }
+              : null;
+          } else if (thing.kind === 'tile') {
+            if (realBoard && thing.tile >= 0 && thing.tile < realBoard.cols * realBoard.rows) {
+              const col = thing.tile % realBoard.cols;
+              const row = Math.floor(thing.tile / realBoard.cols);
+              box = groundBox(col / realBoard.cols, (col + 1) / realBoard.cols, 1 - (row + 1) / realBoard.rows, 1 - row / realBoard.rows);
+            }
+          } else if (thing.kind === 'detection' && realRun) {
+            const list = thing.revealed ? revealedList : footprintList;
+            const fp = list[thing.index];
+            if (fp) {
+              const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
+              const u = (fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin);
+              const v = (fp.lat - latMin) / Math.max(1e-9, latMax - latMin);
+              const halfKm = 0.5 * Math.max(fp.acrossTrackKm, fp.alongTrackKm, 0.1);
+              const du = halfKm / Math.max(1e-3, nextBundle.widthKm);
+              const dv = halfKm / Math.max(1e-3, nextBundle.depthKm);
+              box = groundBox(u - du, u + du, v - dv, v + dv);
+            }
+          }
+          boxes[name] = box;
+          sig += box ? `${name}:${Math.round(box.left)},${Math.round(box.top)},${Math.round(box.right)},${Math.round(box.bottom)},${box.visible ? 1 : 0};` : `${name}:-;`;
+        }
+        if (sig !== thingsSig) {
+          thingsSig = sig;
+          p.onThings(boxes);
+        }
+      } else {
+        thingsSig = '';
       }
 
       // The scale bar: a round number of kilometres from the run's own ground size, along the

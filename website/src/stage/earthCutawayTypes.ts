@@ -272,8 +272,42 @@ export interface StageFireAnchor {
   patches?: StageFirePatch[];
 }
 
+/**
+ * A thing on the stage whose place on screen the page follows (see `things`): the fire's extent at the pass on
+ * show (its detections, or the estimate's cells where they are hidden: the box of the fire anchor), a square of the
+ * game's board, or one detection of the pass on show (by its index in that pass's list; `revealed` for the hidden
+ * instrument's detections once laid on).
+ */
+export type StageThing =
+  | { kind: 'fire' }
+  | { kind: 'tile'; tile: number }
+  | { kind: 'detection'; index: number; revealed?: boolean };
+
+/** Where a thing stands on screen, CSS px of the viewport. */
+export interface StageThingBox {
+  /** Its middle on the terrain. */
+  x: number;
+  y: number;
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  /** False when its middle is behind the camera or off screen. */
+  visible: boolean;
+}
+
 export interface EarthCutawayStageProps {
   apiBase: string;
+  /**
+   * Things whose screen boxes the page follows, by a name of the page's choosing (for its frames of corner
+   * brackets). Their boxes go to `onThings`.
+   */
+  things?: Record<string, StageThing>;
+  /**
+   * Each named thing's screen box (null where it is not on the stage now: no fire, no board, no such square or
+   * detection). Called in the frame a box changes by a pixel or more, so a still camera costs nothing.
+   */
+  onThings?: (boxes: Record<string, StageThingBox | null>) => void;
   /**
    * How the stage turns the address of a run's file into one it can fetch: the run's terrain,
    * imagery and field (`assets.*`), the terrain pack's and the context terrain's files, the belief
