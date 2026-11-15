@@ -168,6 +168,36 @@ each family. The PNGs are on a log scale from dark red to amber, so they read on
 (`layers.json` gives the scale, the ramp and each layer's maximum); a cell that is not loaded is transparent, a
 loaded cell without the layer's rows is grey.
 
+## The public cube
+
+A static page has no backend, so it cannot ask the routes for a drawn box. `backend/firms/cube_public.py write`
+writes, from the current build, the counts a box's Record is computed from, in one file a browser sums any box from:
+`<world>/cube/public/` holds `fire-cells.bin.gz`, `manifest.json` and `harmonize-fitted.json`.
+
+- Per cell and month, the fire rows (kind 0, day and night together, the box rule) of Terra, Aqua, Suomi NPP and
+  NOAA-20; cells and months with no fire row are left out. One bit per cell says whether the cell is loaded.
+- The manifest gives the grid, the months, each platform's delivering months and outage days per month, the sections
+  of the file, and every file's sha256 with the build it was written from.
+- The cells the closed rule closes (`backend/model/training.py`, `closed_for`: a cell meeting a test fire's region's
+  context box, in the years of its fire) lose those months for every platform; the manifest lists them, and a box
+  holding one of them reads those months as closed, never zero.
+- `harmonize-fitted.json` is `backend/model/harmonize_fitted.py`'s tables as JSON, for the served method.
+- Not in it: the static, offshore and volcano rows, fire radiative power, the day and night split, the pixel width and
+  confidence classes, the countries of a cell.
+
+The file is little endian typed arrays after an 8 byte magic, every section on a multiple of 4 bytes, gzipped:
+
+| Section | Type | Length | What |
+| --- | --- | --- | --- |
+| `cell_delta` | uint32 | cells with entries | each such cell as a step from the previous one (the first from 0) |
+| `cell_entries` | uint16 | cells with entries | entries of each such cell |
+| `month_step` | uint8 | entries | the entry's month as a step from the cell's previous entry (the first from month 0); a gap of more than 255 months holds an entry of all zeros |
+| `rows_<p>` | uint8 | entries, per platform | fire rows; 255 means the count is in the escape list |
+| `big_step_<p>`, `big_rows_<p>` | uint32 | escaped entries, per platform | the escaped entries' indices, each as a step from the previous, and their counts |
+| `loaded` | uint8 | 129,600 | one bit per cell: byte `cell >> 3`, bit `cell & 7` |
+
+`PublicCube` in the same module reads the file as a browser does and sums a box on the cube's grid, outer by default.
+
 ## What is not in it
 
 - NOAA-21, and the months after the last country file: they come from the FIRMS area API, which needs a key.
