@@ -179,9 +179,10 @@ export type LayerState =
  * The cube's layers index and one of its layers. `index` is the index's address (`/api/cube/layers`, or a file
  * `.../layers.json`); each layer's image is beside it (`/api/cube/layers/<name>.png`).
  */
-export function useWorldLayer(index: string, name: string): LayerState {
+export function useWorldLayer(index: string | null, name: string): LayerState {
   const [s, setS] = useState<LayerState>({ state: 'loading' });
   useEffect(() => {
+    if (!index) return;
     let live = true;
     const base = index.replace(/\/layers\.json$/, '').replace(/\/$/, '');
     setS({ state: 'loading' });

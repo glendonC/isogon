@@ -215,13 +215,107 @@
 }
 
 .iso-film .world-gauge:not(.world-gauge--mini) {
-  width: 17px;
-  height: 17px;
-  margin: -8.5px 0 0 -8.5px;
-  border-width: 1.5px;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border-width: 2px;
+  box-shadow: 0 0 0 2px rgba(8, 11, 17, 0.85);
 }
 
 .iso-film .world-tests__key,
 .iso-film .world-tests__kept {
   display: none;
+}
+
+/* The film's test across the world: the panel is its three figures, large. */
+.iso-film .world-tests:has(.world-tests__film) {
+  width: auto;
+  padding: var(--sys-s4) var(--sys-s5);
+}
+
+.iso-film .world-tests__film .world-tests__look {
+  font-size: clamp(16px, 1vw, 20px);
+}
+
+.iso-film .world-tests__big {
+  font-size: clamp(72px, 5vw, 104px);
+}
+
+.iso-film .world-tests__figure {
+  font-size: clamp(18px, 1.2vw, 24px);
+}
+
+.iso-film .world-tests__over {
+  font-size: clamp(15px, 0.95vw, 19px);
+}
+
+/* The film's sealed board: the fires and the line of hours large; the digests and the fine print are the page's. */
+.iso-film .world-board {
+  --board-cols: 44px minmax(160px, 0.4fr) minmax(640px, 2fr) minmax(480px, 1.8fr);
+  gap: var(--sys-s2);
+}
+
+.iso-film .world-board__digest,
+.iso-film .world-board__whole,
+.iso-film .world-board__head > span:last-child,
+.iso-film .world-board__rule:not(.world-board__rule--strong),
+.iso-film .world-board__row--rest {
+  display: none;
+}
+
+.iso-film .world-board__num,
+.iso-film .world-board__where,
+.iso-film .world-board__words {
+  font-size: clamp(18px, 1.2vw, 23px);
+  line-height: 1.3;
+}
+
+.iso-film .world-board__row {
+  padding: 12px 0;
+}
+
+.iso-film .world-board__key,
+.iso-film .world-board__axis {
+  font-size: clamp(15px, 0.95vw, 18px);
+}
+
+.iso-film .world-board__axis {
+  height: 24px;
+}
+
+.iso-film .world-board__track {
+  height: 30px;
+}
+
+.iso-film .world-track-seal {
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+}
+
+.iso-film .world-track-pass {
+  width: 17px;
+  height: 17px;
+  margin: -8.5px 0 0 -8.5px;
+  border-width: 2px;
+}
+
+.iso-film .world-track-rows {
+  top: calc(50% - 4px);
+  height: 8px;
+}
+
+.iso-film .world-board__rule--strong {
+  font-size: clamp(18px, 1.15vw, 22px);
+}
+
+.iso-film .world-seal-mark {
+  width: 13px;
+  height: 13px;
+  margin: -6.5px 0 0 -6.5px;
+  border-width: 1.5px;
+}
+
+.iso-film .world-label--num {
+  font-size: clamp(16px, 1vw, 20px);
 }

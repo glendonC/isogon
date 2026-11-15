@@ -115,7 +115,7 @@ function words(f: LiveFire, s: LiveSeal | null): string {
   }
 }
 
-export function SealedTonight({ source, now = null, before = 6, after = 9, caption = true, keepGuideRoom }: SealedTonightProps) {
+export function SealedTonight({ source, now = null, before = 6, after, caption = true, keepGuideRoom }: SealedTonightProps) {
   const keep = keepGuideRoom ?? caption;
   const read = useRead<unknown>(source);
   const live: Live | null = read.state === 'ready' ? parseLive(read.value) : null;
@@ -123,6 +123,8 @@ export function SealedTonight({ source, now = null, before = 6, after = 9, capti
   const [over, setOver] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const film = useMemo(inFilm, []);
+  // In the film the line of hours ends 3 hours ahead, where nothing is due yet, so what has happened takes its width.
+  after = after ?? (film ? 3 : 9);
   const [capBottom, setCapBottom] = useState(0);
   const [guideRoom, setGuideRoom] = useState(0);
   const roomRef = useGuideRoom(useCallback((px: number) => setGuideRoom(px), []));

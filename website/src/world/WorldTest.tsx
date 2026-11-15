@@ -4,7 +4,8 @@ import { countryAt } from './countryAt';
 import { parseFresh, type FreshFire, type FreshLook, type Group } from './freshTest';
 import { useRead } from './read';
 import { inFilm, useGuideRoom, WorldCaption } from './WorldCaption';
-import { WorldCanvas } from './WorldCanvas';
+import { useWorldLayer } from './layers';
+import { WorldCanvas, type GridLayer } from './WorldCanvas';
 import '../styles/world.css';
 
 /**
@@ -27,6 +28,11 @@ export const TEST_WORDS = {
   filmA: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} unseen fires: ahead on ${ahead} of ${of} scores, behind on ${behind}.`,
   filmB: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} untouched fires: ahead on ${ahead} of ${of}, behind on ${behind}.`,
   lookNames: { test_a: 'Test A: fires it had never seen', test_b: 'Test B: fires that nothing had touched' } as Record<string, string>,
+  // The film's panel: the scores over every fire, three figures a viewer reads at once.
+  filmAhead: 'ahead',
+  filmLevel: 'level',
+  filmBehind: 'behind',
+  filmOver: (of: number, fires: number) => `of the ${of} scores, over all ${fires} fires`,
   title: (fires: number, groups: number) => `${count(fires)} fires in ${count(groups)} continents. Each square is one fire.`,
   held: (stated: number, held: number, looks: number) =>
     `Its stated ${Math.round(stated * 100)} percent interval held on ${Math.round(held * 100)} percent of the ${count(looks)} looks.`,
@@ -106,6 +112,19 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom }: {
   const [guideRoom, setGuideRoom] = useState(0);
   const roomRef = useGuideRoom(useCallback((px: number) => setGuideRoom(px), []));
   const keep = keepGuideRoom ?? caption;
+  // In the film the Earth carries the world's fire under the squares, as bright as the years' (the cube's layer of
+  // every MODIS detection since 2000), so the tested fires stand where fire burns.
+  const backdrop = useWorldLayer(film ? '/api/cube/layers' : null, 'rows_modis');
+  const grid = useMemo<GridLayer[]>(
+    () =>
+      backdrop.state === 'ready'
+        ? [
+            { key: 'loaded', image: backdrop.layer.loaded, onLand: true, crispFromPx: 2 },
+            { key: 'fire', image: backdrop.layer.image, halo: true, alpha: 0.6 },
+          ]
+        : [],
+    [backdrop],
+  );
   const [panelTop, setPanelTop] = useState(0);
   const onCaption = useCallback((px: number) => setCapBottom(px), []);
   useLayoutEffect(() => {
@@ -169,7 +188,7 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom }: {
 
   return (
     <div className="world-earth" ref={root}>
-      <WorldCanvas label={TEST_WORDS.label} focus={TEST_VIEW} padLeft={room.left} padBottom={room.bottom + (keep && !room.stacked ? guideRoom : 0)} onClickMap={() => setOpen(null)}>
+      <WorldCanvas label={TEST_WORDS.label} focus={TEST_VIEW} layers={grid} hatchLand={film} padLeft={room.left} padBottom={room.bottom + (keep && !room.stacked ? guideRoom : 0)} onClickMap={() => setOpen(null)}>
         {(p) => (
           <>
             {fires.map((f) => {
@@ -215,6 +234,26 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom }: {
         {ans.example && <div className="world-legend__fine world-legend__caution">{ans.example}</div>}
         {!look ? (
           <div className="world-legend__line">{TEST_WORDS.noLook}</div>
+        ) : film && c ? (
+          // The film's panel: the scores over every fire, read at once; the rest of the panel is the page's.
+          <div className="world-tests__film">
+            <div className="world-tests__look">{TEST_WORDS.lookNames[look.id] ?? look.name}</div>
+            <div className="world-tests__figures">
+              <span className="world-tests__figure">
+                <span className="world-tests__big">{c.ahead}</span>
+                <span>{TEST_WORDS.filmAhead}</span>
+              </span>
+              <span className="world-tests__figure">
+                <span className="world-tests__big">{c.tied}</span>
+                <span>{TEST_WORDS.filmLevel}</span>
+              </span>
+              <span className="world-tests__figure" data-behind="true">
+                <span className="world-tests__big">{c.behind}</span>
+                <span>{TEST_WORDS.filmBehind}</span>
+              </span>
+            </div>
+            <div className="world-tests__over">{TEST_WORDS.filmOver(judged, look.fires.length)}</div>
+          </div>
         ) : (
           <>
             {ans.looks.length > 1 && (

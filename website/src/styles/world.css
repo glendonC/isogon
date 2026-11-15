@@ -1374,3 +1374,32 @@
 .world-key-pass--scored {
   background: var(--sys-detection);
 }
+
+/* The film's panel of the test across the world: three figures and what they count (WorldTest, in the film). */
+.world-tests__film {
+  display: grid;
+  gap: var(--sys-s3);
+}
+
+.world-tests__figures {
+  display: flex;
+  gap: var(--sys-s7);
+}
+
+.world-tests__figure {
+  display: grid;
+  gap: var(--sys-s1);
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.world-tests__big {
+  font: var(--sys-weight-light) 64px / 1 var(--sys-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-ink);
+}
+
+.world-tests__over {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-3);
+}
