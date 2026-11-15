@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { Box, FeaturedFire, Places, Place } from '../../app/places';
 import { FireBlock } from '../../compare/FireBlock';
 import { ChooseOnEarth } from '../../world/ChooseOnEarth';
@@ -58,6 +58,16 @@ export const opensOf = (f: FeaturedFire): string =>
 /** One more sentence on a fire: the fires an agency list names in its box and period. */
 const aboutOf = (f: FeaturedFire): string | null => (f.name ? PLACE_WORDS.among(f.name) : null);
 
+// On a phone the open row leaves out the fire's own ground: the list's part of the screen holds the row's words and
+// its action, not a block as well, and the block's run is not asked for there
+const PHONE = '(max-width: 600px)';
+const watchPhone = (changed: () => void) => {
+  const m = window.matchMedia(PHONE);
+  m.addEventListener('change', changed);
+  return () => m.removeEventListener('change', changed);
+};
+const isPhone = () => window.matchMedia(PHONE).matches;
+
 export interface PlaceScreenProps {
   places: Places;
   /** The fire on the land now, marked with corner marks. */
@@ -82,6 +92,10 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
   // The fire whose row is open: the fire on the land first, then the one the keyboard's focus or a click moves to
   const [chosen, setChosen] = useState<string | null>(currentFire);
   const [credit, setCredit] = useState<string | null>(null);
+  const phone = useSyncExternalStore(watchPhone, isPhone, () => false);
+  useEffect(() => {
+    if (phone) setCredit(null);
+  }, [phone]);
   const [query, setQuery] = useState('');
   const [note, setNote] = useState<string | null>(null);
   // The Earth's first view, and what Find asked it to open: a place's card, or an area of a degree round coordinates
@@ -93,26 +107,24 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
   });
 
   /**
-   * A box widened on the east by the share of the screen the list stands over, and above and below by the trail and
-   * the guide, so that what it holds is seen clear of them when the Earth fits it to the whole screen.
+   * A box widened above and below by the trail and the guide, so that what it holds is seen clear of them when the
+   * Earth fits it to its canvas, which runs from the left edge to the list and from the top to the bottom.
    */
   const clearOf = useCallback((b: Box, pad: number): Box => {
     const el = rootRef.current;
-    const w = el?.clientWidth || 1440;
-    const h = el?.clientHeight || 900;
-    const css = el ? getComputedStyle(el) : null;
-    const px = (name: string, fallback: number) => Number.parseFloat(css?.getPropertyValue(name) ?? '') || fallback;
-    // The list, and room for a mark's name written to its right, which the Earth does not keep clear of the list
-    const rail = px('--place-rail', 340) + 64 + 240;
-    const top = px('--place-top', 104);
-    const bottom = px('--place-guide', 170);
     const dx = (b[2] - b[0]) * pad;
     const dy = (b[3] - b[1]) * pad;
     const cx = (b[0] + b[2]) / 2;
     const cy = (b[1] + b[3]) / 2;
-    const east = (dx * rail) / Math.max(1, w - rail);
+    // On a narrow screen the Earth has its own part of the screen, between the trail and the list
+    if ((el?.clientWidth || 1440) < 900) return [cx - dx / 2, Math.max(-85, cy - dy / 2), cx + dx / 2, Math.min(85, cy + dy / 2)];
+    const h = el?.clientHeight || 900;
+    const css = el ? getComputedStyle(el) : null;
+    const px = (name: string, fallback: number) => Number.parseFloat(css?.getPropertyValue(name) ?? '') || fallback;
+    const top = px('--place-top', 104);
+    const bottom = px('--place-guide', 170);
     const vert = (dy * (top + bottom)) / Math.max(1, h - top - bottom);
-    return [cx - dx / 2, Math.max(-85, cy - dy / 2 - (vert * bottom) / (top + bottom)), cx + dx / 2 + east, Math.min(85, cy + dy / 2 + (vert * top) / (top + bottom))];
+    return [cx - dx / 2, Math.max(-85, cy - dy / 2 - (vert * bottom) / (top + bottom)), cx + dx / 2, Math.min(85, cy + dy / 2 + (vert * top) / (top + bottom))];
   }, []);
 
   // The first view: every place with a featured fire, with room round them, clear of the list, the trail and the guide
@@ -134,8 +146,13 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
     if (!rows || rows.length === 0) return;
     const at = [...rows].find((r) => r.dataset.fire === currentFire) ?? rows[0];
     at.focus({ preventScroll: true });
-    at.scrollIntoView({ block: 'nearest' });
   }, [fires.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The open row is brought whole into the list's view, its ground and its action with it
+  useEffect(() => {
+    const open = listRef.current?.querySelector<HTMLElement>('.place__item[data-open="true"]');
+    open?.scrollIntoView({ block: 'nearest' });
+  }, [chosen]);
 
   const search = () => {
     const q = query.trim();
@@ -192,7 +209,6 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
     const at = items.indexOf(document.activeElement as HTMLButtonElement);
     const next = items[Math.max(0, Math.min(items.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))];
     next?.focus();
-    next?.scrollIntoView({ block: 'nearest' });
     e.preventDefault();
   };
 
@@ -261,16 +277,18 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
                       </button>
                       {open && (
                         <div className="place__open">
-                          <div className="place__cardblock">
-                            <FireBlock
-                              place={place}
-                              fire={fire}
-                              onPick={() => onFire(place, fire)}
-                              onCredit={setCredit}
-                              loadingWords={PLACE_WORDS.loadingFire}
-                              failedWords={PLACE_WORDS.failedFire}
-                            />
-                          </div>
+                          {!phone && (
+                            <div className="place__cardblock">
+                              <FireBlock
+                                place={place}
+                                fire={fire}
+                                onPick={() => onFire(place, fire)}
+                                onCredit={setCredit}
+                                loadingWords={PLACE_WORDS.loadingFire}
+                                failedWords={PLACE_WORDS.failedFire}
+                              />
+                            </div>
+                          )}
                           <span className="sys-label place__opens">{opensOf(fire)}</span>
                           {aboutOf(fire) && <span className="sys-fine">{aboutOf(fire)}</span>}
                           <button type="button" className="place__act place__act--next" tabIndex={-1} onClick={() => onFire(place, fire)}>

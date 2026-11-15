@@ -29,16 +29,17 @@
   }
 }
 
-/* The Earth, edge to edge (world/ChooseOnEarth). Its own tools and legend are moved clear of the list on the
-   right, the trail above and the guide below; it keeps every name clear of them by measuring them. */
+/* The Earth (world/ChooseOnEarth), from the left edge to where the list's ground turns solid: it writes every
+   name inside its own canvas, so none runs under the list. Its tools and legend stand clear of the trail and the
+   guide; it keeps every name clear of them by measuring them. */
 .place__map {
   position: absolute;
-  inset: 0;
+  inset: 0 calc(var(--place-rail) + 48px) 0 0;
 }
 
 .place .world-earth__tools {
   top: var(--place-top);
-  right: calc(var(--place-rail) + var(--sys-gutter) + 40px);
+  right: calc(48px + var(--sys-s4));
 }
 
 .place .world-legend {
@@ -75,8 +76,9 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: calc(var(--place-rail) + 120px);
-  background: linear-gradient(90deg, rgba(8, 11, 17, 0), rgba(8, 11, 17, 0.95) 100px);
+  width: calc(var(--place-rail) + 96px);
+  /* The Earth's edge fades into the list's ground, which is solid where the Earth ends */
+  background: linear-gradient(90deg, rgba(8, 11, 17, 0), var(--sys-night) 48px);
   pointer-events: none;
 }
 
@@ -290,19 +292,48 @@ body:has(.place) .iso-credit {
 }
 
 @media (max-width: 900px) {
+  /* The Earth takes the part between the trail and the list, the list the part above the guide's strip */
   .place {
-    --place-rail: 100%;
+    --place-guide: 190px;
+    --place-split: 40%;
+  }
+
+  .place__map {
+    inset: calc(var(--place-top) - var(--sys-s2)) 0 calc(100% - var(--place-split)) 0;
+  }
+
+  .place .world-earth__tools {
+    top: var(--sys-s2);
+    right: var(--sys-s3);
+  }
+
+  .place .world-legend {
+    left: var(--sys-s3);
+    bottom: var(--sys-s3);
   }
 
   .place__rail {
+    top: calc(var(--place-split) + var(--sys-s3));
     left: var(--sys-gutter);
-    top: auto;
-    height: 38%;
     width: auto;
+    gap: var(--sys-s2);
   }
 
   .place__railground {
+    top: var(--place-split);
     width: 100%;
-    background: linear-gradient(180deg, rgba(8, 11, 17, 0) 40%, rgba(8, 11, 17, 0.9) 60%);
+    background: var(--sys-night);
+  }
+
+  .place__cardblock {
+    height: 130px;
+  }
+}
+
+/* On a phone the list needs the room more than the Earth, whose marks are too small to aim at there */
+@media (max-width: 600px) {
+  .place {
+    --place-guide: 230px;
+    --place-split: 33%;
   }
 }
