@@ -414,6 +414,36 @@ class RoutesTests(unittest.TestCase):
         self.assertEqual(self._get("/api/calendar?source=firms&box=23,38,24,39&region_id=evia_greece")[0], 400)
         self.assertEqual(self._get("/api/calendar/current?source=firms&box=1,2,3")[0], 400)
 
+    def test_a_featured_period_from_noaa21_s_first_day_has_noaa21_rows(self) -> None:
+        """The country files hold no NOAA-21 row; a held-out run lists NOAA-21's passes from its first day in the
+        archive. So a region offering a period from that day on must hold NOAA-21's rows from the area API, or the
+        run scores those passes as passes that saw nothing."""
+        import json as _json
+
+        from backend.firms.places import load_places
+        from backend.model.platforms import ARCHIVE_FIRST_DAY
+
+        first = str(ARCHIVE_FIRST_DAY["VIIRS_NOAA21"])[:10]
+        extract = fa.FIRMS_CACHE_DIR / "extract"
+        if not extract.is_dir():
+            self.skipTest("no FIRMS cache")
+        status, out = self._get("/api/regions")
+        self.assertEqual(status, 200)
+        checked = 0
+        for place in out["places"]:
+            for fire in place.get("featured_fires", []):
+                start = str(fire.get("default_start") or "")
+                if fire.get("blind_test_fire") or start < first:
+                    continue
+                year = start[:4]
+                m = extract / place["id"] / f"viirs-noaa21_{year}.csv.manifest.json"
+                self.assertTrue(m.is_file(), f"{fire['id']} starts {start} but {place['id']} holds no NOAA-21 rows for {year}")
+                covered = _json.loads(m.read_text(encoding="utf-8")).get("covered_days") or ["", ""]
+                self.assertLessEqual(covered[0], start, fire["id"])
+                checked += 1
+        self.assertGreaterEqual(checked, 5)
+        self.assertTrue(load_places())
+
     def test_the_check_of_every_place_in_one_answer(self) -> None:
         from backend.firms.places import load_places
 
