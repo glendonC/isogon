@@ -101,3 +101,65 @@ class ServedTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def lava_records(seed: int = 2) -> list[dict]:
+    """A lava lake that Suomi NPP sees every month and MODIS almost never, gone in 2016 to 2019, and an eruption in
+    2018 that MODIS sees well."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for y in range(2000, 2026):
+        for m in range(1, 13):
+            if (y, m) < (2000, 11):
+                continue
+            lake = not (2016 <= y <= 2019)
+            modis, sharp = (150.0, 450.0) if y == 2018 else ((0.05, 300.0) if lake else (0.0, 0.0))
+
+            def c(n: float) -> dict:
+                n = int(rng.poisson(n))
+                return {"day": n // 2, "night": n - n // 2, "total": n, "outage_days": 0, "frp": 30.0 * n}
+
+            rc = {"Terra": c(modis / 2), "Aqua": c(modis / 2) if (y, m) >= (2002, 7) else None,
+                  "Suomi NPP": c(sharp) if y >= 2012 else None, "NOAA-20": None, "NOAA-21": None}
+            out.append({"year_month": f"{y:04d}-{m:02d}", "raw_counts": rc})
+    return out
+
+
+class StabilityTest(unittest.TestCase):
+    def year(self, y: int, observed: float, predicted: float) -> dict:
+        return {"year": y, "suomi_npp_observed": observed, "predicted": predicted}
+
+    def test_an_ordinary_place_is_stable(self) -> None:
+        st = H.record_series(records(), center_lat=40.5)["check"]["ratio_stability"]
+        self.assertEqual(st["verdict"], "stable")
+        self.assertTrue(st["stable"])
+        self.assertNotIn("note", st)
+
+    def test_a_lava_lake_is_not_stable_and_says_so(self) -> None:
+        st = H.record_series(lava_records(), center_lat=19.5)["check"]["ratio_stability"]
+        self.assertEqual(st["verdict"], "not stable")
+        self.assertFalse(st["stable"])
+        self.assertGreaterEqual(len(st["years_departing"]), H.STABLE_MIN_DEPARTING)
+        self.assertIn("not meaningful", st["note"])
+
+    def test_one_departing_year_does_not_flag(self) -> None:
+        rows = [self.year(y, 400.0, 380.0) for y in range(2012, 2025)] + [self.year(2025, 30.0, 900.0)]
+        st = H.ratio_stability(rows)
+        self.assertEqual(st["verdict"], "stable")
+        self.assertEqual(st["years_departing"], [2025])
+        self.assertEqual(st["worst_year"]["year"], 2025)
+        st = H.ratio_stability(rows + [self.year(2026, 2000.0, 100.0)])
+        self.assertEqual(st["verdict"], "not stable")
+
+    def test_years_with_few_rows_are_not_tested(self) -> None:
+        st = H.ratio_stability([self.year(y, 3.0, 40.0) for y in range(2012, 2026)])
+        self.assertEqual(st["verdict"], "not tested")
+        self.assertIsNone(st["stable"])
+
+    def test_a_closed_year_is_not_tested(self) -> None:
+        st = H.record_series(lava_records(), center_lat=19.5, closed_years=(2017,))["check"]["ratio_stability"]
+        self.assertNotIn(2017, st["years_tested"] + st["years_departing"])
+
+    def test_fire_radiative_power_is_not_flagged(self) -> None:
+        st = H.record_series(records(), center_lat=40.5, quantity="frp")["check"]["ratio_stability"]
+        self.assertEqual(st["verdict"], "not tested")

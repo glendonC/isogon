@@ -395,6 +395,9 @@ def apply_interval(pred: np.ndarray, table: dict[str, Any]) -> tuple[np.ndarray,
 INTERVAL_ID: str = "heldout_log_error_quantiles_v1"
 FIRST_FIT_MONTH: str = "2012-02"     # Suomi NPP rows begin on 20 January 2012: that month is partial
 BUSY_MODIS_ROWS: int = 10            # the calendar's own threshold for a month with fire, chosen by MODIS alone
+STABLE_FACTOR: float = 10.0          # a year departs when its rows and its held-out prediction differ this much
+STABLE_MIN_ROWS: float = 50.0        # a year is tested when its Suomi NPP rows or that prediction reach this
+STABLE_MIN_DEPARTING: int = 2        # tested years that must depart for the place to be not stable
 TERRA_ONLY: Spec = Spec("terra_only", "Terra alone, as the Record harmonizes the months before Aqua", inputs="terra")
 # Each method the Record can serve, with the candidate it is and that candidate on Terra alone (before Aqua).
 SERVED: dict[str, tuple[Spec, Spec]] = {
@@ -620,6 +623,10 @@ def record_series(records: list[dict[str, Any]], area_km2: float | None = None, 
         fitted_on.update({"prior": prior_note, **info_ta,
                           "ratio_over_the_overlap": (float(np.nansum(S[fit_ta]) / np.nansum(MA[fit_ta]))
                                                      if np.nansum(MA[fit_ta]) > 0 else None)})
+    check = record_check(S, MA, year, fit_ta, tab_ta, tab_y, closed_years, check_predict)
+    check["ratio_stability"] = (ratio_stability(check["per_year"]) if quantity == "rows" else
+                                {"verdict": "not tested", "stable": None,
+                                 "note": "the flag is computed on rows, not on fire radiative power"})
     return {
         "method": {
             "id": method,
@@ -637,8 +644,47 @@ def record_series(records: list[dict[str, Any]], area_km2: float | None = None, 
         },
         "months": out_months,
         "years": out_years,
-        "check": record_check(S, MA, year, fit_ta, tab_ta, tab_y, closed_years, check_predict),
+        "check": check,
     }
+
+
+def ratio_stability(per_year: list[dict[str, Any]]) -> dict[str, Any]:
+    """Whether the harmonized value holds at the place from year to year, from its own held-out years alone (the
+    `per_year` rows of `record_check`: the served method fitted on the other overlap years predicts the year; closed
+    years are not among them).
+
+    A year is tested when Suomi NPP's rows or the prediction reach STABLE_MIN_ROWS, and departs when (observed + 1)
+    / (predicted + 1) is above STABLE_FACTOR or below its inverse. Not stable when STABLE_MIN_DEPARTING tested years
+    or more depart: no ratio holds there and the harmonized value is not meaningful (lava and gas flares, which
+    FIRMS counts as fire, do this). One departing year alone can be one fire, and is listed but does not flag."""
+    tested = []
+    for r in per_year:
+        o, p = float(r["suomi_npp_observed"]), float(r["predicted"])
+        if max(o, p) < STABLE_MIN_ROWS:
+            continue
+        tested.append({"year": int(r["year"]), "suomi_npp_rows": round(o, 1), "predicted": round(p, 1),
+                       "factor": round((o + 1.0) / (p + 1.0), 4)})
+    departs = [t for t in tested if not (1.0 / STABLE_FACTOR <= t["factor"] <= STABLE_FACTOR)]
+    worst = max(tested, key=lambda t: abs(np.log(t["factor"]))) if tested else None
+    unstable = len(departs) >= STABLE_MIN_DEPARTING
+    out: dict[str, Any] = {
+        "verdict": "not tested" if not tested else ("not stable" if unstable else "stable"),
+        "stable": None if not tested else not unstable,
+        "years_tested": [t["year"] for t in tested], "years_departing": [t["year"] for t in departs],
+        "worst_year": worst,
+        "rule": f"each held-out year (the served method fitted on the other overlap years) is tested when Suomi NPP's "
+                f"rows or the prediction reach {STABLE_MIN_ROWS:g} over the clean months, and departs when the two "
+                f"differ by more than {STABLE_FACTOR:g} times; not stable when {STABLE_MIN_DEPARTING} tested years or "
+                "more depart",
+    }
+    if unstable:
+        out["note"] = (f"Here the harmonized value misses Suomi NPP's own count by more than {STABLE_FACTOR:g} times in "
+                       f"{len(departs)} of {len(tested)} held-out years (in {worst['year']} it predicts "
+                       f"{worst['predicted']:,.0f} rows where Suomi NPP counted {worst['suomi_npp_rows']:,.0f}): "
+                       "the ratio of the two satellites does not hold from year to year, so the harmonized value is "
+                       "not meaningful here. Hot sources other than vegetation fire, such as lava and gas flares, "
+                       "which FIRMS counts as fire, do this.")
+    return out
 
 
 def record_check(S: np.ndarray, M: np.ndarray, year: np.ndarray, fit: np.ndarray, tab_m: dict[str, Any],
