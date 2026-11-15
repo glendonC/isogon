@@ -422,6 +422,108 @@ def _pass_radiative_basis(
     return b_sym, nded_sym
 
 
+def _zone_basis(abs_lat: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Smooth partition-of-unity latitude fuel-zone basis: [tropical, subtropical, temperate, boreal]."""
+    s1 = 1.0 / (1.0 + np.exp((abs_lat - 23.5) / 3.5))
+    s2_raw = 1.0 / (1.0 + np.exp((abs_lat - 35.0) / 3.5))
+    s2 = np.maximum(0.0, s2_raw - s1)
+    s3_raw = 1.0 / (1.0 + np.exp((abs_lat - 50.0) / 4.0))
+    s3 = np.maximum(0.0, s3_raw - s2_raw)
+    s4 = np.maximum(0.0, 1.0 - s3_raw)
+    tot = np.maximum(s1 + s2 + s3 + s4, 1e-12)
+    return np.column_stack([s1 / tot, s2 / tot, s3 / tot, s4 / tot])
+
+
+def _fit_uncertainty_intervals(
+    oof_pred: NDArray[np.float64],
+    truth: NDArray[np.float64],
+    std_hat: NDArray[np.float64],
+    level: float = 0.90,
+    conformal_pad: float = 0.012,
+    n_bins: int = 3,
+) -> dict[str, Any] | None:
+    """Fit uncertainty-stratified stated_interval multipliers across quantiles of std_hat."""
+    pos = oof_pred > 0.0
+    if not np.any(pos):
+        return None
+    p_pos = oof_pred[pos]
+    y_pos = truth[pos]
+    s_pos = std_hat[pos]
+    eff_level = min(0.95, float(level) + max(0.0, float(conformal_pad)))
+
+    qs = np.linspace(0.0, 1.0, n_bins + 1)[1:-1]
+    edges = [float(v) for v in np.quantile(s_pos, qs)] if n_bins > 1 and s_pos.size >= 90 else []
+    b_idx = np.searchsorted(edges, s_pos, side="right") if edges else np.zeros(s_pos.size, dtype=np.int64)
+
+    global_iv = M.stated_interval((y_pos / p_pos).tolist(), eff_level)
+    if global_iv is None:
+        return None
+    bins: list[dict[str, Any]] = []
+    for b in range(len(edges) + 1):
+        m = b_idx == b
+        if int(m.sum()) >= 40:
+            iv = M.stated_interval((y_pos[m] / p_pos[m]).tolist(), eff_level)
+            bins.append(iv if iv is not None else dict(global_iv))
+        else:
+            bins.append(dict(global_iv))
+    return {
+        "edges": edges,
+        "bins": bins,
+        "global": dict(global_iv),
+        "stated_level": float(level),
+        "eff_level": float(eff_level),
+    }
+
+
+def _apply_uncertainty_intervals(
+    pred: NDArray[np.float64],
+    std_hat: NDArray[np.float64],
+    cal: dict[str, Any],
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    edges = cal.get("edges") or []
+    bins = cal["bins"]
+    b_idx = np.searchsorted(edges, std_hat, side="right") if edges else np.zeros(pred.size, dtype=np.int64)
+    lo = np.zeros_like(pred)
+    hi = np.zeros_like(pred)
+    for b, iv in enumerate(bins):
+        m = (b_idx == b) & (pred > 0.0)
+        if np.any(m):
+            lo[m] = float(iv["lo"]) * pred[m]
+            hi[m] = float(iv["hi"]) * pred[m]
+    return lo, hi
+
+
+def _fit_log_multiplier_poisson(
+    base_pred: NDArray[np.float64],
+    Z: NDArray[np.float64],
+    y: NDArray[np.float64],
+    l2_pen: NDArray[np.float64],
+    max_iter: int = 25,
+) -> NDArray[np.float64]:
+    """Fit mu = base_pred * exp(Z @ w) minimizing Poisson deviance + 0.5 * sum(l2_pen * w^2)."""
+    d = Z.shape[1]
+    pos = base_pred > 1e-9
+    if int(pos.sum()) == 0 or float(y[pos].sum()) <= 1e-9:
+        return np.zeros(d, dtype=np.float64)
+    bp = base_pred[pos]
+    Zp = Z[pos]
+    yp = y[pos]
+    w = np.zeros(d, dtype=np.float64)
+    for _ in range(max_iter):
+        eta = np.clip(Zp @ w, -3.0, 3.0)
+        mu = bp * np.exp(eta)
+        grad = Zp.T @ (mu - yp) + l2_pen * w
+        if float(np.max(np.abs(grad))) < 1e-6:
+            break
+        Zw = Zp * np.sqrt(mu)[:, None]
+        H = Zw.T @ Zw + np.diag(l2_pen + 1e-9)
+        step = np.clip(np.linalg.solve(H, grad), -1.0, 1.0)
+        w = w - step
+        if float(np.max(np.abs(step))) < 1e-6:
+            break
+    return w
+
+
 class FRPHead:
     """Pure-numpy Total FRP Head with symmetric two-sensor VZA physics and honest OOF 90% intervals."""
 
@@ -432,7 +534,7 @@ class FRPHead:
         pass_sat_mw: float = 75000.0,
         gamma_v_small: float = 0.35,
         gamma_v_large: float = 0.04,
-        snpp_plume_mult: float = 0.78,
+        snpp_plume_mult: float = 0.94,
         cbl_gain: float = 2.25,
         eve_gain: float = 0.55,
         dt_pow: float = 1.35,
@@ -441,6 +543,9 @@ class FRPHead:
         cal_disp: float = 120000.0,
         ridge_lam: float = 3.5,
         level: float = 0.90,
+        conformal_pad: float = 0.012,
+        n_interval_bins: int = 3,
+        stratified_intervals: bool = True,
         two_regime_intervals: bool = False,
     ) -> None:
         self.gamma_m_low = float(gamma_m_low)
@@ -457,11 +562,15 @@ class FRPHead:
         self.cal_disp = float(cal_disp)
         self.ridge_lam = float(ridge_lam)
         self.level = float(level)
+        self.conformal_pad = float(conformal_pad)
+        self.n_interval_bins = int(n_interval_bins)
+        self.stratified_intervals = bool(stratified_intervals)
         self.two_regime_intervals = bool(two_regime_intervals)
 
         self.coef_: NDArray[np.float64] = np.array([1.35, 1.10, 0.98, 0.76, 0.50], dtype=np.float64)
         self.scale_: float = 1.0
         self.interval_stats_: dict[str, Any] = {"lo": 0.0, "hi": 2.1, "one_sided": True, "level": self.level}
+        self.stratified_intervals_: dict[str, Any] | None = None
         self.clean_interval_stats_: dict[str, Any] | None = None
         self.uncertain_interval_stats_: dict[str, Any] | None = None
 
@@ -542,7 +651,7 @@ class FRPHead:
         else:
             coef = prior.copy()
 
-        raw_tr, _, _ = self._predict_raw_vis(look_x, ctx_list, basis_cache, slots, idx_tr, coef)
+        raw_tr, _, _, _ = self._predict_raw_vis(look_x, ctx_list, basis_cache, slots, idx_tr, coef)
         num, den = 0.0, 0.0
         for e_i in sorted(set(ep_ids[idx_tr].tolist())):
             em = ep_ids[idx_tr] == e_i
@@ -562,10 +671,11 @@ class FRPHead:
         slots: list[dict[str, Any]],
         indices: NDArray[np.int64],
         coef: NDArray[np.float64],
-    ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
         out_raw = np.zeros(len(indices), dtype=np.float64)
         out_dt = np.full(len(indices), 24.0, dtype=np.float64)
         out_miss = np.zeros(len(indices), dtype=np.float64)
+        out_std = np.full(len(indices), 3.5, dtype=np.float64)
 
         for k_i, l_i in enumerate(indices):
             sd = slots[int(l_i)]
@@ -628,13 +738,15 @@ class FRPHead:
 
             pis = np.array([e[1] for e in ests], dtype=np.float64)
             vs = np.array([max(e[0], 1e-3) for e in ests], dtype=np.float64)
-            ws = pis / pis.sum()
+            pi_tot = float(pis.sum())
+            ws = pis / pi_tot
             m_arith = float(np.sum(ws * vs))
             m_geom = float(np.exp(np.sum(ws * np.log(vs))))
             out_raw[k_i] = self.q_arith * m_arith + (1.0 - self.q_arith) * m_geom
             out_miss[k_i] = miss_max
+            out_std[k_i] = 1.0 / math.sqrt(max(pi_tot, 0.08))
 
-        return out_raw, out_dt, out_miss
+        return out_raw, out_dt, out_miss, out_std
 
     def _build_fallback_basis(self, look_x: NDArray[np.float64]) -> NDArray[np.float64]:
         v_area = np.maximum(look_x[:, 4], 0.12)
@@ -748,29 +860,39 @@ class FRPHead:
             inner_oof = np.zeros(n, dtype=np.float64)
             inner_dt = np.full(n, 24.0, dtype=np.float64)
             inner_miss = np.zeros(n, dtype=np.float64)
+            inner_std = np.full(n, 3.5, dtype=np.float64)
             if folds:
                 for itr, iva in folds:
                     iva_idx = np.flatnonzero(iva)
                     c_i, s_i = self._fit_core_vis(lx, y, ep_ids, ctx_list, basis_cache, slots, itr)
-                    r_va, dt_va, ms_va = self._predict_raw_vis(lx, ctx_list, basis_cache, slots, iva_idx, c_i)
+                    r_va, dt_va, ms_va, std_va = self._predict_raw_vis(lx, ctx_list, basis_cache, slots, iva_idx, c_i)
                     inner_oof[iva_idx] = np.maximum(r_va * s_i, 0.0)
                     inner_dt[iva_idx] = dt_va
                     inner_miss[iva_idx] = ms_va
+                    inner_std[iva_idx] = std_va
             else:
                 all_idx = np.arange(n, dtype=np.int64)
-                r_all, inner_dt, inner_miss = self._predict_raw_vis(lx, ctx_list, basis_cache, slots, all_idx, self.coef_)
+                r_all, inner_dt, inner_miss, inner_std = self._predict_raw_vis(
+                    lx, ctx_list, basis_cache, slots, all_idx, self.coef_
+                )
                 inner_oof = np.maximum(r_all * self.scale_, 0.0)
 
             pos_m = inner_oof > 0.0
-            iv_main = M.stated_interval((y[pos_m] / inner_oof[pos_m]).tolist(), self.level) if np.any(pos_m) else None
+            eff_lvl = min(0.95, self.level + self.conformal_pad)
+            iv_main = M.stated_interval((y[pos_m] / inner_oof[pos_m]).tolist(), eff_lvl) if np.any(pos_m) else None
             if iv_main is not None:
                 self.interval_stats_ = iv_main
+
+            if self.stratified_intervals:
+                self.stratified_intervals_ = _fit_uncertainty_intervals(
+                    inner_oof, y, inner_std, level=self.level, conformal_pad=self.conformal_pad, n_bins=self.n_interval_bins
+                )
 
             clean_m = (inner_oof >= 350.0) & (inner_dt <= 1.5) & (inner_miss <= 0.05)
             unc_m = pos_m & (~clean_m)
             if int(clean_m.sum()) >= 15 and int(unc_m.sum()) >= 15:
-                self.clean_interval_stats_ = M.stated_interval((y[clean_m] / inner_oof[clean_m]).tolist(), self.level)
-                self.uncertain_interval_stats_ = M.stated_interval((y[unc_m] / inner_oof[unc_m]).tolist(), self.level)
+                self.clean_interval_stats_ = M.stated_interval((y[clean_m] / inner_oof[clean_m]).tolist(), eff_lvl)
+                self.uncertain_interval_stats_ = M.stated_interval((y[unc_m] / inner_oof[unc_m]).tolist(), eff_lvl)
         else:
             self.interval_stats_ = dict(self.fallback_interval_stats_)
 
@@ -798,10 +920,12 @@ class FRPHead:
 
             basis_cache = self._precompute_basis_cache(ctx_list)
             idx_all = np.arange(n, dtype=np.int64)
-            raw, dt_v, miss_v = self._predict_raw_vis(lx, ctx_list, basis_cache, slots, idx_all, self.coef_)
+            raw, dt_v, miss_v, std_v = self._predict_raw_vis(lx, ctx_list, basis_cache, slots, idx_all, self.coef_)
             pred = np.maximum(raw * self.scale_, 0.0)
 
-            if self.two_regime_intervals and self.clean_interval_stats_ is not None and self.uncertain_interval_stats_ is not None:
+            if self.stratified_intervals and self.stratified_intervals_ is not None:
+                lo, hi = _apply_uncertainty_intervals(pred, std_v, self.stratified_intervals_)
+            elif self.two_regime_intervals and self.clean_interval_stats_ is not None and self.uncertain_interval_stats_ is not None:
                 is_clean = (pred >= 350.0) & (dt_v <= 1.5) & (miss_v <= 0.05)
                 lo = np.where(
                     pred <= 0.0,
@@ -835,7 +959,7 @@ class FRPHead:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "version": 1,
+            "version": 2,
             "params": {
                 "gamma_m_low": self.gamma_m_low,
                 "gamma_m_high": self.gamma_m_high,
@@ -851,11 +975,15 @@ class FRPHead:
                 "cal_disp": self.cal_disp,
                 "ridge_lam": self.ridge_lam,
                 "level": self.level,
+                "conformal_pad": self.conformal_pad,
+                "n_interval_bins": self.n_interval_bins,
+                "stratified_intervals": self.stratified_intervals,
                 "two_regime_intervals": self.two_regime_intervals,
             },
             "coef": self.coef_.tolist(),
             "scale": float(self.scale_),
             "interval_stats": dict(self.interval_stats_),
+            "stratified_intervals_data": self.stratified_intervals_,
             "clean_interval_stats": None if self.clean_interval_stats_ is None else dict(self.clean_interval_stats_),
             "uncertain_interval_stats": None if self.uncertain_interval_stats_ is None else dict(self.uncertain_interval_stats_),
             "fallback_coef": self.fallback_coef_.tolist(),
@@ -865,10 +993,15 @@ class FRPHead:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> FRPHead:
-        obj = cls(**data["params"])
+        params = dict(data["params"])
+        if int(data.get("version", 1)) == 1:
+            params.setdefault("conformal_pad", 0.0)
+            params.setdefault("stratified_intervals", False)
+        obj = cls(**params)
         obj.coef_ = np.asarray(data["coef"], dtype=np.float64)
         obj.scale_ = float(data["scale"])
         obj.interval_stats_ = dict(data["interval_stats"])
+        obj.stratified_intervals_ = data.get("stratified_intervals_data")
         obj.clean_interval_stats_ = None if data.get("clean_interval_stats") is None else dict(data["clean_interval_stats"])
         obj.uncertain_interval_stats_ = None if data.get("uncertain_interval_stats") is None else dict(data["uncertain_interval_stats"])
         obj.fallback_coef_ = np.asarray(data["fallback_coef"], dtype=np.float64)
@@ -878,7 +1011,11 @@ class FRPHead:
 
 
 class PixelCountHead:
-    """Pure-numpy Pixel Count Head accepting any calibrated cell probability map + look_x."""
+    """Pure-numpy Pixel Count Head with hybrid cell+radiometric basis, Poisson calibration, and OOF intervals."""
+
+    DEFAULT_L2_PEN: tuple[float, ...] = (
+        0.0, 200.0, 200.0, 250.0, 400.0, 300.0, 300.0, 300.0, 500.0, 500.0, 500.0
+    )
 
     def __init__(
         self,
@@ -889,6 +1026,10 @@ class PixelCountHead:
         miss_decay_k: float = 0.30,
         temp_disp: float = 12000.0,
         level: float = 0.90,
+        conformal_pad: float = 0.012,
+        n_interval_bins: int = 3,
+        use_poisson_cal: bool = True,
+        stratified_intervals: bool = True,
         two_regime_intervals: bool = False,
     ) -> None:
         self.alpha_min = float(alpha_min)
@@ -898,25 +1039,35 @@ class PixelCountHead:
         self.miss_decay_k = float(miss_decay_k)
         self.temp_disp = float(temp_disp)
         self.level = float(level)
+        self.conformal_pad = float(conformal_pad)
+        self.n_interval_bins = int(n_interval_bins)
+        self.use_poisson_cal = bool(use_poisson_cal)
+        self.stratified_intervals = bool(stratified_intervals)
         self.two_regime_intervals = bool(two_regime_intervals)
 
         self.scale_day_: float = 1.0
         self.scale_night_: float = 1.0
+        self.poisson_weights_: NDArray[np.float64] = np.zeros(len(self.DEFAULT_L2_PEN), dtype=np.float64)
         self.interval_stats_: dict[str, Any] = {"lo": 0.0, "hi": 2.0, "one_sided": True, "level": self.level}
+        self.stratified_intervals_: dict[str, Any] | None = None
         self.clean_interval_stats_: dict[str, Any] | None = None
         self.uncertain_interval_stats_: dict[str, Any] | None = None
 
-    def _compute_raw(
+    def _compute_features_v2(
         self,
         p_sum_mat: NDArray[np.float64],
         look_x: NDArray[np.float64],
         vis_contexts: Sequence[Any] | VisiblePassContext | dict[str, Any] | None = None,
         slot_infos: Sequence[Any] | Any | None = None,
-    ) -> NDArray[np.float64]:
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+        """Return (cell_pix_v1, base_v2, Z_cov, std_hat)."""
         n = look_x.shape[0]
         sp = np.maximum(p_sum_mat[:, 0], 0.0)
         sp2 = np.clip(p_sum_mat[:, 1], 0.0, sp)
+        c25 = np.maximum(p_sum_mat[:, 5], 0.0) if p_sum_mat.shape[1] > 5 else 0.35 * sp
 
+        is_day_f = look_x[:, 0]
+        is_snpp_f = look_x[:, 1]
         v_area = np.maximum(look_x[:, 4], 0.12)
         v_ovl = np.maximum(look_x[:, 5], 1.0)
         v_cells = np.maximum(look_x[:, 6], 1.0)
@@ -928,6 +1079,13 @@ class PixelCountHead:
         alpha_dyn = np.clip(self.alpha_min + self.alpha_slope * conc, self.alpha_min, self.alpha_max)
         geom_dyn = v_ovl * ((1.0 - alpha_dyn) / v_cells + alpha_dyn * (CELL_AREA_KM2 / v_area))
 
+        mod_area = np.ones(n, dtype=np.float64)
+        clr_miss = np.zeros(n, dtype=np.float64)
+        dt_best_arr = np.expm1(np.maximum(look_x[:, 7], 0.0))
+        diurn_cbl = np.clip(look_x[:, 10], 0.5, 2.0)
+        vis_pix_est = np.zeros(n, dtype=np.float64)
+        abs_lat = np.full(n, 35.0, dtype=np.float64)
+
         if vis_contexts is not None and slot_infos is not None:
             if isinstance(vis_contexts, (VisiblePassContext, dict)):
                 ctx_list = [VisiblePassContext.from_raw_dict(vis_contexts)]
@@ -937,25 +1095,64 @@ class PixelCountHead:
                 ctx_list = [VisiblePassContext.from_raw_dict(v) for v in vis_contexts]
                 slots = [slot_to_dict(slot_infos, ep_idx=0)] if n == 1 else [slot_to_dict(s) for s in slot_infos]
 
-            mod_area = np.ones(n, dtype=np.float64)
-            clr_miss = np.zeros(n, dtype=np.float64)
+            dt_best_arr = np.full(n, 24.0, dtype=np.float64)
+            diurn_cbl = np.ones(n, dtype=np.float64)
             for i in range(n):
                 sd = slots[i]
                 ctx = ctx_list[sd["ep_idx"]]
+                abs_lat[i] = abs(ctx.lat_mid)
                 t_s = sd["time_s"]
+                lst_tgt = ((t_s % 86400.0) / 3600.0 + ctx.lon_mid / 15.0) % 24.0
+                d_tgt = _cbl_frp_diurnal(lst_tgt, 1.35, 0.35)
+
                 cands = [p for p in ctx.near_passes if p["n_in"] > 0]
                 if cands:
-                    gaps = [abs(float(p["time_s"]) - t_s) / 3600.0 for p in cands]
-                    j = int(np.argmin(gaps))
-                    in_mask = np.asarray(cands[j]["is_in"], dtype=bool)
-                    mod_area[i] = float(np.asarray(cands[j]["area"], dtype=np.float64)[in_mask].mean())
-                    dt_best = gaps[j]
-                else:
-                    dt_best = 24.0
+                    times_c = np.array([float(p["time_s"]) for p in cands], dtype=np.float64)
+                    gaps = np.abs(times_c - t_s) / 3600.0
+                    j_best = int(np.argmin(gaps))
+                    dt_best = float(gaps[j_best])
+                    dt_best_arr[i] = dt_best
+                    in_mask = np.asarray(cands[j_best]["is_in"], dtype=bool)
+                    mod_area[i] = float(np.asarray(cands[j_best]["area"], dtype=np.float64)[in_mask].mean())
+
+                    ip = int(np.searchsorted(times_c, t_s, side="right")) - 1
+                    in_ = int(np.searchsorted(times_c, t_s, side="left"))
+                    br_idx: list[int] = []
+                    if ip >= 0:
+                        br_idx.append(ip)
+                    if in_ < len(cands) and in_ != ip:
+                        br_idx.append(in_)
+                    w_sum, px_sum, d_log_sum = 0.0, 0.0, 0.0
+                    for jc in br_idx:
+                        pc = cands[jc]
+                        dt_c = abs(t_s - float(pc["time_s"])) / 3600.0
+                        if dt_c > 24.0:
+                            continue
+                        im = np.asarray(pc["is_in"], dtype=bool)
+                        ovl_c = np.asarray(pc["ovl"], dtype=np.float64)[im]
+                        area_c = np.asarray(pc["area"], dtype=np.float64)[im]
+                        frp_c = np.asarray(pc["y_ded"], dtype=np.float64)[im]
+                        sub_mult = np.clip(1.65 + 0.55 * np.log1p(np.maximum(frp_c, 0.0) / 15.0), 1.0, 4.5) * (
+                            np.maximum(area_c, 1.0) ** 0.12
+                        )
+                        n_veq = float(np.sum(sub_mult / ovl_c)) * v_ovl[i] * ((CELL_AREA_KM2 / v_area[i]) ** 0.22)
+                        d_src = _cbl_frp_diurnal(float(pc["lst_hr"]), 1.35, 0.35)
+                        w_d = min(1.0, dt_c / 1.8)
+                        d_mult = float(np.clip((d_tgt / d_src) ** (0.45 * w_d), 0.55, 1.85))
+                        m_bet, m_near = _clear_misses_info(ctx.empty_noms, float(pc["time_s"]), t_s)
+                        m_dec = math.exp(-0.45 * m_bet - 0.65 * m_near)
+                        w_c = 1.0 / (0.12 + 0.18 * (dt_c ** 1.3) + 0.5 * (m_bet + m_near))
+                        w_sum += w_c
+                        px_sum += w_c * (n_veq * d_mult * m_dec)
+                        d_log_sum += w_c * math.log(d_mult)
+                    if w_sum > 0.0:
+                        vis_pix_est[i] = px_sum / w_sum
+                        diurn_cbl[i] = math.exp(d_log_sum / w_sum)
+
                 for en in ctx.empty_noms:
                     if en["has_ctx"] > 0.0:
                         dt_e = abs(float(en["time_s"]) - t_s) / 3600.0
-                        if dt_e <= 2.2 and dt_best > dt_e + 0.4:
+                        if dt_e <= 2.2 and dt_best_arr[i] > dt_e + 0.4:
                             clr_miss[i] += math.exp(-0.5 * dt_e)
         else:
             mod_area = np.where(
@@ -963,7 +1160,6 @@ class PixelCountHead:
                 (pnt_cells * CELL_AREA_KM2) / np.maximum(pnt_pix_ded, 0.25),
                 1.5,
             )
-            clr_miss = np.zeros(n, dtype=np.float64)
 
         esp = np.where(
             sp > rec_p_sum,
@@ -971,7 +1167,42 @@ class PixelCountHead:
             sp,
         )
         miss_mult = np.exp(-self.miss_decay_k * np.minimum(clr_miss, 2.0))
-        return np.maximum(esp * geom_dyn * miss_mult, 0.0)
+        cell_pix = np.maximum(esp * geom_dyn * miss_mult, 0.0)
+
+        w_vis = np.where(
+            vis_pix_est > 0.0,
+            np.clip(0.18 + 0.12 * np.tanh((dt_best_arr - 1.5) / 2.5), 0.08, 0.32),
+            0.0,
+        )
+        base_v2 = (1.0 - w_vis) * cell_pix + w_vis * vis_pix_est
+
+        log_scale = np.log1p(base_v2) - 4.0
+        log_diurn = np.log(np.clip(diurn_cbl, 0.5, 2.0))
+        log_varea = np.log(v_area / CELL_AREA_KM2) - 0.5
+        core_frac = c25 / np.maximum(sp, 1.0) - 0.35
+        zb = _zone_basis(abs_lat)
+        Z = np.column_stack(
+            [
+                np.ones(n, dtype=np.float64),
+                is_day_f - 0.5,
+                is_snpp_f - 0.5,
+                log_scale,
+                np.maximum(0.0, log_scale - 1.0),
+                log_diurn,
+                log_varea,
+                core_frac,
+                zb[:, 1],
+                zb[:, 2],
+                zb[:, 3],
+            ]
+        )
+        std_hat = np.sqrt(
+            0.04
+            + 1.1 / np.maximum(base_v2, 1.5)
+            + 0.08 * np.minimum(dt_best_arr, 18.0)
+            + 0.35 * np.minimum(clr_miss, 2.0)
+        )
+        return cell_pix, base_v2, Z, std_hat
 
     def _fit_scales(
         self,
@@ -1005,33 +1236,53 @@ class PixelCountHead:
         n = len(y)
 
         p_mat = coerce_prob_summaries(p_maps_or_summaries, n)
-        raw = self._compute_raw(p_mat, lx, vis_contexts=vis_contexts, slot_infos=slot_infos)
+        cell_pix, base_v2, Z_all, std_all = self._compute_features_v2(
+            p_mat, lx, vis_contexts=vis_contexts, slot_infos=slot_infos
+        )
         is_day = lx[:, 0] > 0.5
-        dt_near = np.minimum(lx[:, 8], lx[:, 11])
+        dt_near = np.expm1(np.maximum(lx[:, 7], 0.0))
 
         all_mask = np.ones(n, dtype=bool)
-        self.scale_day_, self.scale_night_ = self._fit_scales(raw, is_day, y, all_mask)
+        self.scale_day_, self.scale_night_ = self._fit_scales(cell_pix, is_day, y, all_mask)
+        l2_pen = np.asarray(self.DEFAULT_L2_PEN, dtype=np.float64)
+        if self.use_poisson_cal:
+            self.poisson_weights_ = _fit_log_multiplier_poisson(base_v2, Z_all, y, l2_pen)
+        else:
+            self.poisson_weights_ = np.zeros(len(self.DEFAULT_L2_PEN), dtype=np.float64)
 
         folds = _grouped_kfold_masks(grp, max_folds=10)
         inner_oof = np.zeros(n, dtype=np.float64)
         if folds:
             for itr, iva in folds:
-                sd_i, sn_i = self._fit_scales(raw, is_day, y, itr)
-                inner_oof[iva & is_day] = raw[iva & is_day] * sd_i
-                inner_oof[iva & (~is_day)] = raw[iva & (~is_day)] * sn_i
+                if self.use_poisson_cal:
+                    w_i = _fit_log_multiplier_poisson(base_v2[itr], Z_all[itr], y[itr], l2_pen)
+                    inner_oof[iva] = np.maximum(base_v2[iva] * np.exp(np.clip(Z_all[iva] @ w_i, -3.0, 3.0)), 0.0)
+                else:
+                    sd_i, sn_i = self._fit_scales(cell_pix, is_day, y, itr)
+                    inner_oof[iva & is_day] = cell_pix[iva & is_day] * sd_i
+                    inner_oof[iva & (~is_day)] = cell_pix[iva & (~is_day)] * sn_i
         else:
-            inner_oof = np.where(is_day, raw * self.scale_day_, raw * self.scale_night_)
+            if self.use_poisson_cal:
+                inner_oof = np.maximum(base_v2 * np.exp(np.clip(Z_all @ self.poisson_weights_, -3.0, 3.0)), 0.0)
+            else:
+                inner_oof = np.where(is_day, cell_pix * self.scale_day_, cell_pix * self.scale_night_)
 
         pos_m = inner_oof > 0.0
-        iv_main = M.stated_interval((y[pos_m] / inner_oof[pos_m]).tolist(), self.level) if np.any(pos_m) else None
+        eff_lvl = min(0.95, self.level + self.conformal_pad)
+        iv_main = M.stated_interval((y[pos_m] / inner_oof[pos_m]).tolist(), eff_lvl) if np.any(pos_m) else None
         if iv_main is not None:
             self.interval_stats_ = iv_main
+
+        if self.stratified_intervals:
+            self.stratified_intervals_ = _fit_uncertainty_intervals(
+                inner_oof, y, std_all, level=self.level, conformal_pad=self.conformal_pad, n_bins=self.n_interval_bins
+            )
 
         clean_m = (inner_oof >= 15.0) & (dt_near <= 1.5)
         unc_m = pos_m & (~clean_m)
         if int(clean_m.sum()) >= 15 and int(unc_m.sum()) >= 15:
-            self.clean_interval_stats_ = M.stated_interval((y[clean_m] / inner_oof[clean_m]).tolist(), self.level)
-            self.uncertain_interval_stats_ = M.stated_interval((y[unc_m] / inner_oof[unc_m]).tolist(), self.level)
+            self.clean_interval_stats_ = M.stated_interval((y[clean_m] / inner_oof[clean_m]).tolist(), eff_lvl)
+            self.uncertain_interval_stats_ = M.stated_interval((y[unc_m] / inner_oof[unc_m]).tolist(), eff_lvl)
 
         return self
 
@@ -1048,12 +1299,20 @@ class PixelCountHead:
         n = lx.shape[0]
 
         p_mat = coerce_prob_summaries(p_maps_or_summaries, n)
-        raw = self._compute_raw(p_mat, lx, vis_contexts=vis_contexts, slot_infos=slot_infos)
+        cell_pix, base_v2, Z_all, std_all = self._compute_features_v2(
+            p_mat, lx, vis_contexts=vis_contexts, slot_infos=slot_infos
+        )
         is_day = lx[:, 0] > 0.5
-        dt_near = np.minimum(lx[:, 8], lx[:, 11])
-        pred = np.where(is_day, raw * self.scale_day_, raw * self.scale_night_)
+        dt_near = np.expm1(np.maximum(lx[:, 7], 0.0))
 
-        if self.two_regime_intervals and self.clean_interval_stats_ is not None and self.uncertain_interval_stats_ is not None:
+        if self.use_poisson_cal:
+            pred = np.maximum(base_v2 * np.exp(np.clip(Z_all @ self.poisson_weights_, -3.0, 3.0)), 0.0)
+        else:
+            pred = np.where(is_day, cell_pix * self.scale_day_, cell_pix * self.scale_night_)
+
+        if self.stratified_intervals and self.stratified_intervals_ is not None:
+            lo, hi = _apply_uncertainty_intervals(pred, std_all, self.stratified_intervals_)
+        elif self.two_regime_intervals and self.clean_interval_stats_ is not None and self.uncertain_interval_stats_ is not None:
             is_clean = (pred >= 15.0) & (dt_near <= 1.5)
             lo = np.where(
                 pred <= 0.0,
@@ -1088,7 +1347,7 @@ class PixelCountHead:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "version": 1,
+            "version": 2,
             "params": {
                 "alpha_min": self.alpha_min,
                 "alpha_slope": self.alpha_slope,
@@ -1097,21 +1356,35 @@ class PixelCountHead:
                 "miss_decay_k": self.miss_decay_k,
                 "temp_disp": self.temp_disp,
                 "level": self.level,
+                "conformal_pad": self.conformal_pad,
+                "n_interval_bins": self.n_interval_bins,
+                "use_poisson_cal": self.use_poisson_cal,
+                "stratified_intervals": self.stratified_intervals,
                 "two_regime_intervals": self.two_regime_intervals,
             },
             "scale_day": float(self.scale_day_),
             "scale_night": float(self.scale_night_),
+            "poisson_weights": self.poisson_weights_.tolist(),
             "interval_stats": dict(self.interval_stats_),
+            "stratified_intervals_data": self.stratified_intervals_,
             "clean_interval_stats": None if self.clean_interval_stats_ is None else dict(self.clean_interval_stats_),
             "uncertain_interval_stats": None if self.uncertain_interval_stats_ is None else dict(self.uncertain_interval_stats_),
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PixelCountHead:
-        obj = cls(**data["params"])
+        params = dict(data["params"])
+        if int(data.get("version", 1)) == 1:
+            params.setdefault("conformal_pad", 0.0)
+            params.setdefault("use_poisson_cal", False)
+            params.setdefault("stratified_intervals", False)
+        obj = cls(**params)
         obj.scale_day_ = float(data["scale_day"])
         obj.scale_night_ = float(data["scale_night"])
+        if "poisson_weights" in data and data["poisson_weights"] is not None:
+            obj.poisson_weights_ = np.asarray(data["poisson_weights"], dtype=np.float64)
         obj.interval_stats_ = dict(data["interval_stats"])
+        obj.stratified_intervals_ = data.get("stratified_intervals_data")
         obj.clean_interval_stats_ = None if data.get("clean_interval_stats") is None else dict(data["clean_interval_stats"])
         obj.uncertain_interval_stats_ = None if data.get("uncertain_interval_stats") is None else dict(data["uncertain_interval_stats"])
         return obj

@@ -655,7 +655,8 @@ class HistGBDT:
     def predict_raw(self, X: NDArray[np.floating[Any]], n_trees: int | None = None) -> NDArray[np.float64]:
         if len(X) == 0:
             return np.empty(0, dtype=np.float64)
-        X_f32 = np.ascontiguousarray(X[:, :35] if X.ndim == 2 and X.shape[1] > 35 else X, dtype=np.float32)
+        nf = self.n_features_ if self.n_features_ > 0 else X.shape[1]
+        X_f32 = np.ascontiguousarray(X[:, :nf] if X.ndim == 2 and X.shape[1] > nf else X, dtype=np.float32)
         end_t = len(self._compiled_trees) if n_trees is None else min(int(n_trees), len(self._compiled_trees))
         raw = self._compute_base_margin_infer(X_f32)
         raw += self._predict_trees_range(X_f32, 0, end_t)
@@ -746,7 +747,7 @@ class HistGBDTEnsemble:
     def predict_proba(self, X: NDArray[np.floating[Any]]) -> NDArray[np.float64]:
         if len(X) == 0:
             return np.empty(0, dtype=np.float64)
-        X_f32 = np.ascontiguousarray(X[:, :35] if X.ndim == 2 and X.shape[1] > 35 else X, dtype=np.float32)
+        X_f32 = np.ascontiguousarray(X, dtype=np.float32)
         out = np.zeros(X_f32.shape[0], dtype=np.float64)
         for m, w in zip(self.models, self.weights):
             out += w * m.predict_proba(X_f32)
@@ -770,20 +771,61 @@ class HistGBDTEnsemble:
 def make_default_single_gbdt(random_state: int = 42, max_train_rows: int = 3_000_000) -> HistGBDT:
     """Return the selected standalone HistGBDT configuration."""
     return HistGBDT(
-        n_estimators=300,
-        learning_rate=0.05,
-        max_depth=4,
+        n_estimators=360,
+        learning_rate=0.045,
+        max_depth=5,
         n_bins=255,
-        l2_reg=80.0,
-        min_child_hessian=90.0,
+        l2_reg=100.0,
+        min_child_hessian=120.0,
         max_delta_step=2.5,
-        colsample_bytree=0.70,
+        colsample_bytree=0.72,
         init_feature_idx=1,
-        init_alpha=0.25,
+        init_alpha=0.30,
         use_goss=True,
-        goss_top_rate=0.20,
-        goss_other_rate=0.15,
+        goss_top_rate=0.22,
+        goss_other_rate=0.16,
         goss_refresh=10,
         max_train_rows=max_train_rows,
         random_state=random_state,
     )
+
+
+def make_default_gbdt_ensemble(random_state: int = 42, max_train_rows: int = 3_000_000) -> HistGBDTEnsemble:
+    """Return a diverse two-depth HistGBDTEnsemble (depth 5 + depth 6)."""
+    m5 = HistGBDT(
+        n_estimators=340,
+        learning_rate=0.045,
+        max_depth=5,
+        n_bins=255,
+        l2_reg=100.0,
+        min_child_hessian=120.0,
+        max_delta_step=2.5,
+        colsample_bytree=0.72,
+        init_feature_idx=1,
+        init_alpha=0.30,
+        use_goss=True,
+        goss_top_rate=0.22,
+        goss_other_rate=0.16,
+        goss_refresh=10,
+        max_train_rows=max_train_rows,
+        random_state=random_state,
+    )
+    m6 = HistGBDT(
+        n_estimators=260,
+        learning_rate=0.042,
+        max_depth=6,
+        n_bins=255,
+        l2_reg=140.0,
+        min_child_hessian=160.0,
+        max_delta_step=2.5,
+        colsample_bytree=0.68,
+        init_feature_idx=1,
+        init_alpha=0.35,
+        use_goss=True,
+        goss_top_rate=0.22,
+        goss_other_rate=0.16,
+        goss_refresh=10,
+        max_train_rows=max_train_rows,
+        random_state=random_state + 100,
+    )
+    return HistGBDTEnsemble(models=[m5, m6], weights=[0.55, 0.45])

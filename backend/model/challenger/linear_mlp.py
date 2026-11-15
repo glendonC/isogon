@@ -57,6 +57,19 @@ CELL_FEATURE_INDEX: dict[str, int] = {
     "missed_modis_decay": 32,
     "terrain_slope": 33,
     "terrain_upslope": 34,
+    "near_inv_modis_area": 35,
+    "near_psf_density": 36,
+    "near_max_conf": 37,
+    "bridge_psf_density": 38,
+    "target_orient_rec_a": 39,
+    "target_orient_psf": 40,
+    "rel_rec_p": 41,
+    "rel_near_psf_dens": 42,
+    "censor_clean_looks": 43,
+    "front_advance": 44,
+    "diurnal_cbl_log_ratio": 45,
+    "abs_lat_norm": 46,
+    "is_snpp": 47,
 }
 
 DEFAULT_PAIRWISE_INTERACTIONS: tuple[tuple[str, str], ...] = (
@@ -77,6 +90,14 @@ DEFAULT_PAIRWISE_INTERACTIONS: tuple[tuple[str, str], ...] = (
     ("pnt_in", "near_ncover"),
     ("rec_p", "pnt_in"),
     ("rec_p_blur3", "near_blur3"),
+    ("near_psf_density", "log_dt_nearest"),
+    ("pnt_in", "near_inv_modis_area"),
+    ("near_psf", "near_inv_modis_area"),
+    ("past_slow", "censor_clean_looks"),
+    ("rec_logit", "censor_clean_looks"),
+    ("target_orient_rec_a", "target_area_ratio"),
+    ("rec_p", "diurnal_cbl_log_ratio"),
+    ("pnt_in", "near_max_conf"),
 )
 
 DEFAULT_MONOTONE_TRANSFORMS: tuple[tuple[str, float], ...] = (
@@ -94,6 +115,10 @@ DEFAULT_MONOTONE_TRANSFORMS: tuple[tuple[str, float], ...] = (
     ("bracket_persist", 1e-2),
     ("past_slow", 1e-3),
     ("fut_slow", 1e-3),
+    ("near_psf_density", 1e-2),
+    ("target_orient_rec_a", 1e-3),
+    ("target_orient_psf", 1e-2),
+    ("rel_rec_p", 1e-3),
 )
 
 
@@ -182,38 +207,49 @@ class InteractionLogistic:
         self.seed = int(seed)
 
         self.bias_: float = 0.0
+        self.n_raw_features_: int = 0
         self.weights_: NDArray[np.float64] | None = None
         self.mean_: NDArray[np.float64] | None = None
         self.std_: NDArray[np.float64] | None = None
 
-    def _build_features(self, X: NDArray[Any]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    def _build_features(self, X: NDArray[Any], n_raw_override: int | None = None) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
         Xf = np.asarray(X, dtype=np.float64).copy()
         if Xf.ndim != 2 or Xf.shape[1] < 35:
             raise ValueError(f"Expected X with shape (N, >=35), got {Xf.shape}")
+        n_raw = int(n_raw_override if n_raw_override is not None else (self.n_raw_features_ or Xf.shape[1]))
+        if Xf.shape[1] < n_raw:
+            raise ValueError(f"Expected at least {n_raw} raw features, got {Xf.shape[1]}")
+        Xf = Xf[:, :n_raw]
         b_idx = CELL_FEATURE_INDEX["bridge_psf"]
         Xf[:, b_idx] = np.log1p(np.maximum(Xf[:, b_idx], 0.0))
 
-        cols: list[NDArray[np.float64]] = [Xf[:, :35]]
-        mults: list[NDArray[np.float64]] = [np.ones(35, dtype=np.float64)]
+        cols: list[NDArray[np.float64]] = [Xf]
+        mults: list[NDArray[np.float64]] = [np.ones(n_raw, dtype=np.float64)]
 
         if self.include_monotone and len(self.monotone_specs) > 0:
             mono_cols = []
             for nm, eps in self.monotone_specs:
-                v = np.maximum(Xf[:, CELL_FEATURE_INDEX[nm]], 0.0)
+                idx_m = CELL_FEATURE_INDEX[nm]
+                if idx_m >= n_raw:
+                    continue
+                v = np.maximum(Xf[:, idx_m], 0.0)
                 mono_cols.append(np.log(v + eps))
                 mono_cols.append(np.sqrt(v))
-            blk_m = np.column_stack(mono_cols)
-            cols.append(blk_m)
-            mults.append(np.ones(blk_m.shape[1], dtype=np.float64))
+            if mono_cols:
+                blk_m = np.column_stack(mono_cols)
+                cols.append(blk_m)
+                mults.append(np.ones(blk_m.shape[1], dtype=np.float64))
 
         if self.include_interactions and len(self.interactions) > 0:
             inter_cols = [
                 Xf[:, CELL_FEATURE_INDEX[a]] * Xf[:, CELL_FEATURE_INDEX[b]]
                 for a, b in self.interactions
+                if CELL_FEATURE_INDEX[a] < n_raw and CELL_FEATURE_INDEX[b] < n_raw
             ]
-            blk_i = np.column_stack(inter_cols)
-            cols.append(blk_i)
-            mults.append(np.full(blk_i.shape[1], self.inter_l2_mult, dtype=np.float64))
+            if inter_cols:
+                blk_i = np.column_stack(inter_cols)
+                cols.append(blk_i)
+                mults.append(np.full(blk_i.shape[1], self.inter_l2_mult, dtype=np.float64))
 
         return np.hstack(cols), np.concatenate(mults)
 
@@ -239,7 +275,8 @@ class InteractionLogistic:
             X_fit = X
             y_f = y_all
 
-        Phi, reg_mult = self._build_features(X_fit)
+        self.n_raw_features_ = int(X_fit.shape[1])
+        Phi, reg_mult = self._build_features(X_fit, n_raw_override=self.n_raw_features_)
         n, d = Phi.shape
 
         self.mean_ = Phi.mean(axis=0)
@@ -330,7 +367,8 @@ class InteractionLogistic:
             raise RuntimeError("Cannot serialize unfitted InteractionLogistic")
         return {
             "model_family": "InteractionLogistic",
-            "version": 1,
+            "version": 2,
+            "n_raw_features": int(self.n_raw_features_ or 35),
             "l2_reg": self.l2_reg,
             "inter_l2_mult": self.inter_l2_mult,
             "include_monotone": self.include_monotone,
@@ -367,6 +405,7 @@ class InteractionLogistic:
             max_train_rows=doc.get("max_train_rows", 2_500_000),
             seed=doc.get("seed", 20261114),
         )
+        obj.n_raw_features_ = int(doc.get("n_raw_features", 35))
         obj.bias_ = float(doc["bias"])
         obj.weights_ = np.asarray(doc["weights"], dtype=np.float64)
         obj.mean_ = np.asarray(doc["mean"], dtype=np.float64)
@@ -386,7 +425,7 @@ class ResidualMLP:
 
     def __init__(
         self,
-        hidden_dims: tuple[int, int] = (48, 24),
+        hidden_dims: tuple[int, int] = (64, 32),
         epochs: int = 16,
         batch_size: int = 8192,
         lr_max: float = 3e-3,
@@ -394,7 +433,7 @@ class ResidualMLP:
         skip_weight_decay: float = 0.01,
         dropout: float = 0.08,
         z_clip: float | None = 10.0,
-        use_ema: bool = False,
+        use_ema: bool = True,
         ema_decay: float = 0.992,
         tau_plateau_frac: float = 0.997,
         tau: float = 0.274,
@@ -418,6 +457,7 @@ class ResidualMLP:
         self.max_train_rows = int(max_train_rows)
         self.seed = int(seed)
 
+        self.n_raw_features_: int = 0
         self.mean_: NDArray[np.float32] | None = None
         self.std_: NDArray[np.float32] | None = None
         self.W1_: NDArray[np.float32] | None = None
@@ -429,11 +469,14 @@ class ResidualMLP:
         self.b3_: float = 0.0
 
     @staticmethod
-    def _preprocess_raw(X: NDArray[Any]) -> NDArray[np.float32]:
+    def _preprocess_raw(X: NDArray[Any], n_raw: int | None = None) -> NDArray[np.float32]:
         Xf = np.asarray(X, dtype=np.float32).copy()
         if Xf.ndim != 2 or Xf.shape[1] < 35:
             raise ValueError(f"Expected X with shape (N, >=35), got {Xf.shape}")
-        Xf = Xf[:, :35]
+        d_use = Xf.shape[1] if n_raw is None or n_raw <= 0 else int(n_raw)
+        if Xf.shape[1] < d_use:
+            raise ValueError(f"Expected at least {d_use} raw features, got {Xf.shape[1]}")
+        Xf = Xf[:, :d_use]
         b_idx = CELL_FEATURE_INDEX["bridge_psf"]
         Xf[:, b_idx] = np.log1p(np.maximum(Xf[:, b_idx], np.float32(0.0)))
         return Xf
@@ -462,6 +505,7 @@ class ResidualMLP:
             y_u8 = y_all
 
         n, d = Xf.shape
+        self.n_raw_features_ = int(d)
         self.mean_ = Xf.mean(axis=0, dtype=np.float64).astype(np.float32)
         self.std_ = np.maximum(Xf.std(axis=0, dtype=np.float64), 1e-6).astype(np.float32)
         Z = self._standardize(Xf)
@@ -655,9 +699,10 @@ class ResidualMLP:
         if n == 0:
             return np.empty(0, dtype=np.float64)
         out = np.empty(n, dtype=np.float64)
+        n_raw = self.n_raw_features_ or int(self.mean_.shape[0])
         for c0 in range(0, n, chunk_size):
             c1 = min(n, c0 + chunk_size)
-            Xf = self._preprocess_raw(X[c0:c1])
+            Xf = self._preprocess_raw(X[c0:c1], n_raw=n_raw)
             Z = self._standardize(Xf)
             out[c0:c1] = self._predict_logit_standardized(Z)
         return out
@@ -678,7 +723,8 @@ class ResidualMLP:
         assert self.W3_ is not None and self.W_skip_ is not None
         return {
             "model_family": "ResidualMLP",
-            "version": 1,
+            "version": 2,
+            "n_raw_features": int(self.n_raw_features_ or self.mean_.shape[0]),
             "hidden_dims": list(self.hidden_dims),
             "epochs": self.epochs,
             "batch_size": self.batch_size,
@@ -723,6 +769,7 @@ class ResidualMLP:
             seed=doc.get("seed", 20261114),
         )
         obj.mean_ = np.asarray(doc["mean"], dtype=np.float32)
+        obj.n_raw_features_ = int(doc.get("n_raw_features", obj.mean_.shape[0]))
         obj.std_ = np.asarray(doc["std"], dtype=np.float32)
         obj.W1_ = np.asarray(doc["W1"], dtype=np.float32)
         obj.b1_ = np.asarray(doc["b1"], dtype=np.float32)
@@ -735,9 +782,9 @@ class ResidualMLP:
 
 
 class LogitStacker:
-    """Logistic meta-learner over out-of-fold base-model log-odds."""
+    """Non-negative regularized logistic meta-learner over out-of-fold base-model log-odds."""
 
-    def __init__(self, weights: list[float] | None = None, bias: float = 0.0, l2_scale: float = 1e-4) -> None:
+    def __init__(self, weights: list[float] | None = None, bias: float = 0.0, l2_scale: float = 5e-4) -> None:
         self.weights_ = None if weights is None else np.asarray(weights, dtype=np.float64)
         self.bias_ = float(bias)
         self.l2_scale = float(l2_scale)
@@ -749,7 +796,7 @@ class LogitStacker:
         w = np.full(k, 1.0 / k, dtype=np.float64)
         b = 0.0
         l2 = self.l2_scale * max(1, n)
-        for _ in range(15):
+        for _ in range(18):
             z = L @ w + b
             p = sigmoid_f64(z)
             diff = p - y_f
@@ -765,9 +812,19 @@ class LogitStacker:
             H[k, :k] = H_wb
             H[k, k] = H_bb
             step = np.linalg.solve(H, np.append(gw, gb))
-            w -= step[:k]
+            w = np.maximum(0.0, w - step[:k])
             b -= float(step[k])
             if float(np.max(np.abs(step))) < 1e-6:
+                break
+        # Final exact intercept polish with fixed non-negative weights
+        Lw = L @ w
+        for _ in range(6):
+            p = sigmoid_f64(Lw + b)
+            gb = float((p - y_f).sum())
+            hb = float(np.maximum(p * (1.0 - p), 1e-7).sum()) + 1e-6
+            db = gb / hb
+            b -= db
+            if abs(db) < 1e-7:
                 break
         self.weights_ = w
         self.bias_ = float(b)
