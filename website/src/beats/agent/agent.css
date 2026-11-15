@@ -1,4 +1,33 @@
-/* The Agent part's picture. Placement only: every size, weight and colour is the design system's. */
+/* The players, side by side (beats/agent/AgentBeat.tsx, AgentPicture.tsx), opened over the stage. Sizes and inks
+   from system.css. */
+
+.players {
+  /* Room kept for the trail above and for the guide's strip below. The page may set either. */
+  --players-top: 40px;
+  --players-guide: 150px;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  padding: var(--players-top) var(--sys-gutter) var(--players-guide);
+  /* The land steps back: the blocks are its own terrain, each with one player's looks on it. */
+  background: linear-gradient(180deg, rgba(8, 11, 17, 0.72) 0%, rgba(8, 11, 17, 0.9) 18%, rgba(8, 11, 17, 0.92) 100%);
+  color: var(--sys-ink);
+  pointer-events: auto;
+  animation: players-open var(--sys-slow) var(--sys-ease);
+}
+
+@keyframes players-open {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .players {
+    animation: none;
+  }
+}
 
 .agent-picture {
   position: relative;
@@ -6,6 +35,7 @@
   grid-template-rows: minmax(0, 1fr) auto;
   width: 100%;
   height: 100%;
+  min-height: 0;
 }
 
 .agent-picture__line {
@@ -13,60 +43,116 @@
   justify-self: center;
   max-width: 52ch;
   margin: 0;
-  padding: var(--sys-s5);
   text-align: center;
+  color: var(--sys-ink);
 }
 
 .agent-picture__foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--sys-s5);
-  padding: var(--sys-s3) var(--sys-s5) var(--sys-s4);
-}
-
-.agent-picture__foot .sys-ctl {
-  flex: none;
-  white-space: nowrap;
-}
-
-/* What a picked player did, look by look, under its own block. */
-.agent-card {
-  position: absolute;
-  z-index: 1;
-  max-width: none;
-}
-
-.agent-card .sys-table {
-  width: 100%;
-  white-space: nowrap;
-}
-
-/* Under a block: the player, its gain, the gain on a bar of the row's one scale, and one line about it. */
-.agent-label {
-  display: grid;
-  /* One fixed column, so that every block's bar has the same full length whatever its words */
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-  gap: 2px;
-  width: 248px;
-  padding: var(--sys-s2) var(--sys-s3);
-  text-align: center;
-  white-space: nowrap;
-}
-
-.agent-label .sys-fine {
-  min-height: calc(2 * var(--sys-lh-fine));
-  white-space: normal;
-}
-
-.agent-label__gain {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sys-s2);
+  justify-content: space-between;
+  gap: var(--sys-s2) var(--sys-s6);
   min-height: var(--sys-lh-label);
 }
 
-.agent-label .sys-readout__bar {
+.agent-picture__acts {
+  display: inline-flex;
+  gap: var(--sys-s6);
+  margin-left: auto;
+}
+
+/* An action is text; its key is a small quiet mark before it. */
+.agent-act {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sys-s2);
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+  cursor: pointer;
+  transition: color var(--sys-fast) var(--sys-ease);
+}
+
+.agent-act:hover {
+  color: var(--sys-ink);
+}
+
+.agent-act:disabled {
+  color: var(--sys-ink-off);
+  cursor: default;
+}
+
+/* The keyboard's place on an action is a line under its words, never a box round it. */
+.agent-act:focus-visible {
+  outline: none;
+  color: var(--sys-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--sys-focus);
+  text-underline-offset: 5px;
+}
+
+.agent-key {
+  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
+  color: var(--sys-ink-3);
+}
+
+/* Under a block: the player, its gain in points on a bar of the picture's one scale, and what is said of it. One
+   fixed width, so that every block's bar has the same full length whatever its words. */
+.agent-label {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: 300px;
+  text-align: center;
+}
+
+.agent-label__name {
+  font: var(--sys-weight-strong) 17px / 24px var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.agent-label__gain {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sys-s2);
+  min-height: var(--sys-lh-body);
+}
+
+.agent-label__points {
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-ink);
+}
+
+/* The gain as a length. For Chance a thin line above the bar spans the least and the most of its rounds. */
+.agent-bar {
+  position: relative;
+  display: block;
   width: 100%;
-  margin-top: var(--sys-s1);
+  height: 2px;
+  margin: 6px 0 4px;
+  background: var(--sys-rule);
+}
+
+.agent-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--sys-ink);
+  transition: width var(--sys-slow) var(--sys-ease);
+}
+
+.agent-bar > b {
+  position: absolute;
+  top: -5px;
+  height: 5px;
+  border: 1px solid var(--sys-ink-3);
+  border-bottom: 0;
+}
+
+.agent-label__note {
+  color: var(--sys-ink-2);
 }

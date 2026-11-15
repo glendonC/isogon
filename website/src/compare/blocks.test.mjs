@@ -2,7 +2,26 @@
 // not been shown: no row of the hidden satellite before the reveal, and for a player only what its own looks found.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cutAround, fireBlock, gainScale, groundOfRun, playBlocks, playerBlocks, PLAYERS, readPlay, sameLooks, seenRows, signed, threeWays, twinLine } from './blocks.ts';
+import {
+  chanceOf,
+  countWord,
+  cutAround,
+  fireBlock,
+  gainScale,
+  groundOfRun,
+  localWhen,
+  playBlocks,
+  PLAYERS,
+  points,
+  readPlay,
+  roundBlocks,
+  roundPlays,
+  roundSeen,
+  sameLooks,
+  seenRows,
+  threeWays,
+  twinLine,
+} from './blocks.ts';
 import { levelLines } from './marks.ts';
 
 const BOX = [-121, 39, -120, 40];
@@ -54,7 +73,7 @@ test('before the reveal the sharp block is withheld and holds no row', () => {
   assert.equal(sharp.state, 'withheld');
   assert.deepEqual(sharp.marks, []);
   assert.equal(tw.scoreLine, null);
-  assert.equal(sharp.label.lines[0], 'hidden');
+  assert.equal(sharp.label.lines[0], 'Hidden');
 });
 
 test('after the reveal the sharp block holds the hidden pass and the score line says its kind', () => {
@@ -63,7 +82,7 @@ test('after the reveal the sharp block holds the hidden pass and the score line 
   const sharp = tw.blocks[2];
   assert.notEqual(sharp.state, 'withheld');
   assert.equal(sharp.marks[0].rows.length, 2);
-  assert.equal(tw.scoreLine, 'Ahead of both simple methods on 5 of 7, by plain comparison');
+  assert.equal(tw.scoreLine, 'Ahead of both simple methods on 5 of 7 scores, by plain comparison');
 });
 
 test('the estimate shown is the step at or before the hidden pass, never a later one', () => {
@@ -71,7 +90,28 @@ test('the estimate shown is the step at or before the hidden pass, never a later
   const estimate = tw.blocks[1].marks[0];
   assert.equal(estimate.kind, 'estimate');
   assert.equal(estimate.source.step, 0);
-  assert.equal(tw.blocks[1].label.lines[0], '3 cells expected to burn, 375 m grid');
+  assert.equal(tw.blocks[1].label.lines[0], '3 squares expected to burn, 375 m across, from the coarse satellite alone');
+});
+
+test('the estimate frames the cells the model declared for the hidden pass, and only on its own grid', () => {
+  const declared = { ...run, declared_cells: { grid: { nx: 4, ny: 4 }, looks: [{ frame: 1, cells: [5, 6, 9] }, { frame: 3, cells: [0] }] } };
+  const estimate = threeWays(declared, null).blocks[1];
+  assert.deepEqual(estimate.marks[0].frames, [5, 6, 9]);
+  assert.equal(estimate.label.lines[0], '3 white frames, 375 m across, from the coarse satellite alone');
+  // A list on another grid is not drawn on this one
+  const other = { ...run, declared_cells: { grid: { nx: 8, ny: 8 }, looks: [{ frame: 1, cells: [5] }] } };
+  assert.equal(threeWays(other, null).blocks[1].marks[0].frames, undefined);
+  // A run with no list keeps the squares alone
+  assert.equal(threeWays(run, null).blocks[1].marks[0].frames, undefined);
+});
+
+test('a pass is said in local time at the fire with the part of the day, and in UTC only when no local hour is given', () => {
+  assert.equal(localWhen('2012-08-11T09:15:46Z', 1.18, false), '11 August, 1:10 at night');
+  // The local day can be the day before the UTC one
+  assert.equal(localWhen('2012-08-11T05:30:00Z', 21.5, false), '10 August, 21:30 at night');
+  assert.equal(localWhen('2012-08-10T21:25:00Z', 13.42, true), '10 August, 13:25 by day');
+  assert.equal(localWhen('2012-08-10T21:25:00Z', null, true), '21:25 UTC');
+  assert.equal(threeWays(run, null).blocks[0].label.lines[1], 'MODIS_AQUA, 10:00 UTC');
 });
 
 test('the cut comes from the coarse satellite rows only: the hidden satellite never moves it, before or after the reveal', () => {
@@ -86,7 +126,7 @@ test('the cut comes from the coarse satellite rows only: the hidden satellite ne
   assert.deepEqual(threeWays(run, other).blocks[2].ground.cut, before);
   // And what lies outside it is counted on the label, not passed over
   assert.equal(after.blocks[2].label.lines[2], '1 of them outside this cut');
-  assert.equal(after.blocks[2].label.lines[0], '2 detections at 375 m');
+  assert.equal(after.blocks[2].label.lines[0], '2 detections, 375 m across (VIIRS)');
 });
 
 test('the pass compared at follows the pass on show', () => {
@@ -135,6 +175,10 @@ const end = {
       [-120.9, 39.1, 0.4, 0.4, 1, 't', 'V', 2, 1, false],
     ],
   },
+  // The visitor's own looks, as pairs of the pass and the square, and what they added
+  looks_taken: [[0, 1], [1, 3]],
+  gain: 0.015,
+  score_start: 0.2,
   reference: {
     score_start: 0.2,
     random: { seeds: [0, 1], gains: [0.01, 0.03], finals: [0.21, 0.23], actions: [[0, -1], [1, 2]] },
@@ -145,27 +189,57 @@ const end = {
   },
 };
 
-test('a player block holds only what that player own looks revealed', () => {
-  const blocks = playerBlocks(groundOfRun(run), start, end);
-  assert.deepEqual(blocks.map((b) => b.label.title), ['Chance', 'Latest MODIS', 'Least sure', 'Learned agent']);
+test('a round becomes one block per player, the visitor first, each with only what its own looks revealed', () => {
+  const blocks = roundBlocks(groundOfRun(run), start, end);
+  assert.deepEqual(blocks.map((b) => b.label.title), ['You', 'Chance', 'Follow the Coarse Satellite', 'Look Where Unsure', 'Learned Player', 'Sees the Answer']);
   const found = (i) => blocks[i].marks.find((m) => m.kind === 'detections' && m.instrument === 'viirs').rows;
-  assert.equal(found(0).length, 1); // Chance, first draw: tile 0 at look 0
-  assert.equal(found(1).length, 2); // tile 1 at look 0, tile 2 at look 1
-  assert.deepEqual(found(2).map((r) => [r.lon, r.lat]), [[-120.9, 39.1]]); // only tile 2 at look 1
-  assert.equal(found(3).length, 1); // tile 0 twice: the second look found nothing there
-  assert.equal(blocks[3].pins[0].text, '1 2');
-  assert.equal(blocks[2].label.lines[1], 'score gain -0.004');
-  // The fifth is named for what it does and carries the line on what it chooses, whatever its looks equal
-  const five = playerBlocks(groundOfRun(run), start, end, { seesTheAnswer: true });
-  assert.equal(five.length, 5);
-  assert.equal(five[4].label.title, 'Sees the answer');
-  assert.equal(five[4].label.lines[2], 'chooses where, at the evenly spread looks');
-  assert.ok(!five[1].label.lines.some((l) => l.startsWith('the same looks')));
+  assert.deepEqual(found(0).map((r) => [r.lon, r.lat]), [[-120.1, 39.9]]); // the visitor: square 1 at pass 0; square 3 at pass 1 held nothing
+  assert.equal(found(1).length, 1); // Chance, the first of its rounds: square 0 at pass 0
+  assert.equal(found(2).length, 2); // square 1 at pass 0, square 2 at pass 1
+  assert.deepEqual(found(3).map((r) => [r.lon, r.lat]), [[-120.9, 39.1]]); // only square 2 at pass 1
+  assert.equal(found(4).length, 1); // square 0 twice: the second look found nothing there
+  assert.equal(blocks[4].pins[0].text, '1 2');
+  assert.equal(blocks[3].label.lines[1], '-0.4 points');
+  assert.equal(blocks[0].label.lines[1], '+1.5 points');
+  // The last is named for what it does and carries the line that says it is no fair player, whatever its looks equal
+  assert.match(blocks[5].label.lines[2], /^Not a fair player/);
+  assert.ok(!blocks[2].label.lines.some((l) => l.startsWith('The same looks')));
+  // Asked without the visitor or without the last player
+  assert.deepEqual(roundPlays(start, end, { you: false, seesTheAnswer: false }).map((p) => p.id), ['random', 'latest_modis', 'least_sure', 'learned']);
+  assert.deepEqual(roundSeen(start).map((r) => r.lon), [-120.5]);
+});
+
+test('Chance is the mean of its rounds with their range, and the looks drawn are said to be one of them', () => {
+  const chance = roundPlays(start, end).find((p) => p.id === 'random');
+  assert.deepEqual(chance.draws, [0.01, 0.03]);
+  assert.equal(chance.gain, 0.01);
+  const { mean, least, most, rounds } = chanceOf(chance.draws);
+  assert.ok(Math.abs(mean - 0.02) < 1e-12);
+  assert.deepEqual([least, most, rounds], [0.01, 0.03, 2]);
+  assert.equal(chanceOf([]), null);
+  const lines = roundBlocks(groundOfRun(run), start, end)[1].label.lines;
+  assert.equal(lines[1], '+2.0 points, the mean of two rounds of random looks, from +1.0 to +3.0');
+  assert.equal(lines[2], 'Drawn here: one of the two, +1.0 points');
+  assert.equal(countWord(10), 'ten');
+  assert.equal(countWord(13), '13');
+});
+
+test('what the looks found can be withheld: the block then holds no row of the hidden satellite', () => {
+  for (const block of roundBlocks(groundOfRun(run), start, end, { found: false })) {
+    assert.equal(block.marks.some((m) => m.kind === 'detections' && m.instrument === 'viirs'), false);
+    assert.ok(!block.label.lines.some((l) => l.includes('found')));
+    // Where it looked and what every player could see stay
+    assert.ok(block.marks.some((m) => m.kind === 'tiles'));
+    assert.ok(block.marks.some((m) => m.kind === 'detections' && m.instrument === 'modis'));
+  }
+  const [withheld] = playBlocks(groundOfRun(run), [play], { found: false });
+  assert.equal(withheld.marks.some((m) => m.instrument === 'viirs'), false);
+  assert.deepEqual(withheld.label.lines, ['2 looks', '+3.0 points']);
 });
 
 test('a round on another box than the ground gives no block', () => {
   const elsewhere = { ...start, episode: { ...start.episode, box: [-121, 38, -120, 39] } };
-  assert.deepEqual(playerBlocks(groundOfRun(run), elsewhere, end), []);
+  assert.deepEqual(roundBlocks(groundOfRun(run), elsewhere, end), []);
 });
 
 test('the dotted line closes around a single cell that may burn', () => {
@@ -217,12 +291,12 @@ test('a play becomes a block with only the detections its own looks handed over,
   assert.deepEqual(read.looks.map((l) => [l.decision, l.tile, l.found.length]), [[1, 3, 2], [2, 3, 1]]);
   const [block] = playBlocks(groundOfRun(run), [play]);
   assert.equal(block.id, 'least_sure');
-  assert.deepEqual(block.label, { title: 'Least sure', lines: ['3 detections found in 2 looks', 'score gain +0.030'] });
+  assert.deepEqual(block.label, { title: 'Look Where Unsure', lines: ['3 detections found in 2 looks', '+3.0 points'] });
   assert.equal(block.pins[0].text, '1 2');
   // Watched look by look: after the first look only its detections, and the gain so far
   const [first] = playBlocks(groundOfRun(run), [play], { looks: 1 });
   assert.equal(first.marks.find((m) => m.kind === 'detections' && m.instrument === 'viirs').rows.length, 2);
-  assert.deepEqual(first.label.lines, ['2 detections found in 1 look', 'score gain +0.010']);
+  assert.deepEqual(first.label.lines, ['2 detections found in 1 look']);
   const [none] = playBlocks(groundOfRun(run), [play], { looks: 0 });
   assert.equal(none.marks.find((m) => m.kind === 'detections' && m.instrument === 'viirs').rows.length, 0);
 });
@@ -230,9 +304,9 @@ test('a play becomes a block with only the detections its own looks handed over,
 test('two plays with the same looks: the second says so, and only once every look stands', () => {
   const twin = { play: { ...play.play, player: { id: 'latest_modis', label: 'Latest MODIS' } } };
   const blocks = playBlocks(groundOfRun(run), [play, twin]);
-  assert.ok(!blocks[0].label.lines.some((l) => l.startsWith('the same looks')));
-  assert.equal(blocks[1].label.lines[2], 'the same looks as Least sure');
-  assert.ok(!playBlocks(groundOfRun(run), [play, twin], { looks: 1 })[1].label.lines.some((l) => l.startsWith('the same looks')));
+  assert.ok(!blocks[0].label.lines.some((l) => l.startsWith('The same looks')));
+  assert.equal(blocks[1].label.lines[2], 'The same looks as Look Where Unsure');
+  assert.ok(!playBlocks(groundOfRun(run), [play, twin], { looks: 1 })[1].label.lines.some((l) => l.startsWith('The same looks')));
 });
 
 test('a play on other ground than the run gives no block', () => {
@@ -256,11 +330,11 @@ test('what every player could see never holds a row of the sharp satellite, even
   assert.equal(fireBlock({ name: 'Somewhere' }, { id: 'f', label: 'January 2020' }, allSensors).marks[0].rows.length, 1);
 });
 
-test('a gain carries its sign, and one that rounds to nothing carries none', () => {
-  assert.equal(signed(0.1182), '+0.118');
-  assert.equal(signed(-0.0111), '-0.011');
-  assert.equal(signed(-0.0003), '0.000');
-  assert.equal(signed(0), '0.000');
+test('a gain is said in points of agreement with its sign, and one that rounds to nothing carries none', () => {
+  assert.equal(points(0.1182), '+11.8');
+  assert.equal(points(-0.0111), '-1.1');
+  assert.equal(points(-0.0003), '0.0');
+  assert.equal(points(0), '0.0');
 });
 
 test('a block takes the run terrain pack image when the run names one, and satellite.jpg only when it does not', () => {
@@ -290,30 +364,29 @@ test('gain bars share one scale, the largest gain among them, and there is none 
   assert.equal(gainScale([]), null);
 });
 
-test('no player is called a ceiling, and none is given as a share of another', () => {
-  assert.deepEqual(PLAYERS.map((p) => p.name), ['Chance', 'Latest MODIS', 'Least sure', 'Learned agent', 'Sees the answer']);
+test('the players carry the page\'s names; none is called a ceiling or given as a share of another', () => {
+  assert.deepEqual(PLAYERS.map((p) => p.name), ['Chance', 'Follow the Coarse Satellite', 'Look Where Unsure', 'Learned Player', 'Sees the Answer']);
   const answer = { play: { ...play.play, player: { id: 'oracle', label: 'Oracle' } } };
   const words = JSON.stringify([
     ...playBlocks(groundOfRun(run), [play, answer]).map((b) => b.label),
-    ...playerBlocks(groundOfRun(run), start, end, { seesTheAnswer: true }).map((b) => b.label),
+    ...roundBlocks(groundOfRun(run), start, end).map((b) => b.label),
   ]);
   assert.ok(!/ceiling/i.test(words));
   assert.ok(!words.includes('%'));
   assert.ok(!/oracle/i.test(words));
 });
 
-test('a learned agent whose looks equal a rule is said to amount to that rule; another player made the same looks', () => {
-  assert.equal(twinLine('learned', 'Least sure'), 'amounts to Least sure here');
-  assert.equal(twinLine('least_sure', 'Latest MODIS'), 'the same looks as Latest MODIS');
+test('a player whose looks equal an earlier one says so in the same words, the learned player too', () => {
+  assert.equal(twinLine('Look Where Unsure'), 'The same looks as Look Where Unsure');
   const learned = { play: { ...play.play, player: { id: 'learned', label: 'Learned' } } };
-  assert.equal(playBlocks(groundOfRun(run), [play, learned])[1].label.lines[2], 'amounts to Least sure here');
+  assert.equal(playBlocks(groundOfRun(run), [play, learned])[1].label.lines[2], 'The same looks as Look Where Unsure');
 });
 
 test('the player whose looks equal an earlier player is named with that player, the first is not', () => {
   const a = readPlay(play);
   const b = readPlay({ play: { ...play.play, player: { id: 'learned', label: 'Learned agent' } } });
   const twins = sameLooks([a, b]);
-  assert.equal(twins.get('learned'), 'Least sure');
+  assert.equal(twins.get('learned'), 'Look Where Unsure');
   assert.equal(twins.has('least_sure'), false);
 });
 

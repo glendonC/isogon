@@ -139,7 +139,9 @@ export function ComparePlane({
               type="button"
               className={state === 'withheld' ? 'cmp-stop sys-sel sys-hidden' : 'cmp-stop sys-sel'}
               data-selected={state === 'selected' ? 'true' : 'false'}
-              aria-pressed={state === 'selected'}
+              aria-pressed={onPick ? state === 'selected' : undefined}
+              // Where a pick does nothing the keyboard does not stop here: the block is a picture, not a control
+              tabIndex={onPick ? undefined : -1}
               aria-label={[block.label.title, ...(block.label.lines ?? [])].join('. ')}
               style={{ left: a.rect.left, top: a.rect.top, width: a.rect.width, height: a.rect.height }}
               onFocus={() => hover(block.id)}

@@ -7,12 +7,13 @@ import type { Box, CompareBlock, CompareGround, CompareMark, ComparePin, Detecti
  */
 
 export const WORDS = {
-  coarseSaw: 'What MODIS saw',
-  estimate: 'The estimate from MODIS alone',
-  sharpSaw: 'What VIIRS saw',
-  coarseSize: '1 km',
-  sharpSize: '375 m',
-  hidden: 'hidden',
+  coarseSaw: 'What the coarse satellite saw',
+  estimate: "The model's estimate",
+  sharpSaw: 'What the sharp satellite saw',
+  coarseSize: 'about 1 km across (MODIS)',
+  sharpSize: '375 m across (VIIRS)',
+  estimateSize: '375 m across, from the coarse satellite alone',
+  hidden: 'Hidden',
 } as const;
 
 /**
@@ -22,21 +23,21 @@ export const WORDS = {
  */
 export const PLAYERS: readonly { key: string; name: string }[] = [
   { key: 'random', name: 'Chance' },
-  { key: 'latest_modis', name: 'Latest MODIS' },
-  { key: 'least_sure', name: 'Least sure' },
-  { key: 'learned', name: 'Learned agent' },
-  { key: 'oracle', name: 'Sees the answer' },
+  { key: 'latest_modis', name: 'Follow the Coarse Satellite' },
+  { key: 'least_sure', name: 'Look Where Unsure' },
+  { key: 'learned', name: 'Learned Player' },
+  { key: 'oracle', name: 'Sees the Answer' },
 ];
 
-/** The id of the player that reads the hidden detections, and the line that says what it chooses. */
+/** The visitor's own play of a round, the player of random looks, and the player that reads the hidden detections. */
+export const YOU = 'you';
+export const YOU_NAME = 'You';
+export const CHANCE = 'random';
 export const SEES_THE_ANSWER = 'oracle';
-export const SEES_THE_ANSWER_LINE = 'chooses where, at the evenly spread looks';
+export const SEES_THE_ANSWER_LINE = 'Not a fair player: it reads the hidden detections, and looks at evenly spaced passes';
 
-/**
- * What a player's block says when its looks equal an earlier player's. The learned agent is said to amount to that
- * rule on this round; any other player made the same looks.
- */
-export const twinLine = (id: string, twin: string): string => (id === 'learned' ? `amounts to ${twin} here` : `the same looks as ${twin}`);
+/** What a player's block says when its looks equal an earlier player's. */
+export const twinLine = (twin: string): string => `The same looks as ${twin}`;
 
 type Obj = Record<string, unknown>;
 const obj = (x: unknown): Obj => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Obj) : {});
@@ -48,13 +49,46 @@ const boxOf = (x: unknown): Box | null => {
   return a.length === 4 && a.every((v) => num(v) !== null) ? (a as Box) : null;
 };
 
-const clock = (iso: string): string => `${iso.slice(11, 16)} UTC`;
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/**
+ * When a pass was, as the page says time: the day and the local time at the fire with the part of the day, "11
+ * August, 1:10 at night". The local hour is the pass's own local solar time; the day is the one that hour falls on.
+ * A pass that gives no local hour is said in UTC.
+ */
+export function localWhen(timeUtc: string, localHour: number | null, isDay: boolean | null): string {
+  const at = Date.parse(timeUtc);
+  if (localHour === null || Number.isNaN(at)) return `${timeUtc.slice(11, 16)} UTC`;
+  const utc = new Date(at);
+  const utcHour = utc.getUTCHours() + utc.getUTCMinutes() / 60;
+  // The fire's offset from UTC, as the nearest way round the clock from the UTC hour to the local one
+  const offset = ((localHour - utcHour + 36) % 24) - 12;
+  const local = new Date(at + offset * 3600000);
+  // Whole minutes, never rounded up into the next one
+  const total = Math.floor(localHour * 60) % 1440;
+  const clock = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+  const part = isDay === null ? '' : isDay ? ' by day' : ' at night';
+  return `${local.getUTCDate()} ${MONTHS[local.getUTCMonth()]}, ${clock}${part}`;
+}
 const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
-/** A gain with its sign, to three places. One that rounds to nothing carries no sign. */
-export const signed = (g: number): string => {
-  const shown = Math.abs(g).toFixed(3);
+/**
+ * A gain or a score move as points of agreement: the value times 100 to one decimal place, with its sign, and no
+ * sign on one that rounds to nothing.
+ */
+export const points = (g: number): string => {
+  const shown = (Math.abs(g) * 100).toFixed(1);
   return Number(shown) === 0 ? shown : `${g >= 0 ? '+' : '-'}${shown}`;
 };
+
+const WORDS_TO_TWELVE = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+/** Zero to twelve as a word, a larger count as digits. */
+export const countWord = (n: number): string => WORDS_TO_TWELVE[n] ?? String(n);
+
+/** What random looks add over the rounds played: their mean and the least and the most, or null with none. */
+export function chanceOf(draws: readonly number[] | undefined): { mean: number; least: number; most: number; rounds: number } | null {
+  if (!draws || draws.length === 0) return null;
+  return { mean: draws.reduce((a, b) => a + b, 0) / draws.length, least: Math.min(...draws), most: Math.max(...draws), rounds: draws.length };
+}
 
 /**
  * The ground of a run: its 512 elevation, its image, its box and its size on the ground. The image is the run's
@@ -108,7 +142,9 @@ interface Frame {
   time: string;
   sensor: string;
   heldOut: boolean;
-  isDay: boolean;
+  isDay: boolean | null;
+  /** The pass's local solar time at the fire, in hours, where the run gives it. */
+  localHour: number | null;
   /** The frame's detections of the coarse instrument only, whatever else the run shows. */
   rows: DetectionRow[];
 }
@@ -131,7 +167,15 @@ function framesOf(run: unknown): Frame[] {
       return isCoarse(named ?? sensor);
     });
     // A frame the page has laid a revealed pass on is still a pass that was hidden
-    out.push({ frame, time, sensor, heldOut: o.held_out === true || o.revealed === true, isDay: o.is_day === true, rows: detectionRows(coarse) });
+    out.push({
+      frame,
+      time,
+      sensor,
+      heldOut: o.held_out === true || o.revealed === true,
+      isDay: typeof o.is_day === 'boolean' ? o.is_day : null,
+      localHour: num(o.local_solar_time_hr),
+      rows: detectionRows(coarse),
+    });
   }
   return out;
 }
@@ -235,7 +279,7 @@ export function scoreLine(verdict: unknown): string | null {
   const ahead = num(v.beats_every_baseline_on);
   const judged = num(v.scores_judged);
   if (ahead === null || judged === null) return null;
-  return `Ahead of both simple methods on ${ahead} of ${judged}, by plain comparison`;
+  return `Ahead of both simple methods on ${ahead} of ${judged} scores, by plain comparison`;
 }
 
 /**
@@ -284,14 +328,24 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
   const stepMinutes = num(bf.step_minutes);
   const firstTime = str(bf.first_time_utc);
   const beliefUrl = str(bf.url);
-  let estimate: { mark: CompareMark; time: string; cells: number | null } | null = null;
+  let estimate: { mark: CompareMark; declared: number | null; cells: number | null } | null = null;
   if (gridBox && nx && ny && steps && stepMinutes && firstTime && beliefUrl) {
     const t0 = Date.parse(firstTime);
     const step = Math.min(steps - 1, Math.max(0, Math.floor((Date.parse(hidden.time) - t0) / (stepMinutes * 60000))));
     const grid: EstimateGrid = { nx, ny, box: gridBox };
+    // The cells the model declared for this hidden pass, fixed before the pass was opened: what the test sets
+    // against the hidden detections. Framed only when the list is on the estimate's own grid.
+    const declaredCells = obj(obj(run).declared_cells);
+    const sameGrid = num(obj(declaredCells.grid).nx) === nx && num(obj(declaredCells.grid).ny) === ny;
+    const look = sameGrid ? arr(declaredCells.looks).map(obj).find((l) => num(l.frame) === hidden.frame) : undefined;
+    const frames = look
+      ? arr(look.cells)
+          .map(num)
+          .filter((c): c is number => c !== null)
+      : null;
     estimate = {
-      mark: { kind: 'estimate', grid, source: { url: beliefUrl, step, steps } },
-      time: new Date(t0 + step * stepMinutes * 60000).toISOString(),
+      mark: { kind: 'estimate', grid, source: { url: beliefUrl, step, steps }, ...(frames ? { frames } : {}) },
+      declared: frames ? frames.length : null,
       cells: num(obj(arr(bf.per_step)[step]).expected_burning_cells),
     };
   }
@@ -306,6 +360,7 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
   // The image is darkened by day as by night: on this plane the marks lead
   const night = true;
 
+  const when = (f: { time: string; localHour: number | null; isDay: boolean | null }) => localWhen(f.time, f.localHour, f.isDay);
   const blocks: CompareBlock[] = [
     {
       id: 'coarse',
@@ -314,9 +369,7 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
       marks: coarse ? [{ kind: 'detections', instrument: 'modis', rows: coarse.rows }] : [],
       label: {
         title: WORDS.coarseSaw,
-        lines: coarse
-          ? [`${count(coarse.rows.length, 'detection', 'detections')} at ${WORDS.coarseSize}`, `${name(coarse.sensor)} pass, ${clock(coarse.time)}`]
-          : [],
+        lines: coarse ? [`${count(coarse.rows.length, 'detection', 'detections')}, ${WORDS.coarseSize}`, `${name(coarse.sensor)}, ${when(coarse)}`] : [],
       },
     },
     {
@@ -328,8 +381,12 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
         title: WORDS.estimate,
         lines: estimate
           ? [
-              estimate.cells !== null ? `${Math.round(estimate.cells)} cells expected to burn, ${WORDS.sharpSize} grid` : `${WORDS.sharpSize} grid`,
-              clock(estimate.time),
+              estimate.declared !== null
+                ? `${count(estimate.declared, 'white frame', 'white frames')}, ${WORDS.estimateSize}`
+                : estimate.cells !== null
+                  ? `${count(Math.round(estimate.cells), 'square', 'squares')} expected to burn, ${WORDS.estimateSize}`
+                  : WORDS.estimateSize,
+              `For the pass of ${when(hidden)}`,
             ]
           : [],
       },
@@ -343,8 +400,8 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
       label: {
         title: WORDS.sharpSaw,
         lines: [
-          sharp ? `${count(sharp.rows.length, 'detection', 'detections')} at ${WORDS.sharpSize}` : WORDS.hidden,
-          `${name(sharp ? sharp.platform : hidden.sensor)} pass, ${clock(sharp ? sharp.time : hidden.time)}`,
+          sharp ? `${count(sharp.rows.length, 'detection', 'detections')}, ${WORDS.sharpSize}` : WORDS.hidden,
+          `${name(sharp ? sharp.platform : hidden.sensor)}, ${when(hidden)}`,
           ...(outside > 0 ? [`${outside} of them outside this cut`] : []),
         ],
       },
@@ -356,127 +413,7 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
 // ---------------------------------------------------------------------------------------------
 // The players of a round
 
-export interface PlayerBlocksOptions {
-  /** Show the player that sees the answer. Default false. */
-  seesTheAnswer?: boolean;
-  /** Which of Chance's draws to show. Default the first. */
-  draw?: number;
-  /** Show only the first looks each player took, for a replay. Default all of them. */
-  looks?: number;
-}
-
-/**
- * One block per player of a finished round, from the round's start and its end. Every block carries the tile
- * lines, outlines for the MODIS detections every player could see, and filled marks only for the VIIRS detections
- * that player's own looks revealed. A pin per tile gives the order of the looks that went there.
- */
-export function playerBlocks(ground: CompareGround | null, start: unknown, end: unknown, opts: PlayerBlocksOptions = {}): CompareBlock[] {
-  const episode = obj(obj(start).episode);
-  const box = boxOf(episode.box);
-  const tiles = arr(episode.tiles);
-  const rowsN = num(tiles[0]);
-  const colsN = num(tiles[1]);
-  const reference = obj(obj(end).reference);
-  if (!ground || !box || !rowsN || !colsN || Object.keys(reference).length === 0) return [];
-  // The round's box must be the ground's: a round on another box needs that box's terrain
-  if (box.some((v, i) => Math.abs(v - ground.box[i]) > 1e-6)) return [];
-
-  const modis = rowsByColumns(obj(obj(start).observation).modis);
-  const seen: DetectionRow[] = [];
-  for (const r of modis.rows) {
-    const lon = num(r[modis.at('lon')]);
-    const lat = num(r[modis.at('lat')]);
-    const scanKm = num(r[modis.at('scan_km')]);
-    const trackKm = num(r[modis.at('track_km')]);
-    if (lon !== null && lat !== null && scanKm !== null && trackKm !== null) seen.push({ lon, lat, scanKm, trackKm });
-  }
-  const reveal = rowsByColumns(obj(end).reveal);
-
-  const blocks: CompareBlock[] = [];
-  // The first player to make each run of looks, so that a later one with the same looks can say so
-  const sameLooks = new Map<string, string>();
-  for (const player of PLAYERS) {
-    if (player.key === SEES_THE_ANSWER && !opts.seesTheAnswer) continue;
-    const ref = obj(reference[player.key]);
-    let actions: unknown[];
-    let gain: number | null;
-    const lines: string[] = [];
-    let note: string | null = null;
-    if (player.key === 'random') {
-      const draw = opts.draw ?? 0;
-      const gains = arr(ref.gains).map(num).filter((g): g is number => g !== null);
-      actions = arr(arr(ref.actions)[draw]);
-      gain = gains[draw] ?? null;
-      if (gains.length > 0) note = `one of ${gains.length} draws, mean ${signed(gains.reduce((a, b) => a + b, 0) / gains.length)}`;
-    } else {
-      actions = arr(ref.actions);
-      gain = num(ref.gain);
-      if (player.key === SEES_THE_ANSWER) note = SEES_THE_ANSWER_LINE;
-    }
-    if (actions.length === 0) continue;
-    const every: { tile: number; look: number }[] = [];
-    actions.forEach((a, look) => {
-      const tile = num(a);
-      if (tile !== null && tile >= 0) every.push({ tile, look });
-    });
-    const whole = opts.looks === undefined || opts.looks >= every.length;
-    const taken = whole ? every : every.slice(0, Math.max(0, opts.looks ?? 0));
-    const found: DetectionRow[] = [];
-    for (const r of reveal.rows) {
-      const tile = num(r[reveal.at('tile')]);
-      const look = num(r[reveal.at('look')]);
-      if (!taken.some((t) => t.tile === tile && t.look === look)) continue;
-      const lon = num(r[reveal.at('lon')]);
-      const lat = num(r[reveal.at('lat')]);
-      const scanKm = num(r[reveal.at('scan_km')]);
-      const trackKm = num(r[reveal.at('track_km')]);
-      if (lon !== null && lat !== null && scanKm !== null && trackKm !== null) found.push({ lon, lat, scanKm, trackKm });
-    }
-    const order = new Map<number, number[]>();
-    taken.forEach((t, i) => order.set(t.tile, [...(order.get(t.tile) ?? []), i + 1]));
-    const pins: ComparePin[] = [...order.entries()].map(([tile, looks]) => ({
-      id: `tile-${tile}`,
-      // The north-west corner of the tile, a little inside it, so the mark does not cover what was found
-      lon: box[0] + (((tile % colsN) + 0.16) / colsN) * (box[2] - box[0]),
-      lat: box[3] - ((Math.floor(tile / colsN) + 0.16) / rowsN) * (box[3] - box[1]),
-      text: looks.join(' '),
-    }));
-    lines.push(`${count(found.length, 'detection', 'detections')} found in ${count(taken.length, 'look', 'looks')}`);
-    // The end of a round gives a player's gain for the whole round only
-    if (gain !== null && whole) lines.push(`score gain ${signed(gain)}`);
-    const looksKey = every.map((t) => `${t.look}:${t.tile}`).join(',');
-    const twin = whole ? sameLooks.get(looksKey) : undefined;
-    if (note && whole && player.key === SEES_THE_ANSWER) lines.push(note);
-    else if (twin) lines.push(twinLine(player.key, twin));
-    else if (note && whole) lines.push(note);
-    if (!sameLooks.has(looksKey)) sameLooks.set(looksKey, player.name);
-    blocks.push({
-      id: player.key,
-      ground,
-      night: true,
-      marks: [
-        { kind: 'tiles', rows: rowsN, cols: colsN, looked: taken.map((t) => t.tile), veil: true },
-        { kind: 'detections', instrument: 'modis', rows: seen, weight: 'quiet' },
-        { kind: 'detections', instrument: 'viirs', rows: found },
-      ],
-      pins,
-      label: { title: player.name, lines },
-    });
-  }
-  return blocks;
-}
-
-// ---------------------------------------------------------------------------------------------
-// The players of a round, from their plays
-
-export interface PlayBlocksOptions {
-  /** The MODIS detections every player could see, drawn as quiet outlines. */
-  seen?: DetectionRow[];
-  /** Show only the first looks each player took, for a replay. Default all of them. */
-  looks?: number;
-}
-
-/** One look a player took, as its play holds it. */
+/** One look a player took. */
 export interface PlayLook {
   /** The index of the scheduled look. */
   decision: number;
@@ -484,13 +421,15 @@ export interface PlayLook {
   timeUtc: string | null;
   platform: string | null;
   isDay: boolean | null;
-  /** Why the player chose the tile, in the play's own words. */
+  /** Why the player chose the tile, in the play's own words, where a play gives them. */
   why: string | null;
   /** Hidden detections the look handed over inside its tile. */
   found: DetectionRow[];
+  /** How far the look moved the score, where the answer gives it look by look. */
   reward: number | null;
 }
 
+/** One player's play of a round, read down to what is drawn. */
 export interface PlaySummary {
   id: string;
   name: string;
@@ -499,9 +438,21 @@ export interface PlaySummary {
   scoreStart: number | null;
   box: Box | null;
   tiles: [number, number] | null;
+  /** Chance only: the gain of every round of random looks that was played, this one among them. */
+  draws?: number[];
 }
 
-/** A play as `POST /api/env/next_look/play` answers it (the answer, or its `play`), read down to what is drawn. */
+const isSummary = (x: unknown): x is PlaySummary => typeof obj(x).id === 'string' && Array.isArray(obj(x).looks);
+
+function detectionOf(table: ReturnType<typeof rowsByColumns>, r: unknown[]): DetectionRow | null {
+  const lon = num(r[table.at('lon')]);
+  const lat = num(r[table.at('lat')]);
+  const scanKm = num(r[table.at('scan_km')]);
+  const trackKm = num(r[table.at('track_km')]);
+  return lon !== null && lat !== null && scanKm !== null && trackKm !== null ? { lon, lat, scanKm, trackKm } : null;
+}
+
+/** A play as `POST /api/env/next_look/play` answers it (the answer, or its `play`). */
 export function readPlay(answer: unknown): PlaySummary | null {
   const a = obj(answer);
   const p = Object.keys(obj(a.play)).length > 0 ? obj(a.play) : a;
@@ -516,14 +467,6 @@ export function readPlay(answer: unknown): PlaySummary | null {
     const decision = num(step.decision);
     if (step.spent !== true || tile === null || tile < 0 || decision === null) continue;
     const table = rowsByColumns(step.revealed);
-    const found: DetectionRow[] = [];
-    for (const r of table.rows) {
-      const lon = num(r[table.at('lon')]);
-      const lat = num(r[table.at('lat')]);
-      const scanKm = num(r[table.at('scan_km')]);
-      const trackKm = num(r[table.at('track_km')]);
-      if (lon !== null && lat !== null && scanKm !== null && trackKm !== null) found.push({ lon, lat, scanKm, trackKm });
-    }
     const look = obj(step.look);
     looks.push({
       decision,
@@ -532,7 +475,7 @@ export function readPlay(answer: unknown): PlaySummary | null {
       platform: str(look.platform),
       isDay: typeof look.is_day === 'boolean' ? look.is_day : null,
       why: str(step.why),
-      found,
+      found: table.rows.map((r) => detectionOf(table, r)).filter((d): d is DetectionRow => d !== null),
       reward: num(step.reward),
     });
   }
@@ -549,48 +492,140 @@ export function readPlay(answer: unknown): PlaySummary | null {
   };
 }
 
+export interface RoundPlaysOptions {
+  /** Leave the visitor's own looks out. Default: they come first. */
+  you?: boolean;
+  /** Which of Chance's rounds is the one drawn. Default the first. */
+  draw?: number;
+  /** Leave out the player that reads the hidden detections. Default: it is there. */
+  seesTheAnswer?: boolean;
+}
+
 /**
- * One block per play, in the order given. Every block carries the tile lines, quiet outlines for the MODIS
- * detections every player could see, and filled marks only for what that player's own looks handed over.
- * With `looks` the blocks stop after that many looks, so a play can be watched look by look; the gain shown is
- * then the sum of the rewards so far.
+ * Every play of a finished round, from the round's start and its end: the visitor's own looks first, then the
+ * page's players in the page's order. A look holds only the hidden detections the round's end lists for that look
+ * and that tile. Chance carries the gain of every random round played; the looks drawn are one of them.
+ */
+export function roundPlays(start: unknown, end: unknown, opts: RoundPlaysOptions = {}): PlaySummary[] {
+  const episode = obj(obj(start).episode);
+  const box = boxOf(episode.box);
+  const rowsN = num(arr(episode.tiles)[0]);
+  const colsN = num(arr(episode.tiles)[1]);
+  const e = obj(end);
+  const reference = obj(e.reference);
+  if (!box || !rowsN || !colsN) return [];
+  const passes = arr(obj(start).looks).map(obj);
+  const reveal = rowsByColumns(e.reveal);
+  const lookOf = (decision: number, tile: number): PlayLook => {
+    const pass = passes[decision] ?? {};
+    const found: DetectionRow[] = [];
+    for (const r of reveal.rows) {
+      if (num(r[reveal.at('tile')]) !== tile || num(r[reveal.at('look')]) !== decision) continue;
+      const d = detectionOf(reveal, r);
+      if (d) found.push(d);
+    }
+    return { decision, tile, timeUtc: str(pass.time_utc), platform: str(pass.platform), isDay: typeof pass.is_day === 'boolean' ? pass.is_day : null, why: null, found, reward: null };
+  };
+  const fromActions = (actions: unknown[]): PlayLook[] =>
+    actions.flatMap((a, decision) => {
+      const tile = num(a);
+      return tile !== null && tile >= 0 ? [lookOf(decision, tile)] : [];
+    });
+  const base = { scoreStart: num(e.score_start) ?? num(reference.score_start), box, tiles: [rowsN, colsN] as [number, number] };
+  const out: PlaySummary[] = [];
+  if (opts.you !== false && Array.isArray(e.looks_taken)) {
+    const mine = arr(e.looks_taken).flatMap((pair) => {
+      const decision = num(arr(pair)[0]);
+      const tile = num(arr(pair)[1]);
+      return decision !== null && tile !== null && tile >= 0 ? [lookOf(decision, tile)] : [];
+    });
+    out.push({ id: YOU, name: YOU_NAME, looks: mine, gain: num(e.gain), ...base });
+  }
+  for (const player of PLAYERS) {
+    if (player.key === SEES_THE_ANSWER && opts.seesTheAnswer === false) continue;
+    const ref = obj(reference[player.key]);
+    if (player.key === CHANCE) {
+      const draws = arr(ref.gains)
+        .map(num)
+        .filter((g): g is number => g !== null);
+      const draw = opts.draw ?? 0;
+      const actions = arr(arr(ref.actions)[draw]);
+      if (actions.length > 0) out.push({ id: player.key, name: player.name, looks: fromActions(actions), gain: draws[draw] ?? null, draws, ...base });
+    } else {
+      const actions = arr(ref.actions);
+      if (actions.length > 0) out.push({ id: player.key, name: player.name, looks: fromActions(actions), gain: num(ref.gain), ...base });
+    }
+  }
+  return out;
+}
+
+/** The coarse satellite's detections a round's start shows: what every player of the round could see. */
+export function roundSeen(start: unknown): DetectionRow[] {
+  const modis = rowsByColumns(obj(obj(start).observation).modis);
+  return modis.rows.map((r) => detectionOf(modis, r)).filter((d): d is DetectionRow => d !== null);
+}
+
+export interface PlayBlocksOptions {
+  /** The coarse satellite's detections every player could see, drawn as quiet outlines. */
+  seen?: DetectionRow[];
+  /** Show only the first looks each player took, for a replay. Default all of them. */
+  looks?: number;
+  /** Draw what the looks found. Default true; false draws where each player looked and nothing of the hidden satellite. */
+  found?: boolean;
+}
+
+/**
+ * One block per play, in the order given: a play as the play route answers it, or one read from a round's end.
+ * Every block carries the tile lines with the looked tiles lit, a pin per tile with the order of the looks that
+ * went there, quiet outlines for what every player could see, and, unless `found` is false, filled marks only for
+ * what that player's own looks handed over. With `looks` the blocks stop after that many looks, so a play can be
+ * watched look by look.
  */
 export function playBlocks(ground: CompareGround | null, plays: readonly unknown[], opts: PlayBlocksOptions = {}): CompareBlock[] {
   if (!ground) return [];
   const blocks: CompareBlock[] = [];
-  const sameLooks = new Map<string, string>();
+  const first = new Map<string, string>();
   for (const answer of plays) {
-    const play = readPlay(answer);
+    const play = isSummary(answer) ? answer : readPlay(answer);
     if (!play || !play.box || !play.tiles) continue;
     const box = play.box;
+    // The round's box must be the ground's: a round on another box needs that box's terrain
     if (box.some((v, i) => Math.abs(v - ground.box[i]) > 1e-6)) continue;
     const [rowsN, colsN] = play.tiles;
     const all = opts.looks === undefined || opts.looks >= play.looks.length;
     const shown = all ? play.looks : play.looks.slice(0, Math.max(0, opts.looks ?? 0));
-    const found = shown.flatMap((l) => l.found);
+    const found = opts.found === false ? [] : shown.flatMap((l) => l.found);
     const order = new Map<number, number[]>();
     shown.forEach((l, i) => order.set(l.tile, [...(order.get(l.tile) ?? []), i + 1]));
     const pins: ComparePin[] = [...order.entries()].map(([tile, looks]) => ({
       id: `tile-${tile}`,
+      // The north-west corner of the tile, a little inside it, so the mark does not cover what was found
       lon: box[0] + (((tile % colsN) + 0.16) / colsN) * (box[2] - box[0]),
       lat: box[3] - ((Math.floor(tile / colsN) + 0.16) / rowsN) * (box[3] - box[1]),
       text: looks.join(' '),
     }));
-    const rewards = shown.map((l) => l.reward);
-    const gain = all && play.gain !== null ? play.gain : rewards.every((r): r is number => r !== null) ? rewards.reduce((a: number, b) => a + b, 0) : null;
-    const lines = [`${count(found.length, 'detection', 'detections')} found in ${count(shown.length, 'look', 'looks')}`];
-    if (gain !== null) lines.push(`score gain ${signed(gain)}`);
+    const lines = [opts.found === false ? count(shown.length, 'look', 'looks') : `${count(found.length, 'detection', 'detections')} found in ${count(shown.length, 'look', 'looks')}`];
+    const chance = chanceOf(play.draws);
+    if (all && chance && chance.rounds > 1) {
+      lines.push(`${points(chance.mean)} points, the mean of ${countWord(chance.rounds)} rounds of random looks, from ${points(chance.least)} to ${points(chance.most)}`);
+      if (play.gain !== null) lines.push(`Drawn here: one of the ${countWord(chance.rounds)}, ${points(play.gain)} points`);
+    } else if (all && play.gain !== null) lines.push(`${points(play.gain)} points`);
     const looksKey = play.looks.map((l) => `${l.decision}:${l.tile}`).join(',');
-    const twin = all ? sameLooks.get(looksKey) : undefined;
+    const twin = all ? first.get(looksKey) : undefined;
     if (play.id === SEES_THE_ANSWER) lines.push(SEES_THE_ANSWER_LINE);
-    else if (twin) lines.push(twinLine(play.id, twin));
-    if (!sameLooks.has(looksKey)) sameLooks.set(looksKey, play.name);
+    else if (twin) lines.push(twinLine(twin));
+    if (!first.has(looksKey)) first.set(looksKey, play.name);
     const marks: CompareMark[] = [{ kind: 'tiles', rows: rowsN, cols: colsN, looked: shown.map((l) => l.tile), veil: true }];
     if (opts.seen && opts.seen.length > 0) marks.push({ kind: 'detections', instrument: 'modis', rows: opts.seen, weight: 'quiet' });
-    marks.push({ kind: 'detections', instrument: 'viirs', rows: found });
+    if (opts.found !== false) marks.push({ kind: 'detections', instrument: 'viirs', rows: found });
     blocks.push({ id: play.id, ground, night: true, marks, pins, label: { title: play.name, lines } });
   }
   return blocks;
+}
+
+/** One block per player of a finished round, the visitor's own looks first, from the round's start and its end. */
+export function roundBlocks(ground: CompareGround | null, start: unknown, end: unknown, opts: RoundPlaysOptions & Pick<PlayBlocksOptions, 'looks' | 'found'> = {}): CompareBlock[] {
+  return playBlocks(ground, roundPlays(start, end, opts), { seen: roundSeen(start), looks: opts.looks, found: opts.found });
 }
 
 /** The MODIS detections of a run's passes that were not held out: what every player of its round could see. */
@@ -598,18 +633,6 @@ export function seenRows(run: unknown): DetectionRow[] {
   return framesOf(run)
     .filter((f) => !f.heldOut)
     .flatMap((f) => f.rows);
-}
-
-/** The most looks any player of a finished round took. */
-export function roundLooks(end: unknown): number {
-  const reference = obj(obj(end).reference);
-  let most = 0;
-  for (const player of PLAYERS) {
-    const ref = obj(reference[player.key]);
-    const actions = player.key === 'random' ? arr(arr(ref.actions)[0]) : arr(ref.actions);
-    most = Math.max(most, actions.filter((a) => (num(a) ?? -1) >= 0).length);
-  }
-  return most;
 }
 
 /** For each play whose looks equal an earlier play's, the name of that earlier player. */

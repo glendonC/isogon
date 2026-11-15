@@ -215,7 +215,7 @@ export function smoothed(probability: Uint8Array, nx: number, ny: number): Float
 }
 
 /** The estimate as the stage draws it: ink squares on the model's own grid inside a dotted line. */
-function paintEstimate(s: MarkSurface, grid: EstimateGrid, step: BeliefStep, open: boolean, palette: MarkPalette) {
+function paintEstimate(s: MarkSurface, grid: EstimateGrid, step: BeliefStep, open: boolean, palette: MarkPalette, frames?: number[]) {
   const { ctx } = s;
   const { nx, ny, box } = grid;
   const cw = ((box[2] - box[0]) / nx / (s.view[2] - s.view[0])) * s.width;
@@ -271,6 +271,28 @@ function paintEstimate(s: MarkSurface, grid: EstimateGrid, step: BeliefStep, ope
       ctx.fillStyle = withAlpha(palette.estimate, strength);
       ctx.fillRect(cx - side / 2, cy - side / 2, side, side);
     }
+  }
+
+  // The cells the model declared for a hidden pass: a frame the size of each cell, so the estimate stands on the
+  // plane with the weight of the detections beside it
+  if (frames && frames.length > 0) {
+    const side = cell * 0.82;
+    ctx.save();
+    ctx.lineJoin = 'miter';
+    for (const [width, colour] of [
+      [Math.max(s.perCssPx * 2.4, cell * 0.3), 'rgba(8,11,17,0.55)'],
+      [Math.max(s.perCssPx * 1.2, cell * 0.15), palette.estimate],
+    ] as const) {
+      ctx.lineWidth = width;
+      ctx.strokeStyle = colour;
+      for (const index of frames) {
+        const r = Math.floor(index / nx);
+        const c = index % nx;
+        if (r < 0 || r >= ny) continue;
+        ctx.strokeRect(x0 + (c + 0.5) * cw - side / 2, y0 + (r + 0.5) * ch - side / 2, side, side);
+      }
+    }
+    ctx.restore();
   }
 }
 
@@ -342,7 +364,7 @@ export function paintMarks(
     else if (mark.kind === 'tiles') paintTiles(s, mark, palette);
     else {
       const step = 'url' in mark.source ? belief(mark.source.url, mark.source.step, mark.grid) : mark.source;
-      if (step) paintEstimate(s, mark.grid, step, mark.open === true, palette);
+      if (step) paintEstimate(s, mark.grid, step, mark.open === true, palette, mark.frames);
     }
   }
 }
@@ -358,7 +380,7 @@ export function marksSignature(marks: readonly CompareMark[]): string {
       }
       if (m.kind === 'tiles') return `t:${m.rows}x${m.cols}:${(m.looked ?? []).join('.')}:${m.veil ? 'veil' : ''}`;
       const src = 'url' in m.source ? `${m.source.url}@${m.source.step}` : `bytes${m.source.probability.length}:${m.source.probability[0]}`;
-      return `e:${m.grid.nx}x${m.grid.ny}:${src}:${m.open ? 'open' : ''}`;
+      return `e:${m.grid.nx}x${m.grid.ny}:${src}:${m.open ? 'open' : ''}:${m.frames ? `${m.frames.length}/${m.frames[0]}/${m.frames[m.frames.length - 1]}` : ''}`;
     })
     .join('|');
 }

@@ -77,6 +77,11 @@ export interface EstimateMark {
   source: { url: string; step: number; steps: number } | { probability: Uint8Array; intensity?: Uint8Array };
   /** Open frames in place of squares at one half or more: what the model holds for a hidden pass. */
   open?: boolean;
+  /**
+   * Cells to frame in the estimate's ink (row times `nx` plus column, row 0 north): the cells the model declared for
+   * a hidden pass, which are what the test sets against the hidden detections. Each gets a frame the size of its cell.
+   */
+  frames?: number[];
 }
 
 /** The board of a round: tile lines in ink, and brackets on the tiles looked at. */

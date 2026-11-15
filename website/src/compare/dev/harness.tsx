@@ -5,7 +5,8 @@
  *   ?use=ways     one fire three ways (region, start, frame, cut=0, revealed=1)
  *   ?use=places   the featured fires of the places registry
  *   ?use=players  one block per player of a round (region, start, answer=1)
- *   ?use=agent    the Agent part's picture, inside a stand-in for the workspace (region, start)
+ *   ?use=agent    the players, side by side, over the still of the stage (region, start, round=1|underway, looks,
+ *                 revealed=1)
  *   ?use=fires    the featured fires as the place screen mounts them, in a box the size of its slot (h, pick)
  *   ?use=reveal   one fire three ways as World model mounts it, inside a stand-in for the workspace (region, start, pass)
  *   ?use=record   The Record over a still of the stage, with stand-ins for the trail and the guide's strip
@@ -19,7 +20,8 @@ import { platformName } from '../../content/realRuns';
 import '../../styles/tokens.css';
 import '../../styles/system.css';
 import { WorkspaceProvider, type WorkspaceStore } from '../../app/store';
-import { AgentPicture } from '../../beats/agent/AgentPicture';
+import { AgentBeat } from '../../beats/agent/AgentBeat';
+import { usePlayersView } from '../../beats/agent/playersView';
 import { openingStart, parsePlaces, type Box, type FeaturedFire, type Places } from '../../app/places';
 import { boxWords, PlaceScreen } from '../../beats/calendar/PlaceScreen';
 import type { FireRecord, RecordPlace } from '../../beats/calendar/record';
@@ -28,7 +30,7 @@ import { TheRecord } from '../../beats/calendar/TheRecord';
 import { ComparePlane } from '../ComparePlane';
 import { FeaturedFiresPlane } from '../FeaturedFiresPlane';
 import { ThreeWaysPlane } from '../ThreeWaysPlane';
-import { fireBlock, groundOfRun, playerBlocks, threeWays } from '../blocks';
+import { fireBlock, groundOfRun, roundBlocks, threeWays } from '../blocks';
 import type { CompareBlock, DetectionRow } from '../types';
 
 const Q = new URLSearchParams(location.search);
@@ -139,7 +141,7 @@ async function playersView(): Promise<View> {
     await new Promise((r) => setTimeout(r, 3000));
     end = (await getJson<Any>('/api/env/next_look/state', { round_id: state.round_id })).end ?? end;
   }
-  const blocks = playerBlocks(groundOfRun(run), state, end, { seesTheAnswer: Q.get('answer') === '1' });
+  const blocks = roundBlocks(groundOfRun(run), state, end, { seesTheAnswer: Q.get('answer') === '1' });
   return {
     title: run.region.name,
     line: `${day(state.episode.first_overpass_utc)}. The same round, ${state.episode.budget} looks each. Numbers give the order of the looks.`,
@@ -148,27 +150,87 @@ async function playersView(): Promise<View> {
   };
 }
 
-/** The Agent part's picture with just enough of the workspace around it: the place and the run on show. */
+/**
+ * The players, side by side, over the still of the stage, with just enough of the workspace round them. With
+ * `round=1` a round is played first through the routes (looks=5,-1,6,-1,9,-1,10 are the visitor's, a square or -1 for
+ * each pass), so the picture is that round with the visitor's own looks; without it the picture asks for plays, and
+ * what the looks found stays hidden until asked for (revealed=1 stands for a test already revealed).
+ * `round=underway` stands for a round that is not over. The strip's words are the guide script's for this state,
+ * and this page's own where the script has none.
+ */
 function AgentHarness() {
   const [store, setStore] = useState<WorkspaceStore | null>(null);
+  const [event, setEvent] = useState('none');
+  const [failed, setFailed] = useState<string | null>(null);
+  const view = usePlayersView();
   useEffect(() => {
-    void defaults().then(async ({ regionId, start }) => {
+    void (async () => {
+      const { regionId, start } = await defaults();
+      if (start.startsWith('2021')) throw new Error('this page does not ask for a 2021 window');
       const run = await heldOutRun(regionId, start);
+      const places = parsePlaces(await getJson<unknown>('/api/regions'));
+      let round: Any = { state: null, start: null, end: null };
+      if (Q.get('round') === 'underway') round = { state: {}, start: null, end: null };
+      else if (Q.get('round') === '1') {
+        const state = await postJson<Any>('/api/env/next_look/reset', { region_id: regionId, start });
+        const mine = (Q.get('looks') ?? '5,-1,6,-1,9,-1,10').split(',').map(Number);
+        let end: Any | null = null;
+        for (let d = 0; d < state.looks.length && !end; d++) {
+          const step = await postJson<Any>('/api/env/next_look/step', { round_id: state.round_id, decision: d, action: mine[d] ?? -1 });
+          if (step.done) end = step.end;
+        }
+        for (let tries = 0; tries < 60 && !(end && end.reference); tries++) {
+          await new Promise((r) => setTimeout(r, 3000));
+          end = (await getJson<Any>('/api/env/next_look/state', { round_id: state.round_id })).end ?? end;
+        }
+        round = { state: {}, start: state, end };
+      }
+      const fire = places.places.flatMap((p) => p.featured_fires).find((f) => f.region_id === regionId && f.default_start === start);
       setStore({
+        places,
+        currentFire: fire?.id ?? null,
         place: { regionId, title: run.region.name },
         run: { active: run, isReal: true, realStart: start },
-        round: { state: null, end: null },
+        round,
+        test: { revealed: Q.get('revealed') === '1' },
+        goStep: (step: string) => setEvent(`step ${step}`),
+        openModel: () => setEvent('model'),
       } as unknown as WorkspaceStore);
-    });
+    })().catch((e: unknown) => setFailed(e instanceof Error ? e.message : String(e)));
   }, []);
+  const played = view.from === 'round';
+  const same = view.players.find((p) => p.id === 'learned')?.sameLooksAs ?? null;
+  const said =
+    view.state !== 'ready'
+      ? [failed ?? view.line ?? 'Loading this fire.']
+      : played
+        ? [
+            'Each small terrain is one player on the round you just played. Lit squares are where it looked, in order, and filled marks are what its looks found.',
+            ...(same ? [`On this round the Learned Player made the same looks as ${same}.`] : []),
+          ]
+        : [`Each small terrain is one player on this fire's round. Lit squares are where it looked, in order.${view.foundShown ? ' Filled marks are what its looks found.' : ''}`];
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'var(--sys-night)' }}>
+    <StandIn
+      objective="See where the other players looked"
+      trail={3}
+      said={said}
+      actions={
+        view.state !== 'ready'
+          ? []
+          : [
+              ...(view.canReveal ? [{ id: 'reveal', key: 'Enter', words: 'Reveal what their looks found', act: view.reveal }] : [{ id: 'finish', key: 'Enter', words: 'Finish' }]),
+              { id: 'watch', key: 'W', words: 'Watch them play', act: view.watch },
+              { id: 'again', key: 'R', words: 'Play again' },
+            ]
+      }
+      event={event}
+    >
       {store && (
         <WorkspaceProvider value={store}>
-          <AgentPicture />
+          <AgentBeat />
         </WorkspaceProvider>
       )}
-    </div>
+    </StandIn>
   );
 }
 
@@ -315,7 +377,22 @@ interface StandInAction {
  * What stands round a screen of this lane on the page, as stand-ins: a still of the stage under it, the objective and
  * the trail top left, the guide's sentences and at most three actions bottom centre, the first one the next step.
  */
-function StandIn({ objective, said, actions, event, children }: { objective: string; said: string[]; actions: StandInAction[]; event: string; children: React.ReactNode }) {
+function StandIn({
+  objective,
+  said,
+  actions,
+  event,
+  trail = 0,
+  children,
+}: {
+  objective: string;
+  said: string[];
+  actions: StandInAction[];
+  event: string;
+  /** Which of the trail's four words is the current one. */
+  trail?: number;
+  children: React.ReactNode;
+}) {
   const quiet = { font: 'inherit', background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit' } as const;
   const key = { font: 'var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono)', color: 'var(--sys-ink-3)', marginRight: 8 } as const;
   return (
@@ -338,7 +415,7 @@ function StandIn({ objective, said, actions, event, children }: { objective: str
                 <span
                   key={w}
                   className="sys-label"
-                  style={i === 0 ? { color: 'var(--sys-ink)', borderBottom: '1px solid var(--sys-ink)', paddingBottom: 2 } : { color: 'var(--sys-ink-3)' }}
+                  style={i === trail ? { color: 'var(--sys-ink)', borderBottom: '1px solid var(--sys-ink)', paddingBottom: 2 } : { color: 'var(--sys-ink-3)' }}
                 >
                   {w}
                 </span>
