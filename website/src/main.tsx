@@ -14,6 +14,8 @@ import './styles/calendar.css';
 import './styles/sequence.css';
 import './styles/landing-parts.css';
 import './styles/film.css';
+// The data displays' shared rules (dataviz/), once for the whole page.
+import './dataviz/dataviz.css';
 import { setControlSound } from './identity/controlState';
 import { armControlVoices, controlVoice } from './ui/controlVoices';
 

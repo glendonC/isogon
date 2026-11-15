@@ -28,6 +28,7 @@ import { RevealSweep } from './identity/RevealSweep';
 import { Entry } from './identity/Entry';
 import { stageReady } from './stage/stageReady';
 import type { StageThingBox } from './stage/earthCutawayTypes';
+import { setPageLinks } from './ui/pageLinks';
 import { usePlay, type PlayShot } from './ui/usePlay';
 import { agentWalkDone, startAgentWalk, stopAgentWalk } from './walk/agentWalk';
 import { AgentWalkLine } from './walk/AgentWalkLine';
@@ -1640,11 +1641,16 @@ export function App() {
   const fireTitle = fireStep && fireShown ? (fireShown.name ? `${fireShown.name}, ${fireShown.label}` : fireShown.label) : null;
   const barLat = runMatchesRegion && activeRun ? activeRun.region.center_lat : registryBox.length === 4 ? (registryBox[1] + registryBox[3]) / 2 : null;
   const barLon = runMatchesRegion && activeRun ? activeRun.region.center_lon : registryBox.length === 4 ? (registryBox[0] + registryBox[2]) / 2 : null;
-  const barLinks = [
-    { label: WORDS.links.search, onClick: () => setAskOpen(true) },
-    { label: WORDS.links.method, onClick: () => setReading('method') },
-    { label: WORDS.links.sources, onClick: () => setReading('sources') },
-  ];
+  const barLinks = useMemo(
+    () => [
+      { label: WORDS.links.search, onClick: () => setAskOpen(true) },
+      { label: WORDS.links.method, onClick: () => setReading('method') },
+      { label: WORDS.links.sources, onClick: () => setReading('sources') },
+    ],
+    [],
+  );
+  // The same links for the bars of screens drawn from other folders (the pictures of the world): ui/pageLinks.ts.
+  useEffect(() => setPageLinks(barLinks), [barLinks]);
   // The visitor's own round (and the players beside it) is the story's last part, their turn.
   const storyPart: StoryPart = step === 'record' ? 'place' : step === 'look' || step === 'agent' ? 'turn' : 'fire';
   const storyNumber = (v: unknown) => {
