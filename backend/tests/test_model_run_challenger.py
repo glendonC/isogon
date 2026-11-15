@@ -49,6 +49,7 @@ class SwitchOffTests(unittest.TestCase):
         self.assertEqual(plain.reconstruction_u8_bytes, named.reconstruction_u8_bytes)
         self.assertNotIn("held_out_passes_estimated_by", plain.extras["model"])
         self.assertEqual(plain.extras["blind_test"]["verdict"]["method"], "reconstruction")
+        self.assertEqual(plain.extras["held_out_passes_answered_by"]["words"], "the estimate in use")
 
     def test_a_value_that_is_neither_is_refused(self) -> None:
         with self.assertRaises(ValueError):
@@ -100,6 +101,16 @@ class SwitchOnTests(unittest.TestCase):
             self.assertEqual(_without_the_scorer(got), want, case)
             self.assertEqual(got.reconstruction_u8_bytes, self.on.reconstruction_u8_bytes, case)
 
+    def test_the_answer_names_in_one_field_which_estimate_answered_the_held_out_passes(self) -> None:
+        from backend.model.real_run import real_response
+
+        field = real_response(self.on, {})["held_out_passes_answered_by"]
+        self.assertEqual(field["method"], self.name)
+        self.assertTrue(field["words"].startswith("a challenger model ("))
+        self.assertEqual(real_response(self.off, {})["held_out_passes_answered_by"]["method"], "reconstruction")
+        for cp in (0x2014, 0x2013, 0x00B7):
+            self.assertNotIn(chr(cp), field["words"] + field["the_rest"])
+
     def test_a_run_answered_by_the_challenger_has_an_id_of_its_own(self) -> None:
         self.assertNotEqual(self.on.run_id, self.off.run_id)
         self.assertTrue(self.on.run_id.endswith(self.name))
@@ -109,6 +120,7 @@ class SwitchOnTests(unittest.TestCase):
         b = _solve(ROWS6, holdout=False)
         self.assertEqual(json.dumps(a.observer_passes, sort_keys=True), json.dumps(b.observer_passes, sort_keys=True))
         self.assertNotIn("held_out_passes_estimated_by", a.extras["model"])
+        self.assertIsNone(a.extras["held_out_passes_answered_by"])
 
 
 if __name__ == "__main__":

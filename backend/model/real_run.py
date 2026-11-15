@@ -92,6 +92,25 @@ def run_estimate(given: str | None = None) -> str:
     return value
 
 
+# The kind of model each challenger is, in words a page can say.
+CHALLENGER_WORDS: dict[str, str] = {
+    "gbdt": "boosted decision trees", "mlp": "a small neural network", "blend": "a blend of three models",
+    "logistic": "a logistic model",
+}
+
+
+def answering_estimate(headline: str) -> dict[str, Any]:
+    """Which estimate answered the held-out passes of a run, in one field, with words a page can say."""
+    if headline == "reconstruction":
+        return {"method": "reconstruction", "words": "the estimate in use", "switch": RUN_ESTIMATE_ENV,
+                "switch_is": ESTIMATE_IN_USE}
+    kind = CHALLENGER_WORDS.get(headline.removeprefix("challenger_"), "a challenger model")
+    return {"method": headline,
+            "words": f"a challenger model ({kind}) chosen on fires it was not fitted on, in place of the estimate in use",
+            "switch": RUN_ESTIMATE_ENV, "switch_is": ESTIMATE_CHALLENGER,
+            "the_rest": "the passes the coarse satellite made, the spread and the frames between passes are the estimate in use"}
+
+
 def _challenger() -> tuple[Any, str, dict[str, Any]]:
     """The default challenger's factory, its method name and what the payload says of it."""
     import hashlib
@@ -714,6 +733,8 @@ def solve_real_reconstruction(
             ),
         },
         "declared_cells": declared,
+        # which estimate answered the held-out passes, in one field; fixed before the hidden rows are opened
+        "held_out_passes_answered_by": answering_estimate(headline) if holdout else None,
         "model": {
             "version": REAL_MODEL_VERSION,
             "method": "forward and backward occupancy filter on the 375 m grid (backend/model/occupancy.py)",
