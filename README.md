@@ -64,6 +64,38 @@ challenger; the coarse passes, the spread and the frames between passes are the 
 - **Elevation and imagery**: Terrain Tiles on AWS Open Data; USGS The National Map, EOxCloudless and Esri World
   Imagery, each with its credit and terms in [`docs/sources.md`](docs/sources.md).
 
+The backend is a Python standard library server with two packages beside it, `numpy` and `Pillow`, and no database;
+[`docs/architecture.md`](docs/architecture.md) gives every module and route, with a key to the shapes and colours, and this is its data flow in short:
+
+```mermaid
+flowchart LR
+  site(["website/"]):::site ==>|"live"| server{{"backend/server.py<br/>the routes"}}:::route
+  site -->|"recorded"| rec[("recorded answers<br/>backend/server_recorder.py")]:::store
+  files[/"NASA FIRMS country files"/]:::nasa --> build["backend/firms/cube_build.py"]:::module --> cube["backend/firms/cube.py<br/>the fire cube"]:::module
+  cube -->|"monthly counts"| harm["backend/model/harmonize.py<br/>the record on one scale"]:::module
+  server --> cube
+  rows[/"backend/firms/archive.py<br/>FIRMS rows"/]:::nasa --> seal{"backend/eval/holdout.py<br/>seal"}:::wall
+  server --> run["backend/model/real_run.py"]:::module
+  run --> seal
+  seal --> env["backend/env/next_look.py<br/>the game"]:::module
+  seal -->|"MODIS rows"| models["the first model and the second<br/>backend/model/occupancy.py, backend/model/challenger/"]:::model
+  models -->|"predictions"| bt["backend/eval/blind_test.py"]:::test
+  seal -.->|"VIIRS rows, sealed"| bt
+  look["backend/model/fresh_world_run.py"]:::test -->|"one look"| bt
+  look -->|"writes the record"| recs[("backend/model/fitted_values/")]:::store --> ev["backend/model/evidence.py"]:::module
+  server --> ev
+  live["backend/live/sealer.py"]:::live -->|"sealed record"| log[("seals.jsonl")]:::store --> score["backend/live/scorer.py"]:::test --> bt
+  classDef nasa fill:#dbeafe,stroke:#1d4ed8,color:#0b1b3f
+  classDef module fill:#ffffff,stroke:#475569,color:#0f172a
+  classDef store fill:#fef3c7,stroke:#b45309,color:#3b2405
+  classDef route fill:#ede9fe,stroke:#6d28d9,color:#2e1065
+  classDef model fill:#dcfce7,stroke:#15803d,color:#052e16
+  classDef test fill:#ffe4e6,stroke:#be123c,color:#4c0519
+  classDef live fill:#ffedd5,stroke:#c2410c,color:#431407
+  classDef wall fill:#fee2e2,stroke:#dc2626,stroke-width:2px,color:#7f1d1d
+  classDef site fill:#e0f2fe,stroke:#0369a1,color:#082f49
+```
+
 ## Quick start
 
 You need `uv` (it supplies Python 3.12 with `numpy` and `Pillow`) and Node.js 20 or later with `npm`.
