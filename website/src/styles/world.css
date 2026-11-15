@@ -253,7 +253,7 @@
 
 .world-legend__fine {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--sys-s2);
   font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
   color: var(--sys-ink-3);
@@ -294,12 +294,13 @@
   flex-shrink: 0;
   width: 14px;
   height: 10px;
+  margin-top: 3px;
 }
 
 .world-swatch--hatch {
   background:
     repeating-linear-gradient(135deg, rgba(243, 244, 246, 0.28) 0 1px, transparent 1px 4px),
-    #161a22;
+    #101318;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -31,13 +31,13 @@ export const EARTH_WORDS = {
   fireLegend: (since: string | null) =>
     `Detections of the coarse satellite (MODIS) in each square of a quarter degree, about 28 km${since ? `, since ${since}` : ''}.`,
   tick: (v: number) => roughly(v),
-  hatch: (complete: boolean, since: string | null) =>
+  hatch: (complete: boolean, since: string | null, loaded: string[] | number | null | undefined) =>
     complete
       ? `Hatched land: no detection there${since ? ` since ${since}` : ''}.`
-      : 'Hatched land: no file loaded so far holds a detection there. That is not the same as no fire.',
-  loaded: (names: string[] | number) =>
-    typeof names === 'number' ? `Loaded so far: the files of ${count(names)} countries.` : names.length ? `Loaded so far: ${listAnd(names)}.` : null,
-  halo: 'The soft glow around the squares is drawing, so that one detection shows at this scale.',
+      : `Hatched land: no file loaded so far holds a detection there, which is not the same as no fire.${
+          typeof loaded === 'number' ? ` The files of ${count(loaded)} countries are loaded.` : Array.isArray(loaded) && loaded.length ? ` Loaded: ${listAnd(loaded)}.` : ''
+        }`,
+  halo: 'The soft glow round the squares is drawing only.',
   factorLegend: (years: string | null, step: number) =>
     `Detections of the sharp satellite (VIIRS) for each one of the coarse satellite (MODIS)${years ? `, ${years}` : ''}, in squares of ${step} degrees.`,
   factorTick: (f: number, low: number, high: number) => (f <= low ? `${f}× or less` : f >= high ? `${f}× or more` : `${f}×`),

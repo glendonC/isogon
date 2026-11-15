@@ -41,9 +41,26 @@ export interface WorldCanvasProps {
 
 const SEA = '#080b11';
 const LAND = '#161a22';
-const HATCH_INK = 'rgba(243, 244, 246, 0.07)';
+/** Land no loaded file holds a detection in: darker than loaded land, and hatched. */
+const LAND_UNLOADED = '#101318';
+const HATCH_INK = 'rgba(243, 244, 246, 0.08)';
 const BORDER = 'rgba(243, 244, 246, 0.09)';
 const COAST = 'rgba(243, 244, 246, 0.2)';
+
+/** The halo of a layer, blurred once at the layer's own size, so a frame only scales it. */
+const halos = new WeakMap<object, HTMLCanvasElement>();
+function haloOf(img: CanvasImageSource & { width: number; height: number }): HTMLCanvasElement {
+  const hit = halos.get(img);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const g = c.getContext('2d')!;
+  g.filter = 'blur(1.6px)';
+  g.drawImage(img, 0, 0);
+  halos.set(img, c);
+  return c;
+}
 
 function hatchPattern(ctx: CanvasRenderingContext2D, dpr: number): CanvasPattern | null {
   const s = Math.round(7 * dpr);
@@ -51,7 +68,7 @@ function hatchPattern(ctx: CanvasRenderingContext2D, dpr: number): CanvasPattern
   c.width = s;
   c.height = s;
   const g = c.getContext('2d')!;
-  g.fillStyle = LAND;
+  g.fillStyle = LAND_UNLOADED;
   g.fillRect(0, 0, s, s);
   g.strokeStyle = HATCH_INK;
   g.lineWidth = Math.max(1, dpr * 0.8);
@@ -124,10 +141,9 @@ export function WorldCanvas({ label, layers = [], hatchLand = false, focus = OPE
       if (l.halo && cellPx < 3) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.filter = `blur(${Math.max(1.5, 4 - cellPx).toFixed(1)}px)`;
-        ctx.globalAlpha = 0.55;
+        ctx.globalAlpha = 0.6;
         ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(l.image, x0, y0, w, h);
+        ctx.drawImage(haloOf(l.image), x0, y0, w, h);
         ctx.restore();
         ctx.globalAlpha = l.alpha ?? 1;
       }

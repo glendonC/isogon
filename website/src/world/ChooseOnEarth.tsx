@@ -308,10 +308,10 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
         </div>
         <div className="world-legend__fine">
           <span className="world-swatch world-swatch--hatch" aria-hidden="true" />
-          {W.hatch(complete, since)}
+          <span>
+            {W.hatch(complete, since, idx.countries_loaded)} {W.halo}
+          </span>
         </div>
-        {!complete && idx.countries_loaded && <div className="world-legend__fine">{W.loaded(idx.countries_loaded)}</div>}
-        <div className="world-legend__fine">{W.halo}</div>
       </>
     );
   };
