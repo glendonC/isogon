@@ -84,7 +84,12 @@ class Sealer:
         if not self.fitted_ok():
             self.log("the fitted values differ from the frozen digests: nothing is sealed")
             return {"sealed": 0, "missed": 0}
-        self._maybe_choose(now)
+        try:
+            self._maybe_choose(now)
+        except SharpRowsRefused:
+            raise
+        except Exception as exc:  # noqa: BLE001  the fires already followed are still sealed; the choice is tried again
+            self.log(f"cohort not chosen this cycle: {type(exc).__name__}: {exc}")
         sealed = missed = 0
         done = self.done_keys()
         for fire in self.fires():
