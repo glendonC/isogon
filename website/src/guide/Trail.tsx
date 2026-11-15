@@ -4,55 +4,61 @@ import '../styles/guide.css';
 export type TrailWord = 'Record' | 'Estimate' | 'Test' | 'Play';
 
 /**
- * Top left, in place of the bar: the four words of the trail, the current one marked, each a way to its step where it
- * can open (a closed one says why on hover and focus); beside them the place and its dates, which open Choose a Place.
+ * Top left, in place of the bar: the objective, one line of what the visitor is doing now; under it the four words
+ * of the trail, the current one marked, each a way to its step where it can open (a closed one says why on hover and
+ * focus); beside them the step's context, the place and its days, fainter, which opens Choose a Place.
  */
 export function Trail({
+  objective,
   current,
-  where,
+  context,
   onWord,
   closed,
   onPlace,
 }: {
+  objective: string | null;
   current: TrailWord | null;
-  where: string | null;
+  context: string | null;
   onWord: (w: TrailWord) => void;
   closed: Partial<Record<TrailWord, string | null>>;
   onPlace: () => void;
 }) {
   return (
     <div className="guide-trail">
-      <nav className="guide-trail__words" aria-label="Steps">
-        {(SCRIPT.trail as TrailWord[]).map((w) => (
+      {objective && <p className="guide-trail__objective">{objective}</p>}
+      <div className="guide-trail__row">
+        <nav className="guide-trail__words" aria-label="Steps">
+          {(SCRIPT.trail as TrailWord[]).map((w) => (
+            <button
+              key={w}
+              type="button"
+              className="guide-trail__word"
+              aria-current={current === w ? 'step' : undefined}
+              data-on={current === w ? 'true' : 'false'}
+              disabled={Boolean(closed[w])}
+              title={closed[w] ?? undefined}
+              onClick={(e) => {
+                onWord(w);
+                if (e.detail > 0) e.currentTarget.blur();
+              }}
+            >
+              {w}
+            </button>
+          ))}
+        </nav>
+        {context && (
           <button
-            key={w}
             type="button"
-            className="guide-trail__word"
-            aria-current={current === w ? 'step' : undefined}
-            data-on={current === w ? 'true' : 'false'}
-            disabled={Boolean(closed[w])}
-            title={closed[w] ?? undefined}
+            className="guide-trail__where"
             onClick={(e) => {
-              onWord(w);
+              onPlace();
               if (e.detail > 0) e.currentTarget.blur();
             }}
           >
-            {w}
+            {context}
           </button>
-        ))}
-      </nav>
-      {where && (
-        <button
-          type="button"
-          className="guide-trail__where"
-          onClick={(e) => {
-            onPlace();
-            if (e.detail > 0) e.currentTarget.blur();
-          }}
-        >
-          {where}
-        </button>
-      )}
+        )}
+      </div>
     </div>
   );
 }

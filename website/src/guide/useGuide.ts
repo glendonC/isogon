@@ -1,13 +1,17 @@
 import { useRef } from 'react';
 import type { WorkspaceBase } from '../app/store';
 import { guideFields } from './fields';
-import { labelOn, says, stateOf, type ScriptAction, type ScriptState } from './script';
+import { missingLine } from './missing';
+import { contextOf, labelOn, objectiveOf, promptBeside, says, stateOf, type ScriptAction, type ScriptState } from './script';
 
 export interface Guide {
   /** The script's step and state on show; null where the guide does not speak yet (the Record, Play). */
   step: 'estimate' | 'test' | null;
   stateId: string | null;
   state: ScriptState | null;
+  /** Top left: what the visitor is doing now, and the fainter line of the place and the days. */
+  objective: string | null;
+  context: string | null;
   lines: string[];
   actions: ScriptAction[];
   /** The label on the fire, and the action that stands beside the fire as a prompt. */
@@ -15,7 +19,17 @@ export interface Guide {
   besideFire: ScriptAction | null;
 }
 
-const NONE: Guide = { step: null, stateId: null, state: null, lines: [], actions: [], fireLabel: null, besideFire: null };
+const NONE: Guide = {
+  step: null,
+  stateId: null,
+  state: null,
+  objective: null,
+  context: null,
+  lines: [],
+  actions: [],
+  fireLabel: null,
+  besideFire: null,
+};
 
 /**
  * Which step and state of the script the workspace is in, and what the guide says there. A state's own pass is the one
@@ -24,11 +38,13 @@ const NONE: Guide = { step: null, stateId: null, state: null, lines: [], actions
 export function useGuide(ws: WorkspaceBase, open: { scores: boolean; sideBySide: boolean }): Guide {
   const entry = useRef<{ key: string; pass: number }>({ key: '', pass: -1 });
   const model = ws.step === 'fire' || ws.step === 'test';
-  if (!model) {
-    entry.current = { key: '', pass: -1 };
-    return NONE;
-  }
   const { fields, conds } = guideFields(ws);
+  if (!model) {
+    // Where the guide does not speak yet, the corner still says the step's objective and context.
+    entry.current = { key: '', pass: -1 };
+    const s = ws.step === 'record' ? 'record' : 'play';
+    return { ...NONE, objective: objectiveOf(s, null, fields), context: contextOf(s, fields) };
+  }
   const failed = Boolean(ws.run.failed && (ws.run.failed.start === ws.run.pendingStart || !ws.run.isReal));
   let step: 'estimate' | 'test' = 'estimate';
   let id: string;
@@ -53,13 +69,17 @@ export function useGuide(ws: WorkspaceBase, open: { scores: boolean; sideBySide:
 
   const state = stateOf(step, id);
   const actions = (state?.actions ?? []).slice(0, 3);
+  // A file that did not load is said first, while the run it belongs to is on show.
+  const missing = id === 'loading' || id === 'failed' ? null : missingLine(ws.model.missingFiles);
   return {
     step,
     stateId: id,
     state,
-    lines: says(state, fields, conds),
+    objective: objectiveOf(step, state, fields),
+    context: contextOf(step, fields),
+    lines: [...(missing ? [missing] : []), ...says(state, fields, conds)],
     actions,
     fireLabel: labelOn(state, 'fire', fields, conds),
-    besideFire: actions.find((a) => a.beside === 'fire') ?? null,
+    besideFire: promptBeside(state, 'fire'),
   };
 }

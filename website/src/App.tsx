@@ -1099,6 +1099,7 @@ export function App() {
       threeWays,
       toggleThreeWays: () => setThreeWays((t) => !t),
       lastSeen: stageTelemetry?.lastSeen ?? null,
+      missingFiles: stageTelemetry?.missingFiles ?? null,
       evidence: evidenceLive,
       openEvidence: () => setEvidenceOpen(true),
       revealedHere: revealed ? trackRevealed.filter((r) => r.frame === activeEpoch).reduce((a, r) => a + r.pixels, 0) : null,
@@ -1212,8 +1213,9 @@ export function App() {
             <div className="iso-ws__scrim iso-ws__scrim--bottom" aria-hidden="true" />
 
             <Trail
+              objective={guide.objective}
               current={trailWord}
-              where={[regionTitle, span].filter(Boolean).join(', ') || null}
+              context={guide.context}
               onWord={(w) => {
                 if (w === 'Record') goStep('record');
                 else if (w === 'Estimate') openModel();

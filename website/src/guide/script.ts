@@ -2,39 +2,79 @@ import raw from './script.json';
 
 /**
  * The guide's words, read from one file: `script.json`, a committed copy of the product lane's GUIDE-script.json
- * (its `version` says which). Each step has states; each state says lines (some only under a condition), offers
- * actions (a label, a command, a key, and the thing it acts on) and puts short labels on things of the stage. Text in
- * braces is a field whose value comes from the backend's answers (`fields.ts`); no figure is typed here.
+ * (its `version` says which). Each step has an objective, a context line and states; each state has its own
+ * objective, says lines in the guide (some only under a condition), offers actions (a label, a command, a key, the
+ * places it is offered and the thing it acts on) and puts short labels on things of the stage. Text in braces is a
+ * field whose value comes from the backend's answers (`fields.ts`); no figure is typed here.
  */
 
-export type ScriptLine = string | { if?: string; unless?: string; line: string };
+/** A condition on a line: shown only when `if` is true, or only when `unless` is false. */
+interface When {
+  if?: string;
+  unless?: string;
+}
+
+export interface ScriptLine extends When {
+  /** Where the line is said: "guide" for the strip at the bottom. */
+  place?: string;
+  line: string;
+}
 
 export interface ScriptAction {
   label: string;
   command: string;
   key?: string;
+  /** Where the action is offered: the guide strip always, and a prompt beside `beside` when "prompt" is named. */
+  places?: string[];
   /** The thing on the stage the action also stands beside, as a prompt, while the pointer or focus is near it. */
   beside?: string;
 }
 
-export interface ScriptLabel {
+export interface ScriptLabel extends When {
+  place?: string;
   on: string;
-  if?: string;
-  unless?: string;
   line: string;
+}
+
+export interface ScriptResultRow {
+  name: string;
+  field: string;
+  strong?: boolean;
+  note?: string;
+  note_if?: string;
+}
+
+export interface ScriptResults {
+  place: string;
+  how: string;
+  line: string;
+  rows: ScriptResultRow[];
 }
 
 export interface ScriptState {
   id: string;
-  says: ScriptLine[];
+  objective?: string;
+  says: Array<string | ScriptLine>;
   actions: ScriptAction[];
   labels?: ScriptLabel[];
   on_demand?: string[];
+  results?: ScriptResults;
+}
+
+export interface ScriptStartCard {
+  place: string;
+  at: string;
+  do: string;
+  done: string;
 }
 
 export interface ScriptStep {
   id: string;
-  name: string;
+  name: string | null;
+  objective?: string;
+  /** The fainter line that goes with the objective: the place and the days. Not a sentence. */
+  context?: string | null;
+  start_card?: ScriptStartCard;
   states: ScriptState[];
 }
 
@@ -47,12 +87,16 @@ interface Script {
 
 export const SCRIPT = raw as unknown as Script;
 
-/** Field values already in their written form ("10 to 13 August 2012", "three", "1:10"); null when not served. */
+/** Field values already in their written form ("9 to 12 August 2012", "three", "+4.1"); null when not served. */
 export type Fields = Record<string, string | null | undefined>;
 export type Conditions = Record<string, boolean | null | undefined>;
 
+export function stepOf(step: string): ScriptStep | null {
+  return SCRIPT.steps.find((s) => s.id === step) ?? null;
+}
+
 export function stateOf(step: string, state: string): ScriptState | null {
-  return SCRIPT.steps.find((s) => s.id === step)?.states.find((x) => x.id === state) ?? null;
+  return stepOf(step)?.states.find((x) => x.id === state) ?? null;
 }
 
 /** A template with its fields filled; null when a field it names has no value, so no line is shown half made. */
@@ -69,16 +113,29 @@ export function fill(template: string, fields: Fields): string | null {
   return missing ? null : out;
 }
 
-const holds = (c: { if?: string; unless?: string }, conds: Conditions) =>
+export const holds = (c: When, conds: Conditions) =>
   (c.if === undefined || conds[c.if] === true) && (c.unless === undefined || conds[c.unless] === false);
 
-/** The lines a state says, in order, conditions applied and fields filled. */
+/** The lines a state says in the guide, in order, conditions applied and fields filled. */
 export function says(state: ScriptState | null, fields: Fields, conds: Conditions): string[] {
   if (!state) return [];
   return state.says
-    .map((l) => (typeof l === 'string' ? l : holds(l, conds) ? l.line : null))
-    .map((l) => (l === null ? null : fill(l, fields)))
+    .map((l) => (typeof l === 'string' ? { line: l } : l))
+    .filter((l) => (l.place ?? 'guide') === 'guide' && holds(l, conds))
+    .map((l) => fill(l.line, fields))
     .filter((l): l is string => l !== null);
+}
+
+/** The objective on show: the state's own, else its step's, filled. */
+export function objectiveOf(step: string, state: ScriptState | null, fields: Fields): string | null {
+  const t = state?.objective ?? stepOf(step)?.objective;
+  return t ? fill(t, fields) : null;
+}
+
+/** The step's context line (the place and the days), filled; null where the step has none. */
+export function contextOf(step: string, fields: Fields): string | null {
+  const t = stepOf(step)?.context;
+  return t ? fill(t, fields) : null;
 }
 
 /** The label a state puts on one thing of the stage. */
@@ -89,6 +146,11 @@ export function labelOn(state: ScriptState | null, thing: string, fields: Fields
     if (text) return text;
   }
   return null;
+}
+
+/** The action a state offers as a prompt beside one thing of the stage. */
+export function promptBeside(state: ScriptState | null, thing: string): ScriptAction | null {
+  return state?.actions.find((a) => a.beside === thing && (a.places === undefined || a.places.includes('prompt'))) ?? null;
 }
 
 /** The key as the keyboard names it, for matching a key press against an action's key. */

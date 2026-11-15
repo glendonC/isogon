@@ -64,6 +64,8 @@ export interface Calendar {
   overlap: OverlapEvidence | null;
   firstYear: number;
   lastYear: number;
+  /** The month the sharp satellite's record begins here ("2012-01"), from `regime_markers`; null when not served. */
+  sharpSince: string | null;
   months: CalendarMonth[];
 }
 
@@ -123,6 +125,16 @@ function combinedUnit(modis: string | null, viirs: string | null): string | null
   const [mw, mp] = modis.split(', ');
   const vp = viirs?.split(', ')[1];
   return mp && vp && viirs?.startsWith(mw) ? `${mw}, ${mp} plus ${vp}` : modis;
+}
+
+/** The first regime marker whose label begins with VIIRS: when the sharp satellite's record begins. */
+function sharpSinceOf(raw: unknown): string | null {
+  if (!Array.isArray(raw)) return null;
+  for (const m of raw) {
+    const r = m && typeof m === 'object' ? (m as Record<string, unknown>) : null;
+    if (r && typeof r.label === 'string' && r.label.startsWith('VIIRS') && typeof r.year_month === 'string') return r.year_month;
+  }
+  return null;
 }
 
 function readOverlap(raw: unknown): OverlapEvidence | null {
@@ -202,6 +214,7 @@ export function parseCalendar(raw: unknown): Calendar | null {
     overlap: real ? readOverlap(rec.summary_metrics) : null,
     firstYear: Math.min(...years),
     lastYear: Math.max(...years),
+    sharpSince: sharpSinceOf(rec.regime_markers),
     months,
   };
 }

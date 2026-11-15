@@ -7,11 +7,25 @@
   z-index: 6;
   left: var(--sys-gutter);
   top: 22px;
-  display: flex;
-  align-items: baseline;
-  gap: var(--sys-s5);
+  display: grid;
+  gap: 6px;
+  max-width: min(640px, calc(100vw - 2 * var(--sys-gutter)));
   pointer-events: auto;
   text-shadow: 0 1px 8px rgba(8, 11, 17, 0.85);
+}
+
+/* The objective: one verb phrase, the heaviest words of the corner. */
+.guide-trail__objective {
+  margin: 0;
+  font: var(--sys-weight-strong) 20px / 26px var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.guide-trail__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sys-s5);
 }
 
 .guide-trail__words {

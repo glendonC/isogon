@@ -1,33 +1,17 @@
 import type { WorkspaceBase } from '../app/store';
 import type { Conditions, Fields } from './script';
+import { count, countWord, listAnd, localDayRange, localDayTime, midLon, ordinal, year } from './formats';
 
 /**
  * The values the guide's lines name, read from the backend's answers the workspace already holds, written in the
- * script's formats (`script.json`, "formats"). A value the answers do not hold is null, and a line that names it is not
- * said. Only the fields of the steps built so far are here (Estimate and Test).
+ * script's formats (`formats.ts`). A value the answers do not hold is null, and a line that names it is not said.
+ * Only the fields of the steps built so far are here.
  */
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-
-const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
-
-/** count: a whole number with a comma for thousands. */
-export const count = (n: number | null) => (n === null ? null : Math.round(n).toLocaleString('en-US'));
-/** count_word: zero to twelve as a word, larger numbers as digits. */
-export const countWord = (n: number | null) => (n === null ? null : n >= 0 && n <= 12 ? WORDS[Math.round(n)] : count(n));
-/** list_and: the items with commas and a final and. */
-export const listAnd = (xs: Array<string | number>) =>
-  xs.length === 0 ? null : xs.length === 1 ? String(xs[0]) : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
-/** local_clock: hours and minutes from a decimal hour of local time, such as 1:10. */
-export const localClock = (h: number | null) => {
-  if (h === null) return null;
-  const m = Math.round((((h % 24) + 24) % 24) * 60);
-  return `${Math.floor(m / 60) % 24}:${String(m % 60).padStart(2, '0')}`;
-};
-/** day_or_night: true is written by day, false at night. */
-export const dayOrNight = (d: unknown) => (d === true ? 'by day' : d === false ? 'at night' : null);
+const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
 
 function frames(run: unknown): Obj[] {
   const f = obj(obj(run)?.observer_passes)?.frames;
@@ -38,6 +22,7 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   const run = ws.run.active as unknown;
   const r = obj(run);
   const win = obj(r?.window);
+  const lon = midLon(ws.run.active?.region.bbox);
   const fs = frames(run);
   const pass = Math.min(ws.time.pass, Math.max(0, fs.length - 1));
   const f = fs[pass] ?? null;
@@ -53,18 +38,18 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   const thisTest = testFires.find((t) => t.region_id === ws.run.active?.region.id) ?? null;
   const hiddenFromFrames = fs.filter((x) => x.held_out === true).length;
   const allSharp = num(obj(r?.blind_test)?.hidden_rows_in_test_box) ?? ws.model.revealedTotal?.detections ?? null;
+  const cal = ws.calendar.state.regionId === ws.place.regionId ? ws.calendar.state.cal : null;
 
   const fields: Fields = {
     place: ws.place.title || null,
-    run_days: ws.run.span,
+    run_days: localDayRange(str(win?.first_overpass_utc), str(win?.last_overpass_utc), lon),
     sharp_square_m: cellKm === null ? null : String(Math.round(cellKm * 1000)),
     coarse_passes: count(num(win?.modis_overpasses)),
     hidden_passes: count(num(win?.hidden_passes) ?? (hiddenFromFrames || null)),
     coarse_detections: count(num(win?.modis_pixels_in_box)),
-    pass_number: f ? String(pass + 1) : null,
+    pass_number: f ? ordinal(num(f.frame) ?? pass) : null,
     passes_total: count(num(win?.overpasses) ?? (fs.length || null)),
-    pass_local_time: localClock(num(f?.local_solar_time_hr)),
-    pass_day_night: dayOrNight(f?.is_day),
+    pass_when: localDayTime(str(f?.timestamp_utc), lon),
     pass_detections: f && f.held_out !== true ? count(num(f.detections_in_box)) : null,
     ahead_on: count(ahead),
     scores_n: score ? count(verdict.length) : null,
@@ -75,7 +60,7 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_fire_scores: ev ? listAnd(testFires.map((t) => t.new.ahead_of_both_on)) : null,
     test_scores_n: count(testScoresN),
     this_test_fire_ahead: thisTest ? count(thisTest.new.ahead_of_both_on) : null,
-    sharp_since: null,
+    sharp_since: year(cal?.sharpSince),
   };
   const conds: Conditions = {
     model_is_experimental: ws.run.model ? ws.run.model.status === 'experimental' : null,

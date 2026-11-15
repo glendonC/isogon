@@ -8,7 +8,7 @@ import type { NextLookEnd, NextLookStart } from '../content/demo/nextLook';
 import type { Step } from '../components/WorkspaceBar';
 import type { Box, FeaturedFire, Place, Places } from './places';
 import type { FireRecord, RecordPlace } from '../beats/calendar/record';
-import type { EarthStageTelemetry, StageFireAnchor } from '../stage/earthCutawayTypes';
+import type { EarthStageTelemetry, StageFireAnchor, StageMissingFile } from '../stage/earthCutawayTypes';
 import type { EvidenceDoc } from '../content/evidence';
 import type { Guide } from '../guide/useGuide';
 
@@ -93,6 +93,8 @@ export interface WorkspaceStore {
     toggleThreeWays: () => void;
     /** On a hidden pass: the earlier pass whose detections the stage draws as an afterglow (`telemetry.lastSeen`). */
     lastSeen: EarthStageTelemetry['lastSeen'] | null;
+    /** The files of the run on show that did not load (`telemetry.missingFiles`); null when none is missing. */
+    missingFiles: StageMissingFile[] | null;
     /** The evidence route's answer, for the record beside a window's own count. */
     evidence: EvidenceDoc | null;
     openEvidence: () => void;

@@ -62,14 +62,18 @@ Without a backend the site still opens and the stage draws `plumas_ca` from the 
 ## What the page is
 
 - **The landing page** (`src/ui/LandingComposition.tsx`): the stage from far away, a headline, one entry into the first application, and below it three parts (world model, environment, agent) whose status lines are read from `GET /api/evidence`.
-- **The workspace**: a top bar with the place and the dates on the terrain, the Calendar and the three parts, one panel, a pass track and the stage. The names and their one line each are in `src/app/names.ts`.
+- **The workspace**: one stage, the guide's words on it, and the four steps below. The names of the landing's parts are in `src/app/names.ts`.
 
-The workspace has no bar. Top left, a trail of four words (Record, Estimate, Test, Play), each a way to its step,
-and beside it the place and its dates, which open Choose a Place. At the bottom, the guide: one or two sentences on what
-is on screen, and at most three actions, the next one first; each action's key is the small mark before it. The words
-are read from `src/guide/script.json`, a committed copy of the product lane's guide script (its `version` says which),
-so they change without code. Labels on things of the stage (the fire, and later a square) are the script's too; an
-action that acts on a thing also shows beside it while the pointer or the keyboard's focus is near.
+The workspace has no bar. Top left, the objective (one line of what the visitor is doing now), and under it a trail of
+four words (Record, Estimate, Test, Play), each a way to its step, with the place and its days beside it, which open
+Choose a Place. At the bottom, the guide: one or two sentences on what is on screen, and at most three actions, the next
+one first; each action's key is the small mark before it. The words are read from `src/guide/script.json`, a committed
+copy of the product lane's guide script (its `version` says which), so they change without code; its fields are filled
+from the backend's answers in the script's formats (`src/guide/formats.ts`). Labels on things of the stage (the fire,
+and later a square) are the script's too; an action that acts on a thing also shows beside it while the pointer or the
+keyboard's focus is near. Every time on the workspace is by the sun at the fire, with the day and the part of the day;
+UTC is written only in the document viewer. When a file of the run on show does not load, the stage puts no stand-in in
+its place and the guide says first which one and what is drawn instead (`src/guide/missing.ts`).
 
 | Step | What it does |
 | --- | --- |
