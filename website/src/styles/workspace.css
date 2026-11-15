@@ -810,3 +810,10 @@ body:has(.iso-viewer-layer) .iso-ws__util {
   text-align: center;
 }
 
+
+/* The film presentation: the choice of a place is the Earth and its caption; the list at its right (the search field,
+   the places with their keycaps and small terrains) is left out, as nothing is chosen in a shot. */
+.iso-film .place__rail,
+.iso-film .place__railground {
+  display: none;
+}
