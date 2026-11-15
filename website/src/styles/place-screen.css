@@ -42,6 +42,12 @@
   right: calc(48px + var(--sys-s4));
 }
 
+/* The Earth's marks carry the selection's corner marks, whose rule sets them relative; in the page that rule loads
+   after the Earth's own, so the marks would fall into the flow and drift from their names */
+.place .world-mark {
+  position: absolute;
+}
+
 .place .world-legend {
   left: var(--sys-gutter);
   bottom: var(--place-guide);
