@@ -102,7 +102,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const [rough, setRough] = useState(false);
   const [plotRef, size] = useSize<HTMLDivElement>();
   const rootRef = useRef<HTMLElement | null>(null);
-  const placeKey = place.kind === 'region' ? place.regionId : place.box.join(',');
+  const placeKey = place.kind === 'region' ? place.regionId : `${place.box.join(',')}|${place.route ?? ''}`;
 
   useEffect(() => {
     const controller = new AbortController();

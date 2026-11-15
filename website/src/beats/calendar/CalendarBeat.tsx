@@ -29,9 +29,13 @@ export function CalendarBeat({ guideSpeaks = false }: CalendarBeatProps) {
     return <PlaceScreen places={ws.places} currentFire={ws.currentFire} onFire={c.chooseFire} onBox={c.chooseBox} onClose={back} />;
   }
   const opensOn = c.place.kind === 'region' ? openingStart(ws.places, c.place.regionId)?.slice(0, 7) ?? null : null;
+  // A box's record is read from the route the registry names for any box (`box_calendar.route` of the registry's
+  // answer, kept whole by the page's reader though its type does not name the field yet)
+  const route = (ws.places.boxCalendar as { route?: unknown } | null)?.route;
+  const place = c.place.kind === 'box' ? { ...c.place, route: typeof route === 'string' ? route : null } : c.place;
   return (
     <TheRecord
-      place={c.place}
+      place={place}
       markedMonth={c.selectedMonth ?? c.stageMonth ?? opensOn}
       canOpen={c.canOpen}
       onOpenMonth={c.openMonth}

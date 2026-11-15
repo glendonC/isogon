@@ -2,7 +2,7 @@
 // ratio, the years as counted from the rates each satellite has, and no figure of the correction that was typed.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { logClass, parseRecord, rampBounds } from './record.ts';
+import { boxRoute, logClass, parseRecord, rampBounds } from './record.ts';
 import { publishRecordView, readRecordView, RECORD_CLOSED } from './recordView.ts';
 import { monthLine, percent, rate, RECORD_WORDS, times } from './recordWords.ts';
 
@@ -141,4 +141,18 @@ test('the view the guide reads is closed until The Record says otherwise', () =>
   assert.equal(readRecordView().marked.words, 'August 2012');
   publishRecordView(RECORD_CLOSED);
   assert.equal(readRecordView().marked, null);
+});
+
+test('a box is read from the route the registry names, with its corners filled in', () => {
+  const box = [-121.55, 39.31, -120.55, 40.31];
+  assert.deepEqual(boxRoute(box, '/api/calendar?source=firms&box=<west>,<south>,<east>,<north>'), {
+    path: '/api/calendar',
+    query: { source: 'firms', box: '-121.55,39.31,-120.55,40.31' },
+  });
+  assert.deepEqual(boxRoute(box, '/api/cube/record?box=<west>,<south>,<east>,<north>'), {
+    path: '/api/cube/record',
+    query: { box: '-121.55,39.31,-120.55,40.31' },
+  });
+  // With no route named, the calendar's route for a box
+  assert.deepEqual(boxRoute(box, null), { path: '/api/calendar', query: { source: 'firms', box: '-121.55,39.31,-120.55,40.31' } });
 });

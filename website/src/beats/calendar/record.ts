@@ -8,7 +8,24 @@ import type { Box } from '../../app/places';
  * when the visitor asks.
  */
 
-export type RecordPlace = { kind: 'region'; regionId: string; name: string } | { kind: 'box'; box: Box; name: string };
+/**
+ * A place whose record is read: a region of the registry, or any box. A box may carry the route its record is read
+ * from, as the registry names it (`box_calendar.route`, with `<west>,<south>,<east>,<north>` in it): the route of the
+ * calendar today, the cube's route of any box on Earth once the registry names that one.
+ */
+export type RecordPlace = { kind: 'region'; regionId: string; name: string } | { kind: 'box'; box: Box; name: string; route?: string | null };
+
+/** The route of a box's record: the registry's template filled with the box, or the calendar's route for a box. */
+export function boxRoute(box: Box, template?: string | null): { path: string; query: Query } {
+  const corners = box.map((n) => String(Math.round(n * 10000) / 10000)).join(',');
+  if (template && template.includes('<west>')) {
+    const [path, q] = template.replace('<west>,<south>,<east>,<north>', corners).split('?');
+    const query: Query = {};
+    if (q) new URLSearchParams(q).forEach((v, k) => (query[k] = v));
+    return { path, query };
+  }
+  return { path: '/api/calendar', query: { source: 'firms', box: corners } };
+}
 
 export interface RecordMonth {
   ym: string;
@@ -163,9 +180,9 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
 }
 
 export async function fetchRecord(place: RecordPlace, signal?: AbortSignal): Promise<FireRecord | null> {
-  const query: Query =
-    place.kind === 'region' ? { source: 'firms', region_id: place.regionId } : { source: 'firms', box: place.box.join(',') };
-  return parseRecord(await getJson<unknown>('/api/calendar', query, { signal }), place);
+  if (place.kind === 'region') return parseRecord(await getJson<unknown>('/api/calendar', { source: 'firms', region_id: place.regionId }, { signal }), place);
+  const { path, query } = boxRoute(place.box, place.route);
+  return parseRecord(await getJson<unknown>(path, query, { signal }), place);
 }
 
 export interface CurrentMonth {
