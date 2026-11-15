@@ -34,6 +34,8 @@ export const PLACE_WORDS = {
   findLabel: 'Find a place by name or coordinates',
   fires: 'Featured fires',
   back: 'Back',
+  /** The line under the list while fires are below its last whole row. */
+  below: (n: number) => (n === 1 ? '1 more fire below' : `${n} more fires below`),
   loadingFire: "Loading this fire's ground",
   failedFire: "This fire's ground did not load.",
   noneNamed: (q: string) => `No place or fire named "${q}". Coordinates work anywhere: latitude, longitude.`,
@@ -57,15 +59,16 @@ export const opensOf = (f: FeaturedFire): string =>
 /** One more sentence on a fire: the fires an agency list names in its box and period. */
 const aboutOf = (f: FeaturedFire): string | null => (f.name ? PLACE_WORDS.among(f.name) : null);
 
-// On a phone the open row leaves out the fire's own ground: the list's part of the screen holds the row's words and
-// its action, not a block as well, and the block's run is not asked for there
-const PHONE = '(max-width: 600px)';
-const watchPhone = (changed: () => void) => {
-  const m = window.matchMedia(PHONE);
+// On a phone, and on a screen too short for the open row to hold a block and its words with other rows in view, the
+// open row leaves out the fire's own ground: the list's part of the screen holds the row's words and its action, and
+// the block's run is not asked for there
+const NO_BLOCK = '(max-width: 600px), (max-height: 775px)';
+const watchNoBlock = (changed: () => void) => {
+  const m = window.matchMedia(NO_BLOCK);
   m.addEventListener('change', changed);
   return () => m.removeEventListener('change', changed);
 };
-const isPhone = () => window.matchMedia(PHONE).matches;
+const isNoBlock = () => window.matchMedia(NO_BLOCK).matches;
 
 export interface PlaceScreenProps {
   places: Places;
@@ -94,10 +97,10 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
   // The fire whose row is open: the fire on the land first, then the one the keyboard's focus or a click moves to
   const [chosen, setChosen] = useState<string | null>(currentFire);
   const [credit, setCredit] = useState<string | null>(null);
-  const phone = useSyncExternalStore(watchPhone, isPhone, () => false);
+  const noBlock = useSyncExternalStore(watchNoBlock, isNoBlock, () => false);
   useEffect(() => {
-    if (phone) setCredit(null);
-  }, [phone]);
+    if (noBlock) setCredit(null);
+  }, [noBlock]);
   const [query, setQuery] = useState('');
   const [note, setNote] = useState<string | null>(null);
   // The Earth's first view, and what Find asked it to open: a place's card, or an area of a degree round coordinates
@@ -187,11 +190,130 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
     at.focus({ preventScroll: true });
   }, [fires.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * The list ends inside the screen on a whole row. It scrolls within its own height; a row its edge would cut is not
+   * drawn until it is scrolled whole into view, a place's name stays at the top while its fires are in view, and the
+   * line under the list says how many fires are below. A row taller than the list (the open row on a short screen) is
+   * drawn while any of it is in view.
+   */
+  const [below, setBelow] = useState(0);
+  const markWhole = useCallback(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const L = list.getBoundingClientRect();
+    const pad = Number.parseFloat(getComputedStyle(list).paddingTop) || 0;
+    let n = 0;
+    for (const group of list.querySelectorAll<HTMLElement>('.place__group')) {
+      const name = group.querySelector<HTMLElement>('.place__placename');
+      const N = name?.getBoundingClientRect();
+      if (name && N) name.dataset.whole = String(N.top >= L.top - 1 && N.bottom <= L.bottom + 1);
+      // A fire under its place's name is whole below the name, which stands over it at the top
+      const floor = Math.max(L.top, N?.bottom ?? L.top);
+      // The most of a row the list can show: all of it below its place's name at the top
+      const room = L.height - pad - (N?.height ?? 0);
+      for (const item of group.querySelectorAll<HTMLElement>('.place__item')) {
+        const r = item.getBoundingClientRect();
+        const whole = r.height > room + 1 ? r.bottom > floor && r.top < L.bottom : r.top >= floor - 1 && r.bottom <= L.bottom + 1;
+        item.dataset.whole = String(whole);
+        if (!whole && r.bottom > L.bottom + 1) {
+          n += 1;
+          // A place's name is not left at the foot of the list without its first fire
+          if (name && item === group.querySelector('.place__item')) name.dataset.whole = 'false';
+        }
+      }
+    }
+    setBelow(n);
+  }, []);
+  // Where the list may rest: the scroll positions at which a row starts at its top, a fire below its place's name
+  const restsOf = (list: HTMLElement) => {
+    const L = list.getBoundingClientRect();
+    const pad = Number.parseFloat(getComputedStyle(list).paddingTop) || 0;
+    const at = (el: Element) => el.getBoundingClientRect().top - L.top + list.scrollTop;
+    const rests: number[] = [];
+    for (const g of list.querySelectorAll<HTMLElement>('.place__group')) {
+      const nameH = g.querySelector<HTMLElement>('.place__placename')?.offsetHeight ?? 0;
+      rests.push(Math.round(at(g) - pad));
+      for (const item of g.querySelectorAll('.place__item')) rests.push(Math.round(at(item) - pad - nameH));
+    }
+    return { rests: [...new Set(rests)].sort((a, b) => a - b), pad, at };
+  };
+  // The scroll positions between which a row is whole: its top below its place's name, its foot above the list's
+  const wholeBetween = (list: HTMLElement, item: HTMLElement) => {
+    const { pad, at } = restsOf(list);
+    const nameH = item.closest('.place__group')?.querySelector<HTMLElement>('.place__placename')?.offsetHeight ?? 0;
+    const top = at(item);
+    return { lo: top + item.offsetHeight - list.clientHeight, hi: top - pad - nameH };
+  };
+  // A row is brought whole into view, the list resting with a row whole at its top
+  const bringWhole = useCallback((item: HTMLElement | null | undefined) => {
+    const list = listRef.current;
+    if (!list || !item) return;
+    const { lo, hi } = wholeBetween(list, item);
+    const s = list.scrollTop;
+    if (s >= lo - 1 && s <= hi + 1) return;
+    if (s > hi || lo > hi) list.scrollTop = hi;
+    else list.scrollTop = restsOf(list).rests.find((v) => v >= lo && v <= hi) ?? lo;
+  }, []);
+  // Once scrolling stops the list moves to the nearer place to rest, unless that would cut the open row
+  const settle = () => {
+    const list = listRef.current;
+    if (!list) return;
+    const s = list.scrollTop;
+    if (s >= list.scrollHeight - list.clientHeight - 1) return;
+    const { rests } = restsOf(list);
+    if (rests.some((v) => Math.abs(v - s) <= 1)) return;
+    const up = [...rests].reverse().find((v) => v < s);
+    const down = rests.find((v) => v > s);
+    const open = list.querySelector<HTMLElement>('.place__item[data-open="true"]');
+    const range = open ? wholeBetween(list, open) : null;
+    const keeps = (v: number) => !range || !(s >= range.lo - 1 && s <= range.hi + 1) || (v >= range.lo - 1 && v <= range.hi + 1);
+    const tries = [up, down].filter((v): v is number => v !== undefined && keeps(v)).sort((a, b) => Math.abs(a - s) - Math.abs(b - s));
+    if (tries.length === 0) return;
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    list.scrollTo({ top: tries[0], behavior: smooth ? 'smooth' : 'auto' });
+  };
+  const marking = useRef(0);
+  const settling = useRef(0);
+  const onListScroll = () => {
+    window.clearTimeout(settling.current);
+    settling.current = window.setTimeout(settle, 160);
+    if (marking.current) return;
+    marking.current = window.requestAnimationFrame(() => {
+      marking.current = 0;
+      markWhole();
+    });
+  };
+  useEffect(
+    () => () => {
+      window.cancelAnimationFrame(marking.current);
+      window.clearTimeout(settling.current);
+    },
+    [],
+  );
+  // Whatever changes the list's height or a row's (the screen, the note under Find, a row opening) marks it again
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const ro = new ResizeObserver(() => markWhole());
+    ro.observe(list);
+    for (const g of list.querySelectorAll('.place__group')) ro.observe(g);
+    return () => ro.disconnect();
+  }, [firms, markWhole]);
+
+  // The line under the list brings the first fire below to the top, under its place's name
+  const showBelow = () => {
+    const list = listRef.current;
+    if (!list) return;
+    const L = list.getBoundingClientRect();
+    const next = [...list.querySelectorAll<HTMLElement>('.place__item')].find((r) => r.dataset.whole === 'false' && r.getBoundingClientRect().bottom > L.bottom + 1);
+    if (next) list.scrollTop = wholeBetween(list, next).hi;
+  };
+
   // The open row is brought whole into the list's view, its ground and its action with it
   useEffect(() => {
-    const open = listRef.current?.querySelector<HTMLElement>('.place__item[data-open="true"]');
-    open?.scrollIntoView({ block: 'nearest' });
-  }, [chosen]);
+    bringWhole(listRef.current?.querySelector<HTMLElement>('.place__item[data-open="true"]'));
+    markWhole();
+  }, [chosen, bringWhole, markWhole]);
 
   const search = () => {
     const q = query.trim();
@@ -212,7 +334,7 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
       if ((fire.name ?? '').toLowerCase().includes(t) || fire.label.toLowerCase().includes(t) || place.name.toLowerCase().includes(t)) {
         setNote(null);
         setEarth((e) => ({ key: e.key + 1, focus: clearOf(place.box, 30), open: place.id, box: null }));
-        listRef.current?.querySelector<HTMLElement>(`[data-fire="${CSS.escape(fire.id)}"]`)?.scrollIntoView({ block: 'nearest' });
+        bringWhole(listRef.current?.querySelector<HTMLElement>(`[data-fire="${CSS.escape(fire.id)}"]`)?.closest<HTMLElement>('.place__item'));
         return;
       }
     }
@@ -291,7 +413,7 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
           <input className="place__input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={PLACE_WORDS.find} aria-label={PLACE_WORDS.findLabel} />
           {note && <span className="sys-label place__note">{note}</span>}
         </form>
-        <div className="place__list" ref={listRef} role="list" aria-label={PLACE_WORDS.fires} onKeyDown={onListKey}>
+        <div className="place__list" ref={listRef} role="list" aria-label={PLACE_WORDS.fires} onKeyDown={onListKey} onScroll={onListScroll}>
           {firms.map((place) => (
             <div key={place.id} className="place__group" role="listitem">
               <button
@@ -332,7 +454,7 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
                       </button>
                       {open && (
                         <div className="place__open">
-                          {!phone && (
+                          {!noBlock && (
                             <div className="place__cardblock">
                               <FireBlock
                                 place={place}
@@ -357,6 +479,13 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
                 })}
             </div>
           ))}
+        </div>
+        <div className="place__more">
+          {below > 0 && (
+            <button type="button" className="place__act" tabIndex={-1} onClick={showBelow}>
+              {PLACE_WORDS.below(below)}
+            </button>
+          )}
         </div>
         <div className="place__acts">
           <button type="button" className="place__act" onClick={onClose}>

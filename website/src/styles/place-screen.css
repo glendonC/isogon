@@ -64,10 +64,11 @@
   animation: place-open var(--sys-fast) var(--sys-ease);
 }
 
+/* The block gives up height before the list does: under 776 pixels of height it is left out (PlaceScreen.tsx) */
 .place__cardblock {
   position: relative;
   width: 100%;
-  height: 170px;
+  height: clamp(96px, calc(100vh - 680px), 170px);
 }
 
 .place__opens {
@@ -97,7 +98,7 @@
   bottom: var(--place-guide);
   width: var(--place-rail);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: var(--sys-s4);
 }
 
@@ -129,14 +130,48 @@
   border-bottom-color: var(--sys-focus);
 }
 
+/* The list scrolls within its own height and ends on a whole row: a row its edge would cut is not drawn until it is
+   scrolled whole into view (PlaceScreen.tsx marks them), and the line under it says how many fires are below. */
 .place__list {
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--sys-s2) var(--sys-s3) var(--sys-s4) 6px;
+  padding: var(--sys-s2) var(--sys-s3) var(--sys-s2) 6px;
   margin-left: -6px;
+  /* A row brought into view stands below the place's name that stays at the top */
+  scroll-padding-top: calc(var(--sys-lh-label) + var(--sys-s1) + var(--sys-s2));
   scrollbar-width: thin;
   scrollbar-color: var(--sys-rule) transparent;
-  mask-image: linear-gradient(transparent, #000 12px, #000 calc(100% - 28px), transparent);
+}
+
+.place__placename,
+.place__item {
+  transition: opacity var(--sys-fast) var(--sys-ease);
+}
+
+/* Not drawn and not under the pointer, but still in reach of the keyboard and read out with the list */
+.place__list [data-whole='false'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .place__placename,
+  .place__item {
+    transition: none;
+  }
+}
+
+.place__more {
+  min-height: calc(var(--sys-lh-label) + 8px);
+  margin-top: calc(-1 * var(--sys-s2));
+}
+
+.place__more .place__act {
+  color: var(--sys-ink-3);
+}
+
+.place__more .place__act:hover {
+  color: var(--sys-ink);
 }
 
 .place__list::-webkit-scrollbar {
@@ -152,11 +187,18 @@
   margin-bottom: var(--sys-s4);
 }
 
+/* A place's name stays at the top of the list while its fires are in view, on the list's ground */
 .place__placename {
-  justify-self: start;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  justify-self: stretch;
   padding: 0 0 var(--sys-s1);
   border: 0;
-  background: none;
+  background: var(--sys-night);
+  box-shadow:
+    -6px 0 0 var(--sys-night),
+    var(--sys-s3) 0 0 var(--sys-night);
   text-align: left;
   color: var(--sys-ink-3);
   cursor: pointer;
