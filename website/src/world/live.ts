@@ -33,6 +33,8 @@ export interface LiveSeal {
   decidedUtc: string | null;
   aheadOfBothOn: number | null;
   judged: number | null;
+  /** The sharp satellite's fire pixels in the box at the pass, as scored (0: it saw no fire there). */
+  hiddenPixels: number | null;
 }
 
 export interface Live {
@@ -106,6 +108,7 @@ export function parseLive(body: unknown): Live {
         decidedUtc: str(t.decided_utc),
         aheadOfBothOn: sc ? num(sc.ahead_of_both_on) : null,
         judged: sc ? num(sc.judged) : null,
+        hiddenPixels: sc ? num(sc.hidden_pixels_in_box) : null,
       },
     ];
   });

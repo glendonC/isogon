@@ -544,6 +544,11 @@
   border-style: dashed;
 }
 
+/* A pass scored: its ring filled. */
+.world-track-pass[data-scored='true'] {
+  background: var(--sys-detection);
+}
+
 .world-track-wait {
   position: absolute;
   top: 50%;
@@ -1364,4 +1369,8 @@
 /* Without the 2012 label (the film's caption says it), the strip's keys take the whole head in one line. */
 .world-years__strip-head[data-step='off'] {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.world-key-pass--scored {
+  background: var(--sys-detection);
 }

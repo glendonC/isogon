@@ -59,6 +59,7 @@ export const SEAL_WORDS = {
   keySeal: 'Written down and sealed',
   keyPass: 'The sharp satellite passes',
   keyRows: 'Its detections published',
+  keyScored: 'Scored',
   now: 'Now',
   ago: (h: number) => (h === 1 ? '1 hour ago' : `${h} hours ago`),
   ahead: (h: number) => (h === 1 ? 'in 1 hour' : `in ${h} hours`),
@@ -67,7 +68,9 @@ export const SEAL_WORDS = {
     `Sealed${at ? ` at ${at}` : ''}${mins !== null ? `, ${Math.round(mins)} minutes before the pass` : ''}${pass ? ` at about ${pass}` : ''}${part ? ` ${part}` : ''}`,
   waitingPass: (pass: string | null) => `Pass due${pass ? ` at ${pass}` : ''}; not yet listed by NASA`,
   waitingRows: (pass: string | null, by: string | null) => `Passed${pass ? ` at ${pass}` : ''}; detections ${by ? `expected by ${by}` : 'not all published yet'}`,
-  scored: (a: number | null, of: number | null) => (a !== null && of !== null ? `Ahead of both simple methods on ${a} of ${of} scores` : 'Scored'),
+  scored: (a: number | null, of: number | null, none: boolean) =>
+    (a !== null && of !== null ? `Ahead of both simple methods on ${a} of ${of} scores` : 'Scored') +
+    (none ? '; no fire in the pass' : ''),
   notScored: (why: string | null) => `Not scored${why ? `: ${why}` : ''}`,
   title: (platform: string | null, day: string | null, point: string) => [platform ? `Predicted pass of ${platform}` : null, day, point].filter(Boolean).join(', '),
   rest: (items: string[], any: boolean) => `${any ? 'Also followed' : 'Followed tonight'}, no pass sealed yet: ${items.join(', ')}`,
@@ -87,6 +90,11 @@ function latest(seals: LiveSeal[]): LiveSeal | null {
   return seals.reduce<LiveSeal | null>((a, s) => (!a || t(s.sealedUtc) > t(a.sealedUtc) ? s : a), null);
 }
 
+/** The seal a fire's row speaks of: its latest scored one, else one that could not be scored, else its latest. */
+function telling(seals: LiveSeal[]): LiveSeal | null {
+  return latest(seals.filter((s) => s.state === 'scored')) ?? latest(seals.filter((s) => s.state === 'not_scored')) ?? latest(seals);
+}
+
 function words(f: LiveFire, s: LiveSeal | null): string {
   const lon = f.centre[0];
   if (!s) return SEAL_WORDS.chosen(f.modisRows48h);
@@ -99,7 +107,7 @@ function words(f: LiveFire, s: LiveSeal | null): string {
     case 'waiting_for_the_rows':
       return SEAL_WORDS.waitingRows(pass, clockAt(s.rowsExpectedUtc, lon));
     case 'scored':
-      return SEAL_WORDS.scored(s.aheadOfBothOn, s.judged);
+      return SEAL_WORDS.scored(s.aheadOfBothOn, s.judged, s.hiddenPixels === 0);
     case 'not_scored':
       return SEAL_WORDS.notScored(s.reason);
     default:
@@ -188,7 +196,7 @@ export function SealedTonight({ source, now = null, before = 6, after = 9, capti
                   {placed.map((l) => (l.shown ? <line key={l.id} x1={l.from[0]} y1={l.from[1]} x2={l.to[0]} y2={l.to[1]} /> : null))}
                 </svg>
                 {items.map((m, i) => {
-                  const s = latest(byFire.get(m.id) ?? []);
+                  const s = telling(byFire.get(m.id) ?? []);
                   return (
                     <div key={m.id}>
                       <span
@@ -223,6 +231,12 @@ export function SealedTonight({ source, now = null, before = 6, after = 9, capti
             {SEAL_WORDS.keyPass}
             <span className="world-key-rows" aria-hidden="true" />
             {SEAL_WORDS.keyRows}
+            {live.seals.some((x) => x.state === 'scored') && (
+              <>
+                <span className="world-key-pass world-key-pass--scored" aria-hidden="true" />
+                {SEAL_WORDS.keyScored}
+              </>
+            )}
           </span>
           <span className="world-board__axis">
             {ticks.map((k) => (
@@ -236,7 +250,7 @@ export function SealedTonight({ source, now = null, before = 6, after = 9, capti
         <ol className="world-board__rows">
           {shown.map(({ f, i }) => {
             const seals = (byFire.get(f.id) ?? []).sort((a, b) => t(a.sealedUtc) - t(b.sealedUtc));
-            const s = latest(seals);
+            const s = telling(seals);
             const point = pointWords(f.centre[0], f.centre[1]);
             return (
               <li key={f.id} className="world-board__row" data-over={over === f.id ? 'true' : 'false'} onPointerEnter={() => setOver(f.id)} onPointerLeave={() => setOver(null)}>
@@ -260,7 +274,9 @@ export function SealedTonight({ source, now = null, before = 6, after = 9, capti
                         {xp !== null && (xr !== null || xe !== null) && (
                           <span className="world-track-rows" data-done={xr !== null ? 'true' : 'false'} style={{ left: `${xp}%`, width: `${Math.max(0, (xr ?? xe ?? xp) - xp)}%` }} />
                         )}
-                        {xp !== null && <span className="world-track-pass" data-real={sl.realPassUtc ? 'true' : 'false'} style={{ left: `${xp}%` }} />}
+                        {xp !== null && (
+                          <span className="world-track-pass" data-real={sl.realPassUtc ? 'true' : 'false'} data-scored={sl.state === 'scored' ? 'true' : 'false'} style={{ left: `${xp}%` }} />
+                        )}
                         {xs !== null && <span className="world-track-seal" style={{ left: `${xs}%` }} />}
                       </span>
                     );
