@@ -25,11 +25,13 @@ type key for key. What is added to it is listed in `evidence()["additions"]`.
 
 from __future__ import annotations
 
+import copy
 import datetime as _dt
 import hashlib
 import json
 from pathlib import Path
 import sys
+import threading
 from typing import Any
 
 from backend.eval.blind_test import COUNT_KINDS, COUNTED_INTERVAL, COUNTED_PLAIN, verdict
@@ -748,8 +750,37 @@ def _fresh_test() -> dict[str, Any]:
     return out
 
 
+_EVIDENCE_LOCK = threading.Lock()
+_EVIDENCE_CACHE: tuple[tuple[Any, ...], dict[str, Any]] | None = None
+
+
+def _evidence_signature() -> tuple[Any, ...]:
+    from backend.env import KNOWN_LIMITS
+    from backend.model import fresh_test as FT
+
+    tracked = (
+        FITTED_DIR / LOOKS_FILE,
+        FITTED_DIR / PARAMS_FILE,
+        ENV_FILE,
+        *(FITTED_DIR / fname for fname in FRESH_FILES.values()),
+    )
+    parts: list[Any] = [FT.PROTOCOL_ID, FT.protocol_sha256(), KNOWN_LIMITS]
+    for p in tracked:
+        try:
+            st = p.stat()
+            parts.append((str(p), True, st.st_ino, st.st_mtime_ns, st.st_size))
+        except OSError:
+            parts.append((str(p), False))
+    return tuple(parts)
+
+
 def evidence() -> dict[str, Any]:
     """The evidence sheet as one JSON-ready dict. Reads three tracked files; runs nothing."""
+    global _EVIDENCE_CACHE
+    sig = _evidence_signature()
+    with _EVIDENCE_LOCK:
+        if _EVIDENCE_CACHE is not None and _EVIDENCE_CACHE[0] == sig:
+            return copy.deepcopy(_EVIDENCE_CACHE[1])
     record = _read(FITTED_DIR / LOOKS_FILE)
     params = _read(FITTED_DIR / PARAMS_FILE)
     env = _read(ENV_FILE)
@@ -823,7 +854,10 @@ def evidence() -> dict[str, Any]:
         },
         "count_kinds": dict(COUNT_KINDS),
     }
-    return _say_the_kind(answer)
+    built = _say_the_kind(answer)
+    with _EVIDENCE_LOCK:
+        _EVIDENCE_CACHE = (sig, built)
+    return copy.deepcopy(built)
 
 
 def main(argv: list[str]) -> int:
