@@ -8,6 +8,9 @@ the first time answered over HTTP in a median of 35 to 46 ms at one degree each 
 about a millisecond. It counts and scores nothing on its own: it keeps the rows'
 kinds apart, and a reader applies a rule.
 
+Its first use is the record of the MODIS years on the VIIRS scale, the first result of the scientific world model
+([harmonization.md](harmonization.md)); the yearly layers and each country's years are read from it too.
+
 Code: `backend/firms/world_fetch.py` (the country files), `backend/firms/cube_build.py` (the builder and its check),
 `backend/firms/cube.py` (the grid, the code layout and the reader).
 
@@ -127,7 +130,7 @@ the grid beside the box asked for.
 
 | Route | Answer |
 | --- | --- |
-| `GET /api/cube/record?box=w,s,e,n[&snap=outer\|inner]` | the Record of the box in the shape of `GET /api/calendar?source=firms&box=` (records with `raw_counts` per platform, the harmonization and its held-out check, the annual summary, the month medians), with `frp_mw`, `frp_mw_day` and `frp_mw_night` in each platform's counts and a `cube` block: the build, the box on the grid, the cells and how many are loaded, the countries, `world_complete`, the read time |
+| `GET /api/cube/record?box=w,s,e,n[&snap=outer\|inner]` | the record of the box in the shape of `GET /api/calendar?source=firms&box=` (records with `raw_counts` per platform, the harmonization and its held-out check, the annual summary, the month medians), with `frp_mw`, `frp_mw_day` and `frp_mw_night` in each platform's counts and a `cube` block: the build, the box on the grid, the cells and how many are loaded, the countries, `world_complete`, the read time |
 | `GET /api/cube/tables?box=w,s,e,n[&snap=outer\|inner]` | the box's tables as lists: rows and fire radiative power by month, platform, day and night and kind; fire rows by scan class and by confidence class; delivering months and outage days per month |
 | `GET /api/cube/countries` | the countries loaded in the cube and not, and the download's progress |
 | `GET /api/cube/layers`, `GET /api/cube/layers/<name>.png`, `.npy` | the world layers |
@@ -135,7 +138,7 @@ the grid beside the box asked for.
 | `GET /api/cube/years/countries` | each country's fire rows each year (below) |
 
 A box takes the same limits as the box calendar (at most 20 degrees each way). A box in which no loaded country file
-has a row answers 404 with `"state": "not_loaded"`, never a record of zeros. The outage days of a cube Record are
+has a row answers 404 with `"state": "not_loaded"`, never a record of zeros. The outage days of a cube record are
 the rule over every country loaded in the cube, so they can differ from the box calendar's, which applies it over
 the countries of the repository cache.
 
@@ -181,7 +184,7 @@ loaded cell without the layer's rows is grey.
 - `modis_<year>`: fire rows (kind 0, day and night) of Terra and Aqua together, 2000 to 2025;
 - `viirs_<year>`: fire rows of Suomi NPP alone, from its first year (2012); NOAA-20 is left out so that a brighter
   year is more fire, not a second satellite;
-- `harmonized_<year>`: drawn from the harmonize lane's arrays in `<world>/harmonize/years/` when they are there, on
+- `harmonized_<year>`: drawn from the harmonization's arrays in `<world>/harmonize/years/` when they are there, on
   the Suomi NPP scale;
 - `modis_on_snpp_<year>`: the `modis` arrays drawn again on the Suomi NPP scale (PNGs only, the arrays are
   `modis_<year>.npy`), so one view can go from MODIS to Suomi NPP and show the step between the instruments in 2012.
@@ -222,7 +225,7 @@ Cyprus for northern Cyprus.
 ## The public cube
 
 A static page has no backend, so it cannot ask the routes for a drawn box. `backend/firms/cube_public.py write`
-writes, from the current build, the counts a box's Record is computed from, in one file a browser sums any box from:
+writes, from the current build, the counts a box's record is computed from, in one file a browser sums any box from:
 `<world>/cube/public/` holds `fire-cells.bin.gz`, `manifest.json` and `harmonize-fitted.json`.
 
 - Per cell and month, the fire rows (kind 0, day and night together, the box rule) of Terra, Aqua, Suomi NPP and
