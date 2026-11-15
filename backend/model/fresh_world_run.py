@@ -24,6 +24,7 @@ import datetime as _dt
 import gzip
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import time
@@ -464,12 +465,25 @@ def run_episode(ep: dict[str, Any], params: dict[str, Any], work: Path,
 # ----------------------------------------------------------------------------------------------------------------
 
 
+def mask_root(given: Path | None = None) -> Path | None:
+    """Where the hidden passes' cloud masks are: the root given, else `ISOGON_PASSMASK_DIR`, else the shared store's
+    `passmask` folder (`ISOGON_WORLD_DIR`), else the mask reader's own default. Named here because the reader's
+    default is found from the code's own folder, which from a worktree or an export of the code is not the store."""
+    if given is not None:
+        return Path(given)
+    if os.environ.get("ISOGON_PASSMASK_DIR", "").strip():
+        return Path(os.environ["ISOGON_PASSMASK_DIR"].strip())
+    if os.environ.get(W.STORE_ENV, "").strip():
+        return Path(os.environ[W.STORE_ENV].strip()) / "passmask"
+    return None
+
+
 def cloud_share(box: F.Box, slot: Any, root: Path | None = None) -> float | None:
     """The share of the tile under cloud at a hidden pass, by that pass's own mask (`backend.firms.passmask`), or
     None when no mask of the pass is on hand. Read for scoring only: no method is given it."""
     from backend.firms import passmask as PM
 
-    got = PM.shares(tuple(box), float(slot.time_s), slot.platform, root=root, allow_sharp=True)
+    got = PM.shares(tuple(box), float(slot.time_s), slot.platform, root=mask_root(root), allow_sharp=True)
     return None if isinstance(got, str) else float(got["cloud"])
 
 

@@ -396,5 +396,18 @@ class ChallengerBesideTests(unittest.TestCase):
         self.assertEqual(R.challenger_factories(()), [])
 
 
+class MaskRootTests(unittest.TestCase):
+    def test_the_masks_are_found_in_the_store_named_not_beside_the_code(self) -> None:
+        import os
+
+        with mock.patch.dict(os.environ, {"ISOGON_PASSMASK_DIR": "", "ISOGON_WORLD_DIR": "/x/world"}):
+            self.assertEqual(R.mask_root(), Path("/x/world/passmask"))
+        with mock.patch.dict(os.environ, {"ISOGON_PASSMASK_DIR": "/y/masks", "ISOGON_WORLD_DIR": "/x/world"}):
+            self.assertEqual(R.mask_root(), Path("/y/masks"))
+        with mock.patch.dict(os.environ, {"ISOGON_PASSMASK_DIR": "", "ISOGON_WORLD_DIR": ""}):
+            self.assertIsNone(R.mask_root())
+        self.assertEqual(R.mask_root(Path("/z")), Path("/z"))
+
+
 if __name__ == "__main__":
     unittest.main()
