@@ -1,0 +1,607 @@
+{
+ "what": "the learned player of the next-look environment: tile weights, look weights, and how they were chosen",
+ "known_limits": "FIRMS lists detections, not where a satellite looked and saw nothing, and has no cloud mask: a revealed tile with no detection may have been cloudy rather than free of fire. So a look that hands over no detection is taken as unknown: it teaches the model nothing and earns nothing. The looks are the passes of each VIIRS platform whose swath held the whole box, from NASA's pass list, at their real times and pixel sizes; a pass that held only part of the box is not a look. Where no pass list is cached for a window the looks are the nominal half-day slots of each platform instead: the real pass is up to about 90 minutes from a slot's time, sometimes comes twice, and its pixel size is not known in advance.",
+ "setting": {
+  "tiles": "4x4",
+  "budget": 4,
+  "score": "csi",
+  "reward": "the score after the look minus the score before it, on one fixed set: every real hidden detection of the episode. The rewards of a round add up to the score at the end minus the score at the start. A look that hands over no hidden pixel earns nothing.",
+  "looks": "cmr"
+ },
+ "episodes": {
+  "train": 300,
+  "what": "the fresh test's fitting episodes",
+  "validation": "used below to choose, not to fit",
+  "test": "test B, measured once after its look",
+  "left_out": {},
+  "folds": 5,
+  "folds_are": "fires grouped by region and year, dealt out in turn"
+ },
+ "reconstruction_parameters": "22 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)",
+ "policy": {
+  "kind": "a linear score per tile for where to look; a linear score per look, one look per stretch of the episode, for when",
+  "feature_names": [
+   "unsure",
+   "burning",
+   "power",
+   "spread",
+   "modis_recent_frp",
+   "modis_recent_pixels",
+   "modis_all_pixels",
+   "seen_before",
+   "unsure_neighbours",
+   "relief",
+   "unsure_by_day",
+   "unsure_by_night",
+   "modis_recent_frp_by_day",
+   "unsure_when_modis_is_old",
+   "burning_early"
+  ],
+  "features": {
+   "unsure": "sum of p (1 - p) over the tile's cells: how unsure the model is there",
+   "burning": "sum of p: cells the model expects to burn",
+   "power": "sum of the model's expected FRP",
+   "spread": "sum of the model's standard deviation",
+   "modis_recent_frp": "MODIS FRP in the tile, halved for every six hours of age",
+   "modis_recent_pixels": "MODIS pixels in the tile, halved for every six hours of age",
+   "modis_all_pixels": "every MODIS pixel in the tile so far",
+   "seen_before": "earlier looks at this tile, each halved for every twelve hours of age (not rescaled)",
+   "unsure_neighbours": "mean of `unsure` over the tiles around it",
+   "relief": "standard deviation of elevation in the tile (0 when no terrain is given)",
+   "unsure_by_day": "`unsure` on a day overpass, else 0",
+   "unsure_by_night": "`unsure` on a night overpass, else 0",
+   "modis_recent_frp_by_day": "`modis_recent_frp` on a day overpass, else 0",
+   "unsure_when_modis_is_old": "`unsure` times the hours since the last MODIS pass, capped at twelve, over twelve",
+   "burning_early": "`burning` times the share of the episode's looks still to come"
+  },
+  "weights": [
+   0.06446380362220769,
+   0.2927999937438619,
+   -0.039661001994190904,
+   0.110744503984449,
+   -0.017139227299486054,
+   0.16448210077257197,
+   0.06195085889909393,
+   0.03897215802988128,
+   0.02412673889901339,
+   0.0,
+   -0.016559293428178447,
+   0.08102309629113727,
+   0.1890312669906604,
+   -0.37709732106449445,
+   0.018546010140491356
+  ],
+  "fit": "ridge regression of each tile's true reward divided by the largest reward of its decision",
+  "ridge": 0.01,
+  "fitted_with": {
+   "reward": "the score after the look minus the score before it, on one fixed set: every real hidden detection of the episode. The rewards of a round add up to the score at the end minus the score at the start. A look that hands over no hidden pixel earns nothing.",
+   "looks": "cmr",
+   "reconstruction_parameters": "22 real fire episodes of 2018, 2019, 2020, 2022, 2023, 2021 in the plumas_ca, lytton_bc and evia_greece context boxes, the three 2021 test fires excluded (backend/model/episodes.py)"
+  },
+  "training": {
+   "episodes": 300,
+   "decisions": 2290,
+   "tile_samples": 36640,
+   "behaviour_round_0": "the best tile half the time, least sure a quarter, random a quarter",
+   "behaviour_round_1": "the round 0 policy's own choices"
+  },
+  "ridge_chosen_with_fires_held_out": [
+   {
+    "ridge": 0.01,
+    "one_look_reward": 0.010609237094957787,
+    "share_of_best_tile": 0.8011075061810466,
+    "decisions": 2400
+   },
+   {
+    "ridge": 0.1,
+    "one_look_reward": 0.010609237094957787,
+    "share_of_best_tile": 0.8011075061810466,
+    "decisions": 2400
+   },
+   {
+    "ridge": 1.0,
+    "one_look_reward": 0.010609237094957787,
+    "share_of_best_tile": 0.8011075061810466,
+    "decisions": 2400
+   },
+   {
+    "ridge": 10.0,
+    "one_look_reward": 0.010607994990208803,
+    "share_of_best_tile": 0.8010137143816016,
+    "decisions": 2400
+   }
+  ],
+  "least_sure_on_the_same_decisions": {
+   "one_look_reward": 0.010482540035966766,
+   "share_of_best_tile": 0.7915405633311211,
+   "decisions": 2400
+  },
+  "when": {
+   "adopted": true,
+   "rule": "used when, on training episodes played with weights fitted without their fold, the gain with the look score minus the gain with the evenly spread looks lies above zero at 90 percent (episodes resampled)",
+   "how": "one look in each of as many equal stretches of the episode as the budget has looks: as soon as the look score is in the top share of what the stretch has shown so far, and at the stretch's last look if not before",
+   "feature_names": [
+    "largest_unsure",
+    "total_unsure",
+    "largest_burning",
+    "total_burning",
+    "largest_recent_modis_power",
+    "largest_recent_modis_pixels",
+    "modis_pixels_last_pass",
+    "day",
+    "pixel_area_km2",
+    "hours_since_modis",
+    "hours_from_previous_look",
+    "hours_to_next_look",
+    "episode_share_done"
+   ],
+   "features": {
+    "largest_unsure": "log of one plus the largest tile sum of p (1 - p): how unsure the model is where it is least sure",
+    "total_unsure": "log of one plus the sum of p (1 - p) over the box",
+    "largest_burning": "log of one plus the largest tile sum of p",
+    "total_burning": "log of one plus the sum of p over the box",
+    "largest_recent_modis_power": "log of one plus the largest tile sum of MODIS power, halved for every six hours of age",
+    "largest_recent_modis_pixels": "log of one plus the largest tile count of MODIS pixels, halved for every six hours of age",
+    "modis_pixels_last_pass": "log of one plus the MODIS pixels in the box within half an hour of the newest one",
+    "day": "1 on a day pass, 0 at night",
+    "pixel_area_km2": "the look's pixel area, scan times track, from the schedule",
+    "hours_since_modis": "hours since the newest MODIS detection, capped at twelve, over twelve",
+    "hours_from_previous_look": "hours since the previous scheduled look, capped at twelve, over twelve",
+    "hours_to_next_look": "hours to the next scheduled look, capped at twelve, over twelve",
+    "episode_share_done": "the look's index over the number of looks less one"
+   },
+   "weights": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.12266576544477881,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scales": [
+    0.5589116386604873,
+    0.6300087489495715,
+    0.643150855015751,
+    0.6880841112845113,
+    1.0126459189498813,
+    0.6029019576842254,
+    1.1494770667462504,
+    0.49729067165493945,
+    0.11715096046919526,
+    0.2425250969307622,
+    0.40070178129844586,
+    0.40070178129844586,
+    0.3064707678213837
+   ],
+   "fit": "ridge regression, on features centred within their episode and divided by their spread, of the reward the least sure tile would pay at each look as a share of the episode's best look; only the selected features are fitted and every other weight is zero",
+   "selected_features": [
+    "largest_recent_modis_pixels"
+   ],
+   "selection": {
+    "how": "forward selection with fires held out: starting from no feature, the feature that raises the held-out figure most is added, until the best addition raises it by less than 0.01 of the evenly spread figure. The held-out figure is the sum of the first-look rewards of the looks the score picks, one per stretch",
+    "ridge_while_selecting": 10.0,
+    "steps": [
+     {
+      "feature": "largest_recent_modis_pixels",
+      "sum_of_first_look_rewards": 0.045090098813046646,
+      "raised_it_by": 0.003165063161234133,
+      "kept": true
+     },
+     {
+      "feature": "hours_to_next_look",
+      "sum_of_first_look_rewards": 0.04542001451399107,
+      "raised_it_by": 0.00032991570094442063,
+      "kept": false,
+      "why": "the best addition left raises the held-out figure by less than 0.01 of the evenly spread figure"
+     }
+    ],
+    "selected_without_each_fold": {
+     "0": [
+      "largest_recent_modis_pixels",
+      "hours_to_next_look"
+     ],
+     "1": [
+      "largest_recent_modis_pixels"
+     ],
+     "2": [
+      "largest_recent_modis_power"
+     ],
+     "3": [
+      "largest_recent_modis_power"
+     ],
+     "4": [
+      "largest_recent_modis_pixels",
+      "hours_to_next_look"
+     ]
+    }
+   },
+   "ridge": 1.0,
+   "training": {
+    "episodes": 300,
+    "looks": 5050
+   },
+   "ridge_chosen_with_fires_held_out": [
+    {
+     "ridge": 1.0,
+     "sum_of_first_look_rewards": 0.045090098813046646,
+     "evenly_spread": 0.04192503565181251,
+     "difference": {
+      "mean_difference": 0.0031650631612341307,
+      "p05": 0.0015458752685191715,
+      "p95": 0.004789223925685085,
+      "episodes": 300,
+      "episodes_a_ahead": 168,
+      "episodes_b_ahead": 113
+     }
+    },
+    {
+     "ridge": 10.0,
+     "sum_of_first_look_rewards": 0.045090098813046646,
+     "evenly_spread": 0.04192503565181251,
+     "difference": {
+      "mean_difference": 0.0031650631612341307,
+      "p05": 0.0015458752685191715,
+      "p95": 0.004789223925685085,
+      "episodes": 300,
+      "episodes_a_ahead": 168,
+      "episodes_b_ahead": 113
+     }
+    },
+    {
+     "ridge": 100.0,
+     "sum_of_first_look_rewards": 0.045090098813046646,
+     "evenly_spread": 0.04192503565181251,
+     "difference": {
+      "mean_difference": 0.0031650631612341307,
+      "p05": 0.0015458752685191715,
+      "p95": 0.004789223925685085,
+      "episodes": 300,
+      "episodes_a_ahead": 168,
+      "episodes_b_ahead": 113
+     }
+    },
+    {
+     "ridge": 1000.0,
+     "sum_of_first_look_rewards": 0.045090098813046646,
+     "evenly_spread": 0.04192503565181251,
+     "difference": {
+      "mean_difference": 0.0031650631612341307,
+      "p05": 0.0015458752685191715,
+      "p95": 0.004789223925685085,
+      "episodes": 300,
+      "episodes_a_ahead": 168,
+      "episodes_b_ahead": 113
+     }
+    }
+   ],
+   "every_look_feature_at_once": {
+    "what": "the look score with all its features fitted at once: the first form tried. It is not in use",
+    "ridge": 1000.0,
+    "ridge_chosen_with_fires_held_out": [
+     {
+      "ridge": 1.0,
+      "sum_of_first_look_rewards": 0.045088462230384194,
+      "evenly_spread": 0.04192503565181251,
+      "difference": {
+       "mean_difference": 0.0031634265785716754,
+       "p05": 0.0014072008550293762,
+       "p95": 0.004971320535427845,
+       "episodes": 300,
+       "episodes_a_ahead": 166,
+       "episodes_b_ahead": 122
+      }
+     },
+     {
+      "ridge": 10.0,
+      "sum_of_first_look_rewards": 0.044998047216575854,
+      "evenly_spread": 0.04192503565181251,
+      "difference": {
+       "mean_difference": 0.0030730115647633373,
+       "p05": 0.0013051254701168572,
+       "p95": 0.0048811186200338995,
+       "episodes": 300,
+       "episodes_a_ahead": 163,
+       "episodes_b_ahead": 125
+      }
+     },
+     {
+      "ridge": 100.0,
+      "sum_of_first_look_rewards": 0.04506418521588165,
+      "evenly_spread": 0.04192503565181251,
+      "difference": {
+       "mean_difference": 0.0031391495640691338,
+       "p05": 0.0013395194024115134,
+       "p95": 0.004958171176503622,
+       "episodes": 300,
+       "episodes_a_ahead": 164,
+       "episodes_b_ahead": 124
+      }
+     },
+     {
+      "ridge": 1000.0,
+      "sum_of_first_look_rewards": 0.045140594254025806,
+      "evenly_spread": 0.04192503565181251,
+      "difference": {
+       "mean_difference": 0.0032155586022132917,
+       "p05": 0.001436502916471294,
+       "p95": 0.005032964039172249,
+       "episodes": 300,
+       "episodes_a_ahead": 171,
+       "episodes_b_ahead": 117
+      }
+     }
+    ],
+    "on_training_fires_held_out": {
+     "mean_difference": 0.003887626859194791,
+     "p05": 0.0019784112732959404,
+     "p95": 0.005700828802653731,
+     "episodes": 300,
+     "episodes_a_ahead": 178,
+     "episodes_b_ahead": 110
+    }
+   }
+  },
+  "on_training_fires_held_out": {
+   "what": "mean gain over the training episodes, each played with weights fitted without its fold",
+   "mean_gain": {
+    "learned_tiles_only": 0.04259521191041699,
+    "learned_with_when": 0.045441181100698017,
+    "learned_with_every_look_feature": 0.04648283876961178,
+    "least_sure": 0.042409452112700245,
+    "least_sure_at_night": 0.03197349056432009,
+    "least_sure_when_unsure": 0.04428356885208839,
+    "least_sure_when_sharp": 0.04257522186487613,
+    "least_sure_looking_freely": 0.045921487194004115
+   },
+   "differences": {
+    "learned_with_when_minus_learned_tiles_only": {
+     "mean_difference": 0.002845969190281025,
+     "p05": 0.001230343865675715,
+     "p95": 0.004436651424337659,
+     "episodes": 300,
+     "episodes_a_ahead": 162,
+     "episodes_b_ahead": 119
+    },
+    "learned_with_every_look_feature_minus_learned_tiles_only": {
+     "mean_difference": 0.003887626859194791,
+     "p05": 0.0019784112732959404,
+     "p95": 0.005700828802653731,
+     "episodes": 300,
+     "episodes_a_ahead": 178,
+     "episodes_b_ahead": 110
+    },
+    "learned_tiles_only_minus_least_sure": {
+     "mean_difference": 0.00018575979771674937,
+     "p05": -0.0005551175486138002,
+     "p95": 0.0009104811323481217,
+     "episodes": 300,
+     "episodes_a_ahead": 77,
+     "episodes_b_ahead": 69
+    },
+    "learned_with_when_minus_least_sure": {
+     "mean_difference": 0.0030317289879977743,
+     "p05": 0.001246648822106214,
+     "p95": 0.004732110614140066,
+     "episodes": 300,
+     "episodes_a_ahead": 174,
+     "episodes_b_ahead": 117
+    },
+    "learned_with_when_minus_least_sure_at_night": {
+     "mean_difference": 0.013467690536377924,
+     "p05": 0.011024213778148722,
+     "p95": 0.01586088697746538,
+     "episodes": 300,
+     "episodes_a_ahead": 227,
+     "episodes_b_ahead": 70
+    },
+    "learned_with_when_minus_least_sure_when_unsure": {
+     "mean_difference": 0.001157612248609631,
+     "p05": -0.0006388123656156151,
+     "p95": 0.0029214641232451323,
+     "episodes": 300,
+     "episodes_a_ahead": 156,
+     "episodes_b_ahead": 139
+    },
+    "learned_with_when_minus_least_sure_when_sharp": {
+     "mean_difference": 0.0028659592358218798,
+     "p05": 0.0010273462744623653,
+     "p95": 0.004637428120621372,
+     "episodes": 300,
+     "episodes_a_ahead": 170,
+     "episodes_b_ahead": 125
+    },
+    "least_sure_at_night_minus_least_sure": {
+     "mean_difference": -0.01043596154838015,
+     "p05": -0.012540816702890017,
+     "p95": -0.008334171276826717,
+     "episodes": 300,
+     "episodes_a_ahead": 81,
+     "episodes_b_ahead": 210
+    },
+    "least_sure_when_unsure_minus_least_sure": {
+     "mean_difference": 0.001874116739388143,
+     "p05": -2.7847585454243722e-05,
+     "p95": 0.003749466117110224,
+     "episodes": 300,
+     "episodes_a_ahead": 154,
+     "episodes_b_ahead": 133
+    },
+    "least_sure_when_sharp_minus_least_sure": {
+     "mean_difference": 0.00016576975217589464,
+     "p05": -0.001688800439436223,
+     "p95": 0.0019939088548759985,
+     "episodes": 300,
+     "episodes_a_ahead": 144,
+     "episodes_b_ahead": 140
+    },
+    "least_sure_looking_freely_minus_least_sure": {
+     "mean_difference": 0.0035120350813038696,
+     "p05": 0.001437819835870524,
+     "p95": 0.005563916474642527,
+     "episodes": 300,
+     "episodes_a_ahead": 169,
+     "episodes_b_ahead": 130
+    }
+   }
+  }
+ },
+ "seconds": 1072.1,
+ "generated_utc": "2026-11-15T05:17:19Z",
+ "choice_on_validation": {
+  "candidates": {
+   "new_fit_tiles_only": {
+    "spec": [
+     "learned",
+     [
+      0.06446380362220769,
+      0.2927999937438619,
+      -0.039661001994190904,
+      0.110744503984449,
+      -0.017139227299486054,
+      0.16448210077257197,
+      0.06195085889909393,
+      0.03897215802988128,
+      0.02412673889901339,
+      0.0,
+      -0.016559293428178447,
+      0.08102309629113727,
+      0.1890312669906604,
+      -0.37709732106449445,
+      0.018546010140491356
+     ],
+     null,
+     null
+    ],
+    "mean_gain_on_validation": 0.05055265887253429
+   },
+   "new_fit_with_its_look_score": {
+    "spec": [
+     "learned",
+     [
+      0.06446380362220769,
+      0.2927999937438619,
+      -0.039661001994190904,
+      0.110744503984449,
+      -0.017139227299486054,
+      0.16448210077257197,
+      0.06195085889909393,
+      0.03897215802988128,
+      0.02412673889901339,
+      0.0,
+      -0.016559293428178447,
+      0.08102309629113727,
+      0.1890312669906604,
+      -0.37709732106449445,
+      0.018546010140491356
+     ],
+     [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.12266576544477881,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.5589116386604873,
+      0.6300087489495715,
+      0.643150855015751,
+      0.6880841112845113,
+      1.0126459189498813,
+      0.6029019576842254,
+      1.1494770667462504,
+      0.49729067165493945,
+      0.11715096046919526,
+      0.2425250969307622,
+      0.40070178129844586,
+      0.40070178129844586,
+      0.3064707678213837
+     ]
+    ],
+    "mean_gain_on_validation": 0.05159739297181759
+   },
+   "player_in_use": {
+    "spec": [
+     "learned",
+     [
+      0.22626907087976467,
+      0.0607235954588776,
+      -0.018539929792983127,
+      0.13712726888144725,
+      0.060027313935234916,
+      0.12494781985229365,
+      0.179622460688081,
+      -0.020166617761854303,
+      -0.024704579718988352,
+      0.0008958411598662536,
+      0.09604642646693207,
+      0.13022264441285886,
+      0.021278111414921908,
+      -0.3986435016240672,
+      -0.00881123681801207
+     ],
+     [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.053571872243893405,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.5774012702555948,
+      0.6170302310537981,
+      0.6901130692734219,
+      0.7135740502887686,
+      1.2020338099692576,
+      0.5718425652749339,
+      0.8846300075723745,
+      0.4954709709432722,
+      0.1189717820461506,
+      0.18105020280951267,
+      0.3673642810395514,
+      0.3673642810395514,
+      0.3101608036663202
+     ]
+    ],
+    "mean_gain_on_validation": 0.05317613516124791
+   }
+  },
+  "chosen": "player_in_use",
+  "rule": "the largest mean gain on the validation episodes; ties go to the first listed",
+  "validation_episodes": 83,
+  "left_out": {}
+ },
+ "protocol_sha256": "050449de777c7b8a3d5258f554f2184c83028046fe4b7908a9390c5ab683ced3",
+ "plan_sha256": "768e5487f75c906fdbedfb14325a7d277bbf6062b27398f08b104ba60da30449",
+ "round_values": {
+  "which": "values in use",
+  "files_sha256": {
+   "occupancy_params.json": "b45e689835b4a9e175ed63877757ebe71226628d3466cb983c411fd837570eb9",
+   "overlap_ratio.json": "881d5654e1fa8638271f5ff7bc87bd3c26699e538dd1c88a098f3b00c34c1811"
+  },
+  "refit_sha256": "669230d63080b095de43f55f4dd3a1441e9fb12cfaa3a379f0d6e8b9fda391dc"
+ },
+ "terrain": "none: a place of the fresh test has no terrain pack"
+}
