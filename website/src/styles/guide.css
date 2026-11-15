@@ -244,9 +244,17 @@
   outline-offset: 4px;
 }
 
-/* Where the guide speaks over the Record, the Record keeps room for its two sentences and their actions. */
+/* Where the guide speaks over the Record, the Record keeps room for its sentences and their actions: the strip's
+   measured room when the page has it (App.tsx, --guide-room), else room for two sentences. */
 .iso-ws[data-guide='true'] .rec {
-  --rec-guide: 190px;
+  --rec-guide: var(--guide-room, 190px);
+}
+
+/* A phone keeps the room it had: the Record's grid already fits above the guide there. */
+@media (max-width: 600px) {
+  .iso-ws[data-guide='true'] .rec {
+    --rec-guide: 190px;
+  }
 }
 
 /* A label on a thing of the stage (guide/StageWords.tsx): the plate sizes to its words up to a measure. */

@@ -1,7 +1,7 @@
 import type { WorkspaceBase } from '../app/store';
 import type { RecordView } from '../beats/calendar/recordView';
 import type { Conditions, Fields } from './script';
-import { count, countWord, listAnd, monthName, rate, ratioWhole, times } from './formats';
+import { count, countWord, listAnd, monthName, percent, rate, ratioWhole, times } from './formats';
 
 /**
  * The values the Record's lines name, from what the Record publishes (`beats/calendar/recordView.ts`, every figure one
@@ -31,6 +31,10 @@ export function recordFields(ws: WorkspaceBase, rv: RecordView): { fields: Field
     test_fires_n: ev ? countWord(ev.test_fires.fires.length) : null,
     places_with_fires: listAnd(ws.places.places.map((x) => x.name)),
   };
+  // How far off a year's corrected count is when that year is hidden, with the correction and without (the Record's
+  // check of its own method).
+  fields.record_error = percent(rv.correction.heldOut);
+  fields.record_error_raw = percent(rv.correction.heldOutWithout);
   // The range's check year by year, for its sentence on demand.
   const check = ws.calendar.state.cal?.rangeCheck ?? null;
   fields.record_held = check ? String(check.held) : null;

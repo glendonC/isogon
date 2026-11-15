@@ -64,6 +64,17 @@ export interface Guide {
 /** How many of a state's lines stand together in the guide. */
 const STANDING = 2;
 
+/** The script's own sentence on the Record's check of its method (an answer to a question there), its fields filled. */
+function recordCheckLine(fields: Fields): string | null {
+  const questions = (SCRIPT as unknown as { questions?: { answer?: { line?: string }[] }[] }).questions ?? [];
+  for (const q of questions) {
+    for (const a of q.answer ?? []) {
+      if (typeof a.line === 'string' && a.line.includes('{record_error}')) return fill(a.line, fields);
+    }
+  }
+  return null;
+}
+
 /**
  * A held-out run whose hidden passes a challenger answered (the backend's switch, off by default), in the page's words
  * until the script carries them: which model answered, in the run's own words, and the fire's standing as its own.
@@ -88,6 +99,8 @@ export interface GuideLive {
   playing: boolean;
   /** The film presentation: the labels on the stage take their film form (script version 18). */
   film?: boolean;
+  /** A phone's width: the guide keeps to its standing sentences, with no line added beside them. */
+  narrow?: boolean;
   /** The squares sized by chance are drawn. */
   chance: boolean;
   /** The key of marks is open. */
@@ -248,7 +261,12 @@ export function useGuide(
       state,
       objective: objectiveOf('record', state, r.fields),
       context: contextOf('record', r.fields),
-      lines: says(state, r.fields, r.conds).slice(0, STANDING),
+      // On the Record as it opens, its check of its own method stands beside what a square is: how far off a hidden
+      // year's count is, with the correction and without.
+      lines: [
+        ...says(state, r.fields, r.conds).slice(0, STANDING),
+        ...(id === 'ready' && !live.narrow && recordCheckLine(r.fields) ? [recordCheckLine(r.fields) as string] : []),
+      ],
       more: moreOf(state, r.fields, r.conds),
       film: filmOf(state, { ...fields, ...r.fields, world_first_year: live.worldFirstYear ?? (live.worldYears?.first != null ? String(live.worldYears.first) : null) }, r.conds),
       fields: { ...fields, ...r.fields },

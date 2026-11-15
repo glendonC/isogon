@@ -1378,6 +1378,7 @@ export function App() {
   const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays, finish: finishOpen }, recordView, playersView, {
     playing,
     film: filmMode,
+    narrow: viewportWidth < 600,
     chance: chanceOn,
     marksOpen,
     places: placesState.state,
@@ -1390,6 +1391,29 @@ export function App() {
     worldYears,
   });
   const guideKey = `${guide.step}:${guide.stateId}:${realStart}`;
+  // The room the guide's strip takes at the bottom (its height and its distance from the edge), for the Record to keep
+  // clear however many lines the guide holds.
+  const [guideRoom, setGuideRoom] = useState<number | null>(null);
+  useEffect(() => {
+    const strip = document.querySelector<HTMLElement>('.guide-strip');
+    if (!strip) {
+      setGuideRoom(null);
+      return;
+    }
+    const measure = () => {
+      const b = strip.getBoundingClientRect();
+      const room = Math.ceil(window.innerHeight - b.top + 16);
+      setGuideRoom((prev) => (prev === room ? prev : room));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(strip);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [guideKey, step, inWorkspace]);
   // At the round's end the board stands above the results rows (the stage fits it into a shorter frame): the frame's
   // bottom is the rows' top over the window's height, less a little room.
   const [endFrameBottom, setEndFrameBottom] = useState<number | null>(null);
@@ -1679,6 +1703,7 @@ export function App() {
             data-debrief={debriefOpen ? 'true' : 'false'}
             data-scene={modelScene ? 'model' : step === 'look' ? 'world' : undefined}
             data-guide={guide.step ? 'true' : undefined}
+            style={guideRoom !== null ? ({ '--guide-room': `${guideRoom}px` } as React.CSSProperties) : undefined}
           >
             <div className="iso-ws__scrim iso-ws__scrim--top" aria-hidden="true" />
             <div className="iso-ws__scrim iso-ws__scrim--right" aria-hidden="true" />
