@@ -7,6 +7,7 @@ import { marksOnShow, type MarkRow } from './marks';
 import { missingLine } from './missing';
 import { playStateId } from './playState';
 import { recordFields, recordStateId } from './recordFields';
+import { countWord } from './formats';
 import { resultRows, type ResultRow } from './Results';
 import { roundFields } from './roundFields';
 import {
@@ -26,7 +27,7 @@ import {
 
 export interface Guide {
   /** The script's step and state on show; null where the guide does not speak (Choose a Place). */
-  step: 'record' | 'estimate' | 'test' | 'play' | 'finish' | null;
+  step: 'place' | 'record' | 'estimate' | 'test' | 'play' | 'finish' | null;
   stateId: string | null;
   state: ScriptState | null;
   /** Top left: what the visitor is doing now, and the fainter line of the place and the days. */
@@ -84,6 +85,10 @@ export interface GuideLive {
   chance: boolean;
   /** The key of marks is open. */
   marksOpen: boolean;
+  /** The places registry's state, for the choice of a place. */
+  places?: 'loading' | 'ready' | 'failed';
+  /** The first year of the world's record (`GET /api/cube/countries`), null until it answers. */
+  worldFirstYear?: string | null;
 }
 
 /** Which command's thing is running, by command. */
@@ -157,8 +162,30 @@ export function useGuide(
   const { fields, conds } = guideFields(ws);
   const on = onOf(live, record);
 
+  if (ws.step === 'record' && ws.calendar.placesOpen) {
+    // The choice of a place: what the map shows and what can be opened. Its keys are the screen's own (the list, the
+    // card's Enter, Back), so the guide adds none of its own there.
+    entry.current = { key: '', pass: -1 };
+    const id = live.places === 'failed' ? 'failed' : live.places === 'ready' ? 'ready' : 'loading';
+    const state = stateOf('place', id);
+    const followed = ws.places.places.filter((p) => p.featured_fires.some((x) => x.default_start)).length;
+    const pf: Fields = { world_first_year: live.worldFirstYear ?? null, places_followed_n: live.places === 'ready' ? countWord(followed) : null };
+    return {
+      ...NONE,
+      step: 'place',
+      stateId: id,
+      state,
+      objective: objectiveOf('place', state, pf),
+      context: null,
+      lines: says(state, pf, conds).slice(0, STANDING),
+      more: moreOf(state, pf, conds),
+      fields: { ...fields, ...pf },
+      conds,
+    };
+  }
+
   if (ws.step === 'record') {
-    // The Record speaks from what it publishes; nothing while Choose a Place is open over it.
+    // The Record speaks from what it publishes.
     entry.current = { key: '', pass: -1 };
     const r = recordFields(ws, record);
     const id = recordStateId(ws, record);

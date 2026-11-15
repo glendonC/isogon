@@ -26,6 +26,7 @@ import { AskField } from './guide/AskField';
 import { useGuide, type Guide } from './guide/useGuide';
 import { keyMatches, says, stateOf } from './guide/script';
 import { StageBoundary } from './ui/StageBoundary';
+import { useWorldFirstYear } from './guide/world';
 import { openingHiddenPass, type OpeningFrame } from './app/openingPass';
 import { BEATS, type BeatId } from './app/names';
 import { WorkspaceProvider, type WorkspaceBase, type WorkspaceStore } from './app/store';
@@ -1261,10 +1262,13 @@ export function App() {
   // What the Record publishes for the guide (the compare-view lane's view), and the guide worked out from the store.
   const recordView = useRecordView();
   const playersView = usePlayersView();
+  const worldFirstYear = useWorldFirstYear();
   const guideBase = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays, finish: finishOpen }, recordView, playersView, {
     playing,
     chance: chanceOn,
     marksOpen,
+    places: placesState.state,
+    worldFirstYear,
   });
   // The start card shows on a step's first screen until the visitor acts there.
   const cardKey = `${guideBase.step}:${realStart}`;
