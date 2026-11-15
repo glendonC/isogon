@@ -49,6 +49,14 @@ says so in its reason. A page draws a stop as a stretch when the sealer was not 
 about fire. Before the first recorded cycle only the runner's starts are known, from its log, so that stretch is
 drawn as not recorded.
 
+## The record of seals in the repository
+
+`data/live_seals.csv` holds one line per seal: the UTC time it was sealed, its digest, its fire, its satellite and the
+predicted minute of the pass. The runner adds a line as soon as a seal is made and commits that file alone; a line
+already written is never changed. A published copy of the repository therefore shows which seals existed when it
+was published, and so witnesses every seal whose pass came after. Each digest can be checked against `seals.jsonl`
+in the live folder, whose chain checks every line before it.
+
 ## How a result is judged
 
 As [method.md](method.md) judges: per fire, the plain comparison of `verdict` (strictly better than both baselines);

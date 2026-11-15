@@ -24,6 +24,7 @@ from backend.firms.archive import redact_key  # noqa: E402
 from backend.firms.area_api import _key  # noqa: E402
 from backend.live import answer  # noqa: E402
 from backend.live import protocol as PR  # noqa: E402
+from backend.live import record  # noqa: E402
 from backend.live.fetch import AreaFetcher, CmrFetcher, ModisOnly, now_s  # noqa: E402
 from backend.live.ledger import Lock, Witness  # noqa: E402
 from backend.live.sealer import Sealer  # noqa: E402
@@ -47,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--once", action="store_true", help="run one cycle and stop")
     ap.add_argument("--no-score", action="store_true", help="seal only")
     ap.add_argument("--page-json", type=Path, default=None, help="also write the page's answer here each cycle")
+    ap.add_argument("--no-record", action="store_true",
+                    help="do not commit the tracked record of seals (data/live_seals.csv); it is committed by default "
+                         "when --witness is given, with each commit's patch beside the witness")
     args = ap.parse_args(argv)
     live = args.live_dir.resolve()
     live.mkdir(parents=True, exist_ok=True)
@@ -71,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
 
             scorer = Scorer(live, area, cmr, clock=now_s, log=log)
         log(f"protocol {sealer.protocol_sha}; {len(sealer.seals.entries)} seals held; code {sealer.code}")
+        record_notes = None if (args.no_record or args.witness is None) else args.witness.resolve().parent
         while True:
             t = now_s()
             try:
@@ -79,6 +84,11 @@ def main(argv: list[str] | None = None) -> int:
                     log(f"cycle: {out['sealed']} sealed, {out['missed']} missed")
             except Exception:  # noqa: BLE001  a cycle that fails is logged and the next one runs
                 log("sealing cycle failed: " + traceback.format_exc().replace("\n", " | ")[-1500:])
+            if record_notes is not None:
+                try:
+                    record.sync(_REPO_ROOT, sealer.seals.entries, record_notes, log)
+                except Exception:  # noqa: BLE001  sealing goes on; the record is brought up to date next cycle
+                    log("record of live seals failed: " + traceback.format_exc().replace("\n", " | ")[-800:])
             if scorer is not None:
                 try:
                     scorer.cycle()
