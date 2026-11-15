@@ -290,7 +290,10 @@ class RecorderTests(unittest.TestCase):
             # the world's answers: the live test, the cube's countries, its layers and the picture of each, the check of
             # every place and the calendar of a box place
             self.assertNotIn("GET /api/cube/years/modis_2012.npy", entries)    # the page draws the pictures only
+            # the commit the recording was made from, which the page names on its landing
+            self.assertEqual(len(index.get("commit", "")), 40)
             for key in ("GET /api/live", "GET /api/cube/countries", "GET /api/cube/layers", "GET /api/cube/layers/rows_modis.png",
+                        "GET /api/cube/years/countries",
                         "GET /api/cube/years", "GET /api/cube/years/modis_2012.png",
                         "GET /api/calendar/checks", "GET /api/calendar?box=-2.5%2C7.25%2C0.1%2C9.15&source=firms"):
                 self.assertIn(key, entries)

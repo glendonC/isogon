@@ -10,7 +10,7 @@ the page looks answers up in:
   <folder>/files/<sha256>.<ext>            one file per distinct answer, named by its content
 
 Without `--plan` it builds the demo path's plan from `GET /api/regions`: the regions, the evidence, the live test's
-answer, the fire cube's countries, world layers and yearly layers (the picture of each), the Record's check of every place with each
+answer, the fire cube's countries, world layers, yearly layers (the picture of each) and each country's years, the Record's check of every place with each
 box place's calendar, each region's calendar and start list, each named fire's box calendar, and for every featured
 fire that is not a blind test fire (only each region's busiest with `--busiest-period-only`)
 its run held out and then revealed and its run with every satellite (the landing and the Agent part ask for it), the
@@ -99,6 +99,18 @@ KEPT_HEADERS: tuple[str, ...] = ("X-Row-Count", "Content-Disposition")
 FORBIDDEN: tuple[bytes, ...] = (b"MAP_KEY=", b"/Users/", b"/home/", b"isogon-notes")
 
 
+def checkout_commit() -> str | None:
+    """The commit of the checkout this tool runs from, or None outside a git checkout."""
+    import subprocess
+
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    v = out.stdout.strip()
+    return v if out.returncode == 0 and len(v) == 40 else None
+
+
 def canonical(body: Any) -> str:
     return json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -169,6 +181,7 @@ class Recorder:
         # Only each region's first open featured period (its busiest) when asked, to keep the page small
         self.busiest_period_only = bool(busiest_period_only)
         self.periods_left_out: list[str] = []
+        self.commit = checkout_commit()
 
     # ---- HTTP and storage ----------------------------------------------------------------------------------------
 
@@ -315,6 +328,7 @@ class Recorder:
             if png:
                 path, query = split_url(str(png))
                 self.fetch("GET", path, query or None)
+        self.fetch("GET", "/api/cube/years/countries")     # each country's years, for a country picked on the Earth
         years = self.fetch("GET", "/api/cube/years")
         yearly = (years or {}).get("layers") if isinstance(years, dict) else None
         for name, meta in sorted(yearly.items()) if isinstance(yearly, dict) else []:
@@ -512,6 +526,9 @@ class Recorder:
         doc = {
             "version": 1,
             "recorded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            # The commit of the checkout this tool runs from, which the backend it records is started from; the page
+            # of recorded answers names it on its landing.
+            **({"commit": self.commit} if self.commit else {}),
             "backend": {k: health.get(k) for k in ("api_version", "schema_version", "downloaded_firms_rows") if k in health},
             "key_rule": "METHOD + ' ' + path + ('?' + query sorted by name, form encoded, if any) + (' ' + body as canonical JSON, if any)",
             "canonical_json": "sort_keys, separators ',' and ':', no ASCII escaping",
