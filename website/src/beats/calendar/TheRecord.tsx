@@ -319,6 +319,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   // no action of its own, and the band takes most of the action's room.
   const hasRanges = useMemo(() => (rec ? [...rec.months.values()].some((m) => m.p10 !== null && m.p90 !== null) : false), [rec]);
   const banded = hasRanges && size.w >= 600;
+  const inFilm = useMemo(() => typeof document !== 'undefined' && document.documentElement.classList.contains('iso-film'), []);
   const headH = HEAD_H + (banded ? (guideSpeaks ? 16 : BAND_H) : 0);
   const cell = years.length
     ? // One column more than the record's years is kept free on the right: this month's square stands there
@@ -331,7 +332,8 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const y0 = headH;
   const xOf = (year: number) => x0 + (year - (rec?.firstYear ?? 0)) * cell;
   const yOf = (month: number) => y0 + (month - 1) * cell;
-  const yearEvery = cell >= 34 ? 1 : cell >= 18 ? 2 : 5;
+  // In the film presentation the years are written a step larger and need wider squares to stand apart
+  const yearEvery = cell >= (inFilm ? 48 : 34) ? 1 : cell >= 18 ? 2 : 5;
 
   const monthAt = (e: { clientX: number; clientY: number; currentTarget: Element }): string | null => {
     if (!rec || !cell) return null;
@@ -356,8 +358,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   // On a grid too narrow for it to stand beside the older satellites' label, the way goes to the foot
   const afterFits = afterYears <= size.w + 24 && gridW >= 360;
   // The label hangs on the side of its leader with room for it, and is never wider than that room.
-  const labelRight = fx + 12 + LABEL_W <= size.w || size.w - fx >= fx;
-  const labelRoom = Math.max(120, Math.min(LABEL_W, (labelRight ? size.w - fx : fx) - 12));
+  // In the film presentation the label's words are a step larger: its room is too
+  const labelW = inFilm ? 400 : LABEL_W;
+  const labelRight = fx + 12 + labelW <= size.w || size.w - fx >= fx;
+  const labelRoom = Math.max(120, Math.min(labelW, (labelRight ? size.w - fx : fx) - 12));
   const sharpX = rec?.spans.sharp ? xOf(Number(rec.spans.sharp[0].slice(0, 4))) : null;
   const spanLine = (span: [string, string] | null) =>
     span && rec ? { from: xOf(Number(span[0].slice(0, 4))), to: xOf(Number(span[1].slice(0, 4))) + cell - gap } : null;
