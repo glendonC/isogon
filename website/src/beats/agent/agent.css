@@ -175,7 +175,12 @@
 
 /* In the film presentation (styles/film.css) the players' labels are a step larger, sized by the window's width, so
    the shot reads in three seconds at 1920 by 1080; the way back leaves the screen, as the film's other controls do,
-   and the guide's actions keep their words. */
+   and the guide's actions keep their words. The guide says no sentence there, only its actions on one line at the
+   foot, so the picture keeps room for that line alone. */
+:root.iso-film .players {
+  --players-guide: calc(clamp(28px, 3.3vw, 64px) + clamp(56px, 4vw, 76px));
+}
+
 .iso-film .agent-label__name {
   font-size: clamp(17px, 1.15vw, 22px);
   line-height: 1.3;

@@ -347,13 +347,13 @@
 
 /* In the film presentation (styles/film.css) the Record keeps the room the caption takes above and the guide below,
    and says its labels a step larger, sized by the window's width, so the shot reads in three seconds at 1920 by 1080
-   and the same rules hold at 1440 by 900. The guide may say more than its first sentence until it says one to a span,
-   so a little more room is kept under the grid. */
+   and the same rules hold at 1440 by 900. In the film the guide says no sentence, only its actions, one line at the
+   foot (film.css), so the grid takes the rest of the height. */
 /* As specific as the guide's own room for the Record (guide.css), and later */
 :root.iso-film .iso-ws .rec,
 .iso-film .rec {
   --rec-top: var(--film-room-top);
-  --rec-guide: calc(var(--film-room-bottom) + 24px);
+  --rec-guide: calc(clamp(28px, 3.3vw, 64px) + clamp(56px, 4vw, 76px));
 }
 
 .iso-film .rec__axis,
