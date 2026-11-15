@@ -40,6 +40,7 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 | `GET /api/cube/record`, `/api/cube/tables`, `/api/cube/countries`, `/api/cube/layers` | The Record of any box on Earth from the fire cube, its tables, the loaded countries and the world layers ([cube.md](cube.md)) |
 | `GET /api/live` | The predictions sealed before a pass on fires burning now, and their scores once the sharp satellite's rows arrive ([live.md](live.md)) |
 | `GET /api/gibs/day`, `/api/gibs/cloud`, `/api/gibs/live` | A box's satellite picture of one day and its cloud share, from NASA's keyless daily tiles held in the world store |
+| `GET /api/burned` | After the reveal, what burned: NASA's burned-area map from MODIS (MCD64A1 v061, never the VIIRS product) in a region's box from the window's first month to the end of the month holding its end, on the run's 375 m grid with each cell's day of burn, read from the world store (`backend/server_burned.py`); 404 "not fetched" where the store does not hold it, 409 for a closed window |
 | `GET /api/firms/countries` | Every country file the FIRMS listing publishes, its size and whether it is cached |
 | `GET /api/runs/starts` | The start dates worth showing for a real run |
 | `POST /api/reconstruct` | Build or fetch a run |
