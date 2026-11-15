@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { tOfValue } from './cells';
+import { countryShapeAt, type CountryShape } from './countryAt';
+import { countryOf, countryRatio, countryTotals, drawnInside, gridLines, type CountriesFile } from './countryYears';
 import { FIRE_RAMP } from './layers';
 import { useWorldKeys } from './keys';
 import { useRead } from './read';
 import { Ticks } from './Ticks';
 import { WorldCanvas, type GridLayer } from './WorldCanvas';
-import type { Box } from './projection';
-import { EARTH_WORDS, millions, wholeMillions, YEAR_WORDS as Y } from './words';
+import type { Box, Projector } from './projection';
+import { EARTH_WORDS, gridWords, millions, wholeMillions, YEAR_WORDS as Y } from './words';
 import {
   familyOf,
   layerOf,
@@ -90,6 +92,19 @@ function axisYears(years: number[], shown: number, width: number): number[] {
 
 const isFilm = () => typeof document !== 'undefined' && document.documentElement.classList.contains('iso-film');
 
+/** A country's outline on the map, as an SVG path in the map's pixels. */
+function outlineOf(rings: number[][][], p: Projector): string {
+  let d = '';
+  for (const r of rings) {
+    for (let i = 0; i < r.length; i++) {
+      const [x, y] = p.at(r[i][0], r[i][1]);
+      d += `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+    }
+    d += 'Z';
+  }
+  return d;
+}
+
 const ramp = (stops: Array<[number, [number, number, number]]>) =>
   `linear-gradient(to right, ${stops.map(([t, c]) => `rgb(${c.join(',')}) ${t * 100}%`).join(', ')})`;
 
@@ -99,6 +114,10 @@ const ramp = (stops: Array<[number, [number, number, number]]>) =>
  * fire; the harmonized record holds one scale through every year. Under it, the world's total of each year: as
  * detected as bars, the harmonized record as a line, the year on show marked. Enter and Space play and stop, the
  * arrows step a year, Y switches the view (the script's keys).
+ *
+ * Outside the film a visitor points at a country (it is outlined and named) and clicks it: the strip shows that
+ * country's detections each year (`GET /api/cube/years/countries`) while the Earth keeps playing the world. Esc or a
+ * click on the sea brings back the whole Earth's strip.
  */
 export function EarthYears({
   source = '/api/cube/years',
@@ -123,6 +142,42 @@ export function EarthYears({
   const [year, setYear] = useState<number | null>(startYear ?? null);
   const [playing, setPlaying] = useState(false);
   const shown = year ?? years[0] ?? null;
+
+  // A country picked on the Earth, outside the film: the country under the pointer, the one chosen, and its years.
+  const pick = !isFilm();
+  const countriesRead = useRead<CountriesFile>(pick ? '/api/cube/years/countries' : null);
+  const countries = countriesRead.state === 'ready' ? countriesRead.value : null;
+  const [pointed, setPointed] = useState<{ shape: CountryShape; x: number; y: number } | null>(null);
+  const [chosen, setChosen] = useState<CountryShape | null>(null);
+  const chosenYears = useMemo(() => (countries && chosen ? countryOf(countries, chosen.key, chosen.name) : null), [countries, chosen]);
+  const hasFile = (s: CountryShape) => !countries || Boolean(countries.by_atlas?.[s.key]);
+  const onHover = useCallback((at: { lon: number; lat: number; x: number; y: number } | null) => {
+    const shape = at ? countryShapeAt(at.lon, at.lat) : null;
+    setPointed(shape && at ? { shape, x: at.x, y: at.y } : null);
+  }, []);
+  const onClickMap = useCallback(
+    (at: { lon: number; lat: number }) => {
+      const shape = countryShapeAt(at.lon, at.lat);
+      // The sea brings back the whole Earth; a country with no file of its own changes nothing.
+      if (!shape) setChosen(null);
+      else if (countries && countries.by_atlas?.[shape.key]) setChosen(shape);
+    },
+    [countries],
+  );
+  // The outlines are kept per country and view, so the pointer's moves do not trace them again.
+  const outlines = useRef(new Map<string, string>());
+  const outline = (shape: CountryShape, p: Projector) => {
+    const [x0, y0] = p.at(0, 0);
+    const [x1] = p.at(10, 0);
+    const k = `${shape.key}|${x0.toFixed(1)}|${y0.toFixed(1)}|${x1.toFixed(1)}`;
+    let d = outlines.current.get(k);
+    if (!d) {
+      if (outlines.current.size > 40) outlines.current.clear();
+      d = outlineOf(shape.rings, p);
+      outlines.current.set(k, d);
+    }
+    return d;
+  };
 
   useEffect(() => {
     if (idx && year === null) setYear(startYear ?? idx.years[0].year);
@@ -251,6 +306,7 @@ export function EarthYears({
     else if (e.key === 'ArrowRight') step(1);
     else if (e.key === 'ArrowLeft') step(-1);
     else if (e.key === 'y' || e.key === 'Y') flip();
+    else if (e.key === 'Escape' && chosen) setChosen(null);
     else return false;
     return true;
   });
@@ -278,16 +334,24 @@ export function EarthYears({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, shown, mode, playing, harmonizedReady, ratioRange]);
 
-  // The strip of totals is measured so the Earth fits above it.
+  // The strip of totals is measured so the Earth fits above it. A country's strip may wrap its keys another way; the
+  // Earth keeps its place for a strip no taller, and is fitted again when the screen itself changes size.
   const stripRef = useRef<HTMLDivElement | null>(null);
   const [stripH, setStripH] = useState(0);
   const [stripW, setStripW] = useState(0);
+  const picked = useRef(false);
+  picked.current = chosenYears !== null;
   useLayoutEffect(() => {
     const el = stripRef.current;
     if (!el) return;
     const box = el.parentElement!;
+    let boxH = -1;
     const measure = () => {
-      setStripH(Math.round(box.clientHeight - el.offsetTop + 12));
+      const h = Math.round(box.clientHeight - el.offsetTop + 12);
+      // Picked, the Earth makes room for a taller strip but does not move for a shorter one.
+      if (picked.current && box.clientHeight === boxH) setStripH((o) => Math.max(o, h));
+      else setStripH(h);
+      boxH = box.clientHeight;
       setStripW(el.clientWidth);
     };
     measure();
@@ -301,9 +365,12 @@ export function EarthYears({
   if (!idx || shown === null) return <div className="world-years"><p className="world-years__state">{Y.loading}</p></div>;
 
   const info = idx.years.find((y) => y.year === shown)!;
-  const totals = totalsOf(idx);
-  const ratio = sharpRatio(idx);
+  // The strip is the whole Earth's, or the chosen country's.
+  const totals = chosenYears ? countryTotals(idx, chosenYears) : totalsOf(idx);
+  const ratio = chosenYears ? countryRatio(idx, chosenYears) : sharpRatio(idx);
   const top = Math.max(...totals.flatMap((t) => [t.detected ?? 0, t.harmonized ?? 0])) * 1.08 || 1;
+  const grids = chosenYears ? gridLines(top).map((v) => ({ v, label: gridWords(v) })) : [10e6, 20e6].filter((v) => v < top).map((v) => ({ v, label: wholeMillions(v) }));
+  const inside = chosenYears && countries ? drawnInside(countries, chosenYears.key) : [];
   const n = totals.length;
   const slot = (i: number) => ((i + 0.5) / n) * 100;
   const at = years.indexOf(shown);
@@ -326,8 +393,34 @@ export function EarthYears({
   const sharpAt = totals.findIndex((t) => t.sharp);
 
   return (
-    <div className="world-years" data-mode={mode}>
-      <WorldCanvas label={Y.label} layers={grid} hatchLand focus={focus} padBottom={stripH} className="world-years__earth" />
+    <div className="world-years" data-mode={mode} data-pointing={pick && pointed !== null && hasFile(pointed.shape) ? 'true' : 'false'} data-country={chosenYears ? chosenYears.key : undefined}>
+      <WorldCanvas
+        label={Y.label}
+        layers={grid}
+        hatchLand
+        focus={focus}
+        padBottom={stripH}
+        className="world-years__earth"
+        onHover={pick ? onHover : undefined}
+        onClickMap={pick ? onClickMap : undefined}
+      >
+        {pick
+          ? (p) => (
+              <>
+                <svg className="world-countries" width={p.w} height={p.h} aria-hidden="true">
+                  {chosen && <path className="world-country world-country--chosen" d={outline(chosen, p)} />}
+                  {pointed && pointed.shape.key !== chosen?.key && <path className="world-country" d={outline(pointed.shape, p)} />}
+                </svg>
+                {pointed && (
+                  <div className="world-country-name" style={{ left: pointed.x + 14, top: pointed.y - 26 }} aria-hidden="true">
+                    {pointed.shape.name}
+                    {!hasFile(pointed.shape) && <span className="world-country-name__more">{`: ${Y.noFile}`}</span>}
+                  </div>
+                )}
+              </>
+            )
+          : undefined}
+      </WorldCanvas>
       {/* The ground under the strip and the guide: the Earth's far south stays out of the shot. */}
       <div className="world-years__floor" style={{ height: stripH }} aria-hidden="true" />
       {caption && (
@@ -391,10 +484,22 @@ export function EarthYears({
       <div className="world-years__strip" ref={stripRef} data-world-ui>
         <div className="world-years__strip-head" data-step={stepLabel ? 'on' : 'off'} style={{ ['--at' as string]: String(Math.max(sharpAt, 0) / n) }}>
           <div className="world-years__strip-keys">
-            <span className="world-years__strip-title">{Y.totals}</span>
+            <span className="world-years__strip-title">{chosenYears ? Y.countryTotals(chosenYears.name) : Y.totals}</span>
+            {chosenYears && (
+              <button type="button" className="world-act world-act--quiet world-years__back" onClick={() => setChosen(null)}>
+                <kbd>Esc</kbd>
+                <span>{Y.wholeEarth}</span>
+              </button>
+            )}
             <span className="world-years__key world-years__key--modis">{Y.barsModis}</span>
             <span className="world-years__key world-years__key--sharp">{Y.barsSharp}</span>
             {line && <span className="world-years__key world-years__key--line">{Y.lineHarmonized}</span>}
+            {pick && countries && !chosenYears && <span className="world-years__hint">{Y.pickCountry}</span>}
+            {inside.length > 0 && (
+              <span className="world-years__hint" title={Y.drawnInsideAll(inside)}>
+                {Y.drawnInside(inside.length)}
+              </span>
+            )}
           </div>
           {/* The label on the 2012 bar: its room is always kept, so the Earth does not move when it is said. */}
           {stepLabel && (
@@ -404,9 +509,9 @@ export function EarthYears({
           )}
         </div>
         <div className="world-years__plot">
-          {[10e6, 20e6].filter((v) => v < top).map((v) => (
+          {grids.map(({ v, label }) => (
             <div key={v} className="world-years__grid" style={{ bottom: `${(v / top) * 100}%` }}>
-              <span>{wholeMillions(v)}</span>
+              <span>{label}</span>
             </div>
           ))}
           {totals.map((t, i) => (

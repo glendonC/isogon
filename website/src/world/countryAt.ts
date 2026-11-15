@@ -9,6 +9,8 @@ import countries from 'world-atlas/countries-50m.json';
 
 type Ring = number[][];
 interface Shape {
+  /** ISO 3166-1 numeric, as Natural Earth gives it ("076" Brazil); some territories have none. */
+  id: string | null;
   name: string;
   box: [number, number, number, number];
   rings: Ring[];
@@ -19,7 +21,7 @@ let shapes: Shape[] | null = null;
 function build(): Shape[] {
   const topo = countries as unknown as Topology<{ countries: GeometryCollection<{ name: string }> }>;
   const fc = feature(topo, topo.objects.countries) as unknown as {
-    features: Array<{ properties: { name: string }; geometry: { type: string; coordinates: unknown } | null }>;
+    features: Array<{ id?: string | number; properties: { name: string }; geometry: { type: string; coordinates: unknown } | null }>;
   };
   return fc.features
     .filter((f) => f.geometry)
@@ -37,7 +39,7 @@ function build(): Shape[] {
           s = Math.min(s, y);
           n = Math.max(n, y);
         }
-      return { name: f.properties.name, box: [w, s, e, n] as [number, number, number, number], rings };
+      return { id: f.id === undefined || f.id === null ? null : String(f.id), name: f.properties.name, box: [w, s, e, n] as [number, number, number, number], rings };
     });
 }
 
@@ -74,6 +76,27 @@ export function countryAt(lon: number, lat: number): string | null {
   for (const s of shapes) {
     if (lon < s.box[0] || lon > s.box[2] || lat < s.box[1] || lat > s.box[3]) continue;
     if (inside(s.rings, lon, lat)) return whole(s.name);
+  }
+  return null;
+}
+
+/** A country on the map: its numeric code and Natural Earth's name (as the fire cube's files match it), said whole. */
+export interface CountryShape {
+  id: string | null;
+  /** Natural Earth's own name, as the map holds it ("Dem. Rep. Congo"). */
+  key: string;
+  /** The name said whole ("Democratic Republic of the Congo"). */
+  name: string;
+  rings: number[][][];
+  box: [number, number, number, number];
+}
+
+/** The country a point lies in, with its outline, or null at sea. */
+export function countryShapeAt(lon: number, lat: number): CountryShape | null {
+  if (!shapes) shapes = build();
+  for (const s of shapes) {
+    if (lon < s.box[0] || lon > s.box[2] || lat < s.box[1] || lat > s.box[3]) continue;
+    if (inside(s.rings, lon, lat)) return { id: s.id, key: s.name, name: whole(s.name), rings: s.rings, box: s.box };
   }
   return null;
 }

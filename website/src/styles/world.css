@@ -1422,3 +1422,50 @@
   top: 0;
   visibility: hidden;
 }
+
+/* A country on the Earth's years: outlined under the pointer, named beside it; the chosen one stays outlined. */
+.world-years[data-pointing='true'] .world-canvas {
+  cursor: pointer;
+}
+
+.world-countries {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.world-country {
+  fill: rgba(237, 239, 243, 0.06);
+  stroke: rgba(237, 239, 243, 0.7);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.world-country--chosen {
+  fill: rgba(237, 239, 243, 0.1);
+  stroke: var(--sys-ink);
+  stroke-width: 1.5;
+}
+
+.world-country-name {
+  position: absolute;
+  padding: 2px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+  background: rgba(8, 11, 17, 0.82);
+}
+
+.world-country-name__more {
+  color: var(--sys-ink-3);
+}
+
+.world-years__hint {
+  color: var(--sys-ink-off);
+}
+
+/* On the title's own line, no taller than it, so picking a country does not move the Earth. */
+.world-years__back {
+  padding-block: 0;
+}

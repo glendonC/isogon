@@ -144,6 +144,9 @@ export function millions(v: number): string {
 /** A grid line's whole millions: "10 million". */
 export const wholeMillions = (v: number) => `${Math.round(v / 1e6)} million`;
 
+/** A country's grid line, a round value: "1.5 million", "40,000". */
+export const gridWords = (v: number) => (v >= 1e6 ? `${Math.round(v / 1e5) / 10} million` : v.toLocaleString('en-US'));
+
 /** "4.4": a factor to one decimal, as the product lane writes the Earth's (EARTH-YEARS.md). */
 export const oneDecimal = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
 
@@ -177,6 +180,13 @@ export const YEAR_WORDS = {
   barsSharp: 'Newer satellite (VIIRS)',
   lineHarmonized: 'On one scale',
   partialBar: 'two months',
+  /** A country picked on the Earth: its own strip, and the way back to the whole Earth. */
+  countryTotals: (name: string) => `Detections each year, ${name}`,
+  wholeEarth: 'The whole Earth',
+  pickCountry: 'Click a country for its own years',
+  noFile: 'no file of its own',
+  drawnInside: (n: number) => `Not in its count: ${n === 1 ? 'one part, with a file of its own' : `${n} parts, with files of their own`}`,
+  drawnInsideAll: (names: string[]) => `${listAnd(names)} ${names.length === 1 ? 'has a file' : 'have files'} of their own, not in this count.`,
   clipped: (n: number) => `${n} ${n === 1 ? 'square lies' : 'squares lie'} above the scale and ${n === 1 ? 'is' : 'are'} drawn at its top`,
 };
 
