@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useWorkspace } from '../../app/store';
-import { ComparePlane, labelWidthOf } from '../../compare/ComparePlane';
 import {
   CHANCE,
   chanceOf,
@@ -22,6 +21,10 @@ import {
 import { PLAYERS_CLOSED, publishPlayersView } from './playersView';
 import { usePlays } from './usePlays';
 import './agent.css';
+
+const ComparePlane = lazy(() =>
+  import('../../compare/ComparePlane').then((m) => ({ default: m.ComparePlane })),
+);
 
 /**
  * Every sentence the players' picture itself puts on screen: labels at a player's block, the legend and the actions
@@ -249,16 +252,19 @@ export function AgentPicture({ onClose = null, guideSpeaks = false }: AgentPictu
           {line}
         </p>
       ) : (
-        <ComparePlane
-          blocks={blocks}
-          labelSpace={UNDER_BLOCK}
-          perRow="fit"
-          ariaLabel={PLAYERS_WORDS.name}
-          renderLabel={(block, anchor) => {
-            const play = summaries.find((p) => p.id === block.id);
-            return play ? <PlayerLabel play={play} width={labelWidthOf(anchor, 300)} {...shownGain(play)} scale={scale} notes={notesOf(play)} /> : null;
-          }}
-        />
+        <Suspense fallback={null}>
+          <ComparePlane
+            blocks={blocks}
+            labelSpace={UNDER_BLOCK}
+            perRow="fit"
+            ariaLabel={PLAYERS_WORDS.name}
+            renderLabel={(block, anchor) => {
+              const play = summaries.find((p) => p.id === block.id);
+              const w = Math.max(120, Math.min(300, Math.round(anchor.rect.width * 1.07 - 8)));
+              return play ? <PlayerLabel play={play} width={w} {...shownGain(play)} scale={scale} notes={notesOf(play)} /> : null;
+            }}
+          />
+        </Suspense>
       )}
       {/* The caption and the actions are the guide's where it speaks; the way back stays, for the pointer */}
       <div className="agent-picture__foot">

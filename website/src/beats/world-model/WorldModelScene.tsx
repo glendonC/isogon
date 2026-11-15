@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useWorkspace } from '../../app/store';
-import { ThreeWaysPlane } from '../../compare/ThreeWaysPlane';
 import type { StageFireAnchor } from '../../stage/earthCutawayTypes';
+
+const ThreeWaysPlane = lazy(() =>
+  import('../../compare/ThreeWaysPlane').then((m) => ({ default: m.ThreeWaysPlane })),
+);
 import { fireAt, onScreen, runBox, type ScreenBox } from './fire';
 import { labelPoint } from '../../guide/anchor';
 import { MarksKey } from '../../guide/MarksKey';
@@ -93,7 +96,9 @@ export function WorldModelScene() {
     return (
       <div className="wm-scene" data-scene="three-ways">
         <div className="wm-three">
-          <ThreeWaysPlane />
+          <Suspense fallback={null}>
+            <ThreeWaysPlane />
+          </Suspense>
         </div>
       </div>
     );
