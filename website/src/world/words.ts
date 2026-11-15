@@ -62,6 +62,13 @@ export const EARTH_WORDS = {
   fireLabel: (name: string | null, place: string, year: string | null) => (name ? `${name}${year ? ` ${year}` : ''}` : place),
   showFire: (label: string) => `Show the fire of ${label}`,
   readPlace: 'Read the fire record of this place',
+  /** A fire kept as the model's test, in the product lane's words (script state recorded_test_fire). */
+  keptLabel: (label: string) => `${label}, kept as the test`,
+  keptLine: (n: number) =>
+    `One of the ${count(n)} fires kept as the model's test, so it is not hidden and tested again. Its record can be read.`,
+  /** A fire the page may not open yet. */
+  heldLabel: (short: string) => `${short}, not open yet`,
+  heldLine: 'Not open yet: it lies where the test across the world is still to be scored, and opens after that test.',
   fires: (n: number) => (n === 1 ? 'One fire can be shown pass by pass' : `${count(n)} fires can be shown pass by pass`),
   /** Drawing an area. */
   draw: 'Draw an area',

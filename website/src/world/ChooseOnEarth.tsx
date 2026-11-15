@@ -42,6 +42,11 @@ export interface ChooseOnEarthProps {
   startOpen?: string | null;
   /** The box first in view; the land a visitor picks on when left out. */
   focus?: Box;
+  /**
+   * Fires or places the page must not open yet (by fire id or place id), with the words to say, or true for the
+   * plain words; joined to any `held` the registry gives.
+   */
+  held?: Record<string, string | true> | null;
 }
 
 type Mode = 'fire' | 'factor';
@@ -53,19 +58,53 @@ const sizeOf = (f: FeaturedFire) => f.size?.modis_pixels_in_box ?? 0;
 /** A name as a stranger reads it: an agency's incident code in brackets is left to the fire's card. */
 const plainName = (s: string | null) => (s ? s.replace(/\s*\([A-Z]{1,6}\d{3,}\)/g, '') : s);
 
-/** The fire a place is known by: a named fire, the largest first; else the place's own name. */
-function knownBy(p: Place): { text: string; sub: string } {
-  const named = p.featured_fires.filter((f) => f.name).sort((a, b) => sizeOf(b) - sizeOf(a));
+/** The first of several names an agency gives one fire ("Stein Mountain fire, Ponderosa Creek fire and ..."). */
+const firstName = (s: string | null) => (s ? (plainName(s) ?? '').split(/, | and /)[0] : s);
+
+type Raw = Record<string, unknown>;
+/** A fire kept as the model's test: its record is shown, it is never hidden and tested again (registry `closed`). */
+export const isClosed = (f: FeaturedFire) => (f as unknown as Raw).closed === true;
+
+/**
+ * A fire the page must not open yet, with every satellite or revealed: the registry's `held` on the fire or its place,
+ * or the mounting screen's own list. Its mark stays, says so, and offers nothing.
+ */
+export function heldWhy(f: FeaturedFire, p: Place, held: Record<string, string | true> | null): string | true | null {
+  const fr = f as unknown as Raw;
+  const pr = p as unknown as Raw;
+  const own = held?.[f.id] ?? held?.[p.id];
+  if (own) return own;
+  if (fr.held === true || pr.held === true) return (typeof fr.held_why === 'string' && fr.held_why) || (typeof pr.held_why === 'string' && pr.held_why) || true;
+  return null;
+}
+
+type Kind = 'open' | 'closed' | 'held';
+
+/**
+ * The fire a place is known by and what its mark is: a fire that can be opened, the largest named one first, else the
+ * place's own name; a place whose every fire is kept as the test says so; a place whose fires are held says so.
+ */
+function knownBy(p: Place, held: Record<string, string | true> | null): { text: string; kind: Kind } {
   const short = p.name.split(',')[0];
-  if (named.length) return { text: W.fireLabel(plainName(named[0].name), short, yearOf(named[0])), sub: short };
-  return { text: short, sub: W.fires(p.featured_fires.length) };
+  const open = p.featured_fires.filter((f) => !isClosed(f) && !heldWhy(f, p, held));
+  const named = (xs: FeaturedFire[]) => xs.filter((f) => f.name).sort((a, b) => sizeOf(b) - sizeOf(a));
+  if (open.length) {
+    const n = named(open);
+    return { text: n.length ? W.fireLabel(firstName(n[0].name), short, yearOf(n[0])) : short, kind: 'open' };
+  }
+  const closed = p.featured_fires.filter(isClosed);
+  if (closed.length) {
+    const n = named(closed);
+    return { text: W.keptLabel(n.length ? W.fireLabel(firstName(n[0].name), short, yearOf(n[0])) : short), kind: 'closed' };
+  }
+  return { text: W.heldLabel(short), kind: 'held' };
 }
 
 function ramp(ramp: Array<[number, [number, number, number]]>): string {
   return `linear-gradient(to right, ${ramp.map(([t, [r, g, b]]) => `rgb(${r | 0} ${g | 0} ${b | 0}) ${(t * 100).toFixed(0)}%`).join(', ')})`;
 }
 
-export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, places, currentFire = null, limits = null, onFire, onPlace, onBox, startDrawing = false, startOnFactor = false, startBox = null, startOpen = null, focus }: ChooseOnEarthProps) {
+export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, places, currentFire = null, limits = null, onFire, onPlace, onBox, startDrawing = false, startOnFactor = false, startBox = null, startOpen = null, focus, held = null }: ChooseOnEarthProps) {
   const world = useWorldLayer(layers, layer);
   const [mode, setMode] = useState<Mode>(startOnFactor && factor ? 'factor' : 'fire');
   // The legend and the tools stand over the map; labels keep clear of them.
@@ -175,9 +214,9 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
     const items = featured.map((pl) => {
       const [lon, lat] = midOf(pl.box);
       const [x, y] = p.at(lon, lat);
-      const k = knownBy(pl);
+      const k = knownBy(pl, held);
       const current = pl.featured_fires.some((f) => f.id === currentFire);
-      return { id: pl.id, x, y, text: k.text, sub: null, rank: current ? -1 : -Math.max(...pl.featured_fires.map(sizeOf)), place: pl, current };
+      return { id: pl.id, x, y, text: k.text, kind: k.kind, sub: null, rank: current ? -1 : -Math.max(...pl.featured_fires.map(sizeOf)), place: pl, current };
     });
     const onScreen = items.filter((m) => m.x > -20 && m.y > -20 && m.x < p.w + 20 && m.y < p.h + 20);
     const at = open ? cardAt(p) : null;
@@ -198,6 +237,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
                 type="button"
                 data-world-ui
                 className="world-mark sys-sel"
+                data-kind={m.kind}
                 data-selected={m.current || open === m.id ? 'true' : 'false'}
                 data-small="true"
                 style={{ left: m.x, top: m.y }}
@@ -240,17 +280,36 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
     if (!at) return null;
     const { pl } = at;
     const fires = [...pl.featured_fires].sort((a, b) => (b.first_day ?? '').localeCompare(a.first_day ?? ''));
+    const keptN = places.reduce((n, x) => n + x.featured_fires.filter(isClosed).length, 0);
+    const allHeld = fires.every((f) => heldWhy(f, pl, held));
     return (
       <div data-world-ui className="world-card sys-plate" style={{ left: at.rect.left, top: at.rect.top }}>
         <div className="world-card__title">{pl.name}</div>
         <div className="world-card__acts">
-          {fires.map((f) => (
-            <button key={f.id} type="button" className="world-act world-act--stack" data-current={f.id === currentFire} onClick={() => onFire(pl, f)}>
-              <span>{W.showFire(f.label)}</span>
-              {f.name && <span className="world-act__sub">{plainName(f.name)}</span>}
-            </button>
-          ))}
-          {onPlace && (
+          {fires.map((f) => {
+            const why = heldWhy(f, pl, held);
+            if (why)
+              return (
+                <div key={f.id} className="world-card__fire">
+                  <span>{f.label}</span>
+                  <span className="world-act__sub">{why === true ? W.heldLine : why}</span>
+                </div>
+              );
+            if (isClosed(f))
+              return (
+                <div key={f.id} className="world-card__fire">
+                  <span>{f.label}{f.name ? `, ${firstName(f.name)}` : ''}</span>
+                  <span className="world-act__sub">{W.keptLine(keptN)}</span>
+                </div>
+              );
+            return (
+              <button key={f.id} type="button" className="world-act world-act--stack" data-current={f.id === currentFire} onClick={() => onFire(pl, f)}>
+                <span>{W.showFire(f.label)}</span>
+                {f.name && <span className="world-act__sub">{plainName(f.name)}</span>}
+              </button>
+            );
+          })}
+          {onPlace && !allHeld && (
             <button type="button" className="world-act world-act--quiet" onClick={() => onPlace(pl)}>
               {W.readPlace}
             </button>

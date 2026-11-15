@@ -62,6 +62,26 @@
   background: var(--sys-detection);
 }
 
+/* A place whose fires are all kept as the test: a hollow square. Held: hollow and dashed, fainter. */
+.world-mark[data-kind='closed'] {
+  background: var(--sys-night);
+  border: 1.5px solid var(--sys-ink);
+  box-shadow: 0 0 0 1px rgba(8, 11, 17, 0.6);
+}
+
+.world-mark[data-kind='held'] {
+  background: var(--sys-night);
+  border: 1px dashed var(--sys-ink-2);
+  box-shadow: none;
+}
+
+.world-card__fire {
+  display: grid;
+  padding: var(--sys-s1) 0 var(--sys-s2);
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
 .world-mark.sys-sel[data-selected='true']::after {
   inset: -6px;
 }
