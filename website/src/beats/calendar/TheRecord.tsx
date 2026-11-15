@@ -437,7 +437,8 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
             >
               {MONTH_NAMES.map((name, i) => (
                 <text key={name} className="rec__axis" x={x0 - 10} y={yOf(i + 1) + cell / 2} textAnchor="end" dominantBaseline="central">
-                  {cell >= 16 ? name.slice(0, 3) : name.slice(0, 1)}
+                  {/* On squares too small for a letter a row, the month's short name every third row */}
+                  {cell >= 16 ? name.slice(0, 3) : i % 3 === 0 ? name.slice(0, 3) : ''}
                 </text>
               ))}
               {years.map((year) =>

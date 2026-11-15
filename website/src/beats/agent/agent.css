@@ -29,19 +29,22 @@
   }
 }
 
-/* On a narrow screen the players stand two to a row and the picture scrolls inside the room above the guide's
-   strip, so every label has its room and nothing of it passes under the guide's words. */
+/* On a narrow screen the players stand two at a time, each whole with its label, in the room above the guide's strip
+   (AgentPicture.tsx turns to the next two); nothing scrolls under the room's edge. */
 @media (max-width: 700px) {
   .players {
     /* The guide's words take three lines and its actions two on a phone */
     --players-guide: 230px;
   }
 
-  .players .agent-picture {
-    height: 100%;
-    grid-template-rows: 1150px auto;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+  .agent-picture__acts {
+    flex-wrap: wrap;
+    gap: var(--sys-s2) var(--sys-s4);
+  }
+
+  .agent-picture__pager {
+    flex-basis: 100%;
+    color: var(--sys-ink);
   }
 }
 

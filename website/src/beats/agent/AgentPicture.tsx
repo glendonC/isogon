@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useWorkspace } from '../../app/store';
 import {
   CHANCE,
@@ -49,6 +49,9 @@ export const PLAYERS_WORDS = {
   reveal: 'Reveal what their looks found',
   watch: 'Watch them play',
   close: 'Close',
+  /** On a phone the players stand two at a time: the way to the next two, or back to the first two. */
+  nextPlayers: (names: string[]) => `More players: ${names.join(' and ')}`,
+  firstPlayers: (names: string[]) => `Back to ${names.join(' and ')}`,
   legend: (found: boolean) =>
     `Lit squares: where a player looked, in order. ${found ? 'Filled marks: what its looks found. ' : ''}Outlines: what the coarse satellite showed every player.`,
 };
@@ -123,6 +126,17 @@ export interface AgentPictureProps {
  * Chance stands for several rounds of random looks: its gain is their mean, its bar carries their range, and the
  * looks drawn are one of them, said so.
  */
+// On a phone the players stand two at a time, whole with their labels, rather than in a column scrolled under its
+// own edge; a line under them names the next two and turns to them
+const PHONE = '(max-width: 700px)';
+const PER_PAGE = 2;
+const watchPhone = (changed: () => void) => {
+  const m = window.matchMedia(PHONE);
+  m.addEventListener('change', changed);
+  return () => m.removeEventListener('change', changed);
+};
+const isPhone = () => window.matchMedia(PHONE).matches;
+
 export function AgentPicture({ onClose = null, guideSpeaks = false }: AgentPictureProps) {
   const ws = useWorkspace();
   const run = ws.run.active;
@@ -176,6 +190,13 @@ export function AgentPicture({ onClose = null, guideSpeaks = false }: AgentPictu
     () => playBlocks(ground, summaries, { seen, looks: looks ?? undefined, found: foundShown }),
     [ground, summaries, seen, looks, foundShown],
   );
+  const phone = useSyncExternalStore(watchPhone, isPhone, () => false);
+  const pages = phone ? Math.ceil(blocks.length / PER_PAGE) : 1;
+  const [page, setPage] = useState(0);
+  const pageAt = Math.min(page, Math.max(0, pages - 1));
+  const shownBlocks = useMemo(() => (pages > 1 ? blocks.slice(pageAt * PER_PAGE, pageAt * PER_PAGE + PER_PAGE) : blocks), [blocks, pages, pageAt]);
+  const nextAt = (pageAt + 1) % Math.max(1, pages);
+  const nextNames = blocks.slice(nextAt * PER_PAGE, nextAt * PER_PAGE + PER_PAGE).map((b) => summaries.find((p) => p.id === b.id)?.name ?? b.id);
 
   const line = !real
     ? PLAYERS_WORDS.noFire
@@ -254,7 +275,7 @@ export function AgentPicture({ onClose = null, guideSpeaks = false }: AgentPictu
       ) : (
         <Suspense fallback={null}>
           <ComparePlane
-            blocks={blocks}
+            blocks={shownBlocks}
             labelSpace={UNDER_BLOCK}
             perRow="fit"
             ariaLabel={PLAYERS_WORDS.name}
@@ -270,6 +291,11 @@ export function AgentPicture({ onClose = null, guideSpeaks = false }: AgentPictu
       <div className="agent-picture__foot">
         {!line && !guideSpeaks && <span className="sys-fine agent-picture__legend">{PLAYERS_WORDS.legend(foundShown)}</span>}
         <span className="agent-picture__acts">
+          {!line && pages > 1 && (
+            <button type="button" className="agent-act agent-picture__pager" onClick={() => setPage(nextAt)}>
+              {nextAt === 0 ? PLAYERS_WORDS.firstPlayers(nextNames) : PLAYERS_WORDS.nextPlayers(nextNames)}
+            </button>
+          )}
           {canReveal && !guideSpeaks && (
             <button type="button" className="agent-act" onClick={() => setAsked(true)}>
               {PLAYERS_WORDS.reveal}
