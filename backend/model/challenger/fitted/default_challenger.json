@@ -1,0 +1,14 @@
+{
+  "default_variant": "gbdt",
+  "default_method": "challenger_gbdt",
+  "bundle_file": "challenger_gbdt.json",
+  "selection_rule": "chosen on SPLIT.md validation fires by lexicographic order: (1) most scores ahead of both baselines under 2000-fire bootstrap at 0.90, (2) fewest scores behind either baseline, (3) most scores ahead of reconstruction directly, (4) highest mean of strict 375 m CSI and 1-cell tolerant CSI",
+  "validation_summary": {
+    "ahead_of_both_baselines": 6,
+    "tied_with_baselines": 1,
+    "behind_baselines": 0,
+    "ahead_of_reconstruction": 6,
+    "tied_with_reconstruction": 0,
+    "behind_reconstruction": 1
+  }
+}
