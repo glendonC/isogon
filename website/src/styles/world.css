@@ -1403,3 +1403,10 @@
   font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
   color: var(--sys-ink-3);
 }
+
+/* A group of the test with no fire in it says so across its three columns. */
+.world-tests__empty {
+  grid-column: 3 / -1;
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}

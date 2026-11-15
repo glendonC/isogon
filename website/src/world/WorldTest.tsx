@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { count } from '../guide/formats';
+import { listAnd } from './words';
 import { countryAt } from './countryAt';
 import { parseFresh, type FreshFire, type FreshLook, type Group } from './freshTest';
 import { useRead } from './read';
@@ -33,27 +34,35 @@ export const TEST_WORDS = {
   filmLevel: 'level',
   filmBehind: 'behind',
   filmOver: (of: number, fires: number) => `of the ${of} scores, over all ${fires} fires`,
-  title: (fires: number, groups: number) => `${count(fires)} fires in ${count(groups)} continents. Each square is one fire.`,
-  held: (stated: number, held: number, looks: number) =>
-    `Its stated ${Math.round(stated * 100)} percent interval held on ${Math.round(held * 100)} percent of the ${count(looks)} looks.`,
+  // The panel in the product lane's words (WORDS-wider.json version 6, world_pictures, test_across_world.panel; WORDS-2).
+  title: (fires: number, groups: number) =>
+    `${count(fires)} fires on ${count(groups)} continents, chosen by a rule before any was looked at. Each square is one fire.`,
+  held: (stated: number, held: number, passes: number) =>
+    `The range it states for each hidden pass's total heat held on ${Math.round(held * 100)} percent of the ${count(passes)} passes, ${
+      Math.round(held * 100) < Math.round(stated * 100) ? `short of the ${Math.round(stated * 100)} percent it claims` : 'as it claims'
+    }.`,
   byContinent: 'By continent',
-  byZone: 'By zone',
-  zoneNote: 'A zone is a band of latitude standing in for the kind of land that burns; no map of fuel is read.',
+  byZone: 'By band of latitude',
+  zoneNote: 'The bands are cut by latitude alone; no map of what grows there was read.',
+  emptyGroup: 'No fire of this test, so it says nothing here.',
   all: 'Every fire',
   fires: (n: number | null) => (n === null ? '' : n === 1 ? '1 fire' : `${count(n)} fires`),
-  classes: (a: number, t: number, b: number) => `${a} ahead, ${t} tied, ${b} behind`,
+  classes: (a: number, t: number, b: number) => `${a} ahead, ${t} level, ${b} behind`,
   head: 'Fires, from fewest scores won to most',
   headAhead: 'Ahead',
-  headTied: 'Tied',
+  headTied: 'Level',
   headBehind: 'Behind',
   classesKey: (judged: number) =>
-    `A square is filled by how many of the ${judged} scores the estimate won against both simple methods on that fire: full is all, empty is none. Beside each group, its ${judged} scores judged with an interval (its fires drawn again 2,000 times): ahead, tied or behind.`,
+    `A square is filled by how many of the ${judged} scores the estimate won against both simple methods on that fire: full is all, empty is none. Beside each group, its ${judged} scores: ahead or behind only where the gap is too large to be luck, level where it is not.`,
   notScored: (n: number) => (n === 1 ? 'One fire of the plan could not be scored; the reason is in the record.' : `${n} fires of the plan could not be scored; the reasons are in the record.`),
-  kept: (xs: string[]) => `Kept as the test in 2021, shown as recorded and never scored again: ${xs.join(', ')}.`,
+  kept: (xs: string[]) => `The three fires kept as the first test stand as recorded and are never scored again: ${listAnd(xs)}.`,
   keptFire: (name: string, a: number, of: number) => `${name} ${a} of ${of}`,
   ahead: (a: number, of: number) => `Ahead of both simple methods on ${a} of ${of} scores`,
-  looks: (n: number) => `Scored on ${n} passes of the sharp satellite`,
-  zones: { tropical: 'Tropical', subtropical: 'Subtropical', temperate: 'Temperate', boreal: 'Boreal' } as Record<string, string>,
+  fireLine: (year: string | null, continent: string | null, won: number, of: number, passes: number | null) =>
+    `A fire of ${year ?? 'the test'}${continent ? ` in ${continent}` : ''}: it won ${won} of ${of} scores against both simple methods${
+      passes !== null ? `, over ${passes} hidden passes` : ''
+    }.`,
+  zones: { tropical: 'Tropics', subtropical: 'Subtropics', temperate: 'Middle latitudes', boreal: 'High latitudes' } as Record<string, string>,
 };
 
 const ZONE_ORDER = ['tropical', 'subtropical', 'temperate', 'boreal'];
@@ -203,7 +212,7 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom }: {
                   data-dim={dim ? 'true' : 'false'}
                   data-open={open === f.key ? 'true' : 'false'}
                   style={{ left: x, top: y, ...fill(f.ahead, f.judged) }}
-                  aria-label={`${countryAt(...centre(f.box!)) ?? f.continent ?? ''} ${f.year ?? ''}: ${TEST_WORDS.ahead(f.ahead, f.judged)}`}
+                  aria-label={`${countryAt(...centre(f.box!)) ?? f.continent ?? ''}. ${TEST_WORDS.fireLine(f.year, f.continent, f.ahead, f.judged, f.looks)}`}
                   onClick={() => setOpen((o) => (o === f.key ? null : f.key))}
                 />
               );
@@ -219,9 +228,8 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom }: {
                 return (
                   <div data-world-ui className="world-card sys-plate" style={right ? { left: x + 18, top: Math.max(12, y - 30) } : { right: p.w - x + 18, top: Math.max(12, y - 30) }}>
                     <div className="world-card__title">{where || f.key}</div>
-                    <div className="world-board__sub">{[f.continent, f.zone ? TEST_WORDS.zones[f.zone] ?? f.zone : null].filter(Boolean).join(', ')}</div>
-                    <div className="world-card__line">{TEST_WORDS.ahead(f.ahead, f.judged)}</div>
-                    {f.looks !== null && <div className="world-board__sub">{TEST_WORDS.looks(f.looks)}</div>}
+                    <div className="world-card__line">{TEST_WORDS.fireLine(f.year, f.continent, f.ahead, f.judged, f.looks)}</div>
+                    {f.zone && <div className="world-board__sub">{TEST_WORDS.zones[f.zone] ?? f.zone}</div>}
                   </div>
                 );
               })()}
@@ -319,7 +327,7 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom }: {
                         <span key={f.key} className="world-gauge world-gauge--mini" style={fill(f.ahead, f.judged)} />
                       ))}
                     </span>
-                    {cls(g.classes)}
+                    {(g.fires ?? mine.length) === 0 ? <span className="world-tests__empty">{TEST_WORDS.emptyGroup}</span> : cls(g.classes)}
                   </li>
                 );
               })}

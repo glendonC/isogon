@@ -71,8 +71,9 @@ const YEARS_VIEW: Box = [-170, -44, 180, 74];
 
 // A pass through the years lasts about six seconds: the coarse years quickly, 2012 long enough to read its sentence.
 const beat = (year: number) => (year < SHARP_FROM ? 170 : year === SHARP_FROM ? 1500 : 190);
-// A short pass (the film's 2010 to 2012) gives each year time to be seen before the last.
-const SHORT_BEAT = 500;
+// A short pass (the film's 2010 to 2012) gives each year time to be seen, and rests about a second on the year before
+// the step (2011), so the Earth before the sharper satellite is seen before it brightens.
+const shortBeat = (year: number) => (year === SHARP_FROM - 1 ? 1100 : 600);
 
 /** The years named under the strip: the one on show first, then 2012, the ends and every fifth, none closer than 44 px. */
 function axisYears(years: number[], shown: number, width: number): number[] {
@@ -207,7 +208,7 @@ export function EarthYears({
         return;
       }
       setYear(years[at + 1]);
-    }, short ? SHORT_BEAT : beat(shown));
+    }, short ? shortBeat(shown) : beat(shown));
     return () => window.clearTimeout(t);
   }, [playing, shown, years, have, ready, lastOfPass, short]);
 
