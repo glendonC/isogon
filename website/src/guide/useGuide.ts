@@ -226,10 +226,12 @@ export function useGuide(
   } else if (ws.test.hidden && !ws.test.loading) id = 'hidden';
   else id = 'loading';
 
-  // The state's own pass: moving away from it is "another pass".
+  // The state's own pass: moving away from it is "another pass". Estimate's sentence is always the one for the kind
+  // of pass on show: on a pass of the coarse satellite there are no white frames to name, from the first moment.
   const key = `${step}:${id}:${ws.run.realStart}`;
   if (entry.current.key !== key) entry.current = { key, pass: ws.time.pass };
-  if (ws.time.pass !== entry.current.pass) {
+  if (id === 'hidden' && conds.pass_is_sharp === false) id = 'on_a_coarse_pass';
+  else if (ws.time.pass !== entry.current.pass) {
     if (id === 'hidden') id = conds.pass_is_sharp ? 'on_a_hidden_pass' : 'on_a_coarse_pass';
     else if (id === 'revealed') id = 'on_another_pass';
   }
