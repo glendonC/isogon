@@ -80,7 +80,8 @@ quarter degree in the fire cube; drawn by `backend/firms/cube_figure.py`.*
 ## Predictions sealed before the pass
 
 For fires burning now, the sealer predicts what VIIRS on NOAA-20 and NOAA-21 will detect on each coming pass, from MODIS
-detections alone. It writes the prediction down before the pass, with a SHA-256 fingerprint and the time.
+detections alone. It writes the prediction down before the pass, with a SHA-256 fingerprint and the time. What it seals
+is the occupancy filter's prediction beside the two baselines; the learned layer is not sealed.
 `data/live_seals.csv` is the seal log: the time sealed, the fingerprint, the fire, the satellite and the predicted time
 of the pass. A line is added as soon as a seal is made and a line already written is never changed. Only a seal that was
 pushed to the public repository before its pass has a public timestamp; the time in the log is the sealer's own clock.
@@ -99,6 +100,9 @@ judged.
   Earth's picture.
 - **Elevation and imagery**: Terrain Tiles on AWS Open Data; USGS The National Map, EOxCloudless and Esri World
   Imagery, each with its credit and terms in [`docs/sources.md`](docs/sources.md).
+
+The public page has no server. It replays answers recorded from the backend, and computes a held-out run and a round of
+the game in the visitor's own browser, by the backend's Python compiled to WebAssembly (`backend/browser.py`).
 
 The backend is a Python standard library server with two packages beside it, `numpy` and `Pillow`, and no database;
 [`docs/architecture.md`](docs/architecture.md) gives every module and route, with a key to the shapes and colours, and this is its data flow in short:
