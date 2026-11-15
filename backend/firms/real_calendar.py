@@ -393,12 +393,19 @@ def leave_one_year_out(pairs: list[tuple[int, float, float]]) -> dict[str, Any]:
     }
 
 
-def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, Any]:
-    """The /api/calendar payload for ``source=firms`` and a region."""
+def firms_calendar(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR, use_pack: bool = True) -> dict[str, Any]:
+    """The /api/calendar payload for ``source=firms`` and a region. Where the place's extracts are not all there
+    and its calendar file is (``backend/firms/calendar_pack.py``, made at build time), the answer is that file's."""
     from backend.terrain.live_region import PRESET_BY_ID
 
     if region_id not in REGION_COUNTRY:
         raise KeyError(f"no FIRMS rows for region '{region_id}'; regions with rows: {sorted(REGION_COUNTRY)}")
+    if use_pack:
+        from backend.firms.calendar_pack import serve
+
+        packed = serve(region_id, cache_dir)
+        if packed is not None:
+            return packed
     box = region_box(region_id)
     if not (cache_dir / "extract" / region_id).is_dir():
         raise KeyError(f"no FIRMS rows cached for '{region_id}'")
