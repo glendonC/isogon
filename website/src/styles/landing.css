@@ -481,17 +481,12 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: 112px;
-  background: linear-gradient(to top, rgba(5, 7, 12, 0.96) 76px, rgba(5, 7, 12, 0));
+  height: 64px;
+  background: linear-gradient(to top, rgba(5, 7, 12, 0.96) 44px, rgba(5, 7, 12, 0));
 }
 
 :root.iso-playing .world-screen {
-  bottom: 76px;
-}
-
-/* The shot's caption (the guide's title in the film presentation) stands above the band. */
-:root.iso-playing .iso-ws .guide-strip {
-  bottom: 104px;
+  bottom: 64px;
 }
 
 .iso-play-stop {
