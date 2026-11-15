@@ -311,6 +311,8 @@ export function App() {
       const closed =
         asked.source === 'firms' && Boolean(asked.start) && Boolean(asked.regionId) && hideRefused(asked.regionId ?? '', asked.start ?? null);
       const params = closed && (asked.holdoutViirs || asked.reveal) ? { ...asked, holdoutViirs: false, reveal: false } : asked;
+      // Nothing simulated is ever asked for: a run is a place's real rows from a start, or nothing.
+      if (params.source !== 'firms' || !params.start || !params.regionId) return false;
       const seq = ++requestSeqRef.current;
       requestAbortRef.current?.abort();
       const controller = new AbortController();
@@ -335,15 +337,7 @@ export function App() {
 
       try {
         // A real run's body comes from the one builder in the client (contract item 20), so a recorded page finds it.
-        // A simulated run keeps its own keys: a synthetic cloud deck, a searched place.
-        let body: Record<string, unknown>;
-        if (realStartParam && params.regionId) {
-          body = { ...runRequestBody(params.regionId, realStartParam, params.holdoutViirs ? 'VIIRS' : null, Boolean(params.reveal)) };
-        } else {
-          body = { holdout_viirs: params.holdoutViirs, cloud_override: params.cloudOverride };
-          if (params.regionId) body.region_id = params.regionId;
-          if (params.queryText) body.query_text = params.queryText;
-        }
+        const body = { ...runRequestBody(params.regionId, params.start, params.holdoutViirs ? 'VIIRS' : null, Boolean(params.reveal)) };
         const runData = await postJson<DynamicRegionRun>('/api/reconstruct', body, { signal: controller.signal });
         if (stale()) return false;
         // Nothing simulated on the real path: a simulated answer to a FIRMS request is refused, not shown.
@@ -415,14 +409,19 @@ export function App() {
 
   const cycleNextTheaterSlew = useCallback(() => {
     // The next place with a fire to open, in the registry's order (the typed catalogue's until the registry has answered).
+    // Never a typed region the registry does not serve: those have no real record, only a simulated fire.
     const withFires = placesRef.current.places.places.filter((p) => p.featured_fires.some((f) => f.default_start));
-    const ids = placesRef.current.state === 'ready' && withFires.length > 0 ? withFires.map((p) => p.id) : THEATER_CATALOG.map((t) => t.id);
+    if (placesRef.current.state !== 'ready' || withFires.length === 0) return;
+    const ids = withFires.map((p) => p.id);
     const idx = ids.indexOf(activeTheaterId);
-    slewToTheater(ids[(idx + 1) % ids.length]);
+    slewToTheater(ids[(idx + 1) % ids.length] as TheaterId);
   }, [activeTheaterId, slewToTheater]);
 
   const handleCinemaStepTheater = useCallback(
     (nextTheaterId: TheaterId) => {
+      // The tour steps only to places with a real fire record: never a simulated region.
+      const real = placesRef.current.places.places.some((p) => p.id === nextTheaterId && p.featured_fires.some((f) => f.default_start));
+      if (!real) return;
       setActiveTheaterId(nextTheaterId);
       if (activeRun?.region.id !== nextTheaterId) askRegion(nextTheaterId);
     },
@@ -499,8 +498,7 @@ export function App() {
   const calendarRegionId = regionAsk?.id ?? activeRun?.region.id ?? activeTheaterId;
   const calendar = useCalendar(API_BASE, calendarRegionId);
 
-  // Real is the default: a region with real run starts opens on its default start; one without real rows opens on a
-  // simulated run, labelled as such. Each ask is handled once, after its calendar is in.
+  // A region with real run starts opens on its default start. Each ask is handled once, after its calendar is in.
   const handledAskRef = useRef<string | null>(null);
   useEffect(() => {
     if (!regionAsk) return;
@@ -527,12 +525,9 @@ export function App() {
         source: 'firms',
         start: opening,
       });
-    } else if (calendar.cal?.simulated && (activeRun?.region.id !== regionAsk.id || isRealRun(activeRun))) {
-      // Only a place with no real rows opens on a simulated run; a real place without a start from the registry opens
-      // nothing new.
-      void executeWorldModel({ regionId: regionAsk.id, holdoutViirs: false, cloudOverride, enterWorkspace: false });
     }
-  }, [regionAsk, calendar, placesState, activeRun, realStart, cloudOverride, executeWorldModel, inWorkspace, hideRefused]);
+    // A place with no real rows, or without a start from the registry, opens nothing new: never a simulated run.
+  }, [regionAsk, calendar, placesState, activeRun, realStart, executeWorldModel, inWorkspace, hideRefused]);
 
   /** Selecting a month that has a real run requests it; the stage replays whatever comes back. */
   const handleSelectMonth = useCallback(
@@ -1381,6 +1376,22 @@ export function App() {
   /** World model on a real run: in place on the terrain (beats/world-model/WorldModelScene.tsx), no column. */
   const modelScene = inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen;
 
+  // What search offers: the registry's places with a real fire to open, under the registry's names.
+  const palettePlaces = placesState.places.places
+    .filter((p) => p.featured_fires.some((f) => f.default_start))
+    .map((p) => {
+      const fires = p.featured_fires.filter((f) => f.default_start).map((f) => f.label);
+      const box = p.box as readonly number[];
+      return {
+        id: p.id,
+        title: p.name,
+        sub: fires.join(', '),
+        note: `Fires on record here: ${fires.join(', ')}.`,
+        lat: box.length === 4 ? (box[1] + box[3]) / 2 : null,
+        lon: box.length === 4 ? (box[0] + box[2]) / 2 : null,
+      };
+    });
+
   // The landing's words: the script's start step for the fire on show (its place, its month, its name where an agency
   // list names it), loading and failure as the script says them.
   const landingLines = (() => {
@@ -1588,6 +1599,7 @@ export function App() {
         isExecuting={isExecuting}
         errorMessage={execError}
         onExecute={handlePaletteExecute}
+        places={palettePlaces}
       />
 
       <AreaSheet

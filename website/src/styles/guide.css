@@ -633,3 +633,12 @@
   font: 600 var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
   color: var(--sys-ink);
 }
+
+/* Search when no place with a real fire record matches what was typed. */
+.iso-finder__none {
+  margin: 0;
+  padding: 20px 24px;
+  color: var(--sys-ink-2);
+  font-size: 14px;
+  line-height: 21px;
+}
