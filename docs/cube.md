@@ -112,6 +112,22 @@ A box is answered on whole cells. By default it takes every cell it touches (`ho
 left out and rows near it come in; `how="inner"` takes only the cells wholly inside it. The answer gives the box on
 the grid beside the box asked for.
 
+## Routes
+
+`backend/server_cube.py` answers these (`cube_route(route, query)`), mounted in the main server or run alone:
+
+| Route | Answer |
+| --- | --- |
+| `GET /api/cube/record?box=w,s,e,n[&snap=outer\|inner]` | the Record of the box in the shape of `GET /api/calendar?source=firms&box=` (records with `raw_counts` per platform, the harmonization and its held-out check, the annual summary, the month medians), with `frp_mw`, `frp_mw_day` and `frp_mw_night` in each platform's counts and a `cube` block: the build, the box on the grid, the cells and how many are loaded, the countries, `world_complete`, the read time |
+| `GET /api/cube/tables?box=w,s,e,n[&snap=outer\|inner]` | the box's tables as lists: rows and fire radiative power by month, platform, day and night and kind; fire rows by scan class and by confidence class; delivering months and outage days per month |
+| `GET /api/cube/countries` | the countries loaded in the cube and not, and the download's progress |
+| `GET /api/cube/layers`, `GET /api/cube/layers/<name>.png`, `.npy` | the world layers |
+
+A box takes the same limits as the box calendar (at most 20 degrees each way). A box in which no loaded country file
+has a row answers 404 with `"state": "not_loaded"`, never a record of zeros. The outage days of a cube Record are
+the rule over every country loaded in the cube, so they can differ from the box calendar's, which applies it over
+the countries of the repository cache.
+
 ## Building
 
 ```bash
