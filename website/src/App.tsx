@@ -1268,7 +1268,9 @@ export function App() {
   });
   // The start card shows on a step's first screen until the visitor acts there.
   const cardKey = `${guideBase.step}:${realStart}`;
-  const cardShown = guideBase.card !== null && !cardsDone.includes(cardKey);
+  // Only in the workspace: on the landing the guide already reads the held-out run as Estimate's, and the landing's
+  // Enter must not fold a card nobody has seen.
+  const cardShown = inWorkspace && guideBase.card !== null && !cardsDone.includes(cardKey);
   const guide = cardShown ? guideBase : { ...guideBase, card: null };
   // Any key or press folds the start card back: the visitor has acted.
   useEffect(() => {
