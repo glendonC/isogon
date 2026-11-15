@@ -111,6 +111,17 @@ class SwitchOnTests(unittest.TestCase):
         for cp in (0x2014, 0x2013, 0x00B7):
             self.assertNotIn(chr(cp), field["words"] + field["the_rest"])
 
+    def test_a_blend_is_named_by_the_models_it_gives_weight_to(self) -> None:
+        from backend.model.challenger import FITTED_DIR, VARIANT_FILES
+
+        weights = json.loads((FITTED_DIR / VARIANT_FILES["blend"]).read_text())["stacker"]["weights"]
+        words = RR.challenger_words("blend")
+        self.assertTrue(words.startswith("a blend of "))
+        for variant, w in zip(RR.BLEND_ORDER, weights):
+            self.assertEqual(RR.CHALLENGER_WORDS[variant] in words, float(w) != 0.0, (variant, w, words))
+        self.assertEqual(RR.challenger_words("gbdt"), "boosted decision trees")
+        self.assertEqual(words.count(" and "), 1)
+
     def test_a_run_answered_by_the_challenger_has_an_id_of_its_own(self) -> None:
         self.assertNotEqual(self.on.run_id, self.off.run_id)
         self.assertTrue(self.on.run_id.endswith(self.name))

@@ -94,9 +94,25 @@ def run_estimate(given: str | None = None) -> str:
 
 # The kind of model each challenger is, in words a page can say.
 CHALLENGER_WORDS: dict[str, str] = {
-    "gbdt": "boosted decision trees", "mlp": "a small neural network", "blend": "a blend of three models",
-    "logistic": "a logistic model",
+    "gbdt": "boosted decision trees", "mlp": "a small neural network", "logistic": "a logistic model",
 }
+# The order in which a blend combines the other challengers (backend/model/challenger/methods.py).
+BLEND_ORDER: tuple[str, ...] = ("logistic", "mlp", "gbdt")
+
+
+def challenger_words(variant: str) -> str:
+    """What kind of model a challenger is, in words a page can say. A blend is named by the models it gives
+    weight to (any weight but zero), read from its bundle, so a part weighted zero is not said."""
+    if variant != "blend":
+        return CHALLENGER_WORDS.get(variant, "a challenger model")
+    from backend.model.challenger import FITTED_DIR as CHALLENGER_DIR, VARIANT_FILES
+
+    doc = json.loads((CHALLENGER_DIR / VARIANT_FILES["blend"]).read_text(encoding="utf-8"))
+    weights = [float(w) for w in doc["stacker"]["weights"]]
+    parts = [CHALLENGER_WORDS[v] for v, w in zip(BLEND_ORDER, weights) if w != 0.0]
+    if not parts:
+        return "a blend of models"
+    return "a blend of " + (parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1])
 
 
 def answering_estimate(headline: str) -> dict[str, Any]:
@@ -104,7 +120,7 @@ def answering_estimate(headline: str) -> dict[str, Any]:
     if headline == "reconstruction":
         return {"method": "reconstruction", "words": "the estimate in use", "switch": RUN_ESTIMATE_ENV,
                 "switch_is": ESTIMATE_IN_USE}
-    kind = CHALLENGER_WORDS.get(headline.removeprefix("challenger_"), "a challenger model")
+    kind = challenger_words(headline.removeprefix("challenger_"))
     return {"method": headline,
             "words": f"a challenger model ({kind}) chosen on fires it was not fitted on, in place of the estimate in use",
             "switch": RUN_ESTIMATE_ENV, "switch_is": ESTIMATE_CHALLENGER,
