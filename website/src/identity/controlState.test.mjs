@@ -7,7 +7,7 @@ import {
   controlSound,
   defaultIcon,
   setControlSound,
-} from './control.ts';
+} from './controlState.ts';
 
 test('every control carries the one swap class and its variant', () => {
   assert.equal(controlClass({ variant: 'primary' }), `${CONTROL_CLASS} ${CONTROL_CLASS}--primary`);

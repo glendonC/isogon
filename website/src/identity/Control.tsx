@@ -6,7 +6,7 @@ import {
   defaultIcon,
   type ControlIcon,
   type ControlVariant,
-} from './control.ts';
+} from './controlState.ts';
 import './identity.css';
 
 function Icon({ name }: { name: ControlIcon }) {
