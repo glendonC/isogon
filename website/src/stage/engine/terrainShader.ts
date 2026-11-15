@@ -737,7 +737,10 @@ void main() {
   // Rendering treatment only. It appears when the imagery is magnified past its own resolution.
   float texelKm = mix(uOrthoTexelKm, uDetailTexelKm, insetWeight);
   // (none on a stand-in: its picture is coarse, and close to it the drawn texture aliases into waves)
-  float detailFade = smoothstep(1.6, 0.45, kmPerPx / max(texelKm, 1e-5)) * (1.0 - waterMask) * uMicroDetail;
+  // and only where a pixel is under about half a crown (crowns are 14 to 22 m): on a coarse picture
+  // the imagery is magnified at distances where the drawn crowns would be a pixel's stipple
+  float detailResolves = 1.0 - smoothstep(0.006, 0.014, kmPerPx);
+  float detailFade = smoothstep(1.6, 0.45, kmPerPx / max(texelKm, 1e-5)) * detailResolves * (1.0 - waterMask) * uMicroDetail;
   float rockMask = smoothstep(0.50, 1.05, trueSlope) * (1.0 - 0.75 * canopyK);
   float canopyMask = smoothstep(0.30, 0.75, canopyK) * (1.0 - smoothstep(0.9, 1.6, trueSlope));
   // On walls the imagery keeps only its color (see sampleOrtho), so the rock texture is drawn there
