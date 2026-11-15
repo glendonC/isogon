@@ -12,8 +12,9 @@ the registry of places when this plan is made, of a region the fresh test's plan
 of one of the three first regions. The three first regions hold the three closed 2021 test fires and the
 environment's episodes on them, so no place of test C meets them.
 
-The years are 2023, 2024 and 2025. Every episode the fresh test read is of 2018 to 2022, and its rows step kept rows
-of the chosen episodes and counted months at the chosen places only, so no row of a test C place was kept by it.
+The years are 2023, 2024 and 2025. Every episode the fresh test read at its own places is of 2018 to 2022, the other
+episodes its refit read lie in the three first regions, and its rows step kept rows of the chosen episodes and
+counted months at the chosen places only, so no row of a test C place was kept by it.
 
 The episodes, by the fresh test's rule in use from MODIS rows alone: `find_episodes` with its defaults at each place
 and year; per place the busiest episode of each year, of those the two busiest (`fresh_test.per_place`); per
