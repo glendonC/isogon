@@ -77,7 +77,7 @@ export function rampAt(ramp: Array<[number, [number, number, number]]>, t: numbe
   return ramp[ramp.length - 1][1];
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -131,6 +131,19 @@ export async function readLayer(base: string, name: string, index: LayersIndex):
   loaded.height = rows;
   loaded.getContext('2d')!.putImageData(land, 0, 0);
   return { name, meta, image, loaded, values, loadedCells };
+}
+
+/** The pixels of an image on the cube's grid (1440 by 720), from an address the site's client resolves. */
+export async function gridPixels(address: string): Promise<Uint8ClampedArray> {
+  const src = await assetUrl(address);
+  if (!src) throw new Error(`${address} is not recorded`);
+  const img = await loadImage(src);
+  const c = document.createElement('canvas');
+  c.width = GRID.cols;
+  c.height = GRID.rows;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(img, 0, 0, GRID.cols, GRID.rows);
+  return g.getImageData(0, 0, GRID.cols, GRID.rows).data;
 }
 
 /** The cell under a longitude and latitude, or null off the grid. */

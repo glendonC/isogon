@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FeaturedFire, Place } from '../app/places';
-import { factorCanvas, factorCellAt, FACTOR_HIGH, FACTOR_LOW, FACTOR_RAMP, FACTOR_STEPS, factorT, useFactor } from './factor';
+import { factorAt, factorCanvas, FACTOR_HIGH, FACTOR_LOW, FACTOR_RAMP, FACTOR_STEPS, factorT, useFactor } from './factor';
 import { placeLabels } from './labels';
 import { cellAt, FIRE_RAMP, GRID, loadedShare, NOT_LOADED, rampAt, tOfValue, useWorldLayer } from './layers';
 import { boxAreaKm2, type Box, type Projector } from './projection';
@@ -21,7 +21,7 @@ export interface ChooseOnEarthProps {
   layers: string;
   /** The layer of where fire is detected; the coarse satellite over every month by default. */
   layer?: string;
-  /** Address of the factor between the satellites, place by place; the second layer is offered only with it. */
+  /** Address of the harmonize maps' index (`maps.json` or its route); the second layer is offered only with it. */
   factor?: string | null;
   /** The places of the registry; those with featured fires are marked. */
   places: Place[];
@@ -108,13 +108,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
     const out: GridLayer[] = [{ key: 'loaded', image: world.layer.loaded, onLand: true, crispFromPx: 2 }];
     if (mode === 'fire') out.push({ key: 'fire', image: world.layer.image, halo: true });
     else if (fac.state === 'ready') {
-      const g = fac.map.grid;
-      out.push({
-        key: 'factor',
-        image: factorCanvas(fac.map, (t) => rampAt(FACTOR_RAMP, t)),
-        extent: [g.west, g.north - g.rows * g.step, g.west + g.cols * g.step, g.north],
-        crispFromPx: 1,
-      });
+      out.push({ key: 'factor', image: factorCanvas(fac.map, (t) => rampAt(FACTOR_RAMP, t)), crispFromPx: 1 });
     }
     return out;
   }, [world, mode, fac]);
@@ -163,11 +157,11 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
     if (!hover || drawing || overMark || world.state !== 'ready') return null;
     if (mode === 'factor') {
       if (fac.state !== 'ready') return null;
-      const c = factorCellAt(fac.map, hover.lon, hover.lat);
+      const c = factorAt(fac.map, hover.lon, hover.lat);
       const cell = cellAt(hover.lon, hover.lat);
       if (!cell || world.layer.values[cell.row * GRID.cols + cell.col] === NOT_LOADED) return null;
       if (!c) return [W.atNoFactor];
-      return [W.atFactor(c.factor, c.viirsRows ?? null, c.modisRows ?? null), ...(c.heldOutError != null ? [W.atFactorError(c.heldOutError)] : [])];
+      return [W.atFactor(c.factor, c.end), ...(c.error !== null ? [W.atFactorError(c.error, c.errorEnd)] : [])];
     }
     const cell = cellAt(hover.lon, hover.lat);
     if (!cell) return null;
@@ -306,7 +300,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
       const m = fac.map;
       return (
         <>
-          <div className="world-legend__line">{W.factorLegend(m.years ?? '2012 to 2024', m.grid.step)}</div>
+          <div className="world-legend__line">{W.factorLegend(m.placeDeg)}</div>
           <div className="world-ramp" style={{ background: ramp(FACTOR_RAMP) }} />
           <div className="world-ticks">
             {FACTOR_STEPS.map((f) => (
@@ -315,8 +309,8 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
               </span>
             ))}
           </div>
-          <div className="world-legend__fine">{W.factorUnmeasured(m.minRows)}</div>
-          {m.madeFor && <div className="world-legend__fine world-legend__caution">{m.madeFor}</div>}
+          {m.median !== null && m.p10 !== null && m.p90 !== null && <div className="world-legend__fine">{W.factorSpread(m.median, m.p10, m.p90)}</div>}
+          <div className="world-legend__fine">{W.factorUnmeasured}</div>
         </>
       );
     }

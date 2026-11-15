@@ -59,3 +59,37 @@ export function cellValue(
   const t = invert(r, g, b);
   return { value: valueOfT(t, max), t };
 }
+
+/** A colour scale as the harmonize maps state it: stops from low to high, the ends, log or linear. */
+export interface StatedScale {
+  stops: string[];
+  vmin: number;
+  vmax: number;
+  log: boolean;
+}
+
+/** "#cde2fb" as [205, 226, 251]. */
+export const hexStops = (stops: string[]): number[][] =>
+  stops.map((h) => {
+    const x = h.replace('#', '');
+    return [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2, 4), 16), parseInt(x.slice(4, 6), 16)];
+  });
+
+export const scaleValue = (t: number, s: StatedScale) => (s.log ? s.vmin * Math.pow(s.vmax / s.vmin, t) : s.vmin + t * (s.vmax - s.vmin));
+
+/**
+ * One pixel of a map on a stated scale: transparent is no value (not loaded, or too few rows to say), never zero; a
+ * colour at either end of the scale may stand for any value beyond it, and says so.
+ */
+export function scaledCell(
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  invert: (r: number, g: number, b: number) => number,
+  scale: StatedScale,
+): { value: number; atLow: boolean; atHigh: boolean } {
+  if (a === 0) return { value: Number.NaN, atLow: false, atHigh: false };
+  const t = invert(r, g, b);
+  return { value: scaleValue(t, scale), atLow: t <= 0.004, atHigh: t >= 0.996 };
+}

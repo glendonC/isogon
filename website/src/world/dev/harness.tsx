@@ -58,7 +58,7 @@ function Earth() {
       <div style={Q.get('w') ? { position: 'absolute', left: 40, top: 160, width: Number(Q.get('w')), height: Number(Q.get('h') ?? 600) } : { position: 'absolute', inset: 0 }}>
       <ChooseOnEarth
         layers={Q.get('layers') ?? `${SAMPLE}/cube-layers/layers.json`}
-        factor={Q.get('factor') ?? `${SAMPLE}/world-factor.json`}
+        factor={Q.get('factor') ?? `${SAMPLE}/harmonize-maps/maps.json`}
         places={places.places}
         currentFire={places.default?.featured_fire ?? null}
         limits={places.boxCalendar}

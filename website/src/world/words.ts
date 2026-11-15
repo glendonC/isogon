@@ -40,11 +40,12 @@ export const EARTH_WORDS = {
   halo: 'The soft glow round the squares is drawing only.',
   fireLegendShort: (since: string | null) => `Coarse detections per 28 km square${since ? ` since ${since}` : ''}.`,
   hatchShort: (complete: boolean) => (complete ? 'Hatched: no detection there.' : 'Hatched: nothing loaded there yet, not no fire.'),
-  factorLegend: (years: string | null, step: number) =>
-    `Detections of the sharp satellite (VIIRS) for each one of the coarse satellite (MODIS)${years ? `, ${years}` : ''}, in squares of ${step} degrees.`,
+  factorLegend: (step: number | null) =>
+    `Detections of the sharp satellite (VIIRS) for each one of the coarse satellite (MODIS), over the months of 2012 to 2025 when both flew without a gap${step ? `, in squares of ${step} degrees` : ''}.`,
+  factorSpread: (median: number, p10: number, p90: number) =>
+    `The middle place: ${median.toFixed(1)} times. Eight places in ten lie between ${p10.toFixed(1)} and ${p90.toFixed(1)} times.`,
   factorTick: (f: number, low: number, high: number) => (f <= low ? `${f}× or less` : f >= high ? `${f}× or more` : `${f}×`),
-  factorUnmeasured: (minRows: number | null) =>
-    minRows ? `Not drawn where the coarse satellite made fewer than ${count(minRows)} detections.` : 'Not drawn where too few detections were made to measure.',
+  factorUnmeasured: 'Not drawn where too few detections were made to measure the factor.',
   factorLoading: 'Loading the factor between the two satellites.',
   factorFailed: 'The factor between the two satellites did not load. The map of detections is unchanged.',
   /** At the pointer. */
@@ -52,9 +53,10 @@ export const EARTH_WORDS = {
     `About ${roughly(v)} detections of the coarse satellite in this 28 km square${since ? ` since ${since}` : ''}`,
   atEmpty: (since: string | null) => `No detection of the coarse satellite in this square${since ? ` since ${since}` : ''}`,
   atNotLoaded: 'Not loaded: no file loaded so far holds a detection in this square',
-  atFactor: (f: number, v: number | null, m: number | null) =>
-    `Here the sharp satellite detects ${f.toFixed(1)} times as many${v !== null && m !== null ? `: ${count(v)} against ${count(m)}` : ''}`,
-  atFactorError: (e: number) => `On a year left out this factor was off by ${Math.round(e * 100)} percent`,
+  atFactor: (f: number, end: -1 | 0 | 1) =>
+    `Here the sharp satellite detects ${end === 1 ? `${Math.round(f)} times as many or more` : end === -1 ? `${f.toFixed(1)} times as many or fewer` : `${f.toFixed(1)} times as many`}`,
+  atFactorError: (e: number, end: -1 | 0 | 1) =>
+    `With this factor, a month of a year left out was off by ${end === 1 ? `${Math.round(e * 100)} percent or more` : `${Math.round(e * 100)} percent`} of what the sharp satellite saw`,
   atNoFactor: 'Too few detections here to measure the factor',
   /** The featured fires. */
   fireLabel: (name: string | null, place: string, year: string | null) => (name ? `${name}${year ? ` ${year}` : ''}` : place),

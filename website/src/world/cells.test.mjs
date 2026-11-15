@@ -3,7 +3,7 @@
 // close to what the cube encoded.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cellValue, inverter, NOT_LOADED, tOfValue } from './cells.ts';
+import { cellValue, hexStops, inverter, NOT_LOADED, scaledCell, tOfValue } from './cells.ts';
 
 // The cube's ramp, as its builder writes it (cube_build.RAMP) and its layers.json repeats.
 const RAMP = [
@@ -43,4 +43,45 @@ test('a value comes back from its colour within a few percent', () => {
     const back = cellValue(r, g, b, 255, inv, max).value;
     assert.ok(Math.abs(back - v) / v < 0.06, `${v} read back as ${back}`);
   }
+});
+
+// The harmonize maps: the factor on a log scale from 1 to 16, the held-out error on a linear scale from 0 to 1.
+const FACTOR = { stops: ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'], vmin: 1, vmax: 16, log: true };
+const ERROR = { stops: ['#fde4d6', '#f9bd9c', '#f39566', '#eb6834', '#c4501f', '#943b15', '#62270d'], vmin: 0, vmax: 1, log: false };
+
+function paint(v, s) {
+  const ramp = hexStops(s.stops);
+  const t0 = s.log ? Math.log(v / s.vmin) / Math.log(s.vmax / s.vmin) : (v - s.vmin) / (s.vmax - s.vmin);
+  const x = Math.min(Math.max(t0, 0), 1) * (ramp.length - 1);
+  const i = Math.min(Math.floor(x), ramp.length - 2);
+  const f = x - i;
+  return ramp[i].map((c, k) => Math.round(c * (1 - f) + ramp[i + 1][k] * f));
+}
+
+test('a place too small to measure reads no value, never zero', () => {
+  const c = scaledCell(0, 0, 0, 0, inverter(hexStops(FACTOR.stops)), FACTOR);
+  assert.ok(Number.isNaN(c.value));
+});
+
+test('a factor and an error come back from their colours', () => {
+  const fi = inverter(hexStops(FACTOR.stops));
+  for (const v of [1.6, 2.55, 3.97, 6.72, 12]) {
+    const [r, g, b] = paint(v, FACTOR);
+    const back = scaledCell(r, g, b, 255, fi, FACTOR).value;
+    assert.ok(Math.abs(back - v) / v < 0.05, `factor ${v} read back as ${back}`);
+  }
+  const ei = inverter(hexStops(ERROR.stops));
+  for (const v of [0.05, 0.18, 0.42, 0.77]) {
+    const [r, g, b] = paint(v, ERROR);
+    const back = scaledCell(r, g, b, 255, ei, ERROR).value;
+    assert.ok(Math.abs(back - v) < 0.02, `error ${v} read back as ${back}`);
+  }
+});
+
+test('a value beyond the top of its scale is flagged, so it is said as that much or more', () => {
+  const ei = inverter(hexStops(ERROR.stops));
+  const [r, g, b] = paint(1.31, ERROR);
+  const c = scaledCell(r, g, b, 255, ei, ERROR);
+  assert.equal(c.atHigh, true);
+  assert.ok(Math.abs(c.value - 1) < 1e-6);
 });
