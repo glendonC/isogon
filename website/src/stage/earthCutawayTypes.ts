@@ -73,6 +73,18 @@ export interface EarthStageTelemetry {
    * are not listed. Absent when nothing is missing.
    */
   missingFiles?: StageMissingFile[];
+  /**
+   * While `dayPicture` is asked for: the photograph on show (or being fetched, or missing), its
+   * satellite as the backend names it, its kind and its UTC day, and whether it stands in for a
+   * hidden satellite's own (then it is Aqua's).
+   */
+  dayPicture?: {
+    state: 'loading' | 'shown' | 'missing';
+    platform: string;
+    kind: 'true_color' | 'false_color';
+    day: string;
+    insteadOfHidden: boolean;
+  };
   /** The film's camera move running, and how far through it is (0 to 1; 1 holds the last pose). */
   film?: { move: StageFilmMove; progress: number };
   /** Vertical exaggeration of the relief (one value for every region). */
@@ -302,6 +314,16 @@ export interface EarthCutawayStageProps {
    * pass and the dotted line around ground that may burn.
    */
   chanceSquares?: boolean;
+  /**
+   * Real runs, in the workspace. Lays NASA's photograph of the box for the UTC day of the pass on
+   * show on the ground in place of the box's own picture: the daily true-colour or false-colour
+   * (MODIS bands 7, 2, 1: burned ground brown, fire red) composite of daytime swaths, from the
+   * backend's `/api/gibs/day`. The satellite is that of the pass on show; on a pass whose
+   * detections are hidden, Aqua's (the coarse satellite), never the hidden satellite's. While
+   * it is shown the ground is drawn by day. `telemetry.dayPicture` says which photograph is on
+   * show. Off by default.
+   */
+  dayPicture?: 'true_color' | 'false_color' | null;
   /**
    * Runs a camera move for the film. Each move is a function of the time since it began, aimed
    * from the fire on show and the presets, so it is the same every time it runs; it starts when

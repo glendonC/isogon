@@ -337,6 +337,16 @@ function lakesFromLevel(bundle: CachedTheaterBundle): boolean {
   return bundle.levelIsWater;
 }
 
+/** The platform name the backend's day pictures use, from a pass's sensor label, or null. */
+function dayPicturePlatform(sensorLabel: string): string | null {
+  const s = sensorLabel.toUpperCase();
+  if (s.includes('TERRA')) return 'MODIS_TERRA';
+  if (s.includes('AQUA')) return 'MODIS_AQUA';
+  if (s.includes('NOAA20') || s.includes('NOAA-20') || s.includes('JPSS')) return 'VIIRS_NOAA20';
+  if (s.includes('SNPP') || s.includes('NPP')) return 'VIIRS_SNPP';
+  return null;
+}
+
 /** The page address's `film` parameter, when it names a film move (see the prop `filmMove`). */
 function filmFromAddress(): StageFilmMove | 'auto' | null {
   if (typeof window === 'undefined') return null;
@@ -1052,6 +1062,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const lightRange = new THREE.Vector2(0.02, 1.0);
     const uLightModis = { value: 0.0 };
     const uRevealed = new THREE.Vector2(0, 0);
+    // The day's photograph of the box (prop dayPicture): textures by address, and the one on show
+    const dayTextures = new Map<string, THREE.Texture | 'loading' | 'missing'>();
+    let dayApplied = false;
+    let dayNow: EarthStageTelemetry['dayPicture'];
     // The front behind which detections laid on after scoring arrive (see uRevealArrive)
     const uRevealArrive = new THREE.Vector4(0, 1, 1e4, 0.4);
     let revealArriveFrom = 0;
@@ -2834,7 +2848,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       );
       terrainUniforms.uDetailMix.value = THREE.MathUtils.lerp(
         terrainUniforms.uDetailMix.value,
-        nextBundle.detailTex ? 1.0 : 0.0,
+        nextBundle.detailTex && !dayApplied ? 1.0 : 0.0,
         dampMed,
       );
 
@@ -3531,7 +3545,64 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       // A stand-in (the ground of a place whose run has not answered) is drawn by night: the first
       // pass a landing rests on is a night pass, so the fire's lights come up on ground that is
       // already dark, and the stand-in's coarse picture of the ground is not put on show by day
-      const nightTarget = (realRun && rawPasses[0]?.isDay === false) || nextBundle.runId === null ? 1.0 : 0.0;
+      // The day's photograph of the box, when asked for: the UTC day of the pass on show, that pass's
+      // satellite, or Aqua's on a pass whose detections are hidden (never the hidden one's own)
+      dayNow = undefined;
+      let dayTex: THREE.Texture | null = null;
+      if (p.dayPicture && realRun && p.inWorkspace && rawPasses[0]?.timeUtc && nextBundle.runId) {
+        const hiddenHere = passOnShowNow?.hidden === true;
+        const own = rawPasses.find((sp) => !passIsHidden(sp, p.holdoutViirs) && !sp.revealed) ?? rawPasses[0];
+        const platform = hiddenHere ? 'MODIS_AQUA' : dayPicturePlatform(own.sensorLabel) ?? 'MODIS_AQUA';
+        const day = rawPasses[0].timeUtc.slice(0, 10);
+        const address = assetAddress(
+          propsRef.current,
+          `/api/gibs/day?region_id=${encodeURIComponent(nextBundle.regionId)}&day=${day}&platform=${platform}&kind=${p.dayPicture}`,
+        );
+        let entry = dayTextures.get(address);
+        if (entry === undefined) {
+          dayTextures.set(address, 'loading');
+          entry = 'loading';
+          texLoader.load(
+            address,
+            (tex) => {
+              tex.colorSpace = THREE.SRGBColorSpace;
+              tex.anisotropy = maxAnisotropy;
+              tex.wrapS = THREE.ClampToEdgeWrapping;
+              tex.wrapT = THREE.ClampToEdgeWrapping;
+              dayTextures.set(address, tex);
+            },
+            undefined,
+            () => dayTextures.set(address, 'missing'),
+          );
+        }
+        if (entry !== 'loading' && entry !== 'missing') dayTex = entry;
+        dayNow = {
+          state: entry === 'loading' ? 'loading' : entry === 'missing' ? 'missing' : 'shown',
+          platform,
+          kind: p.dayPicture,
+          day,
+          insteadOfHidden: hiddenHere,
+        };
+      }
+      if (dayTex) {
+        // In place of the box's own picture: it covers exactly the box. No inset and no sharpening
+        // on it; its texel is its own (about a quarter of a kilometre)
+        terrainUniforms.uSatNext.value = dayTex;
+        terrainUniforms.uSatPrev.value = dayTex;
+        terrainUniforms.uSatSharpen.value = 0;
+        const img = dayTex.image as { width?: number } | undefined;
+        terrainUniforms.uOrthoTexelKm.value = nextBundle.widthKm / Math.max(1, img?.width ?? 256);
+        dayApplied = true;
+      } else if (dayApplied) {
+        terrainUniforms.uSatNext.value = nextBundle.satTex;
+        terrainUniforms.uSatPrev.value = prevBundle.satTex;
+        terrainUniforms.uSatSharpen.value = nextBundle.sharpen;
+        terrainUniforms.uOrthoTexelKm.value = nextBundle.orthoTexelKm;
+        dayApplied = false;
+      }
+      // (a day's photograph is drawn by day, whatever the hour of the pass on show)
+      const nightTarget =
+        dayTex ? 0.0 : (realRun && rawPasses[0]?.isDay === false) || nextBundle.runId === null ? 1.0 : 0.0;
       uNight.value = THREE.MathUtils.lerp(uNight.value, nightTarget, 1.0 - Math.exp(-dtSec * 2.4));
       domeNight.value = uNight.value;
       const fieldScale = nextBundle.fieldScale ?? DEFAULT_FIELD_INTENSITY_SCALE;
@@ -4209,6 +4280,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             realPass: realPassNow,
             lastSeen: lastSeenNow,
             passOnShow: passOnShowNow,
+            dayPicture: dayNow,
             regionGrid: p.regionGridDivisions ? regionGridOf(nextBundle, p.regionGridDivisions) : undefined,
           };
           p.onTelemetry?.(telemetry);
