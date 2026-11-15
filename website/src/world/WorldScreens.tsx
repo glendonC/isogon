@@ -116,8 +116,9 @@ function Frame({ objective, word, lines, actions, onAction, film, trail = true, 
     return () => ro.disconnect();
   }, [film, lines.length, actions.length]);
   if (film) return <>{trail && <Trail objective={objective} current={word} context={null} onWord={toWord} closed={{}} onPlace={() => {}} />}</>;
-  // Search, Method and Sources open on the page, so the picture closes first.
-  const barLinks = pageLinks.map((l) => ({ label: l.label, onClick: () => { closeWorldScreen(); l.onClick(); } }));
+  // Method and Sources open on the page, under the picture, so the picture closes first. Search opens over the picture
+  // and keeps it under it until a place is chosen (a link marked `over`), so it runs as it is.
+  const barLinks = pageLinks.map((l) => (l.over ? l : { label: l.label, onClick: () => { closeWorldScreen(); l.onClick(); } }));
   // The path's first part, the product's name, goes back to the first screen: the picture closes and the page leaves
   // what it had open.
   const onHome = firstScreen ? () => { closeWorldScreen(); firstScreen(); } : undefined;
