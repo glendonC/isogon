@@ -58,8 +58,12 @@ const sizeOf = (f: FeaturedFire) => f.size?.modis_pixels_in_box ?? 0;
 /** A name as a stranger reads it: an agency's incident code in brackets is left to the fire's card. */
 const plainName = (s: string | null) => (s ? s.replace(/\s*\([A-Z]{1,6}\d{3,}\)/g, '') : s);
 
-/** The first of several names an agency gives one fire ("Stein Mountain fire, Ponderosa Creek fire and ..."). */
-const firstName = (s: string | null) => (s ? (plainName(s) ?? '').split(/, | and /)[0] : s);
+/**
+ * A label's name: the first of several names an agency gives one fire ("Stein Mountain fire, Ponderosa Creek fire
+ * and ..."), without a place in brackets ("Gospers Mountain (Wollemi National Park) Fire"); the card keeps it whole.
+ */
+const firstName = (s: string | null) =>
+  s ? (plainName(s) ?? '').split(/, | and /)[0].replace(/\s*\([^)]*\)/g, '').replace(/\s{2,}/g, ' ').trim() : s;
 
 type Raw = Record<string, unknown>;
 /** A fire kept as the model's test: its record is shown, it is never hidden and tested again (registry `closed`). */
@@ -370,7 +374,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
           <div className="world-ramp" style={{ background: ramp(FACTOR_RAMP) }} />
           <div className="world-ticks">
             {FACTOR_STEPS.map((f) => (
-              <span key={f} style={{ left: `${factorT(f) * 100}%` }}>
+              <span key={f} style={{ left: `${factorT(f) * 100}%` }} data-end={factorT(f) > 0.9 ? 'true' : 'false'}>
                 {W.factorTick(f, FACTOR_LOW, FACTOR_HIGH)}
               </span>
             ))}
@@ -381,7 +385,10 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
       );
     }
     const max = world.layer.meta.max;
-    const ticks = [1, 10, 100, 1000, 10000, 100000].filter((v) => v <= max);
+    // Powers of ten on the log scale, none closer than a sixth of the ramp to the one before, so none touch.
+    const ticks = [1, 10, 100, 1000, 10000, 100000]
+      .filter((v) => v <= max)
+      .filter((v, i, xs) => i === 0 || tOfValue(v, max) - tOfValue(xs[i - 1], max) >= 1 / 6 || xs.length <= 4);
     return (
       <>
         <div className="world-legend__line">
@@ -391,7 +398,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
         <div className="world-ramp" style={{ background: ramp(FIRE_RAMP) }} />
         <div className="world-ticks">
           {ticks.map((v) => (
-            <span key={v} style={{ left: `${tOfValue(v, max) * 100}%` }}>
+            <span key={v} style={{ left: `${tOfValue(v, max) * 100}%` }} data-end={tOfValue(v, max) > 0.9 ? 'true' : 'false'}>
               {W.tick(v)}
             </span>
           ))}

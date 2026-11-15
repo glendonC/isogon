@@ -309,7 +309,7 @@
   transform: none;
 }
 
-.world-ticks span:last-child:not(:first-child) {
+.world-ticks span[data-end='true'] {
   transform: translateX(-100%);
 }
 
