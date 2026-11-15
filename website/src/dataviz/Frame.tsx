@@ -1,5 +1,5 @@
 import { CSS } from './tokens';
-import { TEXT, abovePlace, besidePlace, bracketPaths, readoutLines } from './frameGeometry';
+import { TEXT, abovePlace, besidePlace, bracketPaths, columnPlace, readoutLines } from './frameGeometry';
 import type { Box } from './frameGeometry';
 
 export interface FrameProps {
@@ -19,19 +19,23 @@ export interface FrameProps {
   above?: { bottom: number };
   /** Draw the leader from the words above down to the frame (default true). */
   leader?: boolean;
+  /** Set the words above at a column's left edge (`x`), held inside the grid's ends: a month on the Record. */
+  column?: { x: number; left: number; right: number };
 }
 
 /**
  * The page's frame, drawn inside an SVG: four pale cyan corner brackets that close in on the thing, and beside them
  * the action in white and one readout in mono capitals. The interface's own colour; data keeps its colours.
  */
-export function Frame({ box, bounds, action, readout = [], maxChars = 34, above, leader = true }: FrameProps) {
+export function Frame({ box, bounds, action, readout = [], maxChars = 34, above, leader = true, column }: FrameProps) {
   const lines = readoutLines(readout, maxChars);
   const textW = Math.max(action ? action.length * TEXT.actionChar : 0, ...lines.map((l) => l.length * TEXT.readoutChar));
   const textH = (action ? TEXT.actionLine : 0) + lines.length * TEXT.readoutLine;
   let at: { x: number; y: number; anchor: 'start' | 'end' };
   let leaderX = box.x + 0.5;
-  if (above) {
+  if (above && column) {
+    at = { x: columnPlace(column.x, textW, column.right, column.left), y: above.bottom - textH, anchor: 'start' };
+  } else if (above) {
     const a = abovePlace(box, textW, bounds.w);
     at = { x: a.x, y: above.bottom - textH, anchor: a.anchor };
     leaderX = a.leaderX;

@@ -129,6 +129,7 @@ export function RecordGrid({ record, selected, onPick, actionFor, frame = true, 
             maxChars={0}
             above={{ bottom: head - 14 }}
             leader={false}
+            column={{ x: x(framed.year), left, right: left + gridW }}
           />
         ) : null}
       </svg>

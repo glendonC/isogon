@@ -83,3 +83,11 @@ export function abovePlace(
   if (frame.x + frame.w - textW >= 0) return { x: frame.x + frame.w, anchor: 'end', leaderX: frame.x + frame.w - 0.5 };
   return { x: Math.max(0, boundsW - textW), anchor: 'start', leaderX: frame.x + frame.w / 2 };
 }
+
+/**
+ * Words above a grid aligned to one column: their left edge on the column's left edge, slid left only as far as
+ * needed to end at the grid's right end. The alignment is what ties them to the column, so it is exact.
+ */
+export function columnPlace(columnX: number, textW: number, gridRight: number, gridLeft = 0): number {
+  return Math.max(gridLeft, Math.min(columnX, gridRight - textW));
+}

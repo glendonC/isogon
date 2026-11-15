@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { abovePlace, armFor, besidePlace, bracketPaths, grow, readoutLines } from './frameGeometry.ts';
+import { abovePlace, armFor, besidePlace, bracketPaths, columnPlace, grow, readoutLines } from './frameGeometry.ts';
 
 test('four corner brackets, never meeting on a small thing', () => {
   const p = bracketPaths({ x: 10, y: 20, w: 100, h: 60 });
@@ -30,4 +30,10 @@ test('words above a frame start at its left, else end at its right, else slide i
   assert.deepEqual(abovePlace({ x: 100, y: 0, w: 20, h: 20 }, 200, 700), { x: 100, anchor: 'start', leaderX: 100.5 });
   assert.deepEqual(abovePlace({ x: 600, y: 0, w: 20, h: 20 }, 200, 700), { x: 620, anchor: 'end', leaderX: 619.5 });
   assert.deepEqual(abovePlace({ x: 150, y: 0, w: 20, h: 20 }, 600, 700), { x: 100, anchor: 'start', leaderX: 160 });
+});
+
+test('words over a column start exactly at its left edge, slid only to end at the grid\'s right end', () => {
+  assert.equal(columnPlace(332, 300, 670, 44), 332);
+  assert.equal(columnPlace(620, 300, 670, 44), 370, 'clamped so the words end at the right end');
+  assert.equal(columnPlace(60, 900, 670, 44), 44, 'never left of the grid');
 });
