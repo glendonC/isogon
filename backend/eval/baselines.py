@@ -164,8 +164,15 @@ class OverlapRatio:
     name = "overlap_ratio"
     level = 0.90
 
-    def __init__(self, visible: Detections, grid: EvalGrid, fit: OverlapRatioFit, count_ratio: Any | None = None) -> None:
-        self._painted = PaintedModis(visible, grid)
+    def __init__(
+        self,
+        visible: Detections,
+        grid: EvalGrid,
+        fit: OverlapRatioFit,
+        count_ratio: Any | None = None,
+        painted: PaintedModis | None = None,
+    ) -> None:
+        self._painted = painted if (painted is not None and painted.grid == grid) else PaintedModis(visible, grid)
         self.fit = fit
         self.count_ratio = count_ratio
         self.grid = grid
@@ -211,3 +218,20 @@ def overlap_ratio_factory(fit: OverlapRatioFit, count_ratio: Any | None = None):
         return OverlapRatio(visible, grid, fit, count_ratio)
 
     return factory
+
+
+def baseline_factories(fit: OverlapRatioFit, count_ratio: Any | None = None) -> list[Any]:
+    """Both baseline factories sharing one PaintedModis instance when called on the same visible rows and grid."""
+    shared: dict[tuple[int, EvalGrid], tuple[Detections, PaintedModis]] = {}
+
+    def pm_factory(visible: Detections, grid: EvalGrid) -> Method:
+        pm = PaintedModis(visible, grid)
+        shared[(id(visible), grid)] = (visible, pm)
+        return pm
+
+    def or_factory(visible: Detections, grid: EvalGrid) -> Method:
+        entry = shared.pop((id(visible), grid), None)
+        pm = entry[1] if (entry is not None and entry[0] is visible) else None
+        return OverlapRatio(visible, grid, fit, count_ratio, painted=pm)
+
+    return [pm_factory, or_factory]

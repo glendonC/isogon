@@ -40,7 +40,7 @@ from typing import Any, Callable
 import numpy as np
 from numpy.typing import NDArray
 
-from backend.eval.baselines import OverlapRatioFit, overlap_ratio_factory, painted_modis_factory
+from backend.eval.baselines import OverlapRatioFit, baseline_factories, overlap_ratio_factory, painted_modis_factory
 from backend.eval.blind_test import blind_test_sealed, reveal, run_blind_test, verdict
 from backend.eval.grid import CELL_KM, EvalGrid, paint
 from backend.eval.holdout import seal
@@ -426,9 +426,9 @@ def solve_real_reconstruction(
             count_ratio_missing = f"{type(exc).__name__}: {exc}"
     span = (win.start_s, win.end_s)
     if ratio_fit is not None:
-        baselines = [painted_modis_factory, overlap_ratio_factory(ratio_fit, count_ratio)]
+        baselines = baseline_factories(ratio_fit, count_ratio)
         if holdout:
-            methods = baselines + [reconstruction_factory(params)]
+            methods = baselines + [reconstruction_factory(params, recon=recon)]
             held = [(k, fr.slot) for k, fr in enumerate(frames) if fr.hidden and fr.slot is not None]
             if from_list:
                 # the looks scored are the held-out frames and no other; the count of passes left out is read
@@ -457,7 +457,9 @@ def solve_real_reconstruction(
             def in_sample(_visible: Detections, g: EvalGrid):  # sees every row: not a blind method
                 from backend.model.real_blind import ReconstructionMethod
 
-                return ReconstructionMethod(visible, g, params, "reconstruction", "fit with VIIRS assimilated (in sample, not a test)")
+                return ReconstructionMethod(
+                    visible, g, params, "reconstruction", "fit with VIIRS assimilated (in sample, not a test)", recon=recon
+                )
             report = run_blind_test(visible, bbox, baselines + [in_sample], window=span, read_passes=read_passes)
         report["window_choice"] = win.as_dict()
         report["overlap_ratio_fit"] = ratio_fit.as_dict()

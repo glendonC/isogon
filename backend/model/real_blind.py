@@ -34,11 +34,23 @@ EPISODE_OVERPASSES: int = 12
 class ReconstructionMethod:
     """Isogon's reconstruction from the visible instrument alone, asked what the hidden instrument will report."""
 
-    def __init__(self, visible: Detections, grid: EvalGrid, params: OccupancyParams, name: str, label: str) -> None:
+    def __init__(
+        self,
+        visible: Detections,
+        grid: EvalGrid,
+        params: OccupancyParams,
+        name: str,
+        label: str,
+        recon: OccupancyReconstruction | None = None,
+    ) -> None:
         self.name = name
         self.label = label
         self.grid = grid
-        self.recon = OccupancyReconstruction(grid, visible, params)
+        self.recon = (
+            recon
+            if (recon is not None and recon.grid == grid and recon.params == params)
+            else OccupancyReconstruction(grid, visible, params)
+        )
 
     def predict(self, target: Target) -> Prediction:
         pixel_area = float(target.scan_km * target.track_km)
@@ -66,13 +78,18 @@ class ReconstructionMethod:
         )
 
 
-def reconstruction_factory(params: OccupancyParams, name: str = "reconstruction", label: str | None = None):
+def reconstruction_factory(
+    params: OccupancyParams,
+    name: str = "reconstruction",
+    label: str | None = None,
+    recon: OccupancyReconstruction | None = None,
+):
     text = label or (
         "occupancy filter on the 375 m grid from the visible instrument only; parameters: " + params.fitted_on
     )
 
     def factory(visible: Detections, grid: EvalGrid) -> Method:
-        return ReconstructionMethod(visible, grid, params, name, text)
+        return ReconstructionMethod(visible, grid, params, name, text, recon=recon)
 
     return factory
 
