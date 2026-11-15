@@ -26,7 +26,7 @@ import { LocatorBar } from './identity/LocatorBar';
 import { StoryLine } from './identity/StoryLine';
 import { RevealSweep } from './identity/RevealSweep';
 import { stageReady } from './stage/stageReady';
-import type { StageThingBox } from './stage/earthCutawayTypes';
+import type { StageThing, StageThingBox } from './stage/earthCutawayTypes';
 import { setPageLinks } from './ui/pageLinks';
 import { usePlay, type PlayShot } from './ui/usePlay';
 import { agentWalkDone, startAgentWalk, stopAgentWalk } from './walk/agentWalk';
@@ -328,9 +328,23 @@ export function App() {
       markedBoxListeners.current.delete(fn);
     };
   }, []);
+  // The fire on the first screen, for its legend to stand clear of it.
+  const fireBoxListeners = useRef(new Set<(b: StageThingBox | null) => void>());
+  const subscribeFireBox = useCallback((fn: (b: StageThingBox | null) => void) => {
+    fireBoxListeners.current.add(fn);
+    return () => {
+      fireBoxListeners.current.delete(fn);
+    };
+  }, []);
   const onThings = useCallback((boxes: Record<string, StageThingBox | null>) => {
-    const b = boxes.square ?? null;
-    markedBoxListeners.current.forEach((fn) => fn(b));
+    if ('square' in boxes) {
+      const b = boxes.square ?? null;
+      markedBoxListeners.current.forEach((fn) => fn(b));
+    }
+    if ('fire' in boxes) {
+      const f = boxes.fire ?? null;
+      fireBoxListeners.current.forEach((fn) => fn(f));
+    }
   }, []);
   /** The guide on show and its commands, for the key handler defined before them. */
   const guideRef = useRef<Guide | null>(null);
@@ -1296,7 +1310,15 @@ export function App() {
   };
   // The things the stage boxes for the page (G66): the round's marked square, for the frame of the look on it.
   const markedTile = round ? rnd.marked : null;
-  const stageThings = useMemo(() => (markedTile !== null ? { square: { kind: 'tile' as const, tile: markedTile } } : undefined), [markedTile]);
+  const stageThings = useMemo<Record<string, StageThing> | undefined>(
+    (): Record<string, StageThing> | undefined => {
+      const things: Record<string, StageThing> = {};
+      if (markedTile !== null) things.square = { kind: 'tile', tile: markedTile };
+      else if (!inWorkspace) things.fire = { kind: 'fire' };
+      return Object.keys(things).length > 0 ? things : undefined;
+    },
+    [markedTile, inWorkspace],
+  );
   const storeBase: WorkspaceBase = {
     places: placesState.places,
     currentFire: activeRun && realStart ? fireOfStart(placesState.places, activeRun.region.id, realStart)?.id ?? null : null,
@@ -1877,6 +1899,8 @@ export function App() {
           onEnter={enterRecord}
           ways={filmByAddress ? null : { onPlay: startPlay, onExplore: () => openWorldScreen('years'), onSearch: () => setAskOpen(true) }}
           stageIn={stageIn}
+          onOpenSources={() => setReading('sources')}
+          subscribeFireBox={subscribeFireBox}
         />
       )}
       {play.playing && <p className="iso-play-stop">{WORDS.stop}</p>}

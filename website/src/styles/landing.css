@@ -512,3 +512,11 @@
   color: #9fe3ff;
   outline: none;
 }
+
+/* Where the drawn fire covers the bottom right, the legend and its caption stand at the bottom left, over the credit. */
+.iso-land__legend[data-side='left'] {
+  left: var(--iso-gutter);
+  right: auto;
+  justify-items: start;
+  text-align: left;
+}

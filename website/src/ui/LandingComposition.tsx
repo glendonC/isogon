@@ -4,7 +4,7 @@ import { SoundControl } from '../audio';
 import { IsogonMark } from './IsogonMark';
 import { SplitHeadline } from './SplitHeadline';
 import type { PartId, PartStatus } from '../content/partsStatus';
-import type { EarthStageTelemetry } from '../stage/earthCutawayTypes';
+import type { EarthStageTelemetry, StageThingBox } from '../stage/earthCutawayTypes';
 
 const LandingBelow = lazy(() =>
   import('./LandingBelow').then((m) => ({ default: m.LandingBelow })),
@@ -77,6 +77,10 @@ interface LandingCompositionProps {
   ways?: { onPlay: () => void; onExplore: () => void; onSearch: () => void } | null;
   /** The stage's first whole picture is in (stage/stageReady.ts). */
   stageIn?: boolean;
+  /** Opens the sources (the first screen's top right, as on every inner screen). */
+  onOpenSources?: () => void;
+  /** The fire on show as the stage boxes it (its things), so the legend and its caption stand clear of it. */
+  subscribeFireBox?: (fn: (box: StageThingBox | null) => void) => () => void;
 }
 
 /** The three ways in, in the page's words until the product lane gives them. */
@@ -97,10 +101,34 @@ export function LandingComposition({
   onEnter,
   ways = null,
   stageIn = true,
+  onOpenSources,
+  subscribeFireBox,
 }: LandingCompositionProps) {
   const [fontsIn, setReady] = useState(facesLoaded);
   const ready = fontsIn && (ways ? stageIn : true);
   const [showBelow, setShowBelow] = useState(false);
+  // The legend and its caption take the bottom corner the drawn fire covers less (right by default).
+  const legendRef = useRef<HTMLDivElement | null>(null);
+  const footRef = useRef<HTMLDivElement | null>(null);
+  const [side, setSide] = useState<'right' | 'left'>('right');
+  useEffect(() => {
+    if (!subscribeFireBox) return;
+    return subscribeFireBox((box) => {
+      const el = legendRef.current;
+      if (!box || !el) return;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const g = parseFloat(getComputedStyle(el).getPropertyValue('--iso-gutter')) || 28;
+      const footH = footRef.current?.offsetHeight ?? 0;
+      const covered = (l: number, t: number) =>
+        Math.max(0, Math.min(l + w, box.right) - Math.max(l, box.left)) * Math.max(0, Math.min(t + h, box.bottom) - Math.max(t, box.top));
+      const right = covered(W - g - w, H - g - h);
+      const left = covered(g, H - g - footH - 16 - h);
+      setSide((s) => (s === 'right' ? (right > 0 && left < right * 0.5 ? 'left' : 'right') : left > 0 && right < left * 0.5 ? 'right' : 'left'));
+    });
+  }, [subscribeFireBox]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -148,19 +176,27 @@ export function LandingComposition({
           </div>
 
           <nav className="iso-land__menu" aria-label="Sound, search and reference" data-landing-ui="true">
-            <SoundControl />
+            {!ways && <SoundControl />}
             {!ways && (
               <button type="button" className="iso-navlink" onClick={onOpenSearch}>
                 <kbd>/</kbd>
                 <span>Search</span>
               </button>
             )}
-            <button type="button" className="iso-navlink iso-navlink--sensor" onClick={onOpenSensor}>
-              Sensor physics
-            </button>
+            {!ways && (
+              <button type="button" className="iso-navlink iso-navlink--sensor" onClick={onOpenSensor}>
+                Sensor physics
+              </button>
+            )}
             <button type="button" className="iso-navlink" onClick={onOpenMethod}>
               Method
             </button>
+            {ways && onOpenSources && (
+              <button type="button" className="iso-navlink" onClick={onOpenSources}>
+                Sources
+              </button>
+            )}
+            {ways && <SoundControl />}
           </nav>
 
           <div className="iso-land__hero">
@@ -195,11 +231,16 @@ export function LandingComposition({
             )}
           </div>
 
-          <div className="iso-land__legend">
+          <div
+            className="iso-land__legend"
+            ref={legendRef}
+            data-side={side}
+            style={side === 'left' ? { bottom: `calc(var(--iso-gutter) + ${(footRef.current?.offsetHeight ?? 0) + 16}px)` } : undefined}
+          >
             <div className="iso-land__keys" aria-label="What the picture shows">
               {/* What the pass on show draws: lights on a pass the model was given, white frames on a hidden one. */}
               {passHidden ? (
-                <span className="iso-land__legend-item iso-land__legend-item--frame">Model estimate, sharp satellite hidden</span>
+                <span className="iso-land__legend-item iso-land__legend-item--frame">Model estimate, VIIRS hidden</span>
               ) : (
                 <span className="iso-land__legend-item iso-land__legend-item--detection">Satellite detection</span>
               )}
@@ -212,7 +253,7 @@ export function LandingComposition({
           </div>
 
           {/* Bottom left, one block: a long credit wraps upward and lifts the recorded line with it. */}
-          <div className="iso-land__foot">
+          <div className="iso-land__foot" ref={footRef}>
             {recorded && <p className="iso-land__recorded">{recorded}</p>}
             <p className="iso-land__credit">Imagery: {imageryCredit}</p>
           </div>
