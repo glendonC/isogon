@@ -43,7 +43,8 @@ export const PLAYERS_WORDS = {
   chanceOne: 'One round of random looks',
   /** What the fire is to the learned player, by the registry's word for it. */
   learned: {
-    'fitted on': 'Trained on fires of these years around here: not a test of it',
+    // The guide's own words for the same fact at the round's end (script `learned_trained_here`), so the page says one thing
+    'fitted on': 'Trained on rounds that include this one, so this round is not a test of it',
     'never seen': 'It never saw this fire while it learned',
   } as Record<string, string>,
   reveal: 'Reveal what their looks found',
