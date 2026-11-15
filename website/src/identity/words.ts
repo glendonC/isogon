@@ -11,7 +11,18 @@ export const WORDS = {
   explore: 'Explore',
   search: 'Search',
   stop: 'Click or press any key to stop',
-  links: { search: 'Search', method: 'Method', sources: 'Sources' },
+  links: { search: 'Search', method: 'Method', sources: 'Sources', menu: 'Menu' },
+  /** The one menu at the top right: the documents and the sound. */
+  menu: { label: 'Menu', close: 'Close' },
+  /** The documents the menu lists, by the names the reading view gives them (components/EvidenceSheet.tsx). */
+  docs: {
+    fire: 'This fire',
+    tests: 'Every test',
+    sealed: 'Sealed before the pass',
+    method: 'Method',
+    sensors: 'Sensor geometry',
+    sources: 'Sources',
+  },
   /** The level above a place on the path, the Earth's years; the first screen's "Explore the Earth" goes there. */
   earth: 'The Earth',
   /** The bottom edge while the visitor goes by themselves: the way back one level, and the places one level on. */

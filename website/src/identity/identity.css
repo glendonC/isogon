@@ -454,6 +454,131 @@ button.id-story__part:focus-visible {
   }
 }
 
+/* the one menu: a panel slid in from the right, the documents as plain words, the sound under them */
+.id-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 78;
+  font-family: var(--id-font);
+}
+
+.id-menu__scrim {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(5, 7, 12, 0.35);
+  cursor: default;
+  animation: id-menu-fade 300ms var(--id-ease) both;
+}
+
+.id-menu__panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  padding: 140px 40px 40px;
+  background: rgba(5, 7, 12, 0.985);
+  border-left: 1px solid var(--id-line);
+  animation: id-menu-in 380ms var(--id-move) both;
+}
+
+.id-menu__close {
+  position: absolute;
+  top: 36px;
+  right: 40px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 300;
+  color: var(--id-ink-2);
+  cursor: pointer;
+}
+
+.id-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.id-menu__item {
+  position: relative;
+  padding: 8px 0 8px 18px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 300;
+  color: var(--id-ink-3);
+  cursor: pointer;
+  transition: color var(--id-fast) var(--id-ease), transform var(--id-fast) var(--id-ease);
+}
+
+.id-menu__item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18px;
+  width: 4px;
+  height: 4px;
+  background: var(--id-signal);
+  opacity: 0;
+  transition: opacity var(--id-fast) var(--id-ease);
+}
+
+.id-menu__item:hover,
+.id-menu__item:focus-visible,
+.id-menu__close:hover,
+.id-menu__close:focus-visible {
+  color: var(--id-ink);
+  outline: none;
+}
+
+.id-menu__item:hover::before,
+.id-menu__item:focus-visible::before {
+  opacity: 1;
+}
+
+.id-menu__foot {
+  margin-top: auto;
+  padding-top: 24px;
+  border-top: 1px solid var(--id-line);
+}
+
+@keyframes id-menu-in {
+  from {
+    transform: translateX(48px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes id-menu-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .id-menu__panel,
+  .id-menu__scrim {
+    animation: none;
+  }
+}
+
 /* the first screen */
 .id-entry {
   position: absolute;
@@ -550,6 +675,15 @@ button.id-story__part:focus-visible {
   }
   .id-arrival__say {
     left: 16px;
+    right: 16px;
+  }
+  .id-menu__panel {
+    width: auto;
+    left: 0;
+    padding: 96px 16px 32px 32px;
+    border-left: 0;
+  }
+  .id-menu__close {
     right: 16px;
   }
   .id-arrival__name {

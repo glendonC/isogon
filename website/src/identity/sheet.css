@@ -1,8 +1,9 @@
 /*
- * The sheets (the scores, every test, method, sources) in the page's language: a reading view over the scene, not a
- * panel. The scene dims and blurs behind; the list of documents stands as plain words at the left, the chosen one white
- * with the signal mark; the document is one column of text; Close is a word at the top right. It styles the shared
- * viewer's own classes (`components/BlindScoreTable.tsx`), so the sheets change without a change to their markup.
+ * The sheets (the scores, every test, method, sources) in the page's language: a reading view slid in from the right,
+ * the screen still in view at the left. The list of documents stands as plain words at the panel's right, where the
+ * page's menu lists them (identity/SideMenu.tsx), the chosen one white with the signal mark; the document is one column
+ * of text beside it; Close is a word at the top right. It styles the shared viewer's own classes
+ * (`components/BlindScoreTable.tsx`), so the sheets change without a change to their markup.
  * Import it after `styles/sheets.css`.
  */
 @import './identity.css';
@@ -20,9 +21,7 @@
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: rgba(5, 7, 12, 0.8);
-  -webkit-backdrop-filter: blur(18px) saturate(0.8);
-  backdrop-filter: blur(18px) saturate(0.8);
+  background: rgba(5, 7, 12, 0.45);
   cursor: default;
   animation: id-sheet-in 360ms var(--id-move) both;
 }
@@ -34,27 +33,30 @@
 .iso-viewer,
 .iso-viewer--single {
   position: absolute;
-  left: max(40px, 8vw);
-  right: max(40px, 8vw);
+  left: auto;
+  right: 0;
   top: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: 240px minmax(0, 760px);
-  column-gap: 72px;
-  width: auto;
+  grid-template-columns: minmax(0, 680px) 280px;
+  grid-template-rows: 100%;
+  column-gap: 56px;
+  width: min(1112px, 100vw);
   max-width: none;
-  padding: 0;
+  padding: 0 40px 0 56px;
   border: 0;
+  border-left: 1px solid var(--id-line);
   border-radius: 0;
-  background: none;
+  background: rgba(5, 7, 12, 0.985);
   box-shadow: none;
   transform: none;
   outline: none;
-  animation: id-sheet-in 420ms var(--id-move) both;
+  animation: id-sheet-slide 420ms var(--id-move) both;
 }
 
 .iso-viewer--single {
-  grid-template-columns: minmax(0, 760px);
+  grid-template-columns: minmax(0, 680px);
+  width: min(800px, 100vw);
 }
 
 .iso-viewer__top {
@@ -62,7 +64,8 @@
 }
 
 .iso-viewer__trail {
-  grid-column: 1;
+  grid-column: 2;
+  grid-row: 1;
   align-self: start;
   display: flex;
   flex-direction: column;
@@ -166,7 +169,8 @@
 }
 
 .iso-viewer__scroll {
-  grid-column: 2;
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
   height: 100%;
   overflow-y: auto;
@@ -282,15 +286,31 @@
   }
 }
 
+@keyframes id-sheet-slide {
+  from {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (max-width: 860px) {
   .iso-viewer,
   .iso-viewer--single {
-    left: 16px;
-    right: 16px;
+    left: 0;
+    right: 0;
+    width: auto;
+    padding: 0 16px;
+    border-left: 0;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
   .iso-viewer__trail {
     grid-column: 1;
+    grid-row: 1;
     flex-direction: row;
     flex-wrap: wrap;
     gap: 4px 18px;
@@ -298,6 +318,7 @@
   }
   .iso-viewer__scroll {
     grid-column: 1;
+    grid-row: 2;
     padding-top: 24px;
   }
 }

@@ -28,6 +28,8 @@ import type { TrailWord } from './guide/Trail';
 import { LocatorBar } from './identity/LocatorBar';
 import { StoryLine } from './identity/StoryLine';
 import { Moves, type Move } from './identity/Moves';
+import { SideMenu } from './identity/SideMenu';
+import { SoundControl } from './audio';
 import { SCREEN_WORDS } from './world/words';
 import { RevealSweep } from './identity/RevealSweep';
 import { Arrival } from './identity/Arrival';
@@ -238,6 +240,8 @@ export function App() {
   const [askOpen, setAskOpen] = useState(false);
   /** The one reading sheet (method, sensors, sources, credits) and its open section; null when closed. */
   const [reading, setReading] = useState<ReadingSection | null>(null);
+  // The one menu at the top right: the documents and the sound.
+  const [menuOpen, setMenuOpen] = useState(false);
   /** A step asked for from the landing's three parts, taken once the workspace is open. */
   const pendingStepRef = useRef<Step | null>(null);
   /** The evidence sheet opened on its agents' table. */
@@ -1705,8 +1709,7 @@ export function App() {
   const barLinks = useMemo(
     () => [
       { label: WORDS.links.search, onClick: () => setAskOpen(true), over: true },
-      { label: WORDS.links.method, onClick: () => setReading('method') },
-      { label: WORDS.links.sources, onClick: () => setReading('sources') },
+      { label: WORDS.links.menu, onClick: () => setMenuOpen(true), over: true },
     ],
     [],
   );
@@ -1963,6 +1966,7 @@ export function App() {
           ways={filmByAddress ? null : { onPlay: startPlay, onExplore: () => openWorldScreen('years'), onSearch: () => setAskOpen(true) }}
           stageIn={stageIn}
           onOpenSources={() => setReading('sources')}
+          onOpenMenu={() => setMenuOpen(true)}
           subscribeFireBox={subscribeFireBox}
         />
       )}
@@ -2207,6 +2211,20 @@ export function App() {
         </Suspense>
       )}
 
+      <SideMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        items={(['fire', 'tests', 'sealed', 'method', 'sensors', 'sources'] as const)
+          .filter((id) => id !== 'fire' || (inWorkspace && activeRun))
+          .map((id) => ({ id, label: WORDS.docs[id] }))}
+        onPick={(id) => {
+          // A document stands over the page, not over a picture of the world: the picture closes first, as before.
+          if (worldScreenOnShow()) closeWorldScreen();
+          setMenuOpen(false);
+          setReading(id as ReadingSection);
+        }}
+        footer={<SoundControl className="id-menu__sound" />}
+      />
       {(openedSheetsRef.current.reading ||= reading !== null) && (
         <Suspense fallback={null}>
           <ReadingSheet

@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { SoundControl } from '../audio';
 import { formatCoord, splitPath, type Where } from './where.ts';
 import { WORDS } from './words.ts';
 import './identity.css';
@@ -11,7 +10,7 @@ export interface LocatorBarProps extends Where {
   home?: string;
   /** A step of the trail clicked: its index in `path`. Absent, the trail is plain text. */
   onTrail?: (index: number) => void;
-  /** Words at the right before the sound control (Search, Method, Sources). */
+  /** Words at the right (Search, Menu); the sound is in the menu. */
   links?: { label: string; onClick: () => void }[];
   /** Extra content at the right, for example the looks left in a round. */
   right?: ReactNode;
@@ -19,7 +18,7 @@ export interface LocatorBarProps extends Where {
 
 /**
  * The top of every screen in place of the four words: at the left the way back to the start, the path, the name in view
- * and its coordinates; at the right a few words and the sound control.
+ * and its coordinates; at the right a few words (Search and the menu).
  */
 export function LocatorBar({ path, lat, lon, onHome, home = WORDS.brand, onTrail, links = [], right }: LocatorBarProps) {
   const { trail, here } = splitPath(path);
@@ -69,7 +68,6 @@ export function LocatorBar({ path, lat, lon, onHome, home = WORDS.brand, onTrail
             {l.label}
           </button>
         ))}
-        <SoundControl className="id-bar__sound" />
       </div>
     </header>
   );

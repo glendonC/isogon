@@ -84,6 +84,8 @@ interface LandingCompositionProps {
   stageIn?: boolean;
   /** Opens the sources (the first screen's top right, as on every inner screen). */
   onOpenSources?: () => void;
+  /** Opens the page's one menu (the documents and the sound), in place of Method, Sources and the sound. */
+  onOpenMenu?: () => void;
   /** The fire on show as the stage boxes it (its things), so the legend and its caption stand clear of it. */
   subscribeFireBox?: (fn: (box: StageThingBox | null) => void) => () => void;
 }
@@ -107,6 +109,7 @@ export function LandingComposition({
   ways = null,
   stageIn = true,
   onOpenSources,
+  onOpenMenu,
   subscribeFireBox,
 }: LandingCompositionProps) {
   const [fontsIn, setReady] = useState(facesLoaded);
@@ -208,15 +211,21 @@ export function LandingComposition({
                 Sensor physics
               </button>
             )}
-            <button type="button" className="iso-navlink" onClick={onOpenMethod}>
-              Method
-            </button>
-            {ways && onOpenSources && (
+            {ways && onOpenMenu ? (
+              <button type="button" className="iso-navlink" onClick={onOpenMenu}>
+                Menu
+              </button>
+            ) : (
+              <button type="button" className="iso-navlink" onClick={onOpenMethod}>
+                Method
+              </button>
+            )}
+            {ways && onOpenSources && !onOpenMenu && (
               <button type="button" className="iso-navlink" onClick={onOpenSources}>
                 Sources
               </button>
             )}
-            {ways && <SoundControl />}
+            {ways && !onOpenMenu && <SoundControl />}
           </nav>
 
           <div className="iso-land__hero">

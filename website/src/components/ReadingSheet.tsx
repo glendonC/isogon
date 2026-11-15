@@ -4,7 +4,7 @@ import type { MethodEvidence } from './MethodSheet';
 import type { OverlapEvidence } from '../content/calendar';
 import type { SensorModelPayload } from '../ui/useSensorModel';
 
-export type ReadingSection = 'method' | 'sensors' | 'sources' | 'credits';
+export type ReadingSection = 'fire' | 'tests' | 'sealed' | 'method' | 'sensors' | 'sources' | 'credits';
 
 interface ReadingSheetProps {
   section: ReadingSection | null;
@@ -22,9 +22,8 @@ interface ReadingSheetProps {
 }
 
 function docOfSection(section: ReadingSection): ViewerDocId {
-  if (section === 'sensors') return 'sensors';
-  if (section === 'sources' || section === 'credits') return 'sources';
-  return 'method';
+  if (section === 'credits') return 'sources';
+  return section;
 }
 
 /**
@@ -41,9 +40,7 @@ export function ReadingSheet(props: ReadingSheetProps) {
       scrollCredits={section === 'credits'}
       onClose={onClose}
       onDocChange={(doc) => {
-        if (doc === 'method' || doc === 'sensors' || doc === 'sources') {
-          onSection(doc);
-        }
+        if (doc !== 'scores') onSection(doc);
       }}
       methodEvidence={props.evidence}
       imageryCredit={props.imageryCredit}
