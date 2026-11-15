@@ -8,6 +8,7 @@ the episodes are chosen from MODIS pixel counts, windows and places by the state
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import shutil
 import sys
@@ -207,6 +208,38 @@ class OfferedRegionsTests(unittest.TestCase):
         self.assertEqual(F.offered_cost(FIRST, [LJUSDAL]), {"test_b": {"Europe": {"boreal": 4}}})
         self.assertEqual(F.offered_cost(FIRST, [MAULE]), {"validation": {"South America": {"subtropical": 1, "temperate": 1}}})
         self.assertEqual(F.offered_cost(FIRST, []), {})
+
+
+class TestBInTheEvidenceTests(unittest.TestCase):
+    def test_test_b_s_record_is_served_the_moment_it_exists_with_what_stands_beside_its_headline(self) -> None:
+        import shutil
+        from unittest import mock
+
+        from backend.model import evidence as EV
+
+        src = EV.FITTED_DIR
+        with tempfile.TemporaryDirectory() as tmp:
+            for f in src.glob("*.json"):
+                shutil.copy(f, Path(tmp) / f.name)
+            a = json.loads((src / "fresh_world_test_a.json").read_text())
+            judged = a["judged"]["all"]
+            side = {"against_the_baselines": judged, "the_headline_against_it": {"episodes": 2, "ahead": 1, "tied": 6, "behind": 0}}
+            b = {**a, "look_name": F.LOOK_NAMES["test_b"], "values": {"which": "values in use"},
+                 "beside_values": {"refit": "x"}, "challengers": {"challenger_gbdt": "x"},
+                 "beside_the_headline": {"refit": side, "challenger_gbdt": side},
+                 "clear_looks": {"cloud_share_at_most": 0.25, "passes": 10, "passes_with_a_mask": 6, "clear_passes": 4,
+                                 "episodes_with_a_clear_look": 2, "judged": a["judged"], "beside_the_headline": {"refit": side}}}
+            (Path(tmp) / "fresh_world_test_b.json").write_text(json.dumps(b))
+            with mock.patch.object(EV, "FITTED_DIR", Path(tmp)):
+                fresh = EV._fresh_test()
+        tb = fresh["test_b"]
+        self.assertEqual(tb["look_name"], F.LOOK_NAMES["test_b"])
+        self.assertIn("challenger checked", tb["beside_the_headline"]["challenger_gbdt"]["what"])
+        self.assertIn("other values", tb["beside_the_headline"]["refit"]["what"])
+        self.assertEqual(tb["clear_looks"]["clear_passes"], 4)
+        self.assertIn("refit", tb["clear_looks"]["beside_the_headline"])
+        self.assertIn("test_b", fresh["state"])
+        self.assertEqual(fresh["players_fit"]["chosen_on_validation"], "player_in_use")
 
 
 if __name__ == "__main__":

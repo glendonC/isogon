@@ -689,11 +689,40 @@ def _fresh_look(doc: dict[str, Any]) -> dict[str, Any]:
         "by_zone": {z: {k: v[k] for k in keep if k in v} for z, v in j["by_zone"].items()},
         "per_fire": [{k: e[k] for k in ("key", "continent", "zone", "scored_looks", "ahead_of_both_on", "scores_judged")}
                      for e in doc["per_episode"]],
-        "beside_the_headline": {m: {"against_the_baselines": {k: v["against_the_baselines"].get(k) for k in keep},
+        "beside_the_headline": {m: {"what": _beside_what(doc, m),
+                                    "against_the_baselines": {k: v["against_the_baselines"].get(k) for k in keep},
                                     "the_headline_against_it": v["the_headline_against_it"]}
                                 for m, v in (doc.get("beside_the_headline") or {}).items()},
-        "clear_looks": doc.get("clear_looks"),
+        "clear_looks": _clear_looks(doc.get("clear_looks"), keep),
         "fuel": doc.get("fuel"),
+    }
+
+
+def _beside_what(doc: dict[str, Any], method: str) -> str:
+    """What a method beside a look's headline is: the other values, or a challenger checked before the look."""
+    if method in (doc.get("challengers") or {}):
+        return "a challenger checked against the test's rules before the look, in the same run"
+    if method in (doc.get("beside_values") or {}):
+        return "the estimate with the other values, in the same run"
+    return "another method of the same run"
+
+
+def _clear_looks(table: Any, keep: tuple[str, ...]) -> Any:
+    """A look's second table, short: its counts and its judgement over all, by continent and by zone; or the
+    sentence that says there is none."""
+    if not isinstance(table, dict):
+        return table
+    j = table["judged"]
+    return {
+        "cloud_share_at_most": table["cloud_share_at_most"], "passes": table["passes"],
+        "passes_with_a_mask": table["passes_with_a_mask"], "clear_passes": table["clear_passes"],
+        "episodes_with_a_clear_look": table["episodes_with_a_clear_look"],
+        "all": {k: j["all"][k] for k in keep if k in j["all"]},
+        "by_continent": {c: {k: v[k] for k in keep if k in v} for c, v in j["by_continent"].items()},
+        "by_zone": {z: {k: v[k] for k in keep if k in v} for z, v in j["by_zone"].items()},
+        "beside_the_headline": {m: {"against_the_baselines": {k: v["against_the_baselines"].get(k) for k in keep},
+                                    "the_headline_against_it": v["the_headline_against_it"]}
+                                for m, v in (table.get("beside_the_headline") or {}).items()},
     }
 
 
@@ -743,6 +772,11 @@ def _fresh_test() -> dict[str, Any]:
     pl = docs["players_test_b"]
     out["players"] = None if pl is None else {"episodes": pl["episodes"], "mean_gain": pl["mean_gain"],
                                               "differences": pl["differences"], "learned_player": pl["learned_player"]}
+    pf = docs["players_fit"]
+    out["players_fit"] = None if pf is None else {
+        "chosen_on_validation": pf["choice_on_validation"]["chosen"],
+        "mean_gain_on_validation": {n: v["mean_gain_on_validation"] for n, v in pf["choice_on_validation"]["candidates"].items()},
+        "rule": pf["choice_on_validation"]["rule"], "fitting_episodes": pf["episodes"]["train"]}
     done = [k for k in ("plan", "test_a", "refit", "test_b", "players") if out.get(k) is not None]
     out["state"] = ("the protocol is on record and nothing has been read for it yet" if not done
                     else "on record: " + ", ".join(done))
