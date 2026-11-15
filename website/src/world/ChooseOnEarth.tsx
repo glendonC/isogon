@@ -88,22 +88,19 @@ export function heldWhy(f: FeaturedFire, p: Place, held: Record<string, string |
 type Kind = 'open' | 'closed' | 'held';
 
 /**
- * The fire a place is known by and what its mark is: a fire that can be opened, the largest named one first, else the
- * place's own name; a place whose every fire is kept as the test says so; a place whose fires are held says so.
+ * The name a place's mark bears and what its mark is. One form for every mark, as the list beside the Earth names a
+ * place: the place's own name and the year of the fire it opens on (the place's opening fire, else its largest open
+ * one). The registry's fire names are uneven (codes, cases, some fires unnamed), so a fire's own name stands only on
+ * the card. A place whose every fire is kept as the test says so; a place whose fires are held says so.
  */
 function knownBy(p: Place, held: Record<string, string | true> | null): { text: string; kind: Kind } {
   const short = p.name.split(',')[0];
   const open = p.featured_fires.filter((f) => !isClosed(f) && !heldWhy(f, p, held));
-  const named = (xs: FeaturedFire[]) => xs.filter((f) => f.name).sort((a, b) => sizeOf(b) - sizeOf(a));
-  if (open.length) {
-    const n = named(open);
-    return { text: n.length ? W.fireLabel(firstName(n[0].name), short, yearOf(n[0])) : short, kind: 'open' };
-  }
+  const opening = (xs: FeaturedFire[]) =>
+    xs.find((f) => f.id === p.starts?.default_featured_fire) ?? [...xs].sort((a, b) => sizeOf(b) - sizeOf(a))[0];
+  if (open.length) return { text: W.fireLabel(short, short, yearOf(opening(open))), kind: 'open' };
   const closed = p.featured_fires.filter(isClosed);
-  if (closed.length) {
-    const n = named(closed);
-    return { text: W.keptLabel(n.length ? W.fireLabel(firstName(n[0].name), short, yearOf(n[0])) : short), kind: 'closed' };
-  }
+  if (closed.length) return { text: W.keptLabel(W.fireLabel(short, short, yearOf(opening(closed)))), kind: 'closed' };
   return { text: W.heldLabel(short), kind: 'held' };
 }
 
