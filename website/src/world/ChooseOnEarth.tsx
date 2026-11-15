@@ -95,7 +95,8 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
   const keys = useCallback(
     (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       if (e.key === 'b' || e.key === 'B') {
         setDrawing((d) => !d);
         setOpen(null);
@@ -104,17 +105,23 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
         else if (open) setOpen(null);
         else if (box) setBox(null);
         else return;
-        e.stopPropagation();
       } else if (e.key === 'l' || e.key === 'L') {
-        if (factor) setMode((m) => (m === 'fire' ? 'factor' : 'fire'));
+        if (!factor) return;
+        setMode((m) => (m === 'fire' ? 'factor' : 'fire'));
+      } else if (e.key === 'Enter' && box && !fit(box) && !t?.closest('button, a')) {
+        onBox(box);
       } else return;
+      // A key the Earth used is not seen by the screen around it; an Escape it did not use goes on (to close).
       e.preventDefault();
+      e.stopImmediatePropagation();
     },
-    [drawing, open, box, factor],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [drawing, open, box, factor, onBox],
   );
+  // Taken in the capture phase, so the Earth hears its keys before a screen that mounts it and listens the same way.
   useEffect(() => {
-    window.addEventListener('keydown', keys);
-    return () => window.removeEventListener('keydown', keys);
+    window.addEventListener('keydown', keys, true);
+    return () => window.removeEventListener('keydown', keys, true);
   }, [keys]);
 
   const fit = (b: Box) => {
@@ -260,19 +267,6 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
       </>
     );
   };
-
-  useEffect(() => {
-    if (!box) return;
-    const onEnter = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && !fit(box) && !(e.target as HTMLElement)?.closest?.('button')) {
-        e.preventDefault();
-        onBox(box);
-      }
-    };
-    window.addEventListener('keydown', onEnter);
-    return () => window.removeEventListener('keydown', onEnter);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [box]);
 
   const legend = () => {
     if (world.state === 'loading') return <div className="world-legend__line">{W.loading}</div>;
