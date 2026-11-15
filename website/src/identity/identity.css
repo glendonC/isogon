@@ -627,3 +627,8 @@ button.id-story__part:focus-visible {
     transition: none;
   }
 }
+
+/* a figure that runs to its value: tabular digits so it does not shift as it counts */
+.id-count {
+  font-variant-numeric: tabular-nums;
+}

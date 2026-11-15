@@ -42,3 +42,12 @@ test('the sweep runs from 0 to 1 and never backwards', () => {
     last = v;
   }
 });
+
+test('a count from one value to another runs by the difference and ends on the new value', () => {
+  const from = 120;
+  const to = 180;
+  assert.equal(from + countAt(0, to - from), 120);
+  assert.equal(from + countAt(1500, to - from), 180);
+  const down = 180 + countAt(1500, 90 - 180);
+  assert.equal(down, 90);
+});
