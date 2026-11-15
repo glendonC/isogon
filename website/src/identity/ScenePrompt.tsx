@@ -19,6 +19,24 @@ export interface ScenePromptProps {
 }
 
 /**
+ * The lowest edge of the top bar's words over the prompt's columns: on a phone the bar holds the path and the links on
+ * several rows, and the prompt keeps below them. Measured on the words themselves, not their boxes, so a long path
+ * at the left does not push down a prompt that stands clear of it.
+ */
+function barClear(frame: { left: number }, view: { width: number }, width = 340): number {
+  const x0 = Math.min(Math.max(16, frame.left), view.width - 16 - width);
+  let clear = 16;
+  const range = document.createRange();
+  for (const el of document.querySelectorAll('.id-bar__trail, .id-bar__here, .id-bar__coord, .id-bar__right > *')) {
+    range.selectNodeContents(el);
+    for (const r of range.getClientRects()) {
+      if (r.width > 0 && r.right > x0 && r.left < x0 + width) clear = Math.max(clear, Math.ceil(r.bottom) + 8);
+    }
+  }
+  return clear;
+}
+
+/**
  * The action on the thing it acts on. A reticle frames the thing, open at rest and closing when the pointer comes near
  * or the prompt has focus; one prompt and its readout stand at the frame's corner, joined by a short line. The whole
  * frame is the target: click it, or Tab to it and press Enter.
@@ -28,7 +46,7 @@ export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = 
   const [near, setNear] = useState(false);
   const [focus, setFocus] = useState(false);
   const frame = reticleBox(box, view);
-  const spot = promptSpot(frame, view);
+  const spot = promptSpot(frame, view, 92, 340, barClear(frame, view));
 
   useEffect(() => {
     const onResize = () => setView({ width: window.innerWidth, height: window.innerHeight });

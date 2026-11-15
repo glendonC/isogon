@@ -51,3 +51,10 @@ test('a count from one value to another runs by the difference and ends on the n
   const down = 180 + countAt(1500, 90 - 180);
   assert.equal(down, 90);
 });
+
+test('the prompt hangs below its frame when the top bar leaves no room above', () => {
+  const phone = { width: 390, height: 844 };
+  const frame = { left: 148, top: 218, right: 284, bottom: 343 };
+  assert.equal(promptSpot(frame, phone).hang, 'above');
+  assert.equal(promptSpot(frame, phone, 92, 340, 170).hang, 'below');
+});

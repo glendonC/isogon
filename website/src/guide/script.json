@@ -541,7 +541,7 @@
         },
         {
           "id": "ready",
-          "objective": "{place}",
+          "objective": "Read this place's fire, month by month",
           "says": [
             {
               "place": "guide",
@@ -1700,11 +1700,11 @@
       "states": [
         {
           "id": "revealed",
-          "objective": "What VIIRS saw",
+          "objective": "Check the guess against VIIRS",
           "says": [
             {
               "place": "guide",
-              "line": "Blue inside the white outlines: the guess was right."
+              "line": "The white outlines are the model's guess, made without VIIRS. Blue is what VIIRS saw: blue inside white, the guess was right."
             }
           ],
           "more": [
@@ -1758,8 +1758,8 @@
           ],
           "actions": [
             {
-              "label": "See {test_b_fires_n} tested fires",
-              "command": "world:test",
+              "label": "Take your turn",
+              "command": "go:play",
               "key": "Enter",
               "places": [
                 "guide",
@@ -1811,11 +1811,11 @@
         },
         {
           "id": "on_another_pass",
-          "objective": "What VIIRS saw",
+          "objective": "Check the guess against VIIRS",
           "says": [
             {
               "place": "guide",
-              "line": "Blue inside the white outlines: the guess was right."
+              "line": "The white outlines are the model's guess, made without VIIRS. Blue is what VIIRS saw: blue inside white, the guess was right."
             }
           ],
           "more": [
@@ -1869,8 +1869,8 @@
           ],
           "actions": [
             {
-              "label": "See {test_b_fires_n} tested fires",
-              "command": "world:test",
+              "label": "Take your turn",
+              "command": "go:play",
               "key": "Enter",
               "places": [
                 "guide",

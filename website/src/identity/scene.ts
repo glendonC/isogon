@@ -25,10 +25,13 @@ export function reticleBox(box: ScreenBox, view: Viewport, pad = 24, margin = 16
   };
 }
 
-/** Where the prompt stands: above the frame's left corner, or below it when there is no room above. */
-export function promptSpot(frame: ScreenBox, view: Viewport, need = 92, width = 340): { x: number; y: number; hang: 'above' | 'below' } {
+/**
+ * Where the prompt stands: above the frame's left corner, or below it when there is no room above. `clear` is the
+ * lowest edge of what stands at the top of the screen (the top bar), which the prompt never covers.
+ */
+export function promptSpot(frame: ScreenBox, view: Viewport, need = 92, width = 340, clear = 16): { x: number; y: number; hang: 'above' | 'below' } {
   const x = Math.min(Math.max(16, frame.left), view.width - 16 - width);
-  if (frame.top - need >= 16) return { x, y: frame.top, hang: 'above' };
+  if (frame.top - need >= clear) return { x, y: frame.top, hang: 'above' };
   return { x, y: frame.bottom, hang: 'below' };
 }
 
