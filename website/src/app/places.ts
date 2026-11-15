@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getJson } from '../lib/api';
+import { getJson, recordedPeriodsLeftOut } from '../lib/api';
 
 /**
  * The places registry, `GET /api/regions`: the places with FIRMS rows, their featured fires (periods chosen by rule
@@ -104,14 +104,30 @@ export function usePlaces(): PlacesState {
   const [s, setS] = useState<PlacesState>({ state: 'loading', places: EMPTY });
   useEffect(() => {
     const controller = new AbortController();
-    getJson<unknown>('/api/regions', undefined, { signal: controller.signal })
-      .then((body) => setS({ state: 'ready', places: parsePlaces(body) }))
+    // On a page of recorded answers, a period the recording does not hold is left out of every list.
+    Promise.all([getJson<unknown>('/api/regions', undefined, { signal: controller.signal }), recordedPeriodsLeftOut()])
+      .then(([body, out]) => setS({ state: 'ready', places: leaveOut(parsePlaces(body), out) }))
       .catch(() => {
         if (!controller.signal.aborted) setS({ state: 'failed', places: EMPTY });
       });
     return () => controller.abort();
   }, []);
   return s;
+}
+
+/** The registry without the featured periods named (a recording's `periods_left_out`), nor any default that opens one. */
+export function leaveOut(places: Places, ids: readonly string[]): Places {
+  if (ids.length === 0) return places;
+  const out = new Set(ids);
+  return {
+    ...places,
+    default: places.default && out.has(places.default.featured_fire) ? null : places.default,
+    places: places.places.map((p) => ({
+      ...p,
+      featured_fires: p.featured_fires.filter((f) => !out.has(f.id)),
+      starts: p.starts?.default_featured_fire && out.has(p.starts.default_featured_fire) ? { ...p.starts, default_featured_fire: null, default_start: null } : p.starts,
+    })),
+  };
 }
 
 /** The featured fire a run start belongs to, if any. */

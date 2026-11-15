@@ -97,6 +97,8 @@ interface RecordedEntry {
 interface RecordedIndex {
   version: number;
   entries: Record<string, RecordedEntry>;
+  /** The featured periods the recorder did not record (`periods_left_out.periods`: featured fire ids). */
+  periods_left_out?: { why?: string; periods?: unknown };
 }
 
 let indexPromise: Promise<RecordedIndex> | null = null;
@@ -106,9 +108,9 @@ let indexLoaded: RecordedIndex | null = null;
 function recordedIndex(): Promise<RecordedIndex> {
   if (!indexPromise) {
     indexPromise = fetch(`${RECORDED_BASE}index.json`)
-      .then((r) => (r.ok ? (r.json() as Promise<RecordedIndex>) : { version: 1, entries: {} }))
-      .then((idx) => ({ version: idx.version, entries: idx.entries ?? {} }))
-      .catch(() => ({ version: 1, entries: {} }))
+      .then((r) => (r.ok ? (r.json() as Promise<RecordedIndex>) : ({ version: 1, entries: {} } as RecordedIndex)))
+      .then((idx): RecordedIndex => ({ version: idx.version, entries: idx.entries ?? {}, periods_left_out: idx.periods_left_out }))
+      .catch((): RecordedIndex => ({ version: 1, entries: {} }))
       .then((idx) => (indexLoaded = idx));
   }
   return indexPromise;
@@ -132,6 +134,13 @@ async function recorded<T>(key: string, signal?: AbortSignal): Promise<T> {
   const status = hit.status ?? resp.status;
   if (status < 200 || status >= 300) throw new HttpError(status, body);
   return body as T;
+}
+
+/** The featured periods a page of recorded answers does not hold, by featured fire id; none on the live transport. */
+export async function recordedPeriodsLeftOut(): Promise<string[]> {
+  if (TRANSPORT !== 'recorded') return [];
+  const periods = (await recordedIndex()).periods_left_out?.periods;
+  return Array.isArray(periods) ? periods.filter((p): p is string => typeof p === 'string') : [];
 }
 
 interface InflightGet {
