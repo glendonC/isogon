@@ -31,7 +31,7 @@ export const LIGHT_TEX_SIZE = 1536;
 
 /** Brightness of the hot core of the dimmest and of the brightest detection (scene-linear). */
 const CORE_GAIN_MIN = 1.1;
-const CORE_GAIN_MAX = 9.0;
+const CORE_GAIN_MAX = 5.0;
 /** Radius of the hot core: this share of the footprint's smaller half side, and never more, km. */
 const CORE_RADIUS_SHARE = 0.2;
 const CORE_RADIUS_MAX_KM = 0.09;
@@ -53,11 +53,12 @@ const CORE_WANDER = 0.34;
 
 const LIGHT_RED = [1.0, 0.09, 0.015] as const;
 const LIGHT_ORANGE = [1.0, 0.36, 0.05] as const;
-const LIGHT_WHITE = [1.0, 0.84, 0.58] as const;
+const LIGHT_WHITE = [1.0, 0.66, 0.32] as const;
 
 /**
  * Colour and brightness of a detection's light at its core, from how hot it is drawn (0 for the
- * dimmest detection, 1 for the brightest): deep red, through orange, to near white. Writes r, g, b
+ * dimmest detection, 1 for the brightest): deep red, through orange, to a hot amber (never white:
+ * the tone curve would turn the strongest into white discs). Writes r, g, b
  * and the brightness without the colour.
  */
 export function detectionLightOf(heat: number, out: Float32Array): void {
