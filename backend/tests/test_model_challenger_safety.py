@@ -18,12 +18,22 @@ from backend.eval.grid import EvalGrid  # noqa: E402
 from backend.eval.holdout import visible_rows  # noqa: E402
 from backend.eval.rows import detections_from_rows, read_csv_rows  # noqa: E402
 from backend.eval.schedule import Slot  # noqa: E402
-from backend.model.challenger.features import EpisodeFeatureExtractor  # noqa: E402
+from backend.model.challenger.declarations import declare_look_grid  # noqa: E402
+from backend.model.challenger.features import (  # noqa: E402
+    CELL_FEATURE_NAMES,
+    FEATURE_SCHEMA_VERSION,
+    EpisodeFeatureExtractor,
+)
 from backend.model.challenger.guard import (  # noqa: E402
+    MAX_WORKERS,
+    clamp_workers,
+    global_forbidden_test_places,
     refuse_closed_episode,
     refuse_closed_split_years,
+    refuse_forbidden_place,
     refuse_hidden_rows,
 )
+from backend.model.challenger.world_split import load_fresh_world_plan  # noqa: E402
 from backend.model.real_run import parse_start_s  # noqa: E402
 from backend.model.training import ClosedWindow  # noqa: E402
 
@@ -54,9 +64,56 @@ class ChallengerSafetyTests(unittest.TestCase):
         ext = EpisodeFeatureExtractor(modis_only, grid, use_terrain=False)
         slot = Slot(0, "VIIRS_SNPP", float(modis_only.time_s.min()) + 900.0, True, 0.45, 0.42)
         tf = ext.extract(slot)
+        self.assertEqual(FEATURE_SCHEMA_VERSION, 2)
+        self.assertEqual(len(CELL_FEATURE_NAMES), 48)
+        self.assertEqual(tf.cell_x.shape[1], 48)
         self.assertEqual(tf.rec_p.shape, grid.shape)
         self.assertTrue(np.all(np.isfinite(tf.cell_x)))
         self.assertTrue(np.all(np.isfinite(tf.look_x)))
+
+        # Adaptive declaration rule handles both faint and bright grids cleanly
+        faint_grid = np.zeros(grid.shape, dtype=np.float64)
+        faint_grid[2:4, 2:4] = 0.24
+        rule = {
+            "kind": "adaptive_core_plus_spine",
+            "w_blur": 0.22,
+            "tau_hi": 0.255,
+            "s_min": 0.72,
+            "p_peak_min": 0.125,
+            "faint_relief": 0.025,
+        }
+        declared = declare_look_grid(faint_grid, rule)
+        self.assertEqual(declared.shape, grid.shape)
+        self.assertTrue(bool(declared[2, 2]))
+
+    def test_worker_ceiling_and_fresh_world_plan_sealing(self) -> None:
+        self.assertEqual(MAX_WORKERS, 4)
+        self.assertEqual(clamp_workers(18), 4)
+        self.assertEqual(clamp_workers(4), 4)
+        self.assertEqual(clamp_workers(0), 1)
+        self.assertEqual(clamp_workers(-3), 1)
+
+        sealed = global_forbidden_test_places("fresh_world_v1")
+        self.assertEqual(len(sealed), 3264)
+        sample_forb = next(iter(sealed))
+        with self.assertRaises(ValueError):
+            refuse_forbidden_place(sample_forb, sealed)
+
+        has_plan = (_REPO_ROOT / "backend/model/fitted_values/fresh_world_plan.json").is_file() or (
+            _REPO_ROOT / ".git"
+        ).exists()
+        if has_plan:
+            plan = load_fresh_world_plan()
+            self.assertEqual(plan["protocol_id"], "fresh_world_v1")
+            self.assertEqual(len(plan["fitting"]), 300)
+            self.assertEqual(len(plan["validation"]), 83)
+            forb_set = frozenset(plan["forbidden_places"])
+            self.assertGreaterEqual(len(forb_set), 3264)
+            for pid in plan["test_a_places"] + plan["test_b_places"]:
+                with self.assertRaises(ValueError):
+                    refuse_forbidden_place(pid, forb_set)
+            for ep in plan["fitting"] + plan["validation"]:
+                refuse_forbidden_place(ep["place_id"], forb_set)
 
     def test_closed_windows_and_years_are_refused(self) -> None:
         with self.assertRaises(ValueError):

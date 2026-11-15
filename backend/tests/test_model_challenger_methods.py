@@ -240,6 +240,14 @@ class ChallengerMethodsTests(unittest.TestCase):
         self.assertEqual(rep_c["hidden_rows_in_test_box"], 0)
 
     def test_factories_and_pass_reader_pickle_cleanly(self) -> None:
+        from backend.model.challenger import methods as CM
+
+        for var in VALID_VARIANTS:
+            fn = getattr(CM, f"challenger_{var}_factory")
+            fac = fn()
+            restored = pickle.loads(pickle.dumps(fac))
+            self.assertEqual(restored, fac)
+
         for fac in [
             *all_challenger_factories(),
             default_challenger_factory(),

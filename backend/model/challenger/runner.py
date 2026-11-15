@@ -1,4 +1,4 @@
-"""Fit challenger models on SPLIT.md fitting fires and score on validation fires.
+"""Fit challenger models on fresh_world_plan.json fitting fires and score on validation fires.
 
 Enforces strict separation from sealed test places (test_a and test_b) and
 closed 2021 windows, calibrates thresholds, stacking weights, and 90 percent
@@ -33,10 +33,18 @@ from backend.eval.blind_test import (
 )
 from backend.eval.grid import EvalGrid, paint
 from backend.model.challenger.declarations import declare_look_grid
-from backend.model.challenger.features import EpisodeFeatureExtractor
-from backend.model.challenger.gbdt import make_default_single_gbdt
+from backend.model.challenger.features import (
+    CELL_FEATURE_NAMES,
+    FEATURE_SCHEMA_VERSION,
+    EpisodeFeatureExtractor,
+)
+from backend.model.challenger.gbdt import (
+    make_default_gbdt_ensemble,
+    make_default_single_gbdt,
+)
 from backend.model.challenger.guard import (
     REPO_ROOT,
+    clamp_workers,
     refuse_closed_episode,
     refuse_forbidden_place,
     relative_digest_entry,
@@ -70,6 +78,7 @@ from backend.model.challenger.methods import (
 from backend.model.challenger.world_split import (
     DEFAULT_WORK_DIR,
     WorldEpisodePasses,
+    load_fresh_world_plan,
     load_world_episode_rows,
     parse_split_markdown,
     prepare_world_cache,
@@ -86,7 +95,8 @@ from backend.model.fitted import (
 from backend.model.occupancy import OccupancyParams
 from backend.model.real_blind import reconstruction_factory
 
-TAU_CANDIDATES: tuple[float, ...] = (0.23, 0.245, 0.26, 0.275, 0.29, 0.305, 0.32)
+MODEL_ARCH_VERSION: int = 2
+TAU_CANDIDATES: tuple[float, ...] = (0.215, 0.225, 0.235, 0.245, 0.255, 0.265, 0.275, 0.290, 0.305)
 CONTINENTS_ORDER: tuple[str, ...] = (
     "Africa",
     "Asia",
@@ -202,7 +212,7 @@ def _extract_fitting_episode_job(
             "cell_x": (
                 np.concatenate(cell_x_parts, axis=0)
                 if cell_x_parts
-                else np.zeros((0, 35), dtype=np.float32)
+                else np.zeros((0, len(CELL_FEATURE_NAMES)), dtype=np.float32)
             ),
             "cell_y": (
                 np.concatenate(cell_y_parts, axis=0)
@@ -245,16 +255,19 @@ def extract_or_load_fitting_dataset(
     forbidden: frozenset[str],
     occ_params: OccupancyParams,
     plan_sha256: str,
-    split_md_sha256: str,
+    plan_file_sha256: str,
     workers: int = 4,
 ) -> dict[str, Any]:
+    workers = clamp_workers(workers)
     npz_path = work_dir / "challenger_fit_features.npz"
     meta_path = work_dir / "challenger_fit_features_meta.json"
     if npz_path.is_file() and meta_path.is_file():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         if (
             meta.get("plan_sha256") == plan_sha256
-            and meta.get("split_md_sha256") == split_md_sha256
+            and meta.get("plan_file_sha256") == plan_file_sha256
+            and meta.get("feature_schema_version") == FEATURE_SCHEMA_VERSION
+            and meta.get("n_cell_features") == len(CELL_FEATURE_NAMES)
             and meta.get("n_episodes_input") == len(fitting_eps)
         ):
             print("loading cached fitting feature arrays from work_dir...")
@@ -353,7 +366,9 @@ def extract_or_load_fitting_dataset(
 
     meta = {
         "plan_sha256": plan_sha256,
-        "split_md_sha256": split_md_sha256,
+        "plan_file_sha256": plan_file_sha256,
+        "feature_schema_version": FEATURE_SCHEMA_VERSION,
+        "n_cell_features": len(CELL_FEATURE_NAMES),
         "n_episodes_input": len(fitting_eps),
         "n_episodes_kept": kept_ep_idx,
         "n_episodes_with_cached_terrain": terrain_ep_count,
@@ -414,15 +429,38 @@ def select_declaration_rule_oof(
     look_nx: NDArray[np.int32],
     tau_candidates: tuple[float, ...] = TAU_CANDIDATES,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Choose tau_hi in core_plus_spine strictly on fitting OOF predictions."""
+    """Choose declaration rule and tau_hi strictly on fitting OOF predictions."""
     n_looks = len(look_act_counts)
     act_off = np.zeros(n_looks + 1, dtype=np.int64)
     np.cumsum(look_act_counts, out=act_off[1:])
     tr_off = np.zeros(n_looks + 1, dtype=np.int64)
     np.cumsum(look_truth_counts, out=tr_off[1:])
 
-    totals_strict = {tau: M.Counts(0, 0, 0, 0) for tau in tau_candidates}
-    totals_tol = {tau: M.Counts(0, 0, 0, 0) for tau in tau_candidates}
+    candidate_rules: list[dict[str, Any]] = []
+    for tau in tau_candidates:
+        candidate_rules.append(
+            {
+                "kind": "core_plus_spine",
+                "w_blur": 0.20,
+                "tau_hi": float(tau),
+                "s_min": 0.78,
+                "p_peak_min": 0.135,
+            }
+        )
+        candidate_rules.append(
+            {
+                "kind": "adaptive_core_plus_spine",
+                "w_blur": 0.22,
+                "tau_hi": float(tau),
+                "s_min": 0.72,
+                "p_peak_min": 0.125,
+                "faint_relief": 0.025,
+            }
+        )
+
+    n_cand = len(candidate_rules)
+    totals_strict = [M.Counts(0, 0, 0, 0) for _ in range(n_cand)]
+    totals_tol = [M.Counts(0, 0, 0, 0) for _ in range(n_cand)]
 
     for i in range(n_looks):
         ny, nx = int(look_ny[i]), int(look_nx[i])
@@ -438,43 +476,37 @@ def select_declaration_rule_oof(
                 fn_c = int(truth_mask.sum())
                 tn_c = ny * nx - fn_c
                 miss_cnt = M.Counts(0, 0, fn_c, tn_c)
-                for tau in tau_candidates:
-                    totals_strict[tau] = totals_strict[tau] + miss_cnt
-                    totals_tol[tau] = totals_tol[tau] + miss_cnt
+                for ci in range(n_cand):
+                    totals_strict[ci] = totals_strict[ci] + miss_cnt
+                    totals_tol[ci] = totals_tol[ci] + miss_cnt
             else:
                 zero_cnt = M.Counts(0, 0, 0, ny * nx)
-                for tau in tau_candidates:
-                    totals_strict[tau] = totals_strict[tau] + zero_cnt
-                    totals_tol[tau] = totals_tol[tau] + zero_cnt
+                for ci in range(n_cand):
+                    totals_strict[ci] = totals_strict[ci] + zero_cnt
+                    totals_tol[ci] = totals_tol[ci] + zero_cnt
             continue
 
         p_grid = np.zeros((ny, nx), dtype=np.float64)
         p_grid.ravel()[active_idx[a0:a1]] = oof_probs[a0:a1]
 
-        for tau in tau_candidates:
-            rule = {
-                "kind": "core_plus_spine",
-                "w_blur": 0.20,
-                "tau_hi": float(tau),
-                "s_min": 0.78,
-                "p_peak_min": 0.135,
-            }
+        for ci, rule in enumerate(candidate_rules):
             pmask = declare_look_grid(p_grid, rule)
-            totals_strict[tau] = totals_strict[tau] + M.contingency(pmask, truth_mask)
-            totals_tol[tau] = totals_tol[tau] + M.contingency_tolerant(pmask, truth_mask, 1)
+            totals_strict[ci] = totals_strict[ci] + M.contingency(pmask, truth_mask)
+            totals_tol[ci] = totals_tol[ci] + M.contingency_tolerant(pmask, truth_mask, 1)
 
     sweep: list[dict[str, Any]] = []
-    best_tau = tau_candidates[0]
+    best_rule = dict(candidate_rules[0])
     best_obj = -1.0
-    for tau in tau_candidates:
-        s_sc = M.scores(totals_strict[tau])
-        t_sc = M.scores(totals_tol[tau])
+    for ci, rule in enumerate(candidate_rules):
+        s_sc = M.scores(totals_strict[ci])
+        t_sc = M.scores(totals_tol[ci])
         csi_s = float(s_sc["csi"] or 0.0)
         csi_t = float(t_sc["csi"] or 0.0)
         obj = 0.5 * csi_s + 0.5 * csi_t
         sweep.append(
             {
-                "tau_hi": float(tau),
+                "kind": rule["kind"],
+                "tau_hi": float(rule["tau_hi"]),
                 "fitting_oof_csi_strict_375m": round(csi_s, 6),
                 "fitting_oof_csi_tolerant_1_cell": round(csi_t, 6),
                 "fitting_oof_mean_csi": round(obj, 6),
@@ -482,15 +514,8 @@ def select_declaration_rule_oof(
         )
         if obj > best_obj:
             best_obj = obj
-            best_tau = tau
+            best_rule = dict(rule)
 
-    best_rule = {
-        "kind": "core_plus_spine",
-        "w_blur": 0.20,
-        "tau_hi": float(best_tau),
-        "s_min": 0.78,
-        "p_peak_min": 0.135,
-    }
     return best_rule, sweep
 
 
@@ -643,12 +668,18 @@ def _collect_digests(
     ]
 
     return {
-        "split_md": {
-            "logical_path": "fire-model/SPLIT.md",
+        "fresh_world_plan": {
+            "logical_path": str(
+                split_doc.get(
+                    "plan_logical_path",
+                    "backend/model/fitted_values/fresh_world_plan.json",
+                )
+            ),
             "protocol_id": split_doc["protocol_id"],
             "protocol_sha256": split_doc["protocol_sha256"],
             "plan_sha256": split_doc["plan_sha256"],
-            "sha256": split_doc["split_md_sha256"],
+            "bytes": split_doc.get("plan_file_bytes"),
+            "sha256": split_doc.get("plan_file_sha256", split_doc["split_md_sha256"]),
         },
         "world_store_ready_json": {
             "logical_path": "world_store/firms/READY.json",
@@ -670,21 +701,30 @@ def _collect_digests(
 
 
 def run_pipeline(
-    split_md: Path,
     world_dir: Path,
     cmr_seed_dir: Path | None,
     work_dir: Path,
     out_dir: Path,
+    plan_json: Path | None = None,
+    split_md: Path | None = None,
     workers: int = 4,
     inner_folds: int = 5,
+    use_gbdt_ensemble: bool = True,
 ) -> dict[str, Any]:
     t_pipeline = time.time()
-    split_doc = parse_split_markdown(split_md)
+    workers = clamp_workers(workers)
+    if split_md is not None and plan_json is None:
+        split_doc = parse_split_markdown(split_md)
+        split_doc.setdefault("plan_file_sha256", split_doc["split_md_sha256"])
+        split_doc.setdefault("plan_logical_path", "fire-model/SPLIT.md")
+    else:
+        split_doc = load_fresh_world_plan(plan_json)
     forbidden = frozenset(split_doc["forbidden_places"])
+    plan_file_sha = str(split_doc.get("plan_file_sha256", split_doc["split_md_sha256"]))
     print(
-        f"parsed SPLIT.md: protocol={split_doc['protocol_id']}, "
+        f"loaded split plan ({split_doc.get('plan_logical_path')}): protocol={split_doc['protocol_id']}, "
         f"fitting={len(split_doc['fitting'])}, validation={len(split_doc['validation'])}, "
-        f"forbidden_test_places={len(forbidden)}"
+        f"forbidden_test_places={len(forbidden)}, workers={workers}"
     )
 
     rows_step = prepare_world_cache(
@@ -702,7 +742,7 @@ def run_pipeline(
         forbidden=forbidden,
         occ_params=occ_params,
         plan_sha256=split_doc["plan_sha256"],
-        split_md_sha256=split_doc["split_md_sha256"],
+        plan_file_sha256=plan_file_sha,
         workers=workers,
     )
 
@@ -729,12 +769,15 @@ def run_pipeline(
     if not folds:
         raise RuntimeError("Insufficient distinct fitting places for inner cross-validation")
 
-    oof_cache_path = work_dir / f"challenger_inner_oof_{inner_folds}f.npz"
+    gbdt_mode_tag = "ens_d5d6" if use_gbdt_ensemble else "single_d5"
+    oof_cache_path = work_dir / f"challenger_inner_oof_{inner_folds}f_v{FEATURE_SCHEMA_VERSION}_{gbdt_mode_tag}.npz"
     if oof_cache_path.is_file():
         cached_oof = np.load(oof_cache_path)
         if (
             cached_oof["oof_log"].shape[0] == n_cells
             and str(cached_oof["plan_sha256"]) == split_doc["plan_sha256"]
+            and str(cached_oof["plan_file_sha256"]) == plan_file_sha
+            and int(cached_oof["model_arch_version"]) == MODEL_ARCH_VERSION
         ):
             print("loading cached inner-fold OOF predictions...")
             oof_log = cached_oof["oof_log"]
@@ -760,13 +803,16 @@ def run_pipeline(
             X_tr, y_tr = cell_x[tr_c], cell_y[tr_c]
             X_va = cell_x[va_c]
 
-            m_log = InteractionLogistic(max_train_rows=2_000_000, seed=20261114 + f_i).fit(X_tr, y_tr)
+            m_log = InteractionLogistic(max_train_rows=2_200_000, seed=20261114 + f_i).fit(X_tr, y_tr)
             oof_log[va_c] = m_log.predict_proba(X_va)
 
-            m_mlp = ResidualMLP(max_train_rows=2_200_000, seed=20261114 + f_i).fit(X_tr, y_tr)
+            m_mlp = ResidualMLP(max_train_rows=2_400_000, seed=20261114 + f_i).fit(X_tr, y_tr)
             oof_mlp[va_c] = m_mlp.predict_proba(X_va)
 
-            m_gbdt = make_default_single_gbdt(random_state=42 + f_i, max_train_rows=2_200_000).fit(X_tr, y_tr)
+            if use_gbdt_ensemble:
+                m_gbdt = make_default_gbdt_ensemble(random_state=42 + f_i, max_train_rows=2_400_000).fit(X_tr, y_tr)
+            else:
+                m_gbdt = make_default_single_gbdt(random_state=42 + f_i, max_train_rows=2_400_000).fit(X_tr, y_tr)
             oof_gbdt[va_c] = m_gbdt.predict_proba(X_va)
             print(
                 f"  inner fold {f_i + 1}/{len(folds)} complete in {time.time() - t_f:.1f} s "
@@ -776,6 +822,8 @@ def run_pipeline(
         np.savez(
             oof_cache_path,
             plan_sha256=np.array(split_doc["plan_sha256"]),
+            plan_file_sha256=np.array(plan_file_sha),
+            model_arch_version=np.array(MODEL_ARCH_VERSION),
             oof_log=oof_log,
             oof_mlp=oof_mlp,
             oof_gbdt=oof_gbdt,
@@ -822,7 +870,7 @@ def run_pipeline(
         )
         decl_rules[var] = rule
         tau_sweeps[var] = sweep
-        print(f"  {var}: chosen tau_hi={rule['tau_hi']}")
+        print(f"  {var}: chosen kind={rule['kind']}, tau_hi={rule['tau_hi']}")
 
     print("fitting shared FRPHead and variant-specific PixelCountHeads on fitting OOF...")
     frp_head = FRPHead().fit(
@@ -852,12 +900,15 @@ def run_pipeline(
         b_gbdt = ChallengerBundle.load_json(out_dir / VARIANT_FILES["gbdt"])
         if (
             b_log.fitted_on.get("plan_sha256") == split_doc["plan_sha256"]
-            and b_log.fitted_on.get("split_md_sha256") == split_doc["split_md_sha256"]
+            and b_log.fitted_on.get("plan_file_sha256") == plan_file_sha
+            and b_log.fitted_on.get("feature_schema_version") == FEATURE_SCHEMA_VERSION
+            and b_log.fitted_on.get("model_arch_version") == MODEL_ARCH_VERSION
+            and b_log.fitted_on.get("gbdt_mode") == gbdt_mode_tag
             and b_log.logistic_model is not None
             and b_mlp.mlp_model is not None
             and b_gbdt.gbdt_model is not None
         ):
-            print("reusing full-fitting-set cell models matching SPLIT.md plan_sha256...")
+            print("reusing full-fitting-set cell models matching plan_file_sha256 and schema...")
             full_log = b_log.logistic_model
             full_mlp = b_mlp.mlp_model
             full_gbdt = b_gbdt.gbdt_model
@@ -868,14 +919,20 @@ def run_pipeline(
         t_fit_full = time.time()
         full_log = InteractionLogistic(max_train_rows=2_500_000, seed=20261114).fit(cell_x, cell_y)
         full_mlp = ResidualMLP(max_train_rows=3_000_000, seed=20261114).fit(cell_x, cell_y)
-        full_gbdt = make_default_single_gbdt(random_state=42, max_train_rows=3_000_000).fit(cell_x, cell_y)
+        if use_gbdt_ensemble:
+            full_gbdt = make_default_gbdt_ensemble(random_state=42, max_train_rows=3_000_000).fit(cell_x, cell_y)
+        else:
+            full_gbdt = make_default_single_gbdt(random_state=42, max_train_rows=3_000_000).fit(cell_x, cell_y)
         print(f"full cell models fitted in {time.time() - t_fit_full:.1f} s")
 
     fitted_on_meta = {
         "protocol_id": split_doc["protocol_id"],
         "protocol_sha256": split_doc["protocol_sha256"],
         "plan_sha256": split_doc["plan_sha256"],
-        "split_md_sha256": split_doc["split_md_sha256"],
+        "plan_file_sha256": plan_file_sha,
+        "feature_schema_version": FEATURE_SCHEMA_VERSION,
+        "model_arch_version": MODEL_ARCH_VERSION,
+        "gbdt_mode": gbdt_mode_tag,
         "role": "fitting",
         "fitting_episodes_in_plan": len(split_doc["fitting"]),
         "fitting_episodes_used": int(fit_data["meta"]["n_episodes_kept"]),
@@ -885,7 +942,7 @@ def run_pipeline(
         "test_places_read": 0,
         "validation_rows_used_in_fit": 0,
         "description": (
-            f"SPLIT.md {split_doc['protocol_id']} fitting set only "
+            f"fresh_world_plan.json {split_doc['protocol_id']} fitting set only "
             f"({fit_data['meta']['n_episodes_kept']} fires, {n_looks} VIIRS CMR looks)"
         ),
     }
@@ -893,19 +950,19 @@ def run_pipeline(
     labels_by_variant = {
         "logistic": (
             "regularized logistic regression with monotone transforms and physics interactions "
-            "from visible MODIS only; fitted on SPLIT.md fitting fires"
+            "from visible MODIS only; fitted on fresh_world_plan.json fitting fires"
         ),
         "mlp": (
             "two-layer SiLU residual neural network with linear skip from visible MODIS only; "
-            "fitted on SPLIT.md fitting fires"
+            "fitted on fresh_world_plan.json fitting fires"
         ),
         "gbdt": (
             "histogram gradient boosted decision trees with GOSS sampling from visible MODIS only; "
-            "fitted on SPLIT.md fitting fires"
+            "fitted on fresh_world_plan.json fitting fires"
         ),
         "blend": (
             "out-of-fold log-odds stack of logistic regression, residual MLP, and histogram GBDT "
-            "from visible MODIS only; fitted on SPLIT.md fitting fires"
+            "from visible MODIS only; fitted on fresh_world_plan.json fitting fires"
         ),
     }
 
@@ -1079,7 +1136,7 @@ def run_pipeline(
         "default_method": chosen_method,
         "bundle_file": VARIANT_FILES[chosen_variant],
         "selection_rule": (
-            "chosen on SPLIT.md validation fires by lexicographic order: "
+            "chosen on fresh_world_plan.json validation fires by lexicographic order: "
             "(1) most scores ahead of both baselines under 2000-fire bootstrap at 0.90, "
             "(2) fewest scores behind either baseline, "
             "(3) most scores ahead of reconstruction directly, "
@@ -1140,12 +1197,13 @@ def run_pipeline(
 
     results_doc = {
         "what": (
-            "validation evaluation of Isogon challenger models fitted on SPLIT.md fitting fires "
-            "and scored once on SPLIT.md validation fires under protocol version 3"
+            "validation evaluation of Isogon challenger models fitted on fresh_world_plan.json fitting fires "
+            "and scored once on fresh_world_plan.json validation fires under protocol version 3"
         ),
         "protocol_id": split_doc["protocol_id"],
         "protocol_sha256": split_doc["protocol_sha256"],
         "plan_sha256": split_doc["plan_sha256"],
+        "plan_file_sha256": plan_file_sha,
         "blind_test_protocol": rep_list[0]["protocol"] if rep_list else None,
         "chosen_default_challenger": default_ptr,
         "fitting_summary": {
@@ -1158,11 +1216,14 @@ def run_pipeline(
             "declaration_tau_sweeps": tau_sweeps,
             "frp_head_scale": round(float(frp_head.scale_), 6),
             "frp_head_interval": compact_json_numbers(frp_head.interval_stats_, sig=6),
+            "frp_head_stratified_intervals": compact_json_numbers(frp_head.stratified_intervals_, sig=6),
             "pixel_head_scales": {
                 v: {
                     "scale_day": round(float(pixel_heads[v].scale_day_), 6),
                     "scale_night": round(float(pixel_heads[v].scale_night_), 6),
+                    "poisson_weights": [round(float(w), 6) for w in pixel_heads[v].poisson_weights_],
                     "interval": compact_json_numbers(pixel_heads[v].interval_stats_, sig=6),
+                    "stratified_intervals": compact_json_numbers(pixel_heads[v].stratified_intervals_, sig=6),
                 }
                 for v in VALID_VARIANTS
             },
@@ -1207,9 +1268,14 @@ def run_pipeline(
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        description="Fit challenger models on SPLIT.md fitting fires and score on validation fires."
+        description="Fit challenger models on fresh_world_plan.json fitting fires and score on validation fires."
     )
-    ap.add_argument("--split-md", default=None, help="Path to SPLIT.md (or set ISOGON_SPLIT_MD)")
+    ap.add_argument(
+        "--plan-json",
+        default=None,
+        help="Optional path to fresh_world_plan.json (defaults to main:backend/model/fitted_values/fresh_world_plan.json)",
+    )
+    ap.add_argument("--split-md", default=None, help="Optional legacy path to SPLIT.md")
     ap.add_argument("--world-dir", default=None, help="Path to isogon-world (or set ISOGON_WORLD_DIR)")
     ap.add_argument(
         "--cmr-seed-dir",
@@ -1218,25 +1284,33 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--work-dir", default=str(DEFAULT_WORK_DIR), help="Cache working directory")
     ap.add_argument("--out-dir", default=str(FITTED_DIR), help="Directory for fitted bundles")
-    ap.add_argument("--workers", type=int, default=4, help="Worker process count")
+    ap.add_argument("--workers", type=int, default=4, help="Worker process count (clamped to <= 4)")
     ap.add_argument("--inner-folds", type=int, default=5, help="Place-grouped inner CV folds")
+    ap.add_argument(
+        "--single-gbdt",
+        action="store_true",
+        help="Use standalone depth-5 HistGBDT instead of two-depth HistGBDTEnsemble",
+    )
     args = ap.parse_args(argv)
 
-    split_md, world_dir, cmr_seed = resolve_paths_from_env(
-        args.split_md, args.world_dir, args.cmr_seed_dir
+    plan_json, world_dir, cmr_seed, split_md = resolve_paths_from_env(
+        plan_json=args.plan_json,
+        world_dir=args.world_dir,
+        cmr_seed_dir=args.cmr_seed_dir,
+        split_md=args.split_md,
     )
-    if split_md is None or world_dir is None:
-        raise SystemExit(
-            "Provide --split-md and --world-dir (or set ISOGON_SPLIT_MD and ISOGON_WORLD_DIR)"
-        )
+    if world_dir is None:
+        raise SystemExit("Provide --world-dir (or set ISOGON_WORLD_DIR)")
     run_pipeline(
-        split_md=split_md,
         world_dir=world_dir,
         cmr_seed_dir=cmr_seed,
         work_dir=Path(args.work_dir),
         out_dir=Path(args.out_dir),
-        workers=max(1, int(args.workers)),
+        plan_json=plan_json,
+        split_md=split_md,
+        workers=clamp_workers(args.workers),
         inner_folds=max(2, int(args.inner_folds)),
+        use_gbdt_ensemble=not bool(args.single_gbdt),
     )
     return 0
 
