@@ -824,9 +824,13 @@ export function App() {
   // Due for the run on show (true), or for the run of the place named (a place opened from search or N, whose run is
   // still to come while the one before stays on show).
   const openingDueRef = useRef<boolean | string>(false);
+  /** Test asked for from another step: the reveal waits for Estimate's opening hidden pass (below). */
+  const revealDueRef = useRef(false);
   const stepBeforeRef = useRef(step);
   if (stepBeforeRef.current !== step) {
     if (step !== 'test') openingDueRef.current = false;
+    // Left for another step before the reveal came: it is no longer due.
+    if (step !== 'test' && step !== 'fire') revealDueRef.current = false;
     else if (!openingDueRef.current) openingDueRef.current = true;
     stepBeforeRef.current = step;
   }
@@ -847,6 +851,24 @@ export function App() {
     setPlaying(false);
     setTimeProgress(k);
   }, [step, round, isExecuting, pendingStart, activeRun, holdoutViirs, revealed]);
+
+  // Test asked for from another step: once Estimate stands on its opening hidden pass, the reveal (Test's start).
+  const revealTimerRef = useRef(0);
+  useEffect(() => {
+    if (!revealDueRef.current || revealTimerRef.current) return;
+    if (step !== 'test' && step !== 'fire') return;
+    if (round || isExecuting || pendingStart || !activeRun || !isRealRun(activeRun) || openingDueRef.current) return;
+    if (!holdoutViirs || revealed) {
+      revealDueRef.current = false;
+      return;
+    }
+    // One tick later, so the pass the opening chose is the one on show when the reveal reads it.
+    revealTimerRef.current = window.setTimeout(() => {
+      revealTimerRef.current = 0;
+      revealDueRef.current = false;
+      runCommandRef.current('go:test');
+    }, 0);
+  }, [step, round, isExecuting, pendingStart, activeRun, holdoutViirs, revealed, timeProgress]);
 
   /** V: on the test step it hides, then reveals, then opens the score; elsewhere it goes to the test. */
   const testAction = useCallback(() => {
@@ -1383,6 +1405,13 @@ export function App() {
       return;
     }
     if (command === 'go:test') {
+      // From another step (the trail's Test from the Record, say): Test starts with the reveal, so Estimate opens on its
+      // hidden pass and the reveal follows there (the effect after the opening pass).
+      if (step !== 'fire' && step !== 'test' && holdoutViirs && !revealed) {
+        revealDueRef.current = true;
+        openModel();
+        return;
+      }
       if (holdoutViirs && !revealed) {
         const fs = (activeRun as unknown as { observer_passes?: { frames?: Array<{ sensor?: string }> } } | null)?.observer_passes?.frames ?? [];
         const sharp = (k: number) => typeof fs[k]?.sensor === 'string' && fs[k].sensor!.startsWith('VIIRS');
