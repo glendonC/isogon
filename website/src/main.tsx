@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 // Play's hand-back listens before the pictures of the world, which keep their keys from what comes after them.
 import './ui/usePlay';
 import { App } from './App';
+import { ViewportBoundary } from './ui/ViewportBoundary';
 import './styles/tokens.css';
 import './styles/system.css';
 import './styles/scroll.css';
@@ -27,6 +28,8 @@ setControlSound(controlVoice);
 armControlVoices();
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <ViewportBoundary>
+      <App />
+    </ViewportBoundary>
   </React.StrictMode>
 );
