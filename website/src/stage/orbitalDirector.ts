@@ -52,12 +52,13 @@ export const INSPECTOR_CAMERA_PRESETS: Record<InspectorCameraPreset, CameraPrese
     distance: 18.5,
     target: [0.0, 0.3, 0.0],
   },
-  // The whole box from higher, with the land around it (the stage draws no block there)
+  // The whole box from higher, with the land around it (the stage draws no block there). Steep
+  // enough that a board of tiles over the box reads as a grid and its far tiles are not squeezed
   region: {
     azimuth: 0.48,
-    polar: 1.0,
-    distance: 15.5,
-    target: [-0.3, 0.3, 0.4],
+    polar: 0.75,
+    distance: 17.0,
+    target: [-0.3, 0.3, 0.2],
   },
 };
 
