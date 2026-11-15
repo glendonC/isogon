@@ -1,8 +1,9 @@
-import { useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { count } from '../guide/formats';
 import { countryAt } from './countryAt';
 import { parseFresh, type FreshFire, type FreshLook, type Group } from './freshTest';
 import { useRead } from './read';
+import { inFilm, useGuideRoom, WorldCaption } from './WorldCaption';
 import { WorldCanvas } from './WorldCanvas';
 import '../styles/world.css';
 
@@ -20,7 +21,11 @@ export const TEST_WORDS = {
   loading: 'Loading the test across the world.',
   failed: 'The test across the world did not load.',
   noLook: 'No look of the test across the world has been taken yet. Its plan of fires is written before any score.',
-  // The product lane's names of the two looks (WORDS-wider.json, world_pictures.panel.look_names), in place of the served ones.
+  // The product lane's words (WORDS-wider.json version 4, world_pictures): the objective, the film's captions and the
+  // names of the two looks, shown in place of the served ones.
+  objective: 'See where the estimate was tested',
+  filmA: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} unseen fires: ahead on ${ahead} of ${of} scores, behind on ${behind}.`,
+  filmB: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} untouched fires: ahead on ${ahead} of ${of}, behind on ${behind}.`,
   lookNames: { test_a: 'Test A: fires it had never seen', test_b: 'Test B: fires that nothing had touched' } as Record<string, string>,
   title: (fires: number, groups: number) => `${count(fires)} fires in ${count(groups)} continents. Each square is one fire.`,
   held: (stated: number, held: number, looks: number) =>
@@ -72,7 +77,13 @@ export interface WorldTestControl {
   nextFire: () => void;
 }
 
-export function WorldTest({ source, control }: { source: string; control?: MutableRefObject<WorldTestControl | null> }) {
+/**
+ * `caption` (on by default) gives the picture its own caption where the page's objective stands, the objective on the
+ * page and the film's caption in the film presentation, and keeps the room of the guide clear at the bottom
+ * (`--world-guide-room`); a page that frames the picture with its own trail (the host of the pictures of the world)
+ * passes false.
+ */
+export function WorldTest({ source, control, caption = true }: { source: string; control?: MutableRefObject<WorldTestControl | null>; caption?: boolean }) {
   const read = useRead<unknown>(source);
   const ans = useMemo(() => (read.state === 'ready' ? parseFresh(read.value) : null), [read]);
   const [lookId, setLookId] = useState<'test_a' | 'test_b' | null>(null);
@@ -82,7 +93,12 @@ export function WorldTest({ source, control }: { source: string; control?: Mutab
   const panel = useRef<HTMLDivElement | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
   // The panel stands beside the Earth on a wide screen and under it on a narrow one; the Earth fits the room left.
-  const [room, setRoom] = useState({ left: 0, bottom: 0 });
+  const [room, setRoom] = useState({ left: 0, bottom: 0, stacked: false });
+  const film = useMemo(inFilm, []);
+  const [capBottom, setCapBottom] = useState(0);
+  const [guideRoom, setGuideRoom] = useState(0);
+  const roomRef = useGuideRoom(useCallback((px: number) => setGuideRoom(px), []));
+  const onCaption = useCallback((px: number) => setCapBottom(px), []);
   useLayoutEffect(() => {
     const el = panel.current;
     const rt = root.current;
@@ -91,8 +107,10 @@ export function WorldTest({ source, control }: { source: string; control?: Mutab
       const r = rt.getBoundingClientRect();
       const p = el.getBoundingClientRect();
       const stacked = p.width > r.width * 0.7;
-      const next = stacked ? { left: 0, bottom: Math.round(Math.max(0, r.bottom - p.top + 8)) } : { left: Math.round(p.right - r.left + 24), bottom: 0 };
-      setRoom((o) => (o.left === next.left && o.bottom === next.bottom ? o : next));
+      const next = stacked
+        ? { left: 0, bottom: Math.round(Math.max(0, r.bottom - p.top + 8)), stacked }
+        : { left: Math.round(p.right - r.left + 24), bottom: 0, stacked };
+      setRoom((o) => (o.left === next.left && o.bottom === next.bottom && o.stacked === next.stacked ? o : next));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -124,10 +142,19 @@ export function WorldTest({ source, control }: { source: string; control?: Mutab
       },
     };
   }
+  const c = look?.all?.classes ?? null;
+  const filmLine = look && c ? (look.id === 'test_b' ? TEST_WORDS.filmB : TEST_WORDS.filmA)(look.fires.length, c.ahead, judged, c.behind) : null;
+  const captionLine = caption ? (film ? filmLine ?? TEST_WORDS.objective : TEST_WORDS.objective) : null;
+  // With its own caption, the panel stands under it and above the guide's room, or under the Earth on a narrow screen.
+  const panelStyle: React.CSSProperties | undefined = !caption
+    ? undefined
+    : room.stacked
+      ? { bottom: guideRoom }
+      : { top: capBottom + 16, maxHeight: `calc(100% - ${capBottom + 16 + guideRoom + 8}px)`, overflowY: 'auto' };
 
   return (
     <div className="world-earth" ref={root}>
-      <WorldCanvas label={TEST_WORDS.label} padLeft={room.left} padBottom={room.bottom} onClickMap={() => setOpen(null)}>
+      <WorldCanvas label={TEST_WORDS.label} padLeft={room.left} padBottom={room.bottom + (caption && !room.stacked ? guideRoom : 0)} onClickMap={() => setOpen(null)}>
         {(p) => (
           <>
             {fires.map((f) => {
@@ -167,7 +194,9 @@ export function WorldTest({ source, control }: { source: string; control?: Mutab
           </>
         )}
       </WorldCanvas>
-      <div className="world-legend world-tests" data-world-ui ref={panel}>
+      {caption && <div className="world-guide-room" ref={roomRef} aria-hidden="true" />}
+      <WorldCaption line={captionLine} onHeight={onCaption} />
+      <div className="world-legend world-tests" data-world-ui data-captioned={caption ? 'true' : 'false'} ref={panel} style={panelStyle}>
         {ans.example && <div className="world-legend__fine world-legend__caution">{ans.example}</div>}
         {!look ? (
           <div className="world-legend__line">{TEST_WORDS.noLook}</div>

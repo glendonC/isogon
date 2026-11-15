@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { countryAt, pointWords } from './countryAt';
 import { placeLabels } from './labels';
 import { parseLive, platformWords, type Live, type LiveFire, type LiveSeal } from './live';
 import { type Box } from './projection';
 import { useRead } from './read';
 import { clockAt, clockOnly, dayAt, partAt } from './words';
+import { inFilm, useGuideRoom, WorldCaption } from './WorldCaption';
 import { WorldCanvas } from './WorldCanvas';
 import '../styles/world.css';
 
@@ -25,6 +26,12 @@ export interface SealedTonightProps {
   /** Hours of the line of time before and after now. */
   before?: number;
   after?: number;
+  /**
+   * The picture's own caption where the page's objective stands (the objective on the page, the film's caption in the
+   * film presentation) and the guide's room kept clear at the bottom (`--world-guide-room`); on by default. A page
+   * that frames the board with its own trail passes false.
+   */
+  caption?: boolean;
 }
 
 const H = 3_600_000;
@@ -39,6 +46,9 @@ const PARTS: Record<string, string> = {
 };
 
 export const SEAL_WORDS = {
+  // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open).
+  objective: 'See predictions written before the pass',
+  film: (ahead: number, behind: number) => `Sealed before NASA published the pass: ahead on ${ahead}, behind on ${behind}.`,
   label: 'The Earth, with the fires whose predictions are sealed tonight',
   loading: "Loading tonight's sealed predictions.",
   failed: "Tonight's sealed predictions did not load.",
@@ -95,12 +105,17 @@ function words(f: LiveFire, s: LiveSeal | null): string {
   }
 }
 
-export function SealedTonight({ source, now = null, before = 6, after = 9 }: SealedTonightProps) {
+export function SealedTonight({ source, now = null, before = 6, after = 9, caption = true }: SealedTonightProps) {
   const read = useRead<unknown>(source);
   const live: Live | null = read.state === 'ready' ? parseLive(read.value) : null;
   const [open, setOpen] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const film = useMemo(inFilm, []);
+  const [capBottom, setCapBottom] = useState(0);
+  const [guideRoom, setGuideRoom] = useState(0);
+  const roomRef = useGuideRoom(useCallback((px: number) => setGuideRoom(px), []));
+  const onCaption = useCallback((px: number) => setCapBottom(px), []);
 
   const nowMs = t(now ?? live?.writtenUtc ?? null) || Date.now();
   const t0 = nowMs - before * H;
@@ -141,8 +156,20 @@ export function SealedTonight({ source, now = null, before = 6, after = 9 }: Sea
   for (let h = -before; h <= after; h += 3)
     ticks.push({ at: ((h + before) / (before + after)) * 100, text: h === 0 ? SEAL_WORDS.now : h < 0 ? SEAL_WORDS.ago(-h) : SEAL_WORDS.ahead(h), minor: h % 6 !== 0 });
 
+  // The film's caption once a score exists and the count over the fires stands; before that, the objective.
+  const scored = live.seals.filter((s) => s.state === 'scored').length;
+  const o = live.overFires;
+  const filmLine = scored > 0 && o && o.ahead !== null && o.behind !== null ? SEAL_WORDS.film(o.ahead, o.behind) : null;
+  const captionLine = caption ? (film ? filmLine ?? SEAL_WORDS.objective : SEAL_WORDS.objective) : null;
+
   return (
-    <div className="world-sealed">
+    <div
+      className="world-sealed"
+      data-captioned={caption ? 'true' : 'false'}
+      style={caption ? { paddingTop: capBottom + 12, paddingBottom: guideRoom } : undefined}
+    >
+      {caption && <div className="world-guide-room" ref={roomRef} aria-hidden="true" />}
+      <WorldCaption line={captionLine} onHeight={onCaption} />
       <div className="world-sealed__earth">
         <WorldCanvas label={SEAL_WORDS.label} focus={focus}>
           {(p) => {

@@ -10,6 +10,9 @@
  *   ?use=test     The test across the world (test=<address>)
  *   ?use=band     The band of the Record's interval on a month and on a year (record=<address>, month=YYYY-MM)
  *   ?use=years    The Earth plays the years (years=<index>, mode=detected|harmonized, year=YYYY, play=1)
+ *   ?use=testscreen, ?use=sealedscreen   The test across the world and the sealed predictions as screens of their own:
+ *                 their caption where the objective stands, the guide's room clear (test=, seals=, guide=1 for a
+ *                 stand-in guide in that room)
  *   ?use=cube     A drawn box's Record summed here from the public cube (cube=<folder>) against the cube route's answer
  *                 (route=<origin>), for boxes=w,s,e,n;w,s,e,n: times and the largest difference
  */
@@ -107,7 +110,7 @@ function Sealed() {
       actions={['Show a sealed prediction', 'Back to the test']}
     >
       <div style={{ position: 'absolute', inset: 'var(--film-room-top, 96px) 0 var(--film-room-bottom, 150px) 0' }}>
-        <SealedTonight source={Q.get('seals') ?? `${SAMPLE}/live-example.json`} now={Q.get('now')} />
+        <SealedTonight source={Q.get('seals') ?? `${SAMPLE}/live-example.json`} now={Q.get('now')} caption={false} />
       </div>
     </Frame>
   );
@@ -121,7 +124,7 @@ function Test() {
       lines={['Each square is one fire the estimate was tested on, filled by how many of seven scores it won. An empty square is a fire it lost on.']}
       actions={["Show a fire's scores", 'Back to the test']}
     >
-      <WorldTest source={Q.get('test') ?? `${SAMPLE}/test-example.json`} />
+      <WorldTest source={Q.get('test') ?? `${SAMPLE}/test-example.json`} caption={false} />
     </Frame>
   );
 }
@@ -223,7 +226,35 @@ function Years() {
   );
 }
 
+// The two pictures as the interface lane mounts them: a screen of their own over the whole page.
+function Screen({ children, line, actions }: { children: React.ReactNode; line: string; actions: string[] }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--sys-night)' }}>
+      {children}
+      {Q.get('guide') === '1' && <GuideStrip lines={[line]} actions={actions.map((label, i) => ({ label, command: String(i), key: null }) as never)} onAction={() => {}} />}
+    </div>
+  );
+}
+
 function App() {
+  if (USE === 'testscreen')
+    return (
+      <Screen
+        line="Each square is one fire, filled by how many of the 7 scores the estimate won there against both simple methods: full is all, empty is none."
+        actions={["Show a fire's scores", 'Back to the test']}
+      >
+        <WorldTest source={Q.get('test') ?? 'http://127.0.0.1:8788/api/evidence'} />
+      </Screen>
+    );
+  if (USE === 'sealedscreen')
+    return (
+      <Screen
+        line="Each mark is a fire burning now, where a prediction was written down with its fingerprint before NASA published what the sharp satellite saw."
+        actions={['Back to the fire']}
+      >
+        <SealedTonight source={Q.get('seals') ?? 'http://127.0.0.1:8788/api/live'} now={Q.get('now')} />
+      </Screen>
+    );
   if (USE === 'years') return <Years />;
   if (USE === 'cube') return <Cube />;
   if (USE === 'earth') return <Earth />;

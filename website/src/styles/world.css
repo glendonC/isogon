@@ -1325,3 +1325,35 @@
 .world-screen[data-film='true'] {
   --years-bottom: clamp(20px, 2vw, 40px);
 }
+
+/* A picture's own caption (WorldCaption.tsx), where the page's objective stands; and the guide's room it keeps clear,
+   an empty element whose height is measured (`--world-guide-room`, else the film's or 150 px). */
+.world-caption {
+  position: absolute;
+  z-index: 3;
+  top: var(--world-caption-top, clamp(22px, 2.2vw, 44px));
+  left: var(--world-caption-left, clamp(24px, 2.4vw, 48px));
+  max-width: min(72vw, 1100px);
+  pointer-events: none;
+  text-shadow: 0 1px 12px rgba(8, 11, 17, 0.8);
+}
+
+.world-caption__line {
+  margin: 0;
+  font: var(--sys-weight) var(--sys-size-title) / var(--sys-lh-title) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.world-guide-room {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  height: var(--world-guide-room, var(--film-room-bottom, 150px));
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.world-sealed[data-captioned='true'] {
+  box-sizing: border-box;
+}

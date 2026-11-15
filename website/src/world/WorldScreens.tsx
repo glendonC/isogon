@@ -144,7 +144,7 @@ function Test({ film, toWord }: Part) {
   return (
     <>
       <div className="world-screen__test">
-        <WorldTest source="/api/evidence" control={control} />
+        <WorldTest source="/api/evidence" control={control} caption={false} />
       </div>
       <Frame
         film={film}
@@ -191,7 +191,7 @@ function Sealed({ film, toWord }: Part) {
   return (
     <>
       <div className="world-screen__sealed">
-        <SealedTonight source="/api/live" />
+        <SealedTonight source="/api/live" caption={false} />
       </div>
       <Frame
         film={film}
