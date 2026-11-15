@@ -19,8 +19,35 @@ from backend.model.training import closed_for, closed_window_error, refuse_close
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[3]
 PLACE_DEG: float = 2.5
+BLOCK_DEG: float = 10.0
 PLACE_COLS: int = int(round(360.0 / PLACE_DEG))
 PLACE_ROWS: int = int(round(180.0 / PLACE_DEG))
+MAX_WORKERS: int = 4
+ROLE_SHARES: tuple[str, ...] = ("fitting", "fitting", "fitting", "validation", "test_a", "test_b")
+
+
+def clamp_workers(workers: int) -> int:
+    """Enforce the house ceiling of at most four worker processes."""
+    return max(1, min(MAX_WORKERS, int(workers)))
+
+
+def role_of_block(block: tuple[int, int], protocol_id: str = "fresh_world_v1") -> str:
+    """Deterministic block role from coordinates alone, matching backend.model.fresh_test."""
+    h = hashlib.sha256(f"{protocol_id}:{block[0]}:{block[1]}".encode("utf-8")).hexdigest()
+    return ROLE_SHARES[int(h[:12], 16) % len(ROLE_SHARES)]
+
+
+def global_forbidden_test_places(protocol_id: str = "fresh_world_v1") -> frozenset[str]:
+    """Return every 2.5 degree place on Earth whose 10 degree block belongs to test_a or test_b."""
+    per = int(round(BLOCK_DEG / PLACE_DEG))
+    out: set[str] = set()
+    for i in range(PLACE_COLS):
+        bi = i // per
+        for j in range(PLACE_ROWS):
+            bj = j // per
+            if role_of_block((bi, bj), protocol_id=protocol_id) in ("test_a", "test_b"):
+                out.add(place_id_of_index((i, j)))
+    return frozenset(out)
 
 
 def refuse_hidden_rows(visible: Detections, hidden: str = "VIIRS") -> None:
@@ -80,7 +107,7 @@ def refuse_forbidden_place(place_id: str, forbidden_places: set[str] | frozenset
     """Raise ValueError if place_id belongs to test_a or test_b."""
     if place_id in forbidden_places:
         raise ValueError(
-            f"place {place_id} is a sealed test place in SPLIT.md and must never be read by a challenger"
+            f"place {place_id} is a sealed test place in fresh_world_plan.json and must never be read by a challenger"
         )
 
 

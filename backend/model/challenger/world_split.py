@@ -1,8 +1,9 @@
-"""Loader for the fresh world split (SPLIT.md) and shared FIRMS store.
+"""Loader for the fresh world split (fresh_world_plan.json) and shared FIRMS store.
 
-Reads only the fitting and validation fire lists of SPLIT.md, enforces a hard
-block on all test_a and test_b places, extracts rows and monthly overlap counts
-from the read-only world store, and records sha256 digests of every file read.
+Reads only the fitting and validation fire lists of fresh_world_plan.json on main
+(with fallback support for SPLIT.md), enforces a hard block on all test_a and
+test_b places across Earth, extracts rows and monthly overlap counts from the
+read-only world store, and records sha256 digests of every file read.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import time
 from typing import Any, Callable, Iterable
 
@@ -30,6 +32,8 @@ from backend.model.challenger.guard import (
     PLACE_COLS,
     PLACE_ROWS,
     REPO_ROOT,
+    clamp_workers,
+    global_forbidden_test_places,
     place_id_of_index,
     place_index_of_id,
     place_of_coords,
@@ -42,8 +46,13 @@ from backend.model.episodes import PAD_S
 from backend.model.platforms import archive_platforms
 
 WORLD_STORE_ENV: str = "ISOGON_WORLD_DIR"
+PLAN_JSON_ENV: str = "ISOGON_PLAN_JSON"
 SPLIT_MD_ENV: str = "ISOGON_SPLIT_MD"
 CMR_SEED_ENV: str = "ISOGON_CMR_SEED_DIR"
+PLAN_REL_PATH: str = "backend/model/fitted_values/fresh_world_plan.json"
+EXPECTED_PROTOCOL_ID: str = "fresh_world_v1"
+EXPECTED_PROTOCOL_SHA256: str = "050449de777c7b8a3d5258f554f2184c83028046fe4b7908a9390c5ab683ced3"
+EXPECTED_PLAN_SHA256: str = "768e5487f75c906fdbedfb14325a7d277bbf6062b27398f08b104ba60da30449"
 DEFAULT_WORK_DIR: Path = REPO_ROOT / "data" / "cache" / "challenger_world"
 
 PRODUCTS: tuple[str, ...] = ("modis", "viirs-snpp", "viirs-jpss1")
@@ -82,6 +91,105 @@ def _parse_iso_minute_utc(ts: str) -> float:
     hh, mm = int(tparts[0]), int(tparts[1])
     ss = int(tparts[2]) if len(tparts) > 2 else 0
     return float(_cal.timegm((y, m, d, hh, mm, ss, 0, 0, 0)))
+
+
+def _read_plan_bytes(plan_path: str | Path | None = None) -> tuple[bytes, str]:
+    """Read raw bytes of fresh_world_plan.json from path, worktree, or git main."""
+    if plan_path is not None:
+        p = Path(plan_path)
+        return p.read_bytes(), PLAN_REL_PATH
+    env_p = os.environ.get(PLAN_JSON_ENV)
+    if env_p:
+        p = Path(env_p)
+        return p.read_bytes(), PLAN_REL_PATH
+    local_p = REPO_ROOT / PLAN_REL_PATH
+    if local_p.is_file():
+        return local_p.read_bytes(), PLAN_REL_PATH
+    raw = subprocess.check_output(
+        ["git", "-C", str(REPO_ROOT), "show", f"main:{PLAN_REL_PATH}"]
+    )
+    return raw, f"main:{PLAN_REL_PATH}"
+
+
+def load_fresh_world_plan(plan_path: str | Path | None = None) -> dict[str, Any]:
+    """Load fitting and validation episodes from fresh_world_plan.json, sealing all test places."""
+    raw_bytes, logical_source = _read_plan_bytes(plan_path)
+    plan_file_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    doc = json.loads(raw_bytes.decode("utf-8"))
+
+    protocol_id = str(doc.get("protocol_id", ""))
+    protocol_sha256 = str(doc.get("protocol_sha256", ""))
+    plan_sha256 = str(doc.get("plan_sha256", ""))
+    if protocol_id != EXPECTED_PROTOCOL_ID:
+        raise ValueError(f"unexpected protocol_id {protocol_id!r}")
+    if protocol_sha256 != EXPECTED_PROTOCOL_SHA256:
+        raise ValueError(f"unexpected protocol_sha256 {protocol_sha256!r}")
+    if plan_sha256 != EXPECTED_PLAN_SHA256:
+        raise ValueError(f"unexpected plan_sha256 {plan_sha256!r}")
+
+    eps_block = dict(doc.get("episodes", {}))
+    # Immediately discard test_a and test_b episode lists untouched
+    eps_block.pop("test_a", None)
+    eps_block.pop("test_b", None)
+
+    raw_fit = list(eps_block.get("fitting", []))
+    raw_val = list(eps_block.get("validation", []))
+    if len(raw_fit) != 300 or len(raw_val) != 83:
+        raise ValueError(f"expected 300 fitting and 83 validation episodes, got {len(raw_fit)} and {len(raw_val)}")
+
+    global_forb = set(global_forbidden_test_places(protocol_id=protocol_id))
+    places_with_ep = (doc.get("places") or {}).get("with_an_episode") or {}
+    test_a_ep_places = sorted(
+        pid for pid, info in places_with_ep.items() if info.get("role") == "test_a"
+    )
+    test_b_ep_places = sorted(
+        pid for pid, info in places_with_ep.items() if info.get("role") == "test_b"
+    )
+    forbidden = frozenset(global_forb | set(test_a_ep_places) | set(test_b_ep_places))
+
+    def _norm_ep(e: dict[str, Any], role: str) -> dict[str, Any]:
+        box = [float(v) for v in e["box"]]
+        start_s = float(e["start_s"])
+        end_s = float(e["end_s"])
+        pid = str(e["place_id"])
+        refuse_forbidden_place(pid, forbidden)
+        refuse_closed_episode((box[0], box[1], box[2], box[3]), start_s, end_s)
+        return {
+            "key": str(e["key"]),
+            "place_id": pid,
+            "year": int(e["year"]),
+            "tile": [int(e["tile"][0]), int(e["tile"][1])],
+            "continent": str(e["continent"]),
+            "zone": str(e["zone"]),
+            "box": box,
+            "first_overpass_utc": str(e["first_overpass_utc"]),
+            "last_overpass_utc": str(e["last_overpass_utc"]),
+            "start_s": start_s,
+            "end_s": end_s,
+            "role": role,
+        }
+
+    fitting = [_norm_ep(e, "fitting") for e in raw_fit]
+    validation = [_norm_ep(e, "validation") for e in raw_val]
+
+    allowed_places = {ep["place_id"] for ep in fitting} | {ep["place_id"] for ep in validation}
+    if allowed_places & set(forbidden):
+        raise ValueError("role overlap detected between fitting/validation and forbidden test places")
+
+    return {
+        "protocol_id": protocol_id,
+        "protocol_sha256": protocol_sha256,
+        "plan_sha256": plan_sha256,
+        "plan_file_sha256": plan_file_sha256,
+        "plan_file_bytes": len(raw_bytes),
+        "plan_logical_path": logical_source,
+        "split_md_sha256": plan_file_sha256,
+        "fitting": fitting,
+        "validation": validation,
+        "test_a_places": test_a_ep_places,
+        "test_b_places": test_b_ep_places,
+        "forbidden_places": sorted(forbidden),
+    }
 
 
 def parse_split_markdown(path: str | Path) -> dict[str, Any]:
@@ -433,6 +541,7 @@ def prepare_world_cache(
     log: Callable[[str], None] = print,
 ) -> dict[str, Any]:
     """Extract fitting and validation rows/counts and CMR pass lists, never touching test places."""
+    workers = clamp_workers(workers)
     work_dir.mkdir(parents=True, exist_ok=True)
     forbidden = frozenset(split_doc["forbidden_places"])
     all_eps = list(split_doc["fitting"]) + list(split_doc["validation"])
@@ -451,12 +560,11 @@ def prepare_world_cache(
         cached = json.loads(rows_step_file.read_text(encoding="utf-8"))
         if (
             cached.get("plan_sha256") == split_doc["plan_sha256"]
-            and cached.get("split_md_sha256") == split_doc["split_md_sha256"]
             and cached.get("ready_json_sha256") == ready_sha
         ):
             need_rows = False
             rows_step = cached
-            log("world rows cache already matches SPLIT.md and READY.json")
+            log("world rows cache already matches plan_sha256 and READY.json")
 
     if need_rows:
         tg: dict[str, list[tuple[str, float, float]]] = {}
@@ -516,6 +624,7 @@ def prepare_world_cache(
             "protocol_id": split_doc["protocol_id"],
             "protocol_sha256": split_doc["protocol_sha256"],
             "plan_sha256": split_doc["plan_sha256"],
+            "plan_file_sha256": split_doc.get("plan_file_sha256", split_doc.get("split_md_sha256")),
             "split_md_sha256": split_doc["split_md_sha256"],
             "ready_json_sha256": ready_sha,
             "ready_json_bytes": int(ready_file.stat().st_size),
@@ -530,7 +639,7 @@ def prepare_world_cache(
 
     # Ensure CMR pass files for all 383 fitting + validation episodes
     cmr_digests: list[dict[str, Any]] = []
-    with ThreadPoolExecutor(max_workers=min(4, max(1, workers))) as tpool:
+    with ThreadPoolExecutor(max_workers=workers) as tpool:
         batches = list(
             tpool.map(lambda ep: _ensure_episode_passes(ep, work_dir, forbidden, cmr_seed_dir), all_eps)
         )
@@ -570,11 +679,16 @@ def window_years_of_ep(ep: dict[str, Any]) -> tuple[int, ...]:
 def load_world_episode_rows(ep: dict[str, Any], work_dir: Path, forbidden: frozenset[str]) -> Detections:
     """Load Detections for a fitting or validation episode from work_dir/rows/<key>."""
     refuse_forbidden_place(ep["place_id"], forbidden)
+    t0 = float(ep["start_s"]) - PAD_S
+    t1 = float(ep["end_s"]) + PAD_S
     refuse_closed_episode(tuple(ep["box"]), float(ep["start_s"]), float(ep["end_s"]))
     rows: list[dict[str, str]] = []
     for f in sorted((work_dir / "rows" / ep["key"]).glob("*.csv")):
         with f.open(encoding="utf-8", newline="") as fh:
-            rows.extend(csv.DictReader(fh))
+            for r in csv.DictReader(fh):
+                t = _time_s_csv(r["acq_date"], r["acq_time"])
+                if t0 <= t < t1:
+                    rows.append(r)
     if not rows:
         raise LookupError(f"no rows kept for {ep['key']}")
     return detections_from_rows(rows, ROWS_SOURCE)
@@ -587,11 +701,13 @@ def world_episode_ratio(ep: dict[str, Any], rows_step: dict[str, Any], forbidden
 
 
 def resolve_paths_from_env(
-    split_md: str | Path | None = None,
+    plan_json: str | Path | None = None,
     world_dir: str | Path | None = None,
     cmr_seed_dir: str | Path | None = None,
-) -> tuple[Path | None, Path | None, Path | None]:
+    split_md: str | Path | None = None,
+) -> tuple[Path | None, Path | None, Path | None, Path | None]:
+    pj = Path(plan_json) if plan_json else (Path(os.environ[PLAN_JSON_ENV]) if os.environ.get(PLAN_JSON_ENV) else None)
     sm = Path(split_md) if split_md else (Path(os.environ[SPLIT_MD_ENV]) if os.environ.get(SPLIT_MD_ENV) else None)
     wd = Path(world_dir) if world_dir else (Path(os.environ[WORLD_STORE_ENV]) if os.environ.get(WORLD_STORE_ENV) else None)
     cs = Path(cmr_seed_dir) if cmr_seed_dir else (Path(os.environ[CMR_SEED_ENV]) if os.environ.get(CMR_SEED_ENV) else None)
-    return sm, wd, cs
+    return pj, wd, cs, sm

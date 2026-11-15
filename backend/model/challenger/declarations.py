@@ -34,15 +34,24 @@ def declare_look_grid(p_grid: NDArray[np.float64], rule: dict[str, Any]) -> NDAr
         p_eff = (1.0 - wb) * p_grid + wb * b3
         return (p_eff >= tau) & (p_grid >= p_min)
 
-    if kind == "core_plus_spine":
+    if kind in ("core_plus_spine", "adaptive_core_plus_spine"):
         wb = float(rule.get("w_blur", 0.20))
         tau_hi = float(rule["tau_hi"])
         s_min = float(rule["s_min"])
         p_peak_min = float(rule.get("p_peak_min", 0.135))
+        if kind == "adaptive_core_plus_spine":
+            relief = float(rule.get("faint_relief", 0.030))
+            pmax = float(p_grid.max()) if p_grid.size > 0 else 0.0
+            if pmax >= 0.14 and relief > 0.0:
+                tau_eff = tau_hi - relief * max(0.0, min(1.0, (0.35 - pmax) / 0.18))
+            else:
+                tau_eff = tau_hi
+        else:
+            tau_eff = tau_hi
         b3 = box_mean_2d(p_grid, 1, 1)
         s3 = 9.0 * b3
         p_eff = (1.0 - wb) * p_grid + wb * b3
-        core = (p_eff >= tau_hi) & (p_grid >= 0.12)
+        core = (p_eff >= tau_eff) & (p_grid >= 0.12)
         near_core = dilate(core, 1) if np.any(core) else core
 
         m3 = box_max_3x3(p_grid)

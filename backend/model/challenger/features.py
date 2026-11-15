@@ -31,6 +31,8 @@ from backend.model.occupancy import (
 )
 from backend.model.platforms import PLATFORMS, scan_axis_deg
 
+FEATURE_SCHEMA_VERSION: int = 2
+
 CELL_FEATURE_NAMES: tuple[str, ...] = (
     "rec_p",
     "rec_logit",
@@ -67,6 +69,19 @@ CELL_FEATURE_NAMES: tuple[str, ...] = (
     "missed_modis_decay",
     "terrain_slope",
     "terrain_upslope",
+    "near_inv_modis_area",
+    "near_psf_density",
+    "near_max_conf",
+    "bridge_psf_density",
+    "target_orient_rec_a",
+    "target_orient_psf",
+    "rel_rec_p",
+    "rel_near_psf_dens",
+    "censor_clean_looks",
+    "front_advance",
+    "diurnal_cbl_log_ratio",
+    "abs_lat_norm",
+    "is_snpp",
 )
 
 LOOK_FEATURE_NAMES: tuple[str, ...] = (
@@ -173,6 +188,48 @@ def avg_target_cells(grid: EvalGrid, scan_km: float, track_km: float, platform: 
     return float(np.mean(counts))
 
 
+def oriented_footprint_offsets(
+    grid: EvalGrid,
+    scan_km: float,
+    track_km: float,
+    platform: str,
+    is_day: bool,
+) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
+    """Row and column offsets (dr, dc) of one rotated target pixel at the grid centre."""
+    lon_mid = 0.5 * (grid.west + grid.east)
+    lat_mid = 0.5 * (grid.south + grid.north)
+    axis = scan_axis_deg(platform, is_day, lat_mid)
+    x0_a, y0_a = grid.xy_km(lon_mid, lat_mid)
+    c_mid = int(math.floor(float(x0_a) / grid.cell_km))
+    r_mid = int(grid.ny - 1 - math.floor(float(y0_a) / grid.cell_km))
+    r_fp, c_fp = footprint_cells(grid, lon_mid, lat_mid, scan_km, track_km, axis)
+    if r_fp.size == 0:
+        return np.zeros(1, dtype=np.int64), np.zeros(1, dtype=np.int64)
+    return (r_fp.astype(np.int64) - r_mid), (c_fp.astype(np.int64) - c_mid)
+
+
+def oriented_footprint_mean(
+    field: NDArray[np.float64],
+    dr: NDArray[np.int64],
+    dc: NDArray[np.int64],
+) -> NDArray[np.float64]:
+    """Exact 2D mean over oriented footprint offsets (-dr, -dc) with zero padding."""
+    if dr.size == 0:
+        return field.copy()
+    rmax = int(np.max(np.abs(dr)))
+    cmax = int(np.max(np.abs(dc)))
+    if rmax == 0 and cmax == 0:
+        return field.copy()
+    ny, nx = field.shape
+    pad = np.pad(field, ((rmax, rmax), (cmax, cmax)), mode="constant", constant_values=0.0)
+    acc = np.zeros((ny, nx), dtype=np.float64)
+    for k in range(dr.size):
+        ro = rmax - int(dr[k])
+        co = cmax - int(dc[k])
+        acc += pad[ro : ro + ny, co : co + nx]
+    return acc / float(dr.size)
+
+
 @dataclass(frozen=True)
 class PrecomputedPass:
     """Raster and summary fields for one visible coarse overpass near the grid."""
@@ -184,6 +241,9 @@ class PrecomputedPass:
     in_box_mask: NDArray[np.bool_]
     spill_mask: NDArray[np.bool_]
     psf: NDArray[np.float64]
+    psf_density: NDArray[np.float64]
+    inv_modis_area: NDArray[np.float64]
+    max_conf: NDArray[np.float64]
     center_prox: NDArray[np.float64]
     frp_dedup_cell: NDArray[np.float64]
     pix_log_frp: NDArray[np.float64]
@@ -196,6 +256,7 @@ class PrecomputedPass:
     xs_km: NDArray[np.float64]
     ys_km: NDArray[np.float64]
     pix_weights: NDArray[np.float64]
+    pix_areas_km2: NDArray[np.float64]
 
 
 def _build_pass(grid: EvalGrid, det: Detections, op: Overpass, lon_mid: float) -> PrecomputedPass | None:
@@ -204,6 +265,9 @@ def _build_pass(grid: EvalGrid, det: Detections, op: Overpass, lon_mid: float) -
     in_box_mask = np.zeros(shape, dtype=bool)
     spill_mask = np.zeros(shape, dtype=bool)
     psf = np.zeros(shape, dtype=np.float64)
+    psf_density = np.zeros(shape, dtype=np.float64)
+    inv_modis_area = np.zeros(shape, dtype=np.float64)
+    max_conf = np.zeros(shape, dtype=np.float64)
     center_prox = np.zeros(shape, dtype=np.float64)
     frp_dedup_cell = np.zeros(shape, dtype=np.float64)
     pix_log_frp = np.zeros(shape, dtype=np.float64)
@@ -218,6 +282,7 @@ def _build_pass(grid: EvalGrid, det: Detections, op: Overpass, lon_mid: float) -
     xs_list: list[float] = []
     ys_list: list[float] = []
     w_list: list[float] = []
+    area_list: list[float] = []
     any_touched = False
 
     w_km = nx * grid.cell_km
@@ -238,8 +303,9 @@ def _build_pass(grid: EvalGrid, det: Detections, op: Overpass, lon_mid: float) -
         frp = float(det.frp_mw[idx])
         y_ded = frp / ovl
         conf_raw = float(det.confidence[idx])
-        conf = (conf_raw / 100.0) if np.isfinite(conf_raw) else 0.65
-        conf_w = 0.55 + 0.45 * np.clip(conf, 0.0, 1.0)
+        conf = float(np.clip((conf_raw / 100.0) if np.isfinite(conf_raw) else 0.65, 0.0, 1.0))
+        conf_w = 0.55 + 0.45 * conf
+        pix_area = max(scan_km * track_km, 0.5)
 
         is_inside = bool(inb[idx])
         if is_inside:
@@ -266,6 +332,7 @@ def _build_pass(grid: EvalGrid, det: Detections, op: Overpass, lon_mid: float) -
         xs_list.append(x0)
         ys_list.append(y0)
         w_list.append(conf_w * math.log1p(max(y_ded, 0.5)) / math.log(20.0))
+        area_list.append(pix_area)
 
         rr, cc = np.meshgrid(
             np.arange(r_lo, r_hi + 1, dtype=np.int64),
@@ -299,13 +366,16 @@ def _build_pass(grid: EvalGrid, det: Detections, op: Overpass, lon_mid: float) -
         else:
             spill_mask[fp_r, fp_c] = True
 
-        # Sub-pixel tent-Gaussian PSF peaking at pixel centre
+        # Sub-pixel tent-Gaussian PSF peaking at pixel centre + area-normalized density
         kern = np.clip(1.0 - 0.55 * (un[inside_fp] ** 2), 0.25, 1.0) * np.clip(
             1.0 - 0.45 * (vn[inside_fp] ** 2), 0.30, 1.0
         )
         amp = conf_w * (0.45 + 0.55 * min(1.5, math.log1p(max(y_ded, 0.0)) / 4.0))
         psf[fp_r, fp_c] += amp * kern
         k_sum = float(kern.sum())
+        psf_density[fp_r, fp_c] += (amp / ovl) * (7.0 / max(k_sum, 1.0)) * kern
+        np.maximum.at(inv_modis_area, (fp_r, fp_c), 1.0 / pix_area)
+        np.maximum.at(max_conf, (fp_r, fp_c), conf)
         share = kern / k_sum if k_sum > 0.0 else np.full(fp_r.size, 1.0 / fp_r.size)
         np.maximum.at(pix_log_frp, (fp_r, fp_c), math.log1p(max(y_ded, 0.0)))
         if is_inside:
@@ -322,6 +392,9 @@ def _build_pass(grid: EvalGrid, det: Detections, op: Overpass, lon_mid: float) -
         in_box_mask=in_box_mask,
         spill_mask=spill_mask,
         psf=psf,
+        psf_density=psf_density,
+        inv_modis_area=inv_modis_area,
+        max_conf=max_conf,
         center_prox=center_prox,
         frp_dedup_cell=frp_dedup_cell,
         pix_log_frp=pix_log_frp,
@@ -334,11 +407,16 @@ def _build_pass(grid: EvalGrid, det: Detections, op: Overpass, lon_mid: float) -
         xs_km=np.asarray(xs_list, dtype=np.float64),
         ys_km=np.asarray(ys_list, dtype=np.float64),
         pix_weights=np.asarray(w_list, dtype=np.float64),
+        pix_areas_km2=np.asarray(area_list, dtype=np.float64),
     )
 
 
 def _lagrangian_bridge(
-    grid: EvalGrid, p0: PrecomputedPass, p1: PrecomputedPass, time_s: float
+    grid: EvalGrid,
+    p0: PrecomputedPass,
+    p1: PrecomputedPass,
+    time_s: float,
+    area_normalize: bool = False,
 ) -> NDArray[np.float64]:
     """Interpolate active fire positions between p0 and p1 at time_s."""
     dt_tot_h = (p1.time_s - p0.time_s) / 3600.0
@@ -351,7 +429,6 @@ def _lagrangian_bridge(
     ys_out: list[float] = []
     ws_out: list[float] = []
 
-    # Match p0 -> nearest in p1
     dx01 = p1.xs_km[None, :] - p0.xs_km[:, None]
     dy01 = p1.ys_km[None, :] - p0.ys_km[:, None]
     d01 = np.hypot(dx01, dy01)
@@ -361,20 +438,31 @@ def _lagrangian_bridge(
         if float(d01[i, j]) <= max_travel_km:
             xs_out.append((1.0 - alpha) * float(p0.xs_km[i]) + alpha * float(p1.xs_km[j]))
             ys_out.append((1.0 - alpha) * float(p0.ys_km[i]) + alpha * float(p1.ys_km[j]))
-            ws_out.append(0.5 * ((1.0 - alpha) * float(p0.pix_weights[i]) + alpha * float(p1.pix_weights[j])))
+            w_ij = 0.5 * ((1.0 - alpha) * float(p0.pix_weights[i]) + alpha * float(p1.pix_weights[j]))
+            if area_normalize:
+                a_ij = (1.0 - alpha) * float(p0.pix_areas_km2[i]) + alpha * float(p1.pix_areas_km2[j])
+                w_ij /= math.sqrt(max(a_ij, 1.0))
+            ws_out.append(w_ij)
 
-    # Symmetric match p1 -> nearest in p0
     i_min = np.argmin(d01, axis=0)
     for j in range(p1.xs_km.size):
         i = int(i_min[j])
         if float(d01[i, j]) <= max_travel_km:
             xs_out.append((1.0 - alpha) * float(p0.xs_km[i]) + alpha * float(p1.xs_km[j]))
             ys_out.append((1.0 - alpha) * float(p0.ys_km[i]) + alpha * float(p1.ys_km[j]))
-            ws_out.append(0.5 * ((1.0 - alpha) * float(p0.pix_weights[i]) + alpha * float(p1.pix_weights[j])))
+            w_ij = 0.5 * ((1.0 - alpha) * float(p0.pix_weights[i]) + alpha * float(p1.pix_weights[j]))
+            if area_normalize:
+                a_ij = (1.0 - alpha) * float(p0.pix_areas_km2[i]) + alpha * float(p1.pix_areas_km2[j])
+                w_ij /= math.sqrt(max(a_ij, 1.0))
+            ws_out.append(w_ij)
 
     if not xs_out:
         return np.zeros(grid.shape, dtype=np.float64)
-    sigma_km = min(1.2, 0.45 + 0.06 * min(alpha, 1.0 - alpha) * dt_tot_h)
+    sigma_km = (
+        min(1.05, 0.38 + 0.05 * min(alpha, 1.0 - alpha) * dt_tot_h)
+        if area_normalize
+        else min(1.2, 0.45 + 0.06 * min(alpha, 1.0 - alpha) * dt_tot_h)
+    )
     return gaussian_deposit_2d(
         grid.shape,
         grid.cell_km,
@@ -644,6 +732,9 @@ class EpisodeFeatureExtractor:
 
         if p_near is not None:
             near_psf = p_near.psf
+            near_psf_dens = p_near.psf_density
+            near_inv_area = p_near.inv_modis_area
+            near_mconf = p_near.max_conf
             near_center = p_near.center_prox
             near_frp_ded = p_near.frp_dedup_cell
             near_pix_lfrp = p_near.pix_log_frp
@@ -651,6 +742,9 @@ class EpisodeFeatureExtractor:
             spill_in = p_near.spill_mask.astype(np.float64)
         else:
             near_psf = np.zeros(shape, dtype=np.float64)
+            near_psf_dens = np.zeros(shape, dtype=np.float64)
+            near_inv_area = np.zeros(shape, dtype=np.float64)
+            near_mconf = np.zeros(shape, dtype=np.float64)
             near_center = np.zeros(shape, dtype=np.float64)
             near_frp_ded = np.zeros(shape, dtype=np.float64)
             near_pix_lfrp = np.zeros(shape, dtype=np.float64)
@@ -669,21 +763,36 @@ class EpisodeFeatureExtractor:
         target_box_pnt = box_mean_2d(pnt_f, r_rad_tgt, c_rad_tgt)
 
         if p_prev is not None and p_next is not None and p_prev is not p_next:
-            bridge_psf = _lagrangian_bridge(self.grid, p_prev, p_next, t_s)
+            bridge_psf = _lagrangian_bridge(self.grid, p_prev, p_next, t_s, area_normalize=False)
+            bridge_dens = _lagrangian_bridge(self.grid, p_prev, p_next, t_s, area_normalize=True)
             dt_span_h = (p_next.time_s - p_prev.time_s) / 3600.0
             span_w = math.exp(-max(0.0, dt_span_h - 3.0) / 18.0)
-            bracket_persist = np.sqrt(p_prev.psf * p_next.psf) * span_w
+            bracket_persist = np.sqrt(p_prev.psf_density * p_next.psf_density) * span_w
         else:
             bridge_psf = near_psf
+            bridge_dens = near_psf_dens
             bracket_persist = np.zeros(shape, dtype=np.float64)
 
-        # Past and future multi-scale exponential kernels
+        dr_fp, dc_fp = oriented_footprint_offsets(
+            self.grid, scan_km, track_km, target.platform, is_day
+        )
+        target_orient_rec_a = oriented_footprint_mean(rec_a, dr_fp, dc_fp)
+        target_orient_psf = oriented_footprint_mean(
+            0.5 * near_psf_dens + 0.5 * bridge_dens, dr_fp, dc_fp
+        )
+
+        # Past and future multi-scale exponential kernels + clean-swath non-detection censoring
         past_fast = np.zeros(shape, dtype=np.float64)
         past_slow = np.zeros(shape, dtype=np.float64)
         fut_fast = np.zeros(shape, dtype=np.float64)
         fut_slow = np.zeros(shape, dtype=np.float64)
+        censor_raw = np.zeros(shape, dtype=np.float64)
         for p in self.near_passes:
             dt_h = (t_s - p.time_s) / 3600.0
+            abs_dt_h = abs(dt_h)
+            if abs_dt_h <= 18.0:
+                w_c = math.exp(-abs_dt_h / 3.0)
+                censor_raw += w_c * (~(p.in_box_mask | p.spill_mask)).astype(np.float64)
             if dt_h >= -0.05:
                 age = max(0.0, dt_h)
                 if age <= 12.0:
@@ -696,6 +805,16 @@ class EpisodeFeatureExtractor:
                     fut_fast += math.exp(-age / 2.0) * p.psf
                 if age <= 48.0:
                     fut_slow += math.exp(-age / 14.0) * p.psf
+
+        if self.empty_nom_times.size > 0:
+            clr_idx = np.flatnonzero(
+                (self.empty_nom_clear > 0.5) & (np.abs(self.empty_nom_times - t_s) <= 18.0 * 3600.0)
+            )
+            if clr_idx.size > 0:
+                clr_w = float(
+                    np.sum(np.exp(-np.abs(self.empty_nom_times[clr_idx] - t_s) / (3600.0 * 3.0)))
+                )
+                censor_raw += clr_w
 
         # Upslope spread alignment: past fire spreading upslope into cell
         if self.terrain.available:
@@ -724,6 +843,15 @@ class EpisodeFeatureExtractor:
         n_act = idx.size
         near_blur3_flat = near_blur3.ravel()[idx]
         near_psf_flat = near_psf.ravel()[idx]
+        near_psf_dens_flat = near_psf_dens.ravel()[idx]
+        past_fast_flat = past_fast.ravel()[idx]
+        fut_fast_flat = fut_fast.ravel()[idx]
+        rec_p_max = max(float(rec_p.max()), 1e-4)
+        near_dens_max = max(float(near_psf_dens.max()), 1e-4)
+        diurn_log_ratio = math.log(float(np.clip(d_near, 0.35, 3.0)))
+        abs_lat_norm = abs(self.lat_mid) / 60.0
+        is_snpp_val = 1.0 if target.platform == "VIIRS_SNPP" else 0.0
+
         cols = [
             rec_p_flat,
             rec_logit,
@@ -747,9 +875,9 @@ class EpisodeFeatureExtractor:
             target_box_pnt.ravel()[idx],
             bridge_psf.ravel()[idx],
             bracket_persist.ravel()[idx],
-            np.tanh(past_fast.ravel()[idx] * 0.5),
+            np.tanh(past_fast_flat * 0.5),
             np.tanh(past_slow.ravel()[idx] * 0.35),
-            np.tanh(fut_fast.ravel()[idx] * 0.5),
+            np.tanh(fut_fast_flat * 0.5),
             np.tanh(fut_slow.ravel()[idx] * 0.35),
             spill_in.ravel()[idx],
             np.full(n_act, 1.0 if is_day else 0.0, dtype=np.float64),
@@ -760,6 +888,19 @@ class EpisodeFeatureExtractor:
             np.full(n_act, miss_decay, dtype=np.float64),
             self._slope_norm.ravel()[idx],
             terrain_upslope.ravel()[idx],
+            near_inv_area.ravel()[idx],
+            near_psf_dens_flat,
+            near_mconf.ravel()[idx],
+            np.log1p(np.maximum(bridge_dens.ravel()[idx], 0.0)),
+            target_orient_rec_a.ravel()[idx],
+            target_orient_psf.ravel()[idx],
+            rec_p_flat / rec_p_max,
+            near_psf_dens_flat / near_dens_max if p_near is not None else np.zeros(n_act, dtype=np.float64),
+            np.tanh(0.5 * censor_raw.ravel()[idx]),
+            np.tanh(0.5 * (fut_fast_flat - past_fast_flat)),
+            np.full(n_act, diurn_log_ratio, dtype=np.float64),
+            np.full(n_act, abs_lat_norm, dtype=np.float64),
+            np.full(n_act, is_snpp_val, dtype=np.float64),
         ]
         cell_x = np.column_stack(cols).astype(np.float32)
 
