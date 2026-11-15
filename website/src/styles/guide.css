@@ -628,30 +628,14 @@
   }
 }
 
-/* That day's photograph, under the fire's label: what is on show, then the key for the next press. */
-.guide-label--day {
-  display: block;
-  margin-top: var(--sys-s1);
-  color: var(--sys-ink-2);
+/* The day's photograph: the guide's fourth action on Estimate and Test, quiet at the end of the row. */
+.guide-act--quiet {
+  opacity: 0.72;
 }
 
-.guide-day {
-  display: flex;
-  width: fit-content;
-  align-items: center;
-  gap: var(--sys-s2);
-  margin-top: var(--sys-s2);
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--sys-ink-2);
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
-  cursor: pointer;
-}
-
-.guide-day:hover,
-.guide-day:focus-visible {
-  color: var(--sys-ink);
+.guide-act--quiet:hover,
+.guide-act--quiet:focus-visible {
+  opacity: 1;
 }
 
 /* Search when no place with a real fire record matches what was typed. */

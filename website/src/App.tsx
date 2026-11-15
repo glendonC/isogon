@@ -27,7 +27,7 @@ import { useGuide, type Guide } from './guide/useGuide';
 import { keyMatches, says, stateOf } from './guide/script';
 import { StageBoundary } from './ui/StageBoundary';
 import { useWorldFirstYear } from './guide/world';
-import { DAY_PICTURE_KEY, nextDayPicture, type DayPictureKind } from './guide/dayPicture';
+import { nextDayPicture, type DayPictureKind } from './guide/dayPicture';
 import { openingHiddenPass, type OpeningFrame } from './app/openingPass';
 import { BEATS, type BeatId } from './app/names';
 import { WorkspaceProvider, type WorkspaceBase, type WorkspaceStore } from './app/store';
@@ -1015,9 +1015,6 @@ export function App() {
         } else if (lower === 't' && revealed && (step === 'fire' || step === 'test') && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setThreeWays((t) => !t);
-        } else if (lower === DAY_PICTURE_KEY.toLowerCase() && (step === 'fire' || step === 'test') && isRealRun(activeRun) && !e.metaKey && !e.ctrlKey && !e.altKey) {
-          e.preventDefault();
-          setDayPicture(nextDayPicture);
         } else if (lower === 'e' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setEvidenceOpen(true);
@@ -1237,7 +1234,6 @@ export function App() {
         revealed && trackRevealed.length > 0
           ? { detections: trackRevealed.reduce((a, r) => a + r.pixels, 0), passes: trackRevealed.length }
           : null,
-      dayPicture: { asked: dayPicture, shown: stageTelemetry?.dayPicture ?? null, next: () => setDayPicture(nextDayPicture) },
     },
     time: { pass: activeEpoch, powerMw: currentMw, toggleStrip: () => setStripOpen((o) => !o) },
     round: {
@@ -1274,12 +1270,17 @@ export function App() {
     marksOpen,
     places: placesState.state,
     worldFirstYear,
+    day: inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen ? { asked: dayPicture, shown: stageTelemetry?.dayPicture ?? null } : undefined,
   });
   const guideKey = `${guide.step}:${guide.stateId}:${realStart}`;
   guideRef.current = guide;
   marksOpenRef.current = marksOpen;
   /** The commands the guide's actions name (script.json, "commands"). */
   const runCommand = (command: string) => {
+    if (command === 'day:next') {
+      setDayPicture(nextDayPicture);
+      return;
+    }
     if (command === 'go:test') {
       if (holdoutViirs && !revealed) {
         const fs = (activeRun as unknown as { observer_passes?: { frames?: Array<{ sensor?: string }> } } | null)?.observer_passes?.frames ?? [];

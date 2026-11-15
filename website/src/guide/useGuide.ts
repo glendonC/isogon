@@ -7,6 +7,8 @@ import { marksOnShow, type MarkRow } from './marks';
 import { missingLine } from './missing';
 import { playStateId } from './playState';
 import { recordFields, recordStateId } from './recordFields';
+import { dayPictureAction, dayPictureLine, type DayPictureKind } from './dayPicture';
+import type { EarthStageTelemetry } from '../stage/earthCutawayTypes';
 import { countWord } from './formats';
 import { resultRows, type ResultRow } from './Results';
 import { roundFields } from './roundFields';
@@ -69,6 +71,8 @@ export interface GuideLive {
   places?: 'loading' | 'ready' | 'failed';
   /** The first year of the world's record (`GET /api/cube/countries`), null until it answers. */
   worldFirstYear?: string | null;
+  /** The day's photograph on Estimate and Test (guide/dayPicture.ts): what is asked for and what the stage shows. */
+  day?: { asked: DayPictureKind | null; shown: EarthStageTelemetry['dayPicture'] | null };
 }
 
 /** Which command's thing is running, by command. */
@@ -245,6 +249,8 @@ export function useGuide(
   // A file that did not load is said first, while the run it belongs to is on show. Then the state's standing
   // sentences: its first two lines, shown together.
   const missing = id === 'loading' || id === 'failed' ? null : missingLine(ws.model.missingFiles);
+  const dayOffered = Boolean(live.day) && ws.run.isReal && id !== 'loading' && id !== 'failed' && id !== 'revealing';
+  const dayLine = dayOffered && live.day?.asked ? dayPictureLine(live.day.shown) ?? null : null;
   const settled = id !== 'loading' && id !== 'failed' && id !== 'revealing';
   return {
     ...NONE,
@@ -253,11 +259,13 @@ export function useGuide(
     state,
     objective: objectiveOf(step, state, fields),
     context: contextOf(step, fields),
-    lines: [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)],
+    // While a photograph of the day is on, the guide's standing sentence is about it; the label keeps saying the pass.
+    lines: dayLine ? [dayLine] : [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)],
     more: moreOf(state, fields, conds),
     fields,
     conds,
-    actions: actionsOf(state?.actions, fields, on),
+    // The day's photograph: a fourth, quiet action at the end of the row, on these two steps only.
+    actions: [...actionsOf(state?.actions, fields, on), ...(dayOffered ? [dayPictureAction(live.day?.asked ?? null)] : [])],
     also: actionsOf(stepOf(step)?.also, fields, on, 9),
     fireLabel: labelOn(state, 'fire', fields, conds, live.playing),
     besideFire: promptBeside(state, 'fire'),

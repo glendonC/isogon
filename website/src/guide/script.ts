@@ -30,6 +30,8 @@ export interface ScriptAction {
   beside?: string;
   /** What the action reads while what it started is running ("Pause the passes"). */
   label_while_on?: string;
+  /** The page's own: an action shown quietly at the end of the guide's row (the day's photograph). */
+  quiet?: boolean;
 }
 
 export interface ScriptLabel extends When {

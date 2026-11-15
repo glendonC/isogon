@@ -34,7 +34,12 @@ export function GuideStrip({
       {actions.length > 0 && (
         <div className="guide-strip__acts">
           {actions.map((a, n) => (
-            <button key={a.command + a.label} type="button" className={n === 0 ? 'guide-act guide-act--next' : 'guide-act'} onClick={() => onAction(a.command)}>
+            <button
+              key={a.command + a.label}
+              type="button"
+              className={n === 0 ? 'guide-act guide-act--next' : a.quiet ? 'guide-act guide-act--quiet' : 'guide-act'}
+              onClick={() => onAction(a.command)}
+            >
               {a.key && <kbd className="guide-key">{a.key}</kbd>}
               <span className="guide-act__label">{a.label}</span>
             </button>
