@@ -17,6 +17,7 @@ import { keyMatches } from './guide/script';
 import { BEATS, type BeatId } from './app/names';
 import { WorkspaceProvider, type WorkspaceBase, type WorkspaceStore } from './app/store';
 import { CalendarBeat } from './beats/calendar/CalendarBeat';
+import { useRecordView } from './beats/calendar/recordView';
 import { WorldModelScene } from './beats/world-model/WorldModelScene';
 import { isClosedWindow } from './beats/world-model/fire';
 import { TestWorldBeat } from './beats/test-world/TestWorldBeat';
@@ -63,7 +64,7 @@ import type {
   WorkspaceMode,
 } from './stage/types';
 
-import { API_BASE, assetUrlNow, getJson, postJson, runRequestBody } from './lib/api';
+import { API_BASE, assetUrl, assetUrlNow, getJson, postJson, runRequestBody } from './lib/api';
 
 /**
  * Landing world view: `landingSubjectFrame` names the rectangle the stage keeps calm (sky or haze) for the type.
@@ -187,6 +188,8 @@ export function App() {
   const stepRef = useRef<Step>('fire');
   stepRef.current = step;
   const [debriefOpen, setDebriefOpen] = useState(false);
+  /** A new try at the Record after it failed to load: it is mounted afresh. */
+  const [recordTry, setRecordTry] = useState(0);
   const telemetryRef = useRef<EarthStageTelemetry | null>(null);
   /** How a selected item is marked, from the address (?sel=chip|square|box); chip unless it says otherwise. */
   const selStyle = useMemo(() => {
@@ -1125,14 +1128,40 @@ export function App() {
     openModel,
     blocked: stepBlocked,
   };
-  const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays });
+  // What the Record publishes for the guide (the compare-view lane's view), and the guide worked out from the store.
+  const recordView = useRecordView();
+  const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays }, recordView);
   guideRef.current = guide;
   /** The commands the guide's actions name (script.json, "commands"). */
   const runCommand = (command: string) => {
     if (command === 'go:test') {
       if (holdoutViirs && !revealed) toggleHoldoutLive();
       else if (step !== 'fire' && step !== 'test') openModel();
-    } else if (command === 'go:estimate') openModel();
+    } else if (command === 'go:estimate') {
+      // On the Record: the fire of the month picked there when it has one, else of the month it marks (the script's
+      // "Show the fire of {default_fire_month}" on a month with no fire to show).
+      if (step === 'record' && recordView.state === 'ready') {
+        const picked = recordView.picked;
+        recordView.show(picked && picked.opens ? picked.ym : recordView.marked?.ym);
+      } else openModel();
+    } else if (command === 'record:pick') recordView.browse();
+    else if (command === 'record:default_fire') recordView.pick(null);
+    else if (command === 'record:accuracy') recordView.showAsCounted(true);
+    else if (command === 'record:csv') {
+      // The picked month's detections as a CSV file, through the page's client.
+      const path = recordView.picked?.csvPath;
+      if (path)
+        void assetUrl(path).then((url) => {
+          if (!url) return;
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = '';
+          a.click();
+        });
+    } else if (command === 'place:draw') {
+      goStep('record');
+      setPlacesOpen(true);
+    }
     else if (command === 'go:play') goStep('look');
     else if (command === 'go:record') goStep('record');
     else if (command === 'place:open') {
@@ -1153,6 +1182,8 @@ export function App() {
     else if (command === 'close') {
       if (debriefOpen) setDebriefOpen(false);
       else if (threeWays) setThreeWays(false);
+    } else if (command === 'retry' && step === 'record') {
+      setRecordTry((n) => n + 1);
     } else if (command === 'retry' && realFailed) {
       void executeWorldModel({
         regionId: activeRun?.region.id ?? calendarRegionId,
@@ -1230,7 +1261,7 @@ export function App() {
             />
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
-            {step === 'record' && <CalendarBeat />}
+            {step === 'record' && <CalendarBeat key={recordTry} />}
             {modelScene && <WorldModelScene />}
             {step === 'agent' && <AgentBeat />}
             {step === 'look' && <TestWorldBeat />}

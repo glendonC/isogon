@@ -72,3 +72,15 @@ export function localDayRange(a: string | null | undefined, b: string | null | u
   if (y1 === y2) return `${day(x)} to ${day(y)} ${y1}`;
   return `${day(x)} ${y1} to ${day(y)} ${y2}`;
 }
+
+/** times: one decimal place. */
+export const times = (v: number | null | undefined) => (finite(v) ? v.toFixed(1) : null);
+/** rate: two decimal places. */
+export const rate = (v: number | null | undefined) => (finite(v) ? v.toFixed(2) : null);
+/** ratio_whole: a ratio rounded to a whole number. */
+export const ratioWhole = (v: number | null | undefined) => (finite(v) ? String(Math.round(v)) : null);
+/** month_name: the name of the month of a "2012-08". */
+export const monthName = (ym: string | null | undefined) => {
+  const m = typeof ym === 'string' ? Number(ym.slice(5, 7)) : NaN;
+  return m >= 1 && m <= 12 ? MONTHS[m - 1] : null;
+};

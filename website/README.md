@@ -77,7 +77,7 @@ its place and the guide says first which one and what is drawn instead (`src/gui
 
 | Step | What it does |
 | --- | --- |
-| Record | The fire record and Choose a Place (the compare-view lane's screens, mounted through the store) |
+| Record | The fire record and Choose a Place (the compare-view lane's screens, mounted through the store); the guide says what a square is and offers the fire of the marked month, and beside the trail stands the record's span |
 | Estimate | The fire close up with the sharp satellite (VIIRS) hidden: the white frames are the model's estimate from the coarse satellite (MODIS) alone. The guide speaks here; Enter reveals. A recorded test fire shows its record and every satellite; before 2012 nothing is hidden |
 | Test | What the sharp satellite saw, and the verdict in the guide; `T` Side by Side, `S` the scores, `E` every test on record |
 | Play | A round on the fire that is open, on the stage's tiles; after it, the other players (the Agent part) |

@@ -65,8 +65,10 @@
   outline-offset: 3px;
 }
 
+/* Over the screens that open on the stage (the Record sits at z-index 2), under the strip. */
 .guide-scrim {
   position: absolute;
+  z-index: 3;
   left: 0;
   right: 0;
   bottom: 0;
@@ -77,6 +79,7 @@
 
 .guide-strip {
   position: absolute;
+  z-index: 6;
   left: 50%;
   bottom: 30px;
   display: grid;
@@ -168,4 +171,9 @@
 .wm-label:focus-visible {
   outline: 1px solid var(--sys-focus);
   outline-offset: 4px;
+}
+
+/* Where the guide speaks over the Record, the Record keeps room for its two sentences and their actions. */
+.iso-ws[data-guide='true'] .rec {
+  --rec-guide: 190px;
 }
