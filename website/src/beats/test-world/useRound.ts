@@ -3,7 +3,8 @@ import type { DynamicRegionRun } from '../../stage/types';
 import type { StageTileAnchor, StageTileBoard } from '../../stage/earthCutawayTypes';
 import type { NextLookEnd, NextLookStart } from '../../content/demo/nextLook';
 import { NEW_ROUND, type RoundState } from './round';
-import { frameNearest, withLooks } from '../../content/nextLook';
+import { frameNearest, tileOf, withLooks } from '../../content/nextLook';
+import { fireAt } from '../world-model/fire';
 import { isRealRun, withReveal } from '../../content/realRuns';
 import { HttpError, NotRecorded } from '../../lib/api';
 import { openRound, runWithEndReveal, type NextLookEnv } from './env';
@@ -269,6 +270,19 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
     const slot = start.looks[Math.min(state.decision, start.looks.length - 1)];
     if (slot) showFrame(frameNearest(run, Date.parse(slot.time_utc) / 1000));
   }, [state?.decision, state !== null, run, start]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When a look can be taken, one square is marked from the start, so Enter looks: the square the fire is in at the pass
+  // being decided (the nearest pass with detections the round may show), else the board's middle square.
+  useEffect(() => {
+    if (!canPick || focus !== null || !start || !state) return;
+    const [r, c] = start.episode.tiles;
+    if (r < 1 || c < 1) return;
+    const slot = start.looks[Math.min(state.decision, start.looks.length - 1)];
+    const frame = run && slot ? frameNearest(run, Date.parse(slot.time_utc) / 1000) : 0;
+    const at = run ? fireAt(run, frame) : null;
+    const tile = at ? tileOf(at.lon, at.lat, start.episode.box, r, c) : null;
+    setFocus(tile ?? Math.floor(r / 2) * c + Math.floor(c / 2));
+  }, [canPick, focus, start, state?.decision, run]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** What the terrain draws: the looks' detections laid on as they come, and everything after the end. */
   const stageRun = useMemo(() => {
