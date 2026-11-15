@@ -540,6 +540,9 @@ vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
 // tile that grows heavier with its level; a firm outline where a look was spent; corner brackets
 // on the tile chosen now; a brighter outline under the pointer.
 // Returns (coverage of the ink, coverage of the dark edge under it, strength of the ink).
+const float TILE_BRACKET_ARM = 0.25;    // arm length, as a share of the tile's side
+const float TILE_BRACKET_DAY = 1.1;     // ink strength of the brackets by day
+const float TILE_BRACKET_NIGHT = 1.6;   // and by night, where the board's ink is dimmed
 vec3 tileMarks(vec2 uv) {
   vec2 tg = vec2(uv.x, 1.0 - uv.y) * uTileGrid;
   vec2 id = min(floor(tg), uTileGrid - 1.0);
@@ -568,14 +571,19 @@ vec3 tileMarks(vec2 uv) {
   // Under the pointer
   float under = smoothstep(1.6, 2.2, d) * (1.0 - smoothstep(3.4, 4.0, d)) * hover;
   ink = max(ink, under * 0.7);
-  // Chosen: brackets at the four corners
-  float arm = 0.19 / max(px.x, px.y);            // arm length: 19 percent of the tile's side
-  float inCorner = step(max(edgePx.x, edgePx.y), arm);
-  float bracket = smoothstep(1.4, 2.0, d) * (1.0 - smoothstep(4.2, 4.8, d)) * inCorner * state.b;
+  // Chosen: brackets at the four corners, the strongest mark on the board. Each arm runs a
+  // quarter of the tile's side along its own edge, so a tile seen at a slant keeps four
+  // brackets and not four dots
+  vec2 cornerFrac = min(tf, 1.0 - tf);
+  float inCorner = step(max(cornerFrac.x, cornerFrac.y), TILE_BRACKET_ARM);
+  float bracket = smoothstep(0.6, 1.2, d) * (1.0 - smoothstep(5.4, 6.2, d)) * inCorner * state.b;
   ink = max(ink, bracket);
-  strength = mix(strength, 1.0, max(bracket, max(firm, under)));
+  strength = mix(strength, 1.0, max(firm, under));
+  strength = mix(strength, mix(TILE_BRACKET_DAY, TILE_BRACKET_NIGHT, uNight), bracket);
   float edge = smoothstep(0.6, 1.4, d) * (1.0 - smoothstep(4.6, 6.0, d));
   edge *= max(max(state.g, state.b), hover);
+  // (the brackets get a wider dark edge of their own, so they stand on bright ground too)
+  edge = max(edge, (1.0 - smoothstep(7.0, 9.0, d)) * inCorner * state.b);
   return vec3(ink, edge, strength);
 }
 
