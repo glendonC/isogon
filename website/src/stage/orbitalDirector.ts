@@ -62,16 +62,30 @@ export const INSPECTOR_CAMERA_PRESETS: Record<InspectorCameraPreset, CameraPrese
   },
 };
 
+// The whole box while a board of tiles is on it (a round): from nearly overhead and along its grid,
+// so the tiles read as squares in rows and are the largest thing on screen. Closer than the box needs:
+// the stage's fit to the page's frame shrinks it until the board fills that frame exactly.
+export const REGION_BOARD_POSE: CameraPresetSpec = {
+  azimuth: 0.0,
+  polar: 0.42,
+  distance: 12.0,
+  target: [0.0, 0.3, 0.0],
+};
+
 export function resolvePresetForContext(
   preset: InspectorCameraPreset,
   inWorkspace: boolean,
   mode: WorkspaceMode,
   theaterId: TheaterId,
+  board = false,
 ): CameraPresetSpec {
   if (!inWorkspace) {
     return LANDING_HERO_POSE;
   }
-  const base = INSPECTOR_CAMERA_PRESETS[preset] ?? INSPECTOR_CAMERA_PRESETS.overview;
+  const base =
+    preset === 'region' && board
+      ? REGION_BOARD_POSE
+      : INSPECTOR_CAMERA_PRESETS[preset] ?? INSPECTOR_CAMERA_PRESETS.overview;
   // Every place gets the same presets: nothing here is keyed on which place it is
   void theaterId;
 

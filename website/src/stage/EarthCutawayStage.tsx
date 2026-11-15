@@ -1847,7 +1847,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       mode: EarthCutawayStageProps['mode'],
       theaterId: TheaterId,
     ): CameraPresetSpec => {
-      const dest = resolvePresetForContext(preset, inWorkspace, mode, theaterId);
+      const dest = resolvePresetForContext(preset, inWorkspace, mode, theaterId, Boolean(propsRef.current.tileBoard));
       if (!inWorkspace || (preset !== 'canyon' && preset !== 'ridge')) return dest;
       const wantedKind = preset === 'canyon' ? 'subpixel' : 'front';
       const anchor = nextBundle.findings.find((f) => f.kind === wantedKind);
@@ -2398,6 +2398,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let filmPreset: InspectorCameraPreset | null = null;
     // Set when the terrain under the camera changed, so the preset target is resolved again
     let presetDirty = false;
+    // A board coming on or going off changes the whole box's view (see REGION_BOARD_POSE)
+    let boardOnLast = false;
+    let workspaceFitBoard = false;
 
     const setOrbitTargetFromPreset = (dest: CameraPresetSpec) => {
       orbitTarget.azimuth = dest.azimuth;
@@ -2906,14 +2909,17 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           // Whole-slab views: fit the slab of that preset inside the frame, never magnified
           workspaceFitAge += 1;
           const fitSky = p.mode === 'observer' && presetNow === 'overview';
+          const fitBoard = Boolean(p.tileBoard);
           if (
             workspaceFitAge >= SUBJECT_REFIT_INTERVAL_FRAMES ||
             workspaceFitPreset !== presetNow ||
-            workspaceFitSky !== fitSky
+            workspaceFitSky !== fitSky ||
+            workspaceFitBoard !== fitBoard
           ) {
+            workspaceFitBoard = fitBoard;
             refitSubject(
               workspaceFrame,
-              resolvePresetForContext(presetNow, true, p.mode, p.activeTheaterId),
+              resolvePresetForContext(presetNow, true, p.mode, p.activeTheaterId, fitBoard),
               0,
               workspaceFit,
               fitSky,
@@ -3876,6 +3882,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       // and each tile's label corner go back to the page
       const board = p.tileBoard;
       const boardOn = Boolean(board) && board!.cols >= 1 && board!.rows >= 1 && board!.cols * board!.rows <= 64;
+      if (Boolean(board) !== boardOnLast) {
+        boardOnLast = Boolean(board);
+        if (p.cameraPreset === 'region') presetDirty = true;
+      }
       if (board && boardOn) {
         uTileGrid.set(board.cols, board.rows);
         const count = board.cols * board.rows;
