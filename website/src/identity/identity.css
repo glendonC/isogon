@@ -21,6 +21,8 @@
   --id-modis: #ff7a45;
   --id-viirs: #8fd6f5;
   --id-estimate: #f3f4f6;
+  /* the instrument's own colour: reticles, readouts, the sweep */
+  --id-signal: #9fe3ff;
   --id-hatch: repeating-linear-gradient(45deg, rgba(243, 244, 246, 0.42) 0 1px, transparent 1px 6px);
 
   /* modules: a control is one coarse module high; its mark is the finer sensor's pixel at the same scale (375/1000) */
@@ -529,4 +531,213 @@ button.id-story__part:focus-visible {
   opacity: 0;
   visibility: hidden;
   transition: opacity 0s, visibility 0s;
+}
+
+/*
+ * Actions in the scene. What a visitor can do appears on the thing it acts on: a reticle frames it, open at rest and
+ * closing when the pointer comes near; one prompt and its readout stand at the frame's corner. No panel, no menu.
+ */
+.id-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+  font-family: var(--id-font);
+}
+
+.id-scene__frame {
+  position: absolute;
+  left: var(--f-l);
+  top: var(--f-t);
+  width: var(--f-w);
+  height: var(--f-h);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  pointer-events: auto;
+  outline: none;
+}
+
+.id-scene__corner {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 0 solid var(--id-signal);
+  opacity: 0.7;
+  filter: drop-shadow(0 0 6px rgba(159, 227, 255, 0.6));
+  transition:
+    transform 450ms var(--id-move),
+    opacity 300ms var(--id-move);
+}
+
+.id-scene__corner:nth-child(1) {
+  left: 0;
+  top: 0;
+  border-width: 1.5px 0 0 1.5px;
+  transform: translate(-18px, -18px);
+}
+
+.id-scene__corner:nth-child(2) {
+  right: 0;
+  top: 0;
+  border-width: 1.5px 1.5px 0 0;
+  transform: translate(18px, -18px);
+}
+
+.id-scene__corner:nth-child(3) {
+  left: 0;
+  bottom: 0;
+  border-width: 0 0 1.5px 1.5px;
+  transform: translate(-18px, 18px);
+}
+
+.id-scene__corner:nth-child(4) {
+  right: 0;
+  bottom: 0;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translate(18px, 18px);
+}
+
+.id-scene[data-near='true'] .id-scene__corner {
+  transform: none;
+  opacity: 1;
+}
+
+.id-scene__frame:focus-visible .id-scene__corner {
+  border-color: var(--id-ink);
+}
+
+.id-scene__centre {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4px 0 0 -4px;
+  opacity: 0.8;
+}
+
+.id-scene__centre::before,
+.id-scene__centre::after {
+  content: '';
+  position: absolute;
+  background: var(--id-signal);
+}
+
+.id-scene__centre::before {
+  left: 4px;
+  top: 0;
+  width: 1px;
+  height: 9px;
+}
+
+.id-scene__centre::after {
+  top: 4px;
+  left: 0;
+  width: 9px;
+  height: 1px;
+}
+
+.id-scene__prompt {
+  position: absolute;
+  left: var(--p-x);
+  top: var(--p-y);
+  transform: translateY(-100%);
+  padding-bottom: 30px;
+}
+
+.id-scene[data-hang='below'] .id-scene__prompt {
+  transform: none;
+  padding: 30px 0 0;
+}
+
+.id-scene__label {
+  position: relative;
+  display: inline-block;
+  padding: 2px 0 6px;
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  color: var(--id-ink);
+  text-shadow: 0 1px 12px rgba(5, 7, 12, 0.8);
+  transition:
+    transform 450ms var(--id-move),
+    text-shadow 450ms var(--id-move);
+}
+
+.id-scene__label::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -5px;
+  background: var(--id-signal);
+  opacity: 0;
+  transition:
+    opacity 300ms var(--id-move),
+    left 450ms var(--id-move);
+}
+
+.id-scene[data-near='true'] .id-scene__label {
+  transform: translateX(8px);
+  text-shadow: 0 0 18px rgba(159, 227, 255, 0.55), 0 1px 12px rgba(5, 7, 12, 0.8);
+}
+
+.id-scene[data-near='true'] .id-scene__label::before {
+  opacity: 1;
+  left: -14px;
+}
+
+.id-scene__readout {
+  display: block;
+  font-family: var(--id-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: pre;
+  color: var(--id-signal);
+  text-shadow: 0 1px 10px rgba(5, 7, 12, 0.9);
+}
+
+.id-scene__leader {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 26px;
+  background: var(--id-signal);
+  opacity: 0.8;
+}
+
+.id-scene[data-hang='below'] .id-scene__leader {
+  top: 0;
+  bottom: auto;
+}
+
+/* the reveal: one line of the signal colour crosses the screen once */
+.id-sweep {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  z-index: 14;
+  pointer-events: none;
+  background: var(--id-signal);
+  box-shadow:
+    0 0 18px 4px rgba(159, 227, 255, 0.55),
+    0 0 60px 10px rgba(159, 227, 255, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .id-scene__corner,
+  .id-scene__label,
+  .id-scene__label::before {
+    transition: none;
+  }
 }

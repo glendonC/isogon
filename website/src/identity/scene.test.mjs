@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { countAt, isNear, promptSpot, reticleBox, sweepAt } from './scene.ts';
+
+const view = { width: 1440, height: 900 };
+
+test('the reticle frames the thing with room around it and stays inside the screen', () => {
+  assert.deepEqual(reticleBox({ left: 800, top: 320, right: 1240, bottom: 590 }, view), { left: 776, top: 296, right: 1264, bottom: 614 });
+  assert.deepEqual(reticleBox({ left: 0, top: 0, right: 1440, bottom: 900 }, view), { left: 16, top: 16, right: 1424, bottom: 884 });
+});
+
+test('the prompt stands above the frame, or below it when the frame is near the top', () => {
+  assert.deepEqual(promptSpot({ left: 776, top: 296, right: 1264, bottom: 614 }, view), { x: 776, y: 296, hang: 'above' });
+  assert.deepEqual(promptSpot({ left: 776, top: 40, right: 1264, bottom: 300 }, view), { x: 776, y: 300, hang: 'below' });
+  assert.equal(promptSpot({ left: 1300, top: 400, right: 1420, bottom: 500 }, view).x, 1440 - 16 - 340);
+});
+
+test('the pointer is near within the margin around the frame', () => {
+  const f = { left: 100, top: 100, right: 200, bottom: 200 };
+  assert.equal(isNear(f, 150, 150), true);
+  assert.equal(isNear(f, 240, 150), true);
+  assert.equal(isNear(f, 260, 150), false);
+});
+
+test('the readout counts to its value in whole numbers and ends exact', () => {
+  assert.equal(countAt(0, 180), 0);
+  assert.equal(countAt(1500, 180), 180);
+  assert.equal(countAt(5000, 180), 180);
+  const mid = countAt(750, 180);
+  assert.ok(mid > 90 && mid < 180, `eased out: ${mid}`);
+  assert.equal(Number.isInteger(mid), true);
+  assert.equal(countAt(500, Number.NaN), 0);
+});
+
+test('the sweep runs from 0 to 1 and never backwards', () => {
+  assert.equal(sweepAt(0), 0);
+  assert.equal(sweepAt(1600), 1);
+  let last = 0;
+  for (let t = 0; t <= 1600; t += 100) {
+    const v = sweepAt(t);
+    assert.ok(v >= last);
+    last = v;
+  }
+});
