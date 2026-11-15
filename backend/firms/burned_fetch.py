@@ -1044,13 +1044,14 @@ def parse_split_markdown(split_text: str) -> list[dict[str, Any]]:
             "key": m.group("key").strip(),
             "section": section,
             "priority": section_rank,
+            "order": len(out),
             "continent": m.group("continent").strip(),
             "zone": m.group("zone").strip(),
             "box": box,
             "start": format_utc(parse_utc_seconds(start_str)),
             "end": format_utc(parse_utc_seconds(end_str)),
         })
-    out.sort(key=lambda item: (item["priority"], item["key"]))
+    out.sort(key=lambda item: (item["priority"], item["order"]))
     return out
 
 
@@ -1215,16 +1216,25 @@ def main(argv: list[str] | None = None) -> int:
             rows = [r for r in rows if r["priority"] in (0, 1)]
         print(f"EARTHDATA_TOKEN set; parsed {len(rows)} open windows from {args.split_md.name}", flush=True)
         total_sent = 0
+        failed: list[dict[str, str]] = []
         for idx, r in enumerate(rows, 1):
-            res = fetch_window(
-                r["box"],
-                r["start"],
-                r["end"],
-                token=token,
-                out_dir=out_dir,
-                products=prods,
-                workers=workers,
-            )
+            try:
+                res = fetch_window(
+                    r["box"],
+                    r["start"],
+                    r["end"],
+                    token=token,
+                    out_dir=out_dir,
+                    products=prods,
+                    workers=workers,
+                )
+            except (ClosedBurnedWindow, TokenMissing, AuthApprovalRequired, PermissionError):
+                raise
+            except Exception as exc:  # noqa: BLE001
+                err_msg = redact_token(str(exc), token)
+                failed.append({"key": r["key"], "section": r["section"], "error": err_msg})
+                print(f"[{idx}/{len(rows)}] [{r['section']}] {r['key']} ERROR: {err_msg}", flush=True)
+                continue
             total_sent += int(res["bytes_transferred"])
             mcd = res["products"].get("MCD64A1", {})
             print(
@@ -1236,14 +1246,15 @@ def main(argv: list[str] | None = None) -> int:
         print(
             json.dumps(
                 {
-                    "fetched_split_windows": len(rows),
+                    "fetched_split_windows": len(rows) - len(failed),
+                    "failed_windows": failed,
                     "bytes_transferred": total_sent,
                     "store": store_status(out_dir),
                 },
                 indent=2,
             )
         )
-        return 0
+        return 0 if not failed else 1
 
     return 1
 
