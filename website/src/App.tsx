@@ -1034,14 +1034,17 @@ export function App() {
 
   const isCustomRegion = Boolean(activeRun && !isKnownTheaterId(activeRun.region.id));
 
-  const activeDisplay = THEATER_DISPLAY[activeTheaterId];
+  // The typed display table covers only the first places; any other place the registry serves is read from it.
+  const activeDisplay: (typeof THEATER_DISPLAY)[keyof typeof THEATER_DISPLAY] | undefined = (THEATER_DISPLAY as Record<string, (typeof THEATER_DISPLAY)[keyof typeof THEATER_DISPLAY]>)[activeTheaterId];
   const runMatchesRegion = Boolean(
     activeRun && (isCustomRegion || activeRun.region.id === activeTheaterId),
   );
   // The place's name from the registry; the typed display table only until the registry has answered.
-  const registryName = placesState.places.places.find((p) => p.id === activeTheaterId)?.name ?? null;
+  const registryPlace = placesState.places.places.find((p) => p.id === activeTheaterId) ?? null;
+  const registryName = registryPlace?.name ?? null;
+  const registryBox = (registryPlace?.box ?? []) as readonly number[];
   const regionTitle =
-    isCustomRegion && activeRun ? plainText(activeRun.region.name) : registryName ?? activeDisplay.title;
+    isCustomRegion && activeRun ? plainText(activeRun.region.name) : registryName ?? activeDisplay?.title ?? '';
   // No invented numbers: until a run for this region reports, readouts say so.
   const epochSummary = runMatchesRegion ? activeRun?.epoch_summaries?.[activeEpoch] : undefined;
   const rawMw = epochSummary?.reconstructed_total_mw ?? liveTelemetry?.reconstructedMw ?? null;
@@ -1070,8 +1073,8 @@ export function App() {
   const credit = imageryCredit(activeRun);
   const calendarArea = {
     name: regionTitle,
-    lat: runMatchesRegion && activeRun ? activeRun.region.center_lat : activeDisplay.centerLat,
-    lon: runMatchesRegion && activeRun ? activeRun.region.center_lon : activeDisplay.centerLon,
+    lat: runMatchesRegion && activeRun ? activeRun.region.center_lat : activeDisplay?.centerLat ?? (registryBox.length === 4 ? (registryBox[1] + registryBox[3]) / 2 : 0),
+    lon: runMatchesRegion && activeRun ? activeRun.region.center_lon : activeDisplay?.centerLon ?? (registryBox.length === 4 ? (registryBox[0] + registryBox[2]) / 2 : 0),
   };
 
   // What the pass track shows, what each step needs, and the quiet control's contents.
