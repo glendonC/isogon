@@ -88,8 +88,9 @@
 }
 
 .iso-seal-fp-btn {
-  padding: 2px 6px;
-  border: 1px solid var(--sys-rule);
+  padding: 0 0 2px;
+  border: 0;
+  border-bottom: 1px solid var(--sys-line);
   border-radius: 0;
   background: transparent;
   font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
@@ -102,7 +103,7 @@
 
 .iso-seal-fp-btn:hover,
 .iso-seal-fp-btn[aria-expanded='true'] {
-  border-color: var(--sys-edge);
+  border-bottom-color: var(--sys-ink);
   color: var(--sys-ink);
 }
 

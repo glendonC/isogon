@@ -696,3 +696,9 @@
     transition: none;
   }
 }
+
+/* Keep scroll height intact while hiding background landing prose behind an open side sheet. */
+body:has(.iso-viewer-layer) .iso-lb {
+  visibility: hidden;
+  pointer-events: none;
+}

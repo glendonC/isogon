@@ -99,7 +99,7 @@ interface FreshTestALandingSlice {
     tied?: number;
     behind?: number;
   };
-  by_continent?: Record<string, unknown>;
+  by_continent?: Record<string, { episodes_scored?: number; episodes?: number }>;
 }
 
 interface NextLookOnValidationSlice {
@@ -2049,8 +2049,13 @@ export function LandingBelow({
       other_level: formatSheetCount(val?.classes?.tied),
       other_behind: formatCountNone(val?.classes?.behind),
       test_a_fires_n: formatSheetCount(freshTestA?.episodes_scored),
-      test_a_continents_n:
-        freshTestA?.by_continent ? formatCountWord(Object.keys(freshTestA.by_continent).length) : null,
+      test_a_continents_n: freshTestA?.by_continent
+        ? formatCountWord(
+            Object.values(freshTestA.by_continent).filter(
+              (c) => ((c?.episodes_scored ?? c?.episodes ?? 0) as number) > 0,
+            ).length,
+          )
+        : null,
       test_a_ahead: formatSheetCount(freshTestA?.all?.ahead),
       test_a_level: formatSheetCount(freshTestA?.all?.tied),
       test_a_behind: formatCountNone(freshTestA?.all?.behind),

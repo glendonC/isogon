@@ -675,7 +675,10 @@ function FreshWorldTestSection({
   const aPlanFires = formatSheetCount(testA.episodes_in_plan);
   const aLooks = formatSheetCount(allA?.scored_looks);
   const byContA = testA.by_continent ?? {};
-  const contCountWord = formatCountWord(Object.keys(byContA).length) ?? String(Object.keys(byContA).length);
+  const scoredContCount = Object.values(byContA).filter(
+    (c) => (c?.episodes ?? 0) > 0,
+  ).length;
+  const contCountWord = formatCountWord(scoredContCount) ?? String(scoredContCount);
 
   const aAheadNum = allA?.ahead ?? 0;
   const aLevelNum = allA?.tied ?? 0;
