@@ -343,6 +343,11 @@
   color: var(--sys-ink-3);
 }
 
+/* The film presentation: the round end's rows without their small notes, which would pull the eye from the caption. */
+.iso-film .guide-results__note {
+  display: none;
+}
+
 .guide-results__row[data-strong='true'] .guide-results__name,
 .guide-results__row[data-strong='true'] .guide-results__value {
   color: var(--sys-ink);
