@@ -688,6 +688,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   {W.close}
                 </button>
               )}
+              {/* Under the years, how well the correction holds here: the record's own measured accuracy, on the page
+                  and in the film. A phone's narrow foot leaves it to the guide's answer. */}
+              {(inFilm || !narrowFoot) && rec.heldOut && <p className="sys-label rec__wide rec__heldout">{W.holds(rec.heldOut.harmonized, rec.heldOut.raw)}</p>}
               {/* The method every year is put on one scale by, in the product lane's words, and what a month's band is.
                   Where the guide speaks, its sentence on the step names the method, and the Record leaves it to it. */}
               {!guideSpeaks && !narrowFoot && methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld) && (
@@ -706,7 +709,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               {asCounted && rec.spans.sharp && (
                 <p className="sys-label rec__holds rec__wide">
                   {W.asCounted(rec.sharpRatio, Number(rec.spans.sharp[0].slice(0, 4)))}
-                  {rec.heldOut && !guideSpeaks && ` ${W.holds(rec.heldOut.harmonized, rec.heldOut.raw)}`}
+                  {rec.heldOut && !guideSpeaks && narrowFoot && ` ${W.holds(rec.heldOut.harmonized, rec.heldOut.raw)}`}
                 </p>
               )}
             </div>
