@@ -97,6 +97,11 @@ when the fire's label is picked; the left and right arrows step through them, `M
 the camera tour, `N` goes to the next region, `1` opens Estimate, `2` and `3` Play, and Esc goes back. In a round the
 arrows mark a square.
 
+The Earth's years (`src/world/EarthYears.tsx`, `GET /api/cube/years`) are a screen of their own under the Record's
+step: `W` opens them from Choose a Place and from the Record's view of the years as counted, the address `?years`
+opens them at once (with `film`, they play once by themselves), and Esc goes back to where they were opened from.
+Their own keys are Space, the arrows and `H`.
+
 A real run and a simulated run are kept apart. When the site asks for a real run and the answer is not one, it is refused, so modelled numbers are never shown as observations.
 
 One surface reads a stand-in file in `src/content/demo/` instead of a route and says "Demo data" on screen: the calendar of a box outside the three regions with FIRMS rows. The Terra morning result (`src/content/demo/terraMorning.ts`) is kept but not shown until it has a clean measurement and a route. The evidence sheet reads `GET /api/evidence` and shows no figure until it answers. On the pass track, the passes that looked and flagged nothing come from the run itself when its frames are the NASA CMR pass list, and otherwise from `GET /api/passes`; where neither has them (before 2012), the track says it shows passes with fire only. [`../docs/architecture.md`](../docs/architecture.md) lists them.
