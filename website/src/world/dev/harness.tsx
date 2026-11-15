@@ -9,8 +9,10 @@
  *   ?use=sealed   Tonight's sealed predictions (seals=<address>, now=<iso>)
  *   ?use=test     The test across the world (test=<address>)
  *   ?use=band     The band of the Record's interval on a month and on a year (record=<address>, month=YYYY-MM)
+ *   ?use=cube     A drawn box's Record summed here from the public cube (cube=<folder>) against the cube route's answer
+ *                 (route=<origin>), for boxes=w,s,e,n;w,s,e,n: times and the largest difference
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../styles/tokens.css';
 import '../../styles/system.css';
@@ -24,6 +26,8 @@ import { SealedTonight } from '../SealedTonight';
 import { WorldTest } from '../WorldTest';
 import type { Box } from '../projection';
 import { useRead } from '../read';
+import { loadPublicCube } from '../publicCube';
+import { publicRecord } from '../boxRecord';
 
 const Q = new URLSearchParams(location.search);
 // The film presentation, as the page takes it from `film` in its address.
@@ -146,7 +150,64 @@ function Band() {
   );
 }
 
+// Every number of two answers, leaf by leaf, where both hold it: the largest difference.
+function largestDifference(a: unknown, b: unknown): { leaves: number; largest: number } {
+  let leaves = 0;
+  let largest = 0;
+  const walk = (x: unknown, y: unknown) => {
+    if (typeof x === 'number' && typeof y === 'number') {
+      leaves += 1;
+      largest = Math.max(largest, Math.abs(x - y));
+    } else if (x && y && typeof x === 'object' && typeof y === 'object') {
+      for (const k of Object.keys(x as object)) {
+        if (k in (y as object) && !['cube', 'public_cube', 'downloaded_firms_rows', 'day', 'night', 'frp_mw', 'frp_mw_day', 'frp_mw_night'].includes(k)) {
+          walk((x as Record<string, unknown>)[k], (y as Record<string, unknown>)[k]);
+        }
+      }
+    }
+  };
+  walk(a, b);
+  return { leaves, largest };
+}
+
+function Cube() {
+  const base = Q.get('cube') ?? `${SAMPLE}/cube/public/`;
+  const route = Q.get('route') ?? 'http://127.0.0.1:8788';
+  const boxes = (Q.get('boxes') ?? '-122.37,43.12,-120.81,44.93;95,55,114.5,64.8;148.2,-37.9,150.8,-35;-60.37,-34.81,-59.94,-34.43')
+    .split(';')
+    .map((t) => t.split(',').map(Number) as [number, number, number, number]);
+  const [lines, setLines] = useState<string[]>(['Loading the public cube']);
+  useEffect(() => {
+    (async () => {
+      const t0 = performance.now();
+      const cube = await loadPublicCube(base);
+      const out = [`Public cube ${cube.manifest.source.cube_build}: fetched, unpacked and indexed in ${Math.round(performance.now() - t0)} ms`];
+      setLines([...out]);
+      for (const b of boxes) {
+        const t1 = performance.now();
+        const mine = publicRecord(cube, b, { fitted: null });
+        const ms = performance.now() - t1;
+        const resp = await fetch(`${route}/api/cube/record?box=${b.join(',')}`);
+        const theirs = await resp.json();
+        const d = largestDifference(theirs, mine);
+        out.push(`${b.join(', ')}: summed in ${Math.round(ms)} ms; ${d.leaves} numbers against the route, largest difference ${d.largest}`);
+        setLines([...out]);
+      }
+      out.push('Done');
+      setLines([...out]);
+    })().catch((err) => setLines((l) => [...l, `Failed: ${err instanceof Error ? err.message : String(err)}`]));
+  }, []);
+  return (
+    <div style={{ padding: 32, color: '#e5e7eb', font: '15px/1.6 system-ui', background: '#0b0f16', minHeight: '100vh' }}>
+      {lines.map((l) => (
+        <p key={l} data-line style={{ margin: '0 0 6px' }}>{l}</p>
+      ))}
+    </div>
+  );
+}
+
 function App() {
+  if (USE === 'cube') return <Cube />;
   if (USE === 'earth') return <Earth />;
   if (USE === 'sealed') return <Sealed />;
   if (USE === 'test') return <Test />;
