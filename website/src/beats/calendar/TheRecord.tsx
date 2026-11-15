@@ -1,7 +1,18 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LIPARI_32 } from '../../lib/colormaps';
 import { NOT_RECORDED_LINE, NotRecorded } from '../../lib/api';
-import { fetchRecord, logClass, monthWords, MONTH_NAMES, rampBounds, type FireRecord, type RecordMonth, type RecordPlace } from './record';
+import {
+  fetchCurrent,
+  fetchRecord,
+  logClass,
+  monthWords,
+  MONTH_NAMES,
+  rampBounds,
+  type CurrentMonth,
+  type FireRecord,
+  type RecordMonth,
+  type RecordPlace,
+} from './record';
 import { publishRecordView, RECORD_CLOSED, type RecordMonthView } from './recordView';
 import { monthLine, RECORD_WORDS as W } from './recordWords';
 import '../../styles/calendar-screen.css';
@@ -78,6 +89,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
   const [asCounted, setAsCounted] = useState(false);
   // Looking over the months: asked for, or the pointer or the arrow keys are on the grid.
   const [browsing, setBrowsing] = useState(false);
+  // This month so far: asked for by the visitor, never on opening; and whether its label and its caveats are on show.
+  const [now, setNow] = useState<{ state: 'idle' | 'loading' | 'failed' } | { state: 'answered'; month: CurrentMonth }>({ state: 'idle' });
+  const [nowOn, setNowOn] = useState(false);
+  const [rough, setRough] = useState(false);
   const [plotRef, size] = useSize<HTMLDivElement>();
   const rootRef = useRef<HTMLElement | null>(null);
   const placeKey = place.kind === 'region' ? place.regionId : place.box.join(',');
@@ -90,6 +105,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
     setHover(null);
     setAsCounted(false);
     setBrowsing(false);
+    setNow({ state: 'idle' });
+    setNowOn(false);
+    setRough(false);
     fetchRecord(place, controller.signal)
       .then((r) => {
         if (controller.signal.aborted) return;
@@ -121,10 +139,14 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
   const shown = picked ?? marked ?? worst;
   const focus = hover ?? shown;
   const looking = browsing || hover !== null || picked !== null;
+  // This month so far, when the route counted it; else why it could not, in words
+  const thisMonth = now.state === 'answered' && now.month.status === 'ready' && now.month.value !== null && /^\d{4}-\d{2}$/.test(now.month.month) ? now.month : null;
+  const notNow =
+    now.state === 'failed' ? W.notNow(W.whyNot.failed) : now.state === 'answered' && !thisMonth ? W.notNow(W.whyNot[now.month.status] ?? now.month.error ?? W.whyNot.failed) : null;
 
   // The latest of everything the keys and the published commands act on.
-  const live = useRef({ rec, shown, picked, marked, asCounted, openable, onOpenMonth, onClose });
-  live.current = { rec, shown, picked, marked, asCounted, openable, onOpenMonth, onClose };
+  const live = useRef({ rec, shown, picked, marked, asCounted, rough, openable, onOpenMonth, onClose });
+  live.current = { rec, shown, picked, marked, asCounted, rough, openable, onOpenMonth, onClose };
 
   const show = (ym?: string | null) => {
     const l = live.current;
@@ -133,7 +155,18 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
   };
   const pick = (ym: string | null) => {
     const l = live.current;
+    setNowOn(false);
+    setRough(false);
     setPicked(ym && l.rec?.months.has(ym) && ym !== l.marked ? ym : null);
+  };
+  const askNow = () => {
+    const route = live.current.rec?.currentRoute;
+    setNowOn(true);
+    if (!route || now.state === 'loading' || now.state === 'answered') return;
+    setNow({ state: 'loading' });
+    fetchCurrent(route)
+      .then((month) => setNow(month ? { state: 'answered', month } : { state: 'failed' }))
+      .catch(() => setNow({ state: 'failed' }));
   };
 
   // What the guide reads: the marked month, the picked month, the correction's facts, and the three commands.
@@ -171,12 +204,25 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
         heldOutWithout: rec?.heldOut?.raw ?? null,
         asCounted,
       },
+      now: {
+        state: now.state === 'idle' || now.state === 'loading' ? now.state : thisMonth ? 'ready' : 'unavailable',
+        ym: thisMonth?.month ?? null,
+        words: thisMonth ? monthWords(thisMonth.month) : null,
+        rate: thisMonth?.value ?? null,
+        usual: thisMonth?.median ?? null,
+        timesUsual: thisMonth?.timesUsual ?? null,
+        daysCounted: thisMonth?.days?.counted ?? null,
+        daysInMonth: thisMonth?.days?.inMonth ?? null,
+        caveats: thisMonth?.caveats ?? [],
+        why: notNow,
+      },
+      askNow,
       show,
       pick,
       browse: () => setBrowsing(true),
       showAsCounted: setAsCounted,
     });
-  }, [state, failure, rec, marked, picked, asCounted, openable, place.name]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, failure, rec, marked, picked, asCounted, openable, place.name, now]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => publishRecordView(RECORD_CLOSED), []);
 
   // The Record's keys, while the focus is on it or on nothing: arrows move over the months, Enter shows the fire of a
@@ -202,7 +248,8 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
         if (t?.closest('button, a')) return;
         show(l.shown);
       } else if (e.key === 'Escape') {
-        if (l.asCounted) setAsCounted(false);
+        if (l.rough) setRough(false);
+        else if (l.asCounted) setAsCounted(false);
         else if (l.onClose) l.onClose();
         else return;
       } else return;
@@ -216,7 +263,8 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
   const bounds = useMemo(() => (rec ? rampBounds(rec) : { lo: 1, hi: 1 }), [rec]);
   const years = rec ? Array.from({ length: rec.lastYear - rec.firstYear + 1 }, (_, i) => rec.firstYear + i) : [];
   const cell = years.length
-    ? Math.max(8, Math.floor(Math.min((size.w - NAMES_W) / years.length, (size.h - HEAD_H - AXIS_H - SPANS_H - FOOT_H) / 12)))
+    ? // One column more than the record's years is kept free on the right: this month's square stands there
+      Math.max(8, Math.floor(Math.min((size.w - NAMES_W) / (years.length + 1), (size.h - HEAD_H - AXIS_H - SPANS_H - FOOT_H) / 12)))
     : 0;
   const gap = cell >= 24 ? 3 : 1;
   const gridW = cell * years.length;
@@ -237,8 +285,14 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
     return rec.months.has(ym) ? ym : null;
   };
 
-  const fm = focus && rec ? rec.months.get(focus) ?? null : null;
-  const fx = fm ? xOf(fm.year) + cell / 2 : 0;
+  // This month's square stands in its own year's column, past the record's last one, in its month's row
+  const nowAt = thisMonth ? { x: xOf(Number(thisMonth.month.slice(0, 4))), y: yOf(Number(thisMonth.month.slice(5, 7))) } : null;
+  const nowLabel = nowOn && hover === null && thisMonth && nowAt ? thisMonth : null;
+  const fm = nowLabel ? null : focus && rec ? rec.months.get(focus) ?? null : null;
+  const fx = nowLabel && nowAt ? nowAt.x + cell / 2 : fm ? xOf(fm.year) + cell / 2 : 0;
+  const fy = nowLabel && nowAt ? nowAt.y : fm ? yOf(fm.month) : 0;
+  // Where the way to this month stands: after the last year, on the years' line
+  const afterYears = rec ? xOf(rec.lastYear + 1) + 8 : 0;
   // The label hangs on the side of its leader with room for it, and is never wider than that room.
   const labelRight = fx + 12 + LABEL_W <= size.w || size.w - fx >= fx;
   const labelRoom = Math.max(120, Math.min(LABEL_W, (labelRight ? size.w - fx : fx) - 12));
@@ -281,6 +335,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
               onPointerMove={(e) => setHover(monthAt(e))}
               onPointerLeave={() => setHover(null)}
               onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                // This month's own square brings its label back
+                if (nowAt && Math.abs(e.clientX - r.left - nowAt.x - cell / 2) <= cell / 2 && Math.abs(e.clientY - r.top - nowAt.y - cell / 2) <= cell / 2) return setNowOn(true);
                 const ym = monthAt(e);
                 if (!ym) return;
                 if (openable.has(ym)) show(ym);
@@ -334,10 +391,31 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
                   d={brackets(xOf(rec.months.get(shown)!.year), yOf(rec.months.get(shown)!.month), cell - gap, gap, Math.max(4, Math.round(cell * 0.26)))}
                 />
               )}
-              {fm && <line className="rec__leader" x1={fx - gap / 2} y1={y0 - HEAD_H + 12} x2={fx - gap / 2} y2={yOf(fm.month) - 7} />}
+              {(fm || nowLabel) && <line className="rec__leader" x1={fx - gap / 2} y1={y0 - HEAD_H + 12} x2={fx - gap / 2} y2={fy - 7} />}
+
+              {/* This month so far, once asked for: a square on the same ramp, its edge dashed because the month is not over. */}
+              {thisMonth && nowAt && (
+                <g>
+                  <rect
+                    className={logClass(thisMonth.value, bounds.lo, bounds.hi, STEPS) === 0 ? 'rec__cell rec__cell--none' : 'rec__cell'}
+                    x={nowAt.x}
+                    y={nowAt.y}
+                    width={cell - gap}
+                    height={cell - gap}
+                    style={logClass(thisMonth.value, bounds.lo, bounds.hi, STEPS) === 0 ? undefined : { fill: RAMP[logClass(thisMonth.value, bounds.lo, bounds.hi, STEPS) - 1] }}
+                  />
+                  <rect className="rec__now" x={nowAt.x - 1.5} y={nowAt.y - 1.5} width={cell - gap + 3} height={cell - gap + 3} />
+                  {/* Its year is written where every year is; on a small grid it would stand on the last label */}
+                  {yearEvery === 1 && (
+                    <text className="rec__axis" x={nowAt.x + (cell - gap) / 2} y={y0 + gridH + 15} textAnchor="middle">
+                      {thisMonth.month.slice(0, 4)}
+                    </text>
+                  )}
+                </g>
+              )}
 
               {/* Which satellite was flying, from the first and last month each has a rate in the record. */}
-              {coarse && (
+              {!rough && coarse && (
                 <g className="rec__span rec__span--coarse">
                   <line x1={coarse.from} y1={spansY + 24} x2={coarse.to} y2={spansY + 24} />
                   <text x={coarse.from} y={spansY + 17}>
@@ -345,7 +423,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
                   </text>
                 </g>
               )}
-              {sharp && (
+              {!rough && sharp && (
                 <g className="rec__span rec__span--sharp">
                   <line x1={sharp.from} y1={spansY + 48} x2={sharp.to} y2={spansY + 48} />
                   {sharp.to - sharp.from >= 280 ? (
@@ -373,7 +451,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
                 aria-live="polite"
               >
                 <span className="sys-title">{monthWords(fm.ym)}</span>
-                <span className="sys-label">{monthLine(fm.ym, fm.value, fm.timesUsual)}</span>
+                <span className="sys-label">{monthLine(fm.ym, fm.value, fm.timesUsual, fm.median)}</span>
                 {openable.has(fm.ym) && (
                   <button type="button" className="rec__act rec__act--next" onClick={() => show(fm.ym)}>
                     {!hover && <span className="rec__key">Enter</span>}
@@ -383,13 +461,61 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
               </div>
             )}
 
+            {nowLabel && (
+              <div
+                className="rec__label"
+                data-side={labelRight ? 'right' : 'left'}
+                style={
+                  labelRight
+                    ? { left: fx + 12, bottom: size.h - y0 + 8, maxWidth: labelRoom }
+                    : { right: size.w - fx + 12, bottom: size.h - y0 + 8, maxWidth: labelRoom }
+                }
+                aria-live="polite"
+              >
+                <span className="sys-title">{W.soFar(nowLabel.month)}</span>
+                <span className="sys-label">{W.soFarRate(nowLabel.value ?? 0, nowLabel.days)}</span>
+                {nowLabel.median !== null && <span className="sys-label">{W.usualIs(nowLabel.month, nowLabel.median)}</span>}
+                {nowLabel.caveats.length > 0 && (
+                  <button type="button" className="rec__act" aria-pressed={rough} onClick={() => setRough((on) => !on)}>
+                    {W.rough}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* The way to this month so far stands after the last year: the month is the record's next square. */}
+            {rec.currentRoute && !thisMonth && afterYears + 130 <= size.w + 24 && (
+              <div className="rec__after" style={{ left: afterYears, top: y0 + gridH + 2 }}>
+                {now.state === 'loading' ? (
+                  <span className="sys-fine">{W.counting}</span>
+                ) : (
+                  <button type="button" className="rec__act rec__act--small" onClick={askNow}>
+                    {W.thisMonth}
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* The way to the years as counted sits where the sharp satellite's line begins, the thing it is about. */}
-            {sharpX !== null && atJunction && (
+            {!rough && sharpX !== null && atJunction && (
               <div className="rec__junction" style={{ right: size.w - sharpX + 14, top: spansY + 29 }}>
                 {correctionPrompt}
               </div>
             )}
 
+            {rough && thisMonth ? (
+              // How rough this month's figure is, as the route says it, where the satellites' lines and the legend stand
+              <div className="rec__foot rec__foot--rough" style={{ top: spansY + 10, left: x0, width: gridW }}>
+                <ul className="sys-fine rec__caveats rec__wide">
+                  {thisMonth.caveats.map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
+                <button type="button" className="rec__act" onClick={() => setRough(false)}>
+                  {W.roughBack}
+                </button>
+              </div>
+            ) : (
             <div className="rec__foot" style={{ top: footY, left: x0, width: gridW }}>
               <span className="rec__legend sys-fine">
                 {W.noFireLegend}
@@ -417,6 +543,12 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
                 </button>
               )}
               {sharpX !== null && !atJunction && <div className="rec__wide">{correctionPrompt}</div>}
+              {rec.currentRoute && !thisMonth && afterYears + 130 > size.w + 24 && now.state !== 'loading' && (
+                <button type="button" className="rec__act rec__wide" onClick={askNow}>
+                  {W.thisMonth}
+                </button>
+              )}
+              {notNow && nowOn && <p className="sys-label rec__wide rec__holds">{notNow}</p>}
               {asCounted && rec.spans.sharp && (
                 <p className="sys-label rec__holds rec__wide">
                   {W.asCounted(rec.sharpRatio, Number(rec.spans.sharp[0].slice(0, 4)))}
@@ -424,6 +556,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
                 </p>
               )}
             </div>
+            )}
           </>
         )}
       </div>

@@ -182,8 +182,35 @@
   color: var(--sys-ink-3);
 }
 
-.rec__junction {
+.rec__junction,
+.rec__after {
   position: absolute;
+}
+
+.rec__after {
+  white-space: nowrap;
+}
+
+.rec__act--small {
+  font-size: var(--sys-size-fine);
+  line-height: var(--sys-lh-fine);
+}
+
+/* This month so far: the month is not over, so its square's edge is dashed. */
+.rec__now {
+  fill: none;
+  stroke: var(--sys-ink);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
+.rec__caveats {
+  margin: 0;
+  padding-left: var(--sys-s4);
+  display: grid;
+  gap: 2px;
+  color: var(--sys-ink-2);
 }
 
 .rec__foot {

@@ -10,7 +10,7 @@
  *   ?use=fires    the featured fires as the place screen mounts them, in a box the size of its slot (h, pick)
  *   ?use=reveal   one fire three ways as World model mounts it, inside a stand-in for the workspace (region, start, pass)
  *   ?use=record   The Record over a still of the stage, with stand-ins for the trail and the guide's strip
- *                 (region, box=w,s,e,n, marked, pick, counted=1, still=0, guide=0, events=1)
+ *                 (region, box=w,s,e,n, marked, pick, counted=1, now=1, still=0, guide=0, events=1)
  *   ?use=place    Choose a Place over the same still, with the same stand-ins (current, still=0, guide=0, events=1)
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -327,6 +327,7 @@ function RecordHarness() {
     const pick = Q.get('pick');
     if (pick) view.pick(pick);
     if (Q.get('counted') === '1') view.showAsCounted(true);
+    if (Q.get('now') === '1') view.askNow();
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
   const canOpen = (ym: string, rec: FireRecord) => rec.place.kind === 'region' && rec.runStarts.some((st) => st.start.startsWith(ym));
   // The stand-ins below follow the page's frames: the place, the objective and the trail top left, the guide's

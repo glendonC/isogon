@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { logClass, parseRecord, rampBounds } from './record.ts';
 import { publishRecordView, readRecordView, RECORD_CLOSED } from './recordView.ts';
-import { monthLine, percent, RECORD_WORDS, times } from './recordWords.ts';
+import { monthLine, percent, rate, RECORD_WORDS, times } from './recordWords.ts';
 
 const month = (ym, harmonized, modis, viirs, extra = {}) => ({
   year_month: ym,
@@ -69,6 +69,30 @@ test('a month is set against a usual one in plain words', () => {
   assert.equal(times(2349.4), '2,349');
 });
 
+test('from a hundred times up a month is said by its rate and the usual rate, with their unit', () => {
+  assert.equal(monthLine('2021-08', 25.6006, 94.7, 0.2702), '95 times the fire of a usual August here');
+  assert.equal(
+    monthLine('2021-08', 4.698, 2349.4, 0.002),
+    '4.70 detections per 1,000 square kilometres a day. A usual August here: 0.0020',
+  );
+  // With no usual rate served there is nothing to say but the ratio
+  assert.equal(monthLine('2021-08', 4.698, 2349.4), '2,349 times the fire of a usual August here');
+  assert.equal(rate(25.6006), '25.6');
+  assert.equal(rate(0.1952), '0.20');
+  assert.equal(rate(0.0028), '0.0028');
+  assert.equal(rate(0), '0');
+});
+
+test('this month so far is said with its unit, the days it was counted over and a usual month beside it', () => {
+  assert.equal(RECORD_WORDS.soFar('2026-11'), 'November 2026 so far');
+  assert.equal(
+    RECORD_WORDS.soFarRate(0.1952, { counted: 14, inMonth: 30 }),
+    '0.20 detections per 1,000 square kilometres a day, over the first 14 of 30 days',
+  );
+  assert.equal(RECORD_WORDS.usualIs('2026-11', 0.3233), 'A usual November here: 0.32');
+  assert.match(RECORD_WORDS.notNow(RECORD_WORDS.whyNot.busy), /^This month so far cannot be counted now: /);
+});
+
 test('how well the correction holds is said with the shares passed in and nothing typed', () => {
   assert.equal(percent(0.1086), '11');
   const line = RECORD_WORDS.holds(0.1086, 0.7347);
@@ -84,7 +108,16 @@ test('how well the correction holds is said with the shares passed in and nothin
 
 test('no sentence of The Record carries a percent sign or a forbidden dash', () => {
   const said = [
-    ...Object.values(RECORD_WORDS).map((w) => (typeof w === 'function' ? (w.length === 2 ? w(0.1, 0.7) : w('Somewhere')) : w)),
+    ...Object.values(RECORD_WORDS).flatMap((w) => (typeof w === 'string' ? [w] : typeof w === 'object' ? Object.values(w) : [])),
+    RECORD_WORDS.loading('Somewhere'),
+    RECORD_WORDS.failed('Somewhere'),
+    RECORD_WORDS.grid('Somewhere'),
+    RECORD_WORDS.asCounted(4.1, 2012),
+    RECORD_WORDS.holds(0.1, 0.7),
+    RECORD_WORDS.soFar('2026-11'),
+    RECORD_WORDS.soFarRate(0.2, { counted: 14, inMonth: 30 }),
+    RECORD_WORDS.usualIs('2026-11', 0.3),
+    RECORD_WORDS.notNow('it is busy'),
     monthLine('2012-08', 8, 16),
   ];
   // A percent sign, an em dash, an en dash or a middle dot, named by their codes so that this file holds none.

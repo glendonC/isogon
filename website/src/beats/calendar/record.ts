@@ -4,8 +4,8 @@ import type { Box } from '../../app/places';
 /**
  * The Record's data: the fire record of a place (`GET /api/calendar?source=firms&region_id=`) or of any box
  * (`&box=w,s,e,n`), and this month so far against its median (`GET /api/calendar/current`). Every figure the screen
- * shows comes from these answers; nothing is computed here but sums and positions. The Record does not show this month
- * so far; its reader stays here for whoever asks for it.
+ * shows comes from these answers; nothing is computed here but sums and positions. This month so far is asked for only
+ * when the visitor asks.
  */
 
 export type RecordPlace = { kind: 'region'; regionId: string; name: string } | { kind: 'box'; box: Box; name: string };
@@ -176,6 +176,8 @@ export interface CurrentMonth {
   error: string | null;
   value: number | null;
   median: number | null;
+  /** The month so far over the median of its calendar month, as the route serves it. */
+  timesUsual: number | null;
   medianYears: [number, number] | null;
   days: { counted: number; inMonth: number } | null;
   caveats: string[];
@@ -196,6 +198,7 @@ export async function fetchCurrent(route: string, signal?: AbortSignal): Promise
     error: typeof b.error === 'string' ? b.error : null,
     value: num(b.harmonized_mean),
     median: num(b.month_median),
+    timesUsual: num(b.anomaly_ratio),
     medianYears: my,
     days: days && num(days.counted) !== null && num(days.in_month) !== null ? { counted: num(days.counted)!, inMonth: num(days.in_month)! } : null,
     caveats: Array.isArray(b.caveats) ? (b.caveats as unknown[]).filter((c): c is string => typeof c === 'string') : [],

@@ -52,6 +52,25 @@ export interface RecordView {
     /** The grid is showing the years as counted, before the correction. */
     asCounted: boolean;
   };
+  /** This month so far, once the visitor has asked for it. */
+  now: {
+    state: 'idle' | 'loading' | 'ready' | 'unavailable';
+    /** "2026-11" and "November 2026". */
+    ym: string | null;
+    words: string | null;
+    /** The rate over the days counted, the median of this calendar month, and their ratio as served. */
+    rate: number | null;
+    usual: number | null;
+    timesUsual: number | null;
+    daysCounted: number | null;
+    daysInMonth: number | null;
+    /** Why the figure is rough, as the route says it, sentence by sentence. */
+    caveats: string[];
+    /** Why it cannot be counted now, in words, when it cannot. */
+    why: string | null;
+  };
+  /** Ask for this month so far. */
+  askNow: () => void;
   /** Show the fire of a month on the stage: the picked month when there is one, else the marked one. */
   show: (ym?: string) => void;
   /** Pick a month ("2021-07"); none goes back to the marked one. */
@@ -74,6 +93,8 @@ export const RECORD_CLOSED: RecordView = {
   marked: null,
   picked: null,
   correction: { sharpFromYear: null, ratio: null, heldOut: null, heldOutWithout: null, asCounted: false },
+  now: { state: 'idle', ym: null, words: null, rate: null, usual: null, timesUsual: null, daysCounted: null, daysInMonth: null, caveats: [], why: null },
+  askNow: nothing,
   show: nothing,
   pick: nothing,
   browse: nothing,
