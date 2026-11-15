@@ -98,6 +98,7 @@ import {
 import { SunShadowBaker } from './engine/shadowBake';
 import { firePatches, type FirePatches } from './engine/firePatches';
 import { flatGridArrays } from './engine/flatGrid';
+import { liteManifestOf } from './engine/liteManifest';
 import { isSlowMainThread, mainThreadBenchMs } from './engine/deviceSpeed';
 import { RenderScaleGovernor } from './engine/renderScale';
 import { levelIsWholeMetres } from './engine/levelGround';
@@ -301,6 +302,12 @@ interface CachedTheaterBundle {
   residenceHours?: number;
   /** The run's declared cells by frame (the estimate's frames on a hidden pass), on their own grid over the box. */
   declared?: DeclaredCells | null;
+  /** A pack bundle drawn from the pack's small twin (see liteManifestOf); the full pack follows once the cover lifts. */
+  packIsLite?: boolean;
+  /** Its land around is the twin's, until the full pack's comes. */
+  contextLite?: boolean;
+  /** The full pack after the twin: loading or failed. */
+  packUpgrade?: 'loading' | 'failed';
   /**
    * Real runs: the hidden passes were answered by another model than the one whose belief the run
    * carries between passes (a challenger, `held_out_passes_answered_by`): a hidden pass then shows that
@@ -824,6 +831,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     triggerSlew: (targetTheaterId: TheaterId) => void;
     applyCameraPreset: () => void;
     syncCinemaStart: (active: boolean) => void;
+    /** Runs once the stage's cover has lifted (at once when it has): the files a first picture does not need. */
+    whenPictureReady: (fn: () => void) => void;
+    /** A run's field file, fetched after the first picture, laid into its bundles. */
+    patchRunTensor: (runId: string, tensor: Uint8Array, frames: number) => void;
   } | null>(null);
 
   useEffect(() => {
@@ -1871,6 +1882,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       if (!packed?.pack) return bundle;
       if (packed.lite === bundle) return packed;
       const rebased = composePackBundle(bundle, packed.pack, packed);
+      // (still the small twin's textures, if they were: the full pack follows for this bundle)
+      rebased.packIsLite = packed.packIsLite;
+      rebased.contextLite = packed.contextLite;
       packBundles.set(bundle.regionId, rebased);
       // The pack textures, shadow, inset and context moved on to the new bundle. What was built
       // for the old one alone (its fire history, its smoke height) goes once it is off screen.
@@ -1903,7 +1917,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const loadContext = (packed: CachedTheaterBundle) => {
       const pack = packed.pack;
       const manifest = parseTerrainContext(pack?.manifest.context);
-      if (!pack || !manifest || packed.context || packed.contextState !== 'none') return;
+      // (a full pack replaces the land around it took over from its small twin; a twin keeps its own)
+      if (!pack || !manifest || packed.contextState !== 'none') return;
+      if (packed.context && (!packed.contextLite || packed.packIsLite)) return;
       packed.contextState = 'loading';
       void loadTerrainContext(manifest, {
         resolveUrl: (raw) => assetAddress(propsRef.current, raw),
@@ -1918,7 +1934,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         }
         owner.contextState = context ? 'none' : 'failed';
         if (!context) return;
+        if (owner.context && owner.context !== context) owner.context.dispose();
         owner.context = context;
+        owner.contextLite = Boolean(owner.packIsLite);
         if (nextBundle === owner) syncUniformsFromBundles();
       });
     };
@@ -1926,8 +1944,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const requestPack = (lite: CachedTheaterBundle) => {
       const manifest = lite.packManifest;
       if (!manifest || lite.pack || lite.packState !== 'none') return;
+      // (while the cover holds, the pack's small twin first where it has one: the cover lifts on it and the
+      // full pack follows, see upgradePack)
+      const twin = filmHolding ? liteManifestOf(manifest) : null;
       lite.packState = 'loading';
-      void loadTerrainPack(manifest, {
+      void loadTerrainPack(twin ?? manifest, {
         resolveUrl: (raw) => assetAddress(propsRef.current, raw),
         maxTextureSize: fullResPack ? renderer.capabilities.maxTextureSize : 4096,
         maxAnisotropy,
@@ -1949,11 +1970,59 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         }
         evictPacksExcept(lite.regionId);
         const packed = composePackBundle(lite, pack, null);
+        packed.packIsLite = twin !== null;
         packBundles.set(lite.regionId, packed);
         activateBundle(packed, true);
         morphDuration = 0.62;
-        loadDetailInset(packed);
+        if (!packed.packIsLite) loadDetailInset(packed);
         loadContext(packed);
+      });
+    };
+
+    // The full pack after its small twin, once the cover has lifted: the ground sharpens in place (the same
+    // registration), the twin's land around stays until the full one comes, and the twin's textures go after
+    const upgradePack = (packedLite: CachedTheaterBundle) => {
+      if (disposed || !packedLite.packIsLite || packedLite.packUpgrade || !packedLite.packManifest || !packedLite.pack) return;
+      if (packBundles.get(packedLite.regionId) !== packedLite) return;
+      packedLite.packUpgrade = 'loading';
+      void loadTerrainPack(packedLite.packManifest, {
+        resolveUrl: (raw) => assetAddress(propsRef.current, raw),
+        maxTextureSize: fullResPack ? renderer.capabilities.maxTextureSize : 4096,
+        maxAnisotropy,
+        isCancelled: () => disposed,
+      }).then((pack) => {
+        if (disposed) {
+          pack?.dispose();
+          return;
+        }
+        if (!pack) {
+          packedLite.packUpgrade = 'failed';
+          return;
+        }
+        if (packBundles.get(packedLite.regionId) !== packedLite || nextBundle !== packedLite) {
+          // (the view moved on: the twin stays where it is, and the full pack is asked again when it is back)
+          pack.dispose();
+          packedLite.packUpgrade = undefined;
+          return;
+        }
+        const full = composePackBundle(packedLite.lite ?? packedLite, pack, null);
+        full.packIsLite = false;
+        full.context = packedLite.context;
+        full.contextLite = Boolean(packedLite.context);
+        full.contextState = 'none';
+        packedLite.context = null;
+        packBundles.set(full.regionId, full);
+        activateBundle(full, true);
+        morphDuration = 0.62;
+        loadDetailInset(full);
+        loadContext(full);
+        window.setTimeout(() => {
+          if (packedLite === prevBundle || packedLite === nextBundle) return;
+          packedLite.pack?.dispose();
+          packedLite.shadow?.dispose();
+          packedLite.pack = null;
+          packedLite.shadow = null;
+        }, 2500);
       });
     };
 
@@ -1993,6 +2062,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       setRenderedFindings(calloutsFor(bundle));
       presetDirty = true;
       if (!bundle.pack) requestPack(bundle);
+      else if (bundle.packIsLite) whenPictureReady(() => upgradePack(bundle));
     };
 
     const upgradeBundleInPlace = (bundle: CachedTheaterBundle) => {
@@ -3008,6 +3078,24 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let coverStep = -1;
     let coverStepSec = 0;
     markStageLoading();
+    // What waits for the cover to lift: the files a first picture does not need (the full pack after its small
+    // twin, the estimate's belief, the run's field), so the first picture has the network to itself
+    const afterPicture: Array<() => void> = [];
+    const whenPictureReady = (fn: () => void) => {
+      if (filmHolding) afterPicture.push(fn);
+      else fn();
+    };
+    const patchRunTensor = (runId: string, tensor: Uint8Array, frames: number) => {
+      if (disposed) return;
+      const bundles = new Set<CachedTheaterBundle>([...bundleCache.values(), ...packBundles.values(), prevBundle, nextBundle]);
+      for (const b of bundles) {
+        if (b.runId !== runId) continue;
+        b.tensor = tensor;
+        b.frameCount = frames;
+        b.fireHistory = null;
+      }
+      uploadedTensorRef = null;
+    };
     let filmCancelled = false;
     let filmStartSec = 0;
     let filmSeconds = 0;
@@ -3092,10 +3180,16 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       triggerSlew,
       applyCameraPreset,
       syncCinemaStart,
+      whenPictureReady,
+      patchRunTensor,
     };
 
     // 5. Immediate Offline Static Asset Hydration for Feather River, CA (plumas_ca)
-    void (async () => {
+    // (a stand-in until a run of the place comes: never seen under the cover, so it is asked for only once the
+    // cover has lifted, and then only if no run came)
+    whenPictureReady(() => void (async () => {
+      // (a run of the place already in: no stand-in)
+      if ((bundleCache.get('plumas_ca')?.runId ?? null) !== null) return;
       try {
         // The place's ground and its picture, and nothing else: the field and the pass list that
         // used to come with them are a simulation, which is not shown on a real place
@@ -3182,7 +3276,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       } catch {
         // Procedural fallback remains active seamlessly
       }
-    })();
+    })());
 
     // 6. Pointer & Wheel Interaction Handlers (Damped Orbit/Pan/Zoom)
     let viewportW = Math.max(1, host.clientWidth);
@@ -5266,6 +5360,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           }
           markStageReady();
           p.onPictureReady?.();
+          for (const fn of afterPicture.splice(0)) fn();
         }
       } else if (filmFadeStartSec >= 0 && elapsedSec - filmFadeStartSec > FILM_FADE_SECONDS + 0.1 && coverRef.current && coverRef.current.style.display !== 'none') {
         coverRef.current.style.display = 'none';
@@ -5448,7 +5543,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     void (async () => {
       try {
         const prevRegionBundle = bridge.bundleCache.get(run.region.id);
-        const hiresDemUrl = run.assets.dem_hires_f32_url
+        // (where the run's pack has a small twin, the twin is the first ground: the run's own detailed elevation
+        // and its overview picture would only be downloaded to be replaced, so its small elevation stands in
+        // until the twin is in, and no overview is asked for)
+        const twinFirst = liteManifestOf(parseTerrainPackManifest(run.assets.terrain_pack)) !== null;
+        const hiresDemUrl = run.assets.dem_hires_f32_url && !twinFirst
           ? assetAddress(propsRef.current, run.assets.dem_hires_f32_url)
           : null;
         const stdDemUrl = assetAddress(propsRef.current, run.assets.dem_f32_url);
@@ -5456,8 +5555,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         // The run's overview picture comes from Esri whatever the pack's imagery: in the film
         // presentation it is never asked for (the ground waits on the pack's own picture, or borrows
         // the place's earlier one); on the page it shows only until the pack's picture is in
-        const skipOverview = Boolean(propsRef.current.filmMove ?? filmFromAddress());
+        const skipOverview = Boolean(propsRef.current.filmMove ?? filmFromAddress()) || twinFirst;
         const tensorUrl = assetAddress(propsRef.current, run.assets.reconstruction_u8_url);
+        // A real run draws its detections and its belief, never its field: the field file (several MB) is
+        // fetched once the stage's first picture is in, so the first picture has the network to itself
+        const deferTensor = (run as { source?: string }).source === 'firms';
 
         const fetchDemBuffer = async (): Promise<ArrayBuffer | null> => {
           if (hiresDemUrl) {
@@ -5493,7 +5595,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         const [demBuf, satTexLoaded, tensorResp] = await Promise.all([
           fetchDemBuffer(),
           loadSatTexture(),
-          fetch(tensorUrl).catch(() => null),
+          deferTensor ? Promise.resolve(null) : fetch(tensorUrl).catch(() => null),
         ]);
 
         const tensorBuf =
@@ -5519,7 +5621,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         const lendPicture = prevRegionBundle && !(realFiles && prevRegionBundle.noRealPicture) ? prevRegionBundle : undefined;
         if (realFiles && !demBuf && !lendGround) missingFiles.push('elevation');
         if (realFiles && !satTexLoaded && !lendPicture && !skipOverview) missingFiles.push('imagery');
-        if (realFiles && !tensorBuf) missingFiles.push('field');
+        if (realFiles && !tensorBuf && !deferTensor) missingFiles.push('field');
 
         const demPack = demBuf
           ? createDemR32FTexture(new Float32Array(demBuf), true)
@@ -5624,6 +5726,18 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         };
 
         bridge.storeRunBundle(run.region.id, run.run_id, hydratedBundle);
+        if (deferTensor) {
+          bridge.whenPictureReady(() => {
+            void fetch(tensorUrl)
+              .then((resp) => (resp.ok ? resp.arrayBuffer() : null))
+              .then((buf) => {
+                if (!buf) return;
+                const field = alignReconstructionTensor(new Uint8Array(buf), true);
+                bridge.patchRunTensor(run.run_id, field.buffer, field.frames);
+              })
+              .catch(() => undefined);
+          });
+        }
 
         // What the model believes between the passes: fetched once per run, after the run is on show
         const beliefInfo = parseBeliefFrames(run.belief_frames);
@@ -5643,7 +5757,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           });
           while (beliefStore.size > 6) beliefStore.delete(beliefStore.keys().next().value as string);
         }
-        if (beliefInfo && !beliefStore.has(run.run_id)) {
+        // (the estimate's belief is not in the first picture: it is fetched once the cover has lifted)
+        if (beliefInfo && !beliefStore.has(run.run_id)) bridge.whenPictureReady(() => {
+          if (beliefStore.has(run.run_id)) return;
           void fetch(assetAddress(propsRef.current, beliefInfo.url))
             .then((resp) => (resp.ok ? resp.arrayBuffer() : null))
             .then((buf) => {
@@ -5661,7 +5777,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             .catch(() => {
               beliefFailedRef.current.add(run.run_id);
             });
-        }
+        });
 
         // Activate if this run matches the currently viewed theater or is a custom coordinate query
         const currentTarget = propsRef.current.activeTheaterId;
