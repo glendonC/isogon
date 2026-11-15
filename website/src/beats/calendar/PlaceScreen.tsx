@@ -70,6 +70,18 @@ const watchNoBlock = (changed: () => void) => {
 };
 const isNoBlock = () => window.matchMedia(NO_BLOCK).matches;
 
+/** An area of a degree round coordinates typed as "latitude, longitude"; null for anything else. */
+const coordsOf = (q: string): Box | null => {
+  const m = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (!m) return null;
+  const la = Number(m[1]);
+  const lo = Number(m[2]);
+  if (Math.abs(la) > 90 || Math.abs(lo) > 180) return null;
+  return [lo - 0.5, la - 0.5, lo + 0.5, la + 0.5].map((n) => Math.round(n * 100) / 100) as Box;
+};
+/** A fire named by words: its own name or its period. */
+const named = (fire: FeaturedFire, t: string) => (fire.name ?? '').toLowerCase().includes(t) || fire.label.toLowerCase().includes(t);
+
 export interface PlaceScreenProps {
   places: Places;
   /** The fire on the land now, marked with corner marks. */
@@ -103,6 +115,19 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
   }, [noBlock]);
   const [query, setQuery] = useState('');
   const [note, setNote] = useState<string | null>(null);
+  // What Find found, which Enter again with the same words opens
+  const found = useRef<{ q: string; open: () => void } | null>(null);
+  // The list narrowed by the words in the field: a place named shows all its fires, a fire named only itself
+  const narrowBy = query.trim().toLowerCase();
+  const listed = useMemo(() => {
+    if (!narrowBy || coordsOf(narrowBy)) return firms.map((place) => ({ place, shown: place.featured_fires.filter((f) => f.default_start) }));
+    return firms
+      .map((place) => {
+        const withStart = place.featured_fires.filter((f) => f.default_start);
+        return { place, shown: place.name.toLowerCase().includes(narrowBy) ? withStart : withStart.filter((f) => named(f, narrowBy)) };
+      })
+      .filter((g) => g.shown.length > 0);
+  }, [firms, narrowBy]);
   // The Earth's first view, and what Find asked it to open: a place's card, or an area of a degree round coordinates
   const [earth, setEarth] = useState<{ key: number; focus: Box | undefined; open: string | null; box: Box | null }>({
     key: 0,
@@ -297,8 +322,9 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
     const ro = new ResizeObserver(() => markWhole());
     ro.observe(list);
     for (const g of list.querySelectorAll('.place__group')) ro.observe(g);
+    markWhole();
     return () => ro.disconnect();
-  }, [firms, markWhole]);
+  }, [listed, markWhole]);
 
   // The line under the list brings the first fire below to the top, under its place's name
   const showBelow = () => {
@@ -315,41 +341,61 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
     markWhole();
   }, [chosen, bringWhole, markWhole]);
 
+  /**
+   * Find: coordinates draw an area of a degree round them; a name brings its place into view with its card, opens the
+   * fire in the list (the one named, or the place's opening fire) and narrows the list to what it names. Enter again
+   * with the same words opens what was found: the fire, or the area's record. The Earth leaves the keys of a field to
+   * the field, so Escape in it clears the card or the area here.
+   */
   const search = () => {
     const q = query.trim();
     if (!q) return;
-    const m = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
-    if (m) {
-      const la = Number(m[1]);
-      const lo = Number(m[2]);
-      if (Math.abs(la) <= 90 && Math.abs(lo) <= 180) {
-        const b: Box = [lo - 0.5, la - 0.5, lo + 0.5, la + 0.5].map((n) => Math.round(n * 100) / 100) as Box;
-        setNote(null);
-        setEarth((e) => ({ key: e.key + 1, focus: clearOf(b, 6), open: null, box: b }));
-        return;
-      }
+    if (found.current?.q === q) {
+      found.current.open();
+      return;
+    }
+    const b = coordsOf(q);
+    if (b) {
+      setNote(null);
+      setEarth((e) => ({ key: e.key + 1, focus: clearOf(b, 6), open: null, box: b }));
+      found.current = { q, open: () => onBox(b) };
+      return;
     }
     const t = q.toLowerCase();
-    for (const { place, fire } of fires) {
-      if ((fire.name ?? '').toLowerCase().includes(t) || fire.label.toLowerCase().includes(t) || place.name.toLowerCase().includes(t)) {
-        setNote(null);
-        setEarth((e) => ({ key: e.key + 1, focus: clearOf(place.box, 30), open: place.id, box: null }));
-        bringWhole(listRef.current?.querySelector<HTMLElement>(`[data-fire="${CSS.escape(fire.id)}"]`)?.closest<HTMLElement>('.place__item'));
-        return;
-      }
+    // A fire by its own name first; else a place by its name, on its opening fire
+    const byFire = fires.find(({ fire }) => named(fire, t));
+    const byPlace = byFire ? null : fires.filter(({ place }) => place.name.toLowerCase().includes(t));
+    const opening = byPlace?.find(({ place, fire }) => fire.id === place.starts?.default_featured_fire) ?? byPlace?.find(({ fire }) => !fire.blind_test_fire) ?? byPlace?.[0];
+    const hit = byFire ?? opening;
+    if (!hit) {
+      setNote(PLACE_WORDS.noneNamed(q));
+      found.current = null;
+      return;
     }
-    setNote(PLACE_WORDS.noneNamed(q));
+    setNote(null);
+    setChosen(hit.fire.id);
+    setEarth((e) => ({ key: e.key + 1, focus: clearOf(hit.place.box, 30), open: hit.place.id, box: null }));
+    found.current = { q, open: () => onFire(hit.place, hit.fire) };
   };
+
 
   // The screen's own key is Escape, which goes back once the Earth has not used it (to stop drawing, close its card
   // or clear its box): the Earth takes its keys first.
-  const live = useRef({ onClose });
-  live.current = { onClose };
+  const live = useRef({ onClose, earth });
+  live.current = { onClose, earth };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target instanceof HTMLElement ? e.target : null;
       if (t && t !== document.body && !rootRef.current?.contains(t)) return;
+      // In the field the Earth leaves Escape alone: a card or an area Find opened closes here, the view kept
+      if (t?.classList.contains('place__input') && (live.current.earth.open || live.current.earth.box)) {
+        setEarth((x) => ({ ...x, key: x.key + 1, open: null, box: null }));
+        found.current = null;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       // The Earth listens the same way and may be mounted after this screen: while it is drawing, or has a card or a
       // box open, its Escape closes that first, and this screen leaves the key to it
       if (rootRef.current?.querySelector('.world-hint, .world-card, .world-box')) return;
@@ -410,11 +456,23 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
             search();
           }}
         >
-          <input className="place__input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={PLACE_WORDS.find} aria-label={PLACE_WORDS.findLabel} />
-          {note && <span className="sys-label place__note">{note}</span>}
+          <input
+            className="place__input"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setNote(null);
+            }}
+            placeholder={PLACE_WORDS.find}
+            aria-label={PLACE_WORDS.findLabel}
+          />
+          {/* Why nothing is found: on Enter, or as soon as the words narrow the list to nothing */}
+          {(note ?? (listed.length === 0 && narrowBy && !coordsOf(narrowBy) ? PLACE_WORDS.noneNamed(query.trim()) : null)) && (
+            <span className="sys-label place__note">{note ?? PLACE_WORDS.noneNamed(query.trim())}</span>
+          )}
         </form>
         <div className="place__list" ref={listRef} role="list" aria-label={PLACE_WORDS.fires} onKeyDown={onListKey} onScroll={onListScroll}>
-          {firms.map((place) => (
+          {listed.map(({ place, shown }) => (
             <div key={place.id} className="place__group" role="listitem">
               <button
                 type="button"
@@ -424,9 +482,7 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
               >
                 {place.name}
               </button>
-              {place.featured_fires
-                .filter((f) => f.default_start)
-                .map((fire) => {
+              {shown.map((fire) => {
                   const open = chosenHit?.fire.id === fire.id;
                   return (
                     <div key={fire.id} className="place__item" data-open={open ? 'true' : 'false'}>
