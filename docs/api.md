@@ -38,6 +38,7 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 | `GET /api/calendar/rows.csv` | The FIRMS rows behind a calendar selection |
 | `GET /api/calendar/checks` | The held-out check of the calendar's harmonization, for every place in one answer |
 | `GET /api/cube/record`, `/api/cube/tables`, `/api/cube/countries`, `/api/cube/layers` | The Record of any box on Earth from the fire cube, its tables, the loaded countries and the world layers ([cube.md](cube.md)) |
+| `GET /api/live` | The predictions sealed before a pass on fires burning now, and their scores once the sharp satellite's rows arrive ([live.md](live.md)) |
 | `GET /api/firms/countries` | Every country file the FIRMS listing publishes, its size and whether it is cached |
 | `GET /api/runs/starts` | The start dates worth showing for a real run |
 | `POST /api/reconstruct` | Build or fetch a run |
@@ -415,6 +416,10 @@ Shortened: `overlap_years` cut to two of 14 years, the second entry cut to a few
 ## The fire cube
 
 `GET /api/cube/record?box=w,s,e,n[&snap=outer|inner]` returns the Record of any box read from the fire cube ([cube.md](cube.md)), in the shape of `GET /api/calendar?source=firms&box=`, with fire radiative power per platform and month and a `cube` block. `GET /api/cube/tables`, `GET /api/cube/countries` and `GET /api/cube/layers` give the box's tables, the loaded countries and the world layers. A box with no loaded row answers 404, not zeros; before any build of the cube the routes answer 503. The server finds the cube through `ISOGON_WORLD_DIR`, or through `data/cache/world` in the checkout.
+
+## `GET /api/live`
+
+The live test's answer, `backend.live.answer.build` of the live folder ([live.md](live.md)): every prediction sealed before its pass, with its state, times, digest and scores, the fires, the passes not sealed and the running count against the two baselines. It is built from the folder's logs at each request; the server only reads them. The folder is `ISOGON_LIVE_DIR`, else `live` in the world store (`ISOGON_WORLD_DIR`, else `data/cache/world`). Without a folder holding `protocol.json` the route answers `503` with `"state": "not_running"`.
 
 ## `GET /api/firms/countries`
 

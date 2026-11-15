@@ -14,6 +14,7 @@ Endpoints:
   - GET  /api/calendar/checks                 (the Record's held-out check of every place in one answer)
   - GET  /api/cube/record?box=..., /api/cube/tables?box=..., /api/cube/countries, /api/cube/layers[/<name>]
                                                (the fire cube, backend/server_cube.py; docs/cube.md)
+  - GET  /api/live                            (the sealed predictions of fires burning now, backend/server_live.py)
   - GET  /api/sensor-model
   - GET  /api/field-meta
   - POST /api/env/next_look/reset             {region_id, episode | start, tiles, budget, seed}
@@ -93,6 +94,7 @@ from backend.model.solver import (  # noqa: E402
     solve_region_reconstruction,
 )
 from backend.server_cube import cube_route  # noqa: E402
+from backend.server_live import live_route  # noqa: E402
 from backend.server_next_look import (  # noqa: E402
     ClosedWindow,
     NextLookRounds,
@@ -217,6 +219,17 @@ START_RULE_MODULES: tuple[str, ...] = (
     "backend.model.real_run", "backend.model.real_blind", "backend.eval.holdout", "backend.eval.blind_test",
     "backend.eval.overpass", "backend.eval.rows",
 )
+
+
+def live_dir() -> Path:
+    """The live test's folder (`backend/server_live.py`, `docs/live.md`): `ISOGON_LIVE_DIR`, else `live` in the world
+    store the fire cube is found in (`ISOGON_WORLD_DIR`, else `data/cache/world`). The route only reads it."""
+    import os
+
+    from backend.firms.cube import world_dir
+
+    v = os.environ.get("ISOGON_LIVE_DIR", "").strip()
+    return Path(v).expanduser() if v else world_dir() / "live"
 
 
 def read_rows_to_cache_end(box: tuple[float, float, float, float], start: Any, end: Any,
@@ -827,6 +840,7 @@ class IsogonDataStore:
                 "/api/calendar/checks",
                 "/api/cube/record?box=-9.5,37,-6,42",
                 "/api/cube/layers",
+                "/api/live",
                 "/api/sensor-model",
                 "/api/field-meta",
             ],
@@ -1361,6 +1375,16 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                 self._send_bytes(hit[0], hit[1], hit[2])
                 return
 
+            if route == "/api/live":
+                live = live_dir()
+                if not (live / "protocol.json").is_file():
+                    self._send_json_obj(HTTPStatus.SERVICE_UNAVAILABLE, {
+                        "state": "not_running", "error": f"no live folder with a protocol at {live.name}/",
+                        "live_dir": "ISOGON_LIVE_DIR, else the live folder of the world store (ISOGON_WORLD_DIR or data/cache/world)"})
+                    return
+                self._send_json_obj(HTTPStatus.OK, live_route(live))
+                return
+
             if route == "/api/health":
                 self._send_json_obj(HTTPStatus.OK, store.health_payload())
                 return
@@ -1682,6 +1706,7 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                         "/api/cube/tables",
                         "/api/cube/countries",
                         "/api/cube/layers",
+                        "/api/live",
                         "/api/sensor-model",
                         "/api/field-meta",
                         "/api/env/next_look/reset (POST)",

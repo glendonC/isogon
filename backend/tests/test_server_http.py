@@ -264,6 +264,25 @@ class CubeMountTests(unittest.TestCase):
         self.assertEqual(_req("/api/health")[0], 200)
 
 
+class LiveMountTests(unittest.TestCase):
+    def test_the_live_answer_is_served_from_its_folder_and_says_when_there_is_none(self) -> None:
+        import os
+        import tempfile
+        from unittest import mock
+
+        import backend.server as server
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"ISOGON_LIVE_DIR": tmp}):
+            self.assertEqual(server.live_dir(), Path(tmp))
+            status, _, raw = _req("/api/live")
+            self.assertEqual(status, 503)
+            self.assertEqual(json.loads(raw)["state"], "not_running")
+            (Path(tmp) / "protocol.json").write_text("{}", encoding="utf-8")
+            with mock.patch.object(server, "live_route", lambda live: {"seals": [], "from": str(live)}):
+                status, _, raw = _req("/api/live")
+            self.assertEqual((status, json.loads(raw)["from"]), (200, tmp))
+
+
 class DefaultStartTests(unittest.TestCase):
     def test_default_follows_the_model_and_falls_back_to_most_modis_pixels(self) -> None:
         from backend.server import with_default_start
