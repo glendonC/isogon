@@ -1392,7 +1392,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     });
     const terrainDepthMesh = new THREE.Mesh(terrainGeom, terrainDepthMat);
     terrainDepthMesh.frustumCulled = false;
-    terrainDepthMesh.renderOrder = -10;
+    terrainDepthMesh.renderOrder = -11;
     scene.add(terrainDepthMesh);
 
     // 3d. Context terrain: land and sea around the pack, out to the horizon. Drawn in
