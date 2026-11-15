@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GuideStrip } from '../guide/GuideStrip';
 import { LocatorBar } from '../identity/LocatorBar';
 import { StoryLine } from '../identity/StoryLine';
@@ -29,10 +29,23 @@ import '../styles/world.css';
  *
  * Every answer is read through the page's client, so a page of recorded answers shows the pictures it recorded.
  */
-export function WorldScreens({ onWord }: { onWord?: (word: TrailWord) => void }) {
+/** One of the top bar's few words at the right (Search, Method, Sources), as the page gives them. */
+export interface BarLink {
+  label: string;
+  onClick: () => void;
+}
+
+// The page's bar links, for the top bar on each picture of the world.
+const Links = createContext<BarLink[]>([]);
+
+export function WorldScreens({ onWord, links = [] }: { onWord?: (word: TrailWord) => void; links?: BarLink[] }) {
   const screen = useWorldScreen();
   if (!screen) return null;
-  return <Host key={screen.name} screen={screen} onWord={onWord} />;
+  return (
+    <Links.Provider value={links}>
+      <Host key={screen.name} screen={screen} onWord={onWord} />
+    </Links.Provider>
+  );
 }
 
 const isFilm = () => typeof document !== 'undefined' && document.documentElement.classList.contains('iso-film');
@@ -85,6 +98,7 @@ function Frame({ objective, word, lines, actions, onAction, film, trail = true, 
   story: StoryPart;
   figures?: { jumpYear?: number | null; testedFires?: number | null };
 }) {
+  const pageLinks = useContext(Links);
   // The pictures keep clear of this guide: its height (from the bottom of the page) is the room they keep.
   useLayoutEffect(() => {
     const host = document.querySelector<HTMLElement>('.world-screen');
@@ -102,9 +116,11 @@ function Frame({ objective, word, lines, actions, onAction, film, trail = true, 
     return () => ro.disconnect();
   }, [film, lines.length, actions.length]);
   if (film) return <>{trail && <Trail objective={objective} current={word} context={null} onWord={toWord} closed={{}} onPlace={() => {}} />}</>;
+  // Search, Method and Sources open on the page, so the picture closes first.
+  const barLinks = pageLinks.map((l) => ({ label: l.label, onClick: () => { closeWorldScreen(); l.onClick(); } }));
   return (
     <>
-      <LocatorBar path={['World', where]} onTrail={() => closeWorldScreen()} />
+      <LocatorBar path={['World', where]} onTrail={() => closeWorldScreen()} links={barLinks} />
       <StoryLine current={story} jumpYear={figures?.jumpYear ?? null} testedFires={figures?.testedFires ?? null} />
       <GuideStrip title={objective} lines={lines} actions={actions} onAction={onAction} />
     </>
