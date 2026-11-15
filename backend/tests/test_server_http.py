@@ -283,6 +283,29 @@ class LiveMountTests(unittest.TestCase):
             self.assertEqual((status, json.loads(raw)["from"]), (200, tmp))
 
 
+class RealRunKeyTests(unittest.TestCase):
+    def test_the_run_cache_is_keyed_on_the_estimate_a_run_answers_with(self) -> None:
+        """A run made with the challenger's estimate is never served for one made with the estimate in use: the
+        estimate is part of the key the real runs are kept under."""
+        import os
+        from unittest import mock
+
+        import backend.model.real_run as RR
+        from backend.server import IsogonDataStore
+        from backend.terrain.live_region import PRESET_BY_ID
+
+        store = IsogonDataStore.__new__(IsogonDataStore)
+        spec = PRESET_BY_ID["plumas_ca"]
+        with mock.patch.object(IsogonDataStore, "region_rows_key", lambda self, rid, max_age_s=10.0: "rows"):
+            with mock.patch.dict(os.environ, {RR.RUN_ESTIMATE_ENV: RR.ESTIMATE_IN_USE}):
+                in_use = store.real_run_key(spec, "2012-08-10", True)
+            with mock.patch.dict(os.environ, {RR.RUN_ESTIMATE_ENV: RR.ESTIMATE_CHALLENGER}):
+                challenger = store.real_run_key(spec, "2012-08-10", True)
+        self.assertNotEqual(in_use, challenger)
+        self.assertEqual((in_use[-1], challenger[-1]), (RR.ESTIMATE_IN_USE, RR.ESTIMATE_CHALLENGER))
+        self.assertEqual(in_use[:-1], challenger[:-1])
+
+
 class GibsMountTests(unittest.TestCase):
     def test_the_keyless_layers_answer_through_the_main_server_from_the_store_alone(self) -> None:
         """The day's picture and the cloud share are mounted before the health route: a store with no picture answers

@@ -976,8 +976,7 @@ class IsogonDataStore:
             raise FirmsCacheMissing(
                 "a real run reads the cached FIRMS rows of a region; a box of its own has its calendar "
                 "(GET /api/calendar?source=firms&box=) and no run yet")
-        # Keyed on what decides the run: region, start, what is hidden, the region's rows and the fitted values.
-        key = (spec.id, str(start), bool(holdout_viirs), self.region_rows_key(spec.id), fitted_values_digest())
+        key = self.real_run_key(spec, str(start), bool(holdout_viirs))
         with self._lock:
             real_ids = self.__dict__.setdefault("_real_run_ids", {})
             rid = real_ids.get(key)
@@ -995,6 +994,15 @@ class IsogonDataStore:
         if holdout_viirs and not body_bool(body, "reveal"):
             return withhold_scorer_keys(resp)
         return resp
+
+    def real_run_key(self, spec: Any, start: str, holdout_viirs: bool) -> tuple[Any, ...]:
+        """What decides a real run, the key its cache is kept under: region, start, what is hidden, the region's rows,
+        the fitted values and the estimate a held-out run answers with (`backend.model.real_run.run_estimate`), so a
+        run made with one estimate is never served for one made with the other."""
+        from backend.model.real_run import run_estimate
+
+        return (spec.id, str(start), bool(holdout_viirs), self.region_rows_key(spec.id), fitted_values_digest(),
+                run_estimate())
 
     def run_window(self, spec: Any, start: str) -> tuple[float, float]:
         """(start, end) in UTC seconds of the window a real run from ``start`` plays, found as the run finds it: the
