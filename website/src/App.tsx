@@ -27,6 +27,8 @@ import { StoryLine } from './identity/StoryLine';
 import { Entry } from './identity/Entry';
 import { stageReady } from './stage/stageReady';
 import { usePlay, type PlayShot } from './ui/usePlay';
+import { agentWalkDone, startAgentWalk, stopAgentWalk } from './walk/agentWalk';
+import { AgentWalkLine } from './walk/AgentWalkLine';
 import type { StoryPart } from './identity/story';
 import { WORDS } from './identity/words';
 import { GuideStrip } from './guide/GuideStrip';
@@ -1604,6 +1606,9 @@ export function App() {
     else goStep('look');
   };
   const store: WorkspaceStore = { ...storeBase, guide, runCommand };
+  // The agents' walk (walk/agentWalk.ts) reads the store as it is at each of its steps.
+  const storeRef = useRef(store);
+  storeRef.current = store;
   // The identity's top bar (identity/LocatorBar.tsx) in place of the four words: the path from the world to what is
   // in view, its coordinates, and the bar's few words; and the story line along the bottom (identity/StoryLine.tsx).
   const fireStep = step === 'fire' || step === 'test' || step === 'look' || step === 'agent';
@@ -1616,7 +1621,8 @@ export function App() {
     { label: WORDS.links.method, onClick: () => setReading('method') },
     { label: WORDS.links.sources, onClick: () => setReading('sources') },
   ];
-  const storyPart: StoryPart = step === 'record' ? 'place' : 'fire';
+  // The visitor's own round (and the players beside it) is the story's last part, their turn.
+  const storyPart: StoryPart = step === 'record' ? 'place' : step === 'look' || step === 'agent' ? 'turn' : 'fire';
   const storyNumber = (v: unknown) => {
     const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v.replace(/,/g, '')) : NaN;
     return Number.isFinite(n) && n > 0 ? n : null;
@@ -1626,7 +1632,8 @@ export function App() {
     else if (part === 'place') goStep('record');
     else if (part === 'fire') onTrailWord('Estimate');
     else if (part === 'tested') openWorldScreen('test');
-    else openWorldScreen('sealed');
+    else if (part === 'live') openWorldScreen('sealed');
+    else onTrailWord('Play');
   };
   // Play (identity/Entry.tsx's Play): the story by itself in the ux lane's order (MOUNT.md section 7), with the stage's
   // own moves (`filmMove: 'auto'`); any key, click or wheel hands it back where it is. It never plays the game.
@@ -1673,10 +1680,23 @@ export function App() {
     },
     { part: 'tested', start: () => openWorldScreen('test'), ready: () => worldIs('test'), hold: 9000 },
     { part: 'live', start: () => openWorldScreen('sealed'), ready: () => worldIs('sealed'), hold: 8000 },
+    // Back on the fire just revealed, the agents take their looks in time and the walk ends on the visitor's own turn
+    // in a round there (the judge lane's walk, WALK-MOUNT.md); Play ends with it.
+    {
+      part: 'turn',
+      start: () => {
+        closeWorldScreen();
+        startAgentWalk(() => storeRef.current);
+      },
+      ready: () => agentWalkDone(),
+      hold: 0,
+      wait: 90000,
+    },
   ];
   // The pictures of the world read the film presentation from the root's class when they open: it is set before Play's
   // first picture opens, and a picture on show when Play ends opens again in the page's own presentation.
   const endPlay = () => {
+    stopAgentWalk();
     setFilmMode(filmByAddress);
     if (filmByAddress) return;
     document.documentElement.classList.remove('iso-film');
@@ -1783,6 +1803,7 @@ export function App() {
   return (
     <WorkspaceProvider value={store}>
     <div className="iso-app" data-workspace={inWorkspace ? 'true' : 'false'} data-sel={selStyle}>
+      <AgentWalkLine />
       {/* The first screen: the identity's Entry (Play or Explore). The film's address keeps the recorder's landing. */}
       {!inWorkspace &&
         (filmByAddress ? (
