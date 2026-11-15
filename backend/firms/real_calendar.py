@@ -605,6 +605,8 @@ def _calendar_payload(
             "year_month": mo,
             "modis_raw_rate": round(mr, 4) if mr is not None else None,
             "viirs_raw_rate": round(rate(_fire(counts, mo, "Suomi NPP"), mo), 4) if s_on else None,
+            "modis_rows": modis_n if (t_on or a_on) else None,
+            "viirs_rows": _fire(counts, mo, "Suomi NPP") if s_on else None,
             "harmonized_mean": round(h, 4) if h is not None else None,
             "harmonized_p10": round(lo, 4) if lo is not None else None,
             "harmonized_p90": round(hi, 4) if hi is not None else None,
@@ -624,6 +626,10 @@ def _calendar_payload(
                          surround=surround_from_cube(tuple(box)))
     for rec, m in zip(records, harm["months"]):
         rec["harmonized_mean"], rec["harmonized_p10"], rec["harmonized_p90"] = m["harmonized_rate"], m["p10_rate"], m["p90_rate"]
+        # the same as counts in the box that month, so a reader does no arithmetic
+        rec["harmonized_rows"], rec["harmonized_rows_p10"], rec["harmonized_rows_p90"] = (
+            m["harmonized_count"], m["p10_count"], m["p90_count"])
+    harm_years = {y["year"]: y for y in harm.get("years", [])}
     validation = harm["check"]
     # The one ratio the Record speaks is the served method's over its own fit months (from February 2012); the ratio of
     # sums above (ratio_terra_aqua) also holds January 2012, when Suomi NPP rows begin on the 20th.
@@ -651,6 +657,14 @@ def _calendar_payload(
             "harmonized_peak_month": round(float(np.max(hm)), 4) if hm else None,
             "mean_coverage_fraction": None,
             "raw_counts": dict(totals),
+            "modis_rows": sum(r["modis_rows"] for r in rs if r["modis_rows"] is not None)
+            if any(r["modis_rows"] is not None for r in rs) else None,
+            "viirs_rows": sum(r["viirs_rows"] for r in rs if r["viirs_rows"] is not None)
+            if any(r["viirs_rows"] is not None for r in rs) else None,
+            "harmonized_rows": harm_years.get(y, {}).get("harmonized_count"),
+            "harmonized_rows_p10": harm_years.get(y, {}).get("p10_count"),
+            "harmonized_rows_p90": harm_years.get(y, {}).get("p90_count"),
+            "harmonized_months": harm_years.get(y, {}).get("months", 0),
         })
 
     markers = []
@@ -694,6 +708,11 @@ def _calendar_payload(
             "modis_raw_rate": "hotspots_per_1000km2_day (Terra + Aqua)",
             "viirs_raw_rate": "hotspots_per_1000km2_day (Suomi NPP)",
             "harmonized_mean": "suomi_npp_equivalent_hotspots_per_1000km2_day",
+            "modis_rows": "Terra + Aqua fire rows in the box that month (Terra alone before Aqua), as counted",
+            "viirs_rows": "Suomi NPP fire rows in the box that month, as counted",
+            "harmonized_rows": "Suomi NPP equivalent fire rows in the box that month (harmonized_mean as a count); "
+                               "harmonized_rows_p10 and harmonized_rows_p90 bound its 80 percent range. In "
+                               "annual_summary, the year's sum over its harmonized months, with the year's own range",
         },
         "harmonization_method": {
             "id": harm["method"]["id"],
