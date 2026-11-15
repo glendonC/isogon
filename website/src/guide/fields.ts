@@ -101,7 +101,13 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_a_europe_n: countNo(continentFires('Europe')),
     test_a_oceania_n: countWord(continentFires('Oceania')),
   };
+  // Which estimate answered a held-out run's hidden passes (`held_out_passes_answered_by`): the estimate in use, or a
+  // challenger in its place when the backend's switch says so; its words are the run's own.
+  const answered = obj(r?.held_out_passes_answered_by);
+  const byChallenger = answered ? typeof answered.method === 'string' && answered.method !== 'reconstruction' : null;
+  fields.answered_by = byChallenger && typeof answered?.words === 'string' ? answered.words : null;
   const conds: Conditions = {
+    answered_by_challenger: byChallenger,
     model_is_experimental: ws.run.model ? ws.run.model.status === 'experimental' : null,
     pass_is_sharp: f ? sensor.startsWith('VIIRS') : null,
     not_always_ahead: ev && testScoresN !== null && testFires.length > 0 ? Math.min(...testFires.map((t) => t.new.ahead_of_both_on)) < testScoresN : null,

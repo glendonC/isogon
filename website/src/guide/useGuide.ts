@@ -65,6 +65,15 @@ export interface Guide {
 const STANDING = 2;
 
 /**
+ * A held-out run whose hidden passes a challenger answered (the backend's switch, off by default), in the page's words
+ * until the script carries them: which model answered, in the run's own words, and the fire's standing as its own.
+ */
+const CHALLENGER_WORDS = {
+  named: (words: string) => `The hidden passes are answered by ${words}.`,
+  standing: (simple: string, ahead: string, of: string) => `On this fire the challenger beat ${simple} simple methods on ${ahead} of ${of} scores.`,
+};
+
+/**
  * The pictures of the world opened from Test, in the product's words for them until the script carries them:
  * step-wide on the reveal and on its other passes, and quiet at the end of the guide's row.
  */
@@ -352,7 +361,18 @@ export function useGuide(
   const dayOffered = Boolean(live.day) && ws.run.isReal && id !== 'loading' && id !== 'failed' && id !== 'revealing';
   // The day's photograph, in the step's own words (`photo`): its sentence takes the place of the first standing one.
   const photo = dayOffered && live.day?.asked ? photoLine(step, live.day, ws, fields) : null;
-  const standing = [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)];
+  let standing = [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)];
+  // A challenger answered the hidden passes: the guide names it, and the fire's standing is said as the challenger's
+  // (the run's verdict is the answering estimate's).
+  if (conds.answered_by_challenger && fields.answered_by && id !== 'loading' && id !== 'failed') {
+    const own = 'On this fire the estimate beat ';
+    standing = standing.map((l) =>
+      l.startsWith(own) && fields.simple_methods_n && fields.ahead_on && fields.scores_n
+        ? CHALLENGER_WORDS.standing(fields.simple_methods_n, fields.ahead_on, fields.scores_n)
+        : l,
+    );
+    standing.push(CHALLENGER_WORDS.named(fields.answered_by));
+  }
   const photoAct = dayOffered ? stepOf(step)?.also?.find((a) => a.command === 'photo:next') : undefined;
   const world = step === 'test' && (id === 'revealed' || id === 'on_another_pass') ? WORLD_ENTRIES : [];
   const settled = id !== 'loading' && id !== 'failed' && id !== 'revealing';
