@@ -59,7 +59,7 @@ def load_plan(path: Path = W.PLAN_FILE) -> dict[str, Any]:
     sha = doc.pop("plan_sha256", None)
     if sha != F.plan_sha256(doc):
         raise ValueError("the plan's digest does not match its content")
-    if doc.get("protocol_sha256") != F.protocol_sha256():
+    if not F.stands_under(doc.get("protocol_sha256")):
         raise ValueError("the plan was made under another protocol")
     doc["plan_sha256"] = sha
     return doc
@@ -603,6 +603,7 @@ def record_look(plan: dict[str, Any], role: str, results: list[tuple[str, dict[s
         "look_name": F.LOOK_NAMES.get(role, role),
         "protocol_id": F.PROTOCOL_ID,
         "protocol_sha256": F.protocol_sha256(),
+        "protocol_the_plan_was_made_under": plan.get("protocol_sha256"),
         "plan_sha256": plan["plan_sha256"],
         "values": values,
         "source_sha256": source_digests(),
@@ -815,7 +816,7 @@ def test_b_values(refit_doc: dict[str, Any], plan: dict[str, Any]) -> tuple[dict
     """The values test B is looked at with, by the decision on record, and how the record names them."""
     from backend.model.fitted import load_params
 
-    if refit_doc.get("plan_sha256") != plan["plan_sha256"] or refit_doc.get("protocol_sha256") != F.protocol_sha256():
+    if refit_doc.get("plan_sha256") != plan["plan_sha256"] or not F.stands_under(refit_doc.get("protocol_sha256")):
         raise ValueError("the refit on record is not of this plan and protocol")
     F.refuse_unfrozen()
     in_use = load_params().as_dict()

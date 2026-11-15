@@ -24,7 +24,7 @@ from backend.model import fresh_test as F  # noqa: E402
 
 # The digest of the protocol as committed. A change to its text or constants fails here: the protocol is fixed
 # before anything is read, and a new one would be a new protocol with its own name.
-PINNED_PROTOCOL_SHA256 = "050449de777c7b8a3d5258f554f2184c83028046fe4b7908a9390c5ab683ced3"
+PINNED_PROTOCOL_SHA256 = "675ce7d6fb38de0c9cbdf51ac8c2db220a9597c4192722a39755b6ed30ae9660"
 
 FIRST = [region_box(r) for r in F.FIRST_REGIONS]
 
@@ -36,6 +36,24 @@ def _ep(year: int, pixels: int, start_s: float, west: float = 0.0) -> dict:
 class ProtocolIsFixedTests(unittest.TestCase):
     def test_the_protocol_is_the_one_committed(self) -> None:
         self.assertEqual(F.protocol_sha256(), PINNED_PROTOCOL_SHA256)
+
+    def test_the_amendment_of_test_b_s_name_is_the_only_change_since_the_plan(self) -> None:
+        self.assertEqual(F._digest({**F.LOOK_NAMES, "test_b": F.TEST_B_NAME_BEFORE}), F.PLAN_MADE_UNDER)
+        self.assertEqual(F.LOOK_NAMES["test_b"], "fresh test B, values in use, the refit beside them")
+        self.assertTrue(F.stands_under(F.protocol_sha256()))
+        self.assertTrue(F.stands_under(F.PLAN_MADE_UNDER))
+        self.assertFalse(F.stands_under("0" * 64))
+        self.assertFalse(F.stands_under(None))
+
+    def test_the_records_made_before_the_amendment_still_stand(self) -> None:
+        from backend.model import fresh_world_run as R
+
+        plan = R.load_plan()
+        self.assertEqual(plan["protocol_sha256"], F.PLAN_MADE_UNDER)
+        refit = json.loads(R.REFIT_FILE.read_text())
+        params, values = R.test_b_values(refit, plan)
+        self.assertEqual(values["which"], "values in use")
+        self.assertIn("refit", values["beside"])
 
     def test_the_fitted_values_are_the_ones_it_froze(self) -> None:
         self.assertEqual(F.values_now(), F.FROZEN_VALUES)

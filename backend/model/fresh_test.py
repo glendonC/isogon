@@ -3,6 +3,13 @@
 This file is the protocol. It was committed before any row was read for it, and every record the test writes names
 its digest (`protocol_sha256`), so a protocol changed after a score would show. A test pins the digest.
 
+Amended before test B's look, after the refit's decision was on record: test B's name (`LOOK_NAMES["test_b"]`) was
+"fresh test B, after the refit" and is "fresh test B, values in use, the refit beside them", because the decision
+put the values in use as test B's headline and the refit beside it. Nothing else changed. The digest was
+050449de777c7b8a3d5258f554f2184c83028046fe4b7908a9390c5ab683ced3 (the plan, test A, the refit and the players' fit
+were made under it, `PLAN_MADE_UNDER`) and is 675ce7d6fb38de0c9cbdf51ac8c2db220a9597c4192722a39755b6ed30ae9660; a
+test puts the old name back and finds the old digest, so the name is the only change.
+
 The three recorded looks at the 2021 test fires stay closed (`backend.model.training.closed_for`). The fresh test
 does not reopen them: no place of it meets the context box of one of the three first regions.
 
@@ -30,7 +37,12 @@ from backend.model.training import REGIONS
 
 PROTOCOL_ID: str = "fresh_world_v1"
 # The two looks, each under its own name beside the three recorded looks at the test fires.
-LOOK_NAMES: dict[str, str] = {"test_a": "fresh test A, values in use", "test_b": "fresh test B, after the refit"}
+LOOK_NAMES: dict[str, str] = {"test_a": "fresh test A, values in use",
+                              "test_b": "fresh test B, values in use, the refit beside them"}
+# The digest the plan, test A, the refit and the players' fit were made under: the protocol in force with test B's
+# old name, "fresh test B, after the refit" (`TEST_B_NAME_BEFORE`). Records made under it stand under the amendment.
+PLAN_MADE_UNDER: str = "050449de777c7b8a3d5258f554f2184c83028046fe4b7908a9390c5ab683ced3"
+TEST_B_NAME_BEFORE: str = "fresh test B, after the refit"
 # The regions the values in use were fitted, validated and tested in. No place of the fresh test meets them.
 FIRST_REGIONS: tuple[str, ...] = REGIONS
 # The years: both VIIRS platforms in the country files, and NOAA-21 (whose rows are not in them) not yet flying.
@@ -188,8 +200,17 @@ PROTOCOL: dict[str, str] = {
 
 def protocol_sha256() -> str:
     """The digest of the protocol: its constants and its text."""
+    return _digest(LOOK_NAMES)
+
+
+def stands_under(digest: str | None) -> bool:
+    """Was a record made under the protocol in force, or under the one before the amendment of test B's name?"""
+    return digest in (protocol_sha256(), PLAN_MADE_UNDER)
+
+
+def _digest(look_names: dict[str, str]) -> str:
     doc = {
-        "protocol_id": PROTOCOL_ID, "look_names": LOOK_NAMES, "first_regions": list(FIRST_REGIONS),
+        "protocol_id": PROTOCOL_ID, "look_names": look_names, "first_regions": list(FIRST_REGIONS),
         "years": list(YEARS), "place_deg": PLACE_DEG, "tiles_per_side": TILES_PER_SIDE, "block_deg": BLOCK_DEG,
         "roles": list(ROLES), "role_shares": list(ROLE_SHARES), "continents": list(CONTINENTS), "zones": list(ZONES),
         "quota": QUOTA, "per_place": PER_PLACE, "left_out_types": list(LEFT_OUT_TYPES),
