@@ -1,9 +1,10 @@
 # Isogon
 
-Isogon answers the NASA Space Apps challenge "Harmonization of MODIS and VIIRS Hot Spots". Two kinds of NASA
-satellite watch the Earth's fires: MODIS since 2000, which sees squares about 1 km across, and VIIRS since 2012,
-which sees squares 375 m across and makes about 4.4 times as many detections of the same fires. Isogon does three
-things with them, and the site walks through them as four steps, Record, Estimate, Test and Play:
+Isogon answers the NASA Space Apps challenge "Harmonization of MODIS and VIIRS Hot Spots". Two kinds of NASA satellite
+watch the Earth's fires: MODIS since 2000, which sees squares about 1 km across, and VIIRS since 2012, which sees
+squares 375 m across, finds smaller and cooler fires the older satellites miss, and so makes about 4.4 times as many
+detections over the same Earth. Isogon does three things with them, and the site walks through them as four steps,
+Record, Estimate, Test and Play:
 
 1. **A fire record for any area on Earth.** Every NASA FIRMS detection from November 2000 to December 2025, in all
    238 countries, with the MODIS years put on the VIIRS scale so the jump of 2012 is gone, and a range for each
@@ -17,15 +18,16 @@ things with them, and the site walks through them as four steps, Record, Estimat
 ![Detections each year, the whole Earth, 2000 to 2025: as the satellites counted and on one scale](docs/detections-each-year.png)
 
 *Fire detections each year over the whole Earth. Bars: as the satellites counted, MODIS on Terra and Aqua to 2011,
-VIIRS on Suomi NPP from 2012. Line: on one scale, the harmonized record. Figures: every country's NASA FIRMS yearly
+VIIRS on Suomi NPP from 2012, which sees smaller fires and so makes about 4.4 times as many detections over the same
+Earth. Line: on one scale, the harmonized record. Figures: every country's NASA FIRMS yearly
 files, summed by `backend/model/harmonize_years.py` (its yearly totals) and drawn by
 `backend/model/harmonize_figure.py`.*
 
 ![Fire across the Earth in 2011 and 2012, as the satellites counted them and on one scale](docs/earth-2011-2012.png)
 
 *Fire across the Earth in 2011 and 2012. Top, as the satellites counted: the older satellites (MODIS) in 2011, and in
-2012 the newer, sharper one (VIIRS), which makes about 4.4 times as many detections of the same fires, so the Earth
-brightens with no more fire. Bottom, on one scale: the older satellites' detections put on the newer one's scale, and
+2012 the newer, sharper one (VIIRS), which sees smaller fires and so makes about 4.4 times as many detections over the
+same Earth: the Earth brightens with the instrument, not with more burning. Bottom, on one scale: the older satellites' detections put on the newer one's scale, and
 2012 shows no jump. Source: NASA FIRMS country yearly files (MODIS Collection 6.1, VIIRS 375 m Suomi NPP), summed per
 square of a quarter degree in the fire cube; drawn by `backend/firms/cube_figure.py`.*
 
