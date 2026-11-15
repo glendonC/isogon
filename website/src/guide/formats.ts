@@ -86,6 +86,12 @@ export const rate = (v: number | null | undefined) => (finite(v) ? v.toFixed(2) 
 /** ratio_whole: a ratio rounded to a whole number. */
 export const ratioWhole = (v: number | null | undefined) => (finite(v) ? String(Math.round(v)) : null);
 /** month_name: the name of the month of a "2012-08". */
+/** "14 November 2026", from a day "2026-11-14"; null when it is not one. */
+export const dayWords = (day: string | null | undefined) => {
+  const m = typeof day === 'string' ? /^(\d{4})-(\d{2})-(\d{2})/.exec(day) : null;
+  const month = m ? MONTHS[Number(m[2]) - 1] : undefined;
+  return m && month ? `${Number(m[3])} ${month} ${m[1]}` : null;
+};
 export const monthName = (ym: string | null | undefined) => {
   const m = typeof ym === 'string' ? Number(ym.slice(5, 7)) : NaN;
   return m >= 1 && m <= 12 ? MONTHS[m - 1] : null;

@@ -9,7 +9,7 @@ import { playStateId } from './playState';
 import { recordFields, recordStateId } from './recordFields';
 import { dayPictureAction, dayPictureLine, type DayPictureKind } from './dayPicture';
 import type { EarthStageTelemetry } from '../stage/earthCutawayTypes';
-import { countWord } from './formats';
+import { countWord, dayWords } from './formats';
 import { resultRows, type ResultRow } from './Results';
 import { roundFields } from './roundFields';
 import {
@@ -71,6 +71,11 @@ export interface GuideLive {
   places?: 'loading' | 'ready' | 'failed';
   /** The first year of the world's record (`GET /api/cube/countries`), null until it answers. */
   worldFirstYear?: string | null;
+  /**
+   * On a page of recorded answers: the day this month so far's recorded answer stood at for the Record's place, or false
+   * when the recording does not hold it (the action is then left out). Absent on the live page.
+   */
+  recordedNow?: string | false;
   /** The day's photograph on Estimate and Test (guide/dayPicture.ts): what is asked for and what the stage shows. */
   day?: { asked: DayPictureKind | null; shown: EarthStageTelemetry['dayPicture'] | null };
 }
@@ -185,7 +190,14 @@ export function useGuide(
       more: moreOf(state, r.fields, r.conds),
       fields: { ...fields, ...r.fields },
       conds: { ...conds, ...r.conds },
-      actions: actionsOf(state?.actions, r.fields, on),
+      // On a recorded page this month so far is the recording's: its action says the day it stood at, or is left out.
+      actions: actionsOf(state?.actions, r.fields, on).flatMap((a) =>
+        a.command !== 'record:now' || live.recordedNow === undefined
+          ? [a]
+          : live.recordedNow === false
+            ? []
+            : [{ ...a, label: `See this month so far, as it stood on ${dayWords(live.recordedNow) ?? live.recordedNow}` }],
+      ),
       also: actionsOf(stepOf('record')?.also, r.fields, on, 9),
     };
   }

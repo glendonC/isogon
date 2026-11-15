@@ -80,7 +80,7 @@ import type {
   WorkspaceMode,
 } from './stage/types';
 
-import { API_BASE, assetUrl, assetUrlNow, getJson, postJson, runRequestBody } from './lib/api';
+import { API_BASE, assetUrl, assetUrlNow, getJson, postJson, runRequestBody, TRANSPORT } from './lib/api';
 
 /**
  * Landing world view: `landingSubjectFrame` names the rectangle the stage keeps calm (sky or haze) for the type.
@@ -510,6 +510,19 @@ export function App() {
   // follows the region asked for, so opening a region can read its start list before any run arrives.
   const calendarRegionId = regionAsk?.id ?? activeRun?.region.id ?? activeTheaterId;
   const calendar = useCalendar(API_BASE, calendarRegionId);
+  // On a page of recorded answers, this month so far is what the recording holds for the place: the day its answer stood
+  // at (the last day it counted), asked for once, so the guide's action can say that day or be left out.
+  const [recordedNow, setRecordedNow] = useState<{ place: string; day: string | null } | null>(null);
+  useEffect(() => {
+    if (TRANSPORT !== 'recorded' || recordedNow?.place === calendarRegionId) return;
+    let live = true;
+    getJson<{ days?: { last?: string } }>('/api/calendar/current', { source: 'firms', region_id: calendarRegionId })
+      .then((b) => live && setRecordedNow({ place: calendarRegionId, day: typeof b?.days?.last === 'string' ? b.days.last : null }))
+      .catch(() => live && setRecordedNow({ place: calendarRegionId, day: null }));
+    return () => {
+      live = false;
+    };
+  }, [calendarRegionId, recordedNow?.place]);
 
   // A region with real run starts opens on its default start. Each ask is handled once, after its calendar is in.
   const handledAskRef = useRef<string | null>(null);
@@ -1273,6 +1286,7 @@ export function App() {
     marksOpen,
     places: placesState.state,
     worldFirstYear,
+    recordedNow: TRANSPORT === 'recorded' ? (recordedNow?.place === calendarRegionId && recordedNow.day ? recordedNow.day : false) : undefined,
     day: inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen ? { asked: dayPicture, shown: stageTelemetry?.dayPicture ?? null } : undefined,
   });
   const guideKey = `${guide.step}:${guide.stateId}:${realStart}`;
