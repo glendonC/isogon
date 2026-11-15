@@ -98,8 +98,8 @@ export interface AgentPictureProps {
   /** Back to where the picture was opened from; null when there is nowhere to go back to. */
   onClose?: (() => void) | null;
   /**
-   * The guide speaks on this screen. The picture then draws neither its caption nor its row of actions: the guide
-   * says what the marks are and offers to reveal, to watch and to close, through `playersView`.
+   * The guide speaks on this screen. The picture then draws neither its caption nor its actions to reveal and to
+   * watch: the guide says what the marks are and offers them, through `playersView`. The way back stays.
    */
   guideSpeaks?: boolean;
 }
@@ -260,29 +260,28 @@ export function AgentPicture({ onClose = null, guideSpeaks = false }: AgentPictu
           }}
         />
       )}
-      {!guideSpeaks && (
-        <div className="agent-picture__foot">
-          {!line && <span className="sys-fine agent-picture__legend">{PLAYERS_WORDS.legend(foundShown)}</span>}
-          <span className="agent-picture__acts">
-            {canReveal && (
-              <button type="button" className="agent-act" onClick={() => setAsked(true)}>
-                {PLAYERS_WORDS.reveal}
-              </button>
-            )}
-            {!line && (
-              <button type="button" className="agent-act" onClick={watch} disabled={!whole}>
-                {PLAYERS_WORDS.watch}
-              </button>
-            )}
-            {onClose && (
-              <button type="button" className="agent-act" onClick={onClose}>
-                <span className="agent-key">Esc</span>
-                {PLAYERS_WORDS.close}
-              </button>
-            )}
-          </span>
-        </div>
-      )}
+      {/* The caption and the actions are the guide's where it speaks; the way back stays, for the pointer */}
+      <div className="agent-picture__foot">
+        {!line && !guideSpeaks && <span className="sys-fine agent-picture__legend">{PLAYERS_WORDS.legend(foundShown)}</span>}
+        <span className="agent-picture__acts">
+          {canReveal && !guideSpeaks && (
+            <button type="button" className="agent-act" onClick={() => setAsked(true)}>
+              {PLAYERS_WORDS.reveal}
+            </button>
+          )}
+          {!line && !guideSpeaks && (
+            <button type="button" className="agent-act" onClick={watch} disabled={!whole}>
+              {PLAYERS_WORDS.watch}
+            </button>
+          )}
+          {onClose && (
+            <button type="button" className="agent-act" onClick={onClose}>
+              <span className="agent-key">Esc</span>
+              {PLAYERS_WORDS.close}
+            </button>
+          )}
+        </span>
+      </div>
     </div>
   );
 }
