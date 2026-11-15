@@ -1,4 +1,4 @@
-import { MONTH_NAMES } from './record.ts';
+import { MONTH_NAMES, type RecordMonth } from './record.ts';
 
 /**
  * Every sentence The Record itself puts on screen, in one place. They are labels on a thing (a month, the change of
@@ -117,25 +117,6 @@ export const EARTH_HELD_OUT = { yearly: 0.127, yearlyUncorrected: 0.77, monthly:
 /** A rate as exactly as a reader of the record would copy it: "10.83", "0.388", "0.0035". Its unit is said beside it. */
 export const exactRate = (v: number): string => (v === 0 ? '0' : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : v.toPrecision(2));
 
-/** The pointed month's readout beside the grid: each instrument on its satellite, as the answer names the satellites. */
-export const READOUT_WORDS = {
-  counted: 'Detections counted',
-  instruments: [
-    ['Terra', 'MODIS on Terra'],
-    ['Aqua', 'MODIS on Aqua'],
-    ['Suomi NPP', 'VIIRS on Suomi NPP'],
-    ['NOAA-20', 'VIIRS on NOAA-20'],
-    ['NOAA-21', 'VIIRS on NOAA-21'],
-  ] as Array<[string, string]>,
-  /** A satellite the answer gives no count for that month: not yet flying, or no file of it. */
-  noCount: 'no count',
-  oneScale: 'On one scale',
-  asCounted: 'As counted',
-  range: (level: number | null) => (level !== null ? `${percent(level)} percent range` : 'Range'),
-  noValue: 'no value',
-  count: (n: number) => n.toLocaleString('en-US'),
-};
-
 /** A place's own held-out check, from its answer: a typical hidden year's error, with and without the correction. */
 export type HeldOutHere = { year: number; uncorrected: number; monthsHeld: { held: number; of: number } | null };
 
@@ -171,6 +152,29 @@ export const RECORD_WORDS = {
     return here
       ? `A hidden year, VIIRS's count predicted from MODIS: off by ${percent(here.year)} percent here, ${percent(E.yearly)} worldwide, against ${percent(here.uncorrected)} and ${percent(E.yearlyUncorrected)} uncorrected.`
       : `A hidden year, VIIRS's count predicted from MODIS: off by ${percent(E.yearly)} percent worldwide, against ${percent(E.yearlyUncorrected)} uncorrected.`;
+  },
+  /** The prompt on a month that opens a fire: the action, in the ux lane's words. */
+  openFire: (ym: string) => `Open the ${monthName(ym)} ${ym.slice(0, 4)} fire`,
+  /**
+   * The readout under a pointed month's prompt, the two short lines the prompt is made for, the answer's own figures:
+   * what each instrument counted (MODIS on Terra and Aqua together, VIIRS on its satellites together, as the answer
+   * names them), then the month's value with its unit and its range, or as counted while the years are drawn so.
+   */
+  monthReadout: (m: RecordMonth, asCounted: boolean) => {
+    const sum = (ps: string[]) => {
+      const n = ps.map((p) => m.counts.find((c) => c.platform === p)?.total).filter((t): t is number => t !== undefined);
+      return n.length ? n.reduce((x, y) => x + y, 0) : null;
+    };
+    const modis = sum(['Terra', 'Aqua']);
+    const viirs = sum(['Suomi NPP', 'NOAA-20', 'NOAA-21']);
+    const first =
+      [modis !== null ? `MODIS ${count(modis)}` : null, viirs !== null ? `VIIRS ${count(viirs)}` : null].filter(Boolean).join('   ') ||
+      'No satellite counted';
+    const v = asCounted ? m.asCounted : m.value;
+    if (v === null) return `${first}\nNo value`;
+    if (asCounted) return `${first}\n${exactRate(v)} per 1,000 km² a day as counted`;
+    const range = m.p10 !== null && m.p90 !== null ? `, ${exactRate(m.p10)} to ${exactRate(m.p90)}` : '';
+    return `${first}\n${exactRate(v)} per 1,000 km² a day${range}`;
   },
   /** This month so far: the action that asks for it, its label, and why it cannot be counted. */
   thisMonth: 'This month so far',

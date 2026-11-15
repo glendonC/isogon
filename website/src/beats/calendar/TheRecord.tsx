@@ -17,10 +17,9 @@ import {
 } from './record';
 import { boxWords } from './placeWords';
 import { publishRecordView, RECORD_CLOSED, type RecordMonthView } from './recordView';
-import { BAND_UNIT, gridLine, methodLine, monthLine, notLoadedLine, RECORD_WORDS as W, unstableLine } from './recordWords';
+import { gridLine, methodLine, notLoadedLine, RECORD_WORDS as W, unstableLine } from './recordWords';
 import { recordCsv, recordFileName } from './recordCsv';
-import { RecordReadout } from './RecordReadout';
-import { IntervalBand } from '../../world/IntervalBand';
+import { ScenePrompt } from '../../identity/ScenePrompt';
 import '../../styles/calendar-screen.css';
 
 /**
@@ -33,8 +32,6 @@ const RAMP = Array.from({ length: STEPS }, (_, i) => LIPARI_32[Math.round(3 + (i
 /** The bands around the grid, in pixels: month names, the label over a month, the years, who was flying, the foot. */
 const NAMES_W = 40;
 const HEAD_H = 84;
-/** More room over the grid where a month's label carries the band of its range. */
-const BAND_H = 36;
 const AXIS_H = 24;
 const SPANS_H = 56;
 /** The room above the grid on a short phone, where the month's label gives way. */
@@ -59,20 +56,6 @@ function useSize<T extends HTMLElement>() {
 }
 
 const ymOf = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
-
-/** Four corner marks round a square: the mark of the thing under examination. */
-function brackets(x: number, y: number, s: number, out: number, arm: number): string {
-  const l = x - out;
-  const t = y - out;
-  const r = x + s + out;
-  const b = y + s + out;
-  return (
-    `M${l},${t + arm}V${t}H${l + arm}` +
-    `M${r - arm},${t}H${r}V${t + arm}` +
-    `M${r},${b - arm}V${b}H${r - arm}` +
-    `M${l + arm},${b}H${l}V${b - arm}`
-  );
-}
 
 export interface TheRecordProps {
   place: RecordPlace;
@@ -113,6 +96,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const [empty, setEmpty] = useState<BoxGrid | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [asCounted, setAsCounted] = useState(false);
   // Looking over the months: asked for, or the pointer or the arrow keys are on the grid.
   const [browsing, setBrowsing] = useState(false);
@@ -320,7 +304,16 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
       e.stopPropagation();
     };
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    // The page may ask for the record's file from a control of its own: a window event `isogon:record` whose detail is
+    // 'csv' does what key G does
+    const onAsk = (e: Event) => {
+      if ((e as CustomEvent).detail === 'csv' && live.current.rec) download();
+    };
+    window.addEventListener('isogon:record', onAsk);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('isogon:record', onAsk);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The foot as it stands once drawn: the grid gives up height to it. For one record on one screen the room only
@@ -349,28 +342,20 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const footH = Math.max(FOOT_H, footSeen);
   // A month's label carries the band of its range where the record gives ranges. Where the guide speaks the label has
   // no action of its own, and the band takes most of the action's room.
-  const hasRanges = useMemo(() => (rec ? [...rec.months.values()].some((m) => m.p10 !== null && m.p90 !== null) : false), [rec]);
-  // On a narrow plot the label is narrower and its words take two lines each. A phone has no height for the month's
-  // band above the grid as well as how well the correction holds under it, and the record's check comes first: a
-  // phone leaves the band out (the month's range is in the file, key G).
   const narrowLabel = size.w < 600;
-  const banded = hasRanges && !narrowLabel;
   const inFilm = useMemo(() => typeof document !== 'undefined' && document.documentElement.classList.contains('iso-film'), []);
-  // A short phone (the guide's sentence and actions take most of its height) cannot hold the month's label, the grid at
-  // its smallest, the satellites' lines and the foot at once, and what does not fit would stand under the guide. There
-  // the label gives way first (the grid's bracket and the guide's action name the month), then the satellites' lines,
-  // then the legend; a phone's squares may be as small as 6 px. The grid and how well the correction holds always
-  // stay. This month so far keeps its label.
-  // Each step is taken while the grid would fall under 8 px squares; only with all three taken may a phone's squares
-  // go down to 6 px, so a readable grid comes before the label.
+  // The pointed month is a thing in the scene: its prompt and readout stand on its cell (ScenePrompt, the ux lane's), so
+  // the grid keeps a label's room above it only for this month so far. A short phone (the guide's sentence and actions
+  // take most of its height) cannot hold the grid at its smallest, the satellites' lines and the foot at once, and what
+  // does not fit would stand under the guide: there the satellites' lines give way, then the legend, each while the grid
+  // would fall under 8 px squares; only with both gone may a phone's squares go down to 6 px.
   const fits = (head: number, spans: number) => head + 12 * 8 + AXIS_H + spans + footH <= size.h;
   const shortPhone = narrowLabel && !inFilm && !nowOn;
-  const labelOff = shortPhone && !fits(HEAD_H, SPANS_H);
-  const spansOff = labelOff && !fits(HEAD_SHORT, SPANS_H);
+  const spansOff = shortPhone && !fits(HEAD_SHORT, SPANS_H);
   const legendOff = spansOff && !fits(HEAD_SHORT, 0);
   const minCell = legendOff ? 6 : 8;
   const spansH = spansOff ? 0 : SPANS_H;
-  const headH = labelOff ? HEAD_SHORT : HEAD_H + (banded ? (narrowLabel ? 56 : guideSpeaks ? 16 : BAND_H) : 0);
+  const headH = nowOn ? HEAD_H : HEAD_SHORT;
   const cell = years.length
     ? // One column more than the record's years is kept free on the right: this month's square stands there
       Math.max(minCell, Math.floor(Math.min((size.w - NAMES_W) / (years.length + 1), (size.h - headH - AXIS_H - spansH - footH) / 12)))
@@ -395,11 +380,32 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
     const ym = ymOf(years[col], row + 1);
     return rec.months.has(ym) ? ym : null;
   };
+  // The pointed month is read from the pointer over the grid wherever it moves, whatever stands over the grid: the
+  // prompt's frame stands on the pointed cell, and reading the grid's own pointer events would lose the month as the
+  // frame comes under the pointer, and find it again as it leaves, without end
+  const monthAtRef = useRef(monthAt);
+  monthAtRef.current = monthAt;
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const r = svg.getBoundingClientRect();
+      const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      setHover(inside ? monthAtRef.current({ clientX: e.clientX, clientY: e.clientY, currentTarget: svg }) : null);
+    };
+    window.addEventListener('pointermove', onMove);
+    return () => window.removeEventListener('pointermove', onMove);
+  }, []);
 
   // This month's square stands in its own year's column, past the record's last one, in its month's row
   const nowAt = thisMonth ? { x: xOf(Number(thisMonth.month.slice(0, 4))), y: yOf(Number(thisMonth.month.slice(5, 7))) } : null;
   const nowLabel = nowOn && hover === null && thisMonth && nowAt ? thisMonth : null;
   const fm = nowLabel ? null : focus && rec ? rec.months.get(focus) ?? null : null;
+  // The pointed month's cell as a box on the screen, for its prompt
+  const svgBox = svgRef.current?.getBoundingClientRect() ?? null;
+  const cellBox = fm && svgBox && cell > 0
+    ? { left: svgBox.left + xOf(fm.year), top: svgBox.top + yOf(fm.month), right: svgBox.left + xOf(fm.year) + cell - gap, bottom: svgBox.top + yOf(fm.month) + cell - gap }
+    : null;
   const fx = nowLabel && nowAt ? nowAt.x + cell / 2 : fm ? xOf(fm.year) + cell / 2 : 0;
   const fy = nowLabel && nowAt ? nowAt.y : fm ? yOf(fm.month) : 0;
   // Where the way to this month stands: after the last year, on the years' line
@@ -423,19 +429,6 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   // On a narrow screen the foot takes the plot's width from the month names, so its words wrap less. It is decided by
   // the plot's width, not the grid's, so that the grid's size does not move the foot's width back and forth.
   const narrowFoot = size.w < 700;
-  // How well the correction holds, in one line and the words' one place: the answer's own check where it has one, the
-  // Earth's beside in the same measure. The page says it here and nowhere else.
-  const heldHere = rec?.heldOut ? { year: rec.heldOut.harmonized, uncorrected: rec.heldOut.raw, monthsHeld: rec.method.monthsHeld } : null;
-  const accuracyLine = rec ? W.accuracy(heldHere) : '';
-  // The pointed month's readout stands right of the grid, in one place, where the plot has room for it; not in the film,
-  // where nothing points, nor on a phone, where the label says the month
-  const readoutX = x0 + gridW + 32;
-  const readoutW = Math.min(244, size.w - readoutX - 4);
-  const readoutOn = !inFilm && !narrowFoot && fm !== null && readoutW >= 196;
-  // Its cross hairs: along the month's row to the readout and down its column to the year, clear of the square itself
-  const hair = hover !== null && fm !== null && cell > 0
-    ? { x: xOf(fm.year), y: yOf(fm.month), s: cell - gap, right: readoutOn ? readoutX : x0 + gridW + 6 }
-    : null;
   const footX = narrowFoot ? Math.max(0, x0 - NAMES_W) : x0;
   // Never narrower than a line of the legend's width: a narrower grid would make the foot's words wrap taller, which
   // would make the grid narrower still
@@ -472,13 +465,12 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
             {/* A soft dark ground under the grid and its labels, with no edge: the land shows around it. */}
             <div className="rec__ground" style={{ left: Math.min(x0 - NAMES_W, footX), top: y0, width: Math.max(gridW + NAMES_W, footW), height: footY + footH - 12 - y0 }} />
             <svg
+              ref={svgRef}
               className="rec__grid"
               width={size.w}
               height={size.h}
               role="img"
               aria-label={W.grid(rec.label)}
-              onPointerMove={(e) => setHover(monthAt(e))}
-              onPointerLeave={() => setHover(null)}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 // This month's own square brings its label back
@@ -533,20 +525,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                     const m = rec.months.get(ym)!;
                     return <rect key={ym} className="rec__fire" x={xOf(m.year) - 1.5} y={yOf(m.month) - 1.5} width={cell - gap + 3} height={cell - gap + 3} />;
                   })}
-              {shown && rec.months.get(shown) && (
-                <path
-                  className="rec__bracket"
-                  d={brackets(xOf(rec.months.get(shown)!.year), yOf(rec.months.get(shown)!.month), cell - gap, gap, Math.max(4, Math.round(cell * 0.26)))}
-                />
-              )}
-              {((fm && !labelOff) || nowLabel) && <line className="rec__leader" x1={fx - gap / 2} y1={y0 - headH + 12} x2={fx - gap / 2} y2={fy - 7} />}
-              {hair && (
-                <g>
-                  <line className="rec__hair" x1={x0 - 4} y1={hair.y + hair.s / 2} x2={hair.x - 3} y2={hair.y + hair.s / 2} />
-                  <line className="rec__hair" x1={hair.x + hair.s + 3} y1={hair.y + hair.s / 2} x2={hair.right} y2={hair.y + hair.s / 2} />
-                  <line className="rec__hair" x1={hair.x + hair.s / 2} y1={hair.y + hair.s + 3} x2={hair.x + hair.s / 2} y2={y0 + gridH + 3} />
-                </g>
-              )}
+              {nowLabel && <line className="rec__leader" x1={fx - gap / 2} y1={y0 - headH + 12} x2={fx - gap / 2} y2={fy - 7} />}
 
               {/* This month so far, once asked for: a square on the same ramp, its edge dashed because the month is not over. */}
               {thisMonth && nowAt && (
@@ -594,42 +573,18 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               )}
             </svg>
 
-            {fm && !labelOff && (
-              <div
-                className="rec__label"
-                data-side={labelRight ? 'right' : 'left'}
-                style={
-                  labelRight
-                    ? { left: fx + 12, bottom: size.h - y0 + 14, maxWidth: labelRoom }
-                    : { right: size.w - fx + 12, bottom: size.h - y0 + 14, maxWidth: labelRoom }
-                }
-                aria-live="polite"
-              >
-                <span className="sys-title">{monthWords(fm.ym)}</span>
-                <span className="sys-label">{monthLine(fm.ym, fm.value, fm.timesUsual, fm.median)}</span>
-                {/* The month's range, on the world view's band: the figure as a tick within it. What the band is
-                    and how often it held is said once, under the grid. As counted, the figure is not the one the range
-                    is about, so no band is drawn. */}
-                {banded && !asCounted && fm.value !== null && fm.value > 0 && fm.p10 !== null && fm.p90 !== null && (
-                  <div className="rec__band">
-                    <IntervalBand value={fm.value} low={fm.p10} high={fm.p90} unit={BAND_UNIT} level={rec.method.level} compact />
-                  </div>
-                )}
-                {/* The prompt beside the month. Where the guide speaks it offers the same action in its strip, and a
-                    click on the month's square still shows its fire, so the Record draws no prompt of its own. */}
-                {openable.has(fm.ym) && !guideSpeaks && (
-                  <button type="button" className="rec__act rec__act--next" onClick={() => show(fm.ym)}>
-                    {!hover && <span className="rec__key">Enter</span>}
-                    {W.show}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {readoutOn && fm && (
-              <div style={{ position: 'absolute', left: readoutX, top: y0, width: readoutW }}>
-                <RecordReadout month={fm} level={rec.method.level} asCounted={asCounted} />
-              </div>
+            {/* The pointed month (else the marked one, waiting for the pointer): one prompt and its
+                readout on the cell, the ux lane's ScenePrompt. Where the month opens a fire the prompt is that action;
+                else it is the month, and choosing it picks it. */}
+            {fm && cellBox && (
+              <ScenePrompt
+                box={cellBox}
+                label={openable.has(fm.ym) ? W.openFire(fm.ym) : monthWords(fm.ym)}
+                readout={W.monthReadout(fm, asCounted)}
+                // The pointer is on the pointed month, and the marked one waits for it: the reticle stands closed on both
+                invite
+                onSelect={() => (openable.has(fm.ym) ? show(fm.ym) : pick(fm.ym))}
+              />
             )}
 
             {nowLabel && (
@@ -737,10 +692,6 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   {W.close}
                 </button>
               )}
-              {/* Under the years, how well the correction holds: here from the answer, and over the whole Earth, on the
-                  page, on a phone and in the film, and nowhere else on the page. An answer with no check of its own
-                  (a drawn area) has the Earth's alone. */}
-              <p className="sys-label rec__wide rec__heldout">{accuracyLine}</p>
               {/* The method every year is put on one scale by, in plain words, and what a month's band is.
                   Where the guide speaks, its sentence on the step names the method, and the Record leaves it to it. */}
               {!guideSpeaks && !narrowFoot && methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld) && (

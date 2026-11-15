@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { boxRoute, gridOf, logClass, parseRecord, rampBounds } from './record.ts';
 import { publishRecordView, readRecordView, RECORD_CLOSED } from './recordView.ts';
-import { EARTH_HELD_OUT, exactRate, READOUT_WORDS, gridLine, methodLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times, unstableLine } from './recordWords.ts';
+import { EARTH_HELD_OUT, exactRate, gridLine, methodLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times, unstableLine } from './recordWords.ts';
 import { CSV_COLUMNS, recordCsv, recordFileName } from './recordCsv.ts';
 
 const month = (ym, harmonized, modis, viirs, extra = {}) => ({
@@ -298,9 +298,15 @@ test("the pointed month's readout: each instrument on its satellite, and the fig
   assert.equal(exactRate(0.3878), '0.388');
   assert.equal(exactRate(0.0035), '0.0035');
   assert.equal(exactRate(0), '0');
-  // Every satellite the record counts has its instrument named, in the order the file's columns take
-  assert.deepEqual(READOUT_WORDS.instruments.map(([p]) => p), ['Terra', 'Aqua', 'Suomi NPP', 'NOAA-20', 'NOAA-21']);
-  assert.ok(READOUT_WORDS.instruments.every(([p, name]) => name.endsWith(p) && /^(MODIS|VIIRS) on /.test(name)));
-  assert.equal(READOUT_WORDS.count(15639), '15,639');
-  assert.equal(READOUT_WORDS.range(0.8), '80 percent range');
+  // The prompt on a month: the action where it opens a fire; its readout, two lines of the answer's figures
+  assert.equal(RECORD_WORDS.openFire('2012-08'), 'Open the August 2012 fire');
+  const month = { ym: '2012-08', year: 2012, month: 8, value: 10.8305, p10: 9.3773, p90: 12.4952, asCounted: 10.7903, counts: [{ platform: 'Terra', total: 1729 }, { platform: 'Aqua', total: 1772 }, { platform: 'Suomi NPP', total: 15639 }] };
+  assert.equal(RECORD_WORDS.monthReadout(month, false), 'MODIS 3,501   VIIRS 15,639\n10.83 per 1,000 km² a day, 9.38 to 12.50');
+  assert.equal(RECORD_WORDS.monthReadout(month, true), 'MODIS 3,501   VIIRS 15,639\n10.79 per 1,000 km² a day as counted');
+  // Every line short enough for a phone's readout
+  const busy = { ...month, counts: [{ platform: 'Terra', total: 3313 }, { platform: 'Aqua', total: 3317 }, { platform: 'Suomi NPP', total: 26290 }, { platform: 'NOAA-20', total: 21730 }, { platform: 'NOAA-21', total: 26490 }] };
+  // Two lines, each short enough for a phone's readout
+  assert.equal(RECORD_WORDS.monthReadout(busy, false).split('\n').length, 2);
+  assert.ok([month, busy].every((m) => RECORD_WORDS.monthReadout(m, false).split('\n').every((l) => l.length <= 42)));
+  assert.equal(RECORD_WORDS.monthReadout({ ...month, counts: [], value: null }, false), 'No satellite counted\nNo value');
 });

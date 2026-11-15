@@ -82,14 +82,6 @@
   cursor: pointer;
 }
 
-/* The one selected month: corner marks, as everywhere on the page. */
-.rec__bracket {
-  fill: none;
-  stroke: var(--sys-ink);
-  stroke-width: 2px;
-  pointer-events: none;
-}
-
 /* A month that holds a fire the stage can show: a thin frame in the gap round its square. */
 .rec__fire {
   fill: none;
@@ -102,67 +94,6 @@
   stroke: var(--sys-ink-2);
   stroke-width: 1;
   pointer-events: none;
-}
-
-/* The pointed month's cross hairs, in the ink of the search's locator: along its row to the readout, and down its
-   column to its year. */
-.rec {
-  --rec-hair: rgba(214, 241, 255, 0.4);
-}
-
-.rec__hair {
-  stroke: var(--rec-hair);
-  stroke-width: 1;
-  pointer-events: none;
-}
-
-/* The pointed month read out beside the grid, always in one place: the instruments' counts and the value on one
-   scale, exact, in the monospace of the search's side view. No box: a hairline at its left, as the cross hair meets
-   it. */
-.rec-readout {
-  position: absolute;
-  display: grid;
-  gap: var(--sys-s2);
-  padding-left: var(--sys-s4);
-  box-shadow: inset 1px 0 0 var(--rec-hair);
-  pointer-events: none;
-}
-
-.rec-readout__month {
-  color: var(--sys-ink);
-}
-
-.rec-readout__head {
-  margin-top: var(--sys-s1);
-}
-
-.rec-readout__rows {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-}
-
-.rec-readout__row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--sys-s3);
-  align-items: baseline;
-}
-
-.rec-readout__row dt,
-.rec-readout__row dd {
-  margin: 0;
-}
-
-.rec-readout__row dd {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.rec-readout__row--first {
-  margin-top: var(--sys-s2);
-  padding-top: var(--sys-s2);
-  box-shadow: inset 0 1px 0 var(--sys-rule);
 }
 
 .rec__span line {
@@ -348,17 +279,6 @@
   display: none;
 }
 
-/* How well the correction holds here, said in the film under the legend */
-.rec__heldout {
-  margin: 0;
-  color: var(--sys-ink);
-}
-
-.iso-film .rec__heldout {
-  font-size: clamp(14px, 0.94vw, 19px);
-  line-height: 1.35;
-}
-
 /* The method under the grid, after the legend, in the legend's ink */
 .rec__method {
   margin: 0;
@@ -366,15 +286,6 @@
 }
 
 /* A month's band of its range, in its label, as wide as a short line */
-.rec__band {
-  width: min(320px, 100%);
-  margin-top: var(--sys-s1);
-}
-
-.rec__label[data-side='left'] .rec__band {
-  justify-self: end;
-}
-
 /* The corners of an area with no record, under the sentence that says so */
 .rec__status-box {
   display: block;
@@ -426,13 +337,6 @@
   }
 }
 
-/* A phone's foot holds how well the correction holds under the legend, so the Record keeps the guide's measured room
-   there too (App.tsx, --guide-room), not the fixed room a phone kept while its foot held the legend alone. */
-@media (max-width: 600px) {
-  .iso-ws[data-guide='true'] .rec:has(.rec__heldout) {
-    --rec-guide: var(--guide-room, 230px);
-  }
-}
 
 /* The workspace dock steps aside while The Record is open. */
 .iso-ws__dock[hidden] {
@@ -461,15 +365,6 @@
 }
 
 .iso-film .rec__label .sys-label,
-.iso-film .rec__band .world-band__words {
-  font-size: clamp(13px, 0.86vw, 17px);
-  line-height: 1.35;
-}
-
-.iso-film .rec__band {
-  width: min(360px, 100%);
-}
-
 .iso-film .rec__legend,
 .iso-film .rec__gridline,
 .iso-film .rec__unstable {
