@@ -1,4 +1,18 @@
-/* Site-wide scrolling: a thin quiet track in the system's rule ink, square ends, no bright OS bar. */
+/* Site-wide scrolling and overscroll lock: a thin quiet track in the system's rule ink, square ends,
+   no bright OS bar, and no elastic rubber-band peel at the top or bottom of any scroll container. */
+
+html,
+body,
+#root,
+.iso-app,
+.iso-land,
+.iso-viewer__scroll,
+.iso-readout,
+.iso-ws__dock,
+.tw-end,
+.iso-finder__list {
+  overscroll-behavior: none;
+}
 
 * {
   scrollbar-width: thin;
