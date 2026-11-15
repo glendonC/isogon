@@ -12,6 +12,7 @@ from pathlib import Path
 import time
 from typing import Any
 
+from backend.live import finals as F
 from backend.live import protocol as PR
 from backend.live.fetch import iso
 from backend.live.ledger import read_chain
@@ -103,12 +104,25 @@ def _pred(seal: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _withdrawn(w: dict[str, Any]) -> dict[str, Any]:
+    """A withdrawn score as the answer shows it: what it said, when, and why it was withdrawn."""
+    old, line = w["withdrawn"] or {}, w["withdrawal"]
+    look = old.get("look") or {}
+    return {"seal_sha256": line["seal_sha256"], "key": line["key"], "score_sha256": line.get("withdraws_sha256"),
+            "state_withdrawn": old.get("state"), "decided_utc": old.get("decided_utc"),
+            "rows_retrieved_utc": (old.get("rows") or {}).get("retrieved_utc"),
+            "hidden_pixels_in_box": look.get("hidden_pixels_in_box"), "ahead_of_both_on": look.get("ahead_of_both_on"),
+            "judged": look.get("judged"), "withdrawn_utc": line["decided_utc"], "reason": line["reason"]}
+
+
 def build(live_dir: Path, now: float | None = None) -> dict[str, Any]:
     live = Path(live_dir)
     now = time.time() if now is None else now
     proto = _read(live / "protocol.json")
     seals = _entries(live / "seals.jsonl", "seal")
-    finals = {f["seal_sha256"]: f for f in _entries(live / "scores.jsonl", "score")}
+    score_lines = _entries(live / "scores.jsonl", "score")
+    finals = F.current(score_lines)
+    withdrawn = [_withdrawn(w) for w in F.withdrawals(score_lines)]
     missed = _entries(live / "missed.jsonl", "missed")
     cohorts = _entries(live / "cohorts.jsonl", "cohort")
     state = (_read(live / "state.json") or {}).get("seals", {})
@@ -151,6 +165,7 @@ def build(live_dir: Path, now: float | None = None) -> dict[str, Any]:
                 "ahead_of_both_on": look["ahead_of_both_on"], "judged": look["judged"], "counted_by": look["counted_by"],
                 "by_score": look["scores"],
             },
+            "withdrawn_scores": [w for w in withdrawn if w["seal_sha256"] == s["sha256"]],
         })
     fires = [{**{k: f[k] for k in ("id", "cohort", "rank", "part", "box", "centre", "modis_rows_48h")},
               "chosen_utc": c["chosen_utc"]} for c in cohorts for f in c["fires"]]
@@ -165,6 +180,7 @@ def build(live_dir: Path, now: float | None = None) -> dict[str, Any]:
         "counts": {"seals": len(seals), **counts, "passes_not_sealed": len(missed)},
         "fires": fires,
         "seals": rows,
+        "withdrawn": withdrawn,
         "not_sealed": [{**{k: m[k] for k in ("fire_id", "platform", "predicted_time_utc", "reason", "noted_utc")},
                         "seal_window_utc": m.get("seal_window_utc")} for m in missed],
         "runner": runner(live, now, missed),

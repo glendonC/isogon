@@ -41,6 +41,14 @@ first seal; the runner refuses to start when the protocol of its code differs fr
 6. **Nothing is dropped.** A seal is scored or marked with its reason: no pass listed within 12 hours, a real swath
    that held only part of the box, a real pass that began before the seal, rows not obtained within 36 hours.
 
+## A score withdrawn
+
+A look is scored only on a reply retrieved after its pass's rows were due. Two passes of one fire, one satellite and
+one day ask FIRMS the same question, so a reply held from the earlier pass is not reused for the later one. A score
+found decided on such an early reply is withdrawn by a line of its own in `scores.jsonl`, with the digest of the line
+it withdraws and the reason, and the look is scored again on a reply retrieved after. The withdrawn line stays in the
+log, and the answer lists it under `withdrawn` and on its seal, with what it said and why it was withdrawn.
+
 ## When the sealer was not running
 
 The sealer writes one line per cycle (every 5 minutes) and one per start. A stretch of more than two cycles with no

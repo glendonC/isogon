@@ -20,6 +20,7 @@ from backend.eval.blind_test import Prediction, blind_test_sealed, bootstrap_ver
 from backend.eval.holdout import Sealed
 from backend.eval.rows import Detections, detections_from_rows
 from backend.firms.archive import DEDUP_FIELDS, _write_atomic
+from backend.live import finals as F
 from backend.live import passes as PS
 from backend.live import protocol as PR
 from backend.live import seal as SL
@@ -158,13 +159,27 @@ class Scorer:
         self.state: dict[str, Any] = {}
 
     def finals(self) -> dict[str, dict[str, Any]]:
-        return {e["seal_sha256"]: e for e in self.scores.entries}
+        return F.current(self.scores.entries)
+
+    def withdraw_early(self, now: float) -> int:
+        """Withdraw each standing score decided on a reply retrieved before its pass's rows were due."""
+        n = 0
+        for sh, e in self.finals().items():
+            why = F.early_rows(e, PR.ROWS_AFTER_S)
+            if why is None:
+                continue
+            self.scores.append({"seal_sha256": sh, "key": e["key"], "state": F.WITHDRAWN, "decided_utc": iso(now),
+                                "withdraws_sha256": e["sha256"], "reason": why})
+            self.log(f"{e['key']}: score of {e['decided_utc']} withdrawn: {why}")
+            n += 1
+        return n
 
     def cycle(self) -> int:
         seals = Ledger(self.dir / "seals.jsonl", "seal").entries
+        now = self.clock()
+        withdrawn = self.withdraw_early(now)
         done = self.finals()
         new = 0
-        now = self.clock()
         for seal in seals:
             if seal["sha256"] in done:
                 continue
@@ -180,7 +195,7 @@ class Scorer:
                 new += 1
                 self.log(f"{seal['key']}: {out['state']}" + (f" ({out['reason']})" if out.get("reason") else
                          f", estimate ahead of both on {out['look']['ahead_of_both_on']} of {out['look']['judged']}"))
-        if new or not (self.dir / "summary.json").is_file():
+        if new or withdrawn or not (self.dir / "summary.json").is_file():
             self.write_summary(seals)
         self.write_state(now)
         return new
@@ -221,7 +236,9 @@ class Scorer:
         d0, d1 = iso(rs)[:10], iso(re)[:10]
         days = 1 if d0 == d1 else 2
         try:
-            reply = self.area.fetch(PR.VIIRS_SOURCES[slot["platform"]], tuple(seal["fire"]["context_box"]), days, d0)
+            # a reply held from an earlier pass of the same day was retrieved before this pass's rows were due
+            reply = self.area.fetch(PR.VIIRS_SOURCES[slot["platform"]], tuple(seal["fire"]["context_box"]), days, d0,
+                                    retrieved_after_s=re + PR.ROWS_AFTER_S)
         except Exception as exc:  # noqa: BLE001
             if now > re + PR.ROWS_GIVE_UP_S:
                 return self._final(seal, "not_scored", now, real_pass=rp, reason=f"rows not obtained: {type(exc).__name__}")
@@ -251,7 +268,7 @@ class Scorer:
     def write_summary(self, seals: list[dict[str, Any]]) -> None:
         by_sha = {s["sha256"]: s for s in seals}
         fires: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {}
-        for f in self.scores.entries:
+        for f in self.finals().values():
             if f["state"] == "scored":
                 s = by_sha[f["seal_sha256"]]
                 fires.setdefault(s["fire"]["id"], []).append((s, f))

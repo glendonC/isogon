@@ -88,14 +88,17 @@ class AreaFetcher:
         return sorted(out, key=lambda x: x["retrieved_utc"])
 
     def fetch(self, source: str, area: tuple[float, float, float, float] | str, days: int, date: str | None = None,
-              reuse_within_s: float | None = None) -> dict[str, Any]:
+              reuse_within_s: float | None = None, retrieved_after_s: float | None = None) -> dict[str, Any]:
         """The reply's manifest with its text under `text`. A question already answered is not asked again: with
-        `reuse_within_s` None any held reply is reused (a fixed question), otherwise one retrieved that recently."""
+        `reuse_within_s` None any held reply is reused (a fixed question), otherwise one retrieved that recently.
+        With `retrieved_after_s`, a held reply retrieved before that time is not reused."""
         held = self.cached(source, area, days, date)
         if held:
             last = held[-1]
-            age = self.clock() - _dt.datetime.fromisoformat(last["retrieved_utc"].replace("Z", "+00:00")).timestamp()
-            if reuse_within_s is None or age <= reuse_within_s:
+            got = _dt.datetime.fromisoformat(last["retrieved_utc"].replace("Z", "+00:00")).timestamp()
+            age = self.clock() - got
+            late_enough = retrieved_after_s is None or got >= retrieved_after_s
+            if late_enough and (reuse_within_s is None or age <= reuse_within_s):
                 return {**last, "text": (self.cache_dir / last["path"]).read_text(encoding="utf-8")}
         if not 1 <= int(days) <= 5:
             raise ValueError("the area API takes 1 to 5 days")

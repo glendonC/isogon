@@ -98,6 +98,70 @@ class ScoreTests(unittest.TestCase):
             self.assertEqual(sc2.cycle(), 0)
             self.assertEqual(len(sc2.scores.entries), 1)
 
+    def _plant_early_reply(self, root: Path) -> None:
+        """A reply to the same question, retrieved before this pass's rows were due and holding none of its rows: as
+        a reply fetched for an earlier pass of the same fire and day is."""
+        seal = json.loads((root / "live" / "seals.jsonl").read_text().splitlines()[0])["seal"]
+
+        def opener(url: str) -> _Resp:
+            if "mapkey_status" in url:
+                return _Resp(json.dumps({"transaction_limit": 5000, "current_transactions": 3}).encode())
+            return _Resp((VIIRS_HEADER + "\n").encode())
+
+        early = AreaFetcher("TESTKEY", root / "cache", opener=opener, log=lambda m: None, pause_s=0.0,
+                            clock=lambda: GRANULE_START + 3600.0)
+        early.fetch(PR.VIIRS_SOURCES["VIIRS_NOAA20"], tuple(seal["fire"]["context_box"]), 1, iso(GRANULE_START)[:10])
+
+    def test_a_reply_retrieved_before_the_rows_were_due_is_not_used(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            sc, asked = self._run(root, GRANULE_START)
+            self._plant_early_reply(root)
+            self.assertEqual(sc.cycle(), 1)
+            fin = sc.scores.entries[0]
+            self.assertEqual(fin["look"]["hidden_pixels_in_box"], 25)
+            self.assertEqual(fin["rows"]["retrieved_utc"], iso(AFTER))
+            self.assertTrue(any("/VIIRS_NOAA20_NRT/" in u for u in asked))
+
+    def test_a_score_decided_on_a_reply_from_before_its_rows_were_due_is_withdrawn_and_scored_again(self) -> None:
+        from backend.live.answer import build
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            sc, _ = self._run(root, GRANULE_START)
+            self._plant_early_reply(root)
+            # the scorer as it was before 15 November: a held reply to the same question was reused, however early
+            fetch = sc.area.fetch
+            sc.area.fetch = lambda source, area, days, date=None, **kw: fetch(source, area, days, date)
+            self.assertEqual(sc.cycle(), 1)
+            bad = sc.scores.entries[0]
+            self.assertEqual(bad["look"]["hidden_pixels_in_box"], 0)
+            # started again as it is now: the score is withdrawn by a line of its own, kept, and the look scored again
+            asked: list[str] = []
+            firms, _cmr = _openers(GRANULE_START, asked)
+            area = AreaFetcher("TESTKEY", root / "cache", opener=firms, log=lambda m: None, pause_s=0.0, clock=lambda: AFTER)
+            sc2 = Scorer(root / "live", area, sc.cmr, clock=lambda: AFTER + 300.0, log=lambda m: None)
+            self.assertEqual(sc2.cycle(), 1)
+            lines = sc2.scores.entries
+            self.assertEqual([e["state"] for e in lines], ["scored", "withdrawn", "scored"])
+            self.assertEqual(lines[1]["withdraws_sha256"], bad["sha256"])
+            self.assertIn("before this pass's rows were due", lines[1]["reason"])
+            self.assertEqual(lines[2]["look"]["hidden_pixels_in_box"], 25)
+            self.assertTrue(any("/VIIRS_NOAA20_NRT/" in u for u in asked))
+            summary = json.loads((root / "live" / "summary.json").read_text())
+            self.assertEqual((summary["fires_scored"], summary["looks_scored"]), (1, 1))
+            self.assertEqual(summary["per_fire"][0]["hidden_pixels"], 25)
+            ans = build(root / "live", now=AFTER + 300.0)
+            self.assertEqual(ans["counts"]["scored"], 1)
+            row = ans["seals"][0]
+            self.assertEqual((row["state"], row["scores"]["hidden_pixels_in_box"]), ("scored", 25))
+            self.assertEqual([w["score_sha256"] for w in row["withdrawn_scores"]], [bad["sha256"]])
+            self.assertEqual(ans["withdrawn"][0]["hidden_pixels_in_box"], 0)
+            # started again: nothing is withdrawn or scored twice
+            sc3 = Scorer(root / "live", area, sc.cmr, clock=lambda: AFTER + 600.0, log=lambda m: None)
+            self.assertEqual(sc3.cycle(), 0)
+            self.assertEqual(len(sc3.scores.entries), 3)
+
     def test_a_pass_that_began_before_its_seal_is_not_scored(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             sc, _ = self._run(Path(d), NOW - 60.0)
