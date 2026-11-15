@@ -13,6 +13,8 @@ export interface PlayShot {
   ready: () => boolean;
   /** Reading time once ready, ms. */
   hold: number;
+  /** How long to wait for the screen to be ready before going on, ms (a place's data on a cold load can take long). */
+  wait?: number;
 }
 
 const WAIT = 25000;
@@ -80,7 +82,7 @@ export function usePlay(shots: () => PlayShot[], onEnd: () => void) {
       if (!shot) return stop();
       const now = performance.now();
       if (cur.readyAt === null) {
-        if (shot.ready() || now - cur.began > WAIT) cur.readyAt = now;
+        if (shot.ready() || now - cur.began > (shot.wait ?? WAIT)) cur.readyAt = now;
         return;
       }
       const p = Math.min(1, (now - cur.readyAt) / shot.hold);

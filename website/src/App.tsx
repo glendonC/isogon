@@ -25,6 +25,7 @@ import type { TrailWord } from './guide/Trail';
 import { LocatorBar } from './identity/LocatorBar';
 import { StoryLine } from './identity/StoryLine';
 import { Entry } from './identity/Entry';
+import { stageReady } from './stage/stageReady';
 import { usePlay, type PlayShot } from './ui/usePlay';
 import type { StoryPart } from './identity/story';
 import { WORDS } from './identity/words';
@@ -152,6 +153,10 @@ interface LiveObserverTelemetry {
  * The places the page can open: every place the registry serves (`GET /api/regions`), and the typed catalogue's until the
  * registry has answered. Nothing here assumes a number of places: a place the registry adds opens like the others.
  */
+/** Play's two shots of the Earth's years, as the film takes them. */
+const YEARS_COUNTED = { view: 'counted', from: 2010, until: 2012, play: true } as const;
+const YEARS_ONE_SCALE = { view: 'onescale', from: 2010, until: 2012, play: true } as const;
+
 const KNOWN_PLACES = new Set<string>(THEATER_CATALOG.map((t) => t.id));
 function isKnownTheaterId(value: string | undefined): value is TheaterId {
   return value !== undefined && KNOWN_PLACES.has(value);
@@ -1627,13 +1632,24 @@ export function App() {
   // own moves (`filmMove: 'auto'`); any key, click or wheel hands it back where it is. It never plays the game.
   const worldIs = (name: string) => worldScreenOnShow()?.name === name;
   const sceneIs = (s: string) => document.querySelector(`.wm-scene[data-scene="${s}"]`) !== null;
+  const yearsDone = (view: string) =>
+    worldIs('years') &&
+    new URLSearchParams(window.location.search).get('view') === view &&
+    document.querySelector('.world-screen[data-name="years"]')?.getAttribute('data-pass') === 'done';
   const playShots = (): PlayShot[] => [
-    { part: 'world', start: () => openWorldScreen('years', { play: true }), ready: () => worldIs('years'), hold: 9000 },
+    // The years as counted from 2010 to 2012, held on 2012 while its caption stands (as the film does), then the same
+    // years on one scale; each waits for the pass to reach its last year (`data-pass` on the picture), and the second
+    // opens afresh so it plays its own pass.
+    { part: 'world', start: () => openWorldScreen('years', YEARS_COUNTED), ready: () => yearsDone('counted'), hold: 6000, wait: 60000 },
     {
       part: 'jump',
-      start: () => openWorldScreen('years', { view: 'counted', from: 2010, until: 2012, play: true }),
-      ready: () => worldIs('years'),
-      hold: 7000,
+      start: () => {
+        closeWorldScreen();
+        requestAnimationFrame(() => openWorldScreen('years', YEARS_ONE_SCALE));
+      },
+      ready: () => yearsDone('onescale'),
+      hold: 5000,
+      wait: 60000,
     },
     {
       part: 'place',
@@ -1643,8 +1659,9 @@ export function App() {
       },
       ready: () => document.querySelector('.rec__grid') !== null,
       hold: 7000,
+      wait: 60000,
     },
-    { part: 'fire', start: () => onTrailWord('Estimate'), ready: () => sceneIs('blind'), hold: 7000 },
+    { part: 'fire', start: () => onTrailWord('Estimate'), ready: () => sceneIs('blind'), hold: 7000, wait: 60000 },
     {
       part: 'fire',
       start: () => {
@@ -1720,6 +1737,19 @@ export function App() {
   })();
 
   // A page of recorded answers says so on the landing, with the commit the recording names and the day it was made.
+  // The first screen's words wait for the stage's first whole picture (stage/stageReady.ts); a stage that cannot draw
+  // never says so, and the words come after 12 s all the same.
+  const [stageIn, setStageIn] = useState(() => document.documentElement.dataset.stage === 'ready');
+  useEffect(() => {
+    if (stageIn) return;
+    let live = true;
+    void stageReady().then(() => live && setStageIn(true));
+    const timer = window.setTimeout(() => live && setStageIn(true), 12000);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [stageIn]);
   const [recordedLine, setRecordedLine] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -1771,9 +1801,10 @@ export function App() {
             onEnter={enterRecord}
           />
         ) : (
-          !worldScreen && (
+          !worldScreen && !play.playing && (
             <>
               <Entry
+                ready={stageIn}
                 firstYear={worldYears?.first ?? null}
                 lastYear={worldYears?.last ?? null}
                 onPlay={startPlay}
