@@ -32,7 +32,7 @@ The two share the route, the answer's outer shape and the 24 by 256 by 256 by 4 
 - the next-look rounds (`backend/server_next_look.py`), at most 16 in memory;
 - the terrain pack manager, which builds a missing pack in the background.
 
-At start the server builds one simulated run of `plumas_ca`, and a background thread builds the real calendars of the three regions with FIRMS rows so the first page request is fast.
+At start the server builds one simulated run of `plumas_ca`, and a background thread builds the real calendars of every region with FIRMS rows so the first page request is fast.
 
 The request handler keeps three guards. Browser access is limited to pages served from this machine, and a `POST` from any other origin is refused. Request bodies must be JSON objects of limited size, with no `NaN` or `Infinity`, and no type is coerced. A client may hold a socket idle for at most 60 seconds.
 

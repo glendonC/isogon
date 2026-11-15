@@ -182,7 +182,7 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.firms.cmr_passes status
 ```
 
-`plan` prints the number of monthly requests a span needs without making one: 1,905 for 2012 to 2025 over the three boxes. `status` prints the totals of the cache; after that fetch it holds 196,082 granule entries, about 77 MB as transferred.
+`plan` prints the number of monthly requests a span needs without making one: 6,985 for 2012 to 2025 over the eleven boxes (1,905 over the first three). `status` prints the totals of the cache; with every box fetched it holds 781,143 granule entries, about 305 MB as transferred and 161 MB stored (196,082 entries and 77 MB for the first three).
 
 ### What the schedule is used for
 
@@ -218,12 +218,13 @@ The NOAA-20 figures can be read from the pass timeline with `box=context`, `plat
 | `terrarium` | `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`; elevation in metres is `R * 256 + G + B / 256 - 32768` | Every elevation grid |
 | `esri_world_imagery` | Esri World Imagery tile service | Default imagery of a run and of a terrain pack |
 | `usgs_naip` | USGS The National Map, imagery only | Optional pack imagery for the conterminous United States, public domain (`"imagery_source": "usgs_naip"`) |
+| `eox_s2cloudless_2016` | EOX Sentinel-2 cloudless 2016 | Pack imagery outside the conterminous United States on a server started with `--imagery-elsewhere eox_s2cloudless_2016`, licensed CC BY 4.0 ([sources.md](sources.md)) |
 | `eox_s2cloudless_2020` | EOX Sentinel-2 cloudless 2020 | Fallback when the default imagery cannot be fetched, and the tracked Feather River image |
 
 Two modules turn tiles into what a run serves:
 
 - `backend/terrain/live_region.py` builds, for any region, a 256 by 256 and a 512 by 512 elevation grid and a 2048 by 2048 image, reprojected to latitude and longitude.
-- `backend/terrain/terrain_pack.py` builds a terrain pack: a 1024 by 1024 elevation grid, an 8192 or 4096 pixel image, a 2048 pixel auxiliary map (surface normals, sky view, canopy index), an optional zoom 16 inset and, for the three FIRMS regions, the context terrain around it (five times the span, 1024 elevation posts, 4096 pixel image).
+- `backend/terrain/terrain_pack.py` builds a terrain pack: a 1024 by 1024 elevation grid, an 8192 or 4096 pixel image, a 2048 pixel auxiliary map (surface normals, sky view, canopy index), an optional zoom 16 inset and, for each region with FIRMS rows, the context terrain around it (five times the span, 1024 elevation posts, 4096 pixel image).
 
 ```bash
 uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.terrain.terrain_pack build plumas_ca lytton_bc evia_greece

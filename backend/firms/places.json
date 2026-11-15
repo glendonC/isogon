@@ -253,42 +253,193 @@
     "ventura_ca": {
       "country": "United_States",
       "terrain_tier": "hero",
-      "named_fires": []
+      "named_fires": [
+        {
+          "id": "thomas_2017",
+          "name": "Thomas Fire",
+          "first_day": "2017-12-04",
+          "last_day": "2018-01-12",
+          "burned_area": {
+            "value": 281893,
+            "unit": "acres"
+          },
+          "point": [
+            -119.054817,
+            34.425267
+          ],
+          "point_kind": "origin, in Anlauf Canyon",
+          "blind_test_fire": false,
+          "source": "https://www.fire.ca.gov/incidents/2017/12/4/thomas-fire/",
+          "point_source": "https://vcfd.org/wp-content/uploads/2020/02/Thomas-Fire-Investigation-Report_Redacted_3-14-19.pdf"
+        }
+      ]
     },
     "kakisa_nt": {
       "country": "Canada",
       "terrain_tier": "hero",
-      "named_fires": []
+      "named_fires": [
+        {
+          "id": "ss052_2023",
+          "name": "Hay River and Enterprise fire (SS052-23)",
+          "first_day": "2023-08-02",
+          "last_day": null,
+          "burned_area": {
+            "value": 252253,
+            "unit": "hectares"
+          },
+          "point": [
+            -116.8,
+            60.766667
+          ],
+          "point_kind": "the fire's location as the Northwest Territories reported it to the Canadian National Fire Database",
+          "blind_test_fire": false,
+          "source": "https://cwfis.cfs.nrcan.gc.ca/geoserver/public/wfs?service=WFS&version=1.1.0&request=GetFeature&typeName=public:NFDB_point&outputFormat=application/json&CQL_FILTER=NFDBFIREID%3D%27NT-2023-SS052-23%27"
+        }
+      ]
     },
     "okefenokee_ga": {
       "country": "United_States",
       "terrain_tier": "hero",
-      "named_fires": []
+      "named_fires": [
+        {
+          "id": "west_mims_2017",
+          "name": "West Mims Fire",
+          "first_day": "2017-04-06",
+          "last_day": "2017-08-16",
+          "burned_area": {
+            "value": 152515,
+            "unit": "acres"
+          },
+          "point": [
+            -82.323333,
+            30.574446
+          ],
+          "point_kind": "the incident's point in the interagency incident record",
+          "blind_test_fire": false,
+          "source": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations/FeatureServer/0/query?where=UniqueFireIdentifier%3D%272017-GAOKR-017006%27&outFields=*&outSR=4326&f=json",
+          "area_source": "https://www.fws.gov/story/2024-03/peats-sake"
+        }
+      ]
     },
     "evros_greece": {
       "country": "Greece",
       "terrain_tier": "hero",
-      "named_fires": []
+      "named_fires": [
+        {
+          "id": "evros_2023",
+          "name": "Evros fire near Alexandroupoli (EMSR686)",
+          "first_day": "2023-08-19",
+          "last_day": "2023-09-08",
+          "burned_area": {
+            "value": 96610,
+            "unit": "hectares"
+          },
+          "point": [
+            25.997458,
+            41.010802
+          ],
+          "point_kind": "centre of the burnt area EFFIS mapped (no origin is published)",
+          "blind_test_fire": false,
+          "source": "https://api.effis.emergency.copernicus.eu/rest/2/burntareas/current/218736/",
+          "last_day_source": "https://mapping.emergency.copernicus.eu/activations/EMSN166/"
+        }
+      ]
     },
     "serra_acor_pt": {
       "country": "Portugal",
       "terrain_tier": "hero",
-      "named_fires": []
+      "named_fires": [
+        {
+          "id": "piodao_2025",
+          "name": "Piódão fire (Arganil)",
+          "first_day": "2025-08-13",
+          "last_day": "2025-08-25",
+          "burned_area": {
+            "value": 65478.29,
+            "unit": "hectares"
+          },
+          "point": [
+            -7.794183,
+            40.260417
+          ],
+          "point_kind": "centre EFFIS gives for the north-western of the two burnt areas it maps for this fire (no origin is published)",
+          "blind_test_fire": false,
+          "source": "https://sigservices.icnf.pt/server/rest/services/BDG/areas_ardidas/MapServer/20/query?where=Cod_SGIF%3D%2720251075979%27&outFields=*&returnGeometry=false&f=json",
+          "point_source": "https://api.effis.emergency.copernicus.eu/rest/2/burntareas/current/278350/"
+        }
+      ]
     },
     "maule_cl": {
       "country": "Chile",
       "terrain_tier": "hero",
-      "named_fires": []
+      "named_fires": [
+        {
+          "id": "las_maquinas_2017",
+          "name": "Las Máquinas",
+          "first_day": "2017-01-20",
+          "last_day": "2017-02-03",
+          "burned_area": {
+            "value": 183946,
+            "unit": "hectares"
+          },
+          "point": [
+            -72.214733,
+            -35.537306
+          ],
+          "point_kind": "centre of the burnt area of GWIS record 5539909, computed from its polygon; GWIS gives no point and no name, and the record is matched to this fire by its dates, its place in Maule and its area (188,260 ha); no origin is published",
+          "blind_test_fire": false,
+          "source": "https://www.miteco.gob.es/content/dam/miteco/es/biodiversidad/temas/incendios-forestales/informe_tecnico_if_chile2017_tcm30-425304.pdf",
+          "point_source": "https://maps.effis.emergency.copernicus.eu/gwis?service=WFS&version=1.1.0&request=GetFeature&typeName=nrt.ba.query&srsName=EPSG%3A4326&outputFormat=application%2Fjson%3B%20subtype%3Dgeojson&FILTER=%3CFilter%3E%3CPropertyIsEqualTo%3E%3CPropertyName%3Efire_id%3C%2FPropertyName%3E%3CLiteral%3E5539909%3C%2FLiteral%3E%3C%2FPropertyIsEqualTo%3E%3C%2FFilter%3E"
+        }
+      ]
     },
     "ljusdal_se": {
       "country": "Sweden",
       "terrain_tier": "hero",
-      "named_fires": []
+      "named_fires": [
+        {
+          "id": "ljusdal_2018",
+          "name": "Ljusdal fires of 2018 (Kårböle: Ängra, Nötberget and Enskogen)",
+          "first_day": "2018-07-14",
+          "last_day": "2018-08-09",
+          "burned_area": {
+            "value": 9500,
+            "unit": "hectares"
+          },
+          "point": [
+            15.398198,
+            61.962081
+          ],
+          "point_kind": "centre of the burnt area Copernicus EMS mapped for these fires (EMSR298, area Enskogen, situation of 2018-08-07), computed from its polygons; no origin is published",
+          "blind_test_fire": false,
+          "source": "https://catalog.lansstyrelsen.se/store/29/resource/DX_2020_5",
+          "point_source": "https://cems-mapping-website.s3.eu-west-1.amazonaws.com/static/activations/EMSR298/EMSR298_01ENSKOGEN_01DELINEATION_MONIT09_v1_vector.zip"
+        }
+      ]
     },
     "semey_kz": {
       "country": "Kazakhstan",
       "terrain_tier": "hero",
-      "named_fires": []
+      "named_fires": [
+        {
+          "id": "semey_ormany_2023",
+          "name": "Forest fire in Borodulikha district, Abai region (Semey Ormany reserve)",
+          "first_day": "2023-06-08",
+          "last_day": "2023-07-13",
+          "burned_area": {
+            "value": 60000,
+            "unit": "hectares"
+          },
+          "point": [
+            80.821616,
+            50.524834
+          ],
+          "point_kind": "centre of the burnt area of GWIS record 12029424, computed from its polygon; GWIS gives no point and no name, and it is the only burnt area over 5,000 ha it records in east Kazakhstan first seen in June 2023, on the day this fire began; no origin is published",
+          "blind_test_fire": false,
+          "source": "https://www.gov.kz/memleket/entities/emer/press/news/details/587937?lang=ru",
+          "point_source": "https://maps.effis.emergency.copernicus.eu/gwis?service=WFS&version=1.1.0&request=GetFeature&typeName=nrt.ba.query&srsName=EPSG%3A4326&outputFormat=application%2Fjson%3B%20subtype%3Dgeojson&FILTER=%3CFilter%3E%3CPropertyIsEqualTo%3E%3CPropertyName%3Efire_id%3C%2FPropertyName%3E%3CLiteral%3E12029424%3C%2FLiteral%3E%3C%2FPropertyIsEqualTo%3E%3C%2FFilter%3E"
+        }
+      ]
     }
   },
   "record_only_places": [
