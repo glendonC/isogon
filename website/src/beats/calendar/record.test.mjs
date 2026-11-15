@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { boxRoute, gridOf, logClass, parseRecord, rampBounds } from './record.ts';
 import { publishRecordView, readRecordView, RECORD_CLOSED } from './recordView.ts';
-import { gridLine, methodLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times } from './recordWords.ts';
+import { gridLine, methodLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times, unstableLine } from './recordWords.ts';
 
 const month = (ym, harmonized, modis, viirs, extra = {}) => ({
   year_month: ym,
@@ -198,6 +198,23 @@ test("the method is named in the product lane's words, with how often a month's 
   assert.equal(methodLine('overlap_ratio_v1', null, null), "Every year is on the newer satellite's scale by one ratio per place.");
   assert.equal(methodLine('a_new_method_v2', 0.8, { held: 1, of: 2 }), null);
   assert.equal(rec.method.monthsHeld, null);
+});
+
+test("a place whose ratio does not hold says its harmonized value is not meaningful, from the check's own counts", () => {
+  const flagged = (rs) => ({ ...body, harmonization_method: { ...body.harmonization_method, validation: { ...body.harmonization_method.validation, ratio_stability: rs } } });
+  const place = { kind: 'region', regionId: 'x', name: 'Somewhere' };
+  const rule = 'each held-out year is tested when rows reach 50, and departs when the two differ by more than 10 times; not stable when 2 tested years or more depart';
+  const r = parseRecord(flagged({ verdict: 'not stable', stable: false, years_tested: [2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025], years_departing: [2012, 2016, 2018, 2019, 2023, 2024], rule }), place);
+  assert.deepEqual(r.unstable, { departing: 6, tested: 14, factor: 10 });
+  assert.equal(
+    unstableLine(6, 14, 10),
+    "The harmonized value is not meaningful here: with each year hidden in turn, it missed the newer satellite's own count by more than ten times in 6 of 14 years, which lava or gas flares, counted as fire in NASA's files, can cause.",
+  );
+  assert.match(unstableLine(2, 9, null), /own count by far in 2 of 9 years/);
+  // Stable, not tested, or no check at all: nothing is said
+  assert.equal(parseRecord(flagged({ verdict: 'stable', stable: true, years_tested: [2012], years_departing: [], rule }), place).unstable, null);
+  assert.equal(parseRecord(flagged({ verdict: 'not tested', stable: null }), place).unstable, null);
+  assert.equal(rec.unstable, null);
 });
 
 test('a drawn area says the box it is read on, the share of its squares with detections and the ones without', () => {

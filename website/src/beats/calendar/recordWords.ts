@@ -63,6 +63,18 @@ export function methodLine(id: string | null, level: number | null, monthsHeld: 
   return `${scale} A month's band is its range: with each year hidden in turn, it held the newer satellite's own count in ${count(monthsHeld.held)} of ${count(monthsHeld.of)} months, meant for ${percent(level)} percent.`;
 }
 
+const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+const timesWords = (f: number) => (Number.isInteger(f) && f < NUMBER_WORDS.length ? `${NUMBER_WORDS[f]} times` : `${f} times`);
+
+/**
+ * One sentence where the record's check finds the two satellites' ratio does not hold here: the harmonized value is
+ * not meaningful, with the check's own counts. Lava and gas flares are named as what can do this, not as what did.
+ */
+export function unstableLine(departing: number, tested: number, factor: number | null): string {
+  const by = factor !== null ? ` by more than ${timesWords(factor)}` : ' by far';
+  return `The harmonized value is not meaningful here: with each year hidden in turn, it missed the newer satellite's own count${by} in ${departing} of ${tested} years, which lava or gas flares, counted as fire in NASA's files, can cause.`;
+}
+
 /** A drawn area none of whose squares has a detection: there is no record of it, not a record of zeros. */
 export function notLoadedLine(cells: number, step: number, complete: boolean): string {
   const squares = cells === 1 ? `its one square of ${squareWords(step)} has no detection` : `none of its ${count(cells)} squares of ${squareWords(step)} has a detection`;

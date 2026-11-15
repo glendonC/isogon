@@ -17,7 +17,7 @@ import {
 } from './record';
 import { boxWords } from './placeWords';
 import { publishRecordView, RECORD_CLOSED, type RecordMonthView } from './recordView';
-import { BAND_UNIT, gridLine, methodLine, monthLine, notLoadedLine, RECORD_WORDS as W } from './recordWords';
+import { BAND_UNIT, gridLine, methodLine, monthLine, notLoadedLine, RECORD_WORDS as W, unstableLine } from './recordWords';
 import { IntervalBand } from '../../world/IntervalBand';
 import '../../styles/calendar-screen.css';
 
@@ -219,6 +219,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
       failure,
       place: rec?.label ?? place.name,
       grid: grid ? { box: boxWords(grid.box), cells: grid.cells, loaded: grid.loaded, complete: grid.complete } : null,
+      unstable: rec?.unstable ? unstableLine(rec.unstable.departing, rec.unstable.tested, rec.unstable.factor) : null,
       firstYear: rec?.firstYear ?? null,
       lastYear: rec?.lastYear ?? null,
       unit: rec?.unit ?? null,
@@ -606,6 +607,13 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               </div>
             ) : (
             <div className="rec__foot" ref={footRef} style={{ top: footY, left: footX, width: footW }}>
+              {/* Where the ratio of the two satellites does not hold here, the record's corrected values are not
+                  meaningful: said first, in full ink, where the guide speaks too */}
+              {rec.unstable && (
+                <p className="sys-label rec__wide rec__unstable" role="note">
+                  {unstableLine(rec.unstable.departing, rec.unstable.tested, rec.unstable.factor)}
+                </p>
+              )}
               {/* A drawn area: the box its rates are over, on whole squares of the cube, and how many hold detections */}
               {rec.grid && (
                 <p className="sys-fine rec__wide rec__gridline">

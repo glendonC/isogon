@@ -124,6 +124,12 @@ export interface FireRecord {
    * of the years hidden in turn, as the answer's check measured it.
    */
   method: { id: string | null; level: number | null; monthsHeld: { held: number; of: number } | null };
+  /**
+   * Where the answer's check finds the two satellites' ratio does not hold from year to year
+   * (`harmonization_method.validation.ratio_stability`, `stable: false`): how many years hidden in turn were tested,
+   * how many missed by more than the rule's factor, and that factor. Null where the place is stable or not tested.
+   */
+  unstable: { departing: number; tested: number; factor: number | null } | null;
 }
 
 type Obj = Record<string, unknown>;
@@ -230,7 +236,16 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
       level: num(obj(hm.interval)?.level),
       monthsHeld: heldOf(num(val?.monthly_interval_coverage), num(val?.months_tested)),
     },
+    unstable: unstableOf(obj(val?.ratio_stability)),
   };
+}
+
+/** The flag of a place whose ratio does not hold, from the check's own counts and the factor its rule states. */
+function unstableOf(rs: Obj | null): FireRecord['unstable'] {
+  if (!rs || rs.stable !== false) return null;
+  const len = (v: unknown) => (Array.isArray(v) ? v.length : 0);
+  const m = typeof rs.rule === 'string' ? rs.rule.match(/more than (\d+(?:\.\d+)?) times/) : null;
+  return { departing: len(rs.years_departing), tested: len(rs.years_tested), factor: m ? Number(m[1]) : null };
 }
 
 /** A share held of a count tested, as whole months: 0.8125 of 144 is 117 of 144. */

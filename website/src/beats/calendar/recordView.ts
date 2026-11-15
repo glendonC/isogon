@@ -40,6 +40,11 @@ export interface RecordView {
    * Null for a region of the registry.
    */
   grid: { box: string; cells: number; loaded: number; complete: boolean } | null;
+  /**
+   * The sentence the Record says where the record's check finds the two satellites' ratio does not hold here (lava or
+   * gas flares can do this): the harmonized value is not meaningful. Null where the place is stable or not tested.
+   */
+  unstable: string | null;
   firstYear: number | null;
   lastYear: number | null;
   /** The unit of every rate, in plain words. */
@@ -95,6 +100,7 @@ export const RECORD_CLOSED: RecordView = {
   failure: null,
   place: '',
   grid: null,
+  unstable: null,
   firstYear: null,
   lastYear: null,
   unit: null,
