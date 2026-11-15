@@ -74,9 +74,9 @@ and later a square) are the script's too; an action that acts on a thing also sh
 keyboard's focus is near. Every time on the workspace is by the sun at the fire, with the day and the part of the day;
 UTC is written only in the document viewer. When a file of the run on show does not load, the stage puts no stand-in in
 its place and the guide says first which one and what is drawn instead (`src/guide/missing.ts`).
-A step's first screen opens its prompt as a small start card at the fire (what to do, what counts as done, the key
-that starts it), which folds back once the visitor acts. Labels and cards stand clear of the fire's patches, joined
-to them by a leader (`src/guide/place.ts`). The key of marks (`K` on Estimate and Test) lists each mark on show in the
+The fire's label, with its pass and time, stands at the fire from a step's first screen; the step's sentence and its
+action are the guide's alone. Labels stand clear of the fire's patches, under the trail and above the guide's words,
+joined to them by a leader (`src/guide/place.ts`). The key of marks (`K` on Estimate and Test) lists each mark on show in the
 script's words (`src/guide/marks.ts`).
 
 | Step | What it does |

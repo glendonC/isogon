@@ -10,7 +10,6 @@ import { labelPoint } from '../../guide/anchor';
 import { MarksKey } from '../../guide/MarksKey';
 import { ClearPin, patchBoxes } from '../../guide/ClearPin';
 import { SCRIPT } from '../../guide/script';
-import { StartCardView } from '../../guide/StartCardView';
 import '../../styles/world-model.css';
 import '../../styles/guide.css';
 
@@ -117,17 +116,12 @@ export function WorldModelScene() {
   return (
     <div className="wm-scene" data-scene={test.revealed ? 'revealed' : test.hidden ? 'blind' : 'open'}>
       {at && keyOpen && <MarksKey at={at} avoid={avoid} title={SCRIPT.marks?.name ?? 'The Marks'} rows={guide.marks} />}
-      {at && guide.card && !keyOpen && (
-        <ClearPin at={at} avoid={avoid} className="wm-pin guide-card" plateClass="guide-card__plate" label={guide.card.name}>
-          <StartCardView card={guide.card} />
-        </ClearPin>
-      )}
-      {at && guide.fireLabel && !keyOpen && !guide.card && (
+      {at && guide.fireLabel && !keyOpen && (
         <ClearPin at={at} avoid={avoid} className="wm-pin" plateClass="wm-label" label={guide.fireLabel} focusable onFocusChange={setFocused} onPick={time.toggleStrip}>
           <span className="guide-label">{guide.fireLabel}</span>
         </ClearPin>
       )}
-      {act && promptAt && (near || focused) && !guide.card && (
+      {act && promptAt && (near || focused) && (
         <button type="button" className="guide-prompt" style={{ left: promptAt.left, top: promptAt.top }} onClick={() => ws.runCommand(act.command)}>
           {act.key && <kbd className="guide-key">{act.key}</kbd>}
           <span>{act.label}</span>

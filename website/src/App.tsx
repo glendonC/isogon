@@ -221,8 +221,6 @@ export function App() {
   const [nearFoot, setNearFoot] = useState(false);
   /** Sentences said on demand in place of the standing ones, for the state they were asked in. */
   const [said, setSaid] = useState<{ key: string; lines: string[] } | null>(null);
-  /** The start cards folded back, by step and run: a card folds back once the visitor acts. */
-  const [cardsDone, setCardsDone] = useState<string[]>([]);
   /** A new try at the Record after it failed to load: it is mounted afresh. */
   const [recordTry, setRecordTry] = useState(0);
   const telemetryRef = useRef<EarthStageTelemetry | null>(null);
@@ -1263,39 +1261,18 @@ export function App() {
   const recordView = useRecordView();
   const playersView = usePlayersView();
   const worldFirstYear = useWorldFirstYear();
-  const guideBase = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays, finish: finishOpen }, recordView, playersView, {
+  const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays, finish: finishOpen }, recordView, playersView, {
     playing,
     chance: chanceOn,
     marksOpen,
     places: placesState.state,
     worldFirstYear,
   });
-  // The start card shows on a step's first screen until the visitor acts there.
-  const cardKey = `${guideBase.step}:${realStart}`;
-  // Only in the workspace: on the landing the guide already reads the held-out run as Estimate's, and the landing's
-  // Enter must not fold a card nobody has seen.
-  const cardShown = inWorkspace && guideBase.card !== null && !cardsDone.includes(cardKey);
-  const guide = cardShown ? guideBase : { ...guideBase, card: null };
-  // Any key or press folds the start card back: the visitor has acted.
-  useEffect(() => {
-    if (!cardShown) return;
-    // Folded just after the key or press is handled: a render during it would swap the page's own key handler out
-    // before that key reached it.
-    const fold = () => window.setTimeout(() => setCardsDone((d) => (d.includes(cardKey) ? d : [...d, cardKey])), 0);
-    window.addEventListener('keydown', fold);
-    window.addEventListener('pointerdown', fold);
-    return () => {
-      window.removeEventListener('keydown', fold);
-      window.removeEventListener('pointerdown', fold);
-    };
-  }, [cardShown, cardKey]);
-
   const guideKey = `${guide.step}:${guide.stateId}:${realStart}`;
   guideRef.current = guide;
   marksOpenRef.current = marksOpen;
   /** The commands the guide's actions name (script.json, "commands"). */
   const runCommand = (command: string) => {
-    if (cardShown) setCardsDone((d) => [...d, cardKey]);
     if (command === 'go:test') {
       if (holdoutViirs && !revealed) {
         const fs = (activeRun as unknown as { observer_passes?: { frames?: Array<{ sensor?: string }> } } | null)?.observer_passes?.frames ?? [];
