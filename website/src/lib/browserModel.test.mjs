@@ -155,3 +155,39 @@ test('a place counts as in once the model has computed a run there, and not befo
   assert.equal(m.placesIn.has('plumas_ca'), true);
   assert.equal(m.placesIn.has('ventura_ca'), false);
 });
+
+test('a run answer names the small copies the recording holds as its pack\'s lite, for the first screen', () => {
+  const base = '/api/runs/r/terrain';
+  const pack = { dem: { url: `${base}/d_dem_1024_f32.bin`, size: 1024, format: 'f32le' },
+                 ortho: { url: `${base}/o_8192.jpg`, size: 8192, source: 'usgs_naip', attribution: 'USDA' },
+                 ortho_fallback: { url: `${base}/o_4096.jpg`, size: 4096 },
+                 aux: { url: `${base}/a_2048.png`, size: 2048, channels: { r: 'normal_x' } },
+                 context: { extent_km: [200, 200], scale: 5, dem: { url: `${base}/c_dem.bin`, size: 1024, format: 'f32le' }, ortho: { url: `${base}/c_o.jpg`, size: 4096 } },
+                 tier: 'hero' };
+  const lite = (p, size) => ({ key: `GET /lite${p}`, size });
+  const index = {
+    entries: { [`GET ${base}/o_4096.jpg`]: { file: 'files/o4.jpg' } },
+    lite: { [pack.dem.url]: lite(pack.dem.url, 256), [pack.ortho.url]: lite(pack.ortho.url, 1024), [pack.ortho_fallback.url]: lite(pack.ortho.url, 1024),
+            [pack.aux.url]: lite(pack.aux.url, 512), [pack.context.dem.url]: lite(pack.context.dem.url, 256), [pack.context.ortho.url]: lite(pack.context.ortho.url, 1024) },
+  };
+  const got = servedPictures({ assets: { terrain_pack: pack } }, index).assets.terrain_pack;
+  assert.deepEqual(got.lite.dem, { url: `/lite${base}/d_dem_1024_f32.bin`, size: 256, format: 'f32le' });
+  assert.deepEqual(got.lite.ortho, { url: `/lite${base}/o_8192.jpg`, size: 1024, source: 'usgs_naip', attribution: 'USDA' });
+  assert.equal(got.lite.aux.size, 512);
+  assert.deepEqual(got.lite.aux.channels, { r: 'normal_x' });
+  assert.equal(got.lite.context.dem.size, 256);
+  assert.deepEqual(got.lite.context.extent_km, [200, 200]);
+  assert.equal(got.lite.tier, 'hero');
+  assert.equal(got.ortho.size, 4096);                               // the full pack, its 8192 not held, takes the 4096
+  assert.equal(got.dem.size, 1024);
+  const none = servedPictures({ assets: { terrain_pack: pack } }, { entries: index.entries });
+  assert.equal(none.assets.terrain_pack.lite, undefined);         // no copies, no lite
+});
+
+test('a detail inset the recording does not hold is not named in the answer', () => {
+  const pack = { ortho: { url: '/api/runs/r/terrain/o_4096.jpg', size: 4096 }, ortho_detail: [{ url: '/api/runs/r/terrain/x_ortho_detail_0.jpg', size: 8192 }] };
+  const got = servedPictures({ assets: { terrain_pack: pack } }, { entries: { 'GET /api/runs/r/terrain/x_ortho_detail_0.jpg': { withheld: 'smaller' } } });
+  assert.deepEqual(got.assets.terrain_pack.ortho_detail, []);
+  const kept = servedPictures({ assets: { terrain_pack: pack } }, { entries: { 'GET /api/runs/r/terrain/x_ortho_detail_0.jpg': { file: 'f.jpg' } } });
+  assert.equal(kept.assets.terrain_pack.ortho_detail.length, 1);
+});

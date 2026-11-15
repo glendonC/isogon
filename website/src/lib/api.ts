@@ -106,6 +106,8 @@ interface RecordedIndex {
   /** The backend's commit the answers were recorded from, when the recording names it, and when it was recorded. */
   commit?: string | null;
   recordedUtc?: string | null;
+  /** Small copies of the terrain packs' files for the first screen, by the full file's address (backend/public_lite.py). */
+  lite?: Record<string, { key: string; size: number }>;
 }
 
 /** A recorded round of a fire, as the index lists it. */
@@ -128,7 +130,7 @@ function recordedIndex(): Promise<RecordedIndex> {
         const raw = idx as RecordedIndex & { recorded_utc?: unknown; backend?: { commit?: unknown } };
         const commit = typeof raw.commit === 'string' ? raw.commit : typeof raw.backend?.commit === 'string' ? raw.backend.commit : null;
         const recordedUtc = typeof raw.recorded_utc === 'string' ? raw.recorded_utc : null;
-        return { version: idx.version, entries: idx.entries ?? {}, periods_left_out: idx.periods_left_out, rounds: idx.rounds, commit, recordedUtc };
+        return { version: idx.version, entries: idx.entries ?? {}, periods_left_out: idx.periods_left_out, rounds: idx.rounds, commit, recordedUtc, lite: idx.lite };
       })
       .catch((): RecordedIndex => ({ version: 1, entries: {} }))
       .then((idx) => (indexLoaded = idx));
@@ -313,17 +315,42 @@ async function recorded<T>(key: string, signal?: AbortSignal): Promise<T> {
  * (a public build made with `--ortho 4096`), the pack's picture is its 4096 fallback, with the picture's source and
  * credit kept, so the stage asks for no file the page does not have.
  */
-export function servedPictures<T>(answer: T, index: { entries: Record<string, { file?: string }> } | null = indexLoaded): T {
-  const a = answer as { assets?: { terrain_pack?: { ortho?: { url?: string; size?: number }; ortho_fallback?: { url?: string; size?: number } } } };
+export function servedPictures<T>(answer: T, index: Pick<RecordedIndex, 'entries' | 'lite'> | null = indexLoaded): T {
+  type Entry = { url?: string; size?: number; [k: string]: unknown };
+  type Pack = { ortho?: Entry; ortho_fallback?: Entry; ortho_detail?: Entry[]; dem?: Entry; aux?: Entry; context?: { dem?: Entry; ortho?: Entry; [k: string]: unknown }; [k: string]: unknown };
+  const a = answer as { assets?: { terrain_pack?: Pack } };
   const tp = a?.assets?.terrain_pack;
-  const url = tp?.ortho?.url;
-  if (!index || !tp?.ortho_fallback?.url || typeof url !== 'string' || /^(https?:|data:|blob:)/.test(url)) return answer;
-  const [p, q] = url.split('?');
-  const query: Query = {};
-  if (q) new URLSearchParams(q).forEach((v, k) => (query[k] = v));
-  if (index.entries[requestKey('GET', p, query)]?.file) return answer;
-  const ortho = { ...tp.ortho, url: tp.ortho_fallback.url, size: tp.ortho_fallback.size };
-  return { ...a, assets: { ...a.assets, terrain_pack: { ...tp, ortho } } } as T;
+  if (!index || !tp) return answer;
+  let pack: Pack = tp;
+  // The page's first screen draws from the small copies the recording holds (`lite`), the full pack after.
+  const small = index.lite ?? {};
+  const liteOf = (e: Entry | undefined): Entry | null => {
+    const hit = e?.url ? small[e.url] : undefined;
+    return hit ? { ...e, url: hit.key.replace(/^GET /, ''), size: hit.size } : null;
+  };
+  const [dem, ortho, aux] = [liteOf(tp.dem), liteOf(tp.ortho) ?? liteOf(tp.ortho_fallback), liteOf(tp.aux)];
+  if (dem && ortho && aux) {
+    const cDem = liteOf(tp.context?.dem);
+    const cOrtho = liteOf(tp.context?.ortho);
+    const context = tp.context && cDem && cOrtho ? { ...tp.context, dem: cDem, ortho: cOrtho } : undefined;
+    const { ortho_fallback: _fallback, ortho_detail: _detail, context: _context, ...rest } = tp;
+    pack = { ...pack, lite: { ...rest, dem, ortho, aux, ...(context ? { context } : {}) } };
+  }
+  // A detail inset the recording does not hold is not named, so the stage asks for none.
+  const held = (u: unknown) => typeof u === 'string' && (/^(https?:|data:|blob:)/.test(u) || Boolean(index.entries[requestKey('GET', u.split('?')[0])]?.file));
+  if (Array.isArray(tp.ortho_detail) && tp.ortho_detail.some((d: { url?: unknown }) => !held(d?.url))) {
+    pack = { ...pack, ortho_detail: tp.ortho_detail.filter((d: { url?: unknown }) => held(d?.url)) };
+  }
+  const url = tp.ortho?.url;
+  if (tp.ortho_fallback?.url && typeof url === 'string' && !/^(https?:|data:|blob:)/.test(url)) {
+    const [p, q] = url.split('?');
+    const query: Query = {};
+    if (q) new URLSearchParams(q).forEach((v, k) => (query[k] = v));
+    if (!index.entries[requestKey('GET', p, query)]?.file) {
+      pack = { ...pack, ortho: { ...tp.ortho, url: tp.ortho_fallback.url, size: tp.ortho_fallback.size } };
+    }
+  }
+  return (pack === tp ? answer : { ...a, assets: { ...a.assets, terrain_pack: pack } }) as T;
 }
 
 /**

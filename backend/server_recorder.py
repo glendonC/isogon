@@ -576,6 +576,9 @@ def _main(argv: list[str] | None = None) -> int:
                     help="record only each region's first open featured period, its busiest, and list the others")
     ap.add_argument("--also-period", action="append", default=[],
                     help="a featured period recorded even with --busiest-period-only (its id, such as okefenokee_ga:2017-05)")
+    ap.add_argument("--lite", action="store_true",
+                    help="also write small copies of each recorded terrain pack for a public page's first screen "
+                         "(backend/public_lite.py)")
     args = ap.parse_args(argv)
     rec = Recorder(args.base, args.out, recorded_windows=args.recorded_windows,
                    busiest_period_only=args.busiest_period_only)
@@ -585,12 +588,17 @@ def _main(argv: list[str] | None = None) -> int:
     else:
         rec.record_default(current=args.current, also_periods=tuple(args.also_period))
     index = rec.write_index()
+    lite = None
+    if args.lite:
+        from backend.public_lite import add_lite
+
+        lite = add_lite(args.out)
     from backend.firms.archive import _map_key
 
     bad = rec.check(_map_key())
     stored = [e for e in rec.entries.values() if "file" in e]
     print(json.dumps({"index": str(index.name), "entries": len(rec.entries), "stored": len(stored),
-                      "withheld": len(rec.withheld), "rounds": len(rec.rounds), "plays": len(rec.plays),
+                      "withheld": len(rec.withheld), "rounds": len(rec.rounds), "plays": len(rec.plays), "lite": lite,
                       "periods_left_out": rec.periods_left_out,
                       "bytes": sum(e["bytes"] for e in stored), "seconds": round(time.time() - t0, 1),
                       "not_ok": [k for k, e in rec.entries.items() if e.get("status", 200) != 200],

@@ -35,10 +35,10 @@ export const COMPUTED_IN_THE_BROWSER = "computed in the visitor's browser from t
 const RUN_FILE = /^GET \/api\/runs\/([^/ ?]+)\/(reconstruction_u8\.bin|belief_u8\.bin|export\.geojson|export\.csv)$/;
 const ROUND_STEP = /^POST \/api\/env\/next_look\/step (\{.*\})$/;
 const ROUND_STATE = /^GET \/api\/env\/next_look\/state\?round_id=(\S+)$/;
-const ORTHO_8192 = /^GET \/api\/runs\/[^/ ?]+\/terrain\/[^/ ?]*ortho_8192\.jpg$/;
+const ORTHO_8192 = /^GET \/api\/runs\/[^/ ?]+\/terrain\/[^/ ?]*(ortho_8192|ortho_detail_\d+)\.jpg$/;
 
-/** Why a terrain picture of 8192 pixels is not in the page: the stage draws the pack's 4096 instead. */
-export const SMALLER_PICTURE = 'the 8192 picture is not in this page: the stage draws the pack\'s 4096 picture (ortho_fallback)';
+/** Why a terrain picture of 8192 pixels (or a pack's detail inset) is not in the page: the stage draws the 4096. */
+export const SMALLER_PICTURE = 'the 8192 picture and the detail insets are not in this page: the stage draws the pack\'s 4096 picture (ortho_fallback)';
 
 /**
  * The recording without what the browser makes itself. `places` maps each place the pack holds to the start it is
@@ -47,8 +47,8 @@ export const SMALLER_PICTURE = 'the 8192 picture is not in this page: the stage 
  * - the files a run in the browser gives (the 24 frames, the belief and the two exports) of its recorded held-out run;
  * - the recorded steps and state of its round (the visitor's one look and the recorded line), since the round is
  *   played in the browser; the index's round then names no look, so a page where the model cannot run says so;
- * are marked withheld in the index. With `ortho8192: false`, every terrain picture of 8192 pixels is too (the stage
- * draws the 4096 the pack names as its fallback). A file a kept entry also names stays. The run answers, the terrain
+ * are marked withheld in the index. With `ortho8192: false`, every terrain picture of 8192 pixels and every pack's
+ * detail inset is too (the stage draws the 4096 the pack names as its fallback). A file a kept entry also names stays. The run answers, the terrain
  * and every run with all the satellites shown stay.
  * Returns {index, leftOut: files to leave out, entries: how many marked}.
  */
