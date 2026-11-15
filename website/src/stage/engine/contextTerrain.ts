@@ -234,7 +234,14 @@ void main() {
   // A lake: level ground in the elevation where the picture looks like water
   // (a gentler edge than the sea's: a lake is a few posts wide out here, and its shore would step)
   float lake = smoothstep(0.30, 0.70, shade.a) * waterLook(picture);
-  float water = max(sea, lake);
+  // Water by the picture alone, as in the pack: dark, bluer than it is green or red, on flat ground
+  // (a reservoir where the elevation gives no level surface would otherwise be a dark stain)
+  // (on a slightly blurred sample, so a reservoir passes or fails as one piece and not pixel by pixel)
+  vec3 broad = texture2D(uContextOrtho, vCuv, 2.0).rgb;
+  float pictureLuma = dot(broad, vec3(0.2126, 0.7152, 0.0722));
+  float pictureWater = smoothstep(0.90, 0.98, broad.b / max(broad.g, 1e-3)) * smoothstep(1.30, 1.50, broad.b / max(broad.r, 1e-3))
+                     * (1.0 - smoothstep(0.022, 0.042, pictureLuma)) * (1.0 - smoothstep(0.03, 0.08, length(nxz)));
+  float water = max(max(sea, lake), pictureWater);
 
   // The pack's light balance (see ./terrainShader.ts), without baked shadows or sky view
   float nDotL = max(0.0, dot(N, sunDir));
