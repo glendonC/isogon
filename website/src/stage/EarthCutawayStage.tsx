@@ -414,6 +414,13 @@ const FILM_ESTIMATE_SECONDS = 9;
 const FILM_PUSH_FROM = 1.22;
 const FILM_PUSH_TO = 0.94;
 const FILM_PLAY_SECONDS = 5;
+// The landing in the film presentation: its picture stays dark until the run's own ground is complete
+// (terrain pack and land around in, or failed) and frames have run smoothly for a while, then fades in
+// and the record move starts from there, so the shot holds no stand-in, no change of ground and no cut
+const FILM_SETTLE_SECONDS = 0.5;
+const FILM_SLOW_FRAME_MS = 50;
+const FILM_HOLD_MAX_SECONDS = 15;
+const FILM_FADE_SECONDS = 0.8;
 const FIRE_PATCH_GRID_KM = 0.375;
 
 /**
@@ -2374,6 +2381,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const filmAddress = filmFromAddress();
     let filmMoveNow: StageFilmMove | null = null;
     let filmAskedLast: StageFilmMove | 'auto' | null = null;
+    let filmHolding = Boolean(propsRef.current.filmMove ?? filmAddress) && !propsRef.current.inWorkspace;
+    let filmSettledSec = 0;
+    if (filmHolding) renderer.domElement.style.opacity = '0';
     let filmCancelled = false;
     let filmStartSec = 0;
     let filmSeconds = 0;
@@ -2825,7 +2835,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       if (disposed) return;
       rafId = requestAnimationFrame(animate);
 
-      const dtSec = Math.min(0.065, Math.max(0.001, (nowMs - prevTimeMs) * 0.001));
+      const frameGapMs = nowMs - prevTimeMs;
+      const dtSec = Math.min(0.065, Math.max(0.001, frameGapMs * 0.001));
       prevTimeMs = nowMs;
       elapsedSec += dtSec;
 
@@ -3133,8 +3144,24 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           filmCancelled = false;
         }
         if (filmMoveNow && (cameraTouched || pointerDown)) filmCancelled = true;
+        if (filmHolding) {
+          // The landing in the film presentation waits for its whole ground (see FILM_SETTLE_SECONDS)
+          const groundDone =
+            nextBundle.observerDataset.dataSource === 'firms' &&
+            nextBundle.runId !== null &&
+            !morphActive &&
+            (nextBundle.pack
+              ? nextBundle.contextState !== 'loading'
+              : nextBundle.packManifest === null || nextBundle.packState === 'failed');
+          filmSettledSec = groundDone && frameGapMs < FILM_SLOW_FRAME_MS ? filmSettledSec + dtSec : 0;
+          if (filmSettledSec > FILM_SETTLE_SECONDS || elapsedSec > FILM_HOLD_MAX_SECONDS || !filmAsked || p.inWorkspace) {
+            filmHolding = false;
+            renderer.domElement.style.transition = `opacity ${FILM_FADE_SECONDS}s ease-out`;
+            renderer.domElement.style.opacity = '1';
+          }
+        }
         let filmWanted: StageFilmMove | null = null;
-        if (filmAsked && !filmCancelled && !morphActive) {
+        if (filmAsked && !filmCancelled && !morphActive && !filmHolding) {
           filmWanted =
             filmAsked !== 'auto'
               ? filmAsked
