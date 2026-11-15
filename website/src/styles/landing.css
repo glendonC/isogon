@@ -368,7 +368,7 @@
   }
 
   .iso-land__menu {
-    gap: 16px;
+    gap: 14px;
   }
 
   .iso-land__menu .iso-navlink--sensor {
@@ -379,5 +379,15 @@
     bottom: calc(var(--iso-gutter) + 46px);
     left: var(--iso-gutter);
     right: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .iso-land__menu {
+    gap: 12px;
+  }
+
+  .iso-navlink kbd {
+    display: none;
   }
 }

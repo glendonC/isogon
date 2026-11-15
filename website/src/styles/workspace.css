@@ -593,6 +593,19 @@ body:has(.iso-viewer-layer) .iso-ws__util {
   border-color: var(--sys-ink);
 }
 
+@media (max-width: 760px) {
+  .iso-ws__util {
+    top: 14px;
+    gap: var(--sys-s3);
+  }
+}
+
+@media (max-width: 560px) {
+  .iso-ws__util-btn kbd {
+    display: none;
+  }
+}
+
 @media (max-width: 1360px) {
   .iso-tabs {
     gap: 16px;
