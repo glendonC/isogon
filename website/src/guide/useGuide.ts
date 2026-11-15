@@ -255,6 +255,7 @@ export function useGuide(
     fireLabel: labelOn(state, 'fire', fields, conds, live.playing),
     besideFire: promptBeside(state, 'fire'),
     marks: settled ? marksOnShow(ws, fields, conds, { chance: live.chance, revealed: step === 'test' }) : [],
-    card: step === 'estimate' && id === 'hidden' ? cardOf('estimate', state?.actions[0], fields) : null,
+    // The card stays until the visitor acts, even if the page itself moves the pass on show meanwhile.
+    card: step === 'estimate' && (id === 'hidden' || id === 'on_a_hidden_pass' || id === 'on_a_coarse_pass') ? cardOf('estimate', state?.actions[0], fields) : null,
   };
 }
