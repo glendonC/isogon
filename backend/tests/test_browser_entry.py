@@ -93,14 +93,14 @@ class EntryTests(unittest.TestCase):
 
 
 class LoadTests(unittest.TestCase):
-    def test_loading_the_entry_point_loads_no_other_module_of_the_backend_and_a_run_never_the_server(self) -> None:
+    def test_loading_the_entry_point_loads_no_other_module_of_the_backend_and_a_run_never_the_http_server(self) -> None:
         code = ("import sys; import backend.browser; "
                 "print(sorted(m for m in sys.modules if m.startswith('backend.') and m != 'backend.browser'))")
         out = subprocess.run([sys.executable, "-c", code], cwd=_REPO_ROOT, capture_output=True, text=True, check=True)
         self.assertEqual(out.stdout.strip(), "[]")
         if HAS_ROWS:
             code = ("import sys; from backend import browser as B; B.held_out_run('plumas_ca', '2012-08-10'); "
-                    "print([m for m in sys.modules if m in ('backend.server', 'backend.server_next_look')])")
+                    "print([m for m in sys.modules if m == 'backend.server'])")
             out = subprocess.run([sys.executable, "-c", code], cwd=_REPO_ROOT, capture_output=True, text=True, check=True)
             self.assertEqual(out.stdout.strip().splitlines()[-1], "[]")
 

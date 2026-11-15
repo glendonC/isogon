@@ -6,8 +6,8 @@ network, then `solve_real_reconstruction` and `real_response`, its first answer 
 as the route withholds it. The reveal is the same answer whole, from the run kept here.
 
 What is not computed here is read from files made at build time. Nothing here fetches, starts a thread or reads a
-key. A run imports no module of the server; a round uses the server's own round store (`backend.server_next_look`),
-not its HTTP server. Every import is made inside the function that needs it, so loading
+key. Neither a run nor a round imports the server's HTTP module (`backend/server.py`): both ask the server's own
+closed rule and words (`backend.server_next_look.refuse_if_closed`), and a round uses its round store there. Every import is made inside the function that needs it, so loading
 this module costs nothing.
 
 The hidden rows are in the visitor's files. They are kept from the estimate and from the first answer by the same
@@ -51,6 +51,33 @@ def _solved(run_id: str) -> Any:
     return solved
 
 
+# The days a run's frames may take after its first overpass when its window is not known: the server's route's own
+# figure (`backend/server.py`, RUN_TAIL_S), named here so that the server is not imported
+RUN_TAIL_S: float = 15.0 * 86400.0
+
+
+def refuse_if_closed_here(region_id: str, start: str) -> None:
+    """Refuse a run or a round here before anything is read, by the server's own rule and words.
+
+    - A start whose reach meets a closed window is refused by `backend.server_next_look.refuse_if_closed` (over
+      `backend.model.training.closed_for`). The reach is the whole span a run from `start` may take: the 30 days of
+      its search and the days its frames may take after it. The server's route asks the same span where it cannot
+      find the run's window, and here it never can, since no row of a closed window is packed.
+    - A place the page replays only (`backend.browser_pack.REPLAY_ONLY`: its fire on the page is a closed test fire)
+      is refused whatever the start, since none of its files is packed.
+
+    Raises `ClosedWindow`."""
+    from backend.browser_pack import REPLAY_ONLY
+    from backend.model.real_run import SEARCH_S, parse_start_s
+    from backend.server_next_look import ClosedWindow, refuse_if_closed
+    from backend.terrain.live_region import PRESET_BY_ID
+
+    t0 = parse_start_s(str(start))
+    b = PRESET_BY_ID[region_id].bbox
+    refuse_if_closed((float(b.west), float(b.south), float(b.east), float(b.north)), t0, t0 + SEARCH_S + RUN_TAIL_S)
+    if region_id in REPLAY_ONLY:
+        raise ClosedWindow(f"{region_id} is replayed only on this page, not computed here: {REPLAY_ONLY[region_id]}")
+
 def held_out_run(region_id: str, start: str, estimate: str | None = "challenger", **solve: Any) -> dict[str, Any]:
     """The first answer of a held-out run of a place from a date, as `POST /api/reconstruct` gives it with
     `{"source": "firms", "region_id", "start", "holdout_viirs": true}`: the scorer's keys withheld until the reveal.
@@ -58,12 +85,14 @@ def held_out_run(region_id: str, start: str, estimate: str | None = "challenger"
     - `estimate`: who answers the held-out passes, `"challenger"` (the second model, the default here) or `"in_use"`.
     - `solve`: passed on to `solve_real_reconstruction` (the page passes none).
 
-    A window the closed rule closes is refused by the run itself (`ClosedWindow`), as on the server. The run's assets
-    are not routes here: `pictures(run_id)` gives their bytes."""
+    A start whose reach meets a closed window, and a place replayed only, are refused before anything is read
+    (`refuse_if_closed_here`, `ClosedWindow`). The run's assets are not routes here: `pictures(run_id)` gives
+    their bytes."""
     from backend.model.real_run import real_response, solve_real_reconstruction
     from backend.model.withhold import withhold_scorer_keys
     from backend.terrain.live_region import load_region_terrain, resolve_region_request
 
+    refuse_if_closed_here(region_id, start)
     # the calendar the second baseline's ratio reads answers from the place's calendar file where the place's yearly
     # extracts are not all there, as here (backend/firms/calendar_pack.py)
     terrain = load_region_terrain(resolve_region_request(region_id=region_id), allow_network=False)
@@ -212,6 +241,13 @@ def round_start(region_id: str, start: str | None = None, episode: str | None = 
                 budget: int | None = None, seed: int = 0) -> dict[str, Any]:
     """A round's start, as `POST /api/env/next_look/reset` gives it: `start` (a UTC date) or `episode` (a key of
     the catalogue), with the tiles, the budget and the seed."""
+    from backend.browser_pack import REPLAY_ONLY
+    from backend.server_next_look import ClosedWindow
+
+    if start is not None:
+        refuse_if_closed_here(region_id, start)
+    elif region_id in REPLAY_ONLY:
+        raise ClosedWindow(f"{region_id} is replayed only on this page, not computed here: {REPLAY_ONLY[region_id]}")
     body: dict[str, Any] = {"region_id": region_id, "seed": int(seed)}
     if start is not None:
         body["start"] = str(start)
@@ -370,6 +406,7 @@ def prepare(region_id: str, start: str) -> list[str]:
 
     from backend.firms.calendar_pack import build, pack_path
 
+    refuse_if_closed_here(region_id, start)
     root = Path(__file__).resolve().parent.parent
     build(region_id)
     made = [pack_path(region_id), write_round_reference(region_id, start=start)]
@@ -379,10 +416,21 @@ def prepare(region_id: str, start: str) -> list[str]:
 def pack_list(places: dict[str, str]) -> dict[str, Any]:
     """The list the data lane's build packs (its shape: isogon-notes/fire-cube/BROWSER-PACK-shape.md): for each
     place and its start, the Python files a page may import and every data file a held-out run and a round read
-    there, relative to the repository. Files under backend/ and files every place names go in the shared pack."""
+    there, relative to the repository. Files under backend/ and files every place names go in the shared pack. Each
+    place says whether it is `packed` or `replay only` (a place the page replays, or a start whose reach meets a
+    closed window: `refuse_if_closed_here`), and a place replayed only names no file."""
+    from backend.server_next_look import ClosedWindow
+
     py = python_files()
-    return {"version": PACK_LIST_VERSION,
-            "places": {r: {"start": s, "modules": py, "files": files_for_a_round(r, s)} for r, s in places.items()}}
+    out: dict[str, Any] = {}
+    for r, s in places.items():
+        try:
+            refuse_if_closed_here(r, s)
+        except ClosedWindow as exc:
+            out[r] = {"start": s, "status": "replay only", "why": str(exc), "modules": [], "files": []}
+            continue
+        out[r] = {"start": s, "status": "packed", "modules": py, "files": files_for_a_round(r, s)}
+    return {"version": PACK_LIST_VERSION, "places": out}
 
 
 if __name__ == "__main__":
