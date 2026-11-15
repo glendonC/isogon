@@ -1,0 +1,157 @@
+/* The guide (website/src/guide): the trail top left, the strip at the bottom, labels and prompts on the stage. Text on
+   the scene with a soft scrim, never a plate; actions are text, the next one heavier; a key is a small quiet mark.
+   Sizes, inks and fonts come from system.css. */
+
+.guide-trail {
+  position: absolute;
+  z-index: 6;
+  left: var(--sys-gutter);
+  top: 22px;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sys-s5);
+  pointer-events: auto;
+  text-shadow: 0 1px 8px rgba(8, 11, 17, 0.85);
+}
+
+.guide-trail__words {
+  display: flex;
+  gap: var(--sys-s4);
+}
+
+.guide-trail__word,
+.guide-trail__where {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-3);
+  cursor: pointer;
+}
+
+.guide-trail__word[data-on='true'] {
+  color: var(--sys-ink);
+  box-shadow: 0 1px 0 var(--sys-ink);
+}
+
+.guide-trail__word:disabled {
+  color: var(--sys-ink-off);
+  cursor: default;
+}
+
+.guide-trail__word:hover:not(:disabled),
+.guide-trail__where:hover {
+  color: var(--sys-ink);
+}
+
+.guide-trail__word:focus-visible,
+.guide-trail__where:focus-visible,
+.guide-act:focus-visible {
+  outline: 1px solid var(--sys-focus);
+  outline-offset: 3px;
+}
+
+.guide-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 230px;
+  background: linear-gradient(rgba(8, 11, 17, 0), rgba(8, 11, 17, 0.86));
+  pointer-events: none;
+}
+
+.guide-strip {
+  position: absolute;
+  left: 50%;
+  bottom: 30px;
+  display: grid;
+  gap: var(--sys-s3);
+  justify-items: center;
+  width: min(860px, calc(100vw - 2 * var(--sys-gutter)));
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.guide-strip__line {
+  margin: 0;
+  min-height: 52px;
+  font: var(--sys-weight) 17px / 26px var(--sys-font);
+  color: var(--sys-ink);
+  text-shadow: 0 1px 8px rgba(8, 11, 17, 0.9);
+}
+
+.guide-strip__acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sys-s5);
+}
+
+.guide-act {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink-2);
+  cursor: pointer;
+}
+
+.guide-act--next {
+  color: var(--sys-ink);
+  font-weight: 600;
+}
+
+.guide-act:hover {
+  color: var(--sys-ink);
+}
+
+.guide-key {
+  margin-right: 6px;
+  font: var(--sys-weight) 11px / 1 var(--sys-mono);
+  color: var(--sys-ink-3);
+}
+
+/* A label on a thing of the stage, joined by the scene's leader; and a prompt beside the thing's extent. */
+.guide-label {
+  display: block;
+  max-width: 420px;
+  white-space: normal;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+  text-shadow: 0 1px 6px rgba(8, 11, 17, 0.95), 0 0 2px rgba(8, 11, 17, 0.9);
+}
+
+.guide-prompt {
+  position: absolute;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+  white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(8, 11, 17, 0.95);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.guide-prompt .guide-key {
+  color: var(--sys-ink-2);
+}
+
+/* Where the guide speaks, the old scrims of the column and the track step back; its own scrim stays. */
+.iso-ws[data-guide='true'] .iso-ws__scrim--bottom,
+.iso-ws[data-guide='true'] .iso-ws__scrim--right {
+  display: none;
+}
+
+/* The fire's label can take the keyboard's focus, which shows its prompt. */
+.wm-label {
+  outline: none;
+}
+
+.wm-label:focus-visible {
+  outline: 1px solid var(--sys-focus);
+  outline-offset: 4px;
+}

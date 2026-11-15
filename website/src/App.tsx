@@ -9,11 +9,14 @@ import type { EvidenceDoc, EvidenceState } from './content/evidence';
 import { AreaSheet } from './components/AreaSheet';
 import { PassTrack } from './components/PassTrack';
 import { Debrief } from './components/Debrief';
-import { WorkspaceBar, MenuGroup, MenuItem, beatOfStep, type Step } from './components/WorkspaceBar';
-import { BEATS, beatOf, type BeatId } from './app/names';
-import { WorkspaceProvider, type WorkspaceStore } from './app/store';
+import { type Step } from './components/WorkspaceBar';
+import { Trail, type TrailWord } from './guide/Trail';
+import { GuideStrip } from './guide/GuideStrip';
+import { useGuide, type Guide } from './guide/useGuide';
+import { keyMatches } from './guide/script';
+import { BEATS, type BeatId } from './app/names';
+import { WorkspaceProvider, type WorkspaceBase, type WorkspaceStore } from './app/store';
 import { CalendarBeat } from './beats/calendar/CalendarBeat';
-import { WorldModelBeat } from './beats/world-model/WorldModelBeat';
 import { WorldModelScene } from './beats/world-model/WorldModelScene';
 import { isClosedWindow } from './beats/world-model/fire';
 import { TestWorldBeat } from './beats/test-world/TestWorldBeat';
@@ -52,7 +55,7 @@ import {
   startForMonth,
   utcSpan,
 } from './content/realRuns';
-import { THEATER_DISPLAY, formatLat, formatLon } from './content/theaters';
+import { THEATER_DISPLAY } from './content/theaters';
 import type {
   DynamicRegionRun,
   ObserverFilter,
@@ -61,7 +64,6 @@ import type {
 } from './stage/types';
 
 import { API_BASE, assetUrlNow, getJson, postJson, runRequestBody } from './lib/api';
-import { useAssetUrl } from './lib/useAssetUrl';
 
 /**
  * Landing world view: `landingSubjectFrame` names the rectangle the stage keeps calm (sky or haze) for the type.
@@ -103,123 +105,6 @@ function modelFrame(width: number) {
   return { left: 0.04, top: 0.2, right: 0.96, bottom: 0.78 };
 }
 
-const WORKSPACE_VIEWS: ReadonlyArray<{ mode: WorkspaceMode; label: string; key: string }> = [
-  { mode: 'cutaway', label: 'Sensor split', key: '1' },
-  { mode: 'reconstruction', label: '375 m field', key: '2' },
-  { mode: 'observer', label: 'Satellite passes', key: '3' },
-  { mode: 'world', label: 'True color', key: '4' },
-];
-
-const OBSERVER_FILTERS: ReadonlyArray<{ id: ObserverFilter; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'modis', label: 'MODIS 1 km' },
-  { id: 'viirs', label: 'VIIRS 375 m' },
-];
-
-interface VernierScrubberProps {
-  label: string;
-  valueText: string;
-  fraction: number;
-  onChangeFraction: (u: number) => void;
-  onResetAuto?: () => void;
-}
-
-const VERNIER_TICKS = Array.from({ length: 17 }, (_, idx) => idx);
-
-function VernierScrubber({
-  label,
-  valueText,
-  fraction,
-  onChangeFraction,
-  onResetAuto,
-}: VernierScrubberProps) {
-  const trackRef = useRef<HTMLDivElement | null>(null);
-  const draggingRef = useRef(false);
-  const clamped = Math.min(1, Math.max(0, fraction));
-
-  const updateAt = (clientX: number) => {
-    const el = trackRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    onChangeFraction(Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)));
-  };
-
-  return (
-    <div className="iso-vernier">
-      <div className="iso-vernier__head">
-        <span>{label}</span>
-        {onResetAuto ? (
-          <button
-            type="button"
-            className="iso-vernier__val iso-vernier__val--interactive"
-            onClick={onResetAuto}
-            title="Click to resume automatic sweep"
-          >
-            {valueText}
-          </button>
-        ) : (
-          <span className="iso-vernier__val">{valueText}</span>
-        )}
-      </div>
-      <div
-        ref={trackRef}
-        className="iso-vernier__hit"
-        role="slider"
-        tabIndex={0}
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(clamped * 100)}
-        onDoubleClick={onResetAuto}
-        onPointerDown={(e) => {
-          draggingRef.current = true;
-          e.currentTarget.setPointerCapture(e.pointerId);
-          updateAt(e.clientX);
-        }}
-        onPointerMove={(e) => {
-          if (!draggingRef.current) return;
-          updateAt(e.clientX);
-        }}
-        onPointerUp={(e) => {
-          if (!draggingRef.current) return;
-          draggingRef.current = false;
-          if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-            e.currentTarget.releasePointerCapture(e.pointerId);
-          }
-        }}
-        onPointerCancel={(e) => {
-          draggingRef.current = false;
-          if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-            e.currentTarget.releasePointerCapture(e.pointerId);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            onChangeFraction(Math.min(1, clamped + 0.05));
-          } else if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            onChangeFraction(Math.max(0, clamped - 0.05));
-          }
-        }}
-      >
-        <div className="iso-vernier__rail">
-          <div className="iso-vernier__fill" style={{ width: `${clamped * 100}%` }} />
-          {VERNIER_TICKS.map((idx) => (
-            <span
-              key={idx}
-              className={`iso-vernier__tick${idx % 4 === 0 ? ' iso-vernier__tick--major' : ''}`}
-              style={{ left: `${(idx / 16) * 100}%` }}
-            />
-          ))}
-        </div>
-        <div className="iso-vernier__needle" style={{ left: `${clamped * 100}%` }} />
-      </div>
-    </div>
-  );
-}
-
 interface LiveObserverTelemetry {
   sensor: string;
   retainedFootprints: number;
@@ -243,9 +128,9 @@ export function App() {
   const [activeTheaterId, setActiveTheaterId] = useState<TheaterId>('plumas_ca');
   const [timeProgress, setTimeProgress] = useState<number>(12);
   const [playing, setPlaying] = useState<boolean>(false);
-  const [observerFilter, setObserverFilter] = useState<ObserverFilter>('all');
+  const [observerFilter] = useState<ObserverFilter>('all');
   const [showUncertainty, setShowUncertainty] = useState<boolean>(true);
-  const [sensitivityThreshold, setSensitivityThreshold] = useState<number>(0.22);
+  const [sensitivityThreshold] = useState<number>(0.22);
   const [cutawaySplit, setCutawaySplit] = useState<number | null>(null);
   const [cameraPreset, setCameraPreset] = useState<InspectorCameraPreset>('overview');
   const [cinemaActive, setCinemaActive] = useState<boolean>(false);
@@ -328,10 +213,9 @@ export function App() {
       anchorListeners.current.delete(fn);
     };
   }, []);
-  /** Each entry into World model, counted, so its title card shows once per entry (and never again on a sheet's close). */
-  const [modelEntry, setModelEntry] = useState(0);
-  const [cardEntry, setCardEntry] = useState(-1);
-  const prevStepRef = useRef<Step>('fire');
+  /** The guide on show and its commands, for the key handler defined before them. */
+  const guideRef = useRef<Guide | null>(null);
+  const runCommandRef = useRef<(command: string) => void>(() => {});
   /** The round of Test world (beats/test-world/useRound.ts), for the callbacks defined before it. */
   const roundRef = useRef<RoundApi | null>(null);
   // The places registry: the default fire, each place's opening start, and the recorded test fires.
@@ -378,13 +262,6 @@ export function App() {
     setCutawaySplit(null);
     setSelectedFinding(null);
     setInWorkspace(false);
-  }, []);
-
-  const selectWorkspaceMode = useCallback((nextMode: WorkspaceMode) => {
-    setWorkspaceMode(nextMode);
-    if (nextMode !== 'cutaway') {
-      setCutawaySplit(null);
-    }
   }, []);
 
   const executeWorldModel = useCallback(
@@ -907,6 +784,18 @@ export function App() {
         return;
       }
 
+      // The guide's actions answer their keys first, where the guide speaks (Estimate and Test).
+      const g = guideRef.current;
+      if (inWorkspace && g?.step && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const onCtl = Boolean(target?.closest('button, a, [role="slider"], [role="option"]'));
+        const a = g.actions.find((x) => keyMatches(x.key, e));
+        if (a && !(onCtl && (e.key === 'Enter' || e.key === ' '))) {
+          e.preventDefault();
+          runCommandRef.current(a.command);
+          return;
+        }
+      }
+
       if (round && inWorkspace) {
         // The round's keys: Esc leaves, Enter passes or moves on, the arrows move over the tiles, Space looks there.
         const move: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
@@ -996,9 +885,6 @@ export function App() {
         } else if (lower === 'c' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setCinemaActive((c) => !c);
-        } else if (lower === 'h' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-          e.preventDefault();
-          setCleanHud((h) => !h);
         } else if (lower === 't' && revealed && (step === 'fire' || step === 'test') && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setThreeWays((t) => !t);
@@ -1061,20 +947,6 @@ export function App() {
   const registryName = placesState.places.places.find((p) => p.id === activeTheaterId)?.name ?? null;
   const regionTitle =
     isCustomRegion && activeRun ? plainText(activeRun.region.name) : registryName ?? activeDisplay.title;
-  const regionSetting = isCustomRegion ? 'Live terrain from search' : activeDisplay.setting;
-  const regionLat =
-    runMatchesRegion && activeRun ? formatLat(activeRun.region.center_lat) : activeDisplay.lat;
-  const regionLon =
-    runMatchesRegion && activeRun ? formatLon(activeRun.region.center_lon) : activeDisplay.lon;
-
-  const elevRangeText =
-    runMatchesRegion &&
-    activeRun &&
-    Number.isFinite(activeRun.region.min_elev_m) &&
-    Number.isFinite(activeRun.region.max_elev_m)
-      ? `${Math.round(activeRun.region.min_elev_m).toLocaleString()} to ${Math.round(activeRun.region.max_elev_m).toLocaleString()} m`
-      : activeDisplay.elevation;
-
   // No invented numbers: until a run for this region reports, readouts say so.
   const epochSummary = runMatchesRegion ? activeRun?.epoch_summaries?.[activeEpoch] : undefined;
   const rawMw = epochSummary?.reconstructed_total_mw ?? liveTelemetry?.reconstructedMw ?? null;
@@ -1082,21 +954,6 @@ export function App() {
 
   // The physics briefing's diagram data. Its simulated self-check and gates are not shown.
   const sensorModel = useSensorModel(activeRun?.run_id ?? null);
-
-  const pipelineStages = activeRun?.pipeline_stages ?? [];
-  const pipelineStageCount = pipelineStages.length;
-  const completedStages = pipelineStages.filter((st) => st.status === 'completed').length;
-  const totalPipelineMs = Math.round(
-    pipelineStages.reduce((acc, st) => acc + (st.duration_ms || 0), 0),
-  );
-
-  // The run's exports through the page's client: the route live, the recorded file on the public page, else no link.
-  const exportGeoJsonUrl = useAssetUrl(activeRun?.assets.export_geojson_url ?? null);
-  const exportCsvUrl = useAssetUrl(activeRun?.assets.export_csv_url ?? null);
-
-  const stageFps = stageTelemetry?.fps ? Math.round(stageTelemetry.fps) : 60;
-  const orthoShort = stageTelemetry?.orthoResolution || 'Maxar 2K';
-  const demShort = stageTelemetry?.demResolution || '512²';
 
   // Real or simulated, for every number on screen. A real run's blind test shows only after the reveal.
   const runIsReal = isRealRun(activeRun);
@@ -1149,116 +1006,9 @@ export function App() {
             : null,
   };
   const span = runSpan ? utcSpan(runSpan.first, runSpan.last) : null;
-  const beatBlocked: Partial<Record<BeatId, string | null>> = {
-    world: stepBlocked.look ?? null,
-    // The players play the round on the open fire; closed where a round is.
-    agent: closedWindow
-      ? 'Closed on a recorded test fire: its looks are on record'
-      : noSharp
-        ? 'No VIIRS flew before 2012, so there is no round to play'
-        : !runIsReal
-          ? 'The players play on a real NASA FIRMS run'
-          : null,
-  };
   const blindLoading = holdoutViirs && !revealing && (isExecuting || !activeRun?.metrics?.holdout_viirs);
 
-  const quietMenu = (
-    <>
-      <MenuGroup title="Show">
-        <MenuItem label="Hide the interface" hint="H" active={cleanHud} onClick={() => setCleanHud((h) => !h)} />
-        <MenuItem label="Cinema" hint="C" active={cinemaActive} onClick={() => setCinemaActive((c) => !c)} />
-        {/* The stage draws the uncertainty layer and filters by fire power on simulated runs only. */}
-        {!runIsReal && (
-          <MenuItem label="Uncertainty" hint="U" active={showUncertainty} onClick={() => setShowUncertainty((u) => !u)} />
-        )}
-      </MenuGroup>
-      <MenuGroup title="View">
-        {WORKSPACE_VIEWS.map((v) => (
-          <MenuItem key={v.mode} label={v.label} active={workspaceMode === v.mode} onClick={() => selectWorkspaceMode(v.mode)} />
-        ))}
-        {workspaceMode === 'cutaway' && (
-          <VernierScrubber
-            label="Curtain"
-            valueText={cutawaySplit === null ? 'auto sweep' : `${Math.round(((cutawaySplit + 1) / 2) * 100)}%`}
-            fraction={cutawaySplit === null ? 0.5 : (cutawaySplit + 1) / 2}
-            onChangeFraction={(u) => setCutawaySplit(u * 2 - 1)}
-            onResetAuto={cutawaySplit !== null ? () => setCutawaySplit(null) : undefined}
-          />
-        )}
-        {workspaceMode === 'observer' && (
-          <>
-            {OBSERVER_FILTERS.map((f) => (
-              <MenuItem key={f.id} label={`Sensor: ${f.label}`} active={observerFilter === f.id} onClick={() => setObserverFilter(f.id)} />
-            ))}
-            {!runIsReal && (
-              <VernierScrubber
-                label="Minimum fire power"
-                valueText={`${Math.round(sensitivityThreshold * 38)} MW`}
-                fraction={(sensitivityThreshold - 0.04) / 0.78}
-                onChangeFraction={(u) => setSensitivityThreshold(0.04 + u * 0.78)}
-              />
-            )}
-          </>
-        )}
-      </MenuGroup>
-      <MenuGroup title="Camera">
-        {(['overview', 'canyon', 'ridge', 'nadir'] as const).map((preset) => (
-          <MenuItem
-            key={preset}
-            label={preset.charAt(0).toUpperCase() + preset.slice(1)}
-            active={cameraPreset === preset}
-            onClick={() => setCameraPreset(preset)}
-          />
-        ))}
-      </MenuGroup>
-      <MenuGroup title="This run">
-        <p className="iso-menu__fact">
-          Terrain: Esri World Imagery at {orthoShort.replace(/^(Maxar|Esri)\s*/, '')}, elevation {demShort}
-        </p>
-        <p className="iso-menu__fact">Frame rate: {stageFps} fps</p>
-        <p className="iso-menu__fact">
-          Pipeline: {activeRun ? `${completedStages} of ${pipelineStageCount} stages, ${totalPipelineMs.toLocaleString()} ms` : 'pending'}
-        </p>
-        {workspaceMode === 'observer' && liveTelemetry && !runIsReal && (
-          <p className="iso-menu__fact">
-            Footprints: {liveTelemetry.retainedFootprints} of {liveTelemetry.poolFootprints}, {liveTelemetry.observableFluxPct}% of flux
-          </p>
-        )}
-        {exportGeoJsonUrl && (
-          <MenuItem label="Export GeoJSON" href={exportGeoJsonUrl} download={`${activeRun?.region.id ?? activeTheaterId}_${sourceSlug}_harmonized.geojson`} />
-        )}
-        {exportCsvUrl && (
-          <MenuItem label="Export CSV" href={exportCsvUrl} download={`${activeRun?.region.id ?? activeTheaterId}_${sourceSlug}_harmonized.csv`} />
-        )}
-      </MenuGroup>
-      <MenuGroup title="Keys">
-        <p className="iso-menu__keys">
-          <span><kbd>0</kbd> to <kbd>3</kbd> parts</span>
-          <span><kbd>Space</kbd> play</span>
-          <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> pass</span>
-          <span><kbd>V</kbd> hide, reveal</span>
-          <span><kbd>/</kbd> place</span>
-          <span><kbd>N</kbd> next place</span>
-          <span><kbd>M</kbd> sensors</span>
-          <span><kbd>Esc</kbd> back</span>
-        </p>
-      </MenuGroup>
-    </>
-  );
 
-  // A simulated run's callouts only: a real run shows no scenario callouts.
-  const finding = selectedFinding && !runIsReal && (
-    <div className="iso-finding">
-      <div className="iso-finding__head">
-        <span>{selectedFinding.title}</span>
-        <button type="button" className="iso-finding__close" onClick={() => setSelectedFinding(null)} aria-label="Dismiss finding">
-          Close
-        </button>
-      </div>
-      <p className="iso-finding__sub">{selectedFinding.subtitle}</p>
-      <p className="iso-finding__val">{selectedFinding.valueText}</p>
-    </div>
-  );
 
   // The workspace's shared state for the beats (app/store.tsx). The shell owns the state and the requests.
   const recordPlace: RecordPlace = recordBox
@@ -1284,7 +1034,7 @@ export function App() {
       slewToTheater(place.id);
     }
   };
-  const store: WorkspaceStore = {
+  const storeBase: WorkspaceBase = {
     places: placesState.places,
     currentFire: activeRun && realStart ? fireOfStart(placesState.places, activeRun.region.id, realStart)?.id ?? null : null,
     place: { regionId: calendarRegionId, title: regionTitle, area: calendarArea },
@@ -1374,29 +1124,51 @@ export function App() {
     openModel,
     blocked: stepBlocked,
   };
-  const beatPanel = <WorldModelBeat>{finding}</WorldModelBeat>;
+  const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays });
+  guideRef.current = guide;
+  /** The commands the guide's actions name (script.json, "commands"). */
+  const runCommand = (command: string) => {
+    if (command === 'go:test') {
+      if (holdoutViirs && !revealed) toggleHoldoutLive();
+      else if (step !== 'fire' && step !== 'test') openModel();
+    } else if (command === 'go:estimate') openModel();
+    else if (command === 'go:play') goStep('look');
+    else if (command === 'go:record') goStep('record');
+    else if (command === 'place:open') {
+      goStep('record');
+      setPlacesOpen(true);
+    } else if (command === 'passes:play') setPlaying((p) => !p);
+    else if (command === 'passes:hidden_next') {
+      const fs = (activeRun as unknown as { observer_passes?: { frames?: Array<{ held_out?: boolean }> } } | null)?.observer_passes?.frames ?? [];
+      const next = fs.findIndex((f, k) => k > activeEpoch && f.held_out === true);
+      if (next >= 0) {
+        setPlaying(false);
+        setTimeProgress(next);
+      }
+    } else if (command === 'test:side_by_side') setThreeWays(true);
+    else if (command === 'test:scores') setDebriefOpen(true);
+    else if (command === 'tests:record') setEvidenceOpen(true);
+    else if (command === 'method:open') setReading('method');
+    else if (command === 'close') {
+      if (debriefOpen) setDebriefOpen(false);
+      else if (threeWays) setThreeWays(false);
+    } else if (command === 'retry' && realFailed) {
+      void executeWorldModel({
+        regionId: activeRun?.region.id ?? calendarRegionId,
+        holdoutViirs: step === 'test',
+        cloudOverride: null,
+        enterWorkspace: false,
+        source: 'firms',
+        start: realFailed.start,
+      });
+    }
+  };
+  runCommandRef.current = runCommand;
+  const store: WorkspaceStore = { ...storeBase, guide, runCommand };
+  const trailWord: TrailWord | null =
+    step === 'record' ? 'Record' : step === 'look' || step === 'agent' ? 'Play' : revealed ? 'Test' : 'Estimate';
   /** World model on a real run: in place on the terrain (beats/world-model/WorldModelScene.tsx), no column. */
-  const inModelStep = step === 'fire' || step === 'test';
   const modelScene = inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen;
-  // An entry into World model is counted; its title card waits for the entry's own state (the run in, the hide done)
-  // and never comes after the reveal.
-  useEffect(() => {
-    const was = prevStepRef.current === 'fire' || prevStepRef.current === 'test';
-    prevStepRef.current = step;
-    if (inModelStep && !was) setModelEntry((n) => n + 1);
-  }, [step, inModelStep]);
-  const cardSettled = modelScene && !pendingStart && !blindLoading && !revealed && (step !== 'test' || holdoutViirs);
-  useEffect(() => {
-    if (cardSettled && cardEntry !== modelEntry) setCardEntry(modelEntry);
-  }, [cardSettled, cardEntry, modelEntry]);
-  const modelName = beatOf('model');
-  const cardLine = closedWindow
-    ? modelName.recordLine
-    : noSharp
-      ? modelName.earlyLine
-      : holdoutViirs || revealed
-        ? modelName.line
-        : modelName.openLine;
 
   return (
     <WorkspaceProvider value={store}>
@@ -1433,38 +1205,39 @@ export function App() {
             data-step={step}
             data-debrief={debriefOpen ? 'true' : 'false'}
             data-scene={modelScene ? 'model' : step === 'look' ? 'world' : undefined}
+            data-guide={guide.step ? 'true' : undefined}
           >
             <div className="iso-ws__scrim iso-ws__scrim--top" aria-hidden="true" />
             <div className="iso-ws__scrim iso-ws__scrim--right" aria-hidden="true" />
             <div className="iso-ws__scrim iso-ws__scrim--bottom" aria-hidden="true" />
 
-            <WorkspaceBar
-              place={regionTitle}
-              placeDetail={[regionSetting, `${regionLat} ${regionLon}`, elevRangeText].filter(Boolean).join(', ')}
-              placeDates={span}
+            <Trail
+              current={trailWord}
+              where={[regionTitle, span].filter(Boolean).join(', ') || null}
+              onWord={(w) => {
+                if (w === 'Record') goStep('record');
+                else if (w === 'Estimate') openModel();
+                else if (w === 'Test') runCommand('go:test');
+                else goStep('look');
+              }}
+              closed={{ Test: stepBlocked.test ?? null, Play: stepBlocked.look ?? null }}
               onPlace={() => {
                 goStep('record');
                 setPlacesOpen(true);
               }}
-              beat={beatOfStep(step)}
-              onBeat={goBeat}
-              beatBlocked={beatBlocked}
-              onReading={() => setReading('method')}
-              onLanding={exitToOverview}
-              menu={quietMenu}
             />
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
             {step === 'record' && <CalendarBeat />}
-            {inModelStep && runIsReal && cardEntry === modelEntry && (
-              <div key={modelEntry} className="wm-banner sys-plate">
-                <span className="sys-title">{modelName.name.replace(/^\d+\s*/, '')}</span>
-                <span className="sys-label">{cardLine ?? modelName.line}</span>
-              </div>
-            )}
             {modelScene && <WorldModelScene />}
             {step === 'agent' && <AgentBeat />}
             {step === 'look' && <TestWorldBeat />}
+            {guide.step && (
+              <>
+                <div className="guide-scrim" aria-hidden="true" />
+                <GuideStrip stateKey={`${guide.step}:${guide.stateId}:${realStart}`} lines={guide.lines} actions={guide.actions} onAction={runCommand} />
+              </>
+            )}
             <div className="iso-ws__dock" hidden={step === 'record' || step === 'agent'}>
               {debriefOpen && blindTest ? (
                 <Debrief
@@ -1478,13 +1251,9 @@ export function App() {
                   terraOpen={terraOpen}
                   onToggleTerra={() => setTerraOpen((o) => !o)}
                 />
-              ) : modelScene || step === 'look' ? null : (
-                <aside className="iso-step" data-step={step} aria-label={beatOf(beatOfStep(step)).name}>
-                  {beatPanel}
-                </aside>
-              )}
+              ) : null}
 
-              {!round && (
+              {!round && !guide.step && (
                 <div className="iso-ws__track">
                   <PassTrack
                     run={activeRun}

@@ -10,6 +10,7 @@ import type { Box, FeaturedFire, Place, Places } from './places';
 import type { FireRecord, RecordPlace } from '../beats/calendar/record';
 import type { EarthStageTelemetry, StageFireAnchor } from '../stage/earthCutawayTypes';
 import type { EvidenceDoc } from '../content/evidence';
+import type { Guide } from '../guide/useGuide';
 
 /**
  * The workspace's shared state, read by every beat: the place, the run on the terrain, the time on show, and the
@@ -125,11 +126,17 @@ export interface WorkspaceStore {
   goStep: (s: Step) => void;
   /** The one way into World model: VIIRS hidden where it can be, close to the fire. */
   openModel: () => void;
+  /** What the guide says on the step on show (guide/useGuide.ts), and the commands its actions name. */
+  guide: Guide;
+  runCommand: (command: string) => void;
   /** Why a step cannot be opened here (null: it can). */
   blocked: Partial<Record<Step, string | null>>;
 }
 
 const WorkspaceContext = createContext<WorkspaceStore | null>(null);
+
+/** The store before the guide is worked out from it. */
+export type WorkspaceBase = Omit<WorkspaceStore, 'guide' | 'runCommand'>;
 
 export function WorkspaceProvider({ value, children }: { value: WorkspaceStore; children: ReactNode }) {
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

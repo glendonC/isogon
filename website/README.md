@@ -64,14 +64,24 @@ Without a backend the site still opens and the stage draws `plumas_ca` from the 
 - **The landing page** (`src/ui/LandingComposition.tsx`): the stage from far away, a headline, one entry into the first application, and below it three parts (world model, environment, agent) whose status lines are read from `GET /api/evidence`.
 - **The workspace**: a top bar with the place and the dates on the terrain, the Calendar and the three parts, one panel, a pass track and the stage. The names and their one line each are in `src/app/names.ts`.
 
-| Part | Key | What it does |
-| --- | --- | --- |
-| Calendar | `0` | Choose a place on a map (a featured fire, a name or coordinates, or a box you draw; `P` opens it), then its fire record as the whole screen: every month since November 2000 on one log ramp, the mean of each year, the median of each month, how wrong the method is on years left out, and this month against its median. A month with a real run opens in World model. The place screen also shows the featured fires as cut-outs on one plane at one scale; a pick opens that fire |
-| 1 World model | `1` | Opens close to the fire with VIIRS hidden on the run on the terrain: the estimate from MODIS alone, a label on the fire for the pass on show, what was hidden, and Reveal VIIRS. After the reveal the verdict sits beside the fire's extent (scores ahead of both simple methods, by plain comparison, the stated range, and the record of the test fires and the validation beside it); `T` shows one fire three ways in the stage's place (what MODIS saw, the estimate from MODIS alone, what VIIRS saw, at one hidden pass), `Enter` opens the seven scores, `E` every test on record. On a recorded test fire it shows the record and the run with every satellite, and is not hidden or revealed again. Before 2012 nothing can be hidden |
-| 2 Test world | `2` | One round of the next-look environment on the fire that is open: the place and what is hidden at the top left, the look on show and the looks left low left, the stage's tiles on the terrain; pick one with the mouse, or move with the arrow keys and press Space, to point VIIRS at it; Enter passes. At the end the reveal beside the board, with each player's gain (the one that reads the hidden detections is "Sees the answer"). Closed on a recorded test fire and before 2012 |
-| 3 Agent | `3` | The players (chance, latest MODIS, least sure, the learned agent) play the round on the fire that is open, one block each with its looks in order and what they found; "Watch it play" lays the looks down one after another. Closed on a recorded test fire and before 2012; Esc goes back to World model |
+The workspace has no bar. Top left, a trail of four words (Record, Estimate, Test, Play), each a way to its step,
+and beside it the place and its dates, which open Choose a Place. At the bottom, the guide: one or two sentences on what
+is on screen, and at most three actions, the next one first; each action's key is the small mark before it. The words
+are read from `src/guide/script.json`, a committed copy of the product lane's guide script (its `version` says which),
+so they change without code. Labels on things of the stage (the fire, and later a square) are the script's too; an
+action that acts on a thing also shows beside it while the pointer or the keyboard's focus is near.
 
-Other keys: on the landing a bare Enter opens the place screen; in the workspace Enter takes the part's forward action, Space plays or pauses, the left and right arrows step through the passes, `V` hides or reveals VIIRS, `E` opens every test on record, `L` starts a round, `/` or Ctrl+K (Cmd+K) opens the search palette, `M` opens the sensor reading, `U` toggles the uncertainty layer on a simulated run, `H` hides the interface, `C` starts the camera tour, `N` goes to the next region, and Esc goes back.
+| Step | What it does |
+| --- | --- |
+| Record | The fire record and Choose a Place (the compare-view lane's screens, mounted through the store) |
+| Estimate | The fire close up with the sharp satellite (VIIRS) hidden: the white frames are the model's estimate from the coarse satellite (MODIS) alone. The guide speaks here; Enter reveals. A recorded test fire shows its record and every satellite; before 2012 nothing is hidden |
+| Test | What the sharp satellite saw, and the verdict in the guide; `T` Side by Side, `S` the scores, `E` every test on record |
+| Play | A round on the fire that is open, on the stage's tiles; after it, the other players (the Agent part) |
+
+Keys: on the landing a bare Enter opens the place screen; where the guide speaks, each action's key is shown beside it;
+elsewhere Space plays or pauses the passes, the left and right arrows step through them, `/` or Ctrl+K (Cmd+K) opens
+the search palette, `M` opens the sensor reading, `C` starts the camera tour, `N` goes to the next region, `1` to `3`
+open Estimate, Play and the players, and Esc goes back.
 
 A real run and a simulated run are kept apart. When the site asks for a real run and the answer is not one, it is refused, so modelled numbers are never shown as observations.
 
