@@ -9,7 +9,10 @@ From the harmonized dataset as served (`harmonize_dataset.py`, its `monthly.npz`
 - `totals.csv` and `totals.json`: per year, for the world and each continent, the fire rows each satellite
   detected and the harmonized rows, and, for 2012 to 2025, each total's held-out error: every overlap year left
   out in turn over every cell at once, the method fitted on the other years, the total of the year left out
-  predicted and compared with Suomi NPP's over the same clean months.
+  predicted and compared with Suomi NPP's over the same clean months. A continent's totals are the sums of its
+  country files' (`harmonize_countries.py`);
+- `countries.json`: per country file and year, the harmonized rows, the MODIS and Suomi NPP rows as detected, and the
+  flag for a ratio that is not stable at the country's size (`harmonize_countries.py`).
 
 No interval is given on a total: fourteen held-out years per total are too few to set an 80 percent interval and
 measure its coverage on years that did not set it. The held-out errors are what was measured at the totals.
@@ -34,6 +37,7 @@ import numpy as np
 
 from backend.model import harmonize as H
 from backend.model import harmonize_cells as C
+from backend.model import harmonize_countries as HC
 from backend.model import harmonize_dataset as D
 from backend.model import harmonize_eval as E
 from backend.model import harmonize_places as PL
@@ -43,6 +47,7 @@ OVERLAP_YEARS: tuple[int, ...] = tuple(range(2012, 2026))
 WORLD: str = "World"
 LAYER_VERSION: int = 1
 PLATFORM_KEYS: dict[str, str] = {"Terra": "terra", "Aqua": "aqua", "Suomi NPP": "suomi_npp", "NOAA-20": "noaa20"}
+DETECTED_KEYS: tuple[str, ...] = HC.DETECTED
 
 
 def out_dir() -> Path:
@@ -75,29 +80,11 @@ def grid_of(cube_cell: np.ndarray, values: np.ndarray, loaded: np.ndarray) -> np
     return g.reshape(C.N_LAT, C.N_LON)
 
 
-def cell_continents(cdir: Path, cube_cell: np.ndarray, lon_c: np.ndarray) -> tuple[np.ndarray, int]:
-    """The continent (an index into `PL.CONTINENTS`) of each cell by the countries whose files have a row in it,
-    the most of them deciding and the first listed breaking a tie; and how many cells hold countries of two
-    continents."""
-    start = np.load(cdir / "cell_countries_start.npy", mmap_mode="r")
-    cc = np.load(cdir / "cell_countries.npy")
-    ids = json.loads((cdir / "countries.json").read_text(encoding="utf-8"))["ids"]
-    index = {k: i for i, k in enumerate(PL.CONTINENTS)}
-    a, b = np.asarray(start[cube_cell]), np.asarray(start[cube_cell + 1])
-    out = np.full(cube_cell.size, -1, dtype=np.int64)
-    mixed = 0
-    for i in range(cube_cell.size):
-        names = [PL.continent_of(ids[k], float(lon_c[i])) for k in cc[a[i]:b[i]]]
-        conts = [index[n] for n in names if n is not None]
-        if not conts:
-            continue
-        if len(set(conts)) > 1:
-            mixed += 1
-            counts = {c: conts.count(c) for c in conts}
-            out[i] = max(conts, key=lambda c: (counts[c], -conts.index(c)))
-        else:
-            out[i] = conts[0]
-    return out, mixed
+def _check_sum(what: str, parts: np.ndarray, whole: np.ndarray) -> None:
+    """The country files' parts must add up to the cells' totals; a float64 sum of float32 values, so to a row in
+    a hundred million."""
+    if not np.allclose(parts, whole, rtol=1e-8, atol=0.5):
+        raise ValueError(f"{what}: the country files' parts do not add up to the cells' totals")
 
 
 def _sha(path: Path) -> str:
@@ -121,15 +108,15 @@ def _cells_from_dataset(z: Any) -> dict[str, Any]:
     return cells
 
 
-def heldout_by_group(cells: dict[str, Any], group: np.ndarray, n_groups: int, closed_2021: np.ndarray,
-                     cdir: Path, rows_spec: H.Spec) -> dict[str, Any]:
-    """Each group's (and the world's) held-out total per overlap year, over the clean months of that year and the
-    cells not closed in it: Suomi NPP's rows, the method's held-out prediction, the method used before (one ratio
-    per cell) and MODIS as it is."""
+def heldout_preds(cells: dict[str, Any], closed_2021: np.ndarray, cdir: Path, rows_spec: H.Spec) -> dict[str, Any]:
+    """Every overlap year left out in turn over every cell at once: per cell and overlap month, Suomi NPP's rows,
+    the held-out prediction of the method, of the method used before (one ratio per cell) and of MODIS as it is,
+    and the months scored (clean, and not closed)."""
     months_all = cells["months"]
     pm = C.cube_platform_months(cdir, months_all)
     clean_all, sharp_all, info = E.clean_months(months_all, pm)
-    ov = slice(D.OVERLAP_FIRST - D.FIRST_MONTH, None)
+    ov0 = D.OVERLAP_FIRST - D.FIRST_MONTH
+    ov = slice(ov0, None)
     m_ov, clean_ov, sharp_ov = months_all[ov], clean_all[ov], sharp_all[ov]
     band = ((PL.band_of(cells["lat0"] + C.CELL_DEG / 2) + 90.0) / PL.BAND_DEG).astype(np.int64)
     places = H.Places(band=band, nb_src=cells["nb_src"], nb_dst=cells["nb_dst"])
@@ -147,19 +134,20 @@ def heldout_by_group(cells: dict[str, Any], group: np.ndarray, n_groups: int, cl
              "none": H.predict_none(X, "n").astype(np.float64)}
     ok = scored & np.isfinite(preds["method"])
     world_monthly = float(np.abs(preds["method"][ok] - obs[ok]).sum() / obs[ok].sum())
-    out: dict[str, Any] = {"world_monthly_error_method": round(world_monthly, 4), "clean_months": info["clean_months"],
-                           "groups": {}}
-    gid = np.where(group >= 0, group, n_groups)
-    for j, y in enumerate(OVERLAP_YEARS):
-        sel = scored & (yr == y)[None, :]
-        n_months = int((clean_ov & (yr == y)).sum())
-        o = np.bincount(gid, weights=np.where(sel, obs, 0.0).sum(axis=1), minlength=n_groups + 1)[:n_groups]
-        row: dict[str, Any] = {"clean_months": n_months, "suomi_npp": np.append(o, o.sum())}
-        for name, pr in preds.items():
-            v = np.where(sel & np.isfinite(pr), pr, 0.0).sum(axis=1)
-            s = np.bincount(gid, weights=v, minlength=n_groups + 1)[:n_groups]
-            row[name] = np.append(s, s.sum())
-        out["groups"][y] = row
+    return {"preds": preds, "obs": obs, "sel": scored, "ov0": ov0, "yr": yr, "clean_ov": clean_ov,
+            "world_monthly_error_method": round(world_monthly, 4), "clean_months": info["clean_months"]}
+
+
+def heldout_world(held: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    """The world's held-out total per overlap year, over every cell's scored months."""
+    out: dict[int, dict[str, Any]] = {}
+    for y in OVERLAP_YEARS:
+        sel = held["sel"] & (held["yr"] == y)[None, :]
+        row: dict[str, Any] = {"clean_months": int((held["clean_ov"] & (held["yr"] == y)).sum()),
+                               "suomi_npp": float(np.where(sel, held["obs"], 0.0).sum())}
+        for name, pr in held["preds"].items():
+            row[name] = float(np.where(sel & np.isfinite(pr), pr, 0.0).sum())
+        out[y] = row
     return out
 
 
@@ -200,50 +188,67 @@ def write(dataset: Path, out: Path) -> dict[str, Any]:
                        else "Terra and Aqua"),
             "closed_cells": int(closed_2021.sum()) if y == 2021 else 0}
 
-    # the totals: detected per satellite and harmonized, for the world and each continent
-    cont, mixed = cell_continents(cdir, cells["cube_cell"], lon_c)
-    nG = len(PL.CONTINENTS)
-    gid = np.where(cont >= 0, cont, nG)
+    # the totals: detected per satellite and harmonized, for the world, each continent and each country file
     keys = {"terra": "n_T", "aqua": "n_A", "suomi_npp": "n_S", "noaa20": "n_J"}
     yearly = {k: yearly_sum(cells[v], months) for k, v in keys.items()}
     yearly["harmonized"] = yh
     for k in yearly:
         yearly[k][closed_2021, YEARS.index(2021)] = np.nan
     rows_spec = D.method_for(FITTED_SERVE())[1]
-    held = heldout_by_group(cells, cont, nG, closed_2021, cdir, rows_spec)
+    held = heldout_preds(cells, closed_2021, cdir, rows_spec)
+    world_held = heldout_world(held)
+    world_monthly_error = held["world_monthly_error_method"]
+    sums = HC.unit_sums(HC.iter_parts(HC.parts_dir(), cells["cube_cell"], D.FIRST_MONTH, months.size), cells, harm,
+                        closed_2021, held)
+    del held
+    unknown = sorted({c for c, k in sums["units"] if k is None})
+    if unknown:
+        raise ValueError(f"country files with no continent: {unknown}")
+    cnames, cg = HC.group(sums, 1)
+    order = [cnames.index(k) if k in cnames else None for k in PL.CONTINENTS]
+    world = {k: np.nansum(a, axis=0) for k, a in yearly.items()}
+    for k in DETECTED_KEYS:
+        _check_sum(k, cg["detected"][k].sum(axis=0), world[k])
+    _check_sum("harmonized", cg["harmonized"].sum(axis=0), world["harmonized"])
     names = list(PL.CONTINENTS) + [WORLD]
-    closed_by_area = np.bincount(gid, weights=closed_2021, minlength=nG + 1)[:nG]
-    closed_by_area = np.append(closed_by_area, closed_2021.sum())
+    closed_by_area = [len(sums["closed_cells"].get(k, ())) for k in PL.CONTINENTS] + [int(closed_2021.sum())]
     table: list[dict[str, Any]] = []
     for j, y in enumerate(YEARS):
         yr_months = [int(m) for m in months if H.FIRST_YEAR + m // 12 == y]
         delivered = {PLATFORM_KEYS[p]: sum(m in pm[p] for m in yr_months) for p in C.PLATFORMS}
-        sums = {}
-        for k, a in yearly.items():
-            s = np.bincount(gid, weights=np.nan_to_num(a[:, j]), minlength=nG + 1)[:nG]
-            sums[k] = np.append(s, s.sum())
-        h = held["groups"].get(y)
+        area_sums: dict[str, np.ndarray] = {}
+        for k in DETECTED_KEYS + ("harmonized",):
+            a = cg["harmonized"] if k == "harmonized" else cg["detected"][k]
+            area_sums[k] = np.array([a[i, j] if i is not None else 0.0 for i in order] + [world[k][j]])
+        h = world_held.get(y)
+        if h is not None:
+            jo = OVERLAP_YEARS.index(y)
+            hs = {"suomi_npp": np.array([cg["heldout_suomi_npp"][i, jo] if i is not None else 0.0 for i in order]
+                                        + [h["suomi_npp"]])}
+            for name_p in HC.HELD:
+                hs[name_p] = np.array([cg["heldout"][name_p][i, jo] if i is not None else 0.0 for i in order]
+                                      + [h[name_p]])
         for gi, name in enumerate(names):
             r: dict[str, Any] = {"area": name, "year": y, "months": len(yr_months), "partial": len(yr_months) < 12}
             for p, n in delivered.items():
                 r[f"months_{p}"] = n
             for k in ("terra", "aqua"):
-                r[f"{k}_rows"] = round(float(sums[k][gi]), 1) if delivered[k] else None
-            r["modis_rows"] = round(float(sums["terra"][gi] + sums["aqua"][gi]), 1)
+                r[f"{k}_rows"] = round(float(area_sums[k][gi]), 1) if delivered[k] else None
+            r["modis_rows"] = round(float(area_sums["terra"][gi] + area_sums["aqua"][gi]), 1)
             for k in ("suomi_npp", "noaa20"):
-                r[f"{k}_rows"] = round(float(sums[k][gi]), 1) if delivered[k] else None
-            r["harmonized_rows"] = round(float(sums["harmonized"][gi]), 1)
+                r[f"{k}_rows"] = round(float(area_sums[k][gi]), 1) if delivered[k] else None
+            r["harmonized_rows"] = round(float(area_sums["harmonized"][gi]), 1)
             r["closed_cells_left_out"] = int(closed_by_area[gi]) if y == 2021 else 0
             if h is not None:
-                o = float(h["suomi_npp"][gi])
+                o = float(hs["suomi_npp"][gi])
                 r["heldout_clean_months"] = h["clean_months"]
                 r["heldout_suomi_npp_rows"] = round(o, 1)
                 for name_p, col in (("method", "heldout_harmonized_rows"), ("in_use", "heldout_in_use_rows"),
                                     ("none", "heldout_modis_rows")):
-                    r[col] = round(float(h[name_p][gi]), 1)
+                    r[col] = round(float(hs[name_p][gi]), 1)
                 for name_p, col in (("method", "heldout_error"), ("in_use", "heldout_error_in_use"),
                                     ("none", "heldout_error_none")):
-                    r[col] = round(float(h[name_p][gi]) / o - 1.0, 4) if o > 0 else None
+                    r[col] = round(float(hs[name_p][gi]) / o - 1.0, 4) if o > 0 else None
             table.append(r)
     cols = list(table[0].keys())
     for r in table:
@@ -267,9 +272,11 @@ def write(dataset: Path, out: Path) -> dict[str, Any]:
         "what": "yearly fire rows (FIRMS type 0) of the world and each continent: as each satellite detected them, "
                 "and the harmonized record (MODIS on Suomi NPP's scale), with each total's held-out error",
         "years": list(YEARS), "areas": names,
-        "continents": "by the countries whose files have a row in a cell (the United Nations' grouping, the Americas "
-                      "cut at Panama's border with Colombia, the Russian Federation cut at 60 E; "
-                      f"{mixed} cells hold countries of two continents and go to the one most of them are in)",
+        "continents": "the sums of their country files (countries.json): each file's rows go to its continent (the "
+                      "United Nations' grouping, the Americas cut at Panama's border with Colombia, the Russian "
+                      "Federation cut at 60 E by each cell's centre); in a cell shared by files of two continents or "
+                      "more, each file's part of the harmonized value and of the held-out prediction is its share of "
+                      "the cell's rows (countries.json, shared_cells)",
         "interval": "none. Fourteen held-out years per total are too few to set an 80 percent interval and measure "
                     "its coverage on years that did not set it; what was measured at the totals is the held-out "
                     "error of each total, given beside it",
@@ -278,13 +285,19 @@ def write(dataset: Path, out: Path) -> dict[str, Any]:
                    "that prediction summed over the area's cells and the year's clean months, over Suomi NPP's rows "
                    "in the same cells and months, less one. heldout_error_in_use is the method used before (one "
                    "ratio per cell), heldout_error_none MODIS as it is",
-        "heldout_world_monthly_error": held["world_monthly_error_method"],
+        "heldout_world_monthly_error": world_monthly_error,
         "heldout_summary": summary,
         "closed": "in 2021 the cells that meet a test fire region's context box are left out of every column "
                   f"({int(closed_2021.sum())} cells)",
         "rows": table,
     }
     (out / "totals.json").write_text(json.dumps(totals, indent=1) + "\n", encoding="utf-8")
+    delivered_years = {PLATFORM_KEYS[p]: [sum(int(m) in pm[p] for m in months if H.FIRST_YEAR + m // 12 == y)
+                                          for y in YEARS] for p in C.PLATFORMS}
+    countries = HC.write_countries(out, sums, delivered_years, {
+        "dataset_monthly_npz_sha256": _sha(dataset / "monthly.npz"), "dataset_cube_build": built_from,
+        "cube_build": meta["build"], "method": D.method_for(FITTED_SERVE())[0],
+        "parts": "cube/parts/<country>/records.npy"})
     manifest = {
         "layer_version": LAYER_VERSION,
         "what": "harmonized fire rows per cell and year on the fire cube's grid (720 by 1440, north up, row 0 the "
@@ -304,6 +317,7 @@ def write(dataset: Path, out: Path) -> dict[str, Any]:
         "years": layers,
         "totals": {"csv": "totals.csv", "csv_sha256": _sha(out / "totals.csv"),
                    "json": "totals.json", "json_sha256": _sha(out / "totals.json")},
+        "countries": countries,
         "seconds": round(time.time() - t0, 1),
     }
     (out / "harmonized.json").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")

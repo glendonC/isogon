@@ -232,9 +232,10 @@ Terra alone in 2001. At a quarter degree the FRP correction barely beats leaving
 
 `harmonize_years.py` sums the dataset's harmonized rows over each year, 2000 (November and December only) to 2025,
 into one layer per year on the fire cube's grid, beside the cube's own yearly layers of what MODIS and Suomi NPP
-detected; and it writes yearly totals for the world and each continent, as each satellite detected them and
-harmonized. A cell's continent is that of the country files with a row in it (the United Nations' grouping, the
-Americas cut at Panama's border with Colombia, the Russian Federation at 60 E). In 2021 the cells that meet a test
+detected; and it writes yearly totals for the world, each continent and each country file, as each satellite
+detected them and harmonized (`harmonize_countries.py`, `countries.json`). A country file's rows go to its continent
+(the United Nations' grouping, the Americas cut at Panama's border with Colombia, the Russian Federation at 60 E by
+each cell's centre), and a continent's totals are the sums of its countries'. In 2021 the cells that meet a test
 fire region's context box are left out of every layer and total.
 
 Suomi NPP's rows begin on 20 January 2012, so its total for 2012 holds 591,488 rows in January against 1.6 million
@@ -252,7 +253,7 @@ measure its coverage on years that did not set it.
 | World | 2.0 percent | 9.0 (2017) | 2.4, 47.7 | 78 percent low |
 | Africa | 2.7 | 10.5 | 3.7, 82.6 | 78 low |
 | Asia | 5.2 | 13.5 | 2.5, 11.1 | 79 low |
-| Europe | 14.8 | 89.3 (2021) | 4.3, 37.0 | 71 low |
+| Europe | 14.8 | 88.4 (2021) | 4.3, 36.5 | 71 low |
 | North America | 6.0 | 16.0 | 4.7, 17.8 | 76 low |
 | South America | 3.5 | 11.2 | 1.8, 7.5 | 75 low |
 | Oceania | 1.9 | 5.1 | 1.3, 4.1 | 79 low |
@@ -260,7 +261,7 @@ measure its coverage on years that did not set it.
 The largest misses are lava. In 2017 the lava flow of Erta Ale in Ethiopia gave MODIS 2,480 rows in one cell whose
 ratio in the other years was above 3,000 (a lava lake that Suomi NPP sees far more often than MODIS): the world's
 held-out total is 9 percent high with the method and 48 with one ratio per cell. In 2021 the eruptions of
-Fagradalsfjall in Iceland and La Palma put Europe's held-out total 89 percent high with the method and 37 with one
+Fagradalsfjall in Iceland and La Palma put Europe's held-out total 88 percent high with the method and 37 with one
 ratio per cell.
 
 Away from lava, one ratio per cell gives the smaller median error on the totals of five of the six continents. The
@@ -271,6 +272,28 @@ which holds more than half the world's rows. The world's total is within 3 perce
 rows are seen almost only by Suomi NPP (34 to 108 a year; MODIS 3 in 2022 and none in any other year), so its
 harmonized value is the mean of such months and says nothing about any one year. Four cell-years before 2012 go above the largest cell-year Suomi NPP ever counted, all
 volcanic eruptions.
+
+### Country by country
+
+Each of the 238 country files of the cube gets its yearly totals, 2000 to 2025, from the fire cube's parts (one
+file's records each). 6,792 of the dataset's cells hold fire rows of two country files or more, 7.7 percent of the
+harmonized rows. There a country's part of a cell's month is its share of the cell's MODIS rows that month, since
+the value is MODIS's count on Suomi NPP's scale; in a month MODIS saw nothing (the method then gives the cell's mean
+Suomi NPP count of such months) it is its share of the cell's Suomi NPP rows over every month. The shares of a cell
+sum to one, so the countries add up to the continents and the world; the held-out predictions are shared the same
+way and compared with each country's own Suomi NPP rows. Each country's MODIS and Suomi NPP rows as detected equal
+the fire cube's own count of that country in every year.
+
+The flag for a ratio that is not stable (under Limits), with the country taken as the place: Iceland (9 of 14 tested
+years depart; in 2020 Suomi NPP counted 16 rows where the held-out value was 1,801) and Reunion (6 of 14) are not
+stable, both lava. 42 files, small islands and the smallest states, are not tested: none has a year of 50 rows
+(1,659 Suomi NPP rows among them in all). The other 194 are stable. Stable is not the same as close: the median
+country's held-out yearly total misses its own Suomi NPP count by 21 percent in the median year (the United States
+10, Canada 9, Russia 5, Brazil 3, Australia 1.5), and 45 stable countries miss it by more than half, 44 of them
+high. They are mostly countries of small fires and flares (Germany, the United Kingdom, Poland, Japan, the Nordic
+and Baltic countries, Libya, Oman, Yemen, Morocco and small islands); in sample their harmonized total over 2012 to
+2025 is a median 1.58 times their own Suomi NPP count. They hold 0.19 percent of the world's Suomi NPP rows, so the
+world's and the continents' totals hardly feel them; a country's own line does.
 
 ## World maps
 
