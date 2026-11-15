@@ -29,7 +29,6 @@ export const AGENT_WALK_WORDS = {
   /** Beside the frame while it is on a square the agent chose. */
   beside: 'The agent looks here',
   noPlay: 'The agent has no recorded play on this fire. Your turn.',
-  stopped: 'The walk stopped here. The page is yours.',
 } as const;
 
 /** Reading time of each beat once its scene is up, ms. */
@@ -72,10 +71,14 @@ export interface WalkState {
 let state: WalkState = { on: false, beat: null, line: null, done: false, look: null, cols: 0 };
 const listeners = new Set<() => void>();
 let runId = 0;
-let fade = 0;
 
+/**
+ * The walk's words and frame stand only while the walk holds the guide aside (`on`): the frame in which it hands over
+ * takes them off, so they never print over the guide's own words as those come back.
+ */
 function set(next: Partial<WalkState>) {
   state = { ...state, ...next };
+  if (!state.on) state = { ...state, line: null, beat: null, look: null };
   if (typeof document !== 'undefined') {
     if (state.on) document.documentElement.setAttribute('data-walk', 'on');
     else document.documentElement.removeAttribute('data-walk');
@@ -124,8 +127,7 @@ function listenForTakeover() {
 export function stopAgentWalk(): void {
   runId += 1;
   unlisten?.();
-  window.clearTimeout(fade);
-  if (state.on || state.line || state.look) set({ on: false, beat: null, line: null, done: true, look: null });
+  if (state.on || state.line || state.look) set({ on: false, done: true });
 }
 
 /** The learned player's play of the fire in view, from the play route. */
@@ -146,7 +148,6 @@ export interface AgentWalkOptions {
 export function startAgentWalk(page: () => WalkPage, options: AgentWalkOptions = {}): void {
   const id = ++runId;
   const fetchPlay = options.fetchPlay ?? fetchAgentPlay;
-  window.clearTimeout(fade);
   set({ on: true, beat: null, line: null, done: false, look: null, cols: 0 });
   listenForTakeover();
 
@@ -215,13 +216,11 @@ export function startAgentWalk(page: () => WalkPage, options: AgentWalkOptions =
     alive();
     unlisten?.();
     set({ on: false, done: true });
-    fade = window.setTimeout(() => set({ line: null, beat: null }), 2500);
   };
 
   run().catch((e) => {
     if (e instanceof Stopped) return;
     unlisten?.();
-    set({ on: false, beat: null, line: AGENT_WALK_WORDS.stopped, done: true, look: null });
-    fade = window.setTimeout(() => set({ line: null }), 2500);
+    set({ on: false, done: true });
   });
 }

@@ -79,8 +79,41 @@ test('from the reveal: the board, the learned player\'s looks in order, then the
   assert.equal(seen.find((st) => st.look)?.cols, 4);
   assert.equal(page().step, 'look');
   assert.equal(agentWalkState().look, null);
-  assert.equal(seen.at(-1).beat, 'yours');
+  assert.equal(seen.filter((st) => st.line).at(-1).beat, 'yours');
   stopAgentWalk();
+});
+
+test('the hand-over: the walk\'s line leaves in the same state that gives the guide back, never after it', async () => {
+  const { page } = fakePage({ revealed: true });
+  const { seen, off } = record();
+  startAgentWalk(page, { fetchPlay: async () => play });
+  await until(() => agentWalkDone());
+  off();
+  // The guide is held aside exactly while `on`; a line or a frame may only stand then.
+  for (const st of seen) {
+    if (!st.on) {
+      assert.equal(st.line, null);
+      assert.equal(st.look, null);
+    }
+  }
+  const handOver = seen.findIndex((st, i) => i > 0 && seen[i - 1].on && !st.on);
+  assert.ok(handOver > 0);
+  assert.equal(seen[handOver - 1].line, AGENT_WALK_WORDS.yours);
+  assert.equal(seen[handOver].line, null);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(agentWalkState().line, null);
+});
+
+test('a takeover mid-look takes the line and the frame off at once', async () => {
+  const { page } = fakePage({ revealed: true });
+  AGENT_BEAT_HOLD.look = 400;
+  startAgentWalk(page, { fetchPlay: async () => play });
+  await until(() => agentWalkState().look !== null);
+  stopAgentWalk();
+  assert.equal(agentWalkState().on, false);
+  assert.equal(agentWalkState().line, null);
+  assert.equal(agentWalkState().look, null);
+  AGENT_BEAT_HOLD.look = 30;
 });
 
 test('it shows where the agent looked and the pass, never what the looks found', async () => {
