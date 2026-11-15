@@ -4596,6 +4596,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           : null;
         const stdDemUrl = assetAddress(propsRef.current, run.assets.dem_f32_url);
         const satUrl = assetAddress(propsRef.current, run.assets.satellite_url);
+        // The run's overview picture comes from Esri whatever the pack's imagery: in the film
+        // presentation it is never asked for (the ground waits on the pack's own picture, or borrows
+        // the place's earlier one); on the page it shows only until the pack's picture is in
+        const skipOverview = Boolean(propsRef.current.filmMove ?? filmFromAddress());
         const tensorUrl = assetAddress(propsRef.current, run.assets.reconstruction_u8_url);
 
         const fetchDemBuffer = async (): Promise<ArrayBuffer | null> => {
@@ -4609,6 +4613,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
         const loadSatTexture = (): Promise<THREE.Texture | null> =>
           new Promise((resolve) => {
+            if (skipOverview) {
+              resolve(null);
+              return;
+            }
             bridge.texLoader.load(
               satUrl,
               (tex) => {
@@ -4653,7 +4661,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         const lendGround = prevRegionBundle && !(realFiles && prevRegionBundle.noRealGround) ? prevRegionBundle : undefined;
         const lendPicture = prevRegionBundle && !(realFiles && prevRegionBundle.noRealPicture) ? prevRegionBundle : undefined;
         if (realFiles && !demBuf && !lendGround) missingFiles.push('elevation');
-        if (realFiles && !satTexLoaded && !lendPicture) missingFiles.push('imagery');
+        if (realFiles && !satTexLoaded && !lendPicture && !skipOverview) missingFiles.push('imagery');
         if (realFiles && !tensorBuf) missingFiles.push('field');
 
         const demPack = demBuf
