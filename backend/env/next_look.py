@@ -200,6 +200,7 @@ class NextLookEnv:
         schedule: str = SOURCE_AUTO,
         read_passes: PassReader | None = None,
         remember: int = REMEMBER_LOOKS,
+        platforms_cached: Any = None,
     ) -> None:
         if score not in SCORES:
             raise ValueError(f"score must be one of {SCORES}")
@@ -257,8 +258,15 @@ class NextLookEnv:
         # nominal slots are laid out a margin beyond the window (a real pass lies up to 100 minutes from its slot);
         # the pass list gives the passes whose scan crossed the box inside the window
         self._slots: list[Slot]
+        # A hidden platform whose rows the cache does not hold for the window has no look: read from the extracts'
+        # manifests when the pass list is the cache's own, as a held-out run reads it (backend.model.cached_platforms)
+        if platforms_cached is None and read_passes is None:
+            from backend.model.cached_platforms import platforms_with_rows as platforms_cached
+        kept, self.platforms_without_rows = (platforms_cached(box, hidden, window[0], window[1])
+                                             if platforms_cached is not None else ((), {}))
         self._slots, self.schedule_source, self._schedule_info = schedule_for(
-            hidden, None, window[0], window[1], box, source=schedule, read_passes=read_passes, nominal_margin_s=SLOT_MARGIN_S
+            hidden, tuple(kept) if self.platforms_without_rows else None, window[0], window[1], box, source=schedule,
+            read_passes=read_passes, nominal_margin_s=SLOT_MARGIN_S
         )
         from_list = self.schedule_source == SOURCE_CMR
         self.protocol: dict[str, Any] = PROTOCOLS[self.schedule_source]
@@ -747,6 +755,7 @@ class NextLookEnv:
             "tiles": list(self.tiles),
             "budget": self.budget,
             "viirs_looks": self.n_looks,
+            "platforms_without_rows_in_the_cache": dict(sorted(self.platforms_without_rows.items())),
             "looks": {"source": self.schedule_source, "note": NOTES[self.schedule_source],
                       "real_overpasses_scored": int(sum(len(t) for t in self._truth)),
                       "a_look_owns": "the rows of its own pass, in the window or not; the score is taken inside the window",

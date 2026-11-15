@@ -210,7 +210,7 @@ FRAMES_RULE: str = (
 
 def run_frames(
     det: Detections, box: tuple[float, float, float, float], start_s: float, n: int = FRAMES, hidden: str | None = "VIIRS",
-    read_passes: S.PassReader | None = None, search_s: float = 30.0 * 86400.0,
+    read_passes: S.PassReader | None = None, search_s: float = 30.0 * 86400.0, leave_out: tuple[str, ...] = (),
 ) -> tuple[list[Frame], Window]:
     """The frames of a run and the window they span.
 
@@ -222,7 +222,8 @@ def run_frames(
     is hidden, so the two kinds of run cover the same passes.
 
     Without a pass list the frames are the first `n` overpasses of the visible rows with a detection in the box,
-    and the window says so.
+    and the window says so. `leave_out` names platforms whose passes are no frame at all: platforms whose rows the
+    cache does not hold for the window (`backend.model.cached_platforms`).
     """
     back = np.flatnonzero(~hidden_mask(det, hidden))          # position in `det` of every visible row
     vis = det.select(back)
@@ -231,7 +232,8 @@ def run_frames(
         if not modis:
             raise LookupError("no MODIS overpass with a detection in the box at or after that start")
         t0 = modis[0][0].time_s
-        every = archive_platforms("MODIS", t0, t0 + search_s) + archive_platforms("VIIRS", t0, t0 + search_s)
+        every = tuple(p for p in archive_platforms("MODIS", t0, t0 + search_s) + archive_platforms("VIIRS", t0, t0 + search_s)
+                      if p not in leave_out)
         # the anchor's own pass crossed the box within the minute before its rows' time stamp or after it
         slots, _ = S.pass_slots(every, t0 - 120.0, t0 + search_s, box, read_passes)
     except LookupError as exc:

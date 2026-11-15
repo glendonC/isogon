@@ -311,6 +311,7 @@ def solve_real_reconstruction(
     row_source: str = ROW_SOURCE,
     read_passes: Callable[..., list[dict[str, Any]]] | None = None,
     estimate: str | None = None,
+    platforms_cached: Callable[..., tuple[tuple[str, ...], dict[str, str]]] | None = None,
 ) -> SolvedRealRun:
     """Reconstruct a region from real rows, starting at `start` (UTC date or date-time).
 
@@ -327,6 +328,17 @@ def solve_real_reconstruction(
     t_begin = time.perf_counter()
     spec = region_terrain.spec
     bbox = (spec.bbox.west, spec.bbox.south, spec.bbox.east, spec.bbox.north)
+    # Which VIIRS platforms have their rows in the cache over a window: read from the extracts' manifests when the
+    # rows come from the cache; a caller that hands in its own rows has every platform it gives.
+    if platforms_cached is None:
+        if read_firms is None:
+            from backend.model.cached_platforms import platforms_with_rows
+
+            def platforms_cached(box: Any, family: str, t0: float, t1: float) -> tuple[tuple[str, ...], dict[str, str]]:
+                return platforms_with_rows(box, family, t0, t1, region_id=spec.id)
+        else:
+            def platforms_cached(box: Any, family: str, t0: float, t1: float) -> tuple[tuple[str, ...], dict[str, str]]:
+                return hidden_platforms_in(family, None, t0, t1), {}
     if read_firms is None or context_box is None:
         from backend.firms import read_firms as _read, region_box as _box  # the defaults
 
@@ -350,6 +362,17 @@ def solve_real_reconstruction(
     frames: list[Frame]
     win: Window
     frames, win = run_frames(rows_seen, bbox, start_s, n=FRAMES, hidden="VIIRS" if holdout else None, read_passes=read_passes)
+    # A platform whose rows the cache does not hold for the window has no pass in the run: no frame, no hidden pass,
+    # no score. Its rows, had any been fetched, would still be sealed with the rest of VIIRS. Framed again until the
+    # platforms left out are the same for the window the frames span.
+    without_rows: dict[str, str] = {}
+    for _ in range(3):
+        _, missing = platforms_cached(bbox, "VIIRS", win.start_s, win.end_s)
+        if set(missing) <= set(without_rows):
+            break
+        without_rows.update(missing)
+        frames, win = run_frames(rows_seen, bbox, start_s, n=FRAMES, hidden="VIIRS" if holdout else None,
+                                 read_passes=read_passes, leave_out=tuple(sorted(without_rows)))
     from_list = frames[0].slot is not None
     # The closed rule, asked with the run's box and its own window, which was found from visible rows alone. A run
     # with a satellite held out stops here, before anything is estimated. A run with every satellite goes on and
@@ -374,7 +397,8 @@ def solve_real_reconstruction(
     grid375 = EvalGrid.from_bbox(bbox, CELL_KM)
     area = grid375.cell_area_km2
     # which platforms are hidden follows from the archive's dates, not from the hidden rows
-    hidden_platforms = list(hidden_platforms_in("VIIRS", None, win.start_s, win.end_s)) if holdout else []
+    hidden_platforms = ([p for p in hidden_platforms_in("VIIRS", None, win.start_s, win.end_s) if p not in without_rows]
+                        if holdout else [])
     recon = OccupancyReconstruction(grid375, visible, params)
     # the switch: only a run with the sharp satellite held out, on visible rows alone, before anything is scored
     chal_factory, headline, chal_doc, chal_method = None, "reconstruction", None, None
@@ -527,7 +551,8 @@ def solve_real_reconstruction(
                 report["schedule"]["frames_note"] = "slots[i].frame is the held-out frame of the run that slot i is; every held-out frame is a slot"
             else:
                 report = blind_test_sealed(visible, sealed, bbox, methods, window=span, read_passes=read_passes,
-                                           declare=headline)
+                                           declare=headline,
+                                           target_filter=(lambda s: s.platform not in without_rows) if without_rows else None)
             # The declared cells leave the report and go beside it in the answer: a server withholds the report
             # until the reveal, and these were fixed before the hidden rows were opened, so a page may draw them
             # from the first answer. Each published entry keeps their digest (`cells_sha256`).
@@ -730,9 +755,12 @@ def solve_real_reconstruction(
         "hidden_platforms": hidden_platforms,
         "hidden_platforms_note": (
             "every VIIRS detection of these platforms was kept from the estimate and used only to score it; the list "
-            "comes from the archive's start dates, not from the hidden rows"
+            "comes from the archive's start dates, not from the hidden rows, less any platform whose rows the cache "
+            "does not hold for the window (platforms_without_rows_in_the_cache)"
             if holdout else "nothing was hidden: VIIRS detections were assimilated"
         ),
+        # platforms flying in the window whose rows were never fetched for the region: no frame, no hidden pass, no score
+        "platforms_without_rows_in_the_cache": dict(sorted(without_rows.items())),
         "window": win.as_dict(),
         "firms_rows_used": n_used,
         "hidden_rows": {
