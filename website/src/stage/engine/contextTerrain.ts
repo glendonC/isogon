@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { COMMON_HEIGHTFIELD_GLSL, createDemR32FTexture } from '../earthCutawayShaders';
 import { ATMOSPHERE_GLSL, NIGHT_GLSL, SKY_VIEW_MAPPING_GLSL } from './atmosphere';
+import { levelGround } from './levelGround';
 import { loadPackImage } from './terrainPack';
 import { TERRAIN_LOOK_GLSL } from './terrainShader';
 
@@ -50,7 +51,7 @@ export interface LoadedTerrainContext {
   /** Elevation in metres, row 0 south (the same order as the pack grid the stage keeps). */
   alignedDem: Float32Array;
   gridRes: number;
-  /** r, g: true-scale unit normal x (east) and z (south) as n * 0.5 + 0.5. b: sea. */
+  /** r, g: true-scale unit normal x (east) and z (south) as n * 0.5 + 0.5. b: sea. a: a lake (level ground). */
   shadeTexture: THREE.DataTexture;
   orthoTexture: THREE.Texture;
   dispose: () => void;
@@ -63,9 +64,10 @@ export interface TerrainContextLoadOptions {
   isCancelled?: () => boolean;
 }
 
-/** Normals and the sea mask of the context grid, computed once when it is loaded. */
+/** Normals, the sea mask and the lakes of the context grid, computed once when it is loaded. */
 function buildShadeTexture(dem: Float32Array, n: number, extentKm: [number, number]): THREE.DataTexture {
   const out = new Uint8Array(n * n * 4);
+  const lakes = levelGround(dem, n);
   const dx = (extentKm[0] * 1000) / (n - 1);
   const dz = (extentKm[1] * 1000) / (n - 1);
   for (let r = 0; r < n; r++) {
@@ -82,7 +84,7 @@ function buildShadeTexture(dem: Float32Array, n: number, extentKm: [number, numb
       out[o] = Math.round((-dhdx * inv * 0.5 + 0.5) * 255);
       out[o + 1] = Math.round((-dhdz * inv * 0.5 + 0.5) * 255);
       out[o + 2] = dem[r * n + c] === 0 ? 255 : 0;
-      out[o + 3] = 255;
+      out[o + 3] = lakes[r * n + c] ? 255 : 0;
     }
   }
   const tex = new THREE.DataTexture(out, n, n, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -222,7 +224,12 @@ void main() {
   vec3 N = normalize(nTrue / uUnitsPerMetre);
   float sea = smoothstep(0.55, 0.95, shade.b);
 
-  vec3 albedo = pictureToScene(texture2D(uContextOrtho, vCuv).rgb);
+  vec3 picture = texture2D(uContextOrtho, vCuv).rgb;
+  vec3 albedo = pictureToScene(picture);
+  // A lake by the elevation: level ground, unless the picture plainly shows a green field there
+  // (a gentler edge than the sea's: a lake is a few posts wide out here, and its shore would step)
+  float lake = smoothstep(0.30, 0.70, shade.a) * notGreenField(picture);
+  float water = max(sea, lake);
 
   // The pack's light balance (see ./terrainShader.ts), without baked shadows or sky view
   float nDotL = max(0.0, dot(N, sunDir));
@@ -231,16 +238,14 @@ void main() {
                 + uSunColor * (SUN_KEY * nDotL);
   vec3 lit = albedo * lighting;
 
-  if (sea > 0.01) {
+  // The pack's water (see waterSurface in ./terrainShader.ts): the same terms, so a lake or a
+  // sea that crosses the pack's edge is one body of water
+  if (water > 0.01) {
     vec3 up = vec3(0.0, 1.0, 0.0);
     vec3 halfVec = normalize(sunDir + viewDir);
     float fresnel = pow(1.0 - max(0.0, dot(up, viewDir)), 4.0);
     float spec = pow(max(0.0, dot(up, halfVec)), 96.0);
-    vec3 water = mix(lit, vec3(0.05, 0.13, 0.21), 0.42)
-               + vec3(0.22, 0.28, 0.36) * fresnel * 0.45 + vec3(1.0, 0.93, 0.80) * spec * 0.85;
-    lit = mix(lit, water, sea);
-    // By night water gives back a dark sky: no glint, and never brighter than the land beside it
-    lit = mix(lit, mix(lit, vec3(0.05, 0.13, 0.21), 0.42) * 0.45, sea * uNight);
+    lit = waterSurface(lit, water, lake, fresnel, spec, uNight);
   }
 
   // The same air as over the pack: distance takes the ground into what the dome draws behind it
@@ -258,6 +263,8 @@ void main() {
     uSkyExposure, uFloorColor, uFloorHaze
   );
   vec3 rgb = nightGrade(capSurface(lit * trans + backdrop * (1.0 - trans)));
+  // By night water gives back a dark sky: never brighter than the land beside it
+  rgb *= 1.0 - WATER_NIGHT_DIM * water * uNight;
   gl_FragColor = vec4(rgb, uContextMix);
 }
 `;

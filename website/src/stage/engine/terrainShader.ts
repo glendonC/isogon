@@ -43,6 +43,29 @@ vec3 pictureToScene(vec3 displayLinear) {
   return max(ACES_IN_INV * v, vec3(0.0)) * 0.6;
 }
 
+// Water. Where it is comes from the data: the sea at 0 m, a lake as ground that is exactly level
+// in the elevation (see ./shadowBake.ts and ./contextTerrain.ts). Its colour is drawn: on a lake
+// mostly one deep tone, so the strips and glints of an aerial mosaic do not cut the lake into
+// pieces, with a little of the picture left in it. The pack and the land around it use the
+// same terms, so a lake that crosses the pack's edge is one body of water.
+const vec3 WATER_DEEP = vec3(0.05, 0.13, 0.21);
+const float WATER_PICTURE_LEFT = 0.14;  // share of the picture's own colour kept on a lake
+const float WATER_NIGHT_DIM = 0.55;     // by night water gives back a dark sky
+
+// Level ground that is plainly vegetation in the picture (bright and green) is not water
+float notGreenField(vec3 picture) {
+  float luma = dot(picture, vec3(0.2126, 0.7152, 0.0722));
+  float green = picture.g / max(max(picture.r, picture.b), 1e-3);
+  return 1.0 - smoothstep(1.08, 1.25, green) * smoothstep(0.03, 0.08, luma);
+}
+
+// The lit surface with water on it. glint: fresnel and sun glint, already scaled; none by night
+vec3 waterSurface(vec3 lit, float water, float lake, float fresnel, float spec, float night) {
+  vec3 deep = mix(lit, WATER_DEEP, mix(0.42, 1.0 - WATER_PICTURE_LEFT, lake));
+  vec3 glint = (vec3(0.22, 0.28, 0.36) * fresnel * 0.45 + vec3(1.0, 0.93, 0.80) * spec * 0.85) * (1.0 - night);
+  return mix(lit, deep + glint, water);
+}
+
 // Lit ground never reaches the bloom threshold: a smooth ceiling that keeps the hue
 vec3 capSurface(vec3 c) {
   float m = max(c.r, max(c.g, c.b)) / TERRAIN_CEILING;
@@ -121,6 +144,7 @@ uniform vec4 uViirsPass;
 uniform vec4 uScanStrip;  // (MODIS strip center along track km, strength, VIIRS center km, strength)
 uniform float uLatticeMix; // 1 draws the lattice of empty scan cells; 0 on the landing page, which shows no grid
 uniform float uHasSeaCoast;
+uniform float uLakeMix;       // 1 when the elevation is the place's own: level ground is then a lake
 uniform sampler2D uFireHist;  // arrival, extinction, peak, burned (see ./fireField.ts)
 uniform float uFireTime;      // fractional epoch
 uniform vec2 uWindDirUv;
@@ -128,7 +152,7 @@ uniform vec2 uWindDirUv;
 // Terrain pack (all optional, weights are 0 without a pack)
 uniform sampler2D uAuxTex;      // r normal x (east), g normal z (south), b sky view, a canopy
 uniform float uAuxMix;
-uniform sampler2D uShadowTex;   // baked sun shadow factor, 1 = lit
+uniform sampler2D uShadowTex;   // baked once: r the sun shadow factor (1 = lit), g level ground
 uniform sampler2D uSmokeShadowTex; // transmittance of the smoke toward the sun at ground level
 uniform float uSmokeShadowMix;
 uniform vec3 uUnitsPerMetre;    // stage units per metre on x, y, z
@@ -684,7 +708,10 @@ void main() {
                     * step(photoRgb.r * 1.45, photoRgb.b)
                     * (1.0 - smoothstep(0.022, 0.042, satLuma))
                     * (1.0 - smoothstep(0.012, 0.028, slopeMag));
-  float waterMask = clamp(max(seaMask, inlandWater), 0.0, 1.0);
+  // A lake by the elevation: level ground, unless the picture plainly shows a green field there
+  vec4 baked = texture2D(uShadowTex, vUv);
+  float lake = baked.g * uLakeMix * notGreenField(photoRgb);
+  float waterMask = clamp(max(max(seaMask, inlandWater), lake), 0.0, 1.0);
 
   // --- Close-range micro detail: rock on steep walls, crown texture where canopy is high ----
   // Rendering treatment only. It appears when the imagery is magnified past its own resolution.
@@ -737,7 +764,7 @@ void main() {
   // of the day it was taken). A slope square to the sun gets about 1.15, level ground about 0.95,
   // a slope turned away or in cast shadow about 0.25, so relief reads by contrast.
   // Sun shadow is baked once per region with a soft edge (./shadowBake.ts).
-  float shadow = mix(0.10, 1.0, texture2D(uShadowTex, vUv).r);
+  float shadow = mix(0.10, 1.0, baked.r);
   // The context terrain around the pack has no baked shadows and no sky view map. Toward the pack
   // edge both ease out to what the context uses, so the light does not step along the boundary.
   vec2 toPackEdge = min(vUv, 1.0 - vUv);
@@ -779,12 +806,7 @@ void main() {
     vec3 waterN = normalize(N + vec3(rippleA, 0.0, rippleB) * (0.05 * rippleFade * waterMask));
     float spec = pow(max(0.0, dot(waterN, halfVec)), 96.0) * shadow;
     float fresnel = pow(1.0 - max(0.0, dot(waterN, viewDir)), 4.0);
-    vec3 deepWaterTint = mix(litEarth, vec3(0.05, 0.13, 0.21), 0.42);
-    litEarth = mix(
-      litEarth,
-      deepWaterTint + vec3(0.22, 0.28, 0.36) * fresnel * 0.45 + vec3(1.0, 0.93, 0.80) * spec * 0.85,
-      waterMask
-    );
+    litEarth = waterSurface(litEarth, waterMask, lake, fresnel, spec, uNight);
   }
 
   // Aerial perspective: Rayleigh and Mie scattering along the true-scale path from the camera
@@ -814,7 +836,7 @@ void main() {
   vec3 litEarthClear = litEarth;
   litEarth = nightGrade(capSurface(litEarth * hazeTrans + hazeIn));
   // By night water gives back a dark sky: never brighter than the land beside it
-  litEarth *= 1.0 - 0.55 * waterMask * uNight;
+  litEarth *= 1.0 - WATER_NIGHT_DIM * waterMask * uNight;
 
   // Sample 256x256 scientific solver fields
   vec4 f0 = textureLod(uFieldTex0, vUv, 0.0);

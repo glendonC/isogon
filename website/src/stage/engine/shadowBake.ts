@@ -43,6 +43,34 @@ float demHeight(vec2 uv) {
   return clamp(elev - uElevRange.x, 0.0, span * 1.15) * uReliefScale;
 }
 
+// Elevation in metres, as the data holds it
+float demElev(vec2 uv) {
+  vec2 c = clamp(uv, vec2(0.0), vec2(1.0)) * (uDemRes - 1.0);
+  vec2 i0 = floor(c);
+  vec2 f = c - i0;
+  vec2 i1 = min(i0 + vec2(1.0), vec2(uDemRes - 1.0));
+  float inv = 1.0 / uDemRes;
+  float h00 = texture2D(uDem, (i0 + 0.5) * inv).r;
+  float h10 = texture2D(uDem, (vec2(i1.x, i0.y) + 0.5) * inv).r;
+  float h01 = texture2D(uDem, (vec2(i0.x, i1.y) + 0.5) * inv).r;
+  float h11 = texture2D(uDem, (i1 + 0.5) * inv).r;
+  return mix(mix(h00, h10, f.x), mix(h01, h11, f.x), f.y);
+}
+
+// Level ground: within most of a post in every direction the elevation changes by a few
+// centimetres at most. The elevation sources in use level their lakes, and nothing else in
+// them is that level, so this is where a lake is. 1 on level ground, 0 elsewhere.
+float levelGround(vec2 uv) {
+  float reach = 0.7 / (uDemRes - 1.0);
+  float e0 = demElev(uv);
+  float worst = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float a = float(i) * 0.7853982;
+    worst = max(worst, abs(demElev(uv + vec2(cos(a), sin(a)) * reach) - e0));
+  }
+  return 1.0 - smoothstep(0.05, 0.12, worst);
+}
+
 void main() {
   vec3 sun = normalize(uSunDir);
   float horiz = max(length(sun.xz), 1e-4);
@@ -67,7 +95,7 @@ void main() {
     if (lit <= 0.0) break;
   }
   lit = smoothstep(0.0, 1.0, clamp(lit, 0.0, 1.0));
-  gl_FragColor = vec4(lit, lit, lit, 1.0);
+  gl_FragColor = vec4(lit, levelGround(vUv), lit, 1.0);
 }
 `;
 
@@ -100,7 +128,10 @@ export class SunShadowBaker {
     this.scene.add(this.quad);
   }
 
-  /** Renders the shadow factor of one heightfield into a new texture and returns its target. */
+  /**
+   * Renders one heightfield's sun shadow factor (red) and its level ground (green: 1 where the
+   * elevation is level, which is a lake) into a new texture and returns its target.
+   */
   public bake(
     demTexture: THREE.Texture,
     demGridRes: number,

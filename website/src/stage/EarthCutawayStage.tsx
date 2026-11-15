@@ -1248,6 +1248,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uScanStrip: { value: uScanStrip },
       uLatticeMix: { value: 1.0 },
       uHasSeaCoast: { value: nextBundle.hasSeaCoast ? 1.0 : 0.0 },
+      // (level ground is a lake only in elevation that is the place's own: a drawn stand-in and
+      // the flat ground of a missing file are level without being water)
+      uLakeMix: { value: nextBundle.noRealGround ? 0.0 : 1.0 },
       uFireHist: { value: ensureFireHistory(nextBundle).texture },
       uFireTime: { value: 0.0 },
       uWindDirUv: { value: uWindDirUv },
@@ -1461,6 +1464,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       terrainUniforms.uSatNext.value = nextBundle.satTex;
       uExtentKm.set(nextBundle.widthKm, nextBundle.depthKm);
       terrainUniforms.uHasSeaCoast.value = nextBundle.hasSeaCoast ? 1.0 : 0.0;
+      terrainUniforms.uLakeMix.value = nextBundle.noRealGround ? 0.0 : 1.0;
       uWindDirUv.set(nextBundle.windDirUv[0], nextBundle.windDirUv[1]);
       terrainUniforms.uFireHist.value = ensureFireHistory(nextBundle).texture;
 
