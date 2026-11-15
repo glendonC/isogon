@@ -34,6 +34,8 @@ export interface WorldCanvasProps {
   padLeft?: number;
   /** Pixels at the bottom kept for a panel over the map (a phone's legend or list). */
   padBottom?: number;
+  /** Pixels on the right covered by something of the screen around the map (a list beside it). */
+  padRight?: number;
   /** On a tall, narrow screen the view is fitted by height and opens on this point; the visitor pans sideways. */
   centre?: [number, number] | null;
   /** True while the visitor draws a box: a drag draws instead of moving the map. */
@@ -85,7 +87,7 @@ function hatchPattern(ctx: CanvasRenderingContext2D, dpr: number): CanvasPattern
   return ctx.createPattern(c, 'repeat');
 }
 
-export function WorldCanvas({ label, layers = [], hatchLand = false, focus = OPENING, padLeft = 0, padBottom = 0, centre = null, drawing = false, onBox, onHover, onClickMap, children, className }: WorldCanvasProps) {
+export function WorldCanvas({ label, layers = [], hatchLand = false, focus = OPENING, padLeft = 0, padBottom = 0, padRight = 0, centre = null, drawing = false, onBox, onHover, onClickMap, children, className }: WorldCanvasProps) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -112,8 +114,9 @@ export function WorldCanvas({ label, layers = [], hatchLand = false, focus = OPE
   useEffect(() => {
     if (!(size.w > 0 && size.h > 0) || moved.current) return;
     const left = Math.min(padLeft, size.w * 0.6);
+    const right = Math.min(padRight, size.w * 0.6 - left);
     const bottom = Math.min(padBottom, size.h * 0.7);
-    const w = size.w - left;
+    const w = size.w - left - right;
     const h = size.h - bottom;
     let v = fitView(focus, w, h);
     if (h > w * 1.15) {
@@ -122,9 +125,9 @@ export function WorldCanvas({ label, layers = [], hatchLand = false, focus = OPE
       const c = centre ?? [(focus[0] + focus[2]) / 2, (focus[1] + focus[3]) / 2];
       v = { scale, cx: toX(c[0]), cy: toY((focus[1] + focus[3]) / 2) };
     }
-    setView(clampView({ ...v, cx: v.cx - (left / 2) * v.scale, cy: v.cy + (bottom / 2) * v.scale }, size.w, size.h));
+    setView(clampView({ ...v, cx: v.cx - ((left - right) / 2) * v.scale, cy: v.cy + (bottom / 2) * v.scale }, size.w, size.h));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [size.w, size.h, focusKey, padLeft, padBottom, centreKey]);
+  }, [size.w, size.h, focusKey, padLeft, padBottom, padRight, centreKey]);
 
   const proj = useMemo(() => (view && size.w ? projector(view, size.w, size.h) : null), [view, size.w, size.h]);
 

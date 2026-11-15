@@ -47,6 +47,8 @@ export interface ChooseOnEarthProps {
    * plain words; joined to any `held` the registry gives.
    */
   held?: Record<string, string | true> | null;
+  /** Pixels of the Earth that the screen around it covers on the right (its list): fitted beside, labels kept clear. */
+  roomRight?: number;
 }
 
 type Mode = 'fire' | 'factor';
@@ -108,7 +110,7 @@ function ramp(ramp: Array<[number, [number, number, number]]>): string {
   return `linear-gradient(to right, ${ramp.map(([t, [r, g, b]]) => `rgb(${r | 0} ${g | 0} ${b | 0}) ${(t * 100).toFixed(0)}%`).join(', ')})`;
 }
 
-export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, places, currentFire = null, limits = null, onFire, onPlace, onBox, startDrawing = false, startOnFactor = false, startBox = null, startOpen = null, focus, held = null }: ChooseOnEarthProps) {
+export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, places, currentFire = null, limits = null, onFire, onPlace, onBox, startDrawing = false, startOnFactor = false, startBox = null, startOpen = null, focus, held = null, roomRight = 0 }: ChooseOnEarthProps) {
   const world = useWorldLayer(layers, layer);
   const [mode, setMode] = useState<Mode>(startOnFactor && factor ? 'factor' : 'fire');
   // The legend and the tools stand over the map; labels keep clear of them.
@@ -231,7 +233,8 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
     });
     const onScreen = items.filter((m) => m.x > -20 && m.y > -20 && m.x < p.w + 20 && m.y < p.h + 20);
     const at = open ? cardAt(p) : null;
-    const placed = placeLabels(onScreen, p.w, p.h, { avoid: at ? [at.rect, ...overlays] : overlays });
+    const covered = roomRight > 0 ? [{ left: p.w - roomRight, top: 0, width: roomRight, height: p.h }] : [];
+    const placed = placeLabels(onScreen, p.w, p.h, { avoid: [...(at ? [at.rect] : []), ...overlays, ...covered] });
     return (
       <>
         <svg className="world-leaders" width={p.w} height={p.h} aria-hidden="true">
@@ -421,6 +424,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
         layers={grid}
         focus={focus}
         padBottom={padBottom}
+        padRight={roomRight}
         centre={currentCentre}
         hatchLand
         drawing={drawing}

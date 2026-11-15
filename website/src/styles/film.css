@@ -146,6 +146,11 @@
   display: none;
 }
 
+/* The Earth's legend rises above the guide's room, which is wider in the film. */
+.iso-film .world-legend:not(.world-tests) {
+  bottom: var(--film-room-bottom);
+}
+
 .iso-film .world-tests {
   top: var(--film-room-top);
   width: min(600px, 32vw);

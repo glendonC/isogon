@@ -82,6 +82,7 @@ function Earth() {
         startOnFactor={Q.get('onfactor') === '1'}
         startDrawing={Q.get('draw') === '1'}
         focus={boxParam(Q.get('focus')) ?? undefined}
+        roomRight={Number(Q.get('room') ?? 0)}
         onFire={(p, f) => setSaid(`Chosen: ${f.label}, ${p.name}.`)}
         onPlace={(p) => setSaid(`Chosen: the fire record of ${p.name}.`)}
         onBox={(b) => setSaid(`Chosen: the area ${b.map((v) => v.toFixed(2)).join(', ')}.`)}
