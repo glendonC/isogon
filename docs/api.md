@@ -250,7 +250,7 @@ Shortened: `summary_metrics` has 5 keys, `regime_markers` 7 entries, `annual_sum
 {
   "schema_version": "1.0.0",
   "source": "firms",
-  "model_version": "overlap_ratio_v1",
+  "model_version": "pooled_month_size_v1",
   "provenance": "Real NASA FIRMS standard processing rows (...), counted inside the region's context box. Not simulated.",
   "downloaded_firms_rows": 388540,
   "region_id": "plumas_ca",
@@ -260,9 +260,11 @@ Shortened: `summary_metrics` has 5 keys, `regime_markers` 7 entries, `annual_sum
   "reference_frame": "VIIRS_SNPP_375M_EQUIV",
   "units": {"modis_raw_rate": "hotspots_per_1000km2_day (Terra + Aqua)", "viirs_raw_rate": "hotspots_per_1000km2_day (Suomi NPP)", "harmonized_mean": "suomi_npp_equivalent_hotspots_per_1000km2_day"},
   "harmonization_method": {
-    "id": "overlap_ratio_v1",
+    "id": "pooled_month_size_v1",
     "in_use": true,
-    "description": "...",
+    "description": "Suomi NPP equivalent rows = MODIS rows (Terra plus Aqua) x the place's ratio for that month of the year x a factor for the size of the month's MODIS count. ...",
+    "interval": {"id": "heldout_log_error_quantiles_v1", "level": 0.8, "tables": "terra_aqua", "table_month": "band 40", "table_year": "band 40", "what": "...", "fitted_on": {"source": "fire cube", "cube_build": "20261115T034227Z-aec5a74a", "countries": 238, "places": 5286, "...": "..."}},
+    "fitted_on": {"months": ["2012-02"], "suomi_npp_rows": 160085.0, "modis_rows": 38777.0, "prior": "surroundings: the box grown to [-124.5, 37.0, -117.75, 43.0], from the fire cube, less the place's rows", "ratio_over_the_overlap": 4.1283},
     "counted_rows": "...",
     "outage_rule": "...",
     "overlap_months_excluded_for_outages": ["2012-03"],
@@ -273,23 +275,24 @@ Shortened: `summary_metrics` has 5 keys, `regime_markers` 7 entries, `annual_sum
     "ratio_terra_only": {"ratio": 8.4757, "p10": 7.3213, "p90": 8.9392},
     "validation": {
       "held_out_years": [2012],
-      "per_year": [{"year": 2012, "months": 11, "viirs_observed": 17021, "modis_observed": 3970, "ratio_fitted_without_this_year": 4.1029, "viirs_predicted": 16288.5, "relative_error": -0.043, "relative_error_without_harmonization": -0.7668, "inside_interval": true}],
-      "median_abs_relative_error_annual": 0.1086,
-      "median_abs_relative_error_without_harmonization": 0.7343,
-      "annual_interval_coverage": 0.6429,
-      "monthly_interval_coverage": 0.414,
-      "months_tested": 157
+      "years_not_held_out": [2021],
+      "per_year": [{"year": 2012, "months": 10, "suomi_npp_observed": 17001.0, "predicted": 17161.6, "relative_error": 0.0094, "relative_error_without_harmonization": -0.7704, "inside_interval": true}],
+      "median_abs_relative_error_annual": 0.1152,
+      "median_abs_relative_error_without_harmonization": 0.7311,
+      "annual_interval_coverage": 0.9231,
+      "monthly_interval_coverage": 0.8125,
+      "months_tested": 144
     },
     "replaced_only_by": "a method that beats it on held-out overlap years"
   },
-  "summary_metrics": {"total_months": 302, "years_span": [2000, 2025], "first_month": "2000-11", "last_month": "2025-12", "viirs_to_modis_overlap_ratio": 4.1217},
+  "summary_metrics": {"total_months": 302, "years_span": [2000, 2025], "first_month": "2000-11", "last_month": "2025-12", "viirs_to_modis_overlap_ratio": 4.1283},
   "regime_markers": [{"year_month": "2000-11", "label": "MODIS Terra rows begin", "source": "first month with rows in the FIRMS country file"}],
   "annual_summary": [{"year": 2000, "months": 2, "modis_raw_mean": 0.0245, "viirs_raw_mean": null, "harmonized_mean": 0.2077, "harmonized_peak_month": 0.3686, "mean_coverage_fraction": null, "raw_counts": {"Terra": 69}}],
   "records": [
     {
       "index": 0, "year": 2000, "month": 11, "year_month": "2000-11",
       "modis_raw_rate": 0.0435, "viirs_raw_rate": null,
-      "harmonized_mean": 0.3686, "harmonized_p10": 0.3184, "harmonized_p90": 0.3886,
+      "harmonized_mean": 0.3878, "harmonized_p10": 0.2237, "harmonized_p90": 0.5065,
       "coverage_fraction": null, "state_label": "Harmonized", "sensor_regime": "TERRA_ONLY",
       "modis_orbital_drift_factor": null, "ratio_used": "terra_only",
       "raw_counts": {"Terra": {"day": 57, "night": 4, "total": 61, "static_excluded": 0, "offshore_on_sea_excluded": 0, "outage_days": 0}, "Aqua": null, "Suomi NPP": null, "NOAA-20": null, "NOAA-21": null}
@@ -299,14 +302,15 @@ Shortened: `summary_metrics` has 5 keys, `regime_markers` 7 entries, `annual_sum
 }
 ```
 
-Shortened: sentences cut to `...`, lists cut to one entry, `validation` (12 keys) and `summary_metrics` (16 keys) cut to their main keys; `regime_markers` has 6 entries, `annual_summary` 26, and `records` 302, one per month from November 2000 to December 2025.
+Shortened: sentences cut to `...`, lists cut to one entry, `interval.fitted_on` cut to a few keys, `validation` (14 keys) and `summary_metrics` (16 keys) cut to their main keys; `regime_markers` has 6 entries, `annual_summary` 26, and `records` 302, one per month from November 2000 to December 2025.
 
-- Rates are hotspots per 1,000 km2 of the context box per day. `harmonized_mean` is the MODIS rate times the overlap ratio, on the Suomi NPP scale.
+- Rates are hotspots per 1,000 km2 of the context box per day. `harmonized_mean`, `harmonized_p10` and `harmonized_p90` are the served method's value and 80 percent interval on the Suomi NPP scale, from `backend.model.harmonize.record_series` ([harmonization.md](harmonization.md)): `harmonization_method.id` names the method, `interval` the interval and the tables it is read from, `fitted_on` the months, rows and surroundings the place's ratios were fitted on, and `fitted_on.ratio_over_the_overlap` the one ratio the Record speaks (also `summary_metrics.viirs_to_modis_overlap_ratio`).
+- `validation` is the served method's held-out check: each overlap year is left out in turn, except a year in which the box meets a recorded test fire's region (`years_not_held_out`), and that year's Suomi NPP count is predicted from its MODIS count, with and without harmonization.
 - In `raw_counts`, a platform that delivered no data that month is `null`; one that delivered data and saw nothing in the box has zero counts.
 - `coverage_fraction` and `modis_orbital_drift_factor` are `null`: the real calendar has no coverage product and models no drift.
 - `month_climatology` has one entry per calendar month: the median, 10th and 90th percentile of `harmonized_mean` of that month over every year it is harmonized (`years`, `first_year`, `last_year`). Each record adds `month_median`, `anomaly` (`harmonized_mean` minus `month_median`), `anomaly_ratio` (`harmonized_mean` over `month_median`, `null` when the median is 0), `month_rank` (1 is the most burning of that calendar month over the years) and `month_years`.
 - `current_month` names the route that reads this month so far against its median (`GET /api/calendar/current`).
-- `harmonization_method.fit_rows` is how many MODIS and Suomi NPP rows the ratio was fitted on.
+- `harmonization_method.ratio_terra_aqua` and `ratio_terra_only` are the plain ratio of sums over the overlap months (January 2012 included) and the spread of its per-year ratios (`p10`, `p90`, also `summary_metrics.viirs_to_modis_ratio_p10_p90`); `fit_rows` is how many MODIS and Suomi NPP rows that ratio was fitted on.
 
 The answer for a box, for example `box=-121.6,39.6,-120.8,40.3` (around the Feather River canyon), differs from a region's here:
 
@@ -319,9 +323,9 @@ The answer for a box, for example `box=-121.6,39.6,-120.8,40.3` (around the Feat
   "box_area_km2": 5308.0,
   "place": {"kind": "box", "box": [-121.6, 39.6, -120.8, 40.3], "countries": ["United States"], "label": "39.60 N to 40.30 N, 121.60 W to 120.80 W"},
   "harmonization_method": {"counted_rows": "every FIRMS row except type 1 (active volcano, ...), type 2 (static land source, ...) and type 3 (offshore, ...); ...", "fit_rows": {"modis": 11742, "viirs": 49677}},
-  "summary_metrics": {"viirs_to_modis_overlap_ratio": 4.2307, "held_out_median_abs_relative_error": 0.1756, "held_out_median_abs_relative_error_without_harmonization": 0.7504, "static_rows_excluded": {"Terra": 19, "Aqua": 13}, "offshore_rows_excluded": {"Suomi NPP": 101, "NOAA-20": 112}, "volcano_rows_excluded": {}},
-  "month_climatology": [{"month": 11, "median": 0.2125, "p10": 0.0133, "p90": 0.4782, "years": 26, "first_year": 2000, "last_year": 2025}],
-  "records": [{"year_month": "2020-09", "harmonized_mean": 70.778, "month_median": 0.0, "anomaly": 70.778, "anomaly_ratio": null, "month_rank": 1, "month_years": 25, "raw_counts": {"Terra": {"day": 477, "night": 731, "total": 1208, "static_excluded": 0, "offshore_excluded": 0, "volcano_excluded": 0, "outage_days": 0}}}],
+  "summary_metrics": {"viirs_to_modis_overlap_ratio": 4.2321, "held_out_median_abs_relative_error": 0.154, "held_out_median_abs_relative_error_without_harmonization": 0.7571, "static_rows_excluded": {"Terra": 19, "Aqua": 13}, "offshore_rows_excluded": {"Suomi NPP": 101, "NOAA-20": 112}, "volcano_rows_excluded": {}},
+  "month_climatology": [{"month": 11, "median": 0.2336, "p10": 0.0335, "p90": 0.5058, "years": 26, "first_year": 2000, "last_year": 2025}],
+  "records": [{"year_month": "2020-09", "harmonized_mean": 73.6152, "month_median": 0.0147, "anomaly": 73.6005, "anomaly_ratio": 5007.8367, "month_rank": 1, "month_years": 25, "raw_counts": {"Terra": {"day": 477, "night": 731, "total": 1208, "static_excluded": 0, "offshore_excluded": 0, "volcano_excluded": 0, "outage_days": 0}}}],
   "current_month": {"route": "/api/calendar/current?source=firms&box=-121.6,39.6,-120.8,40.3"}
 }
 ```
@@ -386,32 +390,32 @@ The held-out check of every place's calendar side by side: each region with FIRM
 ```json
 {
   "what": "the Record's held-out check of every place side by side, ...",
-  "definition": "for each overlap year: fit the ratio of sums and the 10th to 90th percentile of per-year ratios on the other overlap years; ...",
-  "nominal_interval": "10th to 90th percentile of per-year ratios (80 percent if the yearly ratio spread held)",
+  "definition": "for each overlap year but a closed one: the method is fitted on the other overlap years and predicts that year's Suomi NPP count of every clean month from its MODIS count; ...",
+  "nominal_interval": "80 percent: the 10th to 90th percentile of held-out errors of predictions of about the same size, per latitude band",
   "places": [
     {
       "kind": "region", "id": "plumas_ca", "name": "Feather River & Plumas, CA", "countries": ["United States"],
       "calendar": "/api/calendar?source=firms&region_id=plumas_ca", "box": [-122.48, 39.1, -119.88, 41.0],
-      "method": "overlap_ratio_v1", "ratio": 4.1217, "ratio_p10_p90": [3.1213, 4.3652],
-      "overlap_years": [2012, 2013], "years_held_out": 14,
-      "median_abs_relative_error_annual": 0.1086, "median_abs_relative_error_without_harmonization": 0.7343,
-      "annual_interval_coverage": 0.6429, "monthly_interval_coverage": 0.414, "months_tested": 157,
-      "monthly_interval_coverage_modis_rows_ge_10": 0.4392, "months_tested_modis_rows_ge_10": 148,
-      "fit_rows": {"modis": 38844, "viirs": 160105}, "overlap_months_excluded_for_outages": 11,
+      "method": "pooled_month_size_v1", "interval": "heldout_log_error_quantiles_v1",
+      "ratio": 4.1283, "ratio_p10_p90": [3.1213, 4.3652], "overlap_years": [2012, 2013], "years_held_out": 13,
+      "median_abs_relative_error_annual": 0.1152, "median_abs_relative_error_without_harmonization": 0.7311,
+      "annual_interval_coverage": 0.9231, "monthly_interval_coverage": 0.8125, "months_tested": 144,
+      "monthly_interval_coverage_modis_rows_ge_10": 0.8296, "months_tested_modis_rows_ge_10": 135,
+      "fit_rows": {"modis": 38777, "viirs": 160085}, "overlap_months_excluded_for_outages": 11,
       "counted_rows": "..."
     },
     {
       "kind": "box", "id": "northern_ghana", "name": "Northern Ghana savanna", "countries": ["Ghana"],
       "calendar": "/api/calendar?source=firms&box=-2.5,7.25,0.1,9.15", "record_only": "many small fires lit by day ...",
-      "ratio": 4.2001, "median_abs_relative_error_annual": 0.0748, "fit_rows": {"modis": 253942, "viirs": 1066572}
+      "ratio": 4.3067, "median_abs_relative_error_annual": 0.0452, "fit_rows": {"modis": 253942, "viirs": 1066572}
     }
   ]
 }
 ```
 
-Shortened: `overlap_years` cut to two of 14 years, the second entry cut to a few keys, and `places` to two of 12.
+Shortened: `overlap_years` cut to two of 14 years, the second entry cut to a few keys, and `places` to two of 15.
 
-- `ratio` and `ratio_p10_p90` are the Terra and Aqua ratio in use and its interval; `median_abs_relative_error_annual` and `..._without_harmonization` are the median over held-out years of the yearly error with the ratio and with MODIS counts taken as they are; the coverages are how often the observed Suomi NPP count of a held-out year, or month, lay inside the interval fitted without that year; `fit_rows` are the rows the ratio was fitted on.
+- `method` and `interval` name the served method and its interval; `ratio` is the ratio over the overlap the Record speaks and `ratio_p10_p90` the spread of the per-year ratios; `median_abs_relative_error_annual` and `..._without_harmonization` are the median over held-out years of the yearly error with the method and with MODIS counts taken as they are; the coverages are how often the observed Suomi NPP count of a held-out year, or month, lay inside the stated interval; `fit_rows` are the rows the served method was fitted on.
 - A region's entry is kept while its rows are unchanged; the first answer after a start reads every calendar, about 30 seconds while the box index is built, then tens of milliseconds. A place whose calendar cannot be built carries `error` and the others still answer.
 
 ## The fire cube

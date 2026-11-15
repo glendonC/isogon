@@ -258,6 +258,13 @@ class PlacesRegistryTests(unittest.TestCase):
             "overlap_months_excluded_for_outages": ["2014-02"], "validation": validation}}
         got = record_check(cal)
         self.assertEqual((got["ratio"], got["ratio_p10_p90"], got["fit_rows"]), (3.8, [3.1, 4.4], {"modis": 100, "viirs": 380}))
+        # With the served method's fit, the ratio is the one the Record speaks, over that fit's months
+        cal["harmonization_method"].update({"fitted_on": {"ratio_over_the_overlap": 3.81234, "modis_rows": 99.0,
+                                                          "suomi_npp_rows": 377.0},
+                                            "interval": {"id": "heldout_log_error_quantiles_v1"}})
+        got = record_check(cal)
+        self.assertEqual((got["ratio"], got["ratio_p10_p90"], got["interval"]), (3.8123, [3.1, 4.4], "heldout_log_error_quantiles_v1"))
+        self.assertEqual(got["fit_rows"], {"modis": 99, "viirs": 377})
         self.assertEqual((got["years_held_out"], got["months_tested"], got["overlap_months_excluded_for_outages"]), (3, 36, 1))
         self.assertEqual((got["median_abs_relative_error_annual"], got["median_abs_relative_error_without_harmonization"]), (0.1, 0.7))
         self.assertEqual((got["annual_interval_coverage"], got["monthly_interval_coverage"]), (0.6667, 0.5))
@@ -420,13 +427,15 @@ class RoutesTests(unittest.TestCase):
         self.assertNotIn("error", evia)
         status, cal = self._get(evia["calendar"])
         m = cal["summary_metrics"]
-        self.assertEqual(evia["ratio"], cal["harmonization_method"]["ratio_terra_aqua"]["ratio"])
-        self.assertEqual(round(evia["ratio"], 4), m["viirs_to_modis_overlap_ratio"])
+        self.assertEqual(evia["ratio"], round(cal["harmonization_method"]["fitted_on"]["ratio_over_the_overlap"], 4))
+        self.assertEqual(evia["ratio"], m["viirs_to_modis_overlap_ratio"])
+        self.assertEqual((evia["method"], evia["interval"]), (cal["harmonization_method"]["id"], cal["harmonization_method"]["interval"]["id"]))
         self.assertEqual(evia["median_abs_relative_error_annual"], m["held_out_median_abs_relative_error"])
         self.assertEqual(evia["median_abs_relative_error_without_harmonization"], m["held_out_median_abs_relative_error_without_harmonization"])
         self.assertEqual((evia["annual_interval_coverage"], evia["monthly_interval_coverage"]),
                          (m["held_out_annual_interval_coverage"], m["held_out_monthly_interval_coverage"]))
-        self.assertEqual(evia["fit_rows"], cal["harmonization_method"]["fit_rows"])
+        fitted_on = cal["harmonization_method"]["fitted_on"]
+        self.assertEqual(evia["fit_rows"], {"modis": int(fitted_on["modis_rows"]), "viirs": int(fitted_on["suomi_npp_rows"])})
 
 
 if __name__ == "__main__":

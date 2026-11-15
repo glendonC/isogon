@@ -88,7 +88,9 @@ class SyntheticCalendarTests(unittest.TestCase):
         self.assertTrue(set(sim["records"][0]) <= set(self.cal["records"][0]))
         self.assertTrue(set(sim["annual_summary"][0]) <= set(self.cal["annual_summary"][0]))
         self.assertEqual(self.cal["source"], "firms")
-        self.assertEqual(self.cal["harmonization_method"]["id"], "overlap_ratio_v1")
+        from backend.model.harmonize_fitted import FITTED
+
+        self.assertEqual(self.cal["harmonization_method"]["id"], FITTED["serve"]["rows"])
         self.assertIn("raw_counts", self.cal["records"][0])
         self.assertNotIn("simulat", self.cal["provenance"].lower().replace("not simulated", ""))
 
@@ -102,10 +104,12 @@ class SyntheticCalendarTests(unittest.TestCase):
         self.assertEqual(aug["raw_counts"]["Suomi NPP"]["total"], 2)
         self.assertEqual(aug["raw_counts"]["NOAA-20"]["total"], 1)
         self.assertIsNone(aug["coverage_fraction"])
-        # Ratio fitted on August: 2 Suomi NPP rows over 3 MODIS rows; harmonized MODIS lands on the VIIRS rate.
+        # The ratio of sums is still reported: 2 Suomi NPP rows over 3 MODIS rows. The harmonized value is the served
+        # method's (docs/harmonization.md); on one month of three MODIS rows it leans on its latitude band, and it
+        # lies inside its own interval.
         self.assertAlmostEqual(self.cal["harmonization_method"]["ratio_terra_aqua"]["ratio"], round(2 / 3, 4))
-        self.assertAlmostEqual(aug["harmonized_mean"], aug["viirs_raw_rate"], places=3)
-        self.assertAlmostEqual(aug["modis_raw_rate"] * 2 / 3, aug["harmonized_mean"], places=3)
+        self.assertLessEqual(aug["harmonized_p10"], aug["harmonized_mean"])
+        self.assertLessEqual(aug["harmonized_mean"], aug["harmonized_p90"])
         sep = recs["2021-09"]
         self.assertEqual((sep["sensor_regime"], sep["state_label"]), ("NO_MODIS", "No MODIS data"))
         self.assertIsNone(sep["harmonized_mean"])
@@ -113,7 +117,9 @@ class SyntheticCalendarTests(unittest.TestCase):
         dec = recs["2021-12"]
         self.assertEqual((dec["sensor_regime"], dec["ratio_used"]), ("TERRA_ONLY", "terra_only"))
         self.assertEqual(dec["raw_counts"]["Terra"], {"day": 0, "night": 0, "total": 0, "static_excluded": 1, "offshore_on_sea_excluded": 0, "outage_days": 0})
-        self.assertEqual(dec["harmonized_mean"], 0.0)
+        # A month MODIS saw nothing in gets the place's expected Suomi NPP count in such months, not zero.
+        self.assertGreaterEqual(dec["harmonized_mean"], 0.0)
+        self.assertLessEqual(dec["harmonized_mean"], dec["harmonized_p90"])
         self.assertEqual(self.cal["summary_metrics"]["static_rows_excluded"], {"Terra": 1})
 
     def test_csv_export_of_a_selection(self) -> None:

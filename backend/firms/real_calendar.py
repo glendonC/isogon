@@ -4,12 +4,15 @@ Counts per month and platform come from the region extracts (backend/firms/archi
 (static land source: plants, refineries) are left out of the rates and counted on their own; every other row
 counts. Rates are hotspots per 1000 km2 of the region's context box per day.
 
-Harmonization, method ``overlap_ratio_v1``: the harmonized value of a month is its
-MODIS rate times the ratio of VIIRS Suomi NPP rows to MODIS rows over the overlap years, so every month from 2000 on
-is estimated the same way and lands on the Suomi NPP scale. Months before Aqua delivers use a Terra-only ratio
-fitted the same way. The interval is the 10th to 90th percentile of the per-year ratios. The method is checked by
-leaving each overlap year out in turn, fitting on the rest and predicting that year's Suomi NPP counts from its MODIS
-counts; the same check runs for no harmonization (MODIS as it is) so the gain is visible.
+Harmonization: the harmonized value of every month, its 80 percent interval and the held-out check come from
+``backend.model.harmonize.record_series``, which serves the method named in ``backend/model/harmonize_fitted.py``
+(``serve.rows``, chosen by a rule written before any table and decided on the whole fire cube; docs/harmonization.md),
+so every month from 2000 on is estimated the same way and lands on the Suomi NPP scale. Months before Aqua delivers
+use Terra alone, fitted the same way. The interval is the 10th to 90th percentile of held-out errors of predictions of
+about the same size. The check leaves each overlap year out in turn, except a year in which the box meets a recorded
+test fire's region (``closed_years_for_box``), and predicts that year's Suomi NPP counts from its MODIS counts; the
+same check runs for no harmonization (MODIS as it is) so the gain is visible. The ratio of Suomi NPP rows to MODIS
+rows over the overlap months is still reported (``ratio_terra_aqua``).
 
 Which platforms deliver data in a month is read from the whole country file (the raw manifests), so a platform with
 0 rows in the box but data elsewhere counts as delivering and observing nothing, while a platform with no data at
@@ -40,7 +43,6 @@ from backend.firms.archive import (
     region_box,
 )
 
-METHOD_ID: str = "overlap_ratio_v1"
 PLATFORMS: tuple[str, ...] = ("Terra", "Aqua", "Suomi NPP", "NOAA-20", "NOAA-21")
 _NOTED: set[str] = set()
 
@@ -614,6 +616,21 @@ def _calendar_payload(
             "raw_counts": raw_counts,
         })
 
+    # The harmonized value and its 80 percent interval come from backend/model/harmonize.py: the method chosen by the
+    # rule written before any table, and an interval from held-out errors (docs/harmonization.md).
+    from backend.model.harmonize import closed_years_for_box, record_series, surround_from_cube
+
+    harm = record_series(records, area, center_lat=(box[1] + box[3]) / 2.0, closed_years=closed_years_for_box(box),
+                         surround=surround_from_cube(tuple(box)))
+    for rec, m in zip(records, harm["months"]):
+        rec["harmonized_mean"], rec["harmonized_p10"], rec["harmonized_p90"] = m["harmonized_rate"], m["p10_rate"], m["p90_rate"]
+    validation = harm["check"]
+    # The one ratio the Record speaks is the served method's over its own fit months (from February 2012); the ratio of
+    # sums above (ratio_terra_aqua) also holds January 2012, when Suomi NPP rows begin on the 20th.
+    served_ratio = (harm["method"].get("fitted_on") or {}).get("ratio_over_the_overlap")
+    overlap_ratio = (round(float(served_ratio), 4) if served_ratio is not None
+                     else (round(fit_both["ratio"], 4) if fit_both["ratio"] else None))
+
     annual = []
     for y in sorted({r["year"] for r in records}):
         rs = [r for r in records if r["year"] == y]
@@ -664,7 +681,7 @@ def _calendar_payload(
     return {
         "schema_version": "1.0.0",
         "source": "firms",
-        "model_version": METHOD_ID,
+        "model_version": harm["method"]["id"],
         "provenance": "Real NASA FIRMS standard processing rows (Country Yearly Summary files; MODIS version labels 6.2 "
                       "for 2000 to 2017, 6.03 for 2018 to 2022 and 61.03 for 2023 to 2025; VIIRS version 2), counted "
                       f"{provenance_where}. Not simulated.",
@@ -679,12 +696,11 @@ def _calendar_payload(
             "harmonized_mean": "suomi_npp_equivalent_hotspots_per_1000km2_day",
         },
         "harmonization_method": {
-            "id": METHOD_ID,
+            "id": harm["method"]["id"],
             "in_use": True,
-            "description": "harmonized = MODIS rate x (Suomi NPP rows / MODIS rows over the overlap months); "
-                           "p10 and p90 from the 10th and 90th percentile of the per-year ratios; months before Aqua "
-                           "use a Terra-only ratio fitted the same way; overlap months in which Suomi NPP, Terra or "
-                           "Aqua has an outage day are left out of the fit and the validation",
+            "description": harm["method"]["what"],
+            "interval": harm["method"]["interval"],
+            "fitted_on": harm["method"]["fitted_on"],
             "counted_rows": counted_rows,
             "outage_rule": f"a day inside a platform's operating span on which it has no row in any cached country file "
                            f"while the other platforms together have at least {OUTAGE_MIN_OTHER_ROWS}",
@@ -707,7 +723,7 @@ def _calendar_payload(
             "years_span": [records[0]["year"], records[-1]["year"]],
             "first_month": months[0],
             "last_month": months[-1],
-            "viirs_to_modis_overlap_ratio": round(fit_both["ratio"], 4) if fit_both["ratio"] else None,
+            "viirs_to_modis_overlap_ratio": overlap_ratio,
             "viirs_to_modis_ratio_p10_p90": [round(fit_both["p10"], 4), round(fit_both["p90"], 4)] if fit_both["p10"] is not None else None,
             "held_out_median_abs_relative_error": validation["median_abs_relative_error_annual"],
             "held_out_median_abs_relative_error_without_harmonization": validation["median_abs_relative_error_without_harmonization"],
@@ -728,21 +744,27 @@ def _calendar_payload(
 
 RECORD_CHECK_WHAT: str = (
     "the Record's held-out check of every place side by side, each read from that place's own calendar "
-    "(harmonization_method.validation): for each overlap year, the ratio and its interval are fitted on the other "
-    "years and that year's Suomi NPP count is predicted from its MODIS count"
+    "(harmonization_method.validation): for each overlap year but a closed one, the served method is fitted on the "
+    "other years and that year's Suomi NPP count is predicted from its MODIS count"
 )
 
 
 def record_check(cal: dict[str, Any]) -> dict[str, Any]:
-    """The figures of a calendar's held-out check, for the answer that lists every place: the ratio in use and its
-    interval, the median yearly error with and without the correction, how often the stated interval held, and the
-    rows the fit was made from. Every value is copied from the calendar; nothing is fitted here."""
+    """The figures of a calendar's held-out check, for the answer that lists every place: the method and its
+    interval, the ratio over the overlap the Record speaks and the spread of its per-year ratios, the median yearly
+    error with and without the correction, how often the stated interval held, and the rows the served method was
+    fitted on. Every value is copied from the calendar; nothing is fitted here."""
     h = cal["harmonization_method"]
     fit, v = h["ratio_terra_aqua"], h["validation"]
     busy = f"monthly_interval_coverage_modis_rows_ge_{BUSY_MONTH_MODIS_ROWS}"
+    fitted_on = h.get("fitted_on") or {}
+    served = fitted_on.get("ratio_over_the_overlap")
+    fit_rows = ({"modis": int(fitted_on["modis_rows"]), "viirs": int(fitted_on["suomi_npp_rows"])}
+                if served is not None and "modis_rows" in fitted_on and "suomi_npp_rows" in fitted_on else h["fit_rows"])
     return {
         "method": h["id"],
-        "ratio": fit.get("ratio"),
+        "interval": (h.get("interval") or {}).get("id"),
+        "ratio": round(float(served), 4) if served is not None else fit.get("ratio"),
         "ratio_p10_p90": [fit.get("p10"), fit.get("p90")],
         "overlap_years": fit.get("years"),
         "years_held_out": len(v["held_out_years"]),
@@ -753,7 +775,7 @@ def record_check(cal: dict[str, Any]) -> dict[str, Any]:
         "months_tested": v["months_tested"],
         busy: v.get(busy),
         f"months_tested_modis_rows_ge_{BUSY_MONTH_MODIS_ROWS}": v.get(f"months_tested_modis_rows_ge_{BUSY_MONTH_MODIS_ROWS}"),
-        "fit_rows": h["fit_rows"],
+        "fit_rows": fit_rows,
         "overlap_months_excluded_for_outages": len(h["overlap_months_excluded_for_outages"]),
         "counted_rows": h["counted_rows"],
     }

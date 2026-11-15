@@ -32,16 +32,16 @@ Cloud and thick smoke block both. FIRMS lists detections only, so a pass that fl
 
 ## The burning calendar
 
-`backend/firms/real_calendar.py` builds a monthly series per region from November 2000, on one scale, with the method `overlap_ratio_v1`.
+`backend/firms/real_calendar.py` builds a monthly series per region, or per drawn box, from November 2000, on one scale, with the method `backend/model/harmonize.py` serves (`pooled_month_size_v1` now; [harmonization.md](harmonization.md)).
 
 1. **Count.** Every FIRMS row inside the region's context box counts, except `type` 2 rows (static land sources) and `type` 3 rows (offshore) on the sea or within 500 m of it. Rates are hotspots per 1,000 km2 per day.
-2. **Ratio.** Over the months in which Terra, Aqua and Suomi NPP all deliver data, the ratio is the sum of Suomi NPP rows over the sum of MODIS rows. Months before Aqua use a Terra-only ratio fitted the same way. A month with an outage day of one of the three platforms is left out of the fit.
-3. **Harmonize.** A month's harmonized value is its MODIS rate times the ratio, so every month from 2000 on is estimated the same way and lands on the Suomi NPP scale. The interval is the 10th to 90th percentile of the per-year ratios.
-4. **Check.** Each overlap year is left out in turn; the ratio is fitted on the others and that year's Suomi NPP count is predicted from its MODIS count. The same check runs with no harmonization, so the gain is visible.
+2. **Ratio.** Over the months from February 2012 in which Terra, Aqua and Suomi NPP all deliver data with no outage day, the place's Suomi NPP rows over its MODIS rows, for each month of the year and over the whole year. A month of the year leans on the whole year's ratio, and that on the place's surroundings and its latitude band, so a place with few rows still gets a ratio. Months before Aqua use Terra alone, fitted the same way.
+3. **Harmonize.** A month's harmonized value is its MODIS rate times its month's ratio times a factor for the size of the month's MODIS count (about 1.9 for a month with one row, 1 for a busy month); a month MODIS saw nothing in gets the place's mean Suomi NPP rate in such months. The method won by a rule written before any table, over 238 countries. The 80 percent interval comes from held-out errors, by the size of the prediction and by latitude band.
+4. **Check.** Each overlap year is left out in turn; the ratio is fitted on the others and that year's Suomi NPP count is predicted from its MODIS count. The same check runs with no harmonization, so the gain is visible. A year with a recorded test fire in the region is not held out.
 
 NOAA-20 and NOAA-21 are counted but not fitted, so the reference pair stays the same through the whole overlap. The calendar does not place fire inside a MODIS pixel; it rescales counts.
 
-The ratios and the result of the check depend on the rows in the local cache and are reported by the route itself: `harmonization_method.ratio_terra_aqua` and `harmonization_method.validation` of `GET /api/calendar?source=firms&region_id=<id>`. The method and the check run on invented rows in `backend/tests/test_firms_calendar.py`.
+The ratios and the result of the check depend on the rows in the local cache and are reported by the route itself: `harmonization_method.fitted_on`, `harmonization_method.interval` and `harmonization_method.validation` of `GET /api/calendar?source=firms&region_id=<id>`. The method and the check run on invented rows in `backend/tests/test_firms_calendar.py`.
 
 ## The simulated engine
 
