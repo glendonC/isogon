@@ -1,4 +1,4 @@
-import { MONTH_NAMES, type RecordMonth } from './record.ts';
+import { MONTH_NAMES } from './record.ts';
 
 /**
  * Every sentence The Record itself puts on screen, in one place. They are labels on a thing (a month, the change of
@@ -154,27 +154,8 @@ export const RECORD_WORDS = {
       ? `A hidden year, VIIRS's count predicted from MODIS: off by ${percent(here.year)} percent here, ${percent(E.yearly)} worldwide, against ${percent(here.uncorrected)} and ${percent(E.yearlyUncorrected)} uncorrected.`
       : `A hidden year, VIIRS's count predicted from MODIS: off by ${percent(E.yearly)} percent worldwide, against ${percent(E.yearlyUncorrected)} uncorrected.`;
   },
-  /** The prompt on a month that opens a fire, the product lane's words; a month without one has no prompt. */
+  /** The action over a month that opens a fire (the dataviz grid's `actionFor`), the product lane's words. */
   openFire: (ym: string) => `Open the ${monthName(ym)} ${ym.slice(0, 4)} fire`,
-  /** On a phone, where the readout leaves the month out for width, a month without a fire is named by its prompt. */
-  phonePrompt: (ym: string) => `${monthName(ym)} ${ym.slice(0, 4)}`,
-  /**
-   * The readout under a pointed month's prompt, two lines in the product lane's words, from the answer's own figures:
-   * the month and what each instrument counted inside the box (MODIS on Terra and Aqua; VIIRS on Suomi NPP, the
-   * satellite whose scale the record is on, so the two lines compare), then the month on that one scale with its range
-   * ("likely"). While the years are drawn as counted, the second line says so.
-   */
-  monthReadout: (m: RecordMonth, asCounted: boolean, narrow = false) => {
-    const whole = (n: number) => count(Math.round(n));
-    const counts = [m.modisRows !== null ? `MODIS ${whole(m.modisRows)}` : null, m.viirsRows !== null ? `VIIRS ${whole(m.viirsRows)}` : null];
-    // On a phone the month is the prompt's (W.phonePrompt) and each line is short enough for its width
-    const first = (narrow ? counts : [`${monthName(m.ym)} ${m.ym.slice(0, 4)}`, ...counts]).filter(Boolean).join('   ');
-    if (asCounted) return `${first}\nAs counted, before the correction`;
-    if (m.rows === null) return `${first}\nNo value on one scale`;
-    const likely = m.rowsP10 !== null && m.rowsP90 !== null ? `likely ${whole(m.rowsP10)} to ${whole(m.rowsP90)}` : null;
-    if (narrow) return [first, `On one scale ${whole(m.rows)}`, likely ? likely[0].toUpperCase() + likely.slice(1) : null].filter(Boolean).join('\n');
-    return `${first}\nOn one scale ${whole(m.rows)}${likely ? `, ${likely}` : ''}`;
-  },
   /** This month so far: the action that asks for it, its label, and why it cannot be counted. */
   thisMonth: 'This month so far',
   counting: 'Counting this month so far',

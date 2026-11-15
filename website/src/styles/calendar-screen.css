@@ -329,10 +329,11 @@
   color: var(--sys-ink);
 }
 
-/* On a phone the trail takes two lines and the guide three: the grid keeps clear of both. */
+/* On a phone the top bar wraps to two rows (the place's name, then Search, Method, Sources) and the guide takes three
+   lines: the grid keeps clear of both. */
 @media (max-width: 700px) {
   .rec {
-    --rec-top: 150px;
+    --rec-top: 196px;
     --rec-guide: 230px;
   }
 }
@@ -369,4 +370,47 @@
 .iso-film .rec__gridline,
 .iso-film .rec__unstable {
   font-size: clamp(12px, 0.74vw, 15px);
+}
+
+/* The record as the dataviz lane's grid (dataviz/RecordGrid.tsx): it fills the plot's room above the Record's own foot,
+   scaled from its own units to the room (its words grow with it on a large screen). */
+.rec__dv {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-s2);
+}
+
+.rec__dvgrid {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.rec__dvgrid .dv-figure {
+  height: 100%;
+}
+
+.rec__dvgrid .dv-svg {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.rec__dvfoot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: var(--sys-s2) var(--sys-s5);
+}
+
+.rec__dvfoot p {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+.iso-film .rec__dvfoot .rec__download {
+  display: none;
 }

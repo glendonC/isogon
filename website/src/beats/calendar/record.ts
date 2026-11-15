@@ -139,6 +139,8 @@ export interface FireRecord {
   method: { id: string | null; level: number | null; monthsHeld: { held: number; of: number } | null; what: string | null };
   /** The answer's own words on where its rows come from (`provenance`), and the box it counts (`bbox`). */
   provenance: string | null;
+  /** The route's answer as it came, for a display that reads it whole (the dataviz lane's RecordGrid). */
+  raw: unknown;
   box: Box | null;
   /**
    * Where the answer's check finds the two satellites' ratio does not hold from year to year
@@ -262,6 +264,7 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
       what: typeof obj(hm.interval)?.what === 'string' ? String(obj(hm.interval)!.what) : null,
     },
     provenance: typeof b.provenance === 'string' ? b.provenance : null,
+    raw: body,
     box: box4(b.bbox) ?? box4(placeObj?.box),
     unstable: unstableOf(obj(val?.ratio_stability)),
   };

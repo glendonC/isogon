@@ -19,7 +19,9 @@ import { boxWords } from './placeWords';
 import { publishRecordView, RECORD_CLOSED, type RecordMonthView } from './recordView';
 import { gridLine, methodLine, notLoadedLine, RECORD_WORDS as W, unstableLine } from './recordWords';
 import { recordCsv, recordFileName } from './recordCsv';
-import { ScenePrompt } from '../../identity/ScenePrompt';
+import { RecordGrid } from '../../dataviz/RecordGrid';
+import { cellsFromCalendar } from '../../dataviz/recordCells';
+import '../../dataviz/dataviz.css';
 import '../../styles/calendar-screen.css';
 
 /**
@@ -401,11 +403,12 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const nowAt = thisMonth ? { x: xOf(Number(thisMonth.month.slice(0, 4))), y: yOf(Number(thisMonth.month.slice(5, 7))) } : null;
   const nowLabel = nowOn && hover === null && thisMonth && nowAt ? thisMonth : null;
   const fm = nowLabel ? null : focus && rec ? rec.months.get(focus) ?? null : null;
-  // The pointed month's cell as a box on the screen, for its prompt
-  const svgBox = svgRef.current?.getBoundingClientRect() ?? null;
-  const cellBox = fm && svgBox && cell > 0
-    ? { left: svgBox.left + xOf(fm.year), top: svgBox.top + yOf(fm.month), right: svgBox.left + xOf(fm.year) + cell - gap, bottom: svgBox.top + yOf(fm.month) + cell - gap }
-    : null;
+  // The record as the dataviz lane's grid: its cells from the answer whole, its reticle on the pointed (else the shown)
+  // month, and over the grid in that month's column the action where the month opens a fire and its readout. The
+  // Record's own grid stays for what that grid does not draw: the years as counted, this month so far, and a phone,
+  // where its labels would fall under the page's 16 px.
+  const dvRecord = useMemo(() => (rec ? cellsFromCalendar(rec.raw) : null), [rec]);
+  const dvOn = dvRecord !== null && !asCounted && !nowOn && !narrowLabel;
   const fx = nowLabel && nowAt ? nowAt.x + cell / 2 : fm ? xOf(fm.year) + cell / 2 : 0;
   const fy = nowLabel && nowAt ? nowAt.y : fm ? yOf(fm.month) : 0;
   // Where the way to this month stands: after the last year, on the years' line
@@ -460,7 +463,43 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
           </p>
         )}
 
-        {rec && cell > 0 && !waiting && (
+        {rec && !waiting && dvOn && dvRecord ? (
+          <div className="rec__dv">
+            <div className="rec__dvgrid">
+              <RecordGrid
+                record={dvRecord}
+                selected={shown}
+                onPick={(ym) => (openable.has(ym) ? show(ym) : pick(ym))}
+                actionFor={(c) => (openable.has(c.ym) ? W.openFire(c.ym) : null)}
+                words={{ noFire: W.noFireLegend, fewer: W.less, more: W.more, modis: W.coarse, viirs: W.sharp }}
+              />
+            </div>
+            <div className="rec__dvfoot">
+              {/* Where the ratio of the two satellites does not hold here: said first, in full ink */}
+              {rec.unstable && (
+                <p className="sys-label rec__unstable" role="note">
+                  {unstableLine(rec.unstable.departing, rec.unstable.tested, rec.unstable.factor)}
+                </p>
+              )}
+              {/* A drawn area: the box its rates are over, on whole squares of the cube, and how many hold detections */}
+              {rec.grid && (
+                <p className="sys-fine rec__gridline">
+                  {gridLine(boxWords(rec.grid.box), rec.grid.step, rec.grid.cells, rec.grid.loaded, rec.grid.complete)}
+                </p>
+              )}
+              <button type="button" className="rec__act rec__download" onClick={download}>
+                <span className="rec__key">G</span>
+                {W.download}
+              </button>
+              {onClose && !guideSpeaks && (
+                <button type="button" className="rec__act rec__close" onClick={onClose}>
+                  <span className="rec__key">Esc</span>
+                  {W.close}
+                </button>
+              )}
+            </div>
+          </div>
+        ) : rec && cell > 0 && !waiting ? (
           <>
             {/* A soft dark ground under the grid and its labels, with no edge: the land shows around it. */}
             <div className="rec__ground" style={{ left: Math.min(x0 - NAMES_W, footX), top: y0, width: Math.max(gridW + NAMES_W, footW), height: footY + footH - 12 - y0 }} />
@@ -572,20 +611,6 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                 </g>
               )}
             </svg>
-
-            {/* The pointed month (else the marked one, waiting for the pointer): one prompt and its
-                readout on the cell, the ux lane's ScenePrompt. Where the month opens a fire the prompt is that action;
-                else there is no prompt (the readout names the month), and choosing it picks it. */}
-            {fm && cellBox && (
-              <ScenePrompt
-                box={cellBox}
-                label={openable.has(fm.ym) ? W.openFire(fm.ym) : narrowLabel ? W.phonePrompt(fm.ym) : ''}
-                readout={W.monthReadout(fm, asCounted, narrowLabel)}
-                // The pointer is on the pointed month, and the marked one waits for it: the reticle stands closed on both
-                invite
-                onSelect={() => (openable.has(fm.ym) ? show(fm.ym) : pick(fm.ym))}
-              />
-            )}
 
             {nowLabel && (
               <div
@@ -716,7 +741,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
             </div>
             )}
           </>
-        )}
+        ) : null}
       </div>
     </section>
   );
