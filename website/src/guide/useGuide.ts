@@ -51,6 +51,26 @@ export interface Guide {
   /** The values and conditions the state's lines were filled from, for the answers to questions asked there. */
   fields: Fields;
   conds: Conditions;
+  /** On a step's first screen: its prompt opened into a small card at the fire (the step's `start_card`). */
+  card: StartCard | null;
+}
+
+export interface StartCard {
+  name: string;
+  do: string;
+  done: string;
+  /** The state's first action, whose key the card names. */
+  act: ScriptAction | null;
+}
+
+/** A step's start card, its lines filled; null where a line names a field not served. */
+function cardOf(step: string, act: ScriptAction | undefined, fields: Fields): StartCard | null {
+  const st = stepOf(step);
+  const c = st?.start_card;
+  if (!st || !c) return null;
+  const doLine = fill(c.do, fields);
+  const done = fill(c.done, fields);
+  return doLine && done ? { name: st.name ?? step, do: doLine, done, act: act ?? null } : null;
 }
 
 /** How many of a state's lines stand together in the guide. */
@@ -110,6 +130,7 @@ const NONE: Guide = {
   more: [],
   fields: {},
   conds: {},
+  card: null,
 };
 
 /** The players' states over a round's end (or plays asked on the open fire), from what the picture publishes. */
@@ -187,6 +208,7 @@ export function useGuide(
       squareLabel: labelOn(state, 'looked_square', f, c),
       besideSquare: promptBeside(state, 'marked_square'),
       results: state?.results ? { line: state.results.line, rows: resultRows(state.results, f, r.gains, c) } : null,
+      card: step === 'play' && id === 'choose' && c.first_pass_of_round === true ? cardOf('play', state?.actions[0], f) : null,
     };
   }
 
@@ -233,5 +255,6 @@ export function useGuide(
     fireLabel: labelOn(state, 'fire', fields, conds, live.playing),
     besideFire: promptBeside(state, 'fire'),
     marks: settled ? marksOnShow(ws, fields, conds, { chance: live.chance, revealed: step === 'test' }) : [],
+    card: step === 'estimate' && id === 'hidden' ? cardOf('estimate', state?.actions[0], fields) : null,
   };
 }

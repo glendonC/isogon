@@ -13,6 +13,7 @@ import {
 } from '../../guide/StageWords';
 import { labelPoint } from '../../guide/anchor';
 import { ClearPin, patchBoxes } from '../../guide/ClearPin';
+import { StartCardView } from '../../guide/StartCardView';
 import '../../styles/test-world.css';
 
 /** A tile's box on screen, from the north-west corners the stage reports for it and its neighbours. */
@@ -61,7 +62,12 @@ export function PlayScene() {
 
   return (
     <div className="tw-scene" data-scene={guide.stateId ?? undefined}>
-      {fireAt && guide.fireLabel && !guide.squareLabel && (
+      {fireAt && guide.card && (
+        <ClearPin at={fireAt} avoid={avoid} className="tw-pin guide-card" plateClass="guide-card__plate" label={guide.card.name}>
+          <StartCardView card={guide.card} />
+        </ClearPin>
+      )}
+      {fireAt && guide.fireLabel && !guide.squareLabel && !guide.card && (
         <ClearPin at={fireAt} avoid={avoid} className="tw-pin" label={guide.fireLabel}>
           <span className="guide-label">{guide.fireLabel}</span>
         </ClearPin>

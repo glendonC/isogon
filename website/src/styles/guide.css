@@ -604,3 +604,32 @@
     display: none;
   }
 }
+
+/* A step's start card at its thing (guide/StartCardView.tsx): the step's name, what to do, what counts as done, the key
+   that starts it. On the scene over the soft scrim, folding back once the visitor acts. */
+.guide-card .guide-card__plate {
+  display: grid;
+  gap: var(--sys-s1);
+  max-width: 380px;
+}
+
+.guide-card__name {
+  font: var(--sys-weight-strong) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.guide-card__do {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.guide-card__done {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.guide-card__act {
+  margin-top: var(--sys-s1);
+  font: 600 var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
