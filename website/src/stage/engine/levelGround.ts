@@ -80,3 +80,30 @@ export function levelIsWholeMetres(dem: Float32Array, n: number): boolean {
   }
   return level >= 20 && whole / level > 0.5;
 }
+
+/** A post this little above the sea, mostly ringed by sea, is taken for sea (elevation noise at the shore). */
+const SEA_NOISE_M = 1.5;
+
+/**
+ * The sea in an elevation grid: posts at exactly 0 m (the terrain packs put the sea there), and posts
+ * less than SEA_NOISE_M above it with at least five of their eight neighbours sea, twice over, so
+ * specks of noise just off a coast and small notches in it are sea too. A straight beach is not moved.
+ */
+export function seaPosts(dem: Float32Array, n: number): Uint8Array {
+  let sea = new Uint8Array(n * n);
+  for (let i = 0; i < n * n; i++) sea[i] = dem[i] === 0 ? 1 : 0;
+  for (let pass = 0; pass < 2; pass++) {
+    const next = sea.slice();
+    for (let r = 1; r < n - 1; r++) {
+      for (let c = 1; c < n - 1; c++) {
+        const i = r * n + c;
+        if (sea[i] || !(dem[i] < SEA_NOISE_M)) continue;
+        let around = 0;
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) around += sea[(r + dr) * n + c + dc];
+        if (around >= 5) next[i] = 1;
+      }
+    }
+    sea = next;
+  }
+  return sea;
+}

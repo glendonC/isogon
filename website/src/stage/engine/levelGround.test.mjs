@@ -62,3 +62,18 @@ test('level ground at whole metres (terraces) is told from a lake at any height'
   assert.equal(levelIsWholeMetres(lake, M), false);
   assert.equal(levelIsWholeMetres(new Float32Array(M * M), M), false);
 });
+
+test('specks of noise just off a coast are sea, a straight low beach stays land', async () => {
+  const { seaPosts } = await import('./levelGround.ts');
+  const M = 20;
+  const dem = new Float32Array(M * M);
+  for (let r = 0; r < M; r++) for (let c = 0; c < M; c++) dem[r * M + c] = c < 10 ? 0 : 0.6 + (c - 10) * 3;
+  dem[5 * M + 4] = 0.8; // a speck at sea
+  dem[6 * M + 4] = 0.9; // and its neighbour
+  dem[12 * M + 3] = 4.0; // a rock: too high to be noise
+  const sea = seaPosts(dem, M);
+  assert.equal(sea[5 * M + 4], 1);
+  assert.equal(sea[6 * M + 4], 1);
+  assert.equal(sea[12 * M + 3], 0);
+  for (let r = 1; r < M - 1; r++) assert.equal(sea[r * M + 10], 0, `the beach at row ${r}`);
+});

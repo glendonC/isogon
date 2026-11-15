@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { COMMON_HEIGHTFIELD_GLSL, createDemR32FTexture } from '../earthCutawayShaders';
 import { ATMOSPHERE_GLSL, NIGHT_GLSL, SKY_VIEW_MAPPING_GLSL } from './atmosphere';
-import { levelGround, levelIsWholeMetres } from './levelGround';
+import { levelGround, levelIsWholeMetres, seaPosts } from './levelGround';
 import { loadPackImage } from './terrainPack';
 import { TERRAIN_LOOK_GLSL } from './terrainShader';
 
@@ -70,6 +70,7 @@ function buildShadeTexture(dem: Float32Array, n: number, extentKm: [number, numb
   // (elevation from a source in whole metres is level in terraces, not only on lakes: no lake is
   // taken from it)
   const lakes = levelIsWholeMetres(dem, n) ? new Uint8Array(n * n) : levelGround(dem, n);
+  const sea = seaPosts(dem, n);
   const dx = (extentKm[0] * 1000) / (n - 1);
   const dz = (extentKm[1] * 1000) / (n - 1);
   for (let r = 0; r < n; r++) {
@@ -85,7 +86,7 @@ function buildShadeTexture(dem: Float32Array, n: number, extentKm: [number, numb
       const o = (r * n + c) * 4;
       out[o] = Math.round((-dhdx * inv * 0.5 + 0.5) * 255);
       out[o + 1] = Math.round((-dhdz * inv * 0.5 + 0.5) * 255);
-      out[o + 2] = dem[r * n + c] === 0 ? 255 : 0;
+      out[o + 2] = sea[r * n + c] ? 255 : 0;
       out[o + 3] = lakes[r * n + c] ? 255 : 0;
     }
   }
@@ -247,7 +248,7 @@ void main() {
     vec3 halfVec = normalize(sunDir + viewDir);
     float fresnel = pow(1.0 - max(0.0, dot(up, viewDir)), 4.0);
     float spec = pow(max(0.0, dot(up, halfVec)), 96.0);
-    lit = waterSurface(lit, water, max(lake, sea), fresnel, spec, uNight);
+    lit = waterSurface(lit, water, lake, sea, fresnel, spec, uNight);
   }
 
   // The same air as over the pack: distance takes the ground into what the dome draws behind it

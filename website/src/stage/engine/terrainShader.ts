@@ -50,6 +50,7 @@ vec3 pictureToScene(vec3 displayLinear) {
 // same terms, so a lake that crosses the pack's edge is one body of water.
 const vec3 WATER_DEEP = vec3(0.05, 0.13, 0.21);
 const float WATER_PICTURE_LEFT = 0.14;  // share of the picture's own colour kept on a lake
+// (none on the sea: imagery at sea is tiles of other dates and brightness, and shows them)
 const float WATER_NIGHT_DIM = 0.55;     // by night water gives back a dark sky
 
 // Level ground that is plainly vegetation in the picture (bright and green) is not water
@@ -60,8 +61,9 @@ float notGreenField(vec3 picture) {
 }
 
 // The lit surface with water on it. glint: fresnel and sun glint, already scaled; none by night
-vec3 waterSurface(vec3 lit, float water, float lake, float fresnel, float spec, float night) {
-  vec3 deep = mix(lit, WATER_DEEP, mix(0.42, 1.0 - WATER_PICTURE_LEFT, lake));
+vec3 waterSurface(vec3 lit, float water, float lake, float sea, float fresnel, float spec, float night) {
+  float deepShare = max(mix(0.42, 1.0 - WATER_PICTURE_LEFT, lake), mix(0.42, 1.0, sea));
+  vec3 deep = mix(lit, WATER_DEEP, deepShare);
   vec3 glint = (vec3(0.22, 0.28, 0.36) * fresnel * 0.45 + vec3(1.0, 0.93, 0.80) * spec * 0.85) * (1.0 - night);
   return mix(lit, deep + glint, water);
 }
@@ -813,7 +815,7 @@ void main() {
     float fresnel = pow(1.0 - max(0.0, dot(waterN, viewDir)), 4.0);
     // (the sea, from the elevation's 0 m, takes one deep tone as a lake does: imagery at sea is
     // often tiles of other dates and brightness)
-    litEarth = waterSurface(litEarth, waterMask, max(lake, seaMask), fresnel, spec, uNight);
+    litEarth = waterSurface(litEarth, waterMask, lake, seaMask, fresnel, spec, uNight);
   }
 
   // Aerial perspective: Rayleigh and Mie scattering along the true-scale path from the camera
