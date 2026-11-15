@@ -154,9 +154,17 @@ def interval_check(pred: np.ndarray, obs: np.ndarray, months: np.ndarray, clean:
                    ) -> dict[str, Any]:
     """The held-out interval, set for each year from the held-out errors of every other year and checked on that
     year, for months and for years. Closed place-years neither set it nor check it. With `by` (a group index per
-    place, such as its latitude band) a group with enough pairs gets its own table, the others the world's."""
+    place, such as its latitude band) each group gets its own table, a bin with too few errors taking the world's."""
+    inside_m, m_valid, inside_y, y_valid, ap, ao, width_m = interval_inside(pred, obs, months, clean, closed, years,
+                                                                            groups["world"], unit, by)
+    return _coverage(inside_m, m_valid, inside_y, y_valid, pred, obs, ap, ao, groups, unit, width_m)
+
+
+def interval_inside(pred: np.ndarray, obs: np.ndarray, months: np.ndarray, clean: np.ndarray, closed: np.ndarray,
+                    years: np.ndarray, world: np.ndarray, unit: float, by: np.ndarray | None = None) -> tuple:
+    """(inside per place-month, months checked, inside per place-year, years checked, annual predictions, annual
+    observations, relative width per place-month) of the nested check."""
     yr = H._year(months)
-    world = groups["world"]
     m_valid = world[:, None] & clean[None, :] & ~closed[:, np.searchsorted(years, yr)] & np.isfinite(pred)
     inside_m = np.zeros(pred.shape, dtype=bool)
     width_m = np.full(pred.shape, np.nan)
@@ -188,7 +196,7 @@ def interval_check(pred: np.ndarray, obs: np.ndarray, months: np.ndarray, clean:
             ty = y_valid[:, yi] & rows
             lo, hi = H.apply_interval(ap[ty, yi], taby)
             inside_y[ty, yi] = (ao[ty, yi] >= lo - 1e-9) & (ao[ty, yi] <= hi + 1e-9)
-    return _coverage(inside_m, m_valid, inside_y, y_valid, pred, obs, ap, ao, groups, unit, width_m)
+    return inside_m, m_valid, inside_y, y_valid, ap, ao, width_m
 
 
 def in_use_interval_check(X: dict[str, np.ndarray], obs: np.ndarray, months: np.ndarray, clean: np.ndarray,
