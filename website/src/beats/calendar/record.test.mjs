@@ -298,15 +298,18 @@ test("the pointed month's readout: each instrument on its satellite, and the fig
   assert.equal(exactRate(0.3878), '0.388');
   assert.equal(exactRate(0.0035), '0.0035');
   assert.equal(exactRate(0), '0');
-  // The prompt on a month: the action where it opens a fire; its readout, two lines of the answer's figures
+  // The prompt on a month with a fire, and its readout: two lines in the product lane's words, from the answer's
+  // modis_rows, viirs_rows (Suomi NPP, the scale's satellite) and harmonized_rows with its p10 and p90
   assert.equal(RECORD_WORDS.openFire('2012-08'), 'Open the August 2012 fire');
-  const month = { ym: '2012-08', year: 2012, month: 8, value: 10.8305, p10: 9.3773, p90: 12.4952, asCounted: 10.7903, counts: [{ platform: 'Terra', total: 1729 }, { platform: 'Aqua', total: 1772 }, { platform: 'Suomi NPP', total: 15639 }] };
-  assert.equal(RECORD_WORDS.monthReadout(month, false), 'MODIS 3,501   VIIRS 15,639\n10.83 per 1,000 km² a day, 9.38 to 12.50');
-  assert.equal(RECORD_WORDS.monthReadout(month, true), 'MODIS 3,501   VIIRS 15,639\n10.79 per 1,000 km² a day as counted');
-  // Every line short enough for a phone's readout
-  const busy = { ...month, counts: [{ platform: 'Terra', total: 3313 }, { platform: 'Aqua', total: 3317 }, { platform: 'Suomi NPP', total: 26290 }, { platform: 'NOAA-20', total: 21730 }, { platform: 'NOAA-21', total: 26490 }] };
-  // Two lines, each short enough for a phone's readout
-  assert.equal(RECORD_WORDS.monthReadout(busy, false).split('\n').length, 2);
-  assert.ok([month, busy].every((m) => RECORD_WORDS.monthReadout(m, false).split('\n').every((l) => l.length <= 42)));
-  assert.equal(RECORD_WORDS.monthReadout({ ...month, counts: [], value: null }, false), 'No satellite counted\nNo value');
+  const month = { ym: '2012-08', modisRows: 3501, viirsRows: 15639, rows: 15697.3, rowsP10: 13591.12, rowsP90: 18109.98 };
+  assert.equal(RECORD_WORDS.monthReadout(month, false), 'August 2012   MODIS 3,501   VIIRS 15,639\nOn one scale 15,697, likely 13,591 to 18,110');
+  assert.equal(RECORD_WORDS.monthReadout(month, true), 'August 2012   MODIS 3,501   VIIRS 15,639\nAs counted, before the correction');
+  // Before VIIRS flew, the line names MODIS alone; with no value, it says so
+  assert.equal(RECORD_WORDS.monthReadout({ ...month, ym: '2003-08', viirsRows: null }, false).split('\n')[0], 'August 2003   MODIS 3,501');
+  assert.equal(RECORD_WORDS.monthReadout({ ...month, rows: null }, false).split('\n')[1], 'No value on one scale');
+  assert.equal(RECORD_WORDS.download, 'Download CSV');
+  // On a phone: the counts, the value and its range on three short lines; the month is the prompt's
+  assert.equal(RECORD_WORDS.monthReadout(month, false, true), 'MODIS 3,501   VIIRS 15,639\nOn one scale 15,697\nLikely 13,591 to 18,110');
+  assert.ok(RECORD_WORDS.monthReadout(month, false, true).split('\n').every((l) => l.length <= 26));
+  assert.equal(RECORD_WORDS.phonePrompt('2018-11'), 'November 2018');
 });

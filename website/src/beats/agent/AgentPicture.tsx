@@ -54,7 +54,7 @@ export const PLAYERS_WORDS = {
   nextPlayers: (names: string[]) => `More players: ${names.join(' and ')}`,
   firstPlayers: (names: string[]) => `Back to ${names.join(' and ')}`,
   legend: (found: boolean) =>
-    `Lit squares: where a player looked, in order. ${found ? 'Filled marks: what its looks found. ' : ''}Outlines: what the coarse satellite showed every player.`,
+    `Lit squares: where a player looked, in order. ${found ? 'Filled marks: what its looks found. ' : ''}Outlines: what MODIS showed every player.`,
 };
 
 /** Time between two looks while the plays are watched, ms. */

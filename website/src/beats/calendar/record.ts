@@ -78,6 +78,15 @@ export interface RecordMonth {
   modisRate: number | null;
   viirsRate: number | null;
   counts: Array<{ platform: string; total: number }>;
+  /**
+   * The month in detections counted inside the box: MODIS's (Terra and Aqua together) and VIIRS's on Suomi NPP, the
+   * satellite whose scale the record is on, as counted; and the month on that one scale, with its range.
+   */
+  modisRows: number | null;
+  viirsRows: number | null;
+  rows: number | null;
+  rowsP10: number | null;
+  rowsP90: number | null;
 }
 
 export interface RecordYear {
@@ -188,6 +197,11 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
       asCounted: num(r.viirs_raw_rate) ?? num(r.modis_raw_rate),
       modisRate: num(r.modis_raw_rate),
       viirsRate: num(r.viirs_raw_rate),
+      modisRows: num(r.modis_rows),
+      viirsRows: num(r.viirs_rows),
+      rows: num(r.harmonized_rows),
+      rowsP10: num(r.harmonized_rows_p10),
+      rowsP90: num(r.harmonized_rows_p90),
       counts,
     });
   }

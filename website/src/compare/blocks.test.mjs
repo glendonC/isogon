@@ -91,14 +91,14 @@ test('the estimate shown is the step at or before the hidden pass, never a later
   const estimate = tw.blocks[1].marks[0];
   assert.equal(estimate.kind, 'estimate');
   assert.equal(estimate.source.step, 0);
-  assert.equal(tw.blocks[1].label.lines[0], '3 squares expected to burn, 375 m across, from the coarse satellite alone');
+  assert.equal(tw.blocks[1].label.lines[0], '3 squares expected to burn, 375 m across, from MODIS alone');
 });
 
 test('the estimate frames the cells the model declared for the hidden pass, and only on its own grid', () => {
   const declared = { ...run, declared_cells: { grid: { nx: 4, ny: 4 }, looks: [{ frame: 1, cells: [5, 6, 9] }, { frame: 3, cells: [0] }] } };
   const estimate = threeWays(declared, null).blocks[1];
   assert.deepEqual(estimate.marks[0].frames, [5, 6, 9]);
-  assert.equal(estimate.label.lines[0], '3 white frames, 375 m across, from the coarse satellite alone');
+  assert.equal(estimate.label.lines[0], '3 white frames, 375 m across, from MODIS alone');
   // A list on another grid is not drawn on this one
   const other = { ...run, declared_cells: { grid: { nx: 8, ny: 8 }, looks: [{ frame: 1, cells: [5] }] } };
   assert.equal(threeWays(other, null).blocks[1].marks[0].frames, undefined);
@@ -193,7 +193,7 @@ const end = {
 
 test('a round becomes one block per player, the visitor first, each with only what its own looks revealed', () => {
   const blocks = roundBlocks(groundOfRun(run), start, end);
-  assert.deepEqual(blocks.map((b) => b.label.title), ['You', 'Chance', 'Follow the Coarse Satellite', 'Look Where Unsure', 'Learned Player', 'Sees the Answer']);
+  assert.deepEqual(blocks.map((b) => b.label.title), ['You', 'Chance', 'Follow MODIS', 'Least Sure', 'Learned Player', 'Sees the Answer']);
   const found = (i) => blocks[i].marks.find((m) => m.kind === 'detections' && m.instrument === 'viirs').rows;
   assert.deepEqual(found(0).map((r) => [r.lon, r.lat]), [[-120.1, 39.9]]); // the visitor: square 1 at pass 0; square 3 at pass 1 held nothing
   assert.equal(found(1).length, 1); // Chance, the first of its rounds: square 0 at pass 0
@@ -201,8 +201,8 @@ test('a round becomes one block per player, the visitor first, each with only wh
   assert.deepEqual(found(3).map((r) => [r.lon, r.lat]), [[-120.9, 39.1]]); // only square 2 at pass 1
   assert.equal(found(4).length, 1); // square 0 twice: the second look found nothing there
   assert.equal(blocks[4].pins[0].text, '1 2');
-  assert.equal(blocks[3].label.lines[1], `${guidePoints(-0.004)} points`);
-  assert.equal(blocks[0].label.lines[1], '+1.5 points');
+  assert.equal(blocks[3].label.lines[1], 'Overlap down 0.4 points');
+  assert.equal(blocks[0].label.lines[1], 'Overlap up 1.5 points');
   // The last is named for what it does and carries the line that says it is no fair player, whatever its looks equal
   assert.match(blocks[5].label.lines[2], /^Not a fair player/);
   assert.ok(!blocks[2].label.lines.some((l) => l.startsWith('The same looks')));
@@ -220,8 +220,8 @@ test('Chance is the mean of its rounds with their range, and the looks drawn are
   assert.deepEqual([least, most, rounds], [0.01, 0.03, 2]);
   assert.equal(chanceOf([]), null);
   const lines = roundBlocks(groundOfRun(run), start, end)[1].label.lines;
-  assert.equal(lines[1], '+2.0 points, the mean of two rounds of random looks, from +1.0 to +3.0');
-  assert.equal(lines[2], 'Drawn here: one of the two, +1.0 points');
+  assert.equal(lines[1], 'Overlap up 2.0 points on average over two rounds of random looks, from +1.0 to +3.0');
+  assert.equal(lines[2], 'Drawn here: one of the two, overlap up 1.0 points');
   assert.equal(countWord(10), 'ten');
   assert.equal(countWord(13), '13');
 });
@@ -236,7 +236,7 @@ test('what the looks found can be withheld: the block then holds no row of the h
   }
   const [withheld] = playBlocks(groundOfRun(run), [play], { found: false });
   assert.equal(withheld.marks.some((m) => m.instrument === 'viirs'), false);
-  assert.deepEqual(withheld.label.lines, ['2 looks', '+3.0 points']);
+  assert.deepEqual(withheld.label.lines, ['2 looks', 'Overlap up 3.0 points']);
 });
 
 test('a round on another box than the ground gives no block', () => {
@@ -293,7 +293,7 @@ test('a play becomes a block with only the detections its own looks handed over,
   assert.deepEqual(read.looks.map((l) => [l.decision, l.tile, l.found.length]), [[1, 3, 2], [2, 3, 1]]);
   const [block] = playBlocks(groundOfRun(run), [play]);
   assert.equal(block.id, 'least_sure');
-  assert.deepEqual(block.label, { title: 'Look Where Unsure', lines: ['3 detections found in 2 looks', '+3.0 points'] });
+  assert.deepEqual(block.label, { title: 'Least Sure', lines: ['3 detections found in 2 looks', 'Overlap up 3.0 points'] });
   assert.equal(block.pins[0].text, '1 2');
   // Watched look by look: after the first look only its detections, and the gain so far
   const [first] = playBlocks(groundOfRun(run), [play], { looks: 1 });
@@ -307,7 +307,7 @@ test('two plays with the same looks: the second says so, and only once every loo
   const twin = { play: { ...play.play, player: { id: 'latest_modis', label: 'Latest MODIS' } } };
   const blocks = playBlocks(groundOfRun(run), [play, twin]);
   assert.ok(!blocks[0].label.lines.some((l) => l.startsWith('The same looks')));
-  assert.equal(blocks[1].label.lines[2], 'The same looks as Look Where Unsure');
+  assert.equal(blocks[1].label.lines[2], 'The same looks as Least Sure');
   assert.ok(!playBlocks(groundOfRun(run), [play, twin], { looks: 1 })[1].label.lines.some((l) => l.startsWith('The same looks')));
 });
 
@@ -366,7 +366,7 @@ test('gain bars share one scale, the largest gain among them, and there is none 
 });
 
 test('the players carry the page\'s names; none is called a ceiling or given as a share of another', () => {
-  assert.deepEqual(PLAYERS.map((p) => p.name), ['Chance', 'Follow the Coarse Satellite', 'Look Where Unsure', 'Learned Player', 'Sees the Answer']);
+  assert.deepEqual(PLAYERS.map((p) => p.name), ['Chance', 'Follow MODIS', 'Least Sure', 'Learned Player', 'Sees the Answer']);
   const answer = { play: { ...play.play, player: { id: 'oracle', label: 'Oracle' } } };
   const words = JSON.stringify([
     ...playBlocks(groundOfRun(run), [play, answer]).map((b) => b.label),
@@ -378,16 +378,16 @@ test('the players carry the page\'s names; none is called a ceiling or given as 
 });
 
 test('a player whose looks equal an earlier one says so in the same words, the learned player too', () => {
-  assert.equal(twinLine('Look Where Unsure'), 'The same looks as Look Where Unsure');
+  assert.equal(twinLine('Least Sure'), 'The same looks as Least Sure');
   const learned = { play: { ...play.play, player: { id: 'learned', label: 'Learned' } } };
-  assert.equal(playBlocks(groundOfRun(run), [play, learned])[1].label.lines[2], 'The same looks as Look Where Unsure');
+  assert.equal(playBlocks(groundOfRun(run), [play, learned])[1].label.lines[2], 'The same looks as Least Sure');
 });
 
 test('the player whose looks equal an earlier player is named with that player, the first is not', () => {
   const a = readPlay(play);
   const b = readPlay({ play: { ...play.play, player: { id: 'learned', label: 'Learned agent' } } });
   const twins = sameLooks([a, b]);
-  assert.equal(twins.get('learned'), 'Look Where Unsure');
+  assert.equal(twins.get('learned'), 'Least Sure');
   assert.equal(twins.has('least_sure'), false);
 });
 
@@ -408,14 +408,14 @@ test('a round as the page keeps it (its looks as player.taken, its reveal groupe
     reference: end.reference,
   };
   const blocks = roundBlocks(groundOfRun(run), pageStart, pageEnd);
-  assert.deepEqual(blocks.map((b) => b.label.title), ['You', 'Chance', 'Follow the Coarse Satellite', 'Look Where Unsure', 'Learned Player', 'Sees the Answer']);
+  assert.deepEqual(blocks.map((b) => b.label.title), ['You', 'Chance', 'Follow MODIS', 'Least Sure', 'Learned Player', 'Sees the Answer']);
   const found = (i) => blocks[i].marks.find((m) => m.kind === 'detections' && m.instrument === 'viirs').rows;
   // Each detection counts for the square it lies in, as the route's table says it
   assert.deepEqual(found(0).map((r) => [r.lon, r.lat]), [[-120.1, 39.9]]);
   assert.equal(found(1).length, 1);
   assert.equal(found(2).length, 2);
   assert.deepEqual(found(3).map((r) => [r.lon, r.lat]), [[-120.9, 39.1]]);
-  assert.equal(blocks[0].label.lines[1], `${guidePoints(0.015)} points`);
+  assert.equal(blocks[0].label.lines[1], 'Overlap up 1.5 points');
   assert.deepEqual(roundPlays(pageStart, pageEnd)[0].window, { from: '2020-01-01T10:00:00Z', to: '2020-01-01T10:30:00Z' });
 });
 

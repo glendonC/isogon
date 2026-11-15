@@ -575,12 +575,12 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
 
             {/* The pointed month (else the marked one, waiting for the pointer): one prompt and its
                 readout on the cell, the ux lane's ScenePrompt. Where the month opens a fire the prompt is that action;
-                else it is the month, and choosing it picks it. */}
+                else there is no prompt (the readout names the month), and choosing it picks it. */}
             {fm && cellBox && (
               <ScenePrompt
                 box={cellBox}
-                label={openable.has(fm.ym) ? W.openFire(fm.ym) : monthWords(fm.ym)}
-                readout={W.monthReadout(fm, asCounted)}
+                label={openable.has(fm.ym) ? W.openFire(fm.ym) : narrowLabel ? W.phonePrompt(fm.ym) : ''}
+                readout={W.monthReadout(fm, asCounted, narrowLabel)}
                 // The pointer is on the pointed month, and the marked one waits for it: the reticle stands closed on both
                 invite
                 onSelect={() => (openable.has(fm.ym) ? show(fm.ym) : pick(fm.ym))}

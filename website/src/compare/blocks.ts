@@ -8,12 +8,12 @@ import type { Box, CompareBlock, CompareGround, CompareMark, ComparePin, Detecti
  */
 
 export const WORDS = {
-  coarseSaw: 'What the coarse satellite saw',
-  estimate: "The model's estimate",
-  sharpSaw: 'What the sharp satellite saw',
+  coarseSaw: 'MODIS alone',
+  estimate: "The model's guess",
+  sharpSaw: 'VIIRS',
   coarseSize: 'about 1 km across (MODIS)',
   sharpSize: '375 m across (VIIRS)',
-  estimateSize: '375 m across, from the coarse satellite alone',
+  estimateSize: '375 m across, from MODIS alone',
   hidden: 'Hidden',
 } as const;
 
@@ -24,8 +24,8 @@ export const WORDS = {
  */
 export const PLAYERS: readonly { key: string; name: string }[] = [
   { key: 'random', name: 'Chance' },
-  { key: 'latest_modis', name: 'Follow the Coarse Satellite' },
-  { key: 'least_sure', name: 'Look Where Unsure' },
+  { key: 'latest_modis', name: 'Follow MODIS' },
+  { key: 'least_sure', name: 'Least Sure' },
   { key: 'learned', name: 'Learned Player' },
   { key: 'oracle', name: 'Sees the Answer' },
 ];
@@ -58,6 +58,8 @@ const count = (n: number, one: string, many: string): string => `${n} ${n === 1 
  */
 export const points = (g: number): string => guidePoints(g) ?? '';
 export const countWord = (n: number): string => guideCountWord(n) ?? String(n);
+/** A gain in the product lane's words: "Overlap up 3.0 points", and a loss as plainly, "Overlap down 1.2 points". */
+export const overlapMove = (g: number): string => `Overlap ${g < 0 ? 'down' : 'up'} ${points(Math.abs(g)).replace(/^\+/, '')} points`;
 
 /** What random looks add over the rounds played: their mean and the least and the most, or null with none. */
 export function chanceOf(draws: readonly number[] | undefined): { mean: number; least: number; most: number; rounds: number } | null {
@@ -618,9 +620,9 @@ export function playBlocks(ground: CompareGround | null, plays: readonly unknown
     const lines = [opts.found === false ? count(shown.length, 'look', 'looks') : `${count(found.length, 'detection', 'detections')} found in ${count(shown.length, 'look', 'looks')}`];
     const chance = chanceOf(play.draws);
     if (all && chance && chance.rounds > 1) {
-      lines.push(`${points(chance.mean)} points, the mean of ${countWord(chance.rounds)} rounds of random looks, from ${points(chance.least)} to ${points(chance.most)}`);
-      if (play.gain !== null) lines.push(`Drawn here: one of the ${countWord(chance.rounds)}, ${points(play.gain)} points`);
-    } else if (all && play.gain !== null) lines.push(`${points(play.gain)} points`);
+      lines.push(`${overlapMove(chance.mean)} on average over ${countWord(chance.rounds)} rounds of random looks, from ${points(chance.least)} to ${points(chance.most)}`);
+      if (play.gain !== null) lines.push(`Drawn here: one of the ${countWord(chance.rounds)}, ${overlapMove(play.gain).toLowerCase()}`);
+    } else if (all && play.gain !== null) lines.push(overlapMove(play.gain));
     const looksKey = play.looks.map((l) => `${l.decision}:${l.tile}`).join(',');
     const twin = all ? first.get(looksKey) : undefined;
     if (play.id === SEES_THE_ANSWER) lines.push(SEES_THE_ANSWER_LINE);

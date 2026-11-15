@@ -125,11 +125,12 @@ export const RECORD_WORDS = {
   show: 'Show this fire',
   /** In the legend, once the visitor is looking over the months: what the corner marks on some of them mean. */
   brackets: 'A month with a fire you can show',
-  coarse: 'The older satellites (MODIS, 1 km)',
-  sharp: 'The newer, sharper satellite (VIIRS, 375 m)',
+  /** The satellites' two lines under the years, by name (the dataviz lane's grid says them the same way). */
+  coarse: 'MODIS, 1 km',
+  sharp: 'VIIRS, 375 m',
   close: 'Close the Record',
-  /** The record on screen, taken away as a file. */
-  download: 'Download this record (CSV)',
+  /** The record on screen, taken away as a file (the product lane's word for the lone action). */
+  download: 'Download CSV',
   seeAsCounted: 'See the years as the satellites counted them',
   backToOneScale: 'Back to one scale',
   noFireLegend: 'No fire',
@@ -153,28 +154,26 @@ export const RECORD_WORDS = {
       ? `A hidden year, VIIRS's count predicted from MODIS: off by ${percent(here.year)} percent here, ${percent(E.yearly)} worldwide, against ${percent(here.uncorrected)} and ${percent(E.yearlyUncorrected)} uncorrected.`
       : `A hidden year, VIIRS's count predicted from MODIS: off by ${percent(E.yearly)} percent worldwide, against ${percent(E.yearlyUncorrected)} uncorrected.`;
   },
-  /** The prompt on a month that opens a fire: the action, in the ux lane's words. */
+  /** The prompt on a month that opens a fire, the product lane's words; a month without one has no prompt. */
   openFire: (ym: string) => `Open the ${monthName(ym)} ${ym.slice(0, 4)} fire`,
+  /** On a phone, where the readout leaves the month out for width, a month without a fire is named by its prompt. */
+  phonePrompt: (ym: string) => `${monthName(ym)} ${ym.slice(0, 4)}`,
   /**
-   * The readout under a pointed month's prompt, the two short lines the prompt is made for, the answer's own figures:
-   * what each instrument counted (MODIS on Terra and Aqua together, VIIRS on its satellites together, as the answer
-   * names them), then the month's value with its unit and its range, or as counted while the years are drawn so.
+   * The readout under a pointed month's prompt, two lines in the product lane's words, from the answer's own figures:
+   * the month and what each instrument counted inside the box (MODIS on Terra and Aqua; VIIRS on Suomi NPP, the
+   * satellite whose scale the record is on, so the two lines compare), then the month on that one scale with its range
+   * ("likely"). While the years are drawn as counted, the second line says so.
    */
-  monthReadout: (m: RecordMonth, asCounted: boolean) => {
-    const sum = (ps: string[]) => {
-      const n = ps.map((p) => m.counts.find((c) => c.platform === p)?.total).filter((t): t is number => t !== undefined);
-      return n.length ? n.reduce((x, y) => x + y, 0) : null;
-    };
-    const modis = sum(['Terra', 'Aqua']);
-    const viirs = sum(['Suomi NPP', 'NOAA-20', 'NOAA-21']);
-    const first =
-      [modis !== null ? `MODIS ${count(modis)}` : null, viirs !== null ? `VIIRS ${count(viirs)}` : null].filter(Boolean).join('   ') ||
-      'No satellite counted';
-    const v = asCounted ? m.asCounted : m.value;
-    if (v === null) return `${first}\nNo value`;
-    if (asCounted) return `${first}\n${exactRate(v)} per 1,000 km² a day as counted`;
-    const range = m.p10 !== null && m.p90 !== null ? `, ${exactRate(m.p10)} to ${exactRate(m.p90)}` : '';
-    return `${first}\n${exactRate(v)} per 1,000 km² a day${range}`;
+  monthReadout: (m: RecordMonth, asCounted: boolean, narrow = false) => {
+    const whole = (n: number) => count(Math.round(n));
+    const counts = [m.modisRows !== null ? `MODIS ${whole(m.modisRows)}` : null, m.viirsRows !== null ? `VIIRS ${whole(m.viirsRows)}` : null];
+    // On a phone the month is the prompt's (W.phonePrompt) and each line is short enough for its width
+    const first = (narrow ? counts : [`${monthName(m.ym)} ${m.ym.slice(0, 4)}`, ...counts]).filter(Boolean).join('   ');
+    if (asCounted) return `${first}\nAs counted, before the correction`;
+    if (m.rows === null) return `${first}\nNo value on one scale`;
+    const likely = m.rowsP10 !== null && m.rowsP90 !== null ? `likely ${whole(m.rowsP10)} to ${whole(m.rowsP90)}` : null;
+    if (narrow) return [first, `On one scale ${whole(m.rows)}`, likely ? likely[0].toUpperCase() + likely.slice(1) : null].filter(Boolean).join('\n');
+    return `${first}\nOn one scale ${whole(m.rows)}${likely ? `, ${likely}` : ''}`;
   },
   /** This month so far: the action that asks for it, its label, and why it cannot be counted. */
   thisMonth: 'This month so far',
