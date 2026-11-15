@@ -96,6 +96,7 @@ from backend.model.solver import (  # noqa: E402
     SolvedReconstructionRun,
     solve_region_reconstruction,
 )
+from backend.server_burned import burned_route  # noqa: E402
 from backend.server_cube import cube_route  # noqa: E402
 from backend.server_gibs import gibs_route  # noqa: E402
 from backend.server_live import live_route  # noqa: E402
@@ -1390,6 +1391,10 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                 self._send_bytes(hit[0], hit[1], hit[2])
                 return
             hit = gibs_route(route, qs)
+            if hit is not None:
+                self._send_bytes(hit[0], hit[1], hit[2])
+                return
+            hit = burned_route(route, qs)
             if hit is not None:
                 self._send_bytes(hit[0], hit[1], hit[2])
                 return

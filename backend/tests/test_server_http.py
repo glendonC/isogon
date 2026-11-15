@@ -328,6 +328,26 @@ class GibsMountTests(unittest.TestCase):
             self.assertEqual(_req("/api/health")[0], 200)
 
 
+class BurnedMountTests(unittest.TestCase):
+    def test_the_burned_area_map_answers_through_the_main_server_from_the_store_alone(self) -> None:
+        """NASA's burned-area map is mounted beside the keyless layers: a store that holds no month answers 404 (the
+        main server reads the store and never fetches), the VIIRS product and a bad format 400, and the other routes
+        are untouched."""
+        import os
+        import tempfile
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"ISOGON_BURNED_DIR": tmp}):
+            window = "region_id=ventura_ca&start=2017-12-05&end=2017-12-12"
+            status, headers, raw = _req(f"/api/burned?{window}")
+            self.assertEqual(status, 404, raw[:200])
+            self.assertIn("json", headers.get("Content-Type", ""))
+            self.assertNotIn("Unknown endpoint", raw.decode("utf-8", "replace"))
+            self.assertEqual(_req(f"/api/burned?{window}&product=VNP64A1")[0], 400)
+            self.assertEqual(_req(f"/api/burned?{window}&format=gif")[0], 400)
+            self.assertEqual(_req("/api/health")[0], 200)
+
+
 class DefaultStartTests(unittest.TestCase):
     def test_default_follows_the_model_and_falls_back_to_most_modis_pixels(self) -> None:
         from backend.server import with_default_start
