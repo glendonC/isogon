@@ -93,15 +93,43 @@ type Kind = 'open' | 'closed' | 'held';
  * one). The registry's fire names are uneven (codes, cases, some fires unnamed), so a fire's own name stands only on
  * the card. A place whose every fire is kept as the test says so; a place whose fires are held says so.
  */
-function knownBy(p: Place, held: Record<string, string | true> | null): { text: string; kind: Kind } {
+function knownBy(p: Place, held: Record<string, string | true> | null): { text: string; kind: Kind; alts: string[] } {
   const short = p.name.split(',')[0];
+  const first = firstPlaceName(short);
   const open = p.featured_fires.filter((f) => !isClosed(f) && !heldWhy(f, p, held));
   const opening = (xs: FeaturedFire[]) =>
     xs.find((f) => f.id === p.starts?.default_featured_fire) ?? [...xs].sort((a, b) => sizeOf(b) - sizeOf(a))[0];
-  if (open.length) return { text: W.fireLabel(short, short, yearOf(opening(open))), kind: 'open' };
+  // Where a name finds no room, the place's first name with the year ("Fort McMurray 2016") before it is left out;
+  // a place kept as the test keeps saying so while there is room for it, then its hollow mark and card say it.
+  const alts = (year: string | null, kept: boolean) => {
+    const bare = W.fireLabel(first, first, year);
+    return [...new Set(kept ? [W.keptLabel(bare), bare] : [bare])];
+  };
+  if (open.length) {
+    const year = yearOf(opening(open));
+    const text = W.fireLabel(short, short, year);
+    return { text, kind: 'open', alts: alts(year, false).filter((a) => a !== text) };
+  }
   const closed = p.featured_fires.filter(isClosed);
-  if (closed.length) return { text: W.keptLabel(W.fireLabel(short, short, yearOf(opening(closed)))), kind: 'closed' };
-  return { text: W.heldLabel(short), kind: 'held' };
+  if (closed.length) {
+    const year = yearOf(opening(closed));
+    const text = W.keptLabel(W.fireLabel(short, short, year));
+    return { text, kind: 'closed', alts: alts(year, true).filter((a) => a !== text) };
+  }
+  return { text: W.heldLabel(short), kind: 'held', alts: first !== short ? [W.heldLabel(first)] : [] };
+}
+
+/**
+ * A place's first name: its name up to " & " ("Fort McMurray & the Athabasca" is "Fort McMurray"), or, for a name of
+ * one part, without a last word that only says what kind of ground it is ("Northern Evia Island" is "Northern Evia",
+ * "Jur River Savanna" is "Jur River").
+ */
+function firstPlaceName(name: string): string {
+  const head = name.split(' & ')[0].trim();
+  if (head !== name.trim()) return head;
+  const words = head.split(' ');
+  const kinds = ['Island', 'Islands', 'Swamp', 'Savanna', 'Forest', 'Range', 'Coast', 'Valley', 'Plateau', 'Hills', 'Mountains'];
+  return words.length > 1 && kinds.includes(words[words.length - 1]) ? words.slice(0, -1).join(' ') : head;
 }
 
 function ramp(ramp: Array<[number, [number, number, number]]>): string {
@@ -113,6 +141,28 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
   const [mode, setMode] = useState<Mode>(startOnFactor && factor ? 'factor' : 'fire');
   // The legend and the tools stand over the map; labels keep clear of them.
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // The names are placed in the font they are drawn in, read from a hidden name: the film draws them a step larger
+  // (film.css), and a name measured smaller than it is drawn runs into its neighbours.
+  const probeRef = useRef<HTMLSpanElement | null>(null);
+  const [labelFont, setLabelFont] = useState<{ font: string; line: number }>({ font: '400 13px Geist, sans-serif', line: 18 });
+  useLayoutEffect(() => {
+    const el = probeRef.current;
+    const root = rootRef.current;
+    if (!el || !root) return;
+    const read = () => {
+      const cs = getComputedStyle(el);
+      const size = parseFloat(cs.fontSize) || 13;
+      const lh = parseFloat(cs.lineHeight);
+      const next = { font: `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, line: Math.ceil(Number.isFinite(lh) ? lh : size * 1.3) };
+      setLabelFont((o) => (o.font === next.font && o.line === next.line ? o : next));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(root);
+    // The web font may come in after the first measure: the names are placed again once it has.
+    void document.fonts?.ready.then(() => setLabelFont((o) => ({ ...o })));
+    return () => ro.disconnect();
+  }, []);
   const legendRef = useRef<HTMLDivElement | null>(null);
   const toolsRef = useRef<HTMLDivElement | null>(null);
   const [overlays, setOverlays] = useState<Array<{ left: number; top: number; width: number; height: number }>>([]);
@@ -227,12 +277,17 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
       const [x, y] = p.at(lon, lat);
       const k = knownBy(pl, held);
       const current = pl.featured_fires.some((f) => f.id === currentFire);
-      return { id: pl.id, x, y, text: k.text, kind: k.kind, sub: null, rank: current ? -1 : -Math.max(...pl.featured_fires.map(sizeOf)), place: pl, current };
+      return { id: pl.id, x, y, text: k.text, alts: k.alts, kind: k.kind, sub: null, rank: current ? -1 : -Math.max(...pl.featured_fires.map(sizeOf)), place: pl, current };
     });
     const onScreen = items.filter((m) => m.x > -20 && m.y > -20 && m.x < p.w + 20 && m.y < p.h + 20);
     const at = open ? cardAt(p) : null;
     const covered = roomRight > 0 ? [{ left: p.w - roomRight, top: 0, width: roomRight, height: p.h }] : [];
-    const placed = placeLabels(onScreen, p.w, p.h, { avoid: [...(at ? [at.rect] : []), ...overlays, ...covered] });
+    const placed = placeLabels(onScreen, p.w, p.h, {
+      font: labelFont.font,
+      line: labelFont.line,
+      clearLeaders: true,
+      avoid: [...(at ? [at.rect] : []), ...overlays, ...covered],
+    });
     return (
       <>
         <svg className="world-leaders" width={p.w} height={p.h} aria-hidden="true">
@@ -263,7 +318,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
               />
               {show && open !== m.id && (
                 <div className="world-label" style={{ left: l.left, top: l.top }} aria-hidden="true">
-                  {m.text}
+                  {l.shown ? l.text : m.text}
                 </div>
               )}
             </div>
@@ -403,6 +458,9 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
 
   return (
     <div className="world-earth" ref={rootRef}>
+      <span className="world-label world-label--probe" ref={probeRef} aria-hidden="true">
+        Mg
+      </span>
       <WorldCanvas
         label={W.label}
         layers={grid}

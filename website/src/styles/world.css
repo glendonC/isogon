@@ -1415,3 +1415,10 @@
 .world-earth[data-whole='false'] {
   visibility: hidden;
 }
+
+/* The hidden name the Earth reads its labels' font from. */
+.world-label--probe {
+  left: -9999px;
+  top: 0;
+  visibility: hidden;
+}
