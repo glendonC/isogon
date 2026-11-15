@@ -36,10 +36,11 @@ import os
 from pathlib import Path
 import re
 import ssl
+import subprocess
 import sys
 import threading
 import time
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Sequence
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -1409,6 +1410,10 @@ def _process_one_pass(
     role = platform_role(spec.platform)
 
     dest = passmask_path(box, ts_str, spec.platform, root=out_dir)
+    if role == "sharp" and "/masks/sharp/" not in dest.as_posix():
+        raise PermissionError(f"sharp satellite {spec.platform} must write to scoring-side masks/sharp/ only: {dest}")
+    if role == "coarse" and "/masks/coarse/" not in dest.as_posix():
+        raise PermissionError(f"coarse satellite {spec.platform} must write to masks/coarse/ only: {dest}")
     if not force and dest.is_file() and read_manifest(dest) is not None:
         man = read_manifest(dest) or {}
         return {
@@ -1828,6 +1833,53 @@ def parse_split_pass_windows(split_text: str) -> list[dict[str, Any]]:
     return out
 
 
+DEFAULT_PLAN_ROLES: tuple[str, ...] = ("test_a", "validation", "fitting", "test_b")
+DEFAULT_PLAN_REL: str = "backend/model/fitted_values/fresh_world_plan.json"
+
+
+def load_plan_document(plan_json: Path | None = None, git_object: str | None = None) -> dict[str, Any]:
+    """Load fresh_world_plan.json from a file path or read-only git object (e.g. main:path)."""
+    if plan_json is not None:
+        return json.loads(Path(plan_json).read_text(encoding="utf-8"))
+    obj = git_object or f"main:{DEFAULT_PLAN_REL}"
+    local_default = _REPO_ROOT / DEFAULT_PLAN_REL
+    if git_object is None and local_default.is_file():
+        return json.loads(local_default.read_text(encoding="utf-8"))
+    raw = subprocess.check_output(["git", "show", obj], cwd=str(_REPO_ROOT))
+    return json.loads(raw.decode("utf-8"))
+
+
+def parse_plan_episodes(
+    plan_doc: dict[str, Any],
+    roles: Sequence[str] = DEFAULT_PLAN_ROLES,
+    margin_s: float = 1200.0,
+) -> list[dict[str, Any]]:
+    """Extract open episode pass windows in the requested role order (default: test_a, validation, fitting, test_b)."""
+    episodes_by_role = plan_doc.get("episodes") or {}
+    out: list[dict[str, Any]] = []
+    for role in roles:
+        role_eps = episodes_by_role.get(role)
+        if role_eps is None:
+            raise KeyError(f"unknown role '{role}' in plan episodes (available: {sorted(episodes_by_role.keys())})")
+        for ep in role_eps:
+            box = normalize_box(ep["box"])
+            s0 = float(ep["start_s"]) - float(margin_s)
+            s1 = float(ep["end_s"]) + float(margin_s)
+            if closed_region_for(box, s0, s1) is not None:
+                continue
+            out.append({
+                "key": str(ep["key"]),
+                "role": str(role),
+                "place_id": str(ep.get("place_id", "")),
+                "continent": str(ep.get("continent", "")),
+                "zone": str(ep.get("zone", "")),
+                "box": box,
+                "start": format_utc(s0),
+                "end": format_utc(s1),
+            })
+    return out
+
+
 def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Fetch NASA per-pass active fire and cloud masks.")
     ap.add_argument("--env-file", type=Path, default=None, help="path to .env file holding EARTHDATA_TOKEN")
@@ -1857,6 +1909,18 @@ def _main(argv: list[str] | None = None) -> int:
     fs.add_argument("--split-md", type=Path, required=True)
     fs.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     fs.add_argument("--limit", type=int, default=0, help="optional cap on windows fetched in this invocation")
+
+    fp = sub.add_parser(
+        "fetch-plan",
+        help="fetch per-pass masks for fresh_world_plan.json episodes (default order: test_a, validation, fitting, test_b)",
+    )
+    fp.add_argument("--plan-json", type=Path, default=None, help="optional path to fresh_world_plan.json")
+    fp.add_argument("--git-object", type=str, default=None, help="git rev:path (default main:backend/model/fitted_values/fresh_world_plan.json)")
+    fp.add_argument("--roles", nargs="+", default=list(DEFAULT_PLAN_ROLES), help="ordered episode roles to fetch")
+    fp.add_argument("--platforms", nargs="*", default=None)
+    fp.add_argument("--margin-s", type=float, default=1200.0, help="UTC padding seconds around [start_s, end_s)")
+    fp.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
+    fp.add_argument("--limit", type=int, default=0, help="optional cap on episodes fetched in this invocation")
 
     args = ap.parse_args(argv)
     if not args.no_nice:
@@ -1927,6 +1991,49 @@ def _main(argv: list[str] | None = None) -> int:
                 print(f"=== [{idx}/{len(rows)}] [{r['section']}] {r['key']} ERROR: {failed[-1]['error']} ===", flush=True)
         print(json.dumps({"failed": failed, **store_summary(args.out_dir)}, indent=2))
         return 0 if not failed else 1
+
+    if args.cmd == "fetch-plan":
+        plan_doc = load_plan_document(args.plan_json, args.git_object)
+        rows = parse_plan_episodes(plan_doc, roles=args.roles, margin_s=args.margin_s)
+        if args.limit and args.limit > 0:
+            rows = rows[: args.limit]
+        role_counts = {rl: sum(1 for r in rows if r["role"] == rl) for rl in args.roles}
+        print(
+            f"EARTHDATA_TOKEN {token_state(args.env_file)}; {len(rows)} plan episodes queued "
+            f"in role order {list(args.roles)} counts={role_counts}",
+            flush=True,
+        )
+        failed_plan: list[dict[str, str]] = []
+        done_by_role: dict[str, int] = {rl: 0 for rl in args.roles}
+        for idx, r in enumerate(rows, 1):
+            try:
+                res = fetch_box_window(
+                    r["box"],
+                    r["start"],
+                    r["end"],
+                    platforms=args.platforms,
+                    env_file=args.env_file,
+                    out_dir=args.out_dir,
+                    workers=args.workers,
+                )
+                done_by_role[r["role"]] = done_by_role.get(r["role"], 0) + 1
+                print(
+                    f"=== [{idx}/{len(rows)}] [{r['role']} {done_by_role[r['role']]}/{role_counts[r['role']]}] "
+                    f"{r['key']} passes={res['passes_total']} fetched={res['passes_fetched']} "
+                    f"cached={res['passes_cached']} sent={res['bytes_transferred'] / 1e6:.2f} MB ===",
+                    flush=True,
+                )
+            except (ClosedPassMaskWindow, TokenMissing, AuthApprovalRequired, PermissionError):
+                raise
+            except Exception as exc:  # noqa: BLE001
+                tok_val = _read_earthdata_token(args.env_file)
+                failed_plan.append({"key": r["key"], "role": r["role"], "error": redact_token(str(exc), tok_val)})
+                print(
+                    f"=== [{idx}/{len(rows)}] [{r['role']}] {r['key']} ERROR: {failed_plan[-1]['error']} ===",
+                    flush=True,
+                )
+        print(json.dumps({"done_by_role": done_by_role, "failed": failed_plan, **store_summary(args.out_dir)}, indent=2))
+        return 0 if not failed_plan else 1
 
     target_box = _parse_box_arg(args.box) if args.box else _resolve_region_box(args.region_id, args.box_kind)
     summary = fetch_box_window(

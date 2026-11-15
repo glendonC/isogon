@@ -283,6 +283,20 @@ class BurnedReaderTests(unittest.TestCase):
         self.assertEqual([r["key"] for r in parsed], ["f_01", "v_01", "t_01"])
         self.assertEqual([r["section"] for r in parsed], ["fitting", "validation", "test fires (1)"])
 
+        sample_plan = {
+            "episodes": {
+                "fitting": [{"key": "fit:1", "box": [23.5, 6.5, 24.0, 7.0], "start_s": 1612601220.0, "end_s": 1612862221.0}],
+                "validation": [{"key": "val:1", "box": [36.5, -16.0, 37.0, -15.5], "start_s": 1537257900.0, "end_s": 1537528981.0}],
+                "test_a": [{"key": "ta:1", "box": [-13.0, 14.5, -12.5, 15.0], "start_s": 1667051040.0, "end_s": 1667400961.0}],
+                "test_b": [
+                    {"key": "tb:closed", "box": [23.05, 38.68, 23.55, 39.04], "start_s": 1628035200.0, "end_s": 1628294400.0},
+                    {"key": "tb:1", "box": [13.0, 5.5, 13.5, 6.0], "start_s": 1549360920.0, "end_s": 1549760101.0},
+                ],
+            }
+        }
+        plan_rows = burned_fetch.parse_plan_episodes(sample_plan, roles=("test_a", "validation", "fitting", "test_b"))
+        self.assertEqual([r["key"] for r in plan_rows], ["ta:1", "val:1", "fit:1", "tb:1"])
+
 
 if __name__ == "__main__":
     unittest.main()

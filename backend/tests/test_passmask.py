@@ -349,6 +349,21 @@ class FetchPureNumpyHelperTests(unittest.TestCase):
         self.assertEqual(rows[0]["start"], "2021-02-06T08:41:00Z")
         self.assertEqual(rows[0]["end"], "2021-02-09T09:23:00Z")
 
+        sample_plan = {
+            "episodes": {
+                "fitting": [{"key": "fit:a", "box": [23.5, 6.5, 24.0, 7.0], "start_s": 1612601220.0, "end_s": 1612862221.0}],
+                "validation": [{"key": "val:a", "box": [36.5, -16.0, 37.0, -15.5], "start_s": 1537257900.0, "end_s": 1537528981.0}],
+                "test_a": [
+                    {"key": "ta:closed", "box": [-121.44, 39.86, -120.92, 40.24], "start_s": 1626739200.0, "end_s": 1626998400.0},
+                    {"key": "ta:open", "box": [-13.0, 14.5, -12.5, 15.0], "start_s": 1667051040.0, "end_s": 1667400961.0},
+                ],
+                "test_b": [{"key": "tb:a", "box": [13.0, 5.5, 13.5, 6.0], "start_s": 1549360920.0, "end_s": 1549760101.0}],
+            }
+        }
+        plan_rows = PF.parse_plan_episodes(sample_plan, margin_s=1200.0)
+        self.assertEqual([r["key"] for r in plan_rows], ["ta:open", "val:a", "fit:a", "tb:a"])
+        self.assertEqual([r["role"] for r in plan_rows], ["test_a", "validation", "fitting", "test_b"])
+
 
 if __name__ == "__main__":
     unittest.main()

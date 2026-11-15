@@ -26,10 +26,11 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, Sequence
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -1055,6 +1056,51 @@ def parse_split_markdown(split_text: str) -> list[dict[str, Any]]:
     return out
 
 
+DEFAULT_PLAN_ROLES: tuple[str, ...] = ("fitting", "validation", "test_a", "test_b")
+DEFAULT_PLAN_REL: str = "backend/model/fitted_values/fresh_world_plan.json"
+
+
+def load_plan_document(plan_json: Path | None = None, git_object: str | None = None) -> dict[str, Any]:
+    """Load fresh_world_plan.json from a file path or read-only git object (e.g. main:path)."""
+    if plan_json is not None:
+        return json.loads(Path(plan_json).read_text(encoding="utf-8"))
+    obj = git_object or f"main:{DEFAULT_PLAN_REL}"
+    local_default = _REPO_ROOT / DEFAULT_PLAN_REL
+    if git_object is None and local_default.is_file():
+        return json.loads(local_default.read_text(encoding="utf-8"))
+    raw = subprocess.check_output(["git", "show", obj], cwd=str(_REPO_ROOT))
+    return json.loads(raw.decode("utf-8"))
+
+
+def parse_plan_episodes(
+    plan_doc: dict[str, Any],
+    roles: Sequence[str] = DEFAULT_PLAN_ROLES,
+) -> list[dict[str, Any]]:
+    """Extract open episode windows from fresh_world_plan.json in the requested role order."""
+    episodes_by_role = plan_doc.get("episodes") or {}
+    out: list[dict[str, Any]] = []
+    for role in roles:
+        role_eps = episodes_by_role.get(role)
+        if role_eps is None:
+            raise KeyError(f"unknown role '{role}' in plan episodes (available: {sorted(episodes_by_role.keys())})")
+        for ep in role_eps:
+            box = normalize_box(ep["box"])
+            s0 = float(ep["start_s"])
+            s1 = float(ep["end_s"])
+            if closed_region_for(box, s0, s1) is not None:
+                continue
+            out.append({
+                "key": str(ep["key"]),
+                "role": str(role),
+                "continent": str(ep.get("continent", "")),
+                "zone": str(ep.get("zone", "")),
+                "box": box,
+                "start": format_utc(s0),
+                "end": format_utc(s1),
+            })
+    return out
+
+
 def store_status(out_dir: Path) -> dict[str, Any]:
     """Summarize files and byte counts in the burned-area output store."""
     summary: dict[str, Any] = {"out_dir": out_dir.name, "products": {}}
@@ -1115,6 +1161,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     f_spl.add_argument("--product", default="both", help="MCD64A1, VNP64A1, or both (default: both).")
     f_spl.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help="Max worker threads (1..4).")
     f_spl.add_argument("--only-fit-val", action="store_true", help="Fetch fitting and validation sections only.")
+
+    f_pln = sub.add_parser("fetch-plan", help="Fetch burned-area masks for episodes in fresh_world_plan.json.")
+    f_pln.add_argument("--plan-json", type=Path, default=None, help="Optional path to fresh_world_plan.json.")
+    f_pln.add_argument("--git-object", type=str, default=None, help="Git rev:path (default main:backend/model/fitted_values/fresh_world_plan.json).")
+    f_pln.add_argument("--roles", nargs="+", default=list(DEFAULT_PLAN_ROLES), help="Ordered episode roles to fetch.")
+    f_pln.add_argument("--product", default="both", help="MCD64A1, VNP64A1, or both (default: both).")
+    f_pln.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help="Max worker threads (1..4).")
 
     f_plan = sub.add_parser("plan", help="List CMR monthly tiles overlapping a box and UTC window without downloading.")
     f_plan.add_argument("--box", required=True, help="Bounding box W,S,E,N (use --box=W,S,E,N for negative W).")
@@ -1255,6 +1308,51 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0 if not failed else 1
+
+    if args.cmd == "fetch-plan":
+        plan_doc = load_plan_document(args.plan_json, args.git_object)
+        rows = parse_plan_episodes(plan_doc, roles=args.roles)
+        print(f"EARTHDATA_TOKEN set; parsed {len(rows)} open plan windows in role order {list(args.roles)}", flush=True)
+        total_sent = 0
+        failed_plan: list[dict[str, str]] = []
+        for idx, r in enumerate(rows, 1):
+            try:
+                res = fetch_window(
+                    r["box"],
+                    r["start"],
+                    r["end"],
+                    token=token,
+                    out_dir=out_dir,
+                    products=prods,
+                    workers=workers,
+                )
+            except (ClosedBurnedWindow, TokenMissing, AuthApprovalRequired, PermissionError):
+                raise
+            except Exception as exc:  # noqa: BLE001
+                err_msg = redact_token(str(exc), token)
+                failed_plan.append({"key": r["key"], "role": r["role"], "error": err_msg})
+                print(f"[{idx}/{len(rows)}] [{r['role']}] {r['key']} ERROR: {err_msg}", flush=True)
+                continue
+            total_sent += int(res["bytes_transferred"])
+            mcd = res["products"].get("MCD64A1", {})
+            print(
+                f"[{idx}/{len(rows)}] [{r['role']}] {r['key']} {r['start']}..{r['end']} "
+                f"MCD64A1={mcd.get('status')} burned={mcd.get('burned_in_window_cells')} "
+                f"sent={res['bytes_transferred'] / 1e6:.2f} MB",
+                flush=True,
+            )
+        print(
+            json.dumps(
+                {
+                    "fetched_plan_windows": len(rows) - len(failed_plan),
+                    "failed_windows": failed_plan,
+                    "bytes_transferred": total_sent,
+                    "store": store_status(out_dir),
+                },
+                indent=2,
+            )
+        )
+        return 0 if not failed_plan else 1
 
     return 1
 
