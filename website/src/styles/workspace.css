@@ -817,3 +817,8 @@ body:has(.iso-viewer-layer) .iso-ws__util {
 .iso-film .place__railground {
   display: none;
 }
+
+/* With no list, the Earth takes the width: the place screen's room for its list (which the page may set) is none. */
+.iso-film .place {
+  --place-rail: -48px;
+}
