@@ -5,7 +5,8 @@
 
 export const WORDS = {
   brand: 'Isogon',
-  entryLine: 'Two NASA satellite sensors, MODIS and VIIRS, on one scale.',
+  entryLine:
+    "NASA's fire record jumps in 2012, when a sharper satellite joined. Isogon puts every year on one scale, then hides that satellite and tests how well each fire can be rebuilt without it.",
   play: 'Play',
   explore: 'Explore',
   stop: 'Click or press any key to stop',
