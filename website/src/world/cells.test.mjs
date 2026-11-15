@@ -3,7 +3,7 @@
 // close to what the cube encoded.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cellValue, hexStops, inverter, NOT_LOADED, scaledCell, tOfValue } from './cells.ts';
+import { boxGround, cellValue, hexStops, inverter, NOT_LOADED, scaledCell, tOfValue } from './cells.ts';
 
 // The cube's ramp, as its builder writes it (cube_build.RAMP) and its layers.json repeats.
 const RAMP = [
@@ -102,4 +102,27 @@ test('legend numbers never touch: the last stays, the one before it gives way', 
   assert.ok(wide[4].x + widths[4] <= 260 + 1e-9);
   const narrow = layoutTicks(ticks, widths, 150);
   assert.deepEqual(narrow.map((x) => x.shown), [true, true, true, false, true]);
+});
+
+test('a box says how many of its squares hold a detection, and of the rest how many are sea and how many land', () => {
+  // A world of 8 by 4 squares of 45 degrees; land west of the prime meridian, sea east of it.
+  const grid = { cols: 8, rows: 4, step: 45 };
+  const values = new Float32Array(32).fill(NOT_LOADED);
+  values[1 * 8 + 2] = 0; // loaded, none of this layer's rows: still a square with a row
+  values[1 * 8 + 5] = 12; // a detection at sea, as an offshore flare
+  const isLand = (lon) => lon < 0;
+  const g = boxGround(values, grid, [-90, -45, 89.9, 44.9], isLand); // every square it touches, as before
+  assert.deepEqual(g, { cells: 8, loaded: 2, sea: 3, land: 3 });
+  assert.deepEqual(boxGround(values, grid, [0, -90, 180, 90], () => false), { cells: 16, loaded: 1, sea: 15, land: 0 });
+  assert.deepEqual(boxGround(values, grid, [-200, 0, 0, 10], isLand).cells, 0);
+});
+
+test('a box larger than about 5,000 squares is read at every n-th square, its shares kept', () => {
+  const grid = { cols: 1440, rows: 720, step: 0.25 };
+  const values = new Float32Array(1440 * 720).fill(NOT_LOADED);
+  for (let r = 0; r < 720; r++) for (let c = 0; c < 720; c++) values[r * 1440 + c] = 1; // the west half loaded
+  const g = boxGround(values, grid, [-180, -90, 180, 90], () => true);
+  assert.ok(g.cells <= 5000 && g.cells > 2500, `${g.cells} squares read`);
+  assert.ok(Math.abs(g.loaded / g.cells - 0.5) < 0.01);
+  assert.equal(g.sea, 0);
 });

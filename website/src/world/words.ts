@@ -76,12 +76,23 @@ export const EARTH_WORDS = {
   cancel: 'Stop drawing',
   boxSize: (latDeg: number, lonDeg: number, km2: number) =>
     `${deg(latDeg)} by ${deg(lonDeg)} degrees, ${roughly(km2)} square kilometres`,
-  boxLoaded: (loaded: number, cells: number) =>
-    loaded === cells
-      ? 'Every square of it is in a loaded file'
-      : loaded === 0
-        ? 'No file loaded so far holds a detection in it: its record would be empty because nothing is loaded'
-        : `${Math.round((loaded / cells) * 100)} percent of its squares are in a loaded file; the rest are not counted`,
+  /**
+   * What a drawn box holds: the share of its squares where fire was detected, and what the rest is, sea or land where
+   * nothing was detected (every country's file is loaded; while some were not, that land is said as not loaded yet).
+   */
+  boxGround: (g: { cells: number; loaded: number; sea: number; land: number }, complete: boolean) => {
+    const dry = complete ? 'land where nothing was detected' : 'land with no detection in the files loaded so far';
+    if (g.loaded === g.cells) return "NASA's satellites detected fire in every square of it since November 2000";
+    if (g.loaded === 0) {
+      if (g.land === 0) return 'It is all sea: no fire was detected in it since November 2000, so its record would be empty';
+      return complete
+        ? 'No fire was detected in it since November 2000, so its record would be empty'
+        : 'No file loaded so far holds a detection in it, so its record would be empty';
+    }
+    const p = Math.min(99, Math.max(1, Math.round((g.loaded / g.cells) * 100)));
+    const rest = g.land === 0 ? 'sea' : g.sea === 0 ? dry : `sea, or ${dry}`;
+    return `NASA's satellites detected fire in ${p} percent of its squares since November 2000; the rest is ${rest}`;
+  },
   readBox: "Read this area's fire record",
   tooLarge: (max: number) => `Too large: the record takes an area up to ${deg(max)} degrees on a side`,
   tooSmall: (min: number) => `Too small: the record takes an area at least ${deg(min)} degrees on a side`,

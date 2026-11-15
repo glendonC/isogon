@@ -3,7 +3,9 @@ import type { FeaturedFire, Place } from '../app/places';
 import { factorAt, factorCanvas, FACTOR_HIGH, FACTOR_LOW, FACTOR_RAMP, FACTOR_STEPS, factorT, useFactor } from './factor';
 import { placeLabels } from './labels';
 import { Ticks } from './Ticks';
-import { cellAt, FIRE_RAMP, GRID, loadedShare, NOT_LOADED, rampAt, tOfValue, useWorldLayer } from './layers';
+import { boxGround } from './cells';
+import { countryAt } from './countryAt';
+import { cellAt, FIRE_RAMP, GRID, NOT_LOADED, rampAt, tOfValue, useWorldLayer } from './layers';
 import { boxAreaKm2, type Box, type Projector } from './projection';
 import { EARTH_WORDS as W, monthYear } from './words';
 import { rectOf, WorldCanvas, type GridLayer } from './WorldCanvas';
@@ -194,6 +196,11 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
   const fac = useFactor(factor, mode === 'factor');
   const [drawing, setDrawing] = useState(startDrawing);
   const [box, setBox] = useState<Box | null>(startBox);
+  // What the drawn box holds, counted once a box: where fire was detected, and of the rest what is sea and what land.
+  const ground = useMemo(
+    () => (box && world.state === 'ready' ? boxGround(world.layer.values, GRID, box, (lon, lat) => countryAt(lon, lat) !== null) : null),
+    [box, world],
+  );
   const [open, setOpen] = useState<string | null>(startOpen);
   const [hover, setHover] = useState<{ lon: number; lat: number; x: number; y: number } | null>(null);
   const [overMark, setOverMark] = useState<string | null>(null);
@@ -391,14 +398,15 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
     const r = rectOf(p, box);
     if (open) return <div className="world-box" style={r} />;
     const why = fit(box);
-    const share = world.state === 'ready' ? loadedShare(world.layer, box) : null;
     const below = r.top < 120;
     return (
       <>
         <div className="world-box" style={r} />
         <div data-world-ui className="world-boxlabel sys-plate" style={below ? { left: r.left, top: r.top + r.height + 10 } : { left: r.left, top: r.top - 10, transform: 'translateY(-100%)' }}>
           <div className="world-boxlabel__line">{W.boxSize(box[3] - box[1], box[2] - box[0], boxAreaKm2(box))}</div>
-          {share && share.cells > 0 && <div className="world-boxlabel__sub">{W.boxLoaded(share.loaded, share.cells)}</div>}
+          {ground && ground.cells > 0 && world.state === 'ready' && (
+            <div className="world-boxlabel__sub">{W.boxGround(ground, world.index.world_complete === true)}</div>
+          )}
           {why ? (
             <div className="world-boxlabel__why">{why}</div>
           ) : (

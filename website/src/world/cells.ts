@@ -93,3 +93,42 @@ export function scaledCell(
   const t = invert(r, g, b);
   return { value: scaleValue(t, scale), atLow: t <= 0.004, atHigh: t >= 0.996 };
 }
+
+/** Of the squares a box touches: how many hold a row of a loaded file, and of the rest, how many lie at sea and how many on land. */
+export interface BoxGround {
+  cells: number;
+  loaded: number;
+  sea: number;
+  land: number;
+}
+
+/**
+ * What a box holds, square by square: a square some loaded file has a row in, or else sea or land by the country at the
+ * square's middle (`isLand`). A box of more than about 5,000 squares (wider than the record takes) is read at every n-th
+ * square each way, so its shares stay close and a large box drawn across the map stays quick.
+ */
+export function boxGround(
+  values: ArrayLike<number>,
+  grid: { cols: number; rows: number; step: number },
+  b: [number, number, number, number],
+  isLand: (lon: number, lat: number) => boolean,
+): BoxGround {
+  const colOf = (lon: number) => Math.min(Math.floor((lon + 180) / grid.step), grid.cols - 1);
+  const rowOf = (lat: number) => grid.rows - 1 - Math.min(Math.floor((lat + 90) / grid.step), grid.rows - 1);
+  const out: BoxGround = { cells: 0, loaded: 0, sea: 0, land: 0 };
+  if (b[0] < -180 || b[2] > 180 || b[1] < -90 || b[3] > 90 || b[2] < b[0] || b[3] < b[1]) return out;
+  const c0 = colOf(b[0]);
+  const c1 = colOf(b[2]);
+  const r0 = rowOf(b[3]);
+  const r1 = rowOf(b[1]);
+  const every = Math.max(1, Math.ceil(Math.sqrt(((c1 - c0 + 1) * (r1 - r0 + 1)) / 5000)));
+  for (let r = r0; r <= r1; r += every) {
+    for (let c = c0; c <= c1; c += every) {
+      out.cells += 1;
+      if (values[r * grid.cols + c] !== NOT_LOADED) out.loaded += 1;
+      else if (isLand(-180 + (c + 0.5) * grid.step, 90 - (r + 0.5) * grid.step)) out.land += 1;
+      else out.sea += 1;
+    }
+  }
+  return out;
+}

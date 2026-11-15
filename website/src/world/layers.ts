@@ -154,22 +154,6 @@ export function cellAt(lon: number, lat: number): { col: number; row: number } |
   return { col, row };
 }
 
-/** Of the cells a box touches, how many are loaded. */
-export function loadedShare(layer: WorldLayer, b: [number, number, number, number]): { loaded: number; cells: number } {
-  const a = cellAt(b[0], b[3]);
-  const z = cellAt(b[2], b[1]);
-  if (!a || !z) return { loaded: 0, cells: 0 };
-  let loaded = 0;
-  let cells = 0;
-  for (let r = a.row; r <= z.row; r += 1) {
-    for (let c = a.col; c <= z.col; c += 1) {
-      cells += 1;
-      if (layer.values[r * GRID.cols + c] !== NOT_LOADED) loaded += 1;
-    }
-  }
-  return { loaded, cells };
-}
-
 export type LayerState =
   | { state: 'loading' }
   | { state: 'failed'; why: string }
