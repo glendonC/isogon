@@ -9,6 +9,7 @@ test('the story runs from the world to the visitor\'s own turn', () => {
 
 test('labels that hold a figure take it from the data and are plain without it', () => {
   const plain = storyLabels();
+  assert.equal(plain.world, 'Start');
   assert.equal(plain.jump, 'The jump');
   assert.equal(plain.tested, 'Tested fires');
   const data = storyLabels({ jumpYear: 2012, testedFires: 57 });

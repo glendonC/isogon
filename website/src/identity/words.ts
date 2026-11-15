@@ -9,10 +9,11 @@ export const WORDS = {
     "NASA's fire record jumps in 2012, when a sharper satellite joined. Isogon puts every year on one scale, then hides that satellite and tests how well each fire can be rebuilt without it.",
   play: 'Play',
   explore: 'Explore',
+  search: 'Search',
   stop: 'Click or press any key to stop',
   links: { search: 'Search', method: 'Method', sources: 'Sources' },
   story: {
-    world: 'World',
+    world: 'Start',
     jump: 'The jump',
     place: 'One place',
     fire: 'One fire',
