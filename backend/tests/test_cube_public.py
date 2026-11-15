@@ -38,6 +38,17 @@ class PublicCube(unittest.TestCase):
             self.assertEqual(int(p["rows"].sum()), 5)        # 3 MODIS fire rows (one on a corner) and 2 VIIRS
             self.assertEqual(man["rows_in_file"]["Terra"], 2)
             self.assertFalse(pub.box((100.0, 0.0, 101.0, 1.0))["loaded"])
+            from backend.server_cube import record_payload
+
+            route, mine = record_payload(cube, box), P.public_record(pub, box)
+            self.assertEqual(len(route["records"]), len(mine["records"]))
+            for a, b in zip(route["records"], mine["records"]):
+                for k in ("year_month", "modis_raw_rate", "viirs_raw_rate", "harmonized_mean", "sensor_regime"):
+                    self.assertEqual(a[k], b[k], (a["year_month"], k))
+                for plat, c in a["raw_counts"].items():
+                    self.assertEqual(None if c is None else (c["total"], c["outage_days"]),
+                                     None if b["raw_counts"][plat] is None else
+                                     (b["raw_counts"][plat]["total"], b["raw_counts"][plat]["outage_days"]))
 
     def test_long_gaps_and_large_counts_round_trip(self) -> None:
         rows = [[1, 0, 0, 0], [0, 300, 0, 0], [0, 0, 70000, 2], [5, 0, 0, 255]]

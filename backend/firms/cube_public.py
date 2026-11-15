@@ -12,6 +12,7 @@ and months with no fire row are left out. Cell-months the project's closed rule 
 
 Usage:
   uv run --no-project --python 3.12 --with numpy --with pillow python3 backend/firms/cube_public.py write
+  ... check
   ... read --box w,s,e,n
 """
 
@@ -342,16 +343,210 @@ class PublicCube:
                 "closed_months": sorted(closed), "cells": (c1 - c0) * (r1 - r0)}
 
 
+# A box's Record from the public file, and the check against the cube route
+
+
+CHECK_BOXES: dict[str, tuple[float, float, float, float]] = {
+    "California, Sierra Nevada": (-121.0, 36.0, -118.0, 38.5),
+    "Alberta, Fort McMurray": (-113.0, 55.5, -110.0, 57.5),
+    "Yucatan": (-92.0, 17.0, -87.0, 21.5),
+    "Alaska interior": (-152.0, 63.0, -142.0, 67.0),
+    "Rondonia, Amazon": (-66.0, -13.0, -60.0, -8.0),
+    "Tocantins, Cerrado": (-50.0, -13.0, -45.0, -8.0),
+    "Central Chile": (-73.5, -38.5, -71.0, -35.0),
+    "Patagonia": (-72.0, -46.0, -66.0, -42.0),
+    "Portugal": (-9.5, 37.0, -6.2, 42.2),
+    "Central Sweden": (14.5, 61.0, 17.0, 62.5),
+    "Pontic steppe": (35.0, 45.0, 45.0, 52.0),
+    "Sahel, 20 by 10 degrees": (-10.0, 5.0, 10.0, 15.0),
+    "Congo basin, 20 by 17 degrees": (15.0, -12.0, 35.0, 5.0),
+    "Kruger": (30.5, -25.5, 32.5, -22.0),
+    "Ghana": (-3.0, 6.0, 1.0, 11.0),
+    "Semey, Kazakhstan": (78.0, 49.0, 83.0, 52.0),
+    "Punjab": (73.5, 29.0, 77.5, 32.5),
+    "Yakutia, 20 by 12 degrees": (115.0, 58.0, 135.0, 70.0),
+    "Kalimantan": (110.0, -4.0, 116.0, 1.0),
+    "Northern Australia": (125.0, -18.0, 135.0, -12.0),
+}
+EDGE_BOXES: dict[str, tuple[float, float, float, float]] = {
+    "Fiji, at the antimeridian": (177.0, -19.0, 180.0, -16.0),
+    "Plumas grid box, meets a closed region": (-122.5, 39.0, -120.0, 41.0),
+    "Southern Ocean, nothing loaded": (-130.0, -50.0, -125.0, -45.0),
+}
+
+
+def _gaps(manifest: dict[str, Any]) -> dict[str, set[str]]:
+    """Outage days per platform as the calendar takes them: only their months and number count."""
+    out = {}
+    for plat, per_month in manifest["outage_days"].items():
+        out[plat] = {f"{C.month_label(m)}-{i + 1:02d}" for m, n in enumerate(per_month) for i in range(int(n))}
+    return out
+
+
+def public_record(pub: PublicCube, box: tuple[float, float, float, float], how: str = "outer") -> dict[str, Any] | None:
+    """The Record of a box from the public file alone, through the box calendar's own payload; None when not loaded.
+    A month the closed rule closes for the box is a month no platform delivers. Only `total` of each platform's
+    counts is in the file, so the day and night fields hold the total and zero and are not to be read."""
+    from backend.firms import real_calendar as RC
+
+    t = pub.box(box, how)
+    if not t["loaded"]:
+        return None
+    rows = t["rows"]
+    plats = pub.manifest["platforms"]
+    counts: dict[str, dict[str, dict[str, int]]] = {}
+    for m in np.flatnonzero(rows.sum(axis=1)):
+        counts[C.month_label(int(m))] = {plats[p]: {"day": int(rows[m, p]), "night": 0} for p in range(len(plats))
+                                         if rows[m, p]}
+    closed = {C.month_label(m) for m in t["closed_months"]}
+    deliver = {plat: {C.month_label(m) for m, on in enumerate(v) if on} - closed
+               for plat, v in pub.manifest["delivering"].items()}
+    out = RC._calendar_payload(
+        counts, int(rows.sum()), tuple(t["box"]), deliver, _gaps(pub.manifest),
+        head={"region_id": None, "region_name": RC.box_label(tuple(t["box"]))},
+        provenance_where="inside the box on the fire cube's grid, from the public cube file",
+        counted_rows="fire rows (FIRMS type 0), day and night together, as the box calendar counts",
+        excluded={}, left_out_metrics={}, noaa21_note="not in the file", not_in_calendar="", ignored=[])
+    out["closed_months"] = sorted(closed)
+    return out
+
+
+def public_surround(pub: PublicCube, box: tuple[float, float, float, float], grow_deg: float = 2.0) -> dict[str, Any]:
+    """`backend.model.harmonize.surround_from_cube` from the public file; a closed month is unknown (NaN)."""
+    w, s, e, n = box
+    t = pub.box((max(-180.0, w - grow_deg), max(-90.0, s - grow_deg), min(180.0, e + grow_deg), min(90.0, n + grow_deg)))
+    r = t["rows"].astype(np.float64)
+    r[t["closed_months"], :] = np.nan
+    return {"year_month": [C.month_label(m) for m in range(r.shape[0])], "Terra": r[:, 0], "Aqua": r[:, 1],
+            "Suomi NPP": r[:, 2], "box": t["box"], "build": pub.manifest["source"]["cube_build"]}
+
+
+def _same(a: Any, b: Any) -> bool:
+    if isinstance(a, float) or isinstance(b, float):
+        return a == b or (a is not None and b is not None and abs(float(a) - float(b)) <= 1e-9 * max(1.0, abs(float(a))))
+    return a == b
+
+
+def check(boxes: dict[str, tuple[float, float, float, float]] | None = None, folder: Path | None = None) -> dict[str, Any]:
+    """For each box: the Record from the public file against the cube route's answer, month by month (every
+    platform's total, null and outage days, every derived figure), the yearly summary, the month medians and the
+    summary; the surroundings the served method reads; and the served method's months from either source."""
+    from backend.server_cube import cube_route
+    from backend.model.harmonize import closed_years_for_box, record_series, surround_from_cube
+
+    pub = PublicCube(folder)
+    boxes = boxes or {**CHECK_BOXES, **EDGE_BOXES}
+    report: dict[str, Any] = {"public_file": pub.manifest["file"]["sha256"], "cube_build": pub.manifest["source"]["cube_build"],
+                              "boxes": {}}
+    for name, box in boxes.items():
+        t0 = time.perf_counter()
+        st, body, _ = cube_route("/api/cube/record", {"box": [",".join(f"{v:g}" for v in box)]})
+        route = json.loads(body)
+        t1 = time.perf_counter()
+        mine = public_record(pub, box)
+        t2 = time.perf_counter()
+        r: dict[str, Any] = {"box": list(box), "route_status": st, "route_ms": round(1000 * (t1 - t0), 1),
+                             "public_ms": round(1000 * (t2 - t1), 1)}
+        if st != 200 or mine is None:
+            r.update({"route_state": route.get("state"), "public_loaded": mine is not None,
+                      "equal": (st == 404) == (mine is None)})
+            report["boxes"][name] = r
+            continue
+        closed = set(mine["closed_months"])
+        months = differ = 0
+        fields_differ: dict[str, int] = {}
+        for a, b in zip(route["records"], mine["records"]):
+            if a["year_month"] != b["year_month"]:
+                raise ValueError("months out of step")
+            if a["year_month"] in closed:
+                continue
+            months += 1
+            bad = False
+            for plat, ca in a["raw_counts"].items():
+                cb = b["raw_counts"].get(plat)
+                if (ca is None) != (cb is None) or (ca is not None and (ca["total"] != cb["total"]
+                                                                        or ca["outage_days"] != cb["outage_days"])):
+                    fields_differ[f"raw_counts {plat}"] = fields_differ.get(f"raw_counts {plat}", 0) + 1
+                    bad = True
+            for k, v in a.items():
+                if k != "raw_counts" and not _same(v, b.get(k)):
+                    fields_differ[k] = fields_differ.get(k, 0) + 1
+                    bad = True
+            differ += bad
+        whole = {}
+        for key in ("summary_metrics", "annual_summary", "month_climatology", "regime_markers"):
+            ra, rb = route.get(key), mine.get(key)
+            if key == "annual_summary":
+                strip = lambda ys: [{k: v for k, v in y.items() if k != "raw_counts"} | {  # noqa: E731
+                    "totals": {p: (c if not isinstance(c, dict) else c.get("total")) for p, c in (y.get("raw_counts") or {}).items()}}
+                    for y in ys if not closed or str(y.get("year")) not in {m[:4] for m in closed}]
+                ra, rb = strip(ra), strip(rb)
+            if key == "summary_metrics":
+                drop = {"downloaded_firms_rows", "ignored_extracts", "static_rows_excluded", "offshore_rows_excluded",
+                        "volcano_rows_excluded"}
+                ra = {k: v for k, v in ra.items() if k not in drop}
+                rb = {k: v for k, v in rb.items() if k not in drop}
+            whole[key] = json.dumps(ra, sort_keys=True, default=str) == json.dumps(rb, sort_keys=True, default=str)
+        ha, hb = route["harmonization_method"], mine["harmonization_method"]
+        whole["ratio_and_validation"] = all(json.dumps(ha.get(k), sort_keys=True) == json.dumps(hb.get(k), sort_keys=True)
+                                            for k in ("ratio_terra_aqua", "ratio_terra_only", "validation", "fit_rows"))
+        g = tuple(route["bbox"])
+        sa, sb = surround_from_cube(g), public_surround(pub, g)
+        sur_closed = {C.month_label(x) for x in pub.box(sb["box"])["closed_months"]}
+        ok_m = np.array([m not in closed and m not in sur_closed for m in sa["year_month"]])
+        sur_equal = all(np.array_equal(np.asarray(sa[p], dtype=np.float64)[ok_m], sb[p][ok_m]) for p in ("Terra", "Aqua", "Suomi NPP"))
+        area, lat, cy = RC_area(g), (g[1] + g[3]) / 2.0, closed_years_for_box(g)
+        served_a = record_series(route["records"], area, center_lat=lat, closed_years=cy, surround=sa)
+        served_b = record_series(mine["records"], area, center_lat=lat, closed_years=cy, surround=sb)
+        served_diff = [(x, y) for x, y in zip(served_a["months"], served_b["months"])
+                       if x["year_month"] not in closed
+                       and any(not _same(x[k], y[k]) for k in ("harmonized_count", "p10_count", "p90_count"))]
+        sd = len(served_diff)
+        rel = [abs(y["harmonized_count"] - x["harmonized_count"]) / max(abs(x["harmonized_count"]), 1e-9)
+               for x, y in served_diff if x["harmonized_count"] is not None and y["harmonized_count"] is not None]
+        r.update({"months_compared": months, "months_closed": len(closed), "months_differing": differ,
+                  "fields_differing": fields_differ, **{f"{k}_equal": v for k, v in whole.items()},
+                  "surroundings_equal": sur_equal, "surroundings_meet_closed_cells": bool(sur_closed),
+                  "served_method": served_a["method"]["id"],
+                  "served_largest_relative_difference": round(max(rel), 4) if rel else 0.0,
+                  "served_months_differing_list": [x["year_month"] for x, _ in served_diff][:24],
+                  "served_months_differing": sd,
+                  "rows": {p: int(sum((rec["raw_counts"].get(p) or {}).get("total", 0) for rec in mine["records"]))
+                           for p in pub.manifest["platforms"]},
+                  "equal": differ == 0 and not fields_differ and all(whole.values()) and sur_equal and sd == 0})
+        if closed:
+            r["closed_effect"] = {
+                "route_overlap_ratio": route["summary_metrics"].get("viirs_to_modis_overlap_ratio"),
+                "public_overlap_ratio": mine["summary_metrics"].get("viirs_to_modis_overlap_ratio"),
+                "why": "the closed months are null in the public Record, so they leave its fit; the cube route keeps them"}
+        report["boxes"][name] = r
+    for b in report["boxes"].values():
+        b["difference_explained_by_closed_months"] = (not b["equal"] and (b.get("months_closed", 0) > 0
+                                                                          or b.get("surroundings_meet_closed_cells", False)))
+    report["all_equal_or_explained"] = all(b["equal"] or b["difference_explained_by_closed_months"]
+                                           for b in report["boxes"].values())
+    return report
+
+
+def RC_area(box: tuple[float, float, float, float]) -> float:
+    from backend.firms.real_calendar import box_area_km2
+
+    return box_area_km2(box)
+
+
 def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("write")
+    sub.add_parser("check")
     rd = sub.add_parser("read")
     rd.add_argument("--box", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "write":
         m = write()
         print(json.dumps({k: m[k] for k in ("file", "stats", "rows_in_file", "rows_closed", "seconds")}, indent=1))
+    elif a.cmd == "check":
+        print(json.dumps(check(), indent=1))
     else:
         t = PublicCube().box(tuple(float(v) for v in a.box.split(",")))
         print(json.dumps({"box": t["box"], "loaded": t["loaded"], "closed_months": t["closed_months"],
