@@ -578,6 +578,8 @@
   width: 260px;
   display: grid;
   gap: var(--sys-s2);
+  /* The workspace's layer lets clicks through to the stage; the field takes its own. */
+  pointer-events: auto;
 }
 
 .guide-ask__input {
