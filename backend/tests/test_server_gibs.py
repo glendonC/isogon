@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import datetime as _dt
 from http.server import ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -18,6 +19,7 @@ from backend import server_gibs as sg
 from backend.firms import gibs_cloud as gc
 from backend.terrain import gibs_day as gd
 from backend.tests.test_gibs_cloud import (
+    _MODIS_CLOUD_RGBS,
     _SAVED_TERRA_2012_08_10_TILE_B64,
     _modis_colormap_xml,
     _viirs_colormap_xml,
@@ -177,6 +179,10 @@ class TestServerGibs(unittest.TestCase):
             400,
         )
         self.assertEqual(
+            self.get("/api/gibs/day", region_id="../bad", day="2012-08-10", layer="MODIS_Terra_CorrectedReflectance_TrueColor")[0],
+            400,
+        )
+        self.assertEqual(
             self.get("/api/gibs/day", region_id="unknown_region", day="2012-08-10", layer="MODIS_Terra_CorrectedReflectance_TrueColor")[0],
             404,
         )
@@ -219,12 +225,13 @@ class TestServerGibs(unittest.TestCase):
             self.assertEqual(st_c, 409)
             self.assertIn("evidence", json.loads(b_c))
 
-    def test_featured_fire_windows_skip_closed_2021_and_cap_workers(self) -> None:
+    def test_featured_fire_windows_skip_closed_2021_keep_open_2021_and_dynamic_places(self) -> None:
         sample_regions = {
             "places": [
                 {
                     "id": "plumas_ca",
                     "name": "Feather River & Plumas, CA",
+                    "box": [-121.44, 39.86, -120.92, 40.24],
                     "featured_fires": [
                         {
                             "id": "plumas_ca:2021-07",
@@ -258,6 +265,7 @@ class TestServerGibs(unittest.TestCase):
                 {
                     "id": "evia_greece",
                     "name": "Northern Evia Island, Greece",
+                    "box": [23.05, 38.68, 23.55, 39.04],
                     "featured_fires": [
                         {
                             "id": "evia_greece:2021-08",
@@ -274,15 +282,211 @@ class TestServerGibs(unittest.TestCase):
                         }
                     ],
                 },
+                {
+                    "id": "manavgat_tr",
+                    "name": "Manavgat & the Taurus Foothills, Turkey",
+                    "box": [31.21, 36.71, 31.73, 37.09],
+                    "featured_fires": [
+                        {
+                            "id": "manavgat_tr:2021-07",
+                            "name": "Manavgat fire",
+                            "closed": False,
+                            "default_start": "2021-07-28",
+                            "run_starts": [
+                                {
+                                    "start": "2021-07-28",
+                                    "first_overpass_utc": "2021-07-28T09:00:00Z",
+                                    "last_overpass_utc": "2021-07-29T09:00:00Z",
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "id": "fort_mcmurray_ab",
+                    "name": "Fort McMurray, Alberta",
+                    "box": [-110.6, 56.58, -110.08, 56.96],
+                    "featured_fires": [
+                        {
+                            "id": "fort_mcmurray_ab:2016-05",
+                            "name": "Horse River fire",
+                            "closed": False,
+                            "default_start": "2016-05-03",
+                            "run_starts": [
+                                {
+                                    "start": "2016-05-03",
+                                    "first_overpass_utc": "2016-05-03T18:00:00Z",
+                                    "last_overpass_utc": "2016-05-04T18:00:00Z",
+                                }
+                            ],
+                        }
+                    ],
+                },
             ]
         }
         windows = sg.featured_fire_windows(sample_regions)
-        self.assertEqual(len(windows), 1)
-        self.assertEqual(windows[0]["id"], "plumas_ca:2012-08")
+        self.assertEqual([w["id"] for w in windows], ["plumas_ca:2012-08", "manavgat_tr:2021-07", "fort_mcmurray_ab:2016-05"])
         self.assertEqual(windows[0]["days"], ["2012-08-10", "2012-08-11"])
+        self.assertEqual(windows[1]["days"], ["2021-07-28", "2021-07-29"])
+        self.assertEqual(windows[2]["box"], [-110.6, 56.58, -110.08, 56.96])
 
         with self.assertRaises(ValueError):
             sg.fetch_featured_fires(sample_regions, self.root, workers=5)
+
+    def test_live_cohorts_fetch_and_three_hour_refresh_offline(self) -> None:
+        cohorts_path = Path(self.tmp.name) / "cohorts.jsonl"
+        cohort_record = {
+            "cohort": {
+                "index": 0,
+                "chosen_utc": "2026-11-15T01:57:13Z",
+                "fires": [
+                    {
+                        "id": "c0f01",
+                        "cohort": 0,
+                        "rank": 1,
+                        "part": "africa",
+                        "box": [26.07792, 8.51901, 26.59792, 8.89901],
+                        "centre": [26.33792, 8.70901],
+                        "modis_rows_48h": 85,
+                    }
+                ],
+            },
+            "sha256": "0" * 64,
+        }
+        cohorts_path.write_text(json.dumps(cohort_record) + "\n", encoding="utf-8")
+
+        loaded = sg.load_live_cohorts(cohorts_path)
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0]["id"], "c0f01")
+
+        # Fake opener: on initial sync (04:00Z), 2026-11-14 has green imagery + 25% cloud,
+        # while 2026-11-15 has all-black imagery (swath not yet arrived) and 404 cloud tiles.
+        call_urls: list[str] = []
+        arrived_2026_11_15 = {"ready": False}
+
+        black_rgb = gd.encode_png_rgb(np.zeros((512, 512, 3), dtype=np.uint8))
+        green_rgb = gd.encode_png_rgb(np.full((512, 512, 3), (40, 120, 60), dtype=np.uint8))
+        rgb_25 = tuple(int(v) for v in _MODIS_CLOUD_RGBS[25].split(","))
+        cloud_25_png = gd.encode_png_rgb(np.full((512, 512, 3), rgb_25, dtype=np.uint8))
+
+        def fake_opener(url: str, headers: dict[str, str]) -> tuple[int, dict[str, str], bytes]:
+            call_urls.append(url)
+            if url.endswith("MODIS_Cloud_Fraction.xml"):
+                return 200, {}, _modis_colormap_xml()
+            if url.endswith("VIIRS_Clear_Sky_Confidence.xml"):
+                return 200, {}, _viirs_colormap_xml()
+            if "/2026-11-14/" in url:
+                if "Cloud_Fraction" in url:
+                    return 200, {}, cloud_25_png
+                if "Clear_Sky_Confidence" in url:
+                    return 404, {}, b""
+                return 200, {}, green_rgb
+            if "/2026-11-15/" in url:
+                if not arrived_2026_11_15["ready"]:
+                    if "Cloud_Fraction" in url or "Clear_Sky_Confidence" in url:
+                        return 404, {}, b""
+                    return 200, {}, black_rgb
+                else:
+                    if "MODIS_Terra_Cloud_Fraction_Day" in url:
+                        return 200, {}, cloud_25_png
+                    if "Cloud_Fraction" in url or "Clear_Sky_Confidence" in url:
+                        return 404, {}, b""
+                    return 200, {}, green_rgb
+            return 404, {}, b""
+
+        t0 = _dt.datetime(2026, 11, 15, 4, 0, 0, tzinfo=_dt.timezone.utc)
+        m0 = sg.fetch_live_cohorts(
+            cohorts_path,
+            self.root,
+            workers=1,
+            pause_s=0.0,
+            max_age_s=10200.0,
+            now_utc=t0,
+            opener=fake_opener,
+        )
+        self.assertEqual(m0["days"], ["2026-11-14", "2026-11-15"])
+        self.assertEqual(m0["refreshed_fire_days"], 2)
+        calls_after_t0 = len(call_urls)
+        self.assertGreater(calls_after_t0, 0)
+
+        # Verify HTTP routes serve c0f01 via fire_id offline.
+        st_y, body_y, _ = self.get(
+            "/api/gibs/day",
+            fire_id="c0f01",
+            day="2026-11-14",
+            platform="MODIS_TERRA",
+            kind="true_color",
+            format="json",
+        )
+        self.assertEqual(st_y, 200)
+        doc_y = json.loads(body_y)
+        self.assertEqual(doc_y["fire_id"], "c0f01")
+        self.assertEqual(doc_y["nonzero_pixel_share"], 1.0)
+
+        st_t, body_t, _ = self.get(
+            "/api/gibs/day",
+            fire_id="c0f01",
+            day="2026-11-15",
+            platform="MODIS_TERRA",
+            kind="true_color",
+            format="json",
+        )
+        self.assertEqual(st_t, 200)
+        self.assertEqual(json.loads(body_t)["nonzero_pixel_share"], 0.0)
+
+        st_live, body_live, _ = self.get("/api/gibs/live")
+        self.assertEqual(st_live, 200)
+        self.assertEqual(json.loads(body_live)["live_fires_count"], 1)
+
+        # 1 hour later (< 3h threshold): zero network calls, cached_fire_days == 2.
+        t1 = t0 + _dt.timedelta(hours=1)
+        m1 = sg.fetch_live_cohorts(
+            cohorts_path,
+            self.root,
+            workers=1,
+            pause_s=0.0,
+            max_age_s=10200.0,
+            now_utc=t1,
+            opener=fake_opener,
+        )
+        self.assertEqual(m1["refreshed_fire_days"], 0)
+        self.assertEqual(m1["cached_fire_days"], 2)
+        self.assertEqual(len(call_urls), calls_after_t0)
+
+        # 3 hours later (>= 10200s): daytime swath and cloud fraction arrive on 2026-11-15 and replace black placeholder.
+        arrived_2026_11_15["ready"] = True
+        t3 = t0 + _dt.timedelta(hours=3)
+        m3 = sg.fetch_live_cohorts(
+            cohorts_path,
+            self.root,
+            workers=1,
+            pause_s=0.0,
+            max_age_s=10200.0,
+            now_utc=t3,
+            opener=fake_opener,
+        )
+        self.assertEqual(m3["refreshed_fire_days"], 2)
+        self.assertGreater(len(call_urls), calls_after_t0)
+
+        st_t3, body_t3, _ = self.get(
+            "/api/gibs/day",
+            fire_id="c0f01",
+            day="2026-11-15",
+            platform="MODIS_TERRA",
+            kind="true_color",
+            format="json",
+        )
+        self.assertEqual(st_t3, 200)
+        self.assertEqual(json.loads(body_t3)["nonzero_pixel_share"], 1.0)
+
+        st_c3, body_c3, _ = self.get(
+            "/api/gibs/cloud",
+            fire_id="c0f01",
+            day="2026-11-15",
+            when="day",
+        )
+        self.assertEqual(st_c3, 200)
+        self.assertAlmostEqual(json.loads(body_c3)["share"], 0.25, places=4)
 
     def test_standalone_http_server_loopback(self) -> None:
         srv = ThreadingHTTPServer(("127.0.0.1", 0), sg.make_handler(self.root, allow_network=False))
