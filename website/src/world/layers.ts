@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { assetUrl } from '../lib/api';
 import { readJson } from './read';
+import { cellValue, inverter, NOT_LOADED, tOfValue, valueOfT } from './cells';
+
+export { NOT_LOADED, tOfValue, valueOfT };
 
 /**
  * The world layers of the fire cube: one image per layer on the cube's grid (a quarter degree, 1440 by 720 cells,
@@ -31,8 +34,6 @@ export interface LayersIndex {
   world_complete?: boolean;
 }
 
-/** What a cell holds: not loaded, loaded with none of the layer's rows, or a value. */
-export const NOT_LOADED = -1;
 
 export interface WorldLayer {
   name: string;
@@ -76,36 +77,6 @@ export function rampAt(ramp: Array<[number, [number, number, number]]>, t: numbe
   return ramp[ramp.length - 1][1];
 }
 
-/** Position on the cube's ramp (0 to 1) of a colour the ramp drew, by the nearest point on its segments. */
-function inverter(ramp: number[][]) {
-  const cache = new Map<number, number>();
-  const n = ramp.length - 1;
-  return (r: number, g: number, b: number) => {
-    const key = (r << 16) | (g << 8) | b;
-    const hit = cache.get(key);
-    if (hit !== undefined) return hit;
-    let best = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < n; i += 1) {
-      const a = ramp[i];
-      const c = ramp[i + 1];
-      const d = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-      const len = d[0] * d[0] + d[1] * d[1] + d[2] * d[2] || 1;
-      const f = Math.min(Math.max(((r - a[0]) * d[0] + (g - a[1]) * d[1] + (b - a[2]) * d[2]) / len, 0), 1);
-      const e0 = r - (a[0] + d[0] * f);
-      const e1 = g - (a[1] + d[1] * f);
-      const e2 = b - (a[2] + d[2] * f);
-      const dist = e0 * e0 + e1 * e1 + e2 * e2;
-      if (dist < bestD) {
-        bestD = dist;
-        best = (i + f) / n;
-      }
-    }
-    cache.set(key, best);
-    return best;
-  };
-}
-
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -115,10 +86,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.src = src;
   });
 }
-
-/** The value a position on the log scale stands for: log10(1 + v) / log10(1 + max) = t. */
-export const valueOfT = (t: number, max: number) => Math.pow(1 + max, t) - 1;
-export const tOfValue = (v: number, max: number) => (max > 0 ? Math.log10(1 + v) / Math.log10(1 + max) : 0);
 
 export async function readLayer(base: string, name: string, index: LayersIndex): Promise<WorldLayer> {
   const meta = index.layers[name];
@@ -139,22 +106,16 @@ export async function readLayer(base: string, name: string, index: LayersIndex):
   const land = new ImageData(cols, rows);
   let loadedCells = 0;
   for (let i = 0, p = 0; i < values.length; i += 1, p += 4) {
-    const a = px[p + 3];
-    if (a === 0) {
-      values[i] = NOT_LOADED;
-      continue;
-    }
+    const c = cellValue(px[p], px[p + 1], px[p + 2], px[p + 3], invert, meta.max);
+    values[i] = c.value;
+    if (c.value === NOT_LOADED) continue;
     loadedCells += 1;
     land.data[p] = 36;
     land.data[p + 1] = 40;
     land.data[p + 2] = 48;
     land.data[p + 3] = 255;
-    if (a < 255) {
-      values[i] = 0;
-      continue;
-    }
-    const t = invert(px[p], px[p + 1], px[p + 2]);
-    values[i] = valueOfT(t, meta.max);
+    if (c.t === null) continue;
+    const t = c.t;
     const [r, g, b] = rampAt(FIRE_RAMP, t);
     out.data[p] = r;
     out.data[p + 1] = g;
