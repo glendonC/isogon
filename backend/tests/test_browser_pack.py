@@ -257,9 +257,33 @@ class ClosedWindows(unittest.TestCase):
     def test_a_start_in_a_closed_window_replays_only(self) -> None:
         man = self._pack({"plumas_ca": ("2021-08-01", A_FILES), "a_place": ("2012-08-10", A_FILES)})
         self.assertNotIn("plumas_ca", man["places"])
-        self.assertIn("closed window (plumas_ca, 2021)", man["replay_only"]["plumas_ca"])
+        self.assertIn("reaches a closed window (plumas_ca, 2021)", man["replay_only"]["plumas_ca"])
         with self.assertRaises(ValueError):
             self._pack({"lytton_bc": ("2017-07-06", A_FILES)}, out="out-none")
+
+    def test_a_start_whose_run_reaches_a_closed_window_replays_only(self) -> None:
+        reach_days = P.run_reach_s() / 86400.0
+        self.assertEqual(reach_days, 45.0)                                  # the server's search and frames
+        man = self._pack({"plumas_ca": ("2020-12-10", A_FILES), "a_place": ("2012-08-10", A_FILES)})
+        self.assertIn("reaches a closed window (plumas_ca, 2021)", man["replay_only"]["plumas_ca"])
+        man = self._pack({"plumas_ca": ("2020-11-01", A_FILES)}, out="out-open")
+        self.assertEqual(sorted(man["places"]), ["plumas_ca"])               # ends mid December 2020: open
+
+    def test_the_list_s_status_is_kept_but_never_opens_a_replay_only_place(self) -> None:
+        spec = {"version": 1, "places": {
+            "a_place": {"start": "2012-08-10", "status": "replay only", "why": "the list's own reason", "modules": [],
+                        "files": []},
+            "lytton_bc": {"start": "2017-07-06", "status": "packed", "modules": ["backend/model/solver.py"],
+                          "files": A_FILES},
+            "b_place": {"start": "2017-12-05", "status": "packed", "modules": ["backend/model/solver.py"],
+                        "files": B_FILES}}}
+        lst = self.d / "list-status.json"
+        lst.write_text(json.dumps(spec))
+        man = P.pack([lst], self.d / "out-status", self.root, log=lambda s: None)
+        self.assertEqual(sorted(man["places"]), ["b_place"])
+        self.assertEqual(man["replay_only"]["a_place"], "the list's own reason")
+        self.assertEqual(man["replay_only"]["lytton_bc"], P.REPLAY_ONLY["lytton_bc"])
+        self.assertFalse((self.d / "out-status" / "places" / "a_place.zip").exists())
 
 
 if __name__ == "__main__":

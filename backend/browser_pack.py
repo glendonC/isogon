@@ -9,8 +9,9 @@ server's own (`backend.model.training.closed_for` over the test fires' regions a
 window goes into a public archive, whichever satellite it is from. Counts that summarise a closed window (an extract
 manifest's day counts, a place's monthly calendar counts) are packed: they are the observed record the page has
 always shown for those months, not rows a run could read and score. A place whose fire on the page is a closed test
-fire (`REPLAY_ONLY`), or whose start in the list lies in a closed window, is not packed: the page replays its recorded
-look. The manifest says which places are packed and which replay only. The archives are zip, deflated, with sorted
+fire (`REPLAY_ONLY`), whose list gives it as replay only, or whose start's reach (the server's: a run's search and its
+frames, `real_run.SEARCH_S` and `server.RUN_TAIL_S`) meets a closed window, is not packed: the page replays its
+recorded look. The manifest says which places are packed and which replay only. The archives are zip, deflated, with sorted
 entries and fixed times and modes, so the same files give the same bytes.
 
 The standard library, and the backend's closed rule (so numpy and Pillow). Usage:
@@ -175,6 +176,17 @@ def closed_rows(path: Path, closed_for: Callable[..., Any], years: set[int]) -> 
     return n, first
 
 
+def run_reach_s() -> float:
+    """How far past its start a run may read, as the server asks when it cannot find a run's window: the search and
+    the frames after it."""
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+    from backend.model.real_run import SEARCH_S
+    from backend.server import RUN_TAIL_S
+
+    return float(SEARCH_S + RUN_TAIL_S)
+
+
 def registry_places() -> list[str]:
     """Every region of the backend's place registry (backend/firms/places.json)."""
     try:
@@ -189,7 +201,8 @@ def read_list(path: Path) -> dict[str, Any]:
     d = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(d, dict) and isinstance(d.get("places"), dict):
         places = {r: {"start": spec.get("start"), "modules": list(spec.get("modules") or []),
-                      "files": list(spec.get("files") or [])} for r, spec in d["places"].items()}
+                      "files": list(spec.get("files") or []), "status": spec.get("status"), "why": spec.get("why")}
+                  for r, spec in d["places"].items()}
         return {"places": places, "core": list(d.get("core") or [])}
     if isinstance(d, dict) and "region" in d and "data_files" in d:   # the browser spike's manifest
         files = [x["path"] if isinstance(x, dict) else x for x in d["data_files"]]
@@ -260,12 +273,17 @@ def pack(lists: list[Path], out: Path, root: Path | None = None, log: Callable[[
     worlds = world_dirs(root)
     closed_for, region_box, windows = closed_rule()
     closed_years = {y for w in windows for y in w["years"]}
+    reach = run_reach_s()
     merged = merge(read_list(p) for p in lists)
-    # The places replayed only: their fire on the page is a closed test fire, or their start lies in a closed window.
+    # The places replayed only: their fire on the page is a closed test fire, the list says so, or their start's
+    # reach meets a closed window (from the start's day to a day past the reach, so the rule errs toward closing).
     replay: dict[str, str] = {}
     for r in list(merged["places"]):
         why = REPLAY_ONLY.get(r)
         start = merged["places"][r].get("start")
+        status = merged["places"][r].get("status")
+        if why is None and status and status != "packed":
+            why = merged["places"][r].get("why") or f"the list gives it as {status}"
         if why is None and start:
             try:
                 box = region_box(r)
@@ -273,9 +291,9 @@ def pack(lists: list[Path], out: Path, root: Path | None = None, log: Callable[[
                 box = None
             if box is not None:
                 t = _day_s(str(start))
-                c = closed_for(tuple(box), t, t + 1.0)
+                c = closed_for(tuple(box), t, t + 86400.0 + reach)
                 if c:
-                    why = (f"its start in the list, {start}, lies in a closed window ({c['region_id']}, "
+                    why = (f"a run from its start in the list, {start}, reaches a closed window ({c['region_id']}, "
                            f"{' and '.join(str(y) for y in c['years'])}): the page replays the recorded look")
         if why:
             replay[r] = why
