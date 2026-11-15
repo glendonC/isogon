@@ -185,6 +185,10 @@ export const YEAR_WORDS = {
   wholeEarth: 'The whole Earth',
   pickCountry: 'Click a country for its own years',
   noFile: 'no file of its own',
+  noFileStrip: (name: string, holder: string | null) =>
+    holder
+      ? `${name} has no file of its own in NASA's archive: most of the detections inside it are in ${holder}'s file.`
+      : `${name} has no file of its own in NASA's archive, so there are no yearly counts for it here.`,
   drawnInside: (n: number) => `Not in its count: ${n === 1 ? 'one part, with a file of its own' : `${n} parts, with files of their own`}`,
   drawnInsideAll: (names: string[]) => `${listAnd(names)} ${names.length === 1 ? 'has a file' : 'have files'} of their own, not in this count.`,
   clipped: (n: number) => `${n} ${n === 1 ? 'square lies' : 'squares lie'} above the scale and ${n === 1 ? 'is' : 'are'} drawn at its top`,

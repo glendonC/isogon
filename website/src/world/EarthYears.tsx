@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { tOfValue } from './cells';
 import { countryShapeAt, type CountryShape } from './countryAt';
-import { countryOf, countryRatio, countryTotals, drawnInside, gridLines, type CountriesFile } from './countryYears';
+import { countryOf, countryRatio, countryTotals, drawnInside, gridLines, heldBy, type CountriesFile } from './countryYears';
 import { FIRE_RAMP } from './layers';
 import { useWorldKeys } from './keys';
 import { useRead } from './read';
@@ -150,6 +150,8 @@ export function EarthYears({
   const [pointed, setPointed] = useState<{ shape: CountryShape; x: number; y: number } | null>(null);
   const [chosen, setChosen] = useState<CountryShape | null>(null);
   const chosenYears = useMemo(() => (countries && chosen ? countryOf(countries, chosen.key, chosen.name) : null), [countries, chosen]);
+  // A shape picked that has no file of its own: the strip says so, and which file holds most of it where known.
+  const noFile = countries && chosen && !chosenYears ? { name: chosen.name, holder: heldBy(countries, chosen.key) } : null;
   const hasFile = (s: CountryShape) => !countries || Boolean(countries.by_atlas?.[s.key]);
   const onHover = useCallback((at: { lon: number; lat: number; x: number; y: number } | null) => {
     const shape = at ? countryShapeAt(at.lon, at.lat) : null;
@@ -158,9 +160,9 @@ export function EarthYears({
   const onClickMap = useCallback(
     (at: { lon: number; lat: number }) => {
       const shape = countryShapeAt(at.lon, at.lat);
-      // The sea brings back the whole Earth; a country with no file of its own changes nothing.
+      // The sea brings back the whole Earth.
       if (!shape) setChosen(null);
-      else if (countries && countries.by_atlas?.[shape.key]) setChosen(shape);
+      else if (countries) setChosen(shape);
     },
     [countries],
   );
@@ -340,7 +342,7 @@ export function EarthYears({
   const [stripH, setStripH] = useState(0);
   const [stripW, setStripW] = useState(0);
   const picked = useRef(false);
-  picked.current = chosenYears !== null;
+  picked.current = chosenYears !== null || noFile !== null;
   useLayoutEffect(() => {
     const el = stripRef.current;
     if (!el) return;
@@ -369,7 +371,7 @@ export function EarthYears({
   const totals = chosenYears ? countryTotals(idx, chosenYears) : totalsOf(idx);
   const ratio = chosenYears ? countryRatio(idx, chosenYears) : sharpRatio(idx);
   const top = Math.max(...totals.flatMap((t) => [t.detected ?? 0, t.harmonized ?? 0])) * 1.08 || 1;
-  const grids = chosenYears ? gridLines(top).map((v) => ({ v, label: gridWords(v) })) : [10e6, 20e6].filter((v) => v < top).map((v) => ({ v, label: wholeMillions(v) }));
+  const grids = noFile ? [] : chosenYears ? gridLines(top).map((v) => ({ v, label: gridWords(v) })) : [10e6, 20e6].filter((v) => v < top).map((v) => ({ v, label: wholeMillions(v) }));
   const inside = chosenYears && countries ? drawnInside(countries, chosenYears.key) : [];
   const n = totals.length;
   const slot = (i: number) => ((i + 0.5) / n) * 100;
@@ -393,7 +395,7 @@ export function EarthYears({
   const sharpAt = totals.findIndex((t) => t.sharp);
 
   return (
-    <div className="world-years" data-mode={mode} data-pointing={pick && pointed !== null && hasFile(pointed.shape) ? 'true' : 'false'} data-country={chosenYears ? chosenYears.key : undefined}>
+    <div className="world-years" data-mode={mode} data-pointing={pick && countries !== null && pointed !== null ? 'true' : 'false'} data-country={chosenYears ? chosenYears.key : noFile ? 'none' : undefined}>
       <WorldCanvas
         label={Y.label}
         layers={grid}
@@ -484,17 +486,17 @@ export function EarthYears({
       <div className="world-years__strip" ref={stripRef} data-world-ui>
         <div className="world-years__strip-head" data-step={stepLabel ? 'on' : 'off'} style={{ ['--at' as string]: String(Math.max(sharpAt, 0) / n) }}>
           <div className="world-years__strip-keys">
-            <span className="world-years__strip-title">{chosenYears ? Y.countryTotals(chosenYears.name) : Y.totals}</span>
-            {chosenYears && (
+            <span className="world-years__strip-title">{chosenYears ? Y.countryTotals(chosenYears.name) : noFile ? noFile.name : Y.totals}</span>
+            {(chosenYears || noFile) && (
               <button type="button" className="world-act world-act--quiet world-years__back" onClick={() => setChosen(null)}>
                 <kbd>Esc</kbd>
                 <span>{Y.wholeEarth}</span>
               </button>
             )}
-            <span className="world-years__key world-years__key--modis">{Y.barsModis}</span>
-            <span className="world-years__key world-years__key--sharp">{Y.barsSharp}</span>
-            {line && <span className="world-years__key world-years__key--line">{Y.lineHarmonized}</span>}
-            {pick && countries && !chosenYears && <span className="world-years__hint">{Y.pickCountry}</span>}
+            {!noFile && <span className="world-years__key world-years__key--modis">{Y.barsModis}</span>}
+            {!noFile && <span className="world-years__key world-years__key--sharp">{Y.barsSharp}</span>}
+            {line && !noFile && <span className="world-years__key world-years__key--line">{Y.lineHarmonized}</span>}
+            {pick && countries && !chosen && <span className="world-years__hint">{Y.pickCountry}</span>}
             {inside.length > 0 && (
               <span className="world-years__hint" title={Y.drawnInsideAll(inside)}>
                 {Y.drawnInside(inside.length)}
@@ -503,18 +505,19 @@ export function EarthYears({
           </div>
           {/* The label on the 2012 bar: its room is always kept, so the Earth does not move when it is said. */}
           {stepLabel && (
-            <div className="world-years__step" data-on={shown >= SHARP_FROM && sharpAt >= 0} aria-hidden={shown < SHARP_FROM}>
+            <div className="world-years__step" data-on={shown >= SHARP_FROM && sharpAt >= 0 && !noFile} aria-hidden={shown < SHARP_FROM || noFile !== null}>
               {mode === 'harmonized' ? Y.stepHarmonized : Y.stepDetected(ratio)}
             </div>
           )}
         </div>
         <div className="world-years__plot">
+          {noFile && <p className="world-years__nofile">{Y.noFileStrip(noFile.name, noFile.holder)}</p>}
           {grids.map(({ v, label }) => (
             <div key={v} className="world-years__grid" style={{ bottom: `${(v / top) * 100}%` }}>
               <span>{label}</span>
             </div>
           ))}
-          {totals.map((t, i) => (
+          {!noFile && totals.map((t, i) => (
             <button
               key={t.year}
               type="button"
@@ -532,12 +535,12 @@ export function EarthYears({
               <span className="world-years__fill" style={{ height: `${((t.detected ?? 0) / top) * 100}%` }} />
             </button>
           ))}
-          {line && (
+          {line && !noFile && (
             <svg className="world-years__line" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
               <polyline points={line} vectorEffect="non-scaling-stroke" />
             </svg>
           )}
-          {totals.map((t, i) =>
+          {!noFile && totals.map((t, i) =>
             t.harmonized !== null && (t.partial || i === at) ? (
               <span
                 key={`dot-${t.year}`}

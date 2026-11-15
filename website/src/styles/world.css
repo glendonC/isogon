@@ -1469,3 +1469,13 @@
 .world-years__back {
   padding-block: 0;
 }
+
+.world-years__nofile {
+  position: absolute;
+  left: 0;
+  bottom: var(--sys-s2);
+  margin: 0;
+  max-width: 60ch;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+}

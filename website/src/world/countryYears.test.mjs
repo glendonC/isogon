@@ -3,7 +3,7 @@
 // the files the map draws inside it said.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { countryOf, countryRatio, countryTotals, drawnInside, gridLines } from './countryYears.ts';
+import { countryOf, countryRatio, countryTotals, drawnInside, gridLines, heldBy } from './countryYears.ts';
 
 const YEARS = Array.from({ length: 26 }, (_, i) => 2000 + i);
 const idx = { years: YEARS.map((y) => ({ year: y, months: y === 2000 ? 2 : 12, partial: y === 2000, first_month: '', last_month: '', platform_months: {} })) };
@@ -15,7 +15,7 @@ const file = {
     United_States: { name: 'United States', atlas: 'United States of America', atlas_id: '840', modis: YEARS.map(() => 100), viirs: YEARS.map((y) => (y < 2012 ? null : 450)), harmonized: YEARS.map(() => 430) },
   },
   by_atlas: { France: 'France', 'United States of America': 'United_States' },
-  unmatched: { store: { French_Guiana: 'drawn inside France on the atlas' }, atlas: ['Vatican'] },
+  unmatched: { store: { French_Guiana: 'drawn inside France on the atlas' }, atlas: { Vatican: null, 'W. Sahara': 'France' } },
 };
 
 test("a country's file is found by the map's name, and a shape with no file of its own finds none", () => {
@@ -49,4 +49,10 @@ test("a country's grid lines are round and under its top", () => {
   assert.deepEqual(gridLines(52_000), [20_000, 40_000]);
   assert.deepEqual(gridLines(950), [500]);
   assert.deepEqual(gridLines(0), []);
+});
+
+test('a shape with no file of its own says which file holds most of its rows, where that is known', () => {
+  assert.equal(heldBy(file, 'W. Sahara'), 'France');
+  assert.equal(heldBy(file, 'Vatican'), null);
+  assert.equal(heldBy(file, 'France'), null);
 });

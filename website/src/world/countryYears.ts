@@ -61,7 +61,7 @@ export interface CountriesFile {
   >;
   /** The map's country name (world-atlas `properties.name`) to the store's file. */
   by_atlas: Record<string, string>;
-  unmatched?: { store?: Record<string, string>; atlas?: unknown };
+  unmatched?: { store?: Record<string, string>; atlas?: Record<string, string | null> | string[] };
 }
 
 /** The years of the country the map names `atlasName`, said as `name`; null where it has no file of its own. */
@@ -90,4 +90,11 @@ export function drawnInside(file: CountriesFile, key: string): string[] {
       return m !== null && here.includes(m[1]);
     })
     .map(([k]) => file.countries?.[k]?.name ?? k.replace(/_/g, ' '));
+}
+
+/** For a shape with no file of its own, the store file that holds most of the rows inside it, by name, where known. */
+export function heldBy(file: CountriesFile, atlasName: string): string | null {
+  const a = file.unmatched?.atlas;
+  const key = a && !Array.isArray(a) ? a[atlasName] : null;
+  return key ? (file.countries?.[key]?.name ?? key.replace(/_/g, ' ')) : null;
 }
