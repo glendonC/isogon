@@ -405,6 +405,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   // On a narrow screen the foot takes the plot's width from the month names, so its words wrap less. It is decided by
   // the plot's width, not the grid's, so that the grid's size does not move the foot's width back and forth.
   const narrowFoot = size.w < 700;
+  // How well the correction holds, in the words' one place: the answer's own check where it has one, the Earth's beside
+  const accuracyLine = rec
+    ? W.accuracy(rec.heldOut ? { year: rec.heldOut.harmonized, uncorrected: rec.heldOut.raw, monthsHeld: rec.method.monthsHeld } : null, rec.method.level)
+    : '';
   const footX = narrowFoot ? Math.max(0, x0 - NAMES_W) : x0;
   // Never narrower than a line of the legend's width: a narrower grid would make the foot's words wrap taller, which
   // would make the grid narrower still
@@ -688,9 +692,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   {W.close}
                 </button>
               )}
-              {/* Under the years, how well the correction holds here: the record's own measured accuracy, on the page
-                  and in the film. A phone's narrow foot leaves it to the guide's answer. */}
-              {(inFilm || !narrowFoot) && rec.heldOut && <p className="sys-label rec__wide rec__heldout">{W.holds(rec.heldOut.harmonized, rec.heldOut.raw)}</p>}
+              {/* Under the years, how well the correction holds: here from the answer, and over the whole Earth, on the
+                  page and in the film. An answer with no check of its own (a drawn area) has the Earth's alone. A
+                  phone's narrow foot leaves it to the guide's answer. */}
+              {(inFilm || !narrowFoot) && <p className="sys-label rec__wide rec__heldout">{accuracyLine}</p>}
               {/* The method every year is put on one scale by, in plain words, and what a month's band is.
                   Where the guide speaks, its sentence on the step names the method, and the Record leaves it to it. */}
               {!guideSpeaks && !narrowFoot && methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld) && (
@@ -710,7 +715,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               {asCounted && rec.spans.sharp && !guideSpeaks && (
                 <p className="sys-label rec__holds rec__wide">
                   {W.asCounted(rec.sharpRatio, Number(rec.spans.sharp[0].slice(0, 4)))}
-                  {rec.heldOut && narrowFoot && ` ${W.holds(rec.heldOut.harmonized, rec.heldOut.raw)}`}
+                  {narrowFoot && ` ${accuracyLine}`}
                 </p>
               )}
             </div>

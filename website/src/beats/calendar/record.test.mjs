@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { boxRoute, gridOf, logClass, parseRecord, rampBounds } from './record.ts';
 import { publishRecordView, readRecordView, RECORD_CLOSED } from './recordView.ts';
-import { gridLine, methodLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times, unstableLine } from './recordWords.ts';
+import { EARTH_HELD_OUT, gridLine, methodLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times, unstableLine } from './recordWords.ts';
 import { CSV_COLUMNS, recordCsv, recordFileName } from './recordCsv.ts';
 
 const month = (ym, harmonized, modis, viirs, extra = {}) => ({
@@ -96,14 +96,22 @@ test('this month so far is said with its unit, the days it was counted over and 
   assert.match(RECORD_WORDS.notNow(RECORD_WORDS.whyNot.busy), /^This month so far cannot be counted now: /);
 });
 
-test('how well the correction holds is said with the shares passed in and nothing typed', () => {
+test("how well the correction holds: the place's shares as passed in, the whole Earth's beside them", () => {
   assert.equal(percent(0.1086), '11');
-  const line = RECORD_WORDS.holds(0.1086, 0.7347);
-  assert.match(line, /off by 11 percent/);
-  assert.match(line, /off by 73 percent/);
-  const other = RECORD_WORDS.holds(0.3, 0.5);
-  assert.match(other, /off by 30 percent/);
-  assert.match(other, /off by 50 percent/);
+  const line = RECORD_WORDS.accuracy({ year: 0.1152, uncorrected: 0.7311, monthsHeld: { held: 117, of: 144 } }, 0.8);
+  assert.equal(
+    line,
+    'Hide each year and predict it from the others: here a typical year is off by 12 percent, 73 uncorrected; worldwide, month by month, 14 percent, 18 with one ratio per place, 78 uncorrected. The 80 percent range held in 81 percent of months here, 82 worldwide.',
+  );
+  // The place's figures are the ones passed in; the Earth's are the document's
+  const other = RECORD_WORDS.accuracy({ year: 0.3, uncorrected: 0.5, monthsHeld: null }, null);
+  assert.match(other, /off by 30 percent, 50 uncorrected/);
+  assert.match(other, /The range held in 82 percent of months worldwide\.$/);
+  assert.equal(EARTH_HELD_OUT.monthly, 0.141);
+  // An answer with no check of its own (a drawn area) says the Earth's alone
+  const earth = RECORD_WORDS.accuracy(null, 0.8);
+  assert.doesNotMatch(earth, /here/);
+  assert.match(earth, /^Hide each year and predict it from the others: worldwide/);
   assert.match(RECORD_WORDS.asCounted(4.1223, 2012), /about 4\.1 times as many detections .* before 2012/);
   // With no ratio served, no ratio is said.
   assert.doesNotMatch(RECORD_WORDS.asCounted(null, null), /\d/);
@@ -116,7 +124,8 @@ test('no sentence of The Record carries a percent sign or a forbidden dash', () 
     RECORD_WORDS.failed('Somewhere'),
     RECORD_WORDS.grid('Somewhere'),
     RECORD_WORDS.asCounted(4.1, 2012),
-    RECORD_WORDS.holds(0.1, 0.7),
+    RECORD_WORDS.accuracy({ year: 0.1, uncorrected: 0.7, monthsHeld: { held: 9, of: 12 } }, 0.8),
+    RECORD_WORDS.accuracy(null, null),
     RECORD_WORDS.soFar('2026-11'),
     RECORD_WORDS.soFarRate(0.2, { counted: 14, inMonth: 30 }),
     RECORD_WORDS.usualIs('2026-11', 0.3),

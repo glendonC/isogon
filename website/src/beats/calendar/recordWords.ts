@@ -3,7 +3,8 @@ import { MONTH_NAMES } from './record.ts';
 /**
  * Every sentence The Record itself puts on screen, in one place. They are labels on a thing (a month, the change of
  * satellite, the ramp) and the prompt beside the thing it acts on; what the whole step is belongs to the guide. A
- * figure is passed in from the record's answer and never typed here.
+ * figure is passed in from the record's answer and never typed here, but for the whole Earth's held-out check
+ * (`EARTH_HELD_OUT`), which no answer serves.
  */
 
 const monthName = (ym: string) => MONTH_NAMES[Number(ym.slice(5, 7)) - 1];
@@ -103,6 +104,18 @@ export function monthLine(ym: string, value: number | null, timesUsual: number |
   return `Less fire than a usual ${name} here`;
 }
 
+/**
+ * The served method's own check over the whole Earth, each overlap year hidden in turn: from the decision on the fire
+ * cube with every country (docs/harmonization.md, "The whole world" and "The interval, held out"). No answer serves
+ * these, so they are typed here, and change only with that document. Month by month: the sum of absolute errors over
+ * the sum of the newer satellite's rows, for the served method, for one ratio per place and with no correction; and
+ * the share of held-out months whose count lay inside the stated range.
+ */
+export const EARTH_HELD_OUT = { monthly: 0.141, oneRatio: 0.183, uncorrected: 0.777, monthsHeld: 0.817 };
+
+/** A place's own held-out check, from its answer: a typical hidden year's error, with and without the correction. */
+export type HeldOutHere = { year: number; uncorrected: number; monthsHeld: { held: number; of: number } | null };
+
 export const RECORD_WORDS = {
   name: 'The Record',
   show: 'Show this fire',
@@ -125,9 +138,22 @@ export const RECORD_WORDS = {
     ratio !== null && year !== null
       ? `As counted, before the correction. The newer satellite has about ${times(ratio)} times as many detections as the older ones, so the years before ${year} look quieter than they were.`
       : 'As counted, before the two kinds of satellite are put on one scale.',
-  /** How well the correction holds, on a year left out. */
-  holds: (heldOut: number, without: number) =>
-    `Hide one year and predict it from the others: in a typical year the prediction is off by ${percent(heldOut)} percent. Without the correction for the change of satellite it is off by ${percent(without)} percent.`,
+  /**
+   * How well the correction holds, each year hidden in turn and predicted from the others: here from the answer (a
+   * typical year's error, as the answer measures it), and over the whole Earth month by month, each said with what it
+   * is. Then how often the stated range held, here and over the Earth, both counted in months.
+   */
+  accuracy: (here: HeldOutHere | null, level: number | null) => {
+    const E = EARTH_HELD_OUT;
+    const earth = `worldwide, month by month, ${percent(E.monthly)} percent, ${percent(E.oneRatio)} with one ratio per place, ${percent(E.uncorrected)} uncorrected`;
+    const range = level !== null ? `The ${percent(level)} percent range` : 'The range';
+    const held = here?.monthsHeld
+      ? ` ${range} held in ${percent(here.monthsHeld.held / here.monthsHeld.of)} percent of months here, ${percent(E.monthsHeld)} worldwide.`
+      : ` ${range} held in ${percent(E.monthsHeld)} percent of months worldwide.`;
+    return here
+      ? `Hide each year and predict it from the others: here a typical year is off by ${percent(here.year)} percent, ${percent(here.uncorrected)} uncorrected; ${earth}.${held}`
+      : `Hide each year and predict it from the others: ${earth}.${held}`;
+  },
   /** This month so far: the action that asks for it, its label, and why it cannot be counted. */
   thisMonth: 'This month so far',
   counting: 'Counting this month so far',
