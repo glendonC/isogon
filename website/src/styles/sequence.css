@@ -537,18 +537,6 @@
   gap: 1px;
 }
 
-.iso-debrief__more {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--iso-ink-2);
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  text-decoration-color: var(--iso-hair-strong);
-  cursor: pointer;
-}
-
 .iso-debrief__parts {
   display: grid;
   justify-items: start;

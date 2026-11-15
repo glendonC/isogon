@@ -87,24 +87,59 @@
   color: var(--sys-fail);
 }
 
+/* Marked as a lone action is, no line under the words: on hover the corner brackets close round them in the signal
+   colour, on keyboard focus in white; while the full fingerprint is open they stay. */
 .iso-seal-fp-btn {
-  padding: 0 0 2px;
+  position: relative;
+  padding: 0;
   border: 0;
-  border-bottom: 1px solid var(--sys-line);
   border-radius: 0;
   background: transparent;
   font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
   color: var(--sys-ink-2);
   cursor: pointer;
+  transition: color var(--sys-fast) var(--sys-ease);
+}
+
+.iso-seal-fp-btn::after {
+  content: '';
+  position: absolute;
+  inset: -3px 0;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(1.18);
   transition:
-    border-color var(--sys-fast) var(--sys-ease),
-    color var(--sys-fast) var(--sys-ease);
+    opacity 260ms var(--id-move, ease),
+    transform 450ms var(--id-move, ease);
+  --t: var(--id-signal, #9fe3ff);
+  filter: drop-shadow(0 0 4px rgba(159, 227, 255, 0.5));
+  background:
+    linear-gradient(var(--t), var(--t)) top left / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) top left / 1.5px 7px no-repeat,
+    linear-gradient(var(--t), var(--t)) top right / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) top right / 1.5px 7px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom left / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom left / 1.5px 7px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom right / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom right / 1.5px 7px no-repeat;
 }
 
 .iso-seal-fp-btn:hover,
+.iso-seal-fp-btn:focus-visible,
 .iso-seal-fp-btn[aria-expanded='true'] {
-  border-bottom-color: var(--sys-ink);
+  outline: none;
   color: var(--sys-ink);
+}
+
+.iso-seal-fp-btn:hover::after,
+.iso-seal-fp-btn:focus-visible::after,
+.iso-seal-fp-btn[aria-expanded='true']::after {
+  opacity: 1;
+  transform: none;
+}
+
+.iso-seal-fp-btn:focus-visible::after {
+  --t: var(--id-ink, #f3f4f6);
 }
 
 .iso-seal-fp-full {

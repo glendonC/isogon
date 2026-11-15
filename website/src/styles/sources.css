@@ -48,16 +48,50 @@
   color: var(--sys-ink);
 }
 
+/* A link is its own colour and no line under it; on hover the corner brackets of a lone action close round it in the
+   signal colour, on keyboard focus in white. */
 .iso-sources__link {
+  position: relative;
   color: var(--sys-focus);
   text-decoration: none;
   transition: color var(--sys-fast) var(--sys-ease);
+}
+
+.iso-sources__link::after {
+  content: '';
+  position: absolute;
+  inset: -3px 0;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(1.18);
+  transition:
+    opacity 260ms var(--id-move, ease),
+    transform 450ms var(--id-move, ease);
+  --t: var(--id-signal, #9fe3ff);
+  filter: drop-shadow(0 0 4px rgba(159, 227, 255, 0.5));
+  background:
+    linear-gradient(var(--t), var(--t)) top left / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) top left / 1.5px 7px no-repeat,
+    linear-gradient(var(--t), var(--t)) top right / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) top right / 1.5px 7px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom left / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom left / 1.5px 7px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom right / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom right / 1.5px 7px no-repeat;
 }
 
 .iso-sources__link:hover,
 .iso-sources__link:focus-visible {
   outline: none;
   color: var(--sys-ink);
-  text-decoration: underline;
-  text-underline-offset: 4px;
+}
+
+.iso-sources__link:hover::after,
+.iso-sources__link:focus-visible::after {
+  opacity: 1;
+  transform: none;
+}
+
+.iso-sources__link:focus-visible::after {
+  --t: var(--id-ink, #f3f4f6);
 }

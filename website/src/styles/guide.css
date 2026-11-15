@@ -136,7 +136,10 @@
   line-height: 1.5;
 }
 
+/* Marked as a lone action is: plain words, no line under them; on hover the corner brackets close round the words in
+   the signal colour, on keyboard focus in white. */
 .guide-say__toggle {
+  position: relative;
   margin: 8px 0 0;
   padding: 0;
   border: 0;
@@ -144,18 +147,47 @@
   font: inherit;
   font-size: 14px;
   color: var(--id-ink-3, var(--sys-ink-3));
-  text-decoration: underline;
-  text-underline-offset: 3px;
   cursor: pointer;
+  transition: color 300ms var(--id-move, ease);
 }
 
-.guide-say__toggle:hover {
+.guide-say__toggle::after {
+  content: '';
+  position: absolute;
+  inset: -2px -8px;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(1.18);
+  transition:
+    opacity 260ms var(--id-move, ease),
+    transform 450ms var(--id-move, ease);
+  --t: var(--id-signal, #9fe3ff);
+  filter: drop-shadow(0 0 4px rgba(159, 227, 255, 0.5));
+  background:
+    linear-gradient(var(--t), var(--t)) top left / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) top left / 1.5px 7px no-repeat,
+    linear-gradient(var(--t), var(--t)) top right / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) top right / 1.5px 7px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom left / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom left / 1.5px 7px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom right / 7px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom right / 1.5px 7px no-repeat;
+}
+
+.guide-say__toggle:hover,
+.guide-say__toggle:focus-visible {
+  outline: none;
   color: var(--id-ink, var(--sys-ink));
 }
 
-.guide-say__toggle:focus-visible {
-  outline: 2px solid var(--id-focus, var(--sys-focus));
-  outline-offset: 3px;
+.guide-say__toggle:hover::after,
+.guide-say__toggle:focus-visible::after {
+  opacity: 1;
+  transform: none;
+}
+
+.guide-say__toggle:focus-visible::after {
+  --t: var(--id-ink, #f3f4f6);
 }
 
 .guide-acts {
