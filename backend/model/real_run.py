@@ -79,7 +79,7 @@ VIIRS_CLASS_NUMBER: dict[str, int] = {"l": 15, "n": 55, "h": 90, "": 0}
 # estimate in use answers everything. With "challenger" the default challenger (backend/model/challenger, chosen on
 # the fresh test's validation fires) answers the held-out passes and their declared cells, and is scored beside the
 # estimate in use; the visible passes, the spread, the belief frames and the exports stay with the estimate in use.
-# Nothing on the page changes until the owner says yes.
+# The model in the visitor's browser sets it (backend/browser.py); the code's default stays off.
 RUN_ESTIMATE_ENV: str = "ISOGON_RUN_ESTIMATE"
 ESTIMATE_IN_USE: str = "in_use"
 ESTIMATE_CHALLENGER: str = "challenger"

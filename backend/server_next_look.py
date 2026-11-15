@@ -113,7 +113,7 @@ class ClosedWindow(RoundConflict):
     evidence = "/api/evidence"
 
 
-# The model lane's closed rule, asked with a box and a window, when it is in the build: (module, function), answering
+# The model's closed rule, asked with a box and a window, when it is in the build: (module, function), answering
 # None for an open window or {"region_id": ..., "years": [...]} for a closed one.
 MODEL_CLOSED_RULE: tuple[str, str] = ("backend.env.episodes", "closed_for")
 DAY_S: float = 86400.0
@@ -145,7 +145,7 @@ def _closed_here(box: tuple[float, float, float, float], start_s: float, end_s: 
 
 
 def closed_for(box: tuple[float, float, float, float], start_s: float, end_s: float) -> dict[str, Any] | None:
-    """Whether a box and a window are closed: the model lane's function when it is in the build, else the same rule."""
+    """Whether a box and a window are closed: the model's function when it is in the build, else the same rule."""
     import importlib
 
     mod, fn = MODEL_CLOSED_RULE

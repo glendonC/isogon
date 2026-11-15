@@ -2,7 +2,7 @@
 family through all its years, so the Earth can play the years 2000 to 2025.
 
 Families: `modis` (Terra and Aqua together), `viirs` (Suomi NPP alone, so a brighter year is more fire, not a second
-satellite), and `harmonized` (the harmonize lane's layer, read from its own folder when it is there, on the Suomi NPP
+satellite), and `harmonized` (the harmonization's layer, read from its own folder when it is there, on the Suomi NPP
 scale). Each year is a float32 (720, 1440) array on the cube's grid (NaN where not loaded or closed) and an 8 bit
 indexed PNG with one palette per family. The archive ends with its last country file month (2025-12): a year not
 whole at the end, and every month after the archive, are left out. The first year, 2000, holds November and December
@@ -198,7 +198,7 @@ def write(root: Path | None = None, out: Path | None = None, public: bool = True
                                  minlength=len(years) * C.N_CELLS).reshape(len(years), C.N_CELLS)
     log(f"yearly sums: {len(years)} years, {time.time() - t0:.1f} s")
 
-    # Harmonized, from the harmonize lane's folder when it is there.
+    # Harmonized, from the harmonization's folder when it is there.
     hdir = harmonized_dir()
     hman = json.loads((hdir / "harmonized.json").read_text(encoding="utf-8")) if (hdir / "harmonized.json").is_file() else None
 

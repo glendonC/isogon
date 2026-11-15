@@ -83,7 +83,7 @@ def sync(repo: Path, seals: list[dict[str, Any]], notes: Path | None, log: Calla
 
 
 def report(repo: Path, sha: str, added: list[dict[str, Any]], notes: Path) -> None:
-    """The commit's patch and its digest, for the lead to land."""
+    """The commit's patch and its digest, written under `notes`."""
     folder = notes / "record"
     folder.mkdir(parents=True, exist_ok=True)
     n = len(list(folder.glob("*.patch"))) + 1

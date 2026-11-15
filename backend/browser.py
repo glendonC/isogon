@@ -414,7 +414,7 @@ def prepare(region_id: str, start: str) -> list[str]:
 
 
 def pack_list(places: dict[str, str]) -> dict[str, Any]:
-    """The list the data lane's build packs (its shape: isogon-notes/fire-cube/BROWSER-PACK-shape.md): for each
+    """The list the build packs: for each
     place and its start, the Python files a page may import and every data file a held-out run and a round read
     there, relative to the repository. Files under backend/ and files every place names go in the shared pack. Each
     place says whether it is `packed` or `replay only` (a place the page replays, or a start whose reach meets a

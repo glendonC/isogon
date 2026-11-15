@@ -174,7 +174,7 @@ class Recorder:
         self.round_ids: dict[str, str] = {}          # live id -> recorded id
         self.plays: list[dict[str, Any]] = []
         # The run with every satellite shown on a recorded test fire's window still runs the scorer on that window
-        # until the model lane makes it skip the score there; it is recorded only when asked (--recorded-windows).
+        # until the model is made to skip the score there; it is recorded only when asked (--recorded-windows).
         self.recorded_windows = bool(recorded_windows)
         self.recorded_windows_note: str | None = None
         self.plays_note: str | None = None
@@ -402,7 +402,7 @@ class Recorder:
         return min(firsts) if firsts else None
 
     def record_one_look(self, reset_body: dict[str, Any]) -> dict[str, Any] | None:
-        """The visitor's one scored look on a page of recorded answers (the interface lane's R5): the passes before d*
+        """The visitor's one scored look on a page of recorded answers: the passes before d*
         let go, one step each, and at d* one answer for letting the pass go and for every square of the board, each
         the live server's answer from the same round state (a fresh round with the passes before d* let go), all kept
         under the recorded round's one id. Returns the index's `one_look`, or None when there is no d*."""

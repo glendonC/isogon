@@ -91,7 +91,7 @@ The workspace has no bar. Top left, the objective (one line of what the visitor 
 four words (Record, Estimate, Test, Play), each a way to its step, with the place and its days beside it, which open
 Choose a Place. At the bottom, the guide: one or two sentences on what is on screen, and at most three actions, the next
 one first; each action's key is the small mark before it (not on a phone, which has no keys). The words are read from
-`src/guide/script.json`, a committed copy of the product lane's guide script (its `version` says which), so they change
+`src/guide/script.json`, a committed copy of the guide's script (its `version` says which), so they change
 without code; its fields are filled from the backend's answers in the script's formats (`src/guide/formats.ts`). Labels
 on things of the stage (the fire, and later a square) are the script's too; an action that acts on a thing also shows
 beside it while the pointer or the keyboard's focus is near. Every time on the workspace is by the sun at the fire, with
@@ -104,7 +104,7 @@ lists each mark on show in the script's words (`src/guide/marks.ts`).
 
 | Step | What it does |
 | --- | --- |
-| Record | The fire record and Choose a Place (the compare-view lane's screens, mounted through the store); the guide says what a square is and offers the fire of the marked month, and beside the trail stands the record's span |
+| Record | The fire record and Choose a Place (the compare-view screens, mounted through the store); the guide says what a square is and offers the fire of the marked month, and beside the trail stands the record's span |
 | Estimate | The fire close up with the sharp satellite (VIIRS) hidden: the white frames are the model's estimate from the coarse satellite (MODIS) alone. The guide speaks here; Enter reveals. A recorded test fire shows its record and every satellite; before 2012 nothing is hidden |
 | Test | What the sharp satellite saw, and the verdict in the guide; `T` Side by Side, `S` the scores, `E` every test on record, `A` the test across the world, `J` the sealed predictions |
 | Play | A round on the fire that is open, the whole box on its land, in the guide's words: the pass being decided on the fire, "Look here" beside the marked square, a look's finding on its square; at the end the results rows above the guide's line, then the other players and Finish. On a recorded test fire or before 2012 the guide says why no round is played |

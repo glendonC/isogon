@@ -1,12 +1,12 @@
 """The blind test's methods and both baselines read nothing of the harmonization's tables.
 
-The harmonize lane's fits read the monthly Suomi NPP counts of every loaded place, the fresh test's places included.
+The harmonization's fits read the monthly Suomi NPP counts of every loaded place, the fresh test's places included.
 That stands only because nothing that scores the estimate reads what those fits make. Three things hold it:
 
 1. No module that builds a method or a baseline (the blind test, the baselines, the estimate, the challengers, the
    fresh test's runner), nor anything they import at any depth, imports a module of the harmonization
    (`backend.model.harmonize*`) or of the cube it is fitted on (`backend.firms.cube*`). The Record's payload
-   (`backend.firms.real_calendar`) is the data lane's and is left out of the walk: the second baseline reads it only
+   (`backend.firms.real_calendar`) belongs to the calendar and is left out of the walk: the second baseline reads it only
    through `calendar_ratio`, which test 2 holds to raw counts.
 2. The second baseline's count ratio is the same whatever the Record's harmonized fields hold, or if they are gone.
 3. A blind test with both baselines, the estimate and the default challenger, run in a fresh process, leaves no

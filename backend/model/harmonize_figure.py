@@ -9,7 +9,7 @@ Drawn with Pillow alone from the yearly totals of `harmonize_years.py` (`totals.
 
 Every number drawn comes from the totals file. The numbers are also written into the picture's PNG text (key
 `isogon:figure`) with the totals file's sha256, so a test can check the picture against the file. Colours are the
-page's (`website/src/styles/system.css`); the words are the product lane's for the Earth's years.
+page's (`website/src/styles/system.css`); the words are those for the Earth's years.
 
 Usage:
   uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.model.harmonize_figure \
@@ -49,7 +49,7 @@ SHARP = (240, 138, 69)          # --sys-detection: the sharper instrument (VIIRS
 OLDER = (180, 195, 214)         # --sys-modis: the older instrument (MODIS)
 BAR_OPACITY = 0.85              # the page's bars as counted
 
-# The product lane's words for the Earth's years.
+# The words for the Earth's years.
 WORDS = {
     "title": "Detections each year, the whole Earth",
     "older": "Older satellites (MODIS)",

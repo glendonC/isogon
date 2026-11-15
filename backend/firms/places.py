@@ -11,7 +11,7 @@
   from. A featured fire takes the name of a named fire whose dates overlap it and whose point lies within
   `NAME_MATCH_DEG` of the region's box; one without is shown by place and month.
 - What a fire is to each part, the world model and the learned agent (fitted on, validated on, recorded test fire,
-  never seen), comes from the model lane's function when it exists (`MODEL_ROLE_FUNCTION`): two fields,
+  never seen), comes from the model's function when it exists (`MODEL_ROLE_FUNCTION`): two fields,
   `to_the_world_model` and `to_the_learned_agent`, null until then.
 - The default: the largest featured fire the world model never saw; while the standings are null, the largest that
   is not a blind test fire. The whole entry opens in the warm region (`warm_region`) by that rule, so a larger fire
@@ -39,7 +39,7 @@ FIRE_BOX_HALF_DEG: float = 0.5        # a named fire's calendar box: its point, 
 NO_END_RUN_START_DAYS: int = 90       # a named fire with no published end is taken to last this long for matching
 PERIOD_GAP_DAYS: int = 31             # busiest starts closer than this belong to one featured period
 NAME_MATCH_DEG: float = 0.5           # a named fire's point within this of the region's box can name a period
-# (module, function) of the model lane's standing of a fire, when it lands: fire_roles(region_id, first_day, last_day)
+# (module, function) of the model's standing of a fire: fire_roles(region_id, first_day, last_day)
 # -> {"world_model": "<standing>", "learned_agent": "<standing>"}
 MODEL_ROLE_FUNCTION: tuple[str, str] = ("backend.model.fire_roles", "fire_roles")
 PARTS: dict[str, str] = {"world_model": "to_the_world_model", "learned_agent": "to_the_learned_agent"}
