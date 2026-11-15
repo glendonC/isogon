@@ -23,6 +23,11 @@ from backend.model.platforms import PLATFORM_CODES, PLATFORMS, family, platform_
 NEEDED_COLUMNS: tuple[str, ...] = (
     "latitude", "longitude", "acq_date", "acq_time", "satellite", "instrument", "frp", "scan", "track", "daynight",
 )
+_NEEDED_SET: frozenset[str] = frozenset(NEEDED_COLUMNS)
+_IS_VIIRS_BY_CODE: NDArray[np.bool_] = np.array(
+    [family(PLATFORMS[c]) == "VIIRS" for c in range(len(PLATFORMS))], dtype=bool
+)
+_DAY_EPOCH_CACHE: dict[str, float] = {}
 
 # Names `backend.firms.read_firms` writes into its derived `_platform` key.
 _READER_PLATFORM: dict[str, str] = {
@@ -65,7 +70,7 @@ class Detections:
 
     @property
     def is_viirs(self) -> NDArray[np.bool_]:
-        return np.array([family(PLATFORMS[c]) == "VIIRS" for c in range(len(PLATFORMS))], dtype=bool)[self.platform_code]
+        return _IS_VIIRS_BY_CODE[self.platform_code]
 
     @property
     def is_modis(self) -> NDArray[np.bool_]:
@@ -82,14 +87,28 @@ class Detections:
 
 def parse_acq_time_s(acq_date: str, acq_time: str | int) -> float:
     """UTC seconds since 1970 for FIRMS `acq_date` (YYYY-MM-DD) and `acq_time` (HHMM, leading zeros optional)."""
-    y, m, d = (int(p) for p in str(acq_date).strip().split("-"))
-    hhmm = str(acq_time).strip().zfill(4)
-    if len(hhmm) != 4 or not hhmm.isdigit():
-        raise ValueError(f"acq_time {acq_time!r} is not HHMM")
+    date_s = acq_date.strip() if isinstance(acq_date, str) else str(acq_date).strip()
+    day_epoch = _DAY_EPOCH_CACHE.get(date_s)
+    if day_epoch is None:
+        parts = date_s.split("-")
+        if len(parts) != 3:
+            y, m, d = (int(p) for p in parts)
+        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+    if isinstance(acq_time, str) and len(acq_time) == 4 and acq_time.isdigit():
+        hhmm = acq_time
+    else:
+        hhmm = str(acq_time).strip().zfill(4)
+        if len(hhmm) != 4 or not hhmm.isdigit():
+            raise ValueError(f"acq_time {acq_time!r} is not HHMM")
     hh, mm = int(hhmm[:2]), int(hhmm[2:])
     if hh > 23 or mm > 59:
         raise ValueError(f"acq_time {acq_time!r} is not a time of day")
-    return float(calendar.timegm((y, m, d, hh, mm, 0, 0, 0, 0)))
+    if day_epoch is None:
+        day_epoch = float(calendar.timegm((y, m, d, 0, 0, 0, 0, 0, 0)))
+        if len(_DAY_EPOCH_CACHE) >= 16384:
+            _DAY_EPOCH_CACHE.clear()
+        _DAY_EPOCH_CACHE[date_s] = day_epoch
+    return day_epoch + hh * 3600.0 + mm * 60.0
 
 
 def _is_day(flag: str) -> bool:
@@ -103,7 +122,7 @@ def _is_day(flag: str) -> bool:
 
 def detections_from_rows(rows: Iterable[Mapping[str, Any]], source: str) -> Detections:
     """Arrays for every row. `source` must say where the rows came from (for example 'firms' or 'synthetic fixture')."""
-    rows = list(rows)
+    rows = rows if isinstance(rows, list) else list(rows)
     n = len(rows)
     lat = np.empty(n)
     lon = np.empty(n)
@@ -116,33 +135,47 @@ def detections_from_rows(rows: Iterable[Mapping[str, Any]], source: str) -> Dete
     conf = np.full(n, np.nan)
     conf_cls = np.full(n, "", dtype="<U1")
     typ = np.full(n, -1, dtype=np.int8)
+    needed_set = _NEEDED_SET
+    reader_plat = _READER_PLATFORM
+    plat_codes = PLATFORM_CODES
+    parse_t = parse_acq_time_s
     for i, row in enumerate(rows):
-        missing = [c for c in NEEDED_COLUMNS if c not in row]
-        if missing:
-            raise ValueError(f"row {i} lacks FIRMS columns {missing}")
+        if not needed_set.issubset(row):
+            missing = [c for c in NEEDED_COLUMNS if c not in row]
+            if missing:
+                raise ValueError(f"row {i} lacks FIRMS columns {missing}")
         lat[i] = float(row["latitude"])
         lon[i] = float(row["longitude"])
-        t[i] = parse_acq_time_s(row["acq_date"], row["acq_time"])
+        t[i] = parse_t(row["acq_date"], row["acq_time"])
         frp[i] = float(row["frp"])
         scan[i] = float(row["scan"])
         track[i] = float(row["track"])
         reader_name = row.get("_platform")
-        name = _READER_PLATFORM[reader_name] if reader_name in _READER_PLATFORM else platform_from_firms(
+        name = reader_plat[reader_name] if reader_name in reader_plat else platform_from_firms(
             row["satellite"], row["instrument"]
         )
-        code[i] = PLATFORM_CODES[name]
-        day[i] = _is_day(row["daynight"])
-        c = str(row.get("confidence", "")).strip()
+        code[i] = plat_codes[name]
+        dn = row["daynight"]
+        if dn == "D":
+            day[i] = True
+        elif dn == "N":
+            day[i] = False
+        else:
+            day[i] = _is_day(dn)
+        raw_c = row.get("confidence", "")
+        c = raw_c.strip() if isinstance(raw_c, str) else str(raw_c).strip()
         if c:
-            if c.lower() in ("l", "n", "h"):
-                conf_cls[i] = c.lower()
-            elif c.lower() in ("low", "nominal", "high"):
-                conf_cls[i] = c.lower()[0]
+            cl = c.lower()
+            if cl in ("l", "n", "h"):
+                conf_cls[i] = cl
+            elif cl in ("low", "nominal", "high"):
+                conf_cls[i] = cl[0]
             else:
                 conf[i] = float(c)
-        ty = str(row.get("type", "")).strip()
+        raw_ty = row.get("type", "")
+        ty = raw_ty.strip() if isinstance(raw_ty, str) else str(raw_ty).strip()
         if ty:
-            typ[i] = int(float(ty))
+            typ[i] = int(ty) if ty.isdigit() else int(float(ty))
     return Detections(
         lat=lat, lon=lon, time_s=t, frp_mw=frp, scan_km=scan, track_km=track, platform_code=code, is_day=day,
         confidence=conf, confidence_class=conf_cls, type_code=typ, row_index=np.arange(n, dtype=np.int64),
