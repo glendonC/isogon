@@ -56,6 +56,14 @@ export interface Guide {
   conds: Conditions;
 }
 
+/**
+ * The Earth's years (a screen of its own, world/EarthYears.tsx): from the choice of a place, and from the Record's view
+ * of the years as the satellites counted them, where the same jump stands across the whole Earth. The page's own words
+ * until the product lane writes them.
+ */
+const YEARS_FROM_PLACE: ScriptAction = { label: 'Play the years since 2000', command: 'years:open', key: 'W', places: ['guide'] };
+const YEARS_FROM_RECORD: ScriptAction = { label: 'See the same jump across the whole Earth', command: 'years:open', key: 'W', places: ['guide'] };
+
 /** How many of a state's lines stand together in the guide. */
 const STANDING = 2;
 
@@ -169,6 +177,8 @@ export function useGuide(
       more: moreOf(state, pf, conds),
       fields: { ...fields, ...pf },
       conds,
+      // The Earth's years since 2000, the one action of the guide's own here (the screen's own keys do the rest).
+      actions: id === 'ready' ? [YEARS_FROM_PLACE] : [],
     };
   }
 
@@ -197,7 +207,7 @@ export function useGuide(
           : live.recordedNow === false
             ? []
             : [{ ...a, label: `See this month so far, as it stood on ${dayWords(live.recordedNow) ?? live.recordedNow}` }],
-      ),
+      ).concat(id === 'as_counted' ? [YEARS_FROM_RECORD] : []),
       also: actionsOf(stepOf('record')?.also, r.fields, on, 9),
     };
   }

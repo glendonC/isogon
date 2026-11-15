@@ -18,6 +18,7 @@ const AreaSheet = lazy(() =>
 const Debrief = lazy(() =>
   import('./components/Debrief').then((m) => ({ default: m.Debrief })),
 );
+const EarthYears = lazy(() => import('./world/EarthYears').then((m) => ({ default: m.EarthYears })));
 import { type Step } from './components/WorkspaceBar';
 import { Trail, type TrailWord } from './guide/Trail';
 import { GuideStrip } from './guide/GuideStrip';
@@ -243,6 +244,15 @@ export function App() {
   const [monthAsk, setMonthAsk] = useState<{ region: string; ym: string } | null>(null);
   /** The place screen over the Calendar, and a box drawn on it (its record replaces the place's). */
   const [placesOpen, setPlacesOpen] = useState(false);
+  /**
+   * The Earth's years (world/EarthYears.tsx), a screen of its own under the Record's step, and where it was opened from,
+   * for Escape: the choice of a place, the Record's view of the years as counted, or the page's address (?years).
+   */
+  const [yearsFrom, setYearsFrom] = useState<'place' | 'record' | 'address' | null>(() =>
+    new URLSearchParams(window.location.search).has('years') ? 'address' : null,
+  );
+  /** The Record was on the years as counted when the years were opened from it: its view comes back with it. */
+  const restoreAsCountedRef = useRef(false);
   const [recordBox, setRecordBox] = useState<{ box: Box; name: string } | null>(null);
   /** A featured fire chosen on the place screen: its start replaces the place's opening start once. */
   const fireStartRef = useRef<{ region: string; start: string } | null>(null);
@@ -309,6 +319,30 @@ export function App() {
     setStep('record');
     setPlacesOpen(false);
   }, [enterWorkspace]);
+  // The address ?years opens the Earth's years at once, over the Record's step (so the film can open it directly).
+  useEffect(() => {
+    if (yearsFrom === 'address') enterRecord();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Back from the years to where they were opened from. To the choice of a place one frame after the Record is up
+  // again, so the place screen, mounted afresh, goes back to the Record as it did before.
+  const closeYears = useCallback(() => {
+    const from = yearsFrom;
+    setYearsFrom(null);
+    if (from === 'place') window.setTimeout(() => setPlacesOpen(true), 0);
+  }, [yearsFrom]);
+  // While the years are on, Escape is theirs.
+  useEffect(() => {
+    if (!yearsFrom) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      closeYears();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [yearsFrom, closeYears]);
 
   const exitToOverview = useCallback(() => {
     setPlaying(false);
@@ -906,10 +940,16 @@ export function App() {
 
       if (askOpen || reading !== null || evidenceOpen || areaOpen) return;
 
+      // The Earth's years take their own keys (Space, the arrows, H); Escape goes back to where they were opened from.
+      if (inWorkspace && yearsFrom) return;
       if (inWorkspace && placesOpen) {
         if (e.key === 'Escape') {
           e.preventDefault();
           setPlacesOpen(false);
+        } else if (e.key.toLowerCase() === 'w' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault();
+          setPlacesOpen(false);
+          setYearsFrom('place');
         }
         return;
       }
@@ -1278,6 +1318,12 @@ export function App() {
   };
   // What the Record publishes for the guide (the compare-view lane's view), and the guide worked out from the store.
   const recordView = useRecordView();
+  // Back from the Earth's years opened on the years as counted: the Record, mounted again, shows them as counted again.
+  useEffect(() => {
+    if (!restoreAsCountedRef.current || yearsFrom || recordView.state !== 'ready') return;
+    restoreAsCountedRef.current = false;
+    if (!recordView.correction.asCounted) recordView.showAsCounted(true);
+  }, [yearsFrom, recordView]);
   const playersView = usePlayersView();
   const worldFirstYear = useWorldFirstYear();
   const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays, finish: finishOpen }, recordView, playersView, {
@@ -1294,6 +1340,13 @@ export function App() {
   marksOpenRef.current = marksOpen;
   /** The commands the guide's actions name (script.json, "commands"). */
   const runCommand = (command: string) => {
+    if (command === 'years:open') {
+      // Back from the years, the Record opens again on the view it was opened from (the years as counted).
+      restoreAsCountedRef.current = !placesOpen && recordView.correction.asCounted;
+      setYearsFrom(placesOpen ? 'place' : 'record');
+      setPlacesOpen(false);
+      return;
+    }
     if (command === 'day:next') {
       setDayPicture(nextDayPicture);
       return;
@@ -1501,6 +1554,23 @@ export function App() {
             <div className="iso-ws__scrim iso-ws__scrim--right" aria-hidden="true" />
             <div className="iso-ws__scrim iso-ws__scrim--bottom" aria-hidden="true" />
 
+            {/* The Earth's years over everything of the step: their own caption, controls and strip, and a way back. */}
+            {yearsFrom && (
+              <div className="iso-years" role="region" aria-label="The Earth year by year">
+                <Suspense fallback={null}>
+                  <EarthYears source="/api/cube/years" />
+                </Suspense>
+                <button
+                  type="button"
+                  className="iso-years__back"
+                  onClick={closeYears}
+                >
+                  <kbd className="guide-key">Esc</kbd>
+                  <span>Back</span>
+                </button>
+              </div>
+            )}
+
             <Trail
               objective={guide.objective}
               current={trailWord}
@@ -1527,7 +1597,8 @@ export function App() {
             </div>
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
-            {step === 'record' && <CalendarBeat key={recordTry} guideSpeaks={guide.step === 'record'} />}
+            {/* Down while the Earth's years are on: the Record's keys would act under them. */}
+            {step === 'record' && !yearsFrom && <CalendarBeat key={recordTry} guideSpeaks={guide.step === 'record'} />}
             {modelScene && <WorldModelScene />}
             {step === 'agent' && <AgentBeat guideSpeaks={guide.step === 'play'} />}
             {step === 'look' && <PlayScene />}
@@ -1604,9 +1675,12 @@ export function App() {
             </div>
           </div>
 
-          <button type="button" className="iso-credit" onClick={() => setReading('credits')} title="Imagery credit and sources">
-            Imagery: {credit}
-          </button>
+          {/* No ground is drawn on the Earth's years: no imagery credit there. */}
+          {!yearsFrom && (
+            <button type="button" className="iso-credit" onClick={() => setReading('credits')} title="Imagery credit and sources">
+              Imagery: {credit}
+            </button>
+          )}
         </>
       )}
 

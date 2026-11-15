@@ -809,3 +809,37 @@ body:has(.iso-viewer-layer) .iso-ws__util {
   font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
   text-align: center;
 }
+
+/* The Earth's years: a screen of its own over the step, the night behind it, a way back at the foot. */
+.iso-years {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: var(--sys-night);
+}
+
+.iso-years__back {
+  position: absolute;
+  left: var(--iso-gutter, 24px);
+  bottom: 24px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--sys-s2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sys-ink-2);
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  cursor: pointer;
+}
+
+.iso-years__back:hover,
+.iso-years__back:focus-visible {
+  color: var(--sys-ink);
+}
+
+/* In the film it plays once by itself, with nothing to press. */
+.iso-film .iso-years__back {
+  display: none;
+}
