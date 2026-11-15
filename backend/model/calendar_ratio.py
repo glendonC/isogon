@@ -121,3 +121,79 @@ def calendar_ratio(
         excluded_year=own[0] if own else None, years=tuple(sorted(kept)), method_id=METHOD_ID,
         dropped_years=tuple(sorted(dropped)), excluded_years=own,
     )
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# The calendar's ratio from a small file of its inputs, made at build time, so that a run needs no yearly extract
+# ----------------------------------------------------------------------------------------------------------------
+
+RATIO_INPUTS_VERSION: int = 1
+
+
+def ratio_inputs_dir() -> "Path":
+    """Where the build writes each place's file of the ratio's inputs (not tracked: made from the cached rows)."""
+    from backend.firms.archive import FIRMS_CACHE_DIR
+
+    return FIRMS_CACHE_DIR / "derived" / "ratio_inputs"
+
+
+def ratio_inputs(cal: dict[str, Any]) -> dict[str, Any]:
+    """What `yearly_counts` reads of a calendar, and nothing else: the outage months, and each month's year and
+    totals of Terra, Aqua and Suomi NPP rows. A month without one of the three is kept as such, as the calendar
+    holds it."""
+    keep = ("Terra", "Aqua", "Suomi NPP")
+    records = []
+    for rec in cal["records"]:
+        rc = rec["raw_counts"]
+        records.append({"year": int(rec["year"]), "year_month": rec["year_month"],
+                        "raw_counts": {p: (None if rc.get(p) is None else {"total": rc[p]["total"]}) for p in keep}})
+    return {"harmonization_method": {"overlap_months_excluded_for_outages":
+                                     list(cal["harmonization_method"]["overlap_months_excluded_for_outages"])},
+            "records": records}
+
+
+def write_ratio_inputs(region_id: str, out_dir: "Path | None" = None,
+                       firms_calendar: Callable[[str], dict[str, Any]] | None = None) -> "Path":
+    """Write the place's file of the ratio's inputs, from its calendar, with the digest of the rows it was made
+    from (`backend.firms.archive.region_rows_digest`)."""
+    import json
+    from pathlib import Path
+
+    from backend.firms.archive import region_rows_digest
+
+    if firms_calendar is None:
+        from backend.firms.real_calendar import firms_calendar as _fc
+
+        firms_calendar = _fc
+    doc = {"what": "the calendar's monthly counts its overlap ratio reads (backend/model/calendar_ratio.py)",
+           "version": RATIO_INPUTS_VERSION, "region_id": region_id, "made_from_rows": region_rows_digest(region_id),
+           **ratio_inputs(firms_calendar(region_id))}
+    out = Path(out_dir) if out_dir is not None else ratio_inputs_dir()
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"{region_id}.json"
+    path.write_text(json.dumps(doc, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def ratio_inputs_calendar(in_dir: "Path | None" = None) -> Callable[[str], dict[str, Any]]:
+    """A `firms_calendar` for `calendar_ratio` that reads each place's file of the ratio's inputs in place of the
+    yearly extracts. It refuses a file of another version or of another place."""
+    import json
+    from pathlib import Path
+
+    base = Path(in_dir) if in_dir is not None else ratio_inputs_dir()
+
+    def read(region_id: str) -> dict[str, Any]:
+        doc = json.loads((base / f"{region_id}.json").read_text(encoding="utf-8"))
+        if doc.get("version") != RATIO_INPUTS_VERSION or doc.get("region_id") != region_id:
+            raise ValueError(f"the file of the ratio's inputs for {region_id} is of another version or place")
+        return doc
+
+    return read
+
+
+if __name__ == "__main__":
+    import sys
+
+    for _region in sys.argv[1:]:
+        print(write_ratio_inputs(_region))

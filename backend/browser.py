@@ -51,10 +51,15 @@ def held_out_run(region_id: str, start: str, estimate: str | None = "challenger"
 
     A window the closed rule closes is refused by the run itself (`ClosedWindow`), as on the server. The run's assets
     are not routes here: `pictures(run_id)` gives their bytes."""
+    from backend.model.calendar_ratio import ratio_inputs_calendar, ratio_inputs_dir
     from backend.model.real_run import real_response, solve_real_reconstruction
     from backend.model.withhold import withhold_scorer_keys
     from backend.terrain.live_region import load_region_terrain, resolve_region_request
 
+    # the calendar's ratio from the place's small file of its inputs, made at build time, where there is one: the
+    # same ratio, without the place's yearly extracts
+    if "firms_calendar" not in solve and (ratio_inputs_dir() / f"{region_id}.json").is_file():
+        solve["firms_calendar"] = ratio_inputs_calendar()
     terrain = load_region_terrain(resolve_region_request(region_id=region_id), allow_network=False)
     solved = solve_real_reconstruction(terrain, str(start), holdout_viirs=True, estimate=estimate, **solve)
     _keep(solved)
