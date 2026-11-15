@@ -73,9 +73,9 @@ export const SEAL_WORDS = {
     (none ? '; no fire in the pass' : ''),
   notScored: (why: string | null) => `Not scored${why ? `: ${why}` : ''}`,
   title: (platform: string | null, day: string | null, point: string) => [platform ? `Predicted pass of ${platform}` : null, day, point].filter(Boolean).join(', '),
-  // The judge's two readings of the board, as the product lane asked for them, from the answer's own figures.
+  // The judge's two readings of the board, from the answer's own figures (the first in the product lane's words).
   listed: (followed: number, sealed: number, scored: number) =>
-    `${scored} of the ${followed} fires followed tonight are scored; the ${sealed} with a pass sealed are listed here.`,
+    `Of the ${followed} fires followed, the ${sealed} with a sealed pass are listed here, and ${scored} of them are scored.`,
   // The film's one proof (the fresh judge, JUDGE-1 item 4): one scored prediction's fingerprint and how long before the
   // pass it was sealed.
   proofLabel: 'The fingerprint of one sealed prediction',

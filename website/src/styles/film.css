@@ -250,6 +250,15 @@
   font-size: clamp(15px, 0.95vw, 19px);
 }
 
+.iso-film .world-tests__beside {
+  line-height: 1.35;
+}
+
+/* Over a picture of the world the caption may take the screen's width, so a two-part line stays on one line. */
+.iso-film .world-screen .guide-trail {
+  max-width: min(94vw, 1820px);
+}
+
 /* The film's sealed board: the fires and the line of hours large; the digests and the fine print are the page's. */
 .iso-film .world-board {
   --board-cols: 44px minmax(160px, 0.4fr) minmax(640px, 2fr) minmax(480px, 1.8fr);

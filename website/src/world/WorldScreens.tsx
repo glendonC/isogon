@@ -3,7 +3,7 @@ import { GuideStrip } from '../guide/GuideStrip';
 import type { ScriptAction } from '../guide/script';
 import { Trail, type TrailWord } from '../guide/Trail';
 import { EarthYears, type YearsControl, type YearsState } from './EarthYears';
-import { challengersSaid, parseFresh } from './freshTest';
+import { challengersSaid, parseFresh, secondModel } from './freshTest';
 import { countWord } from '../guide/formats';
 import { useWorldKeys } from './keys';
 import { parseLive } from './live';
@@ -218,7 +218,7 @@ function Test({ film, toWord }: Part) {
         ...(b ? [] : [S.test.squares(a.of)]),
       ]
     : [];
-  const caption = b ? S.test.filmB(b.c.ahead, b.of, b.c.behind, others?.ahead ?? null) : a ? S.test.filmA(a.fires, a.c.ahead, a.of, a.c.behind) : null;
+  const caption = b ? S.test.filmB(b.c.ahead, b.of, b.c.behind, others?.ahead ?? null, secondModel(testB)) : a ? S.test.filmA(a.fires, a.c.ahead, a.of, a.c.behind) : null;
   return (
     <>
       <div className="world-screen__test">

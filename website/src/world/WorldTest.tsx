@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { count, countWord } from '../guide/formats';
 import { listAnd } from './words';
 import { countryAt } from './countryAt';
-import { challengersSaid, parseFresh, type FreshFire, type FreshLook, type Group } from './freshTest';
+import { challengersSaid, parseFresh, secondModel, type FreshFire, type FreshLook, type Group } from './freshTest';
 import { useRead } from './read';
 import { inFilm, useGuideRoom, WorldCaption } from './WorldCaption';
 import { useWorldLayer } from './layers';
@@ -27,8 +27,10 @@ export const TEST_WORDS = {
   // names of the two looks, shown in place of the served ones.
   objective: 'See where the estimate was tested',
   filmA: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} unseen fires: ahead on ${ahead} of ${of} scores, behind on ${behind}.`,
-  filmB: (ahead: number, of: number, behind: number, others: string | null) =>
-    `Untouched fires: ${ahead} of ${of} ahead, ${behind} behind.${others ? ` Other models: ${others} ahead.` : ''}`,
+  filmB: (ahead: number, of: number, behind: number, others: string | null, second: { ahead: number; behind: number } | null) =>
+    second
+      ? `Untouched fires: second model ${second.ahead} ahead, ${second.behind} behind. First: ${ahead} ahead, ${behind} behind.`
+      : `Untouched fires: ${ahead} of ${of} ahead, ${behind} behind.${others ? ` Other models: ${others} ahead.` : ''}`,
   /** The challengers beside the headline, in one plain line under it. */
   beside: (n: string, ahead: string, of: number, behind: string) =>
     `Beside it, ${n} other models looked at once on these fires: each ahead on ${ahead} of ${of} scores, behind on ${behind}.`,
@@ -201,7 +203,7 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
   }
   const c = look?.all?.classes ?? null;
   const others = challengersSaid(look);
-  const filmLine = look && c ? (look.id === 'test_b' ? TEST_WORDS.filmB(c.ahead, judged, c.behind, others?.ahead ?? null) : TEST_WORDS.filmA(look.fires.length, c.ahead, judged, c.behind)) : null;
+  const filmLine = look && c ? (look.id === 'test_b' ? TEST_WORDS.filmB(c.ahead, judged, c.behind, others?.ahead ?? null, secondModel(look)) : TEST_WORDS.filmA(look.fires.length, c.ahead, judged, c.behind)) : null;
   const besideLine = others ? TEST_WORDS.beside(countWord(others.n) ?? String(others.n), others.ahead, judged, others.behind) : null;
   const captionLine = caption ? (film ? filmLine ?? TEST_WORDS.objective : TEST_WORDS.objective) : null;
   // With its own caption, the panel stands under it and above the guide's room, or under the Earth on a narrow screen.

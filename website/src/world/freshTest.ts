@@ -193,6 +193,11 @@ function look(id: 'test_a' | 'test_b', v: unknown, names: Obj, grid: typeof FRES
   };
 }
 
+/** The second model (the challenger the runs answer with, `challenger_blend`), beside the headline, where scored. */
+export function secondModel(look: FreshLook | null): Beside | null {
+  return look?.challengers.find((c) => c.key === 'challenger_blend') ?? null;
+}
+
 /** The challengers' figures as the script says them: one number when all agree, else the least to the most ("5 to 6"). */
 export function challengersSaid(look: FreshLook | null): { n: number; ahead: string; behind: string } | null {
   const cs = look?.challengers ?? [];

@@ -230,9 +230,12 @@ export const SCREEN_WORDS = {
     fireScores: "Show a fire's scores",
     back: 'Back to the test',
     filmA: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} unseen fires: ahead on ${ahead} of ${of} scores, behind on ${behind}.`,
-    // WORDS-wider.json version 11, world_pictures, the test across the world's film line once test B is taken.
-    filmB: (ahead: number, of: number, behind: number, others: string | null) =>
-      `Untouched fires: ${ahead} of ${of} ahead, ${behind} behind.${others ? ` Other models: ${others} ahead.` : ''}`,
+    // WORDS-wider.json version 13, world_pictures, the test across the world's film line once test B is taken: the
+    // second model (the challenger the runs answer with) and the first; version 12's line where no second is scored.
+    filmB: (ahead: number, of: number, behind: number, others: string | null, second: { ahead: number; behind: number } | null) =>
+      second
+        ? `Untouched fires: second model ${second.ahead} ahead, ${second.behind} behind. First: ${ahead} ahead, ${behind} behind.`
+        : `Untouched fires: ${ahead} of ${of} ahead, ${behind} behind.${others ? ` Other models: ${others} ahead.` : ''}`,
     // GUIDE-script.json version 23, step test, `test_b_taken`: said before test A's sentence.
     testB: (fires: number, ahead: number, of: number, level: number, behind: number, others: { n: string; ahead: string } | null) =>
       `On ${fires} fires that nothing had touched, the estimate was ahead of the simple methods on ${ahead} of ${of} scores, level on ${level} and behind on ${behind}${others ? `, while ${others.n} other models were each ahead on ${others.ahead}` : ''}.`,
