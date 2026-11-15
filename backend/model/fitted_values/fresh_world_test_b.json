@@ -1,0 +1,3462 @@
+{
+ "what": "the fresh test's look at its test_b episodes",
+ "look_name": "fresh test B, values in use, the refit beside them",
+ "protocol_id": "fresh_world_v1",
+ "protocol_sha256": "675ce7d6fb38de0c9cbdf51ac8c2db220a9597c4192722a39755b6ed30ae9660",
+ "protocol_the_plan_was_made_under": "050449de777c7b8a3d5258f554f2184c83028046fe4b7908a9390c5ab683ced3",
+ "plan_sha256": "768e5487f75c906fdbedfb14325a7d277bbf6062b27398f08b104ba60da30449",
+ "values": {
+  "which": "values in use",
+  "files_sha256": {
+   "occupancy_params.json": "b45e689835b4a9e175ed63877757ebe71226628d3466cb983c411fd837570eb9",
+   "overlap_ratio.json": "881d5654e1fa8638271f5ff7bc87bd3c26699e538dd1c88a098f3b00c34c1811"
+  },
+  "refit_sha256": "669230d63080b095de43f55f4dd3a1441e9fb12cfaa3a379f0d6e8b9fda391dc"
+ },
+ "source_sha256": {
+  "backend/model/__init__.py": "1e7e2a450f8599ee6b3b3211dabeed84dd61e4d074ce6a9a21bfe2445e468814",
+  "backend/model/belief.py": "33fb2444ecfa132f264feaf26404f7a31094fc55567e5001baf0372e55affba9",
+  "backend/model/cached_platforms.py": "87aef2e3ab9ed98d37f4bb76ff911cb53fa65aeef11da69005e805ca97869d5a",
+  "backend/model/calendar_model.py": "d21c8cf795ec8338b6d8e96dc1fde3169464839ec66001eebc480d0b15c7fd0c",
+  "backend/model/calendar_ratio.py": "28e1007e1b59c60a09fc7a6ac39301875bf6ea6792e357acc4444ef5c5caf97d",
+  "backend/model/calibrator.py": "13dee4e9a05d52817735ee90b4cd19e033d935f3ae81278b70b8398bdf589918",
+  "backend/model/challenger_standing.py": "e8574465d8192933ca3a9fa55f84fd4729d36aba2909be37a54603036e8396bc",
+  "backend/model/encoding.py": "0f8d14acc82a2f7b312952a9c0af6d5ce30c49ddbd13847751bb2b92d1c43001",
+  "backend/model/episodes.py": "62b68db01163209d1e4bdcb4c025b614571341452307de0e4b834f1e505a68a7",
+  "backend/model/evidence.py": "697fa04c3c72bfe6fefd57fd5ad18304e3de652bf6ae986787e604c4788775db",
+  "backend/model/fire_roles.py": "b59522f479e817f55c586ada597bce559cd9a5bed32b11122d0fc756bb48591b",
+  "backend/model/fit_real.py": "274e07fc1d18b1ed81725d6d36b34b18ef51ac8104c5172a3a6b30e3c87ade58",
+  "backend/model/fitted.py": "5e767433bf35983111e10c602242d804285943fbe88521a66ee57b33ed7e6ad6",
+  "backend/model/fresh_test.py": "b63b445d161ba5293b5a84220dc55e824eb87fd5f42afaad699409bc174603f7",
+  "backend/model/fresh_world.py": "8782b54f7e25c57705754db9750f3acd51da359ee9f02b39aa4347c4ef3dc962",
+  "backend/model/fresh_world_run.py": "b2b254fc75df2dfd1f99ccdc0e40b54b00f0c55fa9921c520e9e820335f1342d",
+  "backend/model/gates.py": "8dc6df374d8b7f1aa6eca2c6fee1c99775e08be2083cbbc310d2fc4e73d22004",
+  "backend/model/grid.py": "0a1ef95a9d8cc85f60a83a4276c9d471ffabeb107bba5c6e47f9f90266d97b1f",
+  "backend/model/harmonize.py": "8246debff5f91f200785b137199bad4f20b0e2ab322df05a70e5e1ab0618ce83",
+  "backend/model/harmonize_cells.py": "5d4911da2160cc3fd1a17c853ade49e5a65d0df74c9a1ec60311a344edf4359d",
+  "backend/model/harmonize_dataset.py": "74534b9115f59f602805e70613ffdbfe93dabac676cc7933df6bcf98a4a5a1ac",
+  "backend/model/harmonize_eval.py": "b477edf0d25a7cc6577212b13125050a94eb483de06f210e0a9db7fe4b905df5",
+  "backend/model/harmonize_figure.py": "8d3c3396ea8daad271945414ada3937c25978e9001a97c15fd35b9914a37927f",
+  "backend/model/harmonize_fitted.py": "d095fffaeebd450b88f93865674751634ee083e774e96dd38b9359259e7ba774",
+  "backend/model/harmonize_maps.py": "8dff130e34a953c10be04f35546665b120e961bf8d1c4fdab48a82202352ca04",
+  "backend/model/harmonize_places.py": "256b452a33da75a9dc168349a4c7b2c334004d4cbc4b804c924847f5409ed7c3",
+  "backend/model/harmonize_years.py": "3deaebe840aba206bbd7134b77ce37edc1d0442a0ebd9f90f820add8027dc9f3",
+  "backend/model/occupancy.py": "b2161f5926234c1076db9f7594c20c2c9a7db49ebebaaea1ca2da0c947a15bde",
+  "backend/model/platforms.py": "c66a570ac762b8587e0e68892e23bf0ba0e0518b855072e1225c26688a7d3662",
+  "backend/model/real_blind.py": "8ed7b0605756a93bc4a0d836ac4662703061a1cc905344feafda5786bcfdea96",
+  "backend/model/real_geometry.py": "648569be3148506472d4cbd8eca2666bee88c036ae0465b2d36519324d06410e",
+  "backend/model/real_run.py": "a226179c9f78b1bc293c6052bdb184f90f85b514f137d29399cebeec9af05203",
+  "backend/model/reconstruct.py": "9dddc80fe23baf41891177069136d3ad51f3d914a9547e0b76c024acaa0ce4e9",
+  "backend/model/sensor_physics.py": "35b14c33e5ef97e72d9315797dacf2f8c51fc3e9f8f8070546e5e252dd68ded1",
+  "backend/model/solver.py": "6d015f89b5c72499b7351ea596e21e0d4b8bb324242310bc79e14060d522282c",
+  "backend/model/terra_morning.py": "5239797413985bd8dcdcb5271e28237ef2c02c460b37f32ac8aa25abaa8252b4",
+  "backend/model/training.py": "759d679f29354fb2d6efdf647aaee27a58dddce88537ca5dfdef6afaf145ebfb",
+  "backend/model/world_model.py": "2ccf66edf63e9e1559e3cfb157b96ea2a866f14a37eb3062941992e83276e3f3",
+  "backend/eval/__init__.py": "012fc55acbd77212154d98e182c038a6c1e88387c876863d022418e8db592674",
+  "backend/eval/baselines.py": "d696001e217784a37dff966baa10152ce74927c1964fe522f954b770dc88f037",
+  "backend/eval/blind_test.py": "a6f43efa93cdc572e72f583742c646c0998b04b28cbd95d0d3528a96f23dd61b",
+  "backend/eval/grid.py": "e03828eb7aa4ec5b3681ff6239b9c333aac73685fb5400994b739bbabb3de89a",
+  "backend/eval/holdout.py": "9e5452d7100a071ef6914cb79ab40dff802682d2a171172c9958afdca553a53d",
+  "backend/eval/metrics.py": "7497c743b87c9720c5e49acd9546821df848a7163d01261dab32a15f648357bc",
+  "backend/eval/overpass.py": "4a2a9a4110d104abca4d9862574375931d68460f6c88d1f9b90ab7af333cb7ed",
+  "backend/eval/rows.py": "c116b0360c752e9976db7af13bfe142574f3f4544a85ef96cc113036b808d008",
+  "backend/eval/schedule.py": "56d35540f354db7fa6e6f1de654782059fe8359721bb07332b94f1ad501beafb",
+  "backend/eval/synthetic_fixture.py": "a2f558da7e2d8071febddefd3814ddf4ae4fcfadc5a8f7abc9b443ffd9584b9d"
+ },
+ "episodes_in_plan": 57,
+ "episodes_scored": 57,
+ "unscored": {},
+ "per_episode": [
+  {
+   "key": "p+12.5+5.0:2019:11",
+   "place_id": "p+12.5+5.0",
+   "continent": "Africa",
+   "zone": "tropical",
+   "first_overpass_utc": "2019-02-05T10:02:00Z",
+   "scored_looks": 22,
+   "hidden_pixels_in_tile": 1583,
+   "ahead_of_both_on": 6,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.7272727272727273,
+    "overpasses": 22
+   },
+   "report_sha256": "f4ef57800464dada2ac8b3c92dc2931e9355ab858f793c77f95d510b7d6790f2"
+  },
+  {
+   "key": "p+25.0-25.0:2022:04",
+   "place_id": "p+25.0-25.0",
+   "continent": "Africa",
+   "zone": "subtropical",
+   "first_overpass_utc": "2022-08-13T12:47:00Z",
+   "scored_looks": 13,
+   "hidden_pixels_in_tile": 3544,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9230769230769231,
+    "overpasses": 13
+   },
+   "report_sha256": "e93c7ff6d1ad0cae4dabb37e909ca27609193a7522323c405ed7236d3ee3c258"
+  },
+  {
+   "key": "p+2.5+15.0:2022:31",
+   "place_id": "p+2.5+15.0",
+   "continent": "Africa",
+   "zone": "tropical",
+   "first_overpass_utc": "2022-10-30T22:19:00Z",
+   "scored_looks": 21,
+   "hidden_pixels_in_tile": 1137,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8571428571428571,
+    "overpasses": 21
+   },
+   "report_sha256": "865e9e4e85c9d1671cc26e7cb91dfe457ec96084f4c23f37ac6a1b4d34ec0d08"
+  },
+  {
+   "key": "p+22.5-25.0:2018:32",
+   "place_id": "p+22.5-25.0",
+   "continent": "Africa",
+   "zone": "subtropical",
+   "first_overpass_utc": "2018-09-10T08:57:00Z",
+   "scored_looks": 17,
+   "hidden_pixels_in_tile": 2676,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 17
+   },
+   "report_sha256": "735fde1fe03345cb56d53cdb9969d1e7bcd6459e34b90062aa0c7380ed34f82c"
+  },
+  {
+   "key": "p+22.5-25.0:2022:44",
+   "place_id": "p+22.5-25.0",
+   "continent": "Africa",
+   "zone": "subtropical",
+   "first_overpass_utc": "2022-08-11T23:55:00Z",
+   "scored_looks": 17,
+   "hidden_pixels_in_tile": 2278,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8823529411764706,
+    "overpasses": 17
+   },
+   "report_sha256": "50297be40eb4e64f1cffab769bd14aabe97c74acef4bf07268d82d847790e4f3"
+  },
+  {
+   "key": "p+25.0-25.0:2019:04",
+   "place_id": "p+25.0-25.0",
+   "continent": "Africa",
+   "zone": "subtropical",
+   "first_overpass_utc": "2019-10-26T08:37:00Z",
+   "scored_looks": 16,
+   "hidden_pixels_in_tile": 1568,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9375,
+    "overpasses": 16
+   },
+   "report_sha256": "43854a7dcb6cb56d20ec1dfeaf3463ad18ecc7ae6e027f4d332392135d083664"
+  },
+  {
+   "key": "p+22.5-27.5:2022:43",
+   "place_id": "p+22.5-27.5",
+   "continent": "Africa",
+   "zone": "subtropical",
+   "first_overpass_utc": "2022-08-11T08:49:00Z",
+   "scored_looks": 14,
+   "hidden_pixels_in_tile": 1180,
+   "ahead_of_both_on": 3,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9285714285714286,
+    "overpasses": 14
+   },
+   "report_sha256": "35de54e4e6edf547832a1f793ae18299f20847da13c55c6d9050333251e97c98"
+  },
+  {
+   "key": "p+112.5-5.0:2019:04",
+   "place_id": "p+112.5-5.0",
+   "continent": "Asia",
+   "zone": "tropical",
+   "first_overpass_utc": "2019-09-12T03:10:00Z",
+   "scored_looks": 12,
+   "hidden_pixels_in_tile": 3119,
+   "ahead_of_both_on": 6,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9166666666666666,
+    "overpasses": 12
+   },
+   "report_sha256": "42363bc8e1276c7646aac6a6d644b80045dbcd682af39c45f64b81b55a270c0c"
+  },
+  {
+   "key": "p+75.0+22.5:2020:40",
+   "place_id": "p+75.0+22.5",
+   "continent": "Asia",
+   "zone": "subtropical",
+   "first_overpass_utc": "2020-04-04T05:50:00Z",
+   "scored_looks": 16,
+   "hidden_pixels_in_tile": 1212,
+   "ahead_of_both_on": 1,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 16
+   },
+   "report_sha256": "8f9273c4ca5cc40ccf5d03ee840cff562bcbcfe4879f19d9b0007114d038a311"
+  },
+  {
+   "key": "p+125.0+45.0:2021:42",
+   "place_id": "p+125.0+45.0",
+   "continent": "Asia",
+   "zone": "temperate",
+   "first_overpass_utc": "2021-04-18T03:51:00Z",
+   "scored_looks": 20,
+   "hidden_pixels_in_tile": 2779,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8,
+    "overpasses": 20
+   },
+   "report_sha256": "565c9b40d9462555b14389f73757739f70f51e53376795b60359c96ed6cb08a2"
+  },
+  {
+   "key": "p+132.5+62.5:2021:30",
+   "place_id": "p+132.5+62.5",
+   "continent": "Asia",
+   "zone": "boreal",
+   "first_overpass_utc": "2021-06-29T12:28:00Z",
+   "scored_looks": 17,
+   "hidden_pixels_in_tile": 4446,
+   "ahead_of_both_on": 3,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.7647058823529411,
+    "overpasses": 17
+   },
+   "report_sha256": "dce884639201c952848ed1a7d4ae3388a57e76ff0ce1a6546c60207118011bd9"
+  },
+  {
+   "key": "p+75.0+20.0:2020:44",
+   "place_id": "p+75.0+20.0",
+   "continent": "Asia",
+   "zone": "tropical",
+   "first_overpass_utc": "2020-04-04T16:46:00Z",
+   "scored_looks": 14,
+   "hidden_pixels_in_tile": 1870,
+   "ahead_of_both_on": 1,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 14
+   },
+   "report_sha256": "6de34eaf7d3b9d9c7c99ca2ae0b216a22152361388b4a996a0844f92a07d0d4c"
+  },
+  {
+   "key": "p+75.0+25.0:2020:20",
+   "place_id": "p+75.0+25.0",
+   "continent": "Asia",
+   "zone": "subtropical",
+   "first_overpass_utc": "2020-04-28T20:18:00Z",
+   "scored_looks": 19,
+   "hidden_pixels_in_tile": 1290,
+   "ahead_of_both_on": 1,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 19
+   },
+   "report_sha256": "a1a693d978254775778657dbca99b35a5802d2298063b966e3c0ce04fab7337e"
+  },
+  {
+   "key": "p+122.5+45.0:2020:14",
+   "place_id": "p+122.5+45.0",
+   "continent": "Asia",
+   "zone": "temperate",
+   "first_overpass_utc": "2020-04-12T03:15:00Z",
+   "scored_looks": 14,
+   "hidden_pixels_in_tile": 4967,
+   "ahead_of_both_on": 4,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 14
+   },
+   "report_sha256": "b6b3f6fa973f177cbc7ee220506ad15b1c0770f2d7823c51073f686a20edf9e8"
+  },
+  {
+   "key": "p+132.5+65.0:2020:32",
+   "place_id": "p+132.5+65.0",
+   "continent": "Asia",
+   "zone": "boreal",
+   "first_overpass_utc": "2020-07-23T02:32:00Z",
+   "scored_looks": 12,
+   "hidden_pixels_in_tile": 2209,
+   "ahead_of_both_on": 4,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8333333333333334,
+    "overpasses": 12
+   },
+   "report_sha256": "58d07dda5267207b1d9d7bd9fd63dcc9e3ab348c7960e257b9fd30e693aa2e65"
+  },
+  {
+   "key": "p+112.5-5.0:2018:23",
+   "place_id": "p+112.5-5.0",
+   "continent": "Asia",
+   "zone": "tropical",
+   "first_overpass_utc": "2018-09-27T05:53:00Z",
+   "scored_looks": 12,
+   "hidden_pixels_in_tile": 1029,
+   "ahead_of_both_on": 6,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9166666666666666,
+    "overpasses": 12
+   },
+   "report_sha256": "c280f5295623f822a7805b67191a7d26a7de2c7d3177ba4a9a349b6aa0918d66"
+  },
+  {
+   "key": "p+75.0+22.5:2018:40",
+   "place_id": "p+75.0+22.5",
+   "continent": "Asia",
+   "zone": "subtropical",
+   "first_overpass_utc": "2018-03-26T17:10:00Z",
+   "scored_looks": 8,
+   "hidden_pixels_in_tile": 446,
+   "ahead_of_both_on": 1,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 8
+   },
+   "report_sha256": "65b75990dc9e5b6e1a06eb3be0df225d7c45b3a1358d7521e40025053aab84b8"
+  },
+  {
+   "key": "p+125.0+42.5:2021:24",
+   "place_id": "p+125.0+42.5",
+   "continent": "Asia",
+   "zone": "temperate",
+   "first_overpass_utc": "2021-04-06T05:03:00Z",
+   "scored_looks": 25,
+   "hidden_pixels_in_tile": 2790,
+   "ahead_of_both_on": 3,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.76,
+    "overpasses": 25
+   },
+   "report_sha256": "7a86cfcebf6b312515261cfa4d6e19616166ca67f7041f227fca02be0bd13da4"
+  },
+  {
+   "key": "p+132.5+65.0:2018:24",
+   "place_id": "p+132.5+65.0",
+   "continent": "Asia",
+   "zone": "boreal",
+   "first_overpass_utc": "2018-08-13T16:49:00Z",
+   "scored_looks": 15,
+   "hidden_pixels_in_tile": 2224,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9333333333333333,
+    "overpasses": 15
+   },
+   "report_sha256": "543f53a65aebb47bd4fe82c11b0c10495ab66c04cf4640234f4e75f6b1de77ba"
+  },
+  {
+   "key": "p+75.0+20.0:2018:44",
+   "place_id": "p+75.0+20.0",
+   "continent": "Asia",
+   "zone": "tropical",
+   "first_overpass_utc": "2018-03-27T08:28:00Z",
+   "scored_looks": 7,
+   "hidden_pixels_in_tile": 456,
+   "ahead_of_both_on": 1,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8571428571428571,
+    "overpasses": 7
+   },
+   "report_sha256": "233fd3e6bfdd9b387c6f12c4b79fe7c35c06d0f12ba64ba6acf5c08569660af4"
+  },
+  {
+   "key": "p+75.0+25.0:2021:20",
+   "place_id": "p+75.0+25.0",
+   "continent": "Asia",
+   "zone": "subtropical",
+   "first_overpass_utc": "2021-04-25T05:35:00Z",
+   "scored_looks": 21,
+   "hidden_pixels_in_tile": 745,
+   "ahead_of_both_on": 3,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8095238095238095,
+    "overpasses": 21
+   },
+   "report_sha256": "b112eb2f85b185263e56748504ad4ec8c0834586ee9995784e408f56712b9b64"
+  },
+  {
+   "key": "p+125.0+42.5:2020:24",
+   "place_id": "p+125.0+42.5",
+   "continent": "Asia",
+   "zone": "temperate",
+   "first_overpass_utc": "2020-04-02T02:39:00Z",
+   "scored_looks": 27,
+   "hidden_pixels_in_tile": 1434,
+   "ahead_of_both_on": 3,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8518518518518519,
+    "overpasses": 27
+   },
+   "report_sha256": "97d517538740ece4a7bd323a76f6b389471cf0ad8f6a397a6559bf84dbbf5956"
+  },
+  {
+   "key": "p+135.0+65.0:2020:11",
+   "place_id": "p+135.0+65.0",
+   "continent": "Asia",
+   "zone": "boreal",
+   "first_overpass_utc": "2020-07-24T03:15:00Z",
+   "scored_looks": 12,
+   "hidden_pixels_in_tile": 1270,
+   "ahead_of_both_on": 3,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.75,
+    "overpasses": 12
+   },
+   "report_sha256": "df828cba96f4b8c9d47865cdd26894cc8229bb914dde40e6ee5448955979a954"
+  },
+  {
+   "key": "p+102.5+2.5:2019:11",
+   "place_id": "p+102.5+2.5",
+   "continent": "Asia",
+   "zone": "tropical",
+   "first_overpass_utc": "2019-03-15T18:08:00Z",
+   "scored_looks": 13,
+   "hidden_pixels_in_tile": 830,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9230769230769231,
+    "overpasses": 13
+   },
+   "report_sha256": "235d716c5436a00f3bedd902b35cb9e8918f12aee7fd96023afbeeb402bbd936"
+  },
+  {
+   "key": "p+125.0+45.0:2020:11",
+   "place_id": "p+125.0+45.0",
+   "continent": "Asia",
+   "zone": "temperate",
+   "first_overpass_utc": "2020-04-13T04:03:00Z",
+   "scored_looks": 14,
+   "hidden_pixels_in_tile": 2598,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 14
+   },
+   "report_sha256": "ac6c6b3c34d7f39909913552d5369e2f98c5b0d69bd5a7dcd3d9f148533fde2a"
+  },
+  {
+   "key": "p+105.0+62.5:2019:00",
+   "place_id": "p+105.0+62.5",
+   "continent": "Asia",
+   "zone": "boreal",
+   "first_overpass_utc": "2019-08-09T06:35:00Z",
+   "scored_looks": 14,
+   "hidden_pixels_in_tile": 2291,
+   "ahead_of_both_on": 6,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8571428571428571,
+    "overpasses": 14
+   },
+   "report_sha256": "14aa6b2d65e275ab3b3a3954c3863d5794e7c9427759f6cf8b354bd030cc3206"
+  },
+  {
+   "key": "p+115.0-5.0:2019:04",
+   "place_id": "p+115.0-5.0",
+   "continent": "Asia",
+   "zone": "tropical",
+   "first_overpass_utc": "2019-09-10T03:22:00Z",
+   "scored_looks": 17,
+   "hidden_pixels_in_tile": 1087,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.7647058823529411,
+    "overpasses": 17
+   },
+   "report_sha256": "01f05aae0c37a5e543d47ea5dd29088fcf9da07e019f715dfc2c5099cbb538f2"
+  },
+  {
+   "key": "p+15.0+42.5:2022:23",
+   "place_id": "p+15.0+42.5",
+   "continent": "Europe",
+   "zone": "temperate",
+   "first_overpass_utc": "2022-03-21T12:46:00Z",
+   "scored_looks": 17,
+   "hidden_pixels_in_tile": 433,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 17
+   },
+   "report_sha256": "3ffdeaee35e53cfe18b9c9c9f228e9ef9e0c26a36497255e7623ac26ebd2a899"
+  },
+  {
+   "key": "p+15.0+42.5:2020:33",
+   "place_id": "p+15.0+42.5",
+   "continent": "Europe",
+   "zone": "temperate",
+   "first_overpass_utc": "2020-04-07T11:15:00Z",
+   "scored_looks": 19,
+   "hidden_pixels_in_tile": 581,
+   "ahead_of_both_on": 1,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8947368421052632,
+    "overpasses": 19
+   },
+   "report_sha256": "b91d26a230a125dfb4fbc9556cbcee1e8a56d932c6b84197bc93a35a1f6bdc89"
+  },
+  {
+   "key": "p-87.5+12.5:2020:04",
+   "place_id": "p-87.5+12.5",
+   "continent": "North America",
+   "zone": "tropical",
+   "first_overpass_utc": "2020-04-09T16:04:00Z",
+   "scored_looks": 16,
+   "hidden_pixels_in_tile": 2924,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9375,
+    "overpasses": 16
+   },
+   "report_sha256": "dc346b56235585ff38cefda5daf5fa182d8dcf44ae4f7541ed49f947d86c74c3"
+  },
+  {
+   "key": "p-105.0+22.5:2019:02",
+   "place_id": "p-105.0+22.5",
+   "continent": "North America",
+   "zone": "subtropical",
+   "first_overpass_utc": "2019-05-19T19:48:00Z",
+   "scored_looks": 17,
+   "hidden_pixels_in_tile": 1314,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.5882352941176471,
+    "overpasses": 17
+   },
+   "report_sha256": "59c79ad4ef18949b3b45ce73481fc604772ab1767d6989a5bc3f0bb2077270b0"
+  },
+  {
+   "key": "p-107.5+45.0:2021:11",
+   "place_id": "p-107.5+45.0",
+   "continent": "North America",
+   "zone": "temperate",
+   "first_overpass_utc": "2021-08-09T19:24:00Z",
+   "scored_looks": 15,
+   "hidden_pixels_in_tile": 1840,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 15
+   },
+   "report_sha256": "35bbd5e1d611ad9e9d04c43e4d1b224a478d3679b6a7d902a33c351f321f7cc4"
+  },
+  {
+   "key": "p-157.5+62.5:2019:01",
+   "place_id": "p-157.5+62.5",
+   "continent": "North America",
+   "zone": "boreal",
+   "first_overpass_utc": "2019-07-07T22:07:00Z",
+   "scored_looks": 10,
+   "hidden_pixels_in_tile": 1486,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9,
+    "overpasses": 10
+   },
+   "report_sha256": "87ef325979919e338d1df5e24ca46e53d8cce337726df7b923820bda5b879d69"
+  },
+  {
+   "key": "p-87.5+15.0:2020:20",
+   "place_id": "p-87.5+15.0",
+   "continent": "North America",
+   "zone": "tropical",
+   "first_overpass_utc": "2020-04-12T16:35:00Z",
+   "scored_looks": 20,
+   "hidden_pixels_in_tile": 2466,
+   "ahead_of_both_on": 4,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.85,
+    "overpasses": 20
+   },
+   "report_sha256": "072508f306dd0f5cd5baae8d7002fae3ec99e85c1fdb7e8b02784370d8f81e3a"
+  },
+  {
+   "key": "p-107.5+25.0:2021:12",
+   "place_id": "p-107.5+25.0",
+   "continent": "North America",
+   "zone": "subtropical",
+   "first_overpass_utc": "2021-06-10T17:19:00Z",
+   "scored_looks": 22,
+   "hidden_pixels_in_tile": 1683,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.7727272727272727,
+    "overpasses": 22
+   },
+   "report_sha256": "3adf259c57836965ad977176d8a598c89f767384dadd08bb431eca5ad322c420"
+  },
+  {
+   "key": "p-155.0+62.5:2022:32",
+   "place_id": "p-155.0+62.5",
+   "continent": "North America",
+   "zone": "boreal",
+   "first_overpass_utc": "2022-06-30T22:38:00Z",
+   "scored_looks": 12,
+   "hidden_pixels_in_tile": 1649,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.5,
+    "overpasses": 12
+   },
+   "report_sha256": "3d01fae66e3b5b26956861ee69a04612428742d1b8f062c011852b5a824f6af6"
+  },
+  {
+   "key": "p-92.5+15.0:2019:13",
+   "place_id": "p-92.5+15.0",
+   "continent": "North America",
+   "zone": "tropical",
+   "first_overpass_utc": "2019-04-21T19:22:00Z",
+   "scored_looks": 21,
+   "hidden_pixels_in_tile": 740,
+   "ahead_of_both_on": 4,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8571428571428571,
+    "overpasses": 21
+   },
+   "report_sha256": "d1c694ce48d8470f02946d2eebd46d9f80f6d6febe8a3f7ff6850c42ede4ad9d"
+  },
+  {
+   "key": "p-102.5+25.0:2021:40",
+   "place_id": "p-102.5+25.0",
+   "continent": "North America",
+   "zone": "subtropical",
+   "first_overpass_utc": "2021-03-26T04:48:00Z",
+   "scored_looks": 24,
+   "hidden_pixels_in_tile": 1017,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9583333333333334,
+    "overpasses": 24
+   },
+   "report_sha256": "55eaf2034a6c4a7b3bd2c5370e4f2ed4ff22f7747ffda2eaa7a3ae70a23c5007"
+  },
+  {
+   "key": "p-157.5+62.5:2022:33",
+   "place_id": "p-157.5+62.5",
+   "continent": "North America",
+   "zone": "boreal",
+   "first_overpass_utc": "2022-07-10T21:37:00Z",
+   "scored_looks": 12,
+   "hidden_pixels_in_tile": 2030,
+   "ahead_of_both_on": 4,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 12
+   },
+   "report_sha256": "5184b40ac9946b4e1988937ee4c8d059ac86c3806c83d157fc13c8ee38a11f53"
+  },
+  {
+   "key": "p-95.0+15.0:2019:32",
+   "place_id": "p-95.0+15.0",
+   "continent": "North America",
+   "zone": "tropical",
+   "first_overpass_utc": "2019-04-23T19:10:00Z",
+   "scored_looks": 17,
+   "hidden_pixels_in_tile": 829,
+   "ahead_of_both_on": 4,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 17
+   },
+   "report_sha256": "35fbd79d9848d03e1cc2bf4ccb4c18097364c8552894ee72593d70f1779a33fb"
+  },
+  {
+   "key": "p-107.5+25.0:2019:31",
+   "place_id": "p-107.5+25.0",
+   "continent": "North America",
+   "zone": "subtropical",
+   "first_overpass_utc": "2019-04-20T05:02:00Z",
+   "scored_looks": 18,
+   "hidden_pixels_in_tile": 1047,
+   "ahead_of_both_on": 4,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8888888888888888,
+    "overpasses": 18
+   },
+   "report_sha256": "edaa1efd9e110fce7cb949c508c5e84acb199190add1cf048d5c1b952d9bd3ea"
+  },
+  {
+   "key": "p-155.0+62.5:2019:34",
+   "place_id": "p-155.0+62.5",
+   "continent": "North America",
+   "zone": "boreal",
+   "first_overpass_utc": "2019-07-09T08:30:00Z",
+   "scored_looks": 26,
+   "hidden_pixels_in_tile": 1896,
+   "ahead_of_both_on": 4,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9230769230769231,
+    "overpasses": 26
+   },
+   "report_sha256": "9eb3aa260fcd1b6cc9a03318f0be6e85c9f721aa17f11803e0f26ea9f47266e8"
+  },
+  {
+   "key": "p-90.0+12.5:2020:44",
+   "place_id": "p-90.0+12.5",
+   "continent": "North America",
+   "zone": "tropical",
+   "first_overpass_utc": "2020-04-12T04:22:00Z",
+   "scored_looks": 21,
+   "hidden_pixels_in_tile": 1130,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8095238095238095,
+    "overpasses": 21
+   },
+   "report_sha256": "a2410d278eec0a6098ece6ec01878b0fbf8409fa5a0c9add4b3a0fbb1bd6294c"
+  },
+  {
+   "key": "p-107.5+22.5:2021:41",
+   "place_id": "p-107.5+22.5",
+   "continent": "North America",
+   "zone": "subtropical",
+   "first_overpass_utc": "2021-04-21T17:33:00Z",
+   "scored_looks": 20,
+   "hidden_pixels_in_tile": 1189,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.85,
+    "overpasses": 20
+   },
+   "report_sha256": "b6762eb9e04b98623fe8fad8e033aa35affd320403789b99b5be3e4a5b3df7f4"
+  },
+  {
+   "key": "p-155.0+65.0:2022:00",
+   "place_id": "p-155.0+65.0",
+   "continent": "North America",
+   "zone": "boreal",
+   "first_overpass_utc": "2022-07-10T21:36:00Z",
+   "scored_looks": 11,
+   "hidden_pixels_in_tile": 703,
+   "ahead_of_both_on": 3,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 11
+   },
+   "report_sha256": "ef25101c9ee0fec1082b86aba2c4c72d05eb592ca1a8714890810f323b447dfc"
+  },
+  {
+   "key": "p-97.5+15.0:2019:34",
+   "place_id": "p-97.5+15.0",
+   "continent": "North America",
+   "zone": "tropical",
+   "first_overpass_utc": "2019-05-17T19:59:00Z",
+   "scored_looks": 18,
+   "hidden_pixels_in_tile": 800,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8888888888888888,
+    "overpasses": 18
+   },
+   "report_sha256": "63bba7eecade5cfefaf98b7b37ab814c4386a9dcffe3b1a20e5cb2ec9002bea4"
+  },
+  {
+   "key": "p-107.5+22.5:2019:41",
+   "place_id": "p-107.5+22.5",
+   "continent": "North America",
+   "zone": "subtropical",
+   "first_overpass_utc": "2019-05-19T18:17:00Z",
+   "scored_looks": 16,
+   "hidden_pixels_in_tile": 919,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8125,
+    "overpasses": 16
+   },
+   "report_sha256": "98cb5498d9eac7108be0e34b9c7b56685410dffb39c218a580c0744d1312074a"
+  },
+  {
+   "key": "p-155.0+65.0:2019:32",
+   "place_id": "p-155.0+65.0",
+   "continent": "North America",
+   "zone": "boreal",
+   "first_overpass_utc": "2019-07-09T21:54:00Z",
+   "scored_looks": 9,
+   "hidden_pixels_in_tile": 300,
+   "ahead_of_both_on": 3,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 9
+   },
+   "report_sha256": "fd40a0bec6cbd764a42fe7af742035c0e9755900c5c625c92062c9f789f84ee1"
+  },
+  {
+   "key": "p-85.0+15.0:2020:01",
+   "place_id": "p-85.0+15.0",
+   "continent": "North America",
+   "zone": "tropical",
+   "first_overpass_utc": "2020-04-21T16:28:00Z",
+   "scored_looks": 19,
+   "hidden_pixels_in_tile": 766,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9473684210526315,
+    "overpasses": 19
+   },
+   "report_sha256": "578361e4e92487936ad821f7cb3410379f3b9dbd2e9ff478a262fa61f012315d"
+  },
+  {
+   "key": "p+145.0-45.0:2019:33",
+   "place_id": "p+145.0-45.0",
+   "continent": "Oceania",
+   "zone": "temperate",
+   "first_overpass_utc": "2019-01-27T12:26:00Z",
+   "scored_looks": 12,
+   "hidden_pixels_in_tile": 3322,
+   "ahead_of_both_on": 1,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.5833333333333334,
+    "overpasses": 12
+   },
+   "report_sha256": "32db5dba884575cbe7e38a2199db3f8ec46df0a0a4658dc94aa2374bc5ebfba3"
+  },
+  {
+   "key": "p-45.0-7.5:2019:13",
+   "place_id": "p-45.0-7.5",
+   "continent": "South America",
+   "zone": "tropical",
+   "first_overpass_utc": "2019-10-12T13:16:00Z",
+   "scored_looks": 15,
+   "hidden_pixels_in_tile": 1240,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8666666666666667,
+    "overpasses": 15
+   },
+   "report_sha256": "fa10e42ce48a1a51d1830748011e70d03465b8ce18222563d398e55aa7360b8e"
+  },
+  {
+   "key": "p-47.5-7.5:2019:43",
+   "place_id": "p-47.5-7.5",
+   "continent": "South America",
+   "zone": "tropical",
+   "first_overpass_utc": "2019-09-07T17:17:00Z",
+   "scored_looks": 19,
+   "hidden_pixels_in_tile": 1526,
+   "ahead_of_both_on": 3,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.7368421052631579,
+    "overpasses": 19
+   },
+   "report_sha256": "70312dba4e8b702a838442924cbd87abe73b070551d58c65b067c6fce4250ef7"
+  },
+  {
+   "key": "p-47.5-5.0:2019:30",
+   "place_id": "p-47.5-5.0",
+   "continent": "South America",
+   "zone": "tropical",
+   "first_overpass_utc": "2019-10-30T15:58:00Z",
+   "scored_looks": 14,
+   "hidden_pixels_in_tile": 507,
+   "ahead_of_both_on": 1,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8571428571428571,
+    "overpasses": 14
+   },
+   "report_sha256": "a8262c9bb54486729103d18e9231dd9fc449045761bc59b1bd871eca68814739"
+  },
+  {
+   "key": "p-45.0-7.5:2020:12",
+   "place_id": "p-45.0-7.5",
+   "continent": "South America",
+   "zone": "tropical",
+   "first_overpass_utc": "2020-09-27T17:05:00Z",
+   "scored_looks": 17,
+   "hidden_pixels_in_tile": 653,
+   "ahead_of_both_on": 5,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 1.0,
+    "overpasses": 17
+   },
+   "report_sha256": "ac66a68058cccdc01a2fff841999138e1de56a332ad32284f9d3f193eb20e5c4"
+  },
+  {
+   "key": "p-47.5-5.0:2018:30",
+   "place_id": "p-47.5-5.0",
+   "continent": "South America",
+   "zone": "tropical",
+   "first_overpass_utc": "2018-11-17T00:59:30Z",
+   "scored_looks": 16,
+   "hidden_pixels_in_tile": 710,
+   "ahead_of_both_on": 4,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.875,
+    "overpasses": 16
+   },
+   "report_sha256": "35edf8729f89560679652e3bfe0e9702a944ce01a3f49bff1d5c19eb82b56082"
+  },
+  {
+   "key": "p-47.5-7.5:2020:13",
+   "place_id": "p-47.5-7.5",
+   "continent": "South America",
+   "zone": "tropical",
+   "first_overpass_utc": "2020-09-13T04:35:00Z",
+   "scored_looks": 20,
+   "hidden_pixels_in_tile": 924,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.8,
+    "overpasses": 20
+   },
+   "report_sha256": "91f623fd56f0d9756f68f04f310d12cfe64fd21f1f8af5dc7ff966a1502e4e55"
+  },
+  {
+   "key": "p-45.0-5.0:2022:30",
+   "place_id": "p-45.0-5.0",
+   "continent": "South America",
+   "zone": "tropical",
+   "first_overpass_utc": "2022-08-03T17:14:00Z",
+   "scored_looks": 10,
+   "hidden_pixels_in_tile": 130,
+   "ahead_of_both_on": 2,
+   "scores_judged": 7,
+   "counted_by": "plain comparison",
+   "interval": {
+    "stated_level": 0.9,
+    "observed_coverage": 0.9,
+    "overpasses": 10
+   },
+   "report_sha256": "8147dfe85c58ca3d9c9b9970d027f17682a0ae09eb0283d729bad72f3da26a4c"
+  }
+ ],
+ "judged": {
+  "all": {
+   "episodes": 57,
+   "scored_looks": 932,
+   "interval": {
+    "stated_level": 0.9,
+    "held": 0.8723175965665236,
+    "looks": 932
+   },
+   "counted_by": "judged with an interval",
+   "classes": {
+    "csi_strict_375m": "behind",
+    "csi_one_cell_tolerance": "tie",
+    "hit_rate_at_equal_area": "tie",
+    "brier": "ahead",
+    "pixel_count_error_of_sums": "ahead",
+    "frp_error_of_sums": "behind",
+    "frp_median_abs_relative_error": "behind"
+   },
+   "ahead": 2,
+   "tied": 2,
+   "behind": 3,
+   "scores": {
+    "csi_strict_375m": {
+     "reconstruction": 0.1314232553848283,
+     "painted_modis": 0.15801453974860175,
+     "overlap_ratio": 0.15801453974860175,
+     "better_is": "higher",
+     "beats_every_baseline": false,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.03996,
+       -0.01358
+      ],
+      "overlap_ratio": [
+       -0.03996,
+       -0.01358
+      ]
+     },
+     "class": "behind"
+    },
+    "csi_one_cell_tolerance": {
+     "reconstruction": 0.2660447411937225,
+     "painted_modis": 0.26381435102365336,
+     "overlap_ratio": 0.26381435102365336,
+     "better_is": "higher",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.02253,
+       0.0279
+      ],
+      "overlap_ratio": [
+       -0.02253,
+       0.0279
+      ]
+     },
+     "class": "tie"
+    },
+    "hit_rate_at_equal_area": {
+     "reconstruction": 0.3359391270714944,
+     "painted_modis": 0.3490449555205141,
+     "overlap_ratio": 0.3490449555205141,
+     "better_is": "higher",
+     "beats_every_baseline": false,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.02746,
+       0.00192
+      ],
+      "overlap_ratio": [
+       -0.02746,
+       0.00192
+      ]
+     },
+     "class": "tie"
+    },
+    "brier": {
+     "reconstruction": 0.008230872242289479,
+     "painted_modis": 0.01645056935456262,
+     "overlap_ratio": 0.01645056935456262,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       0.00696,
+       0.0095
+      ],
+      "overlap_ratio": [
+       0.00696,
+       0.0095
+      ]
+     },
+     "class": "ahead"
+    },
+    "pixel_count_error_of_sums": {
+     "reconstruction": 0.17372166302943914,
+     "painted_modis": 0.8101924019062041,
+     "overlap_ratio": 0.7103645392597873,
+     "better_is": "lower",
+     "beats_every_baseline": true,
+     "improvement_interval": {
+      "painted_modis": [
+       0.45314,
+       0.78401
+      ],
+      "overlap_ratio": [
+       0.34223,
+       0.71623
+      ]
+     },
+     "class": "ahead"
+    },
+    "frp_error_of_sums": {
+     "reconstruction": 0.212903221509106,
+     "painted_modis": 0.057630600029411116,
+     "overlap_ratio": 0.1395117475794715,
+     "better_is": "lower",
+     "beats_every_baseline": false,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.23369,
+       -0.05123
+      ],
+      "overlap_ratio": [
+       -0.14587,
+       0.00724
+      ]
+     },
+     "class": "behind"
+    },
+    "frp_median_abs_relative_error": {
+     "reconstruction": 0.5822242505490745,
+     "painted_modis": 0.5274190728165499,
+     "overlap_ratio": 0.546781227286886,
+     "better_is": "lower",
+     "beats_every_baseline": false,
+     "improvement_interval": {
+      "painted_modis": [
+       -0.10075,
+       -0.01853
+      ],
+      "overlap_ratio": [
+       -0.08387,
+       0.00556
+      ]
+     },
+     "class": "behind"
+    }
+   }
+  },
+  "by_continent": {
+   "Africa": {
+    "episodes": 7,
+    "scored_looks": 120,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.8833333333333333,
+     "looks": 120
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "behind",
+     "csi_one_cell_tolerance": "tie",
+     "hit_rate_at_equal_area": "behind",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "ahead",
+     "frp_error_of_sums": "behind",
+     "frp_median_abs_relative_error": "tie"
+    },
+    "ahead": 2,
+    "tied": 2,
+    "behind": 3,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.11044792465228342,
+      "painted_modis": 0.16730813239852704,
+      "overlap_ratio": 0.16730813239852704,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.08317,
+        -0.02747
+       ],
+       "overlap_ratio": [
+        -0.08317,
+        -0.02747
+       ]
+      },
+      "class": "behind"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.22535513103110458,
+      "painted_modis": 0.2812724843252133,
+      "overlap_ratio": 0.2812724843252133,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.10727,
+        0.004
+       ],
+       "overlap_ratio": [
+        -0.10727,
+        0.004
+       ]
+      },
+      "class": "tie"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.30523018251157724,
+      "painted_modis": 0.3651139562335422,
+      "overlap_ratio": 0.3651139562335422,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.08658,
+        -0.03701
+       ],
+       "overlap_ratio": [
+        -0.08658,
+        -0.03701
+       ]
+      },
+      "class": "behind"
+     },
+     "brier": {
+      "reconstruction": 0.008159837955470898,
+      "painted_modis": 0.016136030577112187,
+      "overlap_ratio": 0.016136030577112187,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00608,
+        0.00987
+       ],
+       "overlap_ratio": [
+        0.00608,
+        0.00987
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.1600350852069311,
+      "painted_modis": 0.8112559072032077,
+      "overlap_ratio": 0.6257009881139912,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.49906,
+        0.78336
+       ],
+       "overlap_ratio": [
+        0.22889,
+        0.72667
+       ]
+      },
+      "class": "ahead"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.2186384553438675,
+      "painted_modis": 0.13949651743357228,
+      "overlap_ratio": 0.07290565053982156,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.23176,
+        0.11884
+       ],
+       "overlap_ratio": [
+        -0.24462,
+        -0.01754
+       ]
+      },
+      "class": "behind"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.5813179323536773,
+      "painted_modis": 0.5802376658429647,
+      "overlap_ratio": 0.5894376191954583,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.12923,
+        0.09043
+       ],
+       "overlap_ratio": [
+        -0.12879,
+        0.08918
+       ]
+      },
+      "class": "tie"
+     }
+    }
+   },
+   "Asia": {
+    "episodes": 20,
+    "scored_looks": 309,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.8770226537216829,
+     "looks": 309
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "behind",
+     "csi_one_cell_tolerance": "tie",
+     "hit_rate_at_equal_area": "tie",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "tie",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "tie"
+    },
+    "ahead": 1,
+    "tied": 5,
+    "behind": 1,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.11809307642332585,
+      "painted_modis": 0.15252897560807965,
+      "overlap_ratio": 0.15252897560807965,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.05364,
+        -0.01343
+       ],
+       "overlap_ratio": [
+        -0.05364,
+        -0.01343
+       ]
+      },
+      "class": "behind"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.2378454500775018,
+      "painted_modis": 0.25363751795341477,
+      "overlap_ratio": 0.25363751795341477,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.04683,
+        0.02257
+       ],
+       "overlap_ratio": [
+        -0.04683,
+        0.02257
+       ]
+      },
+      "class": "tie"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.28301821694728124,
+      "painted_modis": 0.306255175269114,
+      "overlap_ratio": 0.306255175269114,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.04775,
+        0.00417
+       ],
+       "overlap_ratio": [
+        -0.04775,
+        0.00417
+       ]
+      },
+      "class": "tie"
+     },
+     "brier": {
+      "reconstruction": 0.01210683034158684,
+      "painted_modis": 0.02201043318635573,
+      "overlap_ratio": 0.02201043318635573,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00738,
+        0.01245
+       ],
+       "overlap_ratio": [
+        0.00738,
+        0.01245
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.33792770899416746,
+      "painted_modis": 0.8367952522255193,
+      "overlap_ratio": 0.5986859203929193,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.05991,
+        0.77435
+       ],
+       "overlap_ratio": [
+        -0.13401,
+        0.58571
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.1522423046030228,
+      "painted_modis": 0.0884024520781519,
+      "overlap_ratio": 0.25832423409195904,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.20528,
+        0.11583
+       ],
+       "overlap_ratio": [
+        -0.02723,
+        0.27353
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.5946549350571616,
+      "painted_modis": 0.5353413682743552,
+      "overlap_ratio": 0.5891122193251146,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.16426,
+        0.00261
+       ],
+       "overlap_ratio": [
+        -0.11499,
+        0.05407
+       ]
+      },
+      "class": "tie"
+     }
+    }
+   },
+   "Europe": {
+    "episodes": 2,
+    "scored_looks": 36,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.9444444444444444,
+     "looks": 36
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "tie",
+     "csi_one_cell_tolerance": "tie",
+     "hit_rate_at_equal_area": "tie",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "tie",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "behind"
+    },
+    "ahead": 1,
+    "tied": 5,
+    "behind": 1,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.12129277566539924,
+      "painted_modis": 0.1476332340284674,
+      "overlap_ratio": 0.1476332340284674,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.06494,
+        0.00763
+       ],
+       "overlap_ratio": [
+        -0.06494,
+        0.00763
+       ]
+      },
+      "class": "tie"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.2986530422666047,
+      "painted_modis": 0.2771551724137931,
+      "overlap_ratio": 0.2771551724137931,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.02576,
+        0.0674
+       ],
+       "overlap_ratio": [
+        -0.02576,
+        0.0674
+       ]
+      },
+      "class": "tie"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.30020847810979845,
+      "painted_modis": 0.30993745656706045,
+      "overlap_ratio": 0.30993745656706045,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.02545,
+        0.0114
+       ],
+       "overlap_ratio": [
+        -0.02545,
+        0.0114
+       ]
+      },
+      "class": "tie"
+     },
+     "brier": {
+      "reconstruction": 0.0022800831352713167,
+      "painted_modis": 0.00448646915748465,
+      "overlap_ratio": 0.00448646915748465,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00149,
+        0.00301
+       ],
+       "overlap_ratio": [
+        0.00149,
+        0.00301
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.027948717948718005,
+      "painted_modis": 0.8165680473372781,
+      "overlap_ratio": 0.6145364891518739,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.26855,
+        0.78862
+       ],
+       "overlap_ratio": [
+        -0.15203,
+        0.60898
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.2120863127344258,
+      "painted_modis": 0.2350276656134831,
+      "overlap_ratio": 0.3776186395027722,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.30272,
+        0.02294
+       ],
+       "overlap_ratio": [
+        -0.11816,
+        0.16553
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.5267820091911573,
+      "painted_modis": 0.37661567427821047,
+      "overlap_ratio": 0.46855604121923433,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.71158,
+        0.0225
+       ],
+       "overlap_ratio": [
+        -0.5987,
+        -0.00192
+       ]
+      },
+      "class": "behind"
+     }
+    }
+   },
+   "North America": {
+    "episodes": 20,
+    "scored_looks": 344,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.872093023255814,
+     "looks": 344
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "tie",
+     "csi_one_cell_tolerance": "ahead",
+     "hit_rate_at_equal_area": "ahead",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "ahead",
+     "frp_error_of_sums": "behind",
+     "frp_median_abs_relative_error": "behind"
+    },
+    "ahead": 4,
+    "tied": 1,
+    "behind": 2,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.17386906583973274,
+      "painted_modis": 0.16474515500880907,
+      "overlap_ratio": 0.16474515500880907,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.00741,
+        0.02244
+       ],
+       "overlap_ratio": [
+        -0.00741,
+        0.02244
+       ]
+      },
+      "class": "tie"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.35106962146928844,
+      "painted_modis": 0.2739332499170093,
+      "overlap_ratio": 0.2739332499170093,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.05489,
+        0.0977
+       ],
+       "overlap_ratio": [
+        0.05489,
+        0.0977
+       ]
+      },
+      "class": "ahead"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.4219759467249776,
+      "painted_modis": 0.39732630951197695,
+      "overlap_ratio": 0.39732630951197695,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.0092,
+        0.03883
+       ],
+       "overlap_ratio": [
+        0.0092,
+        0.03883
+       ]
+      },
+      "class": "ahead"
+     },
+     "brier": {
+      "reconstruction": 0.006600535872555316,
+      "painted_modis": 0.014726719771382258,
+      "overlap_ratio": 0.014726719771382258,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00637,
+        0.01002
+       ],
+       "overlap_ratio": [
+        0.00637,
+        0.01002
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.175905791679138,
+      "painted_modis": 0.7741694103561808,
+      "overlap_ratio": 0.9772564351990423,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.40556,
+        0.75259
+       ],
+       "overlap_ratio": [
+        0.55902,
+        1.04993
+       ]
+      },
+      "class": "ahead"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.211360055596029,
+      "painted_modis": 0.15171753220456852,
+      "overlap_ratio": 0.0629626298532735,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.26526,
+        0.18261
+       ],
+       "overlap_ratio": [
+        -0.20682,
+        -0.03509
+       ]
+      },
+      "class": "behind"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.5530794409414033,
+      "painted_modis": 0.5065926673393879,
+      "overlap_ratio": 0.5218027136339185,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.09471,
+        -0.01215
+       ],
+       "overlap_ratio": [
+        -0.08536,
+        0.0238
+       ]
+      },
+      "class": "behind"
+     }
+    }
+   },
+   "Oceania": {
+    "episodes": 1,
+    "scored_looks": 12,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.5833333333333334,
+     "looks": 12
+    },
+    "why_no_interval": "one episode cannot be resampled"
+   },
+   "South America": {
+    "episodes": 7,
+    "scored_looks": 111,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.8558558558558559,
+     "looks": 111
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "behind",
+     "csi_one_cell_tolerance": "behind",
+     "hit_rate_at_equal_area": "tie",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "tie",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "behind"
+    },
+    "ahead": 1,
+    "tied": 3,
+    "behind": 3,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.08252030304681965,
+      "painted_modis": 0.12084642089601587,
+      "overlap_ratio": 0.12084642089601587,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.05464,
+        -0.01441
+       ],
+       "overlap_ratio": [
+        -0.05464,
+        -0.01441
+       ]
+      },
+      "class": "behind"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.17175548784279585,
+      "painted_modis": 0.19985621854780733,
+      "overlap_ratio": 0.19985621854780733,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.04921,
+        -0.00406
+       ],
+       "overlap_ratio": [
+        -0.04921,
+        -0.00406
+       ]
+      },
+      "class": "behind"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.3493307608826721,
+      "painted_modis": 0.35258651875075364,
+      "overlap_ratio": 0.35258651875075364,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.01799,
+        0.01093
+       ],
+       "overlap_ratio": [
+        -0.01799,
+        0.01093
+       ]
+      },
+      "class": "tie"
+     },
+     "brier": {
+      "reconstruction": 0.0032770632409224233,
+      "painted_modis": 0.00869035187917829,
+      "overlap_ratio": 0.00869035187917829,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00354,
+        0.00725
+       ],
+       "overlap_ratio": [
+        0.00354,
+        0.00725
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.30778558875219697,
+      "painted_modis": 0.7676625659050966,
+      "overlap_ratio": 0.8613110720562391,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.31126,
+        0.75386
+       ],
+       "overlap_ratio": [
+        -0.07692,
+        0.80617
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.28099499552984386,
+      "painted_modis": 0.0787727617551921,
+      "overlap_ratio": 0.12231044756210696,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.34419,
+        0.05593
+       ],
+       "overlap_ratio": [
+        -0.28575,
+        0.0518
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.7814354958160592,
+      "painted_modis": 0.6177113295583798,
+      "overlap_ratio": 0.5316072075295489,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.3802,
+        -0.08029
+       ],
+       "overlap_ratio": [
+        -0.49427,
+        -0.11182
+       ]
+      },
+      "class": "behind"
+     }
+    }
+   }
+  },
+  "by_zone": {
+   "tropical": {
+    "episodes": 22,
+    "scored_looks": 361,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.8698060941828255,
+     "looks": 361
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "tie",
+     "csi_one_cell_tolerance": "tie",
+     "hit_rate_at_equal_area": "tie",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "ahead",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "behind"
+    },
+    "ahead": 2,
+    "tied": 4,
+    "behind": 1,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.12134740259740259,
+      "painted_modis": 0.11736292803542164,
+      "overlap_ratio": 0.11736292803542164,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.01532,
+        0.0216
+       ],
+       "overlap_ratio": [
+        -0.01532,
+        0.0216
+       ]
+      },
+      "class": "tie"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.22371601849103015,
+      "painted_modis": 0.19354876382449462,
+      "overlap_ratio": 0.19354876382449462,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.00465,
+        0.06503
+       ],
+       "overlap_ratio": [
+        -0.00465,
+        0.06503
+       ]
+      },
+      "class": "tie"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.32541374758858765,
+      "painted_modis": 0.3108437404812671,
+      "overlap_ratio": 0.3108437404812671,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.00544,
+        0.02991
+       ],
+       "overlap_ratio": [
+        -0.00544,
+        0.02991
+       ]
+      },
+      "class": "tie"
+     },
+     "brier": {
+      "reconstruction": 0.004707981007263336,
+      "painted_modis": 0.011797122711432234,
+      "overlap_ratio": 0.011797122711432234,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00561,
+        0.00868
+       ],
+       "overlap_ratio": [
+        0.00561,
+        0.00868
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.3269144995464166,
+      "painted_modis": 0.7933172059268219,
+      "overlap_ratio": 0.9054048231025098,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.22386,
+        0.66455
+       ],
+       "overlap_ratio": [
+        0.31863,
+        0.82729
+       ]
+      },
+      "class": "ahead"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.1954121683042156,
+      "painted_modis": 0.04942427379348491,
+      "overlap_ratio": 0.146188457454826,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.23826,
+        0.01589
+       ],
+       "overlap_ratio": [
+        -0.18991,
+        0.0951
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.6961073909506229,
+      "painted_modis": 0.5964990772328169,
+      "overlap_ratio": 0.5612418013647548,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.17818,
+        0.00478
+       ],
+       "overlap_ratio": [
+        -0.21108,
+        -0.01908
+       ]
+      },
+      "class": "behind"
+     }
+    }
+   },
+   "subtropical": {
+    "episodes": 15,
+    "scored_looks": 258,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.8837209302325582,
+     "looks": 258
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "behind",
+     "csi_one_cell_tolerance": "behind",
+     "hit_rate_at_equal_area": "behind",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "tie",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "tie"
+    },
+    "ahead": 1,
+    "tied": 3,
+    "behind": 3,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.10220782541982781,
+      "painted_modis": 0.1627890501020177,
+      "overlap_ratio": 0.1627890501020177,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.07895,
+        -0.03726
+       ],
+       "overlap_ratio": [
+        -0.07895,
+        -0.03726
+       ]
+      },
+      "class": "behind"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.2101708640375739,
+      "painted_modis": 0.2807696385031273,
+      "overlap_ratio": 0.2807696385031273,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.10672,
+        -0.02235
+       ],
+       "overlap_ratio": [
+        -0.10672,
+        -0.02235
+       ]
+      },
+      "class": "behind"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.3048873280655546,
+      "painted_modis": 0.3362306116476441,
+      "overlap_ratio": 0.3362306116476441,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.05003,
+        -0.01023
+       ],
+       "overlap_ratio": [
+        -0.05003,
+        -0.01023
+       ]
+      },
+      "class": "behind"
+     },
+     "brier": {
+      "reconstruction": 0.006156012464529379,
+      "painted_modis": 0.011309964448620292,
+      "overlap_ratio": 0.011309964448620292,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00395,
+        0.00649
+       ],
+       "overlap_ratio": [
+        0.00395,
+        0.00649
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.2698529943911707,
+      "painted_modis": 0.8151800253301972,
+      "overlap_ratio": 0.8514433689162293,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.16043,
+        0.7857
+       ],
+       "overlap_ratio": [
+        -0.05948,
+        0.89751
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.16386471592961604,
+      "painted_modis": 0.08727512704299323,
+      "overlap_ratio": 0.11539296626022888,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.2287,
+        0.10709
+       ],
+       "overlap_ratio": [
+        -0.1745,
+        0.10903
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.5412353803784113,
+      "painted_modis": 0.5274190728165499,
+      "overlap_ratio": 0.561138353765324,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.12776,
+        0.03664
+       ],
+       "overlap_ratio": [
+        -0.11569,
+        0.05768
+       ]
+      },
+      "class": "tie"
+     }
+    }
+   },
+   "temperate": {
+    "episodes": 9,
+    "scored_looks": 163,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.8711656441717791,
+     "looks": 163
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "behind",
+     "csi_one_cell_tolerance": "behind",
+     "hit_rate_at_equal_area": "behind",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "tie",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "tie"
+    },
+    "ahead": 1,
+    "tied": 3,
+    "behind": 3,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.08981934512608204,
+      "painted_modis": 0.13514935127036246,
+      "overlap_ratio": 0.13514935127036246,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.06198,
+        -0.03181
+       ],
+       "overlap_ratio": [
+        -0.06198,
+        -0.03181
+       ]
+      },
+      "class": "behind"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.19784600613637787,
+      "painted_modis": 0.22699654426005392,
+      "overlap_ratio": 0.22699654426005392,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.04933,
+        -0.00916
+       ],
+       "overlap_ratio": [
+        -0.04933,
+        -0.00916
+       ]
+      },
+      "class": "behind"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.21621536721744047,
+      "painted_modis": 0.2663504429226613,
+      "overlap_ratio": 0.2663504429226613,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.07919,
+        -0.01529
+       ],
+       "overlap_ratio": [
+        -0.07919,
+        -0.01529
+       ]
+      },
+      "class": "behind"
+     },
+     "brier": {
+      "reconstruction": 0.011844723307923771,
+      "painted_modis": 0.021381233606422773,
+      "overlap_ratio": 0.021381233606422773,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00593,
+        0.01328
+       ],
+       "overlap_ratio": [
+        0.00593,
+        0.01328
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.19689066718087156,
+      "painted_modis": 0.8413517161588893,
+      "overlap_ratio": 0.31561752795989184,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.48711,
+        0.8008
+       ],
+       "overlap_ratio": [
+        -0.20758,
+        0.71564
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.23513581394868965,
+      "painted_modis": 0.03161588881521449,
+      "overlap_ratio": 0.160677290935745,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.30045,
+        0.15728
+       ],
+       "overlap_ratio": [
+        -0.29134,
+        0.30176
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.6007045065601826,
+      "painted_modis": 0.5196444993388063,
+      "overlap_ratio": 0.5480505985607063,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.2338,
+        0.0225
+       ],
+       "overlap_ratio": [
+        -0.16566,
+        0.07262
+       ]
+      },
+      "class": "tie"
+     }
+    }
+   },
+   "boreal": {
+    "episodes": 11,
+    "scored_looks": 150,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.86,
+     "looks": 150
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "tie",
+     "csi_one_cell_tolerance": "ahead",
+     "hit_rate_at_equal_area": "tie",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "ahead",
+     "frp_error_of_sums": "behind",
+     "frp_median_abs_relative_error": "tie"
+    },
+    "ahead": 3,
+    "tied": 3,
+    "behind": 1,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.22817877221875177,
+      "painted_modis": 0.24801928458244835,
+      "overlap_ratio": 0.24801928458244835,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.04462,
+        0.00952
+       ],
+       "overlap_ratio": [
+        -0.04462,
+        0.00952
+       ]
+      },
+      "class": "tie"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.4869438631607679,
+      "painted_modis": 0.4139536880056656,
+      "overlap_ratio": 0.4139536880056656,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.04151,
+        0.11083
+       ],
+       "overlap_ratio": [
+        0.04151,
+        0.11083
+       ]
+      },
+      "class": "ahead"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.5179727310287839,
+      "painted_modis": 0.5065762291695359,
+      "overlap_ratio": 0.5065762291695359,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.01504,
+        0.03876
+       ],
+       "overlap_ratio": [
+        -0.01504,
+        0.03876
+       ]
+      },
+      "class": "tie"
+     },
+     "brier": {
+      "reconstruction": 0.016351004474343837,
+      "painted_modis": 0.03113371622689584,
+      "overlap_ratio": 0.03113371622689584,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.01269,
+        0.01693
+       ],
+       "overlap_ratio": [
+        0.01269,
+        0.01693
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.24735807647288333,
+      "painted_modis": 0.7950643776824035,
+      "overlap_ratio": 0.705959325009754,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.31359,
+        0.7242
+       ],
+       "overlap_ratio": [
+        0.21966,
+        0.65357
+       ]
+      },
+      "class": "ahead"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.2655648453900641,
+      "painted_modis": 0.050940119792794114,
+      "overlap_ratio": 0.14495509419186625,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.31272,
+        0.07536
+       ],
+       "overlap_ratio": [
+        -0.16339,
+        -0.04917
+       ]
+      },
+      "class": "behind"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.4970113730844935,
+      "painted_modis": 0.4603790005674061,
+      "overlap_ratio": 0.5060628265313727,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.11026,
+        0.01685
+       ],
+       "overlap_ratio": [
+        -0.06993,
+        0.05608
+       ]
+      },
+      "class": "tie"
+     }
+    }
+   }
+  }
+ },
+ "beside_the_headline": {
+  "refit": {
+   "against_the_baselines": {
+    "episodes": 57,
+    "scored_looks": 932,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.9216738197424893,
+     "looks": 932
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "behind",
+     "csi_one_cell_tolerance": "ahead",
+     "hit_rate_at_equal_area": "ahead",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "ahead",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "tie"
+    },
+    "ahead": 4,
+    "tied": 2,
+    "behind": 1,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.138096778490286,
+      "painted_modis": 0.15801453974860175,
+      "overlap_ratio": 0.15801453974860175,
+      "better_is": "higher",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.02987,
+        -0.00925
+       ],
+       "overlap_ratio": [
+        -0.02987,
+        -0.00925
+       ]
+      },
+      "class": "behind"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.2983782712668939,
+      "painted_modis": 0.26381435102365336,
+      "overlap_ratio": 0.26381435102365336,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.01472,
+        0.05401
+       ],
+       "overlap_ratio": [
+        0.01472,
+        0.05401
+       ]
+      },
+      "class": "ahead"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.3626491327244057,
+      "painted_modis": 0.3490449555205141,
+      "overlap_ratio": 0.3490449555205141,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00508,
+        0.02236
+       ],
+       "overlap_ratio": [
+        0.00508,
+        0.02236
+       ]
+      },
+      "class": "ahead"
+     },
+     "brier": {
+      "reconstruction": 0.007878563791590252,
+      "painted_modis": 0.01645056935456262,
+      "overlap_ratio": 0.01645056935456262,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00731,
+        0.00989
+       ],
+       "overlap_ratio": [
+        0.00731,
+        0.00989
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.19530920144301422,
+      "painted_modis": 0.8101924019062041,
+      "overlap_ratio": 0.7103645392597873,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.45146,
+        0.75284
+       ],
+       "overlap_ratio": [
+        0.38237,
+        0.64345
+       ]
+      },
+      "class": "ahead"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.007011733799764164,
+      "painted_modis": 0.057630600029411116,
+      "overlap_ratio": 0.1395117475794715,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.04954,
+        0.09404
+       ],
+       "overlap_ratio": [
+        0.0286,
+        0.17193
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.5652572026679095,
+      "painted_modis": 0.5274190728165499,
+      "overlap_ratio": 0.546781227286886,
+      "better_is": "lower",
+      "beats_every_baseline": false,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.11608,
+        0.03015
+       ],
+       "overlap_ratio": [
+        -0.09772,
+        0.05537
+       ]
+      },
+      "class": "tie"
+     }
+    }
+   },
+   "the_headline_against_it": {
+    "episodes": 57,
+    "classes": {
+     "csi_strict_375m": "tie",
+     "csi_one_cell_tolerance": "behind",
+     "hit_rate_at_equal_area": "behind",
+     "brier": "behind",
+     "pixel_count_error_of_sums": "tie",
+     "frp_error_of_sums": "behind",
+     "frp_median_abs_relative_error": "tie"
+    },
+    "ahead": 0,
+    "tied": 3,
+    "behind": 4
+   }
+  },
+  "challenger_gbdt": {
+   "against_the_baselines": {
+    "episodes": 57,
+    "scored_looks": 932,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.8894849785407726,
+     "looks": 932
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "ahead",
+     "csi_one_cell_tolerance": "ahead",
+     "hit_rate_at_equal_area": "ahead",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "ahead",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "ahead"
+    },
+    "ahead": 6,
+    "tied": 1,
+    "behind": 0,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.19766144734707122,
+      "painted_modis": 0.15801453974860175,
+      "overlap_ratio": 0.15801453974860175,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.02192,
+        0.05664
+       ],
+       "overlap_ratio": [
+        0.02192,
+        0.05664
+       ]
+      },
+      "class": "ahead"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.3649388348752859,
+      "painted_modis": 0.26381435102365336,
+      "overlap_ratio": 0.26381435102365336,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.07871,
+        0.12374
+       ],
+       "overlap_ratio": [
+        0.07871,
+        0.12374
+       ]
+      },
+      "class": "ahead"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.3932417958406474,
+      "painted_modis": 0.3490449555205141,
+      "overlap_ratio": 0.3490449555205141,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.03422,
+        0.05392
+       ],
+       "overlap_ratio": [
+        0.03422,
+        0.05392
+       ]
+      },
+      "class": "ahead"
+     },
+     "brier": {
+      "reconstruction": 0.007465557154837675,
+      "painted_modis": 0.01645056935456262,
+      "overlap_ratio": 0.01645056935456262,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00766,
+        0.01036
+       ],
+       "overlap_ratio": [
+        0.00766,
+        0.01036
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.033502315948870987,
+      "painted_modis": 0.8101924019062041,
+      "overlap_ratio": 0.7103645392597873,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.68926,
+        0.80782
+       ],
+       "overlap_ratio": [
+        0.46327,
+        0.82707
+       ]
+      },
+      "class": "ahead"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.04151501231273058,
+      "painted_modis": 0.057630600029411116,
+      "overlap_ratio": 0.1395117475794715,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.07077,
+        0.10763
+       ],
+       "overlap_ratio": [
+        0.0544,
+        0.13659
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.43419035237155923,
+      "painted_modis": 0.5274190728165499,
+      "overlap_ratio": 0.546781227286886,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.06374,
+        0.11537
+       ],
+       "overlap_ratio": [
+        0.07606,
+        0.14162
+       ]
+      },
+      "class": "ahead"
+     }
+    }
+   },
+   "the_headline_against_it": {
+    "episodes": 57,
+    "classes": {
+     "csi_strict_375m": "behind",
+     "csi_one_cell_tolerance": "behind",
+     "hit_rate_at_equal_area": "behind",
+     "brier": "behind",
+     "pixel_count_error_of_sums": "tie",
+     "frp_error_of_sums": "behind",
+     "frp_median_abs_relative_error": "behind"
+    },
+    "ahead": 0,
+    "tied": 1,
+    "behind": 6
+   }
+  },
+  "challenger_mlp": {
+   "against_the_baselines": {
+    "episodes": 57,
+    "scored_looks": 932,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.8894849785407726,
+     "looks": 932
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "ahead",
+     "csi_one_cell_tolerance": "ahead",
+     "hit_rate_at_equal_area": "ahead",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "ahead",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "ahead"
+    },
+    "ahead": 6,
+    "tied": 1,
+    "behind": 0,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.2041673405029514,
+      "painted_modis": 0.15801453974860175,
+      "overlap_ratio": 0.15801453974860175,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.0294,
+        0.06237
+       ],
+       "overlap_ratio": [
+        0.0294,
+        0.06237
+       ]
+      },
+      "class": "ahead"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.37330752018913554,
+      "painted_modis": 0.26381435102365336,
+      "overlap_ratio": 0.26381435102365336,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.08768,
+        0.13176
+       ],
+       "overlap_ratio": [
+        0.08768,
+        0.13176
+       ]
+      },
+      "class": "ahead"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.39687155990598316,
+      "painted_modis": 0.3490449555205141,
+      "overlap_ratio": 0.3490449555205141,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.0382,
+        0.0573
+       ],
+       "overlap_ratio": [
+        0.0382,
+        0.0573
+       ]
+      },
+      "class": "ahead"
+     },
+     "brier": {
+      "reconstruction": 0.007416169651711004,
+      "painted_modis": 0.01645056935456262,
+      "overlap_ratio": 0.01645056935456262,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.0077,
+        0.01042
+       ],
+       "overlap_ratio": [
+        0.0077,
+        0.01042
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.019572885583218347,
+      "painted_modis": 0.8101924019062041,
+      "overlap_ratio": 0.7103645392597873,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.69382,
+        0.80901
+       ],
+       "overlap_ratio": [
+        0.47922,
+        0.82337
+       ]
+      },
+      "class": "ahead"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.04151501231273058,
+      "painted_modis": 0.057630600029411116,
+      "overlap_ratio": 0.1395117475794715,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.07077,
+        0.10763
+       ],
+       "overlap_ratio": [
+        0.0544,
+        0.13659
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.43419035237155923,
+      "painted_modis": 0.5274190728165499,
+      "overlap_ratio": 0.546781227286886,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.06374,
+        0.11537
+       ],
+       "overlap_ratio": [
+        0.07606,
+        0.14162
+       ]
+      },
+      "class": "ahead"
+     }
+    }
+   },
+   "the_headline_against_it": {
+    "episodes": 57,
+    "classes": {
+     "csi_strict_375m": "behind",
+     "csi_one_cell_tolerance": "behind",
+     "hit_rate_at_equal_area": "behind",
+     "brier": "behind",
+     "pixel_count_error_of_sums": "tie",
+     "frp_error_of_sums": "behind",
+     "frp_median_abs_relative_error": "behind"
+    },
+    "ahead": 0,
+    "tied": 1,
+    "behind": 6
+   }
+  },
+  "challenger_blend": {
+   "against_the_baselines": {
+    "episodes": 57,
+    "scored_looks": 932,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.8894849785407726,
+     "looks": 932
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "ahead",
+     "csi_one_cell_tolerance": "ahead",
+     "hit_rate_at_equal_area": "ahead",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "ahead",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "ahead"
+    },
+    "ahead": 6,
+    "tied": 1,
+    "behind": 0,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.20400361333339986,
+      "painted_modis": 0.15801453974860175,
+      "overlap_ratio": 0.15801453974860175,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.029,
+        0.06232
+       ],
+       "overlap_ratio": [
+        0.029,
+        0.06232
+       ]
+      },
+      "class": "ahead"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.3689388363283845,
+      "painted_modis": 0.26381435102365336,
+      "overlap_ratio": 0.26381435102365336,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.08353,
+        0.12689
+       ],
+       "overlap_ratio": [
+        0.08353,
+        0.12689
+       ]
+      },
+      "class": "ahead"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.3966856088780459,
+      "painted_modis": 0.3490449555205141,
+      "overlap_ratio": 0.3490449555205141,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.03755,
+        0.05757
+       ],
+       "overlap_ratio": [
+        0.03755,
+        0.05757
+       ]
+      },
+      "class": "ahead"
+     },
+     "brier": {
+      "reconstruction": 0.007447128044543235,
+      "painted_modis": 0.01645056935456262,
+      "overlap_ratio": 0.01645056935456262,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.00768,
+        0.01037
+       ],
+       "overlap_ratio": [
+        0.00768,
+        0.01037
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.029266913107379944,
+      "painted_modis": 0.8101924019062041,
+      "overlap_ratio": 0.7103645392597873,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.6892,
+        0.80817
+       ],
+       "overlap_ratio": [
+        0.46806,
+        0.8248
+       ]
+      },
+      "class": "ahead"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.04151501231273058,
+      "painted_modis": 0.057630600029411116,
+      "overlap_ratio": 0.1395117475794715,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.07077,
+        0.10763
+       ],
+       "overlap_ratio": [
+        0.0544,
+        0.13659
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.43419035237155923,
+      "painted_modis": 0.5274190728165499,
+      "overlap_ratio": 0.546781227286886,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.06374,
+        0.11537
+       ],
+       "overlap_ratio": [
+        0.07606,
+        0.14162
+       ]
+      },
+      "class": "ahead"
+     }
+    }
+   },
+   "the_headline_against_it": {
+    "episodes": 57,
+    "classes": {
+     "csi_strict_375m": "behind",
+     "csi_one_cell_tolerance": "behind",
+     "hit_rate_at_equal_area": "behind",
+     "brier": "behind",
+     "pixel_count_error_of_sums": "tie",
+     "frp_error_of_sums": "behind",
+     "frp_median_abs_relative_error": "behind"
+    },
+    "ahead": 0,
+    "tied": 1,
+    "behind": 6
+   }
+  },
+  "challenger_logistic": {
+   "against_the_baselines": {
+    "episodes": 57,
+    "scored_looks": 932,
+    "interval": {
+     "stated_level": 0.9,
+     "held": 0.8894849785407726,
+     "looks": 932
+    },
+    "counted_by": "judged with an interval",
+    "classes": {
+     "csi_strict_375m": "ahead",
+     "csi_one_cell_tolerance": "ahead",
+     "hit_rate_at_equal_area": "ahead",
+     "brier": "ahead",
+     "pixel_count_error_of_sums": "ahead",
+     "frp_error_of_sums": "tie",
+     "frp_median_abs_relative_error": "ahead"
+    },
+    "ahead": 6,
+    "tied": 1,
+    "behind": 0,
+    "scores": {
+     "csi_strict_375m": {
+      "reconstruction": 0.19289449070027753,
+      "painted_modis": 0.15801453974860175,
+      "overlap_ratio": 0.15801453974860175,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.01923,
+        0.05021
+       ],
+       "overlap_ratio": [
+        0.01923,
+        0.05021
+       ]
+      },
+      "class": "ahead"
+     },
+     "csi_one_cell_tolerance": {
+      "reconstruction": 0.3438636184899063,
+      "painted_modis": 0.26381435102365336,
+      "overlap_ratio": 0.26381435102365336,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.05854,
+        0.10231
+       ],
+       "overlap_ratio": [
+        0.05854,
+        0.10231
+       ]
+      },
+      "class": "ahead"
+     },
+     "hit_rate_at_equal_area": {
+      "reconstruction": 0.3851343310225819,
+      "painted_modis": 0.3490449555205141,
+      "overlap_ratio": 0.3490449555205141,
+      "better_is": "higher",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.02855,
+        0.04382
+       ],
+       "overlap_ratio": [
+        0.02855,
+        0.04382
+       ]
+      },
+      "class": "ahead"
+     },
+     "brier": {
+      "reconstruction": 0.007546793180706678,
+      "painted_modis": 0.01645056935456262,
+      "overlap_ratio": 0.01645056935456262,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.0076,
+        0.01026
+       ],
+       "overlap_ratio": [
+        0.0076,
+        0.01026
+       ]
+      },
+      "class": "ahead"
+     },
+     "pixel_count_error_of_sums": {
+      "reconstruction": 0.0015407740613726517,
+      "painted_modis": 0.8101924019062041,
+      "overlap_ratio": 0.7103645392597873,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.68646,
+        0.80886
+       ],
+       "overlap_ratio": [
+        0.49007,
+        0.81252
+       ]
+      },
+      "class": "ahead"
+     },
+     "frp_error_of_sums": {
+      "reconstruction": 0.04151501231273058,
+      "painted_modis": 0.057630600029411116,
+      "overlap_ratio": 0.1395117475794715,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        -0.07077,
+        0.10763
+       ],
+       "overlap_ratio": [
+        0.0544,
+        0.13659
+       ]
+      },
+      "class": "tie"
+     },
+     "frp_median_abs_relative_error": {
+      "reconstruction": 0.43419035237155923,
+      "painted_modis": 0.5274190728165499,
+      "overlap_ratio": 0.546781227286886,
+      "better_is": "lower",
+      "beats_every_baseline": true,
+      "improvement_interval": {
+       "painted_modis": [
+        0.06374,
+        0.11537
+       ],
+       "overlap_ratio": [
+        0.07606,
+        0.14162
+       ]
+      },
+      "class": "ahead"
+     }
+    }
+   },
+   "the_headline_against_it": {
+    "episodes": 57,
+    "classes": {
+     "csi_strict_375m": "behind",
+     "csi_one_cell_tolerance": "behind",
+     "hit_rate_at_equal_area": "behind",
+     "brier": "behind",
+     "pixel_count_error_of_sums": "tie",
+     "frp_error_of_sums": "behind",
+     "frp_median_abs_relative_error": "behind"
+    },
+    "ahead": 0,
+    "tied": 1,
+    "behind": 6
+   }
+  }
+ },
+ "fuel": "the zone, from latitude, stands in for fuel; no map of fuel was read",
+ "beside_values": {
+  "refit": "the estimate with these values, in the same run"
+ },
+ "challengers": {
+  "challenger_gbdt": "a challenger checked against the test's rules before the look, in the same run",
+  "challenger_mlp": "a challenger checked against the test's rules before the look, in the same run",
+  "challenger_blend": "a challenger checked against the test's rules before the look, in the same run",
+  "challenger_logistic": "a challenger checked against the test's rules before the look, in the same run"
+ },
+ "clear_looks": "no table: no cloud mask of a hidden pass of these episodes was on hand at this look",
+ "seconds": 200.8
+}
