@@ -85,7 +85,9 @@ class StandIn:
                                   {"platform": "VIIRS_SNPP", "time_start": "2012-08-11T09:50:00Z", "time_mid": "2012-08-11T09:52:00Z"}]})
         if u.path == "/api/cube/layers":
             return js({"layers": {"rows_modis": {"png": "/api/cube/layers/rows_modis.png"}}})
-        if u.path.startswith("/api/cube/layers/") or u.path == "/api/gibs/day":
+        if u.path == "/api/cube/years":
+            return js({"layers": {"modis_2012": {"png_route": "/api/cube/years/modis_2012.png", "npy_route": "/api/cube/years/modis_2012.npy"}}})
+        if u.path.startswith("/api/cube/layers/") or u.path.startswith("/api/cube/years/") or u.path == "/api/gibs/day":
             return _Reply(200, "image/png", b"\x89PNG")
         if u.path == "/api/calendar/checks":
             return js({"places": [{"kind": "region", "id": "plumas_ca", "calendar": "/api/calendar?source=firms&region_id=plumas_ca"},
@@ -250,7 +252,9 @@ class RecorderTests(unittest.TestCase):
             self.assertEqual(rec.check("not-in-any-file"), [])
             # the world's answers: the live test, the cube's countries, its layers and the picture of each, the check of
             # every place and the calendar of a box place
+            self.assertNotIn("GET /api/cube/years/modis_2012.npy", entries)    # the page draws the pictures only
             for key in ("GET /api/live", "GET /api/cube/countries", "GET /api/cube/layers", "GET /api/cube/layers/rows_modis.png",
+                        "GET /api/cube/years", "GET /api/cube/years/modis_2012.png",
                         "GET /api/calendar/checks", "GET /api/calendar?box=-2.5%2C7.25%2C0.1%2C9.15&source=firms"):
                 self.assertIn(key, entries)
             # the day's pictures of the open fire's window: each day, the satellites that passed and Aqua's, both kinds

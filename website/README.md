@@ -20,8 +20,9 @@ npm run preview   # serve dist/ on http://127.0.0.1:5188
 The public page is the site built to replay recorded answers, with no backend, served under a path (`/isogon/` on
 GitHub Pages). One command builds it: the site with the recorded transport on (`VITE_TRANSPORT=recorded`), the base
 path given as an argument, and a recording made by `backend/server_recorder.py` copied inside as `recorded/` (only
-`index.json` and the files its entries name). With `--cube`, the public cube (the monthly fire rows per cell that the
-page sums a drawn box's Record from, written by `backend/firms/cube_public.py`) is copied as it is to `cube/`.
+`index.json` and the files its entries name). With `--cube`, the public cube's three files (the monthly fire rows per
+cell that the page sums a drawn box's Record from, written by `backend/firms/cube_public.py`) are copied to
+`recorded/cube/public/`.
 
 ```bash
 node scripts/build-public.mjs --recording <folder written by backend/server_recorder.py> --cube <the public cube's folder> --base /isogon/ --out dist/public

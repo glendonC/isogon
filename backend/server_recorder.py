@@ -10,7 +10,7 @@ the page looks answers up in:
   <folder>/files/<sha256>.<ext>            one file per distinct answer, named by its content
 
 Without `--plan` it builds the demo path's plan from `GET /api/regions`: the regions, the evidence, the live test's
-answer, the fire cube's countries and world layers (the picture of each), the Record's check of every place with each
+answer, the fire cube's countries, world layers and yearly layers (the picture of each), the Record's check of every place with each
 box place's calendar, each region's calendar and start list, each named fire's box calendar, and for every featured
 fire that is not a blind test fire (only each region's busiest with `--busiest-period-only`)
 its run held out and then revealed and its run with every satellite (the landing and the Agent part ask for it), the
@@ -267,15 +267,22 @@ class Recorder:
                     self.fetch("GET", "/api/gibs/day", {"region_id": region_id, "day": day, "platform": plat, "kind": kind})
 
     def record_world(self) -> None:
-        """What the page reads beyond the places: the live test's answer, the fire cube's countries and its world
-        layers (the picture of each, which is what the page draws), and the Record's check of every place with the
-        calendar of each place that is a box."""
+        """What the page reads beyond the places: the live test's answer, the fire cube's countries, its world layers
+        and its yearly layers (the picture of each, which is what the page draws), and the Record's check of every
+        place with the calendar of each place that is a box."""
         self.fetch("GET", "/api/live")
         self.fetch("GET", "/api/cube/countries")
         layers = self.fetch("GET", "/api/cube/layers")
         named = (layers or {}).get("layers") if isinstance(layers, dict) else None
         for name, meta in sorted(named.items()) if isinstance(named, dict) else []:
             png = meta.get("png") if isinstance(meta, dict) else None
+            if png:
+                path, query = split_url(str(png))
+                self.fetch("GET", path, query or None)
+        years = self.fetch("GET", "/api/cube/years")
+        yearly = (years or {}).get("layers") if isinstance(years, dict) else None
+        for name, meta in sorted(yearly.items()) if isinstance(yearly, dict) else []:
+            png = meta.get("png_route") if isinstance(meta, dict) else None
             if png:
                 path, query = split_url(str(png))
                 self.fetch("GET", path, query or None)

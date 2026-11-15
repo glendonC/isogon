@@ -7,8 +7,9 @@
 // The site lands in `<out>/<base>` (for the default base, `dist/public/isogon/`), so `<out>` can be served as it is to
 // try the page under the same path it will have online. `<folder>` is a folder written by
 // `backend/server_recorder.py`; only `index.json` and the files its entries name are copied. `--cube` names the public
-// cube's folder (`backend/firms/cube_public.py` writes it: `fire-cells.bin.gz`, `manifest.json`, `harmonize-fitted.json`
-// and the yearly layers), copied as it is to `<base>/cube/`, where the page reads a drawn box's Record.
+// cube's folder (`backend/firms/cube_public.py` writes it); its three files (`fire-cells.bin.gz`, `manifest.json`,
+// `harmonize-fitted.json`) are copied to `recorded/cube/public/`, where the page sums a drawn box's Record from them
+// (`website/src/world/publicAnswer.ts`). The yearly layers are recorded answers (`GET /api/cube/years`).
 
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
@@ -70,13 +71,14 @@ const cube = arg('cube', null);
 let cubeLine = 'no public cube (give --cube <folder>)';
 if (cube) {
   const cubeDir = path.resolve(cube);
-  for (const f of ['fire-cells.bin.gz', 'manifest.json']) {
+  const cubeFiles = ['fire-cells.bin.gz', 'manifest.json', 'harmonize-fitted.json'];
+  for (const f of cubeFiles) {
     if (!existsSync(path.join(cubeDir, f))) fail(`${cubeDir} holds no ${f}: give the folder the public cube's writer made`);
   }
-  const cubeOut = path.join(target, 'cube');
-  rmSync(cubeOut, { recursive: true, force: true });
-  cpSync(cubeDir, cubeOut, { recursive: true });
-  cubeLine = `public cube in cube/ ${(bytesOf(cubeOut) / 1e6).toFixed(1)} MB`;
+  const cubeOut = path.join(recordedDir, 'cube', 'public');
+  mkdirSync(cubeOut, { recursive: true });
+  for (const f of cubeFiles) cpSync(path.join(cubeDir, f), path.join(cubeOut, f));
+  cubeLine = `public cube in recorded/cube/public/ ${(bytesOf(cubeOut) / 1e6).toFixed(1)} MB`;
 }
 
 const mb = (n) => `${(n / 1e6).toFixed(1)} MB`;
