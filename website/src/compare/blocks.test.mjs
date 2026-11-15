@@ -9,7 +9,6 @@ import {
   fireBlock,
   gainScale,
   groundOfRun,
-  localWhen,
   playBlocks,
   PLAYERS,
   points,
@@ -22,6 +21,7 @@ import {
   threeWays,
   twinLine,
 } from './blocks.ts';
+import { localDayTime, midLon, points as guidePoints } from '../guide/formats.ts';
 import { levelLines } from './marks.ts';
 
 const BOX = [-121, 39, -120, 40];
@@ -105,13 +105,14 @@ test('the estimate frames the cells the model declared for the hidden pass, and 
   assert.equal(threeWays(run, null).blocks[1].marks[0].frames, undefined);
 });
 
-test('a pass is said in local time at the fire with the part of the day, and in UTC only when no local hour is given', () => {
-  assert.equal(localWhen('2012-08-11T09:15:46Z', 1.18, false), '11 August, 1:10 at night');
-  // The local day can be the day before the UTC one
-  assert.equal(localWhen('2012-08-11T05:30:00Z', 21.5, false), '10 August, 21:30 at night');
-  assert.equal(localWhen('2012-08-10T21:25:00Z', 13.42, true), '10 August, 13:25 by day');
-  assert.equal(localWhen('2012-08-10T21:25:00Z', null, true), '21:25 UTC');
-  assert.equal(threeWays(run, null).blocks[0].label.lines[1], 'MODIS_AQUA, 10:00 UTC');
+test('a pass is said as the guide says it: the day and the clock by the sun at the fire, no craft and no UTC', () => {
+  const lon = midLon(BOX);
+  const tw = threeWays(run, revealed);
+  assert.equal(tw.blocks[0].label.lines[1], localDayTime('2020-01-01T10:00:00Z', lon));
+  assert.equal(tw.blocks[1].label.lines[1], `For the pass of ${localDayTime('2020-01-01T10:20:00Z', lon)}`);
+  assert.equal(tw.blocks[2].label.lines[1], localDayTime('2020-01-01T10:20:00Z', lon));
+  const words = JSON.stringify(tw.blocks.map((b) => b.label));
+  assert.ok(!/UTC|AQUA|TERRA|SNPP|NOAA|Suomi/i.test(words), words);
 });
 
 test('the cut comes from the coarse satellite rows only: the hidden satellite never moves it, before or after the reveal', () => {
@@ -125,7 +126,7 @@ test('the cut comes from the coarse satellite rows only: the hidden satellite ne
   const other = { ...revealed, blind_test: { ...revealed.blind_test, reveal: { overpasses: [{ ...revealed.blind_test.reveal.overpasses[0], footprints: [[-120.9, 39.1, 0.4, 0.4, 280, 3, 0, 4]] }] } } };
   assert.deepEqual(threeWays(run, other).blocks[2].ground.cut, before);
   // And what lies outside it is counted on the label, not passed over
-  assert.equal(after.blocks[2].label.lines[2], '1 of them outside this cut');
+  assert.equal(after.blocks[2].label.lines.at(-1), '1 of them outside this cut');
   assert.equal(after.blocks[2].label.lines[0], '2 detections, 375 m across (VIIRS)');
 });
 
@@ -199,7 +200,7 @@ test('a round becomes one block per player, the visitor first, each with only wh
   assert.deepEqual(found(3).map((r) => [r.lon, r.lat]), [[-120.9, 39.1]]); // only square 2 at pass 1
   assert.equal(found(4).length, 1); // square 0 twice: the second look found nothing there
   assert.equal(blocks[4].pins[0].text, '1 2');
-  assert.equal(blocks[3].label.lines[1], '-0.4 points');
+  assert.equal(blocks[3].label.lines[1], `${guidePoints(-0.004)} points`);
   assert.equal(blocks[0].label.lines[1], '+1.5 points');
   // The last is named for what it does and carries the line that says it is no fair player, whatever its looks equal
   assert.match(blocks[5].label.lines[2], /^Not a fair player/);
@@ -330,11 +331,10 @@ test('what every player could see never holds a row of the sharp satellite, even
   assert.equal(fireBlock({ name: 'Somewhere' }, { id: 'f', label: 'January 2020' }, allSensors).marks[0].rows.length, 1);
 });
 
-test('a gain is said in points of agreement with its sign, and one that rounds to nothing carries none', () => {
+test('a gain is said in points of agreement exactly as the guide says it', () => {
   assert.equal(points(0.1182), '+11.8');
-  assert.equal(points(-0.0111), '-1.1');
-  assert.equal(points(-0.0003), '0.0');
-  assert.equal(points(0), '0.0');
+  for (const g of [0.1182, -0.0111, -0.0003, 0, 0.0247]) assert.equal(points(g), guidePoints(g));
+  assert.equal(countWord(10), 'ten');
 });
 
 test('a block takes the run terrain pack image when the run names one, and satellite.jpg only when it does not', () => {

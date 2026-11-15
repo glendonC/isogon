@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { useWorkspace } from '../app/store';
-import { platformName } from '../content/realRuns';
 import { ComparePlane } from './ComparePlane';
 import { threeWays } from './blocks';
 
@@ -18,7 +17,7 @@ export function ThreeWaysPlane() {
   const run = ws.run.active;
   const revealed = ws.test.revealed;
   const pass = ws.time.pass;
-  const ways = useMemo(() => threeWays(run, revealed ? run : null, { at: pass, platformName }), [run, revealed, pass]);
+  const ways = useMemo(() => threeWays(run, revealed ? run : null, { at: pass }), [run, revealed, pass]);
   if (!ways) return null;
   return (
     <div className="cmp-ways">

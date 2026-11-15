@@ -1,3 +1,4 @@
+import { countWord as guideCountWord, localDayTime, midLon, points as guidePoints } from '../guide/formats.ts';
 import type { Box, CompareBlock, CompareGround, CompareMark, ComparePin, DetectionRow, EstimateGrid } from './types';
 
 /**
@@ -49,40 +50,14 @@ const boxOf = (x: unknown): Box | null => {
   return a.length === 4 && a.every((v) => num(v) !== null) ? (a as Box) : null;
 };
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-/**
- * When a pass was, as the page says time: the day and the local time at the fire with the part of the day, "11
- * August, 1:10 at night". The local hour is the pass's own local solar time; the day is the one that hour falls on.
- * A pass that gives no local hour is said in UTC.
- */
-export function localWhen(timeUtc: string, localHour: number | null, isDay: boolean | null): string {
-  const at = Date.parse(timeUtc);
-  if (localHour === null || Number.isNaN(at)) return `${timeUtc.slice(11, 16)} UTC`;
-  const utc = new Date(at);
-  const utcHour = utc.getUTCHours() + utc.getUTCMinutes() / 60;
-  // The fire's offset from UTC, as the nearest way round the clock from the UTC hour to the local one
-  const offset = ((localHour - utcHour + 36) % 24) - 12;
-  const local = new Date(at + offset * 3600000);
-  // Whole minutes, never rounded up into the next one
-  const total = Math.floor(localHour * 60) % 1440;
-  const clock = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
-  const part = isDay === null ? '' : isDay ? ' by day' : ' at night';
-  return `${local.getUTCDate()} ${MONTHS[local.getUTCMonth()]}, ${clock}${part}`;
-}
 const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
-/**
- * A gain or a score move as points of agreement: the value times 100 to one decimal place, with its sign, and no
- * sign on one that rounds to nothing.
- */
-export const points = (g: number): string => {
-  const shown = (Math.abs(g) * 100).toFixed(1);
-  return Number(shown) === 0 ? shown : `${g >= 0 ? '+' : '-'}${shown}`;
-};
 
-const WORDS_TO_TWELVE = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
-/** Zero to twelve as a word, a larger count as digits. */
-export const countWord = (n: number): string => WORDS_TO_TWELVE[n] ?? String(n);
+/**
+ * A gain or a score move as points of agreement, and a small count as a word: the guide's own formats, so that a
+ * figure reads the same on a block as in the guide's line.
+ */
+export const points = (g: number): string => guidePoints(g) ?? '';
+export const countWord = (n: number): string => guideCountWord(n) ?? String(n);
 
 /** What random looks add over the rounds played: their mean and the least and the most, or null with none. */
 export function chanceOf(draws: readonly number[] | undefined): { mean: number; least: number; most: number; rounds: number } | null {
@@ -143,8 +118,6 @@ interface Frame {
   sensor: string;
   heldOut: boolean;
   isDay: boolean | null;
-  /** The pass's local solar time at the fire, in hours, where the run gives it. */
-  localHour: number | null;
   /** The frame's detections of the coarse instrument only, whatever else the run shows. */
   rows: DetectionRow[];
 }
@@ -173,7 +146,6 @@ function framesOf(run: unknown): Frame[] {
       sensor,
       heldOut: o.held_out === true || o.revealed === true,
       isDay: typeof o.is_day === 'boolean' ? o.is_day : null,
-      localHour: num(o.local_solar_time_hr),
       rows: detectionRows(coarse),
     });
   }
@@ -261,8 +233,6 @@ export interface ThreeWaysOptions {
   at?: number;
   /** Cut all three blocks to the fire. Default true. */
   cut?: boolean;
-  /** A platform's name as the page shows it. Default: the code as the run gives it. */
-  platformName?: (code: string) => string;
 }
 
 export interface ThreeWays {
@@ -302,19 +272,18 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
     (at !== undefined ? [...hiddenFrames].reverse().find((f) => f.frame <= at) : undefined) ??
     hiddenFrames[hiddenFrames.length - 1];
   if (!hidden) return null;
-  const name = opts.platformName ?? ((code: string) => code);
 
   // The last pass of the coarse satellite with a detection, before the hidden pass
   let coarse: Frame | null = null;
   for (const f of frames) if (f.frame < hidden.frame && !f.heldOut && f.rows.length > 0) coarse = f;
 
   // What the sharp satellite saw, only once revealed
-  let sharp: { rows: DetectionRow[]; platform: string; time: string } | null = null;
+  let sharp: { rows: DetectionRow[] } | null = null;
   if (revealed) {
     for (const o of arr(obj(obj(obj(revealed).blind_test).reveal).overpasses)) {
       const pass = obj(o);
       if (num(pass.frame) !== hidden.frame) continue;
-      sharp = { rows: detectionRows(pass.footprints), platform: str(pass.platform) ?? hidden.sensor, time: str(pass.time_utc) ?? hidden.time };
+      sharp = { rows: detectionRows(pass.footprints) };
     }
   }
 
@@ -360,7 +329,12 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
   // The image is darkened by day as by night: on this plane the marks lead
   const night = true;
 
-  const when = (f: { time: string; localHour: number | null; isDay: boolean | null }) => localWhen(f.time, f.localHour, f.isDay);
+  // Every time is the guide's: the day and the clock by the sun at the fire. No craft is named and nothing is in UTC.
+  const lon = midLon(ground.box);
+  const when = (iso: string): string[] => {
+    const said = localDayTime(iso, lon);
+    return said ? [said] : [];
+  };
   const blocks: CompareBlock[] = [
     {
       id: 'coarse',
@@ -369,7 +343,7 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
       marks: coarse ? [{ kind: 'detections', instrument: 'modis', rows: coarse.rows }] : [],
       label: {
         title: WORDS.coarseSaw,
-        lines: coarse ? [`${count(coarse.rows.length, 'detection', 'detections')}, ${WORDS.coarseSize}`, `${name(coarse.sensor)}, ${when(coarse)}`] : [],
+        lines: coarse ? [`${count(coarse.rows.length, 'detection', 'detections')}, ${WORDS.coarseSize}`, ...when(coarse.time)] : [],
       },
     },
     {
@@ -386,7 +360,7 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
                 : estimate.cells !== null
                   ? `${count(Math.round(estimate.cells), 'square', 'squares')} expected to burn, ${WORDS.estimateSize}`
                   : WORDS.estimateSize,
-              `For the pass of ${when(hidden)}`,
+              ...when(hidden.time).map((t) => `For the pass of ${t}`),
             ]
           : [],
       },
@@ -401,7 +375,7 @@ export function threeWays(run: unknown, revealed: unknown, opts: ThreeWaysOption
         title: WORDS.sharpSaw,
         lines: [
           sharp ? `${count(sharp.rows.length, 'detection', 'detections')}, ${WORDS.sharpSize}` : WORDS.hidden,
-          `${name(sharp ? sharp.platform : hidden.sensor)}, ${when(hidden)}`,
+          ...when(hidden.time),
           ...(outside > 0 ? [`${outside} of them outside this cut`] : []),
         ],
       },

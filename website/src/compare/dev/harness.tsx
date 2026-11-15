@@ -16,7 +16,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { assetUrl, getJson, postJson } from '../../lib/api';
-import { platformName } from '../../content/realRuns';
 import '../../styles/tokens.css';
 import '../../styles/system.css';
 import { WorkspaceProvider, type WorkspaceStore } from '../../app/store';
@@ -64,7 +63,7 @@ async function waysView(revealed: boolean): Promise<View> {
   const run = await heldOutRun(regionId, start);
   const open = revealed ? await heldOutRun(regionId, start, true) : null;
   const frame = Q.get('frame');
-  const tw = threeWays(run, open, { platformName, frame: frame ? Number(frame) : undefined, cut: Q.get('cut') !== '0' });
+  const tw = threeWays(run, open, { frame: frame ? Number(frame) : undefined, cut: Q.get('cut') !== '0' });
   if (!tw) throw new Error('this run has no hidden pass to compare at');
   return {
     title: run.region.name,
