@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { tOfValue } from './cells';
-import { countryShapeAt, type CountryShape } from './countryAt';
+import { tOfValue, valueOfT } from './cells';
+import { countryShapeAt, pointWords, type CountryShape } from './countryAt';
+import { Globe, globeAvailable } from './Globe';
 import { countryOf, countryRatio, countryTotals, drawnInside, gridLines, heldBy, type CountriesFile } from './countryYears';
 import { FIRE_RAMP } from './layers';
 import { useWorldKeys } from './keys';
@@ -105,6 +106,18 @@ function outlineOf(rings: number[][][], p: Projector): string {
   return d;
 }
 
+/** What the square under the pointer holds in the year on show, from its palette index ("about": one colour a band). */
+function squareWords(ix: Uint8Array | null, lon: number, lat: number, vmax: number, year: number): string {
+  if (!ix) return '';
+  const col = Math.min(Math.floor((lon + 180) / 0.25), 1439);
+  const row = Math.min(Math.floor((90 - lat) / 0.25), 719);
+  const k = ix[row * 1440 + col];
+  if (k === 2) return Y.squareClosed(year);
+  if (k < 3) return Y.squareNone(year);
+  const v = valueOfT((k - 3 + 0.5) / 253, vmax);
+  return Y.squareAbout(v, year);
+}
+
 const ramp = (stops: Array<[number, [number, number, number]]>) =>
   `linear-gradient(to right, ${stops.map(([t, c]) => `rgb(${c.join(',')}) ${t * 100}%`).join(', ')})`;
 
@@ -145,6 +158,8 @@ export function EarthYears({
 
   // A country picked on the Earth, outside the film: the country under the pointer, the one chosen, and its years.
   const pick = !isFilm();
+  // The Earth as a turning globe where WebGL 2 holds its frames; the flat map where it does not (or with ?globe=0).
+  const [flat, setFlat] = useState(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('globe') === '0') || !globeAvailable());
   const countriesRead = useRead<CountriesFile>(pick ? '/api/cube/years/countries' : null);
   const countries = countriesRead.state === 'ready' ? countriesRead.value : null;
   const [pointed, setPointed] = useState<{ shape: CountryShape; x: number; y: number } | null>(null);
@@ -166,6 +181,23 @@ export function EarthYears({
     },
     [countries],
   );
+  const globeOutlines = useMemo(
+    () => [
+      ...(chosen ? [{ rings: chosen.rings, strong: true }] : []),
+      ...(pointed && pointed.shape.key !== chosen?.key ? [{ rings: pointed.shape.rings, strong: false }] : []),
+    ],
+    [chosen, pointed],
+  );
+  // On the globe the pointer says where it is and what the square holds, sea included.
+  const [under, setUnder] = useState<{ lon: number; lat: number; x: number; y: number } | null>(null);
+  const onGlobePoint = useCallback(
+    (p: { lon: number; lat: number; x: number; y: number } | null) => {
+      setUnder(p);
+      onHover(p);
+    },
+    [onHover],
+  );
+  const onGlobePick = useCallback((p: { lon: number; lat: number } | null) => (p ? onClickMap(p) : setChosen(null)), [onClickMap]);
   // The outlines are kept per country and view, so the pointer's moves do not trace them again.
   const outlines = useRef(new Map<string, string>());
   const outline = (shape: CountryShape, p: Projector) => {
@@ -234,6 +266,7 @@ export function EarthYears({
   const lut = useMemo(() => yearLut().fire, []);
   const last = useRef<{ key: string; fire: HTMLCanvasElement; loaded: HTMLCanvasElement } | null>(null);
   const frame = useMemo(() => {
+    if (!flat) return null;
     if (shown === null) return last.current;
     const k = keyOf(shown);
     if (last.current?.key === k) return last.current;
@@ -242,7 +275,15 @@ export function EarthYears({
     last.current = { key: k, ...paintYear(ix, lut) };
     return last.current;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, keyOf, ready, lut]);
+  }, [shown, keyOf, ready, lut, flat]);
+  // The globe takes the year's cells as they are; the last year's stay until the next is read.
+  const lastIx = useRef<Uint8Array | null>(null);
+  const ix = useMemo(() => {
+    const v = shown === null ? null : frames.current.get(keyOf(shown));
+    if (v) lastIx.current = v;
+    return lastIx.current;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, keyOf, ready]);
   const grid = useMemo<GridLayer[]>(
     () => (frame ? [{ key: `loaded-${frame.key}`, image: frame.loaded, onLand: true, crispFromPx: 2 }, { key: frame.key, image: frame.fire, halo: true }] : []),
     [frame],
@@ -252,6 +293,8 @@ export function EarthYears({
   const lastOfPass = until !== undefined && years.includes(until) ? until : years[years.length - 1];
   const firstOfPass = startYear !== undefined && years.includes(startYear) ? startYear : years[0];
   const short = until !== undefined && years.indexOf(lastOfPass) - years.indexOf(firstOfPass) <= 4;
+  // How long a pass takes to reach its last year: the film's globe turns over that time and rests there.
+  const passMs = years.slice(years.indexOf(firstOfPass), years.indexOf(lastOfPass)).reduce((a, y) => a + (short ? shortBeat(y) : beat(y)), 0);
   useEffect(() => {
     if (!playing || shown === null || !years.length) return;
     const at = years.indexOf(shown);
@@ -396,6 +439,35 @@ export function EarthYears({
 
   return (
     <div className="world-years" data-mode={mode} data-pointing={pick && countries !== null && pointed !== null ? 'true' : 'false'} data-country={chosenYears ? chosenYears.key : noFile ? 'none' : undefined}>
+      {!flat && (
+        <Globe
+          label={Y.label}
+          ix={ix}
+          lut={lut}
+          padTop={16}
+          padBottom={stripH}
+          padLeft={pick ? 0 : Math.round(stripW * 0.4)}
+          film={pick ? null : { playing, passMs }}
+          outlines={globeOutlines}
+          onPoint={pick ? onGlobePoint : undefined}
+          onPick={pick ? onGlobePick : undefined}
+          onSlow={() => setFlat(true)}
+          className="world-years__earth"
+        />
+      )}
+      {!flat && pick && under && (
+        <div className="world-country-name world-globe-tag" style={{ left: under.x + 16, top: under.y - 12 }} aria-hidden="true">
+          {pointed && (
+            <span className="world-globe-tag__name">
+              {pointed.shape.name}
+              {!hasFile(pointed.shape) && <span className="world-country-name__more">{`: ${Y.noFile}`}</span>}
+            </span>
+          )}
+          <span className="world-globe-tag__fine">{pointWords(under.lon, under.lat)}</span>
+          <span className="world-globe-tag__fine">{squareWords(ix, under.lon, under.lat, vmax, shown)}</span>
+        </div>
+      )}
+      {flat && (
       <WorldCanvas
         label={Y.label}
         layers={grid}
@@ -423,6 +495,7 @@ export function EarthYears({
             )
           : undefined}
       </WorldCanvas>
+      )}
       {/* The ground under the strip and the guide: the Earth's far south stays out of the shot. */}
       <div className="world-years__floor" style={{ height: stripH }} aria-hidden="true" />
       {caption && (

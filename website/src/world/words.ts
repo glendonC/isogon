@@ -185,6 +185,11 @@ export const YEAR_WORDS = {
   wholeEarth: 'The whole Earth',
   pickCountry: 'Click a country for its own years',
   noFile: 'no file of its own',
+  /** The square under the pointer on the globe, for the year on show. */
+  squareNone: (year: number) => `No detection in this square in ${year}`,
+  squareClosed: (year: number) => `Kept as the model's test in ${year}`,
+  squareAbout: (v: number, year: number) =>
+    v < 1.5 ? `About 1 detection in this square in ${year}` : `About ${roughly(v)} detections in this square in ${year}`,
   noFileStrip: (name: string, holder: string | null) =>
     holder
       ? `${name} has no file of its own in NASA's archive: most of the detections inside it are in ${holder}'s file.`
