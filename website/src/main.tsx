@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import './styles/tokens.css';
 import './styles/system.css';
+import './styles/scroll.css';
 import './styles/landing.css';
 import './styles/workspace.css';
 import './styles/sheets.css';

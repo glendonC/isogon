@@ -1,37 +1,27 @@
-/* Any area (components/AreaSheet.tsx). The map is NASA's Blue Marble, as the search palette's locator. */
+/* Draw an Area side sheet (components/AreaSheet.tsx). */
 
-.iso-area {
-  display: grid;
-  gap: 0;
-}
-
-.iso-area__pick {
-  display: grid;
-  gap: 12px;
-  margin: 18px 28px 20px;
-}
-
-.iso-area__map {
+.iso-area-map {
   position: relative;
   width: 100%;
-  max-width: 560px;
   aspect-ratio: 2 / 1;
   overflow: hidden;
+  background: var(--sys-night);
+  border: 1px solid var(--sys-rule);
+  border-radius: 0;
   cursor: crosshair;
   touch-action: none;
-  background: var(--iso-night);
+  user-select: none;
 }
 
-.iso-area__img {
+.iso-area-map__img {
   position: absolute;
   max-width: none;
   height: auto;
+  filter: saturate(0.75) brightness(0.76) contrast(1.05);
   pointer-events: none;
-  user-select: none;
-  filter: saturate(0.75) brightness(0.78) contrast(1.05);
 }
 
-.iso-area__marks {
+.iso-area-map__marks {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -39,101 +29,84 @@
   pointer-events: none;
 }
 
-.iso-area__context {
+.iso-area-map__context {
   fill: none;
-  stroke: rgba(243, 244, 246, 0.55);
+  stroke: var(--sys-edge);
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
 
-.iso-area__box {
-  fill: rgba(214, 241, 255, 0.08);
-  stroke: var(--iso-curtain);
+.iso-area-map__box {
+  fill: rgba(240, 138, 69, 0.14);
+  stroke: var(--sys-detection);
   stroke-width: 1.5;
 }
 
-.iso-area__credit {
+.iso-area-map__credit {
   position: absolute;
-  right: 8px;
-  bottom: 6px;
-  font: 400 10.5px/14px var(--font-mono);
-  color: var(--iso-ink-3);
+  right: var(--sys-s2);
+  bottom: var(--sys-s2);
+  padding: 2px var(--sys-s2);
+  background: var(--sys-plate);
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  color: var(--sys-ink-3);
 }
 
-.iso-area__fields {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 12px 16px;
-}
-
-.iso-area__field {
+.iso-area-form {
   display: grid;
-  gap: 4px;
-  font: 400 12px/16px var(--font-sans);
-  color: var(--iso-ink-3);
+  gap: var(--sys-s3);
 }
 
-.iso-area__field input {
-  width: 92px;
-  padding: 6px 8px;
-  border: 1px solid var(--iso-hair);
+.iso-area-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sys-s3);
+}
+
+.iso-area-field {
+  display: grid;
+  gap: var(--sys-s1);
+}
+
+.iso-area-field__label {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.iso-area-field__input {
+  width: 100%;
+  padding: var(--sys-s2);
+  border: 1px solid var(--sys-edge);
   border-radius: 0;
-  background: transparent;
-  color: var(--iso-ink);
-  font: 400 13px/18px var(--font-mono);
+  background: var(--sys-night);
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-mono);
   font-variant-numeric: tabular-nums;
+  color: var(--sys-ink);
+  outline: none;
 }
 
-.iso-area__field input:focus-visible {
-  outline: 1px solid var(--iso-curtain);
-  outline-offset: 1px;
+.iso-area-field__input:focus-visible {
+  border-color: var(--sys-focus);
 }
 
-.iso-area__hint,
-.iso-area__error {
+.iso-area-error {
   margin: 0;
-  font: 400 12px/17px var(--font-sans);
-  color: var(--iso-ink-3);
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-fail);
 }
 
-.iso-area__error {
-  color: var(--iso-fail);
-}
-
-.iso-area__result {
-  display: grid;
-  gap: 14px;
-  margin: 0 28px 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--iso-hair);
-}
-
-.iso-area__result .iso-cal {
-  max-width: 760px;
-}
-
-.iso-area__line {
+.iso-area-status {
   margin: 0;
-  font: 400 13px/19px var(--font-sans);
-  color: var(--iso-ink-2);
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink-2);
 }
 
-.iso-cal__tag[data-source='demo'] {
-  color: var(--iso-modis-ink);
+.iso-area-status[data-source='demo'] {
+  color: var(--sys-caution);
 }
 
-.iso-area__line[data-source='demo'] {
-  color: var(--iso-modis-ink);
-}
-
-@media (max-width: 760px) {
-  .iso-area__pick,
-  .iso-area__result {
-    margin: 0 16px 16px;
-  }
-
-  .iso-area__field input {
-    width: 72px;
+@media (max-width: 600px) {
+  .iso-area-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

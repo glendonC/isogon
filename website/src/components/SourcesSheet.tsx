@@ -1,5 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { useDialogFocus } from '../ui/useDialogFocus';
+import { useEffect, useState, type ReactNode } from 'react';
 import { THEATER_DISPLAY, THEATER_ORDER } from '../content/theaters';
 import type { TheaterId } from '../stage/earthCutawayTypes';
 import {
@@ -16,6 +15,8 @@ import {
   type CalendarSources,
   type HealthCounts,
 } from '../content/sources';
+import { Loader } from '../ui/Loader';
+import { AlignedNumber, SideSheet } from './BlindScoreTable';
 import '../styles/sources.css';
 
 export interface SourcesSheetProps {
@@ -27,11 +28,12 @@ export interface SourcesSheetProps {
   regionName: string;
   /** Imagery credit from the active run (ui/attribution.ts). */
   imageryCredit: string;
-  /** The body only, inside the reading sheet; credits are its own section there. */
+  /** The body only, inside the reading sheet; credits can also be included or scrolled to. */
   embedded?: boolean;
+  /** Include Credits at the foot of the embedded body as well. */
+  includeCredits?: boolean;
 }
 
-/** A request's state, tagged with what it was made for so a new region never shows the previous one's answer. */
 type Load<T> =
   | { key: string; state: 'loading' }
   | { key: string; state: 'ready'; data: T }
@@ -49,7 +51,6 @@ function regionRank(id: string): number {
   return i === -1 ? THEATER_ORDER.length : i;
 }
 
-/** "a, b or c". */
 function listOr(items: readonly string[]): string {
   if (items.length <= 1) return items.join('');
   return `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`;
@@ -57,183 +58,270 @@ function listOr(items: readonly string[]): string {
 
 function ExternalLink({ url }: { url: string }) {
   return (
-    <a className="iso-link iso-sources__link" href={url} target="_blank" rel="noreferrer">
+    <a className="iso-sources__link" href={url} target="_blank" rel="noreferrer">
       {linkText(url)}
     </a>
   );
 }
 
-/** Label, value, context: the Method sheet's table. */
-function Facts({ children, events = false }: { children: ReactNode; events?: boolean }) {
+function DocSection({
+  id,
+  title,
+  children,
+}: {
+  id?: string;
+  title: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <table className={`iso-table iso-table--sheet iso-sources__facts${events ? ' iso-sources__events' : ''}`}>
-      <tbody>{children}</tbody>
-    </table>
-  );
-}
-
-function Section({ title, children }: { title: ReactNode; children: ReactNode }) {
-  const id = useId();
-  return (
-    <section className="iso-sources__section" aria-labelledby={id}>
-      <h3 id={id} className="iso-sources__title">
-        {title}
-      </h3>
+    <section id={id} className="iso-doc-section">
+      <h3 className="iso-doc-section__title">{title}</h3>
       {children}
     </section>
   );
 }
 
-/** A list joined by commas, each item kept on one line so "2012-03" or "NOAA-21 179" never breaks at its hyphen. */
-function Items({ items }: { items: readonly string[] }) {
+const isCoarsePlatform = (p: string) => p === 'Terra' || p === 'Aqua';
+
+export function Credits({ imageryCredit }: { imageryCredit: string }) {
+  const imagery = imageryCredit.trim();
   return (
-    <>
-      {items.map((item, i) => (
-        <span key={item}>
-          {i > 0 ? ', ' : ''}
-          <span className="iso-sources__item">{item}</span>
-        </span>
-      ))}
-    </>
+    <DocSection id="iso-sources-credits" title="Credits">
+      <div className="iso-doc-table-wrap">
+        <table className="iso-doc-table">
+          <thead>
+            <tr>
+              <th scope="col">Layer</th>
+              <th scope="col">Source</th>
+              <th scope="col">Reference</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">
+                <span className="iso-doc-table__row-name">Fire detections</span>
+              </th>
+              <td>{FIRMS_CREDIT.value}</td>
+              <td>
+                <ExternalLink url={FIRMS_CREDIT.url} />
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <span className="iso-doc-table__row-name">Elevation</span>
+              </th>
+              <td>{ELEVATION_CREDIT.value}</td>
+              <td>
+                <ExternalLink url={ELEVATION_CREDIT.url} />
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <span className="iso-doc-table__row-name">Basemap</span>
+              </th>
+              <td>
+                Powered by{' '}
+                <a className="iso-sources__link" href="https://www.esri.com" target="_blank" rel="noreferrer">
+                  Esri
+                </a>
+              </td>
+              <td>World Imagery</td>
+            </tr>
+            {imagery !== '' && (
+              <tr>
+                <th scope="row">
+                  <span className="iso-doc-table__row-name">Imagery on this fire</span>
+                </th>
+                <td colSpan={2}>{imagery}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </DocSection>
   );
 }
 
-function Line({ children }: { children: ReactNode }) {
-  return <p className="iso-sources__line">{children}</p>;
-}
+function SourcesMediaPane({
+  counts,
+  regionId,
+  regionName,
+}: {
+  counts: HealthCounts;
+  regionId: string;
+  regionName: string;
+}) {
+  const current = counts.regions.find((r) => r.regionId === regionId) ?? counts.regions[0] ?? null;
+  if (!current || current.total <= 0) return null;
 
-function Products() {
+  const sortedRows = [...current.rows].sort((a, b) => comparePlatforms(a.platform, b.platform));
+  const label = current.regionId === regionId ? regionName : regionLabel(current.regionId);
+
   return (
-    <Section title="Products">
-      <Facts>
-        {PRODUCT_ROWS.map((row) => (
-          <tr key={row.label}>
-            <th scope="row">{row.label}</th>
-            <td>{row.value}</td>
-            <td>{row.context}</td>
-          </tr>
+    <figure className="iso-doc-media" aria-label={`Stored detections by satellite in ${label}`}>
+      <div className="iso-sources-bar" aria-hidden="true">
+        {sortedRows.map((row) => {
+          const pct = Math.max(2, (row.value / current.total) * 100);
+          const coarse = isCoarsePlatform(row.platform);
+          return (
+            <span
+              key={row.platform}
+              className={`iso-sources-bar__seg ${
+                coarse ? 'iso-sources-bar__seg--modis' : 'iso-sources-bar__seg--viirs'
+              }`}
+              style={{ width: `${pct.toFixed(2)}%` }}
+            />
+          );
+        })}
+      </div>
+
+      <div className="iso-sources-sat-grid">
+        {sortedRows.map((row) => (
+          <div key={row.platform} className="iso-sources-sat">
+            <span>{row.platform}</span>
+            <span className="iso-sources-sat__val">{formatCount(row.value)}</span>
+          </div>
         ))}
-      </Facts>
-    </Section>
+      </div>
+
+      <figcaption className="iso-doc-media__caption">
+        <span className="iso-doc-legend">
+          <span className="iso-doc-legend__item">
+            <span className="iso-doc-swatch iso-doc-swatch--modis" />
+            Coarse satellites (Terra, Aqua)
+          </span>
+          <span className="iso-doc-legend__item">
+            <span className="iso-doc-swatch iso-doc-swatch--detection" />
+            Sharp satellites (Suomi NPP, NOAA-20, NOAA-21)
+          </span>
+        </span>
+        <span>
+          {formatCount(current.total)} detections inside {label}
+        </span>
+      </figcaption>
+    </figure>
   );
 }
 
-function RowCounts({ counts, regionId }: { counts: HealthCounts; regionId: string }) {
+function RowCountsSection({ counts, regionId }: { counts: HealthCounts; regionId: string }) {
   const regions = [...counts.regions].sort(
     (a, b) => regionRank(a.regionId) - regionRank(b.regionId) || a.regionId.localeCompare(b.regionId),
   );
   const platforms = [...new Set(regions.flatMap((r) => r.rows.map((x) => x.platform)))].sort(comparePlatforms);
-  const files = counts.downloadedFiles;
+
+  if (regions.length === 0) return null;
 
   return (
-    <>
-      {counts.downloadedRows !== null && (
-        <Line>
-          {formatCount(counts.downloadedRows)} rows downloaded
-          {files !== null ? ` in ${formatCount(files)} ${files === 1 ? 'file' : 'files'}` : ''}.
-          {regions.length > 0 ? ' The table counts the rows inside each region box, 2026 included.' : ''}
-        </Line>
-      )}
-      {regions.length > 0 && (
-        <div className="iso-sources__scroll" role="region" aria-label="Rows by region box and platform" tabIndex={0}>
-          <table className="iso-table iso-table--sheet iso-sources__matrix">
-            <thead>
-              <tr>
-                <th scope="col">Region box</th>
-                {platforms.map((p) => (
-                  <th key={p} scope="col">
-                    {p}
+    <DocSection title="Stored Detections by Place and Satellite">
+      <p className="iso-doc-section__p">
+        Every row inside each place&apos;s context box, across all cached years including 2026.
+      </p>
+      <div className="iso-doc-table-wrap">
+        <table className="iso-doc-table">
+          <thead>
+            <tr>
+              <th scope="col">Place</th>
+              {platforms.map((p) => (
+                <th key={p} scope="col" className="is-num">
+                  {p}
+                </th>
+              ))}
+              <th scope="col" className="is-num">
+                All satellites
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {regions.map((r) => {
+              const active = r.regionId === regionId;
+              return (
+                <tr key={r.regionId} className={active ? 'iso-sources__row-active' : undefined}>
+                  <th scope="row">
+                    <span className="iso-doc-table__row-name">{regionLabel(r.regionId)}</span>
                   </th>
-                ))}
-                <th scope="col">All</th>
-              </tr>
-            </thead>
-            <tbody>
-              {regions.map((r) => (
-                <tr key={r.regionId} data-current={r.regionId === regionId}>
-                  <th scope="row">{regionLabel(r.regionId)}</th>
                   {platforms.map((p) => {
                     const v = r.rows.find((x) => x.platform === p)?.value;
-                    return <td key={p}>{v === undefined ? '' : formatCount(v)}</td>;
+                    return (
+                      <td key={p} className="is-num">
+                        {v === undefined ? null : <AlignedNumber intPart={formatCount(v)} integerOnly />}
+                      </td>
+                    );
                   })}
-                  <td>{formatCount(r.total)}</td>
+                  <td className={`is-num${active ? ' is-best' : ''}`}>
+                    <AlignedNumber intPart={formatCount(r.total)} integerOnly />
+                  </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </DocSection>
   );
 }
 
-function Rows({ load, regionId }: { load: Load<HealthCounts>; regionId: string }) {
+function ProductsSection() {
   return (
-    <Section title="Rows">
-      {load.state === 'ready' ? (
-        <RowCounts counts={load.data} regionId={regionId} />
-      ) : (
-        <Line>{load.state === 'loading' ? 'Loading' : 'The row counts did not load.'}</Line>
-      )}
-    </Section>
+    <DocSection title="Satellite Products">
+      <div className="iso-doc-table-wrap">
+        <table className="iso-doc-table">
+          <thead>
+            <tr>
+              <th scope="col">Instrument or rule</th>
+              <th scope="col">Product</th>
+              <th scope="col">Where the rows come from</th>
+            </tr>
+          </thead>
+          <tbody>
+            {PRODUCT_ROWS.map((row) => (
+              <tr key={row.label}>
+                <th scope="row">
+                  <span className="iso-doc-table__row-name">{row.label}</span>
+                </th>
+                <td>{row.value}</td>
+                <td>{row.context}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </DocSection>
   );
 }
 
-function LeftOut({ cal }: { cal: CalendarSources }) {
+function CalendarSourcesSection({
+  load,
+  regionName,
+}: {
+  load: Load<CalendarSources>;
+  regionName: string;
+}) {
+  const title = `What Is Left Out in ${regionName}`;
+  if (load.state === 'loading') {
+    return (
+      <DocSection title={title}>
+        <Loader surface="inline" line={`Loading the ${regionName} record rules`} />
+      </DocSection>
+    );
+  }
+  if (load.state === 'missing') {
+    return (
+      <DocSection title={title}>
+        <p className="iso-doc-section__p">No stored NASA FIRMS calendar covers {regionName}.</p>
+      </DocSection>
+    );
+  }
+  if (load.state === 'failed') {
+    return (
+      <DocSection title={title}>
+        <p className="iso-doc-section__p">The {regionName} calendar rules did not load.</p>
+      </DocSection>
+    );
+  }
+
+  const cal = load.data;
   const staticTotal = cal.staticExcluded.reduce((s, x) => s + x.value, 0);
   const months = cal.monthsOutForOutages;
-  return (
-    <Facts>
-      {cal.countingRule && (
-        <tr>
-          <th scope="row">Counted</th>
-          <td colSpan={2} data-cell="rule">
-            {plain(cal.countingRule)}
-          </td>
-        </tr>
-      )}
-      {cal.staticExcluded.length > 0 && (
-        <tr>
-          <th scope="row">Static sources</th>
-          <td>
-            {formatCount(staticTotal)} {staticTotal === 1 ? 'row' : 'rows'}
-          </td>
-          <td>
-            <Items items={cal.staticExcluded.map((s) => `${s.platform} ${formatCount(s.value)}`)} />
-          </td>
-        </tr>
-      )}
-      {months.length > 0 && (
-        <tr>
-          <th scope="row">Outage months</th>
-          <td>
-            {months.length} overlap {months.length === 1 ? 'month' : 'months'}
-          </td>
-          <td>
-            {cal.platformsInFit.length > 0 ? `With an outage day on ${listOr(cal.platformsInFit)}: ` : ''}
-            <Items items={months} />
-          </td>
-        </tr>
-      )}
-      {cal.countedNotFitted.map((n) => (
-        <tr key={n.platform}>
-          <th scope="row">{n.platform}</th>
-          <td>not in the fit</td>
-          <td>{plain(n.why)}</td>
-        </tr>
-      ))}
-      {cal.notInCalendar && (
-        <tr>
-          <th scope="row">{cal.notInCalendar.what}</th>
-          <td>not in the calendar</td>
-          <td>{plain(cal.notInCalendar.why)}</td>
-        </tr>
-      )}
-    </Facts>
-  );
-}
-
-function Outages({ cal }: { cal: CalendarSources }) {
   const platforms = [
     ...new Set([
       ...cal.outageDays.map((o) => o.platform),
@@ -244,125 +332,142 @@ function Outages({ cal }: { cal: CalendarSources }) {
   const events = datedEvents(cal);
 
   return (
-    <Section title="Known outages">
-      <Facts>
-        {cal.outageRule && (
-          <tr>
-            <th scope="row">Outage day</th>
-            <td colSpan={2} data-cell="rule">
-              {plain(cal.outageRule)}
-            </td>
-          </tr>
-        )}
-        {platforms.map((p) => {
-          const days = cal.outageDays.find((o) => o.platform === p)?.value;
-          return (
-            <tr key={p}>
-              <th scope="row">{p}</th>
-              <td>{days === undefined ? 'not checked' : `${formatCount(days)} ${days === 1 ? 'day' : 'days'}`}</td>
-              <td>{cal.platformsInFit.includes(p) ? 'in the ratio fit' : 'not in the fit'}</td>
-            </tr>
-          );
-        })}
-      </Facts>
-      {events.length > 0 && (
-        <Facts events>
-          {events.map((e) => (
-            <tr key={`${e.yearMonth} ${e.label}`}>
-              <th scope="row">{e.yearMonth}</th>
-              <td>{e.label}</td>
-              <td>{e.url ? <ExternalLink url={e.url} /> : e.source}</td>
-            </tr>
-          ))}
-        </Facts>
-      )}
-    </Section>
-  );
-}
-
-function CalendarParts({ load, regionName }: { load: Load<CalendarSources>; regionName: string }) {
-  const title = `Left out in ${regionName}`;
-  if (load.state !== 'ready') {
-    return (
-      <Section title={title}>
-        <Line>
-          {load.state === 'loading'
-            ? 'Loading'
-            : load.state === 'missing'
-              ? `No NASA FIRMS calendar covers ${regionName}.`
-              : `The ${regionName} calendar did not load.`}
-        </Line>
-      </Section>
-    );
-  }
-  return (
     <>
-      <Section title={title}>
-        <LeftOut cal={load.data} />
-      </Section>
-      <Outages cal={load.data} />
+      <DocSection title={title}>
+        {cal.countingRule && <p className="iso-doc-section__p">{plain(cal.countingRule)}</p>}
+        <div className="iso-doc-table-wrap">
+          <table className="iso-doc-table">
+            <thead>
+              <tr>
+                <th scope="col">Excluded or unscaled</th>
+                <th scope="col" className="is-num">
+                  Count
+                </th>
+                <th scope="col">Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cal.staticExcluded.length > 0 && (
+                <tr>
+                  <th scope="row">
+                    <span className="iso-doc-table__row-name">Static land sources</span>
+                  </th>
+                  <td className="is-num">
+                    {formatCount(staticTotal)} {staticTotal === 1 ? 'row' : 'rows'}
+                  </td>
+                  <td>{cal.staticExcluded.map((s) => `${s.platform} ${formatCount(s.value)}`).join(', ')}</td>
+                </tr>
+              )}
+              {months.length > 0 && (
+                <tr>
+                  <th scope="row">
+                    <span className="iso-doc-table__row-name">Outage months left out of scale fit</span>
+                  </th>
+                  <td className="is-num">
+                    {months.length} {months.length === 1 ? 'month' : 'months'}
+                  </td>
+                  <td>
+                    {cal.platformsInFit.length > 0 ? `Outage day on ${listOr(cal.platformsInFit)}: ` : ''}
+                    {months.join(', ')}
+                  </td>
+                </tr>
+              )}
+              {cal.countedNotFitted.map((n) => (
+                <tr key={n.platform}>
+                  <th scope="row">
+                    <span className="iso-doc-table__row-name">{n.platform}</span>
+                  </th>
+                  <td className="is-num">Counted only</td>
+                  <td>{plain(n.why)}</td>
+                </tr>
+              ))}
+              {cal.notInCalendar && (
+                <tr>
+                  <th scope="row">
+                    <span className="iso-doc-table__row-name">{cal.notInCalendar.what}</span>
+                  </th>
+                  <td className="is-num">Omitted</td>
+                  <td>{plain(cal.notInCalendar.why)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </DocSection>
+
+      <DocSection title="Known Outages and Orbit Milestones">
+        {cal.outageRule && <p className="iso-doc-section__p">{plain(cal.outageRule)}</p>}
+        {platforms.length > 0 && (
+          <div className="iso-doc-table-wrap">
+            <table className="iso-doc-table">
+              <thead>
+                <tr>
+                  <th scope="col">Satellite</th>
+                  <th scope="col" className="is-num">
+                    Outage days
+                  </th>
+                  <th scope="col">Role in scale fit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {platforms.map((p) => {
+                  const days = cal.outageDays.find((o) => o.platform === p)?.value;
+                  return (
+                    <tr key={p}>
+                      <th scope="row">
+                        <span className="iso-doc-table__row-name">{p}</span>
+                      </th>
+                      <td className="is-num">
+                        {days === undefined ? 'Not checked' : `${formatCount(days)} ${days === 1 ? 'day' : 'days'}`}
+                      </td>
+                      <td>{cal.platformsInFit.includes(p) ? 'In the overlap ratio fit' : 'Not in the fit'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {events.length > 0 && (
+          <div className="iso-doc-table-wrap">
+            <table className="iso-doc-table">
+              <thead>
+                <tr>
+                  <th scope="col">Month</th>
+                  <th scope="col">Event</th>
+                  <th scope="col">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((e) => (
+                  <tr key={`${e.yearMonth} ${e.label}`}>
+                    <th scope="row">
+                      <span className="iso-doc-table__row-name">{e.yearMonth}</span>
+                    </th>
+                    <td>{e.label}</td>
+                    <td>{e.url ? <ExternalLink url={e.url} /> : e.source}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </DocSection>
     </>
   );
 }
 
-/**
- * The credits. Esri's attribution rules for an interactive map (developers.arcgis.com, "Esri and data
- * attribution"): "Powered by Esri" may sit in a window opened from a button, as here; the data source names must stay
- * visible on the map itself, so the stage keeps them as small corner text, which opens this section.
- */
-export function Credits({ imageryCredit }: { imageryCredit: string }) {
-  const imagery = imageryCredit.trim();
-  return (
-    <Section title="Credits">
-      <Facts>
-        <tr>
-          <th scope="row">Basemap</th>
-          <td>
-            Powered by{' '}
-            <a className="iso-link" href="https://www.esri.com" target="_blank" rel="noreferrer">
-              Esri
-            </a>
-          </td>
-          <td>World Imagery</td>
-        </tr>
-        <tr>
-          <th scope="row">Fire detections</th>
-          <td>{FIRMS_CREDIT.value}</td>
-          <td>
-            <ExternalLink url={FIRMS_CREDIT.url} />
-          </td>
-        </tr>
-        <tr>
-          <th scope="row">Elevation</th>
-          <td>{ELEVATION_CREDIT.value}</td>
-          <td>
-            <ExternalLink url={ELEVATION_CREDIT.url} />
-          </td>
-        </tr>
-        {imagery !== '' && (
-          <tr>
-            <th scope="row">Imagery</th>
-            <td colSpan={2} data-cell="value">
-              {imagery}
-            </td>
-          </tr>
-        )}
-      </Facts>
-    </Section>
-  );
-}
-
-/**
- * The data and sources sheet: the products the record is built from, the rows downloaded and inside each
- * region box, what the region's real calendar leaves out and why, known outages, and credits. Every count is read
- * live from `/api/health` and the region's real calendar when the sheet opens.
- */
-export function SourcesSheet({ open, onClose, apiBase, regionId, regionName, imageryCredit, embedded = false }: SourcesSheetProps) {
-  const closeRef = useRef<HTMLButtonElement | null>(null);
-  const sheetRef = useRef<HTMLDivElement | null>(null);
-  const titleId = useId();
-  useDialogFocus(open && !embedded, sheetRef, closeRef);
-
+export function SourcesSheet({
+  open,
+  onClose,
+  apiBase,
+  regionId,
+  regionName,
+  imageryCredit,
+  embedded = false,
+  includeCredits = true,
+}: SourcesSheetProps) {
   const healthKey = apiBase;
   const calendarKey = `${apiBase} ${regionId}`;
   const [health, setHealth] = useState<Load<HealthCounts>>({ key: '', state: 'loading' });
@@ -399,67 +504,54 @@ export function SourcesSheet({ open, onClose, apiBase, regionId, regionName, ima
     return () => controller.abort();
   }, [open, apiBase, regionId, calendarKey]);
 
-  useEffect(() => {
-    if (!open || embedded) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, embedded, onClose]);
-
   if (!open) return null;
 
   const healthNow: Load<HealthCounts> = health.key === healthKey ? health : { key: healthKey, state: 'loading' };
   const calendarNow: Load<CalendarSources> =
     calendar.key === calendarKey ? calendar : { key: calendarKey, state: 'loading' };
 
-  if (embedded) {
-    return (
-      <div className="iso-sources">
-        <p className="iso-sheet__lede">Every count here is read live from the NASA FIRMS rows the backend has downloaded.</p>
-        <Products />
-        <Rows load={healthNow} regionId={regionId} />
-        <CalendarParts load={calendarNow} regionName={regionName} />
-      </div>
-    );
-  }
+  const readyHealth = healthNow.state === 'ready' ? healthNow.data : null;
+
+  const content = (
+    <>
+      <section className="iso-doc-lead" aria-label="Sources summary">
+        {readyHealth && readyHealth.downloadedRows !== null && (
+          <div className="iso-doc-lead__hero">
+            <span className="iso-doc-lead__figure">{formatCount(readyHealth.downloadedRows)}</span>
+            <span className="iso-doc-lead__unit">
+              stored NASA FIRMS detections
+              {readyHealth.downloadedFiles !== null
+                ? ` across ${formatCount(readyHealth.downloadedFiles)} ${
+                    readyHealth.downloadedFiles === 1 ? 'file' : 'files'
+                  }`
+                : ''}
+            </span>
+          </div>
+        )}
+        <p className="iso-doc-lead__p iso-doc-lead__p--strong">
+          Every count on this sheet is read live from the NASA FIRMS files stored on the server and from the open
+          place&apos;s fire record.
+        </p>
+      </section>
+
+      {healthNow.state === 'loading' && <Loader surface="inline" line="Loading stored detection counts" />}
+      {healthNow.state === 'failed' && (
+        <p className="iso-doc-section__p">The stored detection counts did not answer, so no count is shown.</p>
+      )}
+
+      {readyHealth && <SourcesMediaPane counts={readyHealth} regionId={regionId} regionName={regionName} />}
+      {readyHealth && <RowCountsSection counts={readyHealth} regionId={regionId} />}
+      <ProductsSection />
+      <CalendarSourcesSection load={calendarNow} regionName={regionName} />
+      {includeCredits && <Credits imageryCredit={imageryCredit} />}
+    </>
+  );
+
+  if (embedded) return <div className="iso-sources">{content}</div>;
 
   return (
-    <div className="iso-backdrop iso-backdrop--center" onClick={onClose} role="presentation">
-      <div
-        ref={sheetRef}
-        className="iso-sheet iso-sources"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <div className="iso-sheet__head">
-          <div className="iso-sources__heading">
-            <h2 id={titleId} className="iso-sheet__title">
-              Sources
-            </h2>
-            <span className="iso-sources__tag">NASA FIRMS</span>
-          </div>
-          <button ref={closeRef} type="button" className="iso-key" onClick={onClose}>
-            <kbd>Esc</kbd>
-            <span>Close</span>
-          </button>
-        </div>
-
-        <p className="iso-sheet__lede">
-          Every count here is read live from the NASA FIRMS rows the backend has downloaded.
-        </p>
-
-        <Products />
-        <Rows load={healthNow} regionId={regionId} />
-        <CalendarParts load={calendarNow} regionName={regionName} />
-        <Credits imageryCredit={imageryCredit} />
-      </div>
-    </div>
+    <SideSheet open={open} title="Sources" onClose={onClose}>
+      {content}
+    </SideSheet>
   );
 }

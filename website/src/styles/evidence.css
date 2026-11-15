@@ -1,217 +1,179 @@
-/* Evidence sheet (components/EvidenceSheet.tsx). Built on the Method sheet: the same glass, head, lede and
-   sheet table. Plain tables and text only; wide tables scroll inside their own wrapper, never the page. */
+/* Every Test on Record and Method and Data media panes inside the side-sheet viewer. */
 
-.iso-evidence {
-  width: min(900px, calc(100vw - 2 * var(--iso-gutter)));
-  max-height: calc(100dvh - 2 * var(--iso-gutter));
-  overflow-x: hidden;
-  overflow-y: auto;
+/* Three test fires visual strip */
+.iso-ev-fires {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 24px;
-  padding-bottom: 28px;
-  user-select: text;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sys-s4);
 }
 
-.iso-evidence__name {
+.iso-ev-fire {
+  display: grid;
+  gap: var(--sys-s2);
+}
+
+.iso-ev-fire__head {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
-  column-gap: 14px;
-  row-gap: 6px;
-  min-width: 0;
+  justify-content: space-between;
+  gap: var(--sys-s2);
 }
 
-/* Where the numbers come from, beside the title. */
-.iso-evidence__source {
-  font: 400 12px/16px var(--font-mono);
-  color: var(--iso-curtain);
+.iso-ev-fire__name {
+  font: var(--sys-weight-strong) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.iso-ev-fire__count {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-ink);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.iso-evidence__section {
+.iso-ev-fire__count[data-low='true'] {
+  color: var(--sys-fail);
+}
+
+.iso-ev-fire__cells {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  min-width: 0;
-  padding-top: 10px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--sys-s1);
+  height: 10px;
 }
 
-.iso-evidence__heading {
-  margin: 0;
-  padding: 0 28px;
-  font: 500 16px/20px var(--font-sans);
-  letter-spacing: -0.01em;
+.iso-ev-fire__cell {
+  border-radius: 0;
+  background: var(--sys-rule);
+  border: 1px solid var(--sys-edge);
 }
 
-.iso-evidence__text {
-  margin: 0;
-  padding: 0 28px;
-  max-width: calc(72ch + 56px);
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: var(--iso-ink-2);
+.iso-ev-fire__cell[data-won='true'] {
+  background: var(--sys-ink);
+  border-color: var(--sys-ink);
 }
 
-/* What each look at the test fires was: the look in the sans, what it did in the body text below it. */
-.iso-evidence__looks {
-  margin: 0;
-  padding: 0 28px;
+.iso-ev-fire__meta {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+/* Player mean-gain horizontal bar inside the rounds table */
+.iso-ev-gain-cell {
   display: grid;
-  gap: 8px;
-  max-width: calc(72ch + 56px);
+  grid-template-columns: minmax(72px, 1fr) auto;
+  align-items: center;
+  column-gap: var(--sys-s3);
 }
 
-.iso-evidence__looks dt {
-  font: 500 13px/18px var(--font-sans);
-  color: var(--iso-ink);
+.iso-ev-gain-bar {
+  height: 6px;
+  background: var(--sys-rule);
 }
 
-.iso-evidence__looks dd {
-  margin: 0;
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: var(--iso-ink-2);
-}
-
-.iso-evidence__choice {
-  padding: 0 28px;
-}
-
-.iso-evidence__scroll {
-  min-width: 0;
-  overflow-x: auto;
-  padding: 0 28px;
-}
-
-.iso-evidence .iso-evidence__scroll .iso-table--sheet {
-  width: 100%;
-  margin: 0;
-}
-
-.iso-evidence .iso-evidence__scroll .iso-table th,
-.iso-evidence .iso-evidence__scroll .iso-table td {
-  white-space: nowrap;
-  vertical-align: top;
-}
-
-/* Row names wrap before the numbers have to scroll; each date keeps its day and time together. */
-.iso-evidence .iso-evidence__scroll .iso-table tbody th {
-  min-width: 9em;
-  white-space: normal;
-}
-
-.iso-evidence .iso-evidence__scroll .iso-table td.iso-evidence__val {
-  white-space: normal;
-}
-
-.iso-evidence__when {
-  white-space: nowrap;
-}
-
-.iso-evidence .iso-evidence__scroll .iso-table thead th {
-  font-size: 12.5px;
-  color: var(--iso-ink-3);
-}
-
-.iso-evidence .iso-table .iso-evidence__num {
-  padding-left: 18px;
-  text-align: right;
-}
-
-.iso-evidence .iso-table .iso-evidence__test,
-.iso-evidence .iso-table .iso-evidence__who,
-.iso-evidence .iso-table .iso-evidence__val {
-  padding-left: 18px;
-  text-align: left;
-}
-
-.iso-evidence .iso-table td.iso-evidence__test {
-  font: 400 12.5px/18px var(--font-sans);
-  color: var(--iso-ink-2);
-}
-
-.iso-evidence .iso-table td.iso-evidence__num,
-.iso-evidence .iso-table td.iso-evidence__val {
-  color: var(--iso-ink);
-}
-
-/* Who is ahead on the row, in words. One colour whoever is ahead, so a row Isogon loses reads as plainly as
-   one it wins. */
-.iso-evidence .iso-table td.iso-evidence__who {
-  padding-left: 22px;
-  font: 400 12.5px/18px var(--font-sans);
-  color: var(--iso-ink);
-}
-
-/* The first protocol version sits under the later one, one step quieter. */
-.iso-evidence .iso-table tr[data-test='old'] td.iso-evidence__num,
-.iso-evidence .iso-table tr[data-test='old'] td.iso-evidence__who,
-.iso-evidence .iso-table td.iso-evidence__val[data-test='old'] {
-  color: var(--iso-ink-2);
-}
-
-.iso-evidence__hint {
+.iso-ev-gain-bar > span {
   display: block;
-  margin-top: 1px;
-  font: 400 11.5px/15px var(--font-sans);
-  color: var(--iso-ink-3);
+  height: 100%;
+  background: var(--sys-ink-2);
 }
 
-/* Validation parts: the part and its scores in plain words, then the verdict. Wraps at any width. */
-.iso-evidence .iso-evidence__parts th {
-  width: 62%;
-  white-space: normal;
+.iso-ev-gain-bar[data-role='rule'] > span {
+  background: var(--sys-ink);
 }
 
-.iso-evidence .iso-table.iso-evidence__parts td {
-  color: var(--iso-ink);
+.iso-ev-gain-bar[data-role='learned'] > span {
+  background: var(--sys-detection);
 }
 
-.iso-evidence__limits {
-  margin: 0;
-  padding: 0 28px;
-  list-style: none;
+/* Method and Data scale + calibration visual pane */
+.iso-method-media {
   display: grid;
-  gap: 10px;
-  max-width: calc(72ch + 56px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--sys-s5);
+  align-items: center;
 }
 
-.iso-evidence__limits li {
+.iso-method-squares {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sys-s5);
+}
+
+.iso-method-sq-item {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: var(--iso-ink-2);
+  gap: var(--sys-s2);
 }
 
-.iso-evidence__limit-num {
-  font: 400 12px/21px var(--font-mono);
-  color: var(--iso-ink-3);
+.iso-method-sq-coarse {
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--sys-modis);
+  background: rgba(180, 195, 214, 0.12);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 2px;
+  padding: 3px;
 }
 
-@media (max-width: 520px) {
-  .iso-evidence .iso-sheet__head {
-    padding: 22px 20px 0;
-  }
+.iso-method-sq-coarse > span {
+  border: 1px dotted var(--sys-estimate);
+}
 
-  .iso-evidence .iso-sheet__lede,
-  .iso-evidence__heading,
-  .iso-evidence__text,
-  .iso-evidence__looks,
-  .iso-evidence__choice,
-  .iso-evidence__scroll,
-  .iso-evidence__limits {
-    padding-left: 20px;
-    padding-right: 20px;
-  }
+.iso-method-sq-sharp {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--sys-detection);
+  background: rgba(240, 138, 69, 0.24);
+}
 
-  .iso-evidence .iso-evidence__parts {
-    width: calc(100% - 40px);
-    margin: 0 20px;
-  }
+.iso-method-sq-label {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-2);
+}
 
-  .iso-evidence .iso-evidence__parts th {
-    width: 58%;
+.iso-method-bars {
+  display: grid;
+  gap: var(--sys-s3);
+}
+
+.iso-method-bar-row {
+  display: grid;
+  gap: var(--sys-s1);
+}
+
+.iso-method-bar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sys-s3);
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.iso-method-bar-val {
+  font-family: var(--sys-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-ink);
+}
+
+.iso-method-bar-track {
+  height: 8px;
+  background: var(--sys-rule);
+}
+
+.iso-method-bar-fill {
+  height: 100%;
+  background: var(--sys-ink);
+}
+
+.iso-method-bar-fill--raw {
+  background: var(--sys-fail);
+}
+
+@media (max-width: 680px) {
+  .iso-ev-fires,
+  .iso-method-media {
+    grid-template-columns: 1fr;
   }
 }

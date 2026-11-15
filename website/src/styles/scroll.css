@@ -1,0 +1,46 @@
+/* Site-wide scrolling: a thin quiet track in the system's rule ink, square ends, no bright OS bar. */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sys-rule) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 0;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--sys-rule);
+  border-radius: 0;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--sys-edge);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.iso-scroll-fade {
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    #000 var(--sys-s3),
+    #000 calc(100% - var(--sys-s4)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    #000 var(--sys-s3),
+    #000 calc(100% - var(--sys-s4)),
+    transparent 100%
+  );
+}
