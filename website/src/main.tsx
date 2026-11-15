@@ -1,5 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+// Play's hand-back listens before the pictures of the world, which keep their keys from what comes after them.
+import './ui/usePlay';
 import { App } from './App';
 import './styles/tokens.css';
 import './styles/system.css';

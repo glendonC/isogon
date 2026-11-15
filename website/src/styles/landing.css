@@ -443,3 +443,37 @@
   animation: none;
   opacity: 0;
 }
+
+/* The identity's Entry (identity/Entry.tsx) as the first screen, over the page's stage: its ground lets the stage's
+   picture through behind its veil, and only its words and controls take the pointer. */
+.iso-app > .id-entry {
+  position: fixed;
+  z-index: 10;
+  background: transparent;
+  pointer-events: none;
+}
+
+.iso-app > .id-entry .id-entry__say,
+.iso-app > .id-entry .id-entry__acts {
+  pointer-events: auto;
+}
+
+/* The imagery credit (and a recorded page's line) under Entry's words. */
+.iso-entry-foot {
+  position: fixed;
+  z-index: 11;
+  bottom: 12px;
+}
+
+/* While Play tells the story: how to take it back, where the controls stand otherwise. */
+.iso-play-stop {
+  position: fixed;
+  right: 40px;
+  bottom: 64px;
+  z-index: 30;
+  margin: 0;
+  font: var(--sys-weight) 14px / 20px var(--sys-font);
+  color: var(--sys-ink-3);
+  text-shadow: 0 1px 8px rgba(8, 11, 17, 0.9);
+  pointer-events: none;
+}

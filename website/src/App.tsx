@@ -24,6 +24,8 @@ import { type Step } from './components/WorkspaceBar';
 import type { TrailWord } from './guide/Trail';
 import { LocatorBar } from './identity/LocatorBar';
 import { StoryLine } from './identity/StoryLine';
+import { Entry } from './identity/Entry';
+import { usePlay, type PlayShot } from './ui/usePlay';
 import type { StoryPart } from './identity/story';
 import { WORDS } from './identity/words';
 import { GuideStrip } from './guide/GuideStrip';
@@ -33,7 +35,7 @@ import { keyMatches, says, stateOf } from './guide/script';
 import { StageBoundary } from './ui/StageBoundary';
 // Read first: the pictures' keys listen before any screen of the page installs its own.
 import './world/keys';
-import { openWorldScreen, useWorldScreen, worldScreenOnShow } from './world/screens';
+import { closeWorldScreen, openWorldScreen, useWorldScreen, worldScreenOnShow } from './world/screens';
 import { useWorldFirstYear, useWorldYears } from './guide/world';
 import { dayPictureCredit, nextDayPicture, type DayPictureKind } from './guide/dayPicture';
 import { openingHiddenPass, type OpeningFrame } from './app/openingPass';
@@ -248,7 +250,12 @@ export function App() {
    * The film presentation (any `film` in the address): a state's film caption stands in the objective's place and the
    * guide's sentences are off (the script's reading of `film`).
    */
-  const filmMode = useMemo(() => new URLSearchParams(window.location.search).has('film'), []);
+  // The film presentation: from the address (a recorder's link), or while Play tells the story by itself.
+  const filmByAddress = useMemo(() => new URLSearchParams(window.location.search).has('film'), []);
+  const [filmMode, setFilmMode] = useState(filmByAddress);
+  useEffect(() => {
+    document.documentElement.classList.toggle('iso-film', filmMode);
+  }, [filmMode]);
   const selStyle = useMemo(() => {
     const v = new URLSearchParams(window.location.search).get('sel');
     return v === 'square' || v === 'box' ? v : 'chip';
@@ -1061,7 +1068,8 @@ export function App() {
 
       // Enter on a focused trigger activates that trigger; only a bare Enter opens the terrain.
       const onControl = Boolean(target?.closest('button, a, [role="slider"], [role="option"]'));
-      if (!inWorkspace && e.key === 'Enter' && !onControl) {
+      // Entry plays on Enter itself; the recorder's landing (the film's address) still opens the Record.
+      if (!inWorkspace && filmByAddress && e.key === 'Enter' && !onControl) {
         e.preventDefault();
         enterRecord();
         return;
@@ -1615,6 +1623,58 @@ export function App() {
     else if (part === 'tested') openWorldScreen('test');
     else openWorldScreen('sealed');
   };
+  // Play (identity/Entry.tsx's Play): the story by itself in the ux lane's order (MOUNT.md section 7), with the stage's
+  // own moves (`filmMove: 'auto'`); any key, click or wheel hands it back where it is. It never plays the game.
+  const worldIs = (name: string) => worldScreenOnShow()?.name === name;
+  const sceneIs = (s: string) => document.querySelector(`.wm-scene[data-scene="${s}"]`) !== null;
+  const playShots = (): PlayShot[] => [
+    { part: 'world', start: () => openWorldScreen('years', { play: true }), ready: () => worldIs('years'), hold: 9000 },
+    {
+      part: 'jump',
+      start: () => openWorldScreen('years', { view: 'counted', from: 2010, until: 2012, play: true }),
+      ready: () => worldIs('years'),
+      hold: 7000,
+    },
+    {
+      part: 'place',
+      start: () => {
+        closeWorldScreen();
+        enterRecord();
+      },
+      ready: () => document.querySelector('.rec__grid') !== null,
+      hold: 7000,
+    },
+    { part: 'fire', start: () => onTrailWord('Estimate'), ready: () => sceneIs('blind'), hold: 7000 },
+    {
+      part: 'fire',
+      start: () => {
+        const next = guideRef.current?.actions[0]?.command;
+        if (next) runCommand(next);
+      },
+      ready: () => sceneIs('revealed'),
+      hold: 7000,
+    },
+    { part: 'tested', start: () => openWorldScreen('test'), ready: () => worldIs('test'), hold: 9000 },
+    { part: 'live', start: () => openWorldScreen('sealed'), ready: () => worldIs('sealed'), hold: 8000 },
+  ];
+  // The pictures of the world read the film presentation from the root's class when they open: it is set before Play's
+  // first picture opens, and a picture on show when Play ends opens again in the page's own presentation.
+  const endPlay = () => {
+    setFilmMode(filmByAddress);
+    if (filmByAddress) return;
+    document.documentElement.classList.remove('iso-film');
+    const on = worldScreenOnShow();
+    if (on) {
+      closeWorldScreen();
+      requestAnimationFrame(() => openWorldScreen(on.name));
+    }
+  };
+  const play = usePlay(playShots, endPlay);
+  const startPlay = () => {
+    document.documentElement.classList.add('iso-film');
+    setFilmMode(true);
+    play.start();
+  };
   /** World model on a real run: in place on the terrain (beats/world-model/WorldModelScene.tsx), no column. */
   const modelScene = inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen;
   // The day's photograph is put away when Estimate and Test are left or another run comes in.
@@ -1693,22 +1753,41 @@ export function App() {
   return (
     <WorkspaceProvider value={store}>
     <div className="iso-app" data-workspace={inWorkspace ? 'true' : 'false'} data-sel={selStyle}>
-      {!inWorkspace && (
-        <LandingComposition
-          imageryCredit={credit}
-          parts={landingParts}
-          onOpenPart={openPart}
-          realPass={stageTelemetry?.realPass ?? null}
-          lines={landingLines}
-          passHidden={landingHidden}
-          caption={landingCaption}
-          recorded={recordedLine}
-          onOpenSearch={() => setAskOpen(true)}
-          onOpenSensor={() => setReading('sensors')}
-          onOpenMethod={() => setReading('method')}
-          onEnter={enterRecord}
-        />
-      )}
+      {/* The first screen: the identity's Entry (Play or Explore). The film's address keeps the recorder's landing. */}
+      {!inWorkspace &&
+        (filmByAddress ? (
+          <LandingComposition
+            imageryCredit={credit}
+            parts={landingParts}
+            onOpenPart={openPart}
+            realPass={stageTelemetry?.realPass ?? null}
+            lines={landingLines}
+            passHidden={landingHidden}
+            caption={landingCaption}
+            recorded={recordedLine}
+            onOpenSearch={() => setAskOpen(true)}
+            onOpenSensor={() => setReading('sensors')}
+            onOpenMethod={() => setReading('method')}
+            onEnter={enterRecord}
+          />
+        ) : (
+          !worldScreen && (
+            <>
+              <Entry
+                firstYear={worldYears?.first ?? null}
+                lastYear={worldYears?.last ?? null}
+                onPlay={startPlay}
+                onExplore={() => openWorldScreen('years')}
+                links={barLinks}
+              />
+              <div className="iso-entry-foot iso-land__foot">
+                {recordedLine && <p className="iso-land__recorded">{recordedLine}</p>}
+                <p className="iso-land__credit">Imagery: {credit}</p>
+              </div>
+            </>
+          )
+        ))}
+      {play.playing && <p className="iso-play-stop">{WORDS.stop}</p>}
 
       {inWorkspace && (
         <>
@@ -1740,11 +1819,11 @@ export function App() {
               links={barLinks}
             />
             <StoryLine
-              current={storyPart}
-              progress={null}
+              current={play.part ?? storyPart}
+              progress={play.playing ? play.progress : null}
               jumpYear={storyNumber(guide.fields.sharp_since)}
               testedFires={storyNumber(guide.fields.test_b_fires_n)}
-              onPart={filmMode ? undefined : goStory}
+              onPart={filmMode || play.playing ? undefined : goStory}
             />
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
@@ -1772,7 +1851,7 @@ export function App() {
                   title={filmMode && guide.film ? guide.film : guide.objective}
                   lines={filmMode ? [] : said && said.key === guideKey ? said.lines : guide.lines}
                   // In the film only the step's strong action stands, so nothing else competes with the caption.
-                  actions={filmMode ? guide.actions.slice(0, 1) : guide.actions}
+                  actions={play.playing ? [] : filmMode ? guide.actions.slice(0, 1) : guide.actions}
                   onAction={runCommand}
                   results={guide.results}
                 />
@@ -1871,6 +1950,7 @@ export function App() {
                       ? modelFrame(viewportWidth)
                       : workspaceFrame(viewportWidth)
                 }
+                filmMove={play.playing ? 'auto' : undefined}
                 regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
                 chanceSquares={chanceOn}
                 onFireAnchor={modelScene || step === 'look' ? emitAnchor : undefined}
