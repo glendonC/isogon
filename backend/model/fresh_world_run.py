@@ -274,15 +274,17 @@ def _pass_file(work: Path, key: str, platform: str) -> Path:
     return work / "cmr" / key / f"{platform}.json.gz"
 
 
-def fetch_episode_passes(ep: dict[str, Any], work: Path, opener: Any = None, pause_s: float = 0.5) -> dict[str, Any]:
+def fetch_episode_passes(ep: dict[str, Any], work: Path, opener: Any = None, pause_s: float = 0.5,
+                         platforms: Iterable[str] | None = None) -> dict[str, Any]:
     """The granules of each hidden platform over the episode's tile and window, every reply kept with its sha256.
-    A reply already kept is not asked for again."""
+    A reply already kept is not asked for again. `platforms` names the hidden platforms to ask for, when not every
+    platform of the archive in the window."""
     from backend.firms import cmr_passes as C
 
     opener = opener or C._default_opener
     out: dict[str, Any] = {"key": ep["key"], "platforms": {}}
     t0, t1 = float(ep["start_s"]) - CMR_MARGIN_S, float(ep["end_s"]) + CMR_MARGIN_S
-    for plat in hidden_platforms(ep):
+    for plat in (tuple(platforms) if platforms is not None else hidden_platforms(ep)):
         dest = _pass_file(work, ep["key"], plat)
         if dest.is_file():
             out["platforms"][plat] = json.loads(dest.with_name(dest.name + ".manifest.json").read_text())
@@ -702,11 +704,13 @@ def _world_job(job: tuple[str, Any, dict[str, Any], str]) -> dict[str, Any]:
     return FR._run_episode((FR.TRAIN_OPEN, int(item), pdict))
 
 
-def scorable(ep: dict[str, Any], work: Path) -> str | None:
-    """None when an episode's rows and pass lists are all kept, else the reason it cannot be scored. Reads no row."""
+def scorable(ep: dict[str, Any], work: Path, platforms: Iterable[str] | None = None) -> str | None:
+    """None when an episode's rows and pass lists are all kept, else the reason it cannot be scored. Reads no row.
+    `platforms` names the hidden platforms whose pass lists it needs, when not every platform of the archive."""
     if not any((work / "rows" / ep["key"]).glob("*.csv")):
         return "no rows kept"
-    missing = [p for p in hidden_platforms(ep) if not _pass_file(work, ep["key"], p).is_file()]
+    need = tuple(platforms) if platforms is not None else hidden_platforms(ep)
+    missing = [p for p in need if not _pass_file(work, ep["key"], p).is_file()]
     return f"no pass list for {', '.join(missing)}" if missing else None
 
 
