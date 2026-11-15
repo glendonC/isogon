@@ -1,9 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { countryAt, countryShapeAt, pointWords } from './countryAt';
 import { placeLabels } from './labels';
-import { LiveTable } from '../dataviz/LiveTable';
-import { partWords, rowsFromLive } from '../dataviz/liveRows';
-import '../dataviz/dataviz.css';
 import { closeGroup, parseLive, platformWords, type Live, type LiveFire, type LiveSeal } from './live';
 import { type Box } from './projection';
 import { useRead } from './read';
@@ -77,7 +74,6 @@ export const SEAL_WORDS = {
   // Words version 16: no count of scores; each row opens its result, the overlap with VIIRS fire pixels.
   scored: (_a: number | null, _of: number | null, none: boolean) => (none ? 'Scored; VIIRS saw no fire in the box' : 'Scored'),
   result: (model: string, modis: string) => `Overlap with VIIRS fire pixels: the model ${model} percent, MODIS alone ${modis}.`,
-  notYet: "Not scored yet: its result opens here once VIIRS's data has come and been checked.",
   resultWithin: (model: string, modis: string) => `Within one pixel: the model ${model} percent, MODIS alone ${modis}.`,
   notScored: (why: string | null) => `Not scored${why ? `: ${why}` : ''}`,
   title: (platform: string | null, day: string | null, point: string) => [platform ? `Predicted pass of ${platform}` : null, day, point].filter(Boolean).join(', '),
@@ -151,7 +147,6 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
   const rootRef = useRef<HTMLDivElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const [fit, setFit] = useState<{ drop: number; rows: number }>({ drop: 0, rows: Infinity });
-  const [openFire, setOpenFire] = useState<string | null>(null);
   const onCaption = useCallback((px: number) => setCapBottom(px), []);
 
   const nowMs = t(now ?? live?.writtenUtc ?? null) || Date.now();
@@ -219,11 +214,6 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
   const whereOf = (f: LiveFire) => countryAt(f.centre[0], f.centre[1]) ?? (f.part ? PARTS[f.part] ?? f.part : pointWords(f.centre[0], f.centre[1]));
   const numbered = fires.map((f, i) => ({ f, i }));
   // Fires with no seal yet share one line, so the board is the height of what has happened.
-  // The page's table (the dataviz lane's rows from the live answer), cut to the rows the room has, and the open row.
-  const table = !film && read.state === 'ready' ? rowsFromLive(read.value, (f) => (f.centre ? countryAt(f.centre[0], f.centre[1]) : null) ?? partWords(f)) : null;
-  const tableRows = table ? table.rows.slice(0, fit.rows) : [];
-  const tableMore = table ? table.rows.slice(fit.rows).map((r) => r.place) : [];
-  const openSeal = openFire ? telling(byFire.get(openFire) ?? []) : null;
   const sealedAll = numbered.filter(({ f }) => byFire.has(f.id));
   const shown = sealedAll.slice(0, fit.rows);
   const more = sealedAll.slice(fit.rows);
@@ -315,36 +305,6 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
       <div className="world-board" ref={boardRef}>
         {live.protocol?.sha256 && note('protocol') && <div className="world-board__rule">{SEAL_WORDS.protocol(live.protocol.sha256, null)}</div>}
         {live.example && <div className="world-board__rule world-legend__caution">{live.example}</div>}
-        {!film && table ? (
-          <>
-            {/* The dataviz lane's live table (its MOUNT.md): one row a fire with a sealed prediction, newest first. A row
-                opens its result under the table (words version 16). */}
-            <div className="world-ledger" onClick={(e) => {
-              const tr = (e.target as HTMLElement).closest('tbody tr');
-              const at = tr ? Array.from(tr.parentElement?.children ?? []).indexOf(tr) : -1;
-              const id = at >= 0 ? tableRows[at]?.fireId : undefined;
-              if (id) setOpenFire((o) => (o === id ? null : id));
-            }}>
-              <LiveTable table={{ ...table, rows: tableRows }} width={860} />
-            </div>
-            {openSeal && (
-              <div className="world-board__opened">
-                {openSeal.overlap ? (
-                  <>
-                    <span>{SEAL_WORDS.result(percent1(openSeal.overlap.model.exact), percent1(openSeal.overlap.modis.exact))}</span>
-                    <span className="world-board__sub">{SEAL_WORDS.resultWithin(percent1(openSeal.overlap.model.within), percent1(openSeal.overlap.modis.within))}</span>
-                  </>
-                ) : (
-                  <span>{SEAL_WORDS.notYet}</span>
-                )}
-                <span className="world-board__sub">{SEAL_WORDS.whole}</span>
-                <span className="world-mono world-select">{openSeal.sha256}</span>
-              </div>
-            )}
-            {tableMore.length > 0 && <div className="world-board__rule">{SEAL_WORDS.more(tableMore)}</div>}
-          </>
-        ) : (
-          <>
         <div className="world-board__head">
           <span />
           <span className="world-board__key">
@@ -465,8 +425,6 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
             </li>
           )}
         </ol>
-          </>
-        )}
         {scoredFires.length > 0 && note('listed') && (
           <div className="world-board__rule">
             {SEAL_WORDS.listed(fires.length, sealedAll.length, scoredFires.length)}
