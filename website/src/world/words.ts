@@ -29,7 +29,7 @@ export const EARTH_WORDS = {
   layerFactor: 'How much more the sharp satellite sees',
   /** The legend of the fire layer, from the layer's own first month. */
   fireLegend: (since: string | null) =>
-    `Detections of the coarse satellite (MODIS) in each square of a quarter degree, about 28 km${since ? `, since ${since}` : ''}.`,
+    `Coarse detections in each quarter degree, about 28 km${since ? `, since ${since}` : ''}.`,
   tick: (v: number) => roughly(v),
   hatch: (complete: boolean, since: string | null, loaded: string[] | number | null | undefined) =>
     complete
@@ -41,7 +41,7 @@ export const EARTH_WORDS = {
   fireLegendShort: (since: string | null) => `Coarse detections per 28 km square${since ? ` since ${since}` : ''}.`,
   hatchShort: (complete: boolean) => (complete ? 'Hatched: no detection there.' : 'Hatched: nothing loaded there yet, not no fire.'),
   factorLegend: (step: number | null) =>
-    `Detections of the sharp satellite (VIIRS) for each one of the coarse satellite (MODIS), over the months of 2012 to 2025 when both flew without a gap${step ? `, in squares of ${step} degrees` : ''}.`,
+    `Sharp detections for each coarse one, over the months both flew without a gap${step ? `, in squares of ${step} degrees` : ''}.`,
   factorSpread: (median: number, p10: number, p90: number) =>
     `The middle place: ${median.toFixed(1)} times. Eight places in ten lie between ${p10.toFixed(1)} and ${p90.toFixed(1)} times.`,
   factorTick: (f: number, low: number, high: number) => (f <= low ? `${f}× or less` : f >= high ? `${f}× or more` : `${f}×`),
@@ -64,8 +64,7 @@ export const EARTH_WORDS = {
   readPlace: 'Read the fire record of this place',
   /** A fire kept as the model's test, in the product lane's words (script state recorded_test_fire). */
   keptLabel: (label: string) => `${label}, kept as the test`,
-  keptLine: (n: number) =>
-    `One of the ${count(n)} fires kept as the model's test, so it is not hidden and tested again. Its record can be read.`,
+  keptLine: (_n: number) => 'A test fire: you can read its record, but it is not tested again.',
   /** A fire the page may not open yet. */
   heldLabel: (short: string) => `${short}, not open yet`,
   heldLine: 'Not open yet: it lies where the test across the world is still to be scored, and opens after that test.',
@@ -155,29 +154,29 @@ export const YEAR_WORDS = {
   label: 'The Earth year by year, 2000 to 2025: detections in each square of a quarter degree',
   loading: 'Loading the years',
   failed: 'The yearly layers could not be read.',
-  detected: 'As the satellites counted',
+  detected: 'As counted',
   harmonized: 'On one scale',
   harmonizedMissing: 'On one scale: not written yet',
   play: 'Play the years',
   pause: 'Stop',
   step: 'A year',
-  modis: 'Counted by the older satellites (MODIS)',
-  sharp: 'Counted by the newer, sharper satellite (VIIRS)',
-  onScale: "On the newer satellite's scale",
+  modis: 'Counted by the coarse satellites',
+  sharp: 'Counted by the sharp satellite',
+  onScale: "On the sharp satellite's scale",
   partialYear: (months: number) => `${months === 2 ? 'November and December' : `${months} months`} only: the archive begins in November 2000`,
   terraAlone: 'Terra alone: Aqua joins in July 2002',
   aquaJoins: 'Aqua joins in July',
   stepDetected: (ratio: number | null) =>
     ratio
-      ? `2012: the newer, sharper satellite begins and makes about ${oneDecimal(ratio)} times as many detections, smaller fires among them, so the Earth brightens with no more fire.`
-      : '2012: the newer, sharper satellite begins and makes more detections, smaller fires among them, so the Earth brightens with no more fire.',
-  stepHarmonized: "2012: the newer, sharper satellite begins, and on one scale there is no step, because the older satellites' detections are put on its scale.",
+      ? `2012: the sharp satellite begins and makes ${oneDecimal(ratio)} times as many detections, so the Earth brightens with no more fire.`
+      : '2012: the sharp satellite begins and makes more detections, so the Earth brightens with no more fire.',
+  stepHarmonized: '2012: the sharp satellite begins, and on one scale there is no step.',
   legend: 'Fire detected in a square of a quarter degree, about 28 km, in the year',
-  closed: "Squares kept as the model's test, in 2021",
+  closed: 'Test fires of 2021, not tested again',
   hatch: 'Hatched land: no detection there.',
   totals: 'Detections each year, the whole Earth',
-  barsModis: 'Older satellites (MODIS)',
-  barsSharp: 'Newer satellite (VIIRS)',
+  barsModis: 'Coarse satellites',
+  barsSharp: 'Sharp satellite',
   lineHarmonized: 'On one scale',
   partialBar: 'two months',
   /** A country picked on the Earth: its own strip, and the way back to the whole Earth. */
@@ -187,7 +186,7 @@ export const YEAR_WORDS = {
   noFile: 'no file of its own',
   /** The square under the pointer on the globe, for the year on show. */
   squareNone: (year: number) => `No detection in this square in ${year}`,
-  squareClosed: (year: number) => `Kept as the model's test in ${year}`,
+  squareClosed: (year: number) => `A test fire of ${year}, not tested again`,
   squareExact: (v: number, year: number) =>
     `${Math.round(v).toLocaleString('en-US')} ${Math.round(v) === 1 ? 'detection' : 'detections'} in this square in ${year}`,
   squareOneScale: (v: number, year: number) => `${v < 10 ? v.toFixed(1) : Math.round(v).toLocaleString('en-US')} on one scale in this square in ${year}`,
@@ -205,52 +204,52 @@ export const YEAR_WORDS = {
 
 /**
  * The guide's words on the pictures of the world, as the product lane writes them: the Earth's years from the
- * script's state `earth_years` (GUIDE-script.json version 23, EARTH-YEARS.md), the test across the world and the
+ * script's state `earth_years` (GUIDE-script.json version 26, EARTH-YEARS.md), the test across the world and the
  * sealed predictions from WORDS-wider.json version 4 (`world_pictures`). Every figure is a field filled from an answer.
  */
 export const SCREEN_WORDS = {
   years: {
-    objective: (first: number) => `Watch the Earth's fire year by year since ${first}`,
+    objective: (first: number) => `Watch the Earth's fire since ${first}`,
     context: (first: number, last: number) => `${first} to ${last}`,
     counted: (ratio: string) =>
-      `Each year as the satellites counted it: the older satellites' detections before 2012, the newer one's from then, about ${ratio} times as many, since it also sees smaller fires.`,
-    oneScale: "Each year on one scale: the older satellites' detections are put on the newer one's scale, so the years can be set side by side and 2012 shows no jump.",
+      `These are the years as counted, and from 2012 the sharp satellite makes ${ratio} times as many detections.`,
+    oneScale: "On one scale the coarse satellites' years are scaled up to match, so 2012 shows no jump.",
     play: 'Play the years',
     stop: 'Stop',
-    toOneScale: 'See the years on one scale',
-    toCounted: 'See the years as the satellites counted them',
+    toOneScale: 'Show the years on one scale',
+    toCounted: 'Show the years as counted',
     back: 'Back',
     filmCounted: (ratio: string) => `2012: a sharper satellite begins, seeing smaller fires too: ${ratio} times the detections.`,
-    filmOneScale: (first: number) => `On one scale, the years since ${first} show no jump.`,
+    filmOneScale: (_first: number) => 'On one scale, no jump.',
   },
   test: {
     objective: 'See where the estimate was tested',
-    strictBehind: (fires: number, continents: number, ahead: number, of: number, behind: number) =>
-      `On ${fires} fires it had never seen, across ${continents} continents, the experimental model was ahead of the simple methods on ${ahead} of ${of} scores and behind on ${behind}: it does not place fire square for square better than painting the coarse satellite's detections.`,
-    notStrictBehind: (fires: number, continents: number, ahead: number, of: number, level: number, behind: number) =>
-      `On ${fires} fires it had never seen, across ${continents} continents, the experimental model was ahead of the simple methods on ${ahead} of ${of} scores, level on ${level} and behind on ${behind}.`,
+    strictBehind: (fires: number, _continents: number, ahead: number, _of: number, behind: number) =>
+      `On ${fires} fires it never saw, it won ${ahead} scores and lost ${behind}, and pixel for pixel the coarse guess does better.`,
+    notStrictBehind: (fires: number, _continents: number, ahead: number, of: number, level: number, behind: number) =>
+      `On ${fires} fires it never saw, it won ${ahead}, tied ${level} and lost ${behind} of ${of} scores.`,
     squares: (of: number) =>
-      `Each square is one fire, filled by how many of the ${of} scores the estimate won there against both simple methods: full is all, empty is none.`,
+      `Each square is one fire, filled by how many of the ${of} scores the estimate won there: full is all, empty is none.`,
     fireScores: "Show a fire's scores",
     back: 'Back to the test',
-    filmA: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} unseen fires: ahead on ${ahead} of ${of} scores, behind on ${behind}.`,
-    // WORDS-wider.json version 13, world_pictures, the test across the world's film line once test B is taken: the
+    filmA: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} unseen fires: won ${ahead} of ${of} scores, lost ${behind}.`,
+    // WORDS-wider.json version 14, world_pictures, the test across the world's film line once test B is taken: the
     // second model (the challenger the runs answer with) and the first; version 12's line where no second is scored.
     filmB: (ahead: number, of: number, behind: number, others: string | null, second: { ahead: number; behind: number } | null) =>
       second
-        ? `Untouched fires: second model ${second.ahead} ahead, ${second.behind} behind. First: ${ahead} ahead, ${behind} behind.`
-        : `Untouched fires: ${ahead} of ${of} ahead, ${behind} behind.${others ? ` Other models: ${others} ahead.` : ''}`,
-    // GUIDE-script.json version 23, step test, `test_b_taken`: said before test A's sentence.
-    testB: (fires: number, ahead: number, of: number, level: number, behind: number, others: { n: string; ahead: string } | null) =>
-      `On ${fires} fires that nothing had touched, the estimate was ahead of the simple methods on ${ahead} of ${of} scores, level on ${level} and behind on ${behind}${others ? `, while ${others.n} other models were each ahead on ${others.ahead}` : ''}.`,
+        ? `Untouched fires: second model won ${second.ahead}, lost ${second.behind}. First: won ${ahead}, lost ${behind}.`
+        : `Untouched fires: won ${ahead} of ${of}, lost ${behind}.${others ? ` Other models: won ${others}.` : ''}`,
+    // GUIDE-script.json version 26, step test, `test_b_by_estimate` (the world's test has no run): said before test A's.
+    testB: (fires: number, ahead: number, of: number, _level: number, behind: number, others: { n: string; ahead: string } | null) =>
+      `On ${fires} untouched fires the first model won ${ahead} of ${of} scores and lost ${behind}${others ? `, and ${others.n} others each won ${others.ahead}` : ''}.`,
   },
   sealed: {
     objective: 'See predictions written before the pass',
     marks: 'Each mark is a fire burning now, where a prediction was written down with its fingerprint before NASA published what the sharp satellite saw.',
     soFar: (scored: number, ahead: number, level: number, behind: number) =>
-      `So far ${scored} are scored: ahead of both simple methods on ${ahead} scores, level on ${level} and behind on ${behind}.`,
+      `So far ${scored} are scored: they won ${ahead}, tied ${level} and lost ${behind} against both simple guesses.`,
     back: 'Back to the fire',
-    film: (ahead: number, level: number, behind: number) => `Sealed before the pass. Scores: ${ahead} ahead, ${level} level, ${behind} behind.`,
+    film: (ahead: number, level: number, behind: number) => `Sealed before the pass. Scores: won ${ahead}, tied ${level}, lost ${behind}.`,
   },
 };
 

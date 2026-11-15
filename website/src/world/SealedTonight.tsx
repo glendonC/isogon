@@ -48,9 +48,9 @@ const PARTS: Record<string, string> = {
 };
 
 export const SEAL_WORDS = {
-  // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open; version 11 for the film's caption).
+  // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open; version 14 for the film's caption).
   objective: 'See predictions written before the pass',
-  film: (ahead: number, level: number, behind: number) => `Sealed before the pass. Scores: ${ahead} ahead, ${level} level, ${behind} behind.`,
+  film: (ahead: number, level: number, behind: number) => `Sealed before the pass. Scores: won ${ahead}, tied ${level}, lost ${behind}.`,
   label: 'The Earth, with the fires whose predictions are sealed tonight',
   loading: "Loading tonight's sealed predictions.",
   failed: "Tonight's sealed predictions did not load.",
@@ -69,7 +69,7 @@ export const SEAL_WORDS = {
   waitingPass: (pass: string | null) => `Pass due${pass ? ` at ${pass}` : ''}; not yet listed by NASA`,
   waitingRows: (pass: string | null, by: string | null) => `Passed${pass ? ` at ${pass}` : ''}; detections ${by ? `expected by ${by}` : 'not all published yet'}`,
   scored: (a: number | null, of: number | null, none: boolean) =>
-    (a !== null && of !== null ? `Ahead of both simple methods on ${a} of ${of} scores` : 'Scored') +
+    (a !== null && of !== null ? `Won ${a} of ${of} scores against both simple guesses` : 'Scored') +
     (none ? '; no fire in the pass' : ''),
   notScored: (why: string | null) => `Not scored${why ? `: ${why}` : ''}`,
   title: (platform: string | null, day: string | null, point: string) => [platform ? `Predicted pass of ${platform}` : null, day, point].filter(Boolean).join(', '),
@@ -96,7 +96,7 @@ export const SEAL_WORDS = {
   over: (fires: number, a: number, t: number, b: number, of: number | null) => {
     const judged = a + t + b;
     const counted = of !== null && judged < of ? `of the ${judged} scores that could be judged` : `of the ${of ?? judged} scores`;
-    return `Over the ${fires} fires scored, ahead or behind only where the gap is too large to be luck: ahead on ${a}, level on ${t}, behind on ${b} ${counted}.`;
+    return `Over the ${fires} fires scored, won or lost only where the gap is too large to be luck: won ${a}, tied ${t}, lost ${b} ${counted}.`;
   },
 };
 

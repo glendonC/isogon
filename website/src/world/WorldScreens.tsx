@@ -261,7 +261,8 @@ function Sealed({ film, toWord }: Part) {
   const scored = live ? live.seals.filter((s) => s.state === 'scored').length : 0;
   const o = live?.overFires ?? null;
   const counted = o && o.ahead !== null && o.tied !== null && o.behind !== null;
-  const lines = live ? [S.sealed.marks, ...(scored > 0 && counted ? [S.sealed.soFar(scored, o!.ahead!, o!.tied!, o!.behind!)] : [])] : [];
+  // "So far N are scored" counts fires, as the marks and the board do (the won, tied and lost are over those fires).
+  const lines = live ? [S.sealed.marks, ...(scored > 0 && counted ? [S.sealed.soFar(o!.fires ?? scored, o!.ahead!, o!.tied!, o!.behind!)] : [])] : [];
   const caption = scored > 0 && counted ? S.sealed.film(o!.ahead!, o!.tied!, o!.behind!) : null;
   useWorldKeys((e) => {
     if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey) return false;
