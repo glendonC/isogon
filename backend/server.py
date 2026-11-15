@@ -574,13 +574,35 @@ class IsogonDataStore:
             memo[region_id] = (now, key)
         return key
 
+    def _flight(self, name: str) -> threading.Lock:
+        """One lock per piece of work several askers may want at once (a region's calendar, the regions answer, the
+        row counts): the first asker builds it, a second waits for it and takes its answer instead of building again."""
+        with self._lock:
+            return self.__dict__.setdefault("_flights", {}).setdefault(name, threading.Lock())
+
     def firms_counts(self, max_age_s: float = 10.0) -> dict[str, Any]:
-        """Row counts from the FIRMS cache manifests, re-read at most every ``max_age_s``."""
-        now = time.monotonic()
+        """Row counts from the FIRMS cache manifests. Only the first call reads them on the asker's thread; after that
+        the last counts answer at once, and counts older than ``max_age_s`` are read again in the background, one
+        reader at a time, so health never waits on a busy server."""
         cached = getattr(self, "_firms_counts", None)
-        if cached is None or now - cached[0] > max_age_s:
-            cached = (now, firms_cache_summary())
-            self._firms_counts = cached
+        if cached is None:
+            with self._flight("firms_counts"):
+                cached = getattr(self, "_firms_counts", None)
+                if cached is None:
+                    cached = (time.monotonic(), firms_cache_summary())
+                    self._firms_counts = cached
+            return cached[1]
+        if time.monotonic() - cached[0] > max_age_s:
+            flight = self._flight("firms_counts")
+            if flight.acquire(blocking=False):
+
+                def _reread() -> None:
+                    try:
+                        self._firms_counts = (time.monotonic(), firms_cache_summary())
+                    finally:
+                        flight.release()
+
+                threading.Thread(target=_reread, name="firms-counts", daemon=True).start()
         return cached[1]
 
     def firms_calendar_payload(self, region_id: str) -> tuple[bytes, dict[str, Any]]:
@@ -594,18 +616,25 @@ class IsogonDataStore:
             hit = calendars.get(region_id)
         if hit is not None and hit[0] == key:
             return hit[1], hit[2]
-        cal = firms_calendar(region_id)
-        try:
-            starts = self.real_run_starts(region_id, cal, key)
-        except Exception as exc:  # noqa: BLE001  (the calendar answers even when the start search cannot)
-            sys.stderr.write(f"[Isogon API] real_run_starts for {region_id} failed: {exc}\n")
-            starts = {"starts": [], "error": f"start dates unavailable: {exc}", "default_start": None,
-                      "default_rule": "no start list, so there is no default"}
-        cal["real_run_starts"] = starts
-        body = json.dumps(cal, ensure_ascii=False).encode("utf-8")
-        with self._lock:
-            calendars[region_id] = (key, body, starts)
-        return body, starts
+        # One builder per region: the warm-up and every asker share it (a start search after a change of the start
+        # rule takes minutes, and several at once under the one interpreter lock starve every other request).
+        with self._flight(f"calendar {region_id}"):
+            with self._lock:
+                hit = calendars.get(region_id)
+            if hit is not None and hit[0] == key:
+                return hit[1], hit[2]
+            cal = firms_calendar(region_id)
+            try:
+                starts = self.real_run_starts(region_id, cal, key)
+            except Exception as exc:  # noqa: BLE001  (the calendar answers even when the start search cannot)
+                sys.stderr.write(f"[Isogon API] real_run_starts for {region_id} failed: {exc}\n")
+                starts = {"starts": [], "error": f"start dates unavailable: {exc}", "default_start": None,
+                          "default_rule": "no start list, so there is no default"}
+            cal["real_run_starts"] = starts
+            body = json.dumps(cal, ensure_ascii=False).encode("utf-8")
+            with self._lock:
+                calendars[region_id] = (key, body, starts)
+            return body, starts
 
     def firms_calendar_bytes(self, region_id: str) -> bytes:
         return self.firms_calendar_payload(region_id)[0]
@@ -711,19 +740,31 @@ class IsogonDataStore:
                 self._current_months[key] = out
         return out
 
-    def regions_full_payload(self) -> dict[str, Any]:
-        """`regions_payload` and the places registry (`backend/firms/places.py`)."""
-        out = self.regions_payload()
-        out["schema_version"] = "1.1.0"
+    def regions_full_payload(self) -> bytes:
+        """`regions_payload` and the places registry (`backend/firms/places.py`), as the route's bytes. Built once and
+        shared: an asker while it is built waits for that build and takes its answer; it is built again only when a
+        region's rows or the box index change."""
+        key = (tuple(self.region_rows_key(rid) for rid in REGION_COUNTRY), self.box_index_key())
+        hit = self.__dict__.get("_regions_full")
+        if hit is not None and hit[0] == key:
+            return hit[1]
+        with self._flight("regions"):
+            hit = self.__dict__.get("_regions_full")
+            if hit is not None and hit[0] == key:
+                return hit[1]
+            out = self.regions_payload()
+            out["schema_version"] = "1.1.0"
 
-        def starts(region_id: str) -> list[dict[str, Any]]:
-            try:
-                return list(self.firms_calendar_payload(region_id)[1].get("starts", []))
-            except Exception:  # noqa: BLE001  (the registry answers without a start list)
-                return []
+            def starts(region_id: str) -> list[dict[str, Any]]:
+                try:
+                    return list(self.firms_calendar_payload(region_id)[1].get("starts", []))
+                except Exception:  # noqa: BLE001  (the registry answers without a start list)
+                    return []
 
-        out.update(places_payload(starts, self.box_index))
-        return out
+            out.update(places_payload(starts, self.box_index))
+            body = strict_json_bytes(out)
+            self._regions_full = (key, body)
+            return body
 
     def real_run_starts(self, region_id: str, cal: dict[str, Any], rows_key: int) -> dict[str, Any]:
         """Every worth-showing start date of a real run in the region (``real_start_dates``), with
@@ -795,9 +836,14 @@ class IsogonDataStore:
         return without_hidden_counts(value)
 
     def warm_firms(self) -> None:
-        """Build the real calendars and their start lists in the background, so the first page request is fast."""
+        """Build the real calendars, their start lists and the regions answer in the background, so the first page
+        request is fast; an asker before it is done waits for the same build (`_flight`) and does not start again."""
 
         def _run() -> None:
+            try:
+                self.regions_full_payload()
+            except Exception as exc:  # noqa: BLE001
+                sys.stderr.write(f"[Isogon API] regions warm-up skipped: {exc}\n")
             for rid in REGION_COUNTRY:
                 try:
                     self.firms_calendar_payload(rid)
@@ -1414,7 +1460,7 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                 return
 
             if route == "/api/regions":
-                self._send_json_obj(HTTPStatus.OK, store.regions_full_payload())
+                self._send_json_bytes(HTTPStatus.OK, store.regions_full_payload())
                 return
 
             if route == "/api/calendar":
@@ -1756,6 +1802,14 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
 def run_server(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, imagery_elsewhere: str = DEFAULT_IMAGERY) -> None:
     fields_dir = _REPO_ROOT / DEFAULT_FIELDS_REL_DIR
     store = IsogonDataStore(fields_dir=fields_dir, imagery_elsewhere=imagery_elsewhere)
+    # Before the port opens: the row counts (a fraction of a second), so health answers at once, and the regions
+    # answer with every region's calendar and start list, so no asker meets them cold (about 10 s, more after a change
+    # of the start rule, when every start search runs again); the rest of the warm-up goes on in the background.
+    store.firms_counts()
+    try:
+        store.regions_full_payload()
+    except Exception as exc:  # noqa: BLE001  (the route builds it on the first ask instead)
+        sys.stderr.write(f"[Isogon API] regions warm-up before the port opened skipped: {exc}\n")
     store.warm_firms()
     httpd = IsogonHTTPServer((host, port), store=store)
     print(
