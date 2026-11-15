@@ -98,8 +98,16 @@ class CountriesYears(unittest.TestCase):
             hpath = K.harmonized_countries_path()
             hpath.parent.mkdir(parents=True, exist_ok=True)
             vals = [None] * (len(years) - 1) + [5.5]
-            hpath.write_text(json.dumps({"years": years, "countries": {"Testland": vals, "Nowhere": vals}}))
+            tl = info["countries"]["Testland"]
+            tl_modis = tl["modis"][:i] + [4]                          # as counted without the closed cell
+            detected = {"Testland": {"modis": tl_modis, "suomi_npp": tl["viirs"]},
+                        "Otherland": {"modis": info["countries"]["Otherland"]["modis"], "suomi_npp": [0] * len(years)}}
+            hpath.write_text(json.dumps({"years": years, "what": "on one scale", "flag": {"Testland": {"big": 1}},
+                                         "detected": detected, "countries": {"Testland": vals, "Nowhere": vals}}))
             info = K.write(root=root, log=lambda s: None)
+            self.assertEqual(info["series"]["harmonized"]["source"], {"what": "on one scale"})   # its tables stay out
+            self.assertFalse(info["check"]["harmonized_detected_equal"])
+            self.assertEqual(info["check"]["harmonized_detected_differs"], ["Otherland suomi_npp"])
             self.assertEqual(info["countries"]["Testland"]["harmonized"], vals)
             self.assertIsNone(info["countries"]["Otherland"]["harmonized"])
             h = info["series"]["harmonized"]

@@ -41,6 +41,10 @@ SERIES: dict[str, dict[str, Any]] = {
     "modis": {"platforms": (0, 1), "what": "fire rows (FIRMS type 0, day and night) of Terra and Aqua, as counted"},
     "viirs": {"platforms": (2,), "what": "fire rows (FIRMS type 0, day and night) of Suomi NPP, as counted"},
 }
+# The harmonized file's own fields carried over: its words, not its per-country tables.
+HARMONIZED_KEEP: tuple[str, ...] = ("version", "what", "scale", "unit", "closed", "years_note", "shared_cells", "source")
+# Its own counts as detected, by its names, checked against the counted series.
+HARMONIZED_DETECTED: dict[str, str] = {"modis": "modis", "suomi_npp": "viirs"}
 HARMONIZED_WHAT: str = "the country's harmonized total on the Suomi NPP scale, from <world>/harmonize/years/"
 ATLAS_FILE: Path = Path(__file__).with_name("atlas_countries_50m.json")
 
@@ -133,12 +137,14 @@ def _part_sums(rec: np.ndarray, years: list[dict[str, Any]], masks: dict[int, np
     return out
 
 
-def _harmonized(years: list[int], countries: list[str]) -> tuple[dict[str, list[float | None]], dict[str, Any]]:
+def _harmonized(years: list[int], countries: list[str]) -> tuple[dict[str, list[float | None]], dict[str, Any],
+                                                                 dict[str, Any]]:
+    """The harmonized series per country, the state of the file, and its own counts as detected (if it has them)."""
     path = harmonized_countries_path()
     state: dict[str, Any] = {"what": HARMONIZED_WHAT, "scale": "suomi_npp", "state": "not written yet",
                              "file": "<world>/harmonize/years/countries.json", "sha256": None}
     if not path.is_file():
-        return {}, state
+        return {}, state, {}
     src = json.loads(path.read_text(encoding="utf-8"))
     if [int(y) for y in src.get("years", [])] != years:
         raise ValueError(f"{path.name}: its years {src.get('years')} are not {years[0]} to {years[-1]}")
@@ -153,8 +159,8 @@ def _harmonized(years: list[int], countries: list[str]) -> tuple[dict[str, list[
         out[key] = [None if v is None else float(v) for v in vals]
     state.update({"state": "drawn from the harmonize folder", "sha256": _sha(path),
                   "countries": len(out), "unknown_keys": sorted(unknown),
-                  "source": {k: v for k, v in src.items() if k != "countries"}})
-    return out, state
+                  "source": {k: src[k] for k in HARMONIZED_KEEP if k in src}})
+    return out, state, src.get("detected") or {}
 
 
 def write(root: Path | None = None, public: bool = True, closed: list[dict[str, Any]] | None = None,
@@ -186,7 +192,7 @@ def write(root: Path | None = None, public: bool = True, closed: list[dict[str, 
     for name, spec in SERIES.items():
         ms = np.nonzero(delivering[list(spec["platforms"])].any(axis=0))[0]
         first_year[name] = int(year_of_month(int(ms[0]))) if ms.size else None
-    harm, harm_state = _harmonized(year_list, countries)
+    harm, harm_state, harm_detected = _harmonized(year_list, countries)
 
     shapes = atlas()
     matched = match_atlas(countries, shapes)
@@ -219,6 +225,11 @@ def write(root: Path | None = None, public: bool = True, closed: list[dict[str, 
                      if f"{name}_{y}" in yj["layers"] and int(yj["layers"][f"{name}_{y}"]["rows"]) != int(world[i, j])]
             check["equals_yearly_layers"] = not diffs
             check["differs"] = diffs
+    if harm_detected:
+        diffs = sorted(f"{c} {theirs}" for c in countries for theirs, ours in HARMONIZED_DETECTED.items()
+                       if (harm_detected.get(c) or {}).get(theirs) != out_countries[c][ours])
+        check["harmonized_detected_equal"] = not diffs
+        check["harmonized_detected_differs"] = diffs
     info = {
         "version": VERSION,
         "what": "per country file of the store, per year, the fire detections its files hold",
