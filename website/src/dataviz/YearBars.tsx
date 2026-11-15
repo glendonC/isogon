@@ -1,7 +1,7 @@
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import { useState } from 'react';
 import { CSS, MARK } from './tokens';
-import { ReadoutBox } from './Readout';
-import { countedOf, yearReadout } from './yearSeries';
+import { Frame } from './Frame';
+import { countWords, countedOf, yearReadout } from './yearSeries';
 import type { YearSeries } from './yearSeries';
 
 export interface YearBarsProps {
@@ -20,8 +20,10 @@ export interface YearBarsProps {
  * Detections each year: orange bars where MODIS counted, light blue from VIIRS's first year, so the jump of 2012 is
  * the change of satellite. On one scale, each year's estimate is a white outline over its bar.
  */
-export function YearBars({ series, width = 700, height = 150, upTo = null, oneScale = false, current = null }: YearBarsProps) {
+export function YearBars({ series, width = 700, height = 240, upTo = null, oneScale = false, current = null }: YearBarsProps) {
+  const [hover, setHover] = useState<number | null>(null);
   const { years, firstViirsYear } = series;
+  const head = 90;
   const base = height - 30;
   const n = years.length;
   const pitch = width / n;
@@ -31,22 +33,21 @@ export function YearBars({ series, width = 700, height = 150, upTo = null, oneSc
     ...years.map((p) => countedOf(p, firstViirsYear).value ?? 0),
     ...(oneScale ? years.map((p) => p.oneScale ?? 0) : []),
   );
-  const sy = (v: number) => base - (v / max) * (base - 8);
+  const sy = (v: number) => base - (v / max) * (base - head - 8);
   const shown = years.filter((p) => upTo === null || p.year <= upTo);
   const labelled = new Set([years[0]?.year, firstViirsYear, years[n - 1]?.year, current].filter((y): y is number => typeof y === 'number'));
   return (
-    <ReadoutBox label="Fire detections each year">
-      {({ show, hide }) => (
-        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" style={{ display: 'block', maxWidth: '100%' }}>
+    <div className="dv-figure">
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Fire detections each year" className="dv-svg"
+          onPointerLeave={() => setHover(null)}>
           {shown.map((p) => {
             const i = years.indexOf(p);
             const x = i * pitch + (pitch - bar) / 2;
             const c = countedOf(p, firstViirsYear);
             const colour = c.by === 'viirs' ? CSS.viirs : CSS.modis;
-            const move = (e: ReactPointerEvent) => show(yearReadout(p, firstViirsYear), e);
             return (
-              <g key={p.year} onPointerMove={move} onPointerLeave={hide}>
-                <rect x={i * pitch} y={0} width={pitch} height={base} fill="transparent" />
+              <g key={p.year} onPointerEnter={() => setHover(p.year)} aria-label={yearReadout(p, firstViirsYear)}>
+                <rect x={i * pitch} y={head} width={pitch} height={base - head} fill="transparent" />
                 {c.value !== null ? (
                   p.partial ? (
                     <rect x={x + 0.75} y={sy(c.value) + 0.75} width={bar - 1.5} height={Math.max(1, base - sy(c.value) - 1.5)}
@@ -71,8 +72,23 @@ export function YearBars({ series, width = 700, height = 150, upTo = null, oneSc
               </text>
             ) : null,
           )}
+          {(() => {
+            const p = years.find((q) => q.year === hover && (upTo === null || q.year <= upTo));
+            if (!p) return null;
+            const i = years.indexOf(p);
+            const c = countedOf(p, firstViirsYear);
+            const tops = [c.value, oneScale ? p.oneScale : null].filter((v): v is number => v !== null);
+            const top = tops.length ? Math.min(...tops.map(sy)) : base - 10;
+            const fields = [String(p.year)];
+            if (c.value !== null) fields.push(`${countWords(c.value)} as ${c.by === 'viirs' ? 'VIIRS' : 'MODIS'} counted`);
+            if (p.oneScale !== null) fields.push(`${countWords(p.oneScale)} on one scale`);
+            if (p.partial && p.months !== null) fields.push(`${p.months} months only`);
+            return (
+              <Frame key={p.year} box={{ x: i * pitch + 1, y: top - 6, w: pitch - 2, h: base - top + 10 }} bounds={{ w: width, h: height }}
+                readout={fields} maxChars={34} above={{ bottom: head - 14 }} />
+            );
+          })()}
         </svg>
-      )}
-    </ReadoutBox>
+    </div>
   );
 }

@@ -44,7 +44,7 @@ test('a month with no fire is no fire, never the dimmest step', () => {
 
 test('the readout says the month, its value and its range', () => {
   const r = cellsFromCalendar(calendar(24));
-  assert.equal(cellReadout(r.cells[0]), 'November 2000: 0.10 detections per 1,000 km² a day, likely 0.00 to 0.20');
+  assert.equal(cellReadout(r.cells[0]), 'November 2000: 0.10 a day per 1,000 km², likely 0.00 to 0.20');
 });
 
 test('the held-out line comes from the route, rounded to whole percent', () => {

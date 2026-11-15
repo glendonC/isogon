@@ -1,8 +1,11 @@
 # Mounting the data displays
 
-Built to the ux lane's IDENTITY-2. Colour is only for data: orange MODIS, light blue VIIRS, white the estimate.
-Every component reads the identity's CSS variables first (`--id-*`), so it follows `identity.css` once that lands.
-A live page of every component: run the dev server and open `/src/dataviz/preview.html`.
+Built to the ux lane's in-scene look. No box anywhere: pointing at a month, a year or a method frames it with pale
+cyan corner brackets (`#9fe3ff`, the interface's one colour) and sets its exact readout beside or above it in mono
+capitals, with the action in white where pressing does something. Data keeps its colours: orange MODIS `#ff7a45`,
+light blue VIIRS `#8fd6f5`, the estimate white. Every component reads the identity's CSS variables first (`--id-*`,
+the cyan as `--id-ui`). A live page of every component: run the dev server and open `/src/dataviz/preview.html`
+(add `?still` for a headless capture: the frame's close-in motion off).
 
 ## Once, in `main.tsx` (after the identity's stylesheet)
 
@@ -24,7 +27,10 @@ const record = cellsFromCalendar(calendarAnswer);
 ) : null}
 ```
 
-It replaces the grid's SVG, its legend, the two satellite lines and the grey method line. `selected` is "YYYY-MM".
+It replaces the grid's SVG, its legend, the two satellite lines, the month label with its range bar and the grey
+method line: the frame rests on `selected` ("YYYY-MM") and follows the pointer, with the month's readout above the
+grid and a leader down to it. Pass `action` (two to four words, for example the product lane's words for showing
+the month's fire) and it is set over the readout while the frame is on the picked month; click picks a month.
 The product lane's words go in `words` (legend and satellite names) and `line` (the line under the grid).
 A drawn area (`/api/cube/record`) has no validation block, so its line is left out unless `line` is given.
 

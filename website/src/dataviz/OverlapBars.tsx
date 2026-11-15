@@ -1,6 +1,6 @@
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import { useState } from 'react';
 import { CSS, MARK } from './tokens';
-import { ReadoutBox } from './Readout';
+import { Frame } from './Frame';
 import { overlapAxisMax } from './overlapRows';
 import type { Overlap } from './overlapRows';
 import { useCount } from './useCount';
@@ -32,10 +32,12 @@ function Figure({ value, x, y }: { value: number; x: number; y: number }) {
  * One axis, two bars a method: exact (filled) and within one pixel (outlined), the number at each bar's end.
  * MODIS alone is the grey reference, then the model in use and the new model in white.
  */
-export function OverlapBars({ overlap, width = 560, words = DEFAULT_WORDS }: OverlapBarsProps) {
+export function OverlapBars({ overlap, width = 860, words = DEFAULT_WORDS }: OverlapBarsProps) {
+  const [hover, setHover] = useState<string | null>(null);
   const labelW = 150;
   const numW = 64;
-  const axisW = width - labelW - numW;
+  const readoutW = 290;
+  const axisW = width - labelW - numW - readoutW;
   const max = overlapAxisMax(overlap.rows) / 100;
   const sx = (v: number) => labelW + (v / max) * axisW;
   const keyY = 18;
@@ -45,11 +47,10 @@ export function OverlapBars({ overlap, width = 560, words = DEFAULT_WORDS }: Ove
   const height = axisY + 26;
   const ticks = Array.from({ length: Math.round(max * 10) + 1 }, (_, i) => i / 10);
   return (
-    <ReadoutBox label={words.title}>
-      {({ show, hide }) => (
-        <>
-          <p className="dv-title">{words.title}</p>
-          <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" style={{ display: 'block', maxWidth: '100%' }}>
+    <div className="dv-figure">
+      <p className="dv-title">{words.title}</p>
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={words.title} className="dv-svg"
+        onPointerLeave={() => setHover(null)}>
             <rect x={labelW} y={keyY - 12} width={14} height={12} fill={CSS.ink} />
             <text x={labelW + 22} y={keyY} className="dv-label">
               {words.exact}
@@ -65,9 +66,8 @@ export function OverlapBars({ overlap, width = 560, words = DEFAULT_WORDS }: Ove
               const y = top + i * group;
               const colour = row.key === 'modis' ? CSS.reference : CSS.ink;
               const tip = `${row.label}: ${(row.exact * 100).toFixed(1)}% exact, ${(row.within * 100).toFixed(1)}% within 1 pixel`;
-              const move = (e: ReactPointerEvent) => show(tip, e);
               return (
-                <g key={row.key} onPointerMove={move} onPointerLeave={hide}>
+                <g key={row.key} onPointerEnter={() => setHover(row.key)} aria-label={tip}>
                   <rect x={0} y={y - 4} width={width} height={group - 10} fill="transparent" />
                   <text x={0} y={y + MARK.bar + 4} className="dv-label" style={{ fill: row.key === 'modis' ? CSS.ink2 : CSS.ink }}>
                     {row.label}
@@ -85,10 +85,19 @@ export function OverlapBars({ overlap, width = 560, words = DEFAULT_WORDS }: Ove
                 {Math.round(t * 100)}%
               </text>
             ))}
-          </svg>
-          <p className="dv-line">{words.line}</p>
-        </>
-      )}
-    </ReadoutBox>
+            {(() => {
+              const i = overlap.rows.findIndex((r) => r.key === hover);
+              if (i < 0) return null;
+              const row = overlap.rows[i];
+              const y = top + i * group;
+              const right = sx(Math.max(row.exact, row.within)) + numW;
+              return (
+                <Frame key={row.key} box={{ x: labelW - 10, y: y - 8, w: right - labelW + 10, h: 2 * MARK.bar + 22 }} bounds={{ w: width, h: height }}
+                  readout={[row.label, `${(row.exact * 100).toFixed(1)}% exact`, `${(row.within * 100).toFixed(1)}% within 1 pixel`]} maxChars={20} />
+              );
+            })()}
+      </svg>
+      <p className="dv-line">{words.line}</p>
+    </div>
   );
 }

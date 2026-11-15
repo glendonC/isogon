@@ -79,13 +79,20 @@ export function rateText(v: number): string {
   return v < 10 ? v.toFixed(2) : v.toFixed(1);
 }
 
-/** The readout for one month: its value and its range, in plain words. */
-export function cellReadout(cell: RecordCell): string {
+/** The readout's fields for one month: its name, its value, its range. */
+export function cellFields(cell: RecordCell): string[] {
   const name = `${MONTHS_LONG[cell.month - 1]} ${cell.year}`;
-  if (cell.value === null) return `${name}: no value`;
-  if (cell.value === 0) return `${name}: no fire detected`;
-  const range = cell.low !== null && cell.high !== null ? `, likely ${rateText(cell.low)} to ${rateText(cell.high)}` : '';
-  return `${name}: ${rateText(cell.value)} detections per 1,000 km² a day${range}`;
+  if (cell.value === null) return [name, 'no value'];
+  if (cell.value === 0) return [name, 'no fire detected'];
+  const out = [name, `${rateText(cell.value)} a day per 1,000 km²`];
+  if (cell.low !== null && cell.high !== null) out.push(`likely ${rateText(cell.low)} to ${rateText(cell.high)}`);
+  return out;
+}
+
+/** The same in one plain line, for a reader's label. */
+export function cellReadout(cell: RecordCell): string {
+  const [name, ...rest] = cellFields(cell);
+  return `${name}: ${rest.join(', ')}`;
 }
 
 export interface HeldOut {

@@ -47,7 +47,7 @@ function Preview() {
   return (
     <main style={{ color: 'var(--dv-ink)', fontFamily: 'var(--dv-font)', background: 'var(--dv-ground)' }}>
       <Screen>
-        <div style={{ marginLeft: 260 }}>{record ? <RecordGrid record={record} selected={picked} onPick={setPicked} heldOut={heldOutFromCalendar(calendar)} /> : null}</div>
+        <div style={{ marginLeft: 260 }}>{record ? <RecordGrid record={record} selected={picked} onPick={setPicked} action="Show this fire" heldOut={heldOutFromCalendar(calendar)} /> : null}</div>
       </Screen>
       <Screen>{overlap ? <OverlapBars overlap={overlap} /> : null}</Screen>
       <Screen>
@@ -58,6 +58,13 @@ function Preview() {
       <Screen>{live ? <LiveTable table={live} /> : null}</Screen>
     </main>
   );
+}
+
+// ?still turns the frame's close-in motion off, so a headless capture shows its final place.
+if (new URLSearchParams(location.search).has('still')) {
+  const style = document.createElement('style');
+  style.textContent = '.dv-frame { animation: none !important; }';
+  document.head.appendChild(style);
 }
 
 createRoot(document.getElementById('root')!).render(

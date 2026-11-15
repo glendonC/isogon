@@ -12,6 +12,8 @@
   --dv-viirs: var(--id-viirs, #8fd6f5);
   --dv-estimate: var(--id-estimate, #f4f6f9);
   --dv-reference: #8a8f99;
+  --dv-ui: var(--id-ui, #9fe3ff);
+  --dv-move: cubic-bezier(0.35, 0, 0, 1);
   --dv-font: var(--sys-font, 'Geist', -apple-system, sans-serif);
   --dv-mono: var(--sys-mono, 'IBM Plex Mono', ui-monospace, Menlo, monospace);
   --dv-ease: var(--id-ease, cubic-bezier(0.22, 1, 0.36, 1));
@@ -53,20 +55,36 @@
   fill: var(--dv-ink);
 }
 
-/* The exact readout that follows the pointer. */
-.dv-readout {
-  position: absolute;
-  pointer-events: none;
+/* The frame on the thing pointed at: pale cyan corners closing in, the action in white, the readout in mono
+   capitals beside it. No box. */
+.dv-frame {
+  filter: drop-shadow(0 0 6px rgba(159, 227, 255, 0.6));
+  animation: dv-frame-in 450ms var(--dv-move) both;
+}
+@keyframes dv-frame-in {
+  from { transform: scale(1.25); }
+  to { transform: scale(1); }
+}
+.dv-action {
   font-family: var(--dv-font);
+  font-size: 22px;
+  font-weight: 300;
+  fill: var(--dv-ink);
+}
+.dv-readout {
+  font-family: var(--dv-mono);
   font-size: 16px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.3;
-  color: var(--dv-ink);
-  background: var(--dv-ground);
-  border: 1px solid var(--dv-line);
-  padding: 6px 8px;
-  white-space: nowrap;
-  border-radius: 0;
+  letter-spacing: 0.14em;
+  fill: var(--dv-ui);
+  white-space: pre;
+}
+.dv-svg {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dv-frame { animation: none; }
 }
 
 .dv-cell {

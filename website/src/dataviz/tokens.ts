@@ -4,7 +4,8 @@
  * The source of truth is `website/src/identity/identity.css` (`--id-modis`, `--id-viirs`, `--id-estimate`,
  * `--id-ground`, `--id-ink`, `--id-ink-2`, `--id-ink-3`, `--id-line`); these hex values are the same, and
  * `dataviz.css` reads the identity's variables first. Colour is only for data: orange is MODIS fire, light blue is
- * VIIRS fire, a white outline is the estimate, a hatch is VIIRS hidden. Controls and text are white and grey.
+ * VIIRS fire, a white outline is the estimate, a hatch is VIIRS hidden. The interface's own marks (the frame on the
+ * thing pointed at, its readout) are one pale cyan. Words are white.
  * Plain erasable TypeScript, so the tests import it directly.
  */
 
@@ -22,6 +23,8 @@ export const COLOR = {
   estimate: '#f4f6f9',
   /** A reference that is not one of the models drawn (MODIS alone as a method, in a comparison). */
   reference: '#8a8f99',
+  /** The interface's own marks: the frame and its readout. Never data. */
+  ui: '#9fe3ff',
 } as const;
 
 /** The same colours as CSS variables, for SVG attributes. */
@@ -35,6 +38,7 @@ export const CSS = {
   viirs: 'var(--dv-viirs)',
   estimate: 'var(--dv-estimate)',
   reference: 'var(--dv-reference)',
+  ui: 'var(--dv-ui)',
 } as const;
 
 /**
@@ -80,18 +84,26 @@ export const MARK = {
   bar: 14,
 } as const;
 
-/** Type: the system font; mono only for coordinates and fingerprints. Nothing a visitor must read under 16 px. */
+/**
+ * Type: the system font; mono capitals for the frame's readout, coordinates and fingerprints. Nothing a visitor must
+ * read under 16 px.
+ */
 export const TYPE = {
   font: 'var(--dv-font)',
   mono: 'var(--dv-mono)',
   min: 16,
   label: 16,
   title: 20,
+  action: 22,
+  readout: 16,
 } as const;
 
 /** Motion: the identity's timing and ease; a figure counts to its value once. */
 export const MOTION = {
   ease: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  /** The frame closing in on a thing. */
+  move: 'cubic-bezier(0.35, 0, 0, 1)',
+  frameMs: 450,
   fastMs: 160,
   countMs: 400,
 } as const;
