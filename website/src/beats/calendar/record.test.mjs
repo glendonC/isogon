@@ -190,7 +190,7 @@ test("a box's grid is the cube's own: the box on whole squares, how many and how
   assert.equal(gridOf({ grid_box: [-30, -30, -29, -29] }, null), null);
 });
 
-test("the method is named in the product lane's words, with how often a month's band held, all from the answer", () => {
+test("the method is named in plain words, with how often a month's band held, all from the answer", () => {
   const served = {
     ...body,
     harmonization_method: {

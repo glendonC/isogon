@@ -42,7 +42,7 @@ export function gridLine(box: string, step: number, cells: number, loaded: numbe
 }
 
 /**
- * The product lane's words for each method the Record may serve, by `harmonization_method.id`. A method with no
+ * Plain words for each method the Record may serve, by `harmonization_method.id`. A method with no
  * words here is not named: the Record says nothing rather than an id.
  */
 export const METHOD_PLAIN: Record<string, string> = {

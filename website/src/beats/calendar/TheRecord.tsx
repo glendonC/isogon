@@ -569,7 +569,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               >
                 <span className="sys-title">{monthWords(fm.ym)}</span>
                 <span className="sys-label">{monthLine(fm.ym, fm.value, fm.timesUsual, fm.median)}</span>
-                {/* The month's range, on the world-view lane's band: the figure as a tick within it. What the band is
+                {/* The month's range, on the world view's band: the figure as a tick within it. What the band is
                     and how often it held is said once, under the grid. As counted, the figure is not the one the range
                     is about, so no band is drawn. */}
                 {banded && !asCounted && fm.value !== null && fm.value > 0 && fm.p10 !== null && fm.p90 !== null && (
@@ -691,7 +691,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               {/* Under the years, how well the correction holds here: the record's own measured accuracy, on the page
                   and in the film. A phone's narrow foot leaves it to the guide's answer. */}
               {(inFilm || !narrowFoot) && rec.heldOut && <p className="sys-label rec__wide rec__heldout">{W.holds(rec.heldOut.harmonized, rec.heldOut.raw)}</p>}
-              {/* The method every year is put on one scale by, in the product lane's words, and what a month's band is.
+              {/* The method every year is put on one scale by, in plain words, and what a month's band is.
                   Where the guide speaks, its sentence on the step names the method, and the Record leaves it to it. */}
               {!guideSpeaks && !narrowFoot && methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld) && (
                 <p className="sys-fine rec__wide rec__method">{methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld)}</p>
