@@ -33,7 +33,9 @@ import type {
   TheaterId,
   StageMissingFile,
   StageFilmMove,
+  StageBurnedArea,
 } from './earthCutawayTypes';
+import { burnedBounds, burnedClasses, slabToPicture } from './engine/burnedArea';
 import {
   CinemaDirector,
   LANDING_HERO_POSE,
@@ -1125,6 +1127,56 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const uHeldOut = { value: 0.0 };
     // 1 on a run whose hidden passes another model answered (see answeredByOther)
     const uHeldOutOther = { value: 0.0 };
+    // NASA's burned-area map after the reveal (prop burnedArea, see burnedOver in the terrain shader)
+    const uBurnedMix = { value: 0.0 };
+    const uBurnedBox = new THREE.Vector4(1, 1, 0, 0);
+    const uBurnedSize = new THREE.Vector2(1, 1);
+    let burnedAsked: StageBurnedArea | null = null;
+    let burnedTex: THREE.DataTexture | null = null;
+    let burnedFor: StageBurnedArea | null = null;
+    let burnedPicture: [number, number, number, number] | null = null;
+    let burnedMix = 0;
+    // (its day picture read into a small texture: each cell's class against the run's window in red, its
+    // day of burn in green; rows from the south, as the slab's coordinates run)
+    const loadBurned = (b: StageBurnedArea) => {
+      const nx = Math.round(b.grid?.nx ?? 0);
+      const ny = Math.round(b.grid?.ny ?? 0);
+      if (!(nx > 0 && ny > 0 && nx * ny <= 4_000_000) || typeof b.day_png !== 'string') return;
+      const img = new Image();
+      img.onload = () => {
+        if (disposed || burnedAsked !== b) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = nx;
+        canvas.height = ny;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, nx, ny);
+        const px = ctx.getImageData(0, 0, nx, ny).data;
+        const days = new Uint8Array(nx * ny);
+        for (let r = 0; r < ny; r++) {
+          for (let c = 0; c < nx; c++) days[(ny - 1 - r) * nx + c] = px[(r * nx + c) * 4];
+        }
+        const spanStart = Date.parse(/T/.test(b.span.start) ? b.span.start : `${b.span.start}T00:00:00Z`);
+        const classes = burnedClasses(days, spanStart, Date.parse(b.window.start), Date.parse(b.window.end));
+        const data = new Uint8Array(nx * ny * 4);
+        for (let i = 0; i < nx * ny; i++) {
+          data[i * 4] = classes[i] * 64;
+          data[i * 4 + 1] = days[i];
+          data[i * 4 + 3] = 255;
+        }
+        const tex = new THREE.DataTexture(data, nx, ny, THREE.RGBAFormat, THREE.UnsignedByteType);
+        tex.magFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.NearestFilter;
+        tex.generateMipmaps = false;
+        tex.needsUpdate = true;
+        burnedTex?.dispose();
+        burnedTex = tex;
+        burnedFor = b;
+        burnedPicture = burnedBounds(b.box, nx, ny, b.grid.cell_km ?? 0.375, b.grid.bounds ?? null);
+        uBurnedSize.set(nx, ny);
+      };
+      img.src = b.day_png;
+    };
     const uDeclaredGiven = { value: 0.0 };
     // The hidden pass on show, or the last one shown, of the run named: its declared cells stay
     // flagged while the open frames fade out on the pass after it
@@ -1458,6 +1510,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uBeliefMix,
       uHeldOut,
       uHeldOutOther,
+      uBurnedMix,
+      uBurnedBox: { value: uBurnedBox },
+      uBurnedSize: { value: uBurnedSize },
       uDeclaredGiven,
       uChanceSquares,
       uDayJoin,
@@ -4013,6 +4068,28 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       // A real run: the detections of this overpass, each with its own footprint, replace the
       // scan lattice, and the smoke rises from detections
       const realRun = nextBundle.observerDataset.dataSource === 'firms';
+      // NASA's burned-area map: read when the page gives a new answer, drawn on a real run of its place,
+      // eased in and out
+      const burnedNow = p.burnedArea ?? null;
+      if (burnedNow !== burnedAsked) {
+        burnedAsked = burnedNow;
+        if (burnedNow) loadBurned(burnedNow);
+      }
+      const burnedShown =
+        realRun &&
+        burnedTex !== null &&
+        burnedAsked !== null &&
+        burnedFor === burnedAsked &&
+        (!burnedAsked.region_id || burnedAsked.region_id === nextBundle.regionId);
+      burnedMix = THREE.MathUtils.lerp(burnedMix, burnedShown ? 1 : 0, 1 - Math.exp(-dtSec * 3.0));
+      if (!burnedShown && burnedMix < 0.003) burnedMix = 0;
+      uBurnedMix.value = realRun ? burnedMix : 0;
+      // (on a real run the field's second sampler is never read: the map rides on it while it shows)
+      terrainUniforms.uFieldTex1.value = realRun && burnedMix > 0 && burnedTex ? burnedTex : fieldTex1;
+      if (burnedMix > 0 && burnedPicture) {
+        const m = slabToPicture(nextBundle.bbox, burnedPicture);
+        uBurnedBox.set(m[0], m[1], m[2], m[3]);
+      }
       if (realRun) {
         syncDetectionTextures(nextBundle, uploadedFrame0, uploadedFrame1);
         const key = `${nextBundle.key}:${epochIdx}:${p.holdoutViirs ? 1 : 0}:${landingWorld ? 1 : 0}`;
@@ -5099,6 +5176,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       }
       fieldTex0.dispose();
       fieldTex1.dispose();
+      burnedTex?.dispose();
       detectionTex0.dispose();
       detectionTex1.dispose();
       footprintField.dispose();

@@ -169,6 +169,26 @@ export interface StageTile {
 }
 
 /** A board of tiles over the region's box, drawn on the terrain. At most 64 tiles. */
+/** The fields of `GET /api/burned`'s answer the stage reads (isogon-notes/harmonize/BURNED-shape.md). */
+export interface StageBurnedArea {
+  region_id?: string;
+  /** The box asked for: west, south, east, north. */
+  box: [number, number, number, number];
+  /** The run's window, UTC; end exclusive. */
+  window: { start: string; end: string };
+  /** The months read: `start` is the first day, from which `day_png`'s days count. */
+  span: { start: string };
+  grid: {
+    cell_km?: number;
+    nx: number;
+    ny: number;
+    /** The picture on the ground: west, south, east, north (up to a cell past the box's east and north). */
+    bounds?: [number, number, number, number];
+  };
+  /** The day of burn per cell, from `span.start` (1 is that day, 0 not burned): a grey PNG data URL. */
+  day_png: string;
+}
+
 export interface StageTileBoard {
   /** Rows run north to south, columns west to east. Tile = row * cols + col. */
   rows: number;
@@ -356,6 +376,14 @@ export interface EarthCutawayStageProps {
   onFireAnchor?: (anchor: StageFireAnchor | null) => void;
   /** A board of tiles over the region's box, drawn on the terrain. Null or absent: no board. */
   tileBoard?: StageTileBoard | null;
+  /**
+   * NASA's burned-area map of the run's box (MCD64A1), to lay on the terrain after the reveal: the answer
+   * of `GET /api/burned` for the run's place and window, as it comes. Null or absent: none drawn. The
+   * stage draws what burned in the run's window as the scar, what burned before it darker and what burned
+   * after it to the month's end lighter, with an edge line, under the estimate's frames and the revealed
+   * squares. A run of another place, or a simulated run, draws nothing.
+   */
+  burnedArea?: StageBurnedArea | null;
   /** The tile under the pointer, or null. Called on change, only while `tileBoard.pickable` is true. */
   onTileHover?: (tile: number | null) => void;
   /** A click or tap on a tile, only while `tileBoard.pickable` is true. */

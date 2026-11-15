@@ -215,6 +215,11 @@ uniform float uBeliefMix;    // position between the two steps
 uniform vec4 uBeliefBox;     // the part of the region that holds any belief: (u west, v south, u east, v north)
 uniform float uHeldOut;      // 1 on a pass whose detections were kept from the estimate
 uniform float uHeldOutOther; // 1 on a run whose hidden passes another model answered than the one whose belief it carries
+// NASA's burned-area map after the reveal (see burnedOver): its share drawn, the map from the slab's
+// coordinates to the picture's (scale u, scale v, offset u, offset v), and the picture's cells
+uniform float uBurnedMix;
+uniform vec4 uBurnedBox;
+uniform vec2 uBurnedSize;
 uniform vec4 uRevealArrive;  // detections laid on after scoring arrive: xy the pass's direction of travel (east, north), z the front along it (km from the box's centre), w the front's soft width (km)
 uniform float uDayJoin;       // share of the box's side over which a day's photograph blends into the land around (0: none)
 uniform float uDayFalse;      // 1 while the day's photograph on the box is the false-colour one (bands 7, 2, 1)
@@ -603,6 +608,43 @@ vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   return vec4(max(cells, line * 0.9), lineEdge * 0.7, mix(strength, mix(1.0, BELIEF_INK_FAR, tiny), line), within);
 }
 
+// --- NASA's burned-area map (real runs, after the reveal) -------------------------------------------
+// MCD64A1's cells on the run's own 375 m grid, nearest cell, as the product gives them: what burned in the
+// run's window is the scar, what burned before it a darker tone, what burned after it to the month's end a
+// lighter one, and an amber line along the scar's edge. On a real run the picture rides on the field's
+// second sampler (uFieldTex1), which a real run never reads. Its red channel is the class times 64:
+// 1 before, 2 in the window, 3 after.
+float burnedClassAt(vec2 cell) {
+  return floor(texture2D(uFieldTex1, (cell + 0.5) / uBurnedSize).r * 255.0 / 64.0 + 0.5);
+}
+
+vec3 burnedOver(vec3 rgb, vec2 uv) {
+  vec2 q = uv * uBurnedBox.xy + uBurnedBox.zw;
+  if (q.x < 0.0 || q.y < 0.0 || q.x >= 1.0 || q.y >= 1.0) return rgb;
+  vec2 t = q * uBurnedSize;
+  vec2 cell = floor(t);
+  vec2 f = t - cell;
+  float cls = burnedClassAt(cell);
+  vec2 px = max(fwidth(t), vec2(1e-5));
+  if (cls < 0.5) return rgb;
+  // (the scar's edge: a cell side whose neighbour did not burn, about a pixel and a half wide)
+  float edge = 0.0;
+  edge = max(edge, step(burnedClassAt(cell + vec2(1.0, 0.0)), 0.5) * (1.0 - smoothstep(0.6, 1.6, (1.0 - f.x) / px.x)));
+  edge = max(edge, step(burnedClassAt(cell - vec2(1.0, 0.0)), 0.5) * (1.0 - smoothstep(0.6, 1.6, f.x / px.x)));
+  edge = max(edge, step(burnedClassAt(cell + vec2(0.0, 1.0)), 0.5) * (1.0 - smoothstep(0.6, 1.6, (1.0 - f.y) / px.y)));
+  edge = max(edge, step(burnedClassAt(cell - vec2(0.0, 1.0)), 0.5) * (1.0 - smoothstep(0.6, 1.6, f.y / px.y)));
+  vec3 before = mix(vec3(0.15, 0.065, 0.045), vec3(0.055, 0.024, 0.018), uNight);
+  vec3 within = mix(vec3(0.36, 0.11, 0.05), vec3(0.14, 0.04, 0.022), uNight);
+  vec3 after = mix(vec3(0.66, 0.42, 0.22), vec3(0.20, 0.12, 0.06), uNight);
+  vec3 tone = cls < 1.5 ? before : (cls < 2.5 ? within : after);
+  float cover = cls < 1.5 ? 0.50 : (cls < 2.5 ? 0.54 : 0.40);
+  // (a tint that keeps the ground's own shading, so the relief reads through the scar)
+  float shade = dot(rgb, vec3(0.30, 0.55, 0.15)) / max(dot(tone, vec3(0.30, 0.55, 0.15)), 1e-3);
+  rgb = mix(rgb, tone * clamp(0.55 + 0.45 * shade, 0.4, 1.6), cover * uBurnedMix);
+  vec3 line = mix(vec3(1.0, 0.64, 0.32), vec3(0.92, 0.48, 0.20), uNight);
+  return mix(rgb, line, edge * 0.85 * uBurnedMix);
+}
+
 // --- The board of tiles ------------------------------------------------------------------------
 // Lines in ink on the ground, never a fill: a hairline along every tile edge; a frame inside the
 // tile that grows heavier with its level; a firm outline where a look was spent; corner brackets
@@ -939,11 +981,13 @@ void main() {
     if (uFootMix.x > 0.5) {
       // A real run. Two things are drawn and nothing is invented: no flames, no embers, no
       // burned ground.
+      // 0. NASA's burned-area map, after the reveal, on the ground under everything else
+      vec3 groundRgb = uBurnedMix > 0.002 ? burnedOver(litEarth, vUv) : litEarth;
       // 1. The model's estimate.
       if (uBeliefGrid.x > 0.5) {
         // The belief, in ink (see beliefMarks). By day a dark edge holds the ink on bright ground.
         vec3 ink = mix(vec3(1.30, 1.32, 1.36), vec3(0.40, 0.46, 0.56), uNight) * marks.z;
-        postRgb = litEarth * (1.0 - 0.55 * marks.y * (1.0 - uNight) * hazeTrans.g);
+        postRgb = groundRgb * (1.0 - 0.55 * marks.y * (1.0 - uNight) * hazeTrans.g);
         postRgb *= 1.0 - BELIEF_DAY_SHADE * marks.w * (1.0 - uNight) * hazeTrans.g;
         // (while the landing fades from one pass to the next the ink dips with the lights, so the
         // belief's change of time does not pop)
@@ -952,7 +996,7 @@ void main() {
         // No belief frames on show (the file has not come yet, or did not load): no estimate is
         // drawn. A tint read off the run's field used to stand in here; on a real field it washed
         // the whole block red, since that field is above its floor almost everywhere.
-        postRgb = litEarth;
+        postRgb = groundRgb;
       }
       // 2. What the overpass on show detected, as emitted light, each detection in its own
       // footprint. A paired MODIS overpass (landing) belongs to the raw side only.
