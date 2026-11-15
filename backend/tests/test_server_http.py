@@ -280,6 +280,29 @@ class DefaultStartTests(unittest.TestCase):
         self.assertIn("could not be read", d["default_rule"])
         self.assertEqual(with_default_start({"starts": []}, "2021-07-22")["default_start"], None)
 
+    def test_a_start_search_window_past_the_cached_rows_is_read_to_their_end(self) -> None:
+        """The last month of the country files reads 30 days into a year only the area API holds; that read stops at
+        the end of the cached year instead of failing the place's whole start list. A window that starts in a year
+        with no rows still fails."""
+        from unittest import mock
+
+        import backend.firms as firms
+        import backend.server as server
+
+        asked = []
+
+        def read(box, start, end, platforms=None):
+            asked.append((str(start)[:10], str(end)[:10]))
+            if str(end)[:4] > "2025" and str(end)[:10] != "2026-01-01":
+                raise fa.FirmsCacheMissing("no FIRMS rows are cached for a region in [2026]")
+            return [{"row": 1}]
+
+        with mock.patch.object(firms, "read_firms", read):
+            self.assertEqual(server.read_rows_to_cache_end((0, 0, 1, 1), "2025-12-01T00:00:00", "2026-01-30T00:00:00"), [{"row": 1}])
+            self.assertEqual(asked, [("2025-12-01", "2026-01-30"), ("2025-12-01", "2026-01-01")])
+            with self.assertRaises(fa.FirmsCacheMissing):
+                server.read_rows_to_cache_end((0, 0, 1, 1), "2026-01-05T00:00:00", "2026-02-04T00:00:00")
+
     def test_the_start_list_reads_no_retired_constant(self) -> None:
         import inspect
 

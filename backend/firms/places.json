@@ -1,6 +1,7 @@
 {
   "what": "Named fires of each region: the name, dates, burned area and point the page in source gives (point_source, area_source or last_day_source when that fact comes from another page). They name the featured fires, which are chosen by rule from the real run starts, and give a calendar box around each fire; the rows and every figure of a calendar or a run come from NASA FIRMS. last_day is null where no end date is published.",
   "regions_what": "regions with cached FIRMS rows: the FIRMS country file their rows come from and their terrain tier; the preset list and the boxes are backend/terrain/live_region.py",
+  "record_only_what": "places with the Record only: their box is counted from the cached country files (GET /api/calendar?source=firms&box=) with the same held-out check, and no start passes the start rule there, so no run, round or play is offered; GET /api/calendar/checks lists their check beside the regions'",
   "warm_region": "plumas_ca",
   "regions": {
     "plumas_ca": {
@@ -248,6 +249,60 @@
           "source": "https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations/?code=EMSR746"
         }
       ]
+    },
+    "ventura_ca": {
+      "country": "United_States",
+      "terrain_tier": "hero",
+      "named_fires": []
+    },
+    "kakisa_nt": {
+      "country": "Canada",
+      "terrain_tier": "hero",
+      "named_fires": []
+    },
+    "okefenokee_ga": {
+      "country": "United_States",
+      "terrain_tier": "hero",
+      "named_fires": []
+    },
+    "evros_greece": {
+      "country": "Greece",
+      "terrain_tier": "hero",
+      "named_fires": []
+    },
+    "serra_acor_pt": {
+      "country": "Portugal",
+      "terrain_tier": "hero",
+      "named_fires": []
+    },
+    "maule_cl": {
+      "country": "Chile",
+      "terrain_tier": "hero",
+      "named_fires": []
+    },
+    "ljusdal_se": {
+      "country": "Sweden",
+      "terrain_tier": "hero",
+      "named_fires": []
+    },
+    "semey_kz": {
+      "country": "Kazakhstan",
+      "terrain_tier": "hero",
+      "named_fires": []
     }
-  }
+  },
+  "record_only_places": [
+    {
+      "id": "northern_ghana",
+      "name": "Northern Ghana savanna",
+      "country": "Ghana",
+      "box": [
+        -2.5,
+        7.25,
+        0.1,
+        9.15
+      ],
+      "why": "many small fires lit by day in the dry season: in no box of the region size searched do 24 MODIS overpasses with a detection fall within eight days, so the start rule finds no start; the box is the context box (five times the region span) about the region-size box that held the most MODIS rows from 2016-11-15 to 2017-02-15"
+    }
+  ]
 }

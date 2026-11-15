@@ -190,6 +190,50 @@ class PlacesRegistryTests(unittest.TestCase):
                     self.assertEqual(list(parse_box(entry["calendar"].split("box=")[1])), entry["box"])
         self.assertEqual(sorted(blind), [("evia_greece", 2021), ("lytton_bc", 2021), ("plumas_ca", 2021)])
 
+    def test_every_region_has_a_preset_box_and_no_two_context_boxes_meet(self) -> None:
+        """A region's rows are kept for its context box, so a box that met another region's (one with a closed test
+        fire above all) would share its rows. Every place of the Record only has its box and its reason."""
+        from backend.firms.places import load_places
+        from backend.terrain.live_region import DEFAULT_SPAN_LAT_DEG, DEFAULT_SPAN_LON_DEG, PRESET_BY_ID
+
+        reg = load_places()
+        boxes = {r: fa.region_box(r) for r in reg["regions"]}
+        self.assertEqual(set(boxes), set(fa.REGION_COUNTRY))
+        for r in boxes:
+            spec = PRESET_BY_ID[r]
+            if r not in ("plumas_ca", "lytton_bc", "evia_greece"):    # the first three keep the spans they were cut with
+                self.assertAlmostEqual(spec.bbox.east - spec.bbox.west, DEFAULT_SPAN_LON_DEG, places=6)
+                self.assertAlmostEqual(spec.bbox.north - spec.bbox.south, DEFAULT_SPAN_LAT_DEG, places=6)
+        names = sorted(boxes)
+        for i, a in enumerate(names):
+            for b in names[i + 1:]:
+                wa, sa, ea, na = boxes[a]
+                wb, sb, eb, nb = boxes[b]
+                with self.subTest(a=a, b=b):
+                    self.assertTrue(ea < wb or eb < wa or na < sb or nb < sa)
+        for place in reg.get("record_only_places", []):
+            self.assertNotIn(place["id"], boxes)
+            self.assertEqual(list(parse_box(",".join(str(v) for v in place["box"]))), place["box"])
+            self.assertTrue(place["why"])
+
+    def test_the_check_of_a_place_is_copied_from_its_calendar(self) -> None:
+        from backend.firms.real_calendar import record_check
+
+        validation = {"held_out_years": [2013, 2014, 2015], "median_abs_relative_error_annual": 0.1,
+                      "median_abs_relative_error_without_harmonization": 0.7, "annual_interval_coverage": 0.6667,
+                      "monthly_interval_coverage": 0.5, "months_tested": 36,
+                      "monthly_interval_coverage_modis_rows_ge_10": 0.75, "months_tested_modis_rows_ge_10": 8}
+        cal = {"harmonization_method": {
+            "id": "overlap_ratio_v1", "counted_rows": "every row", "fit_rows": {"modis": 100, "viirs": 380},
+            "ratio_terra_aqua": {"ratio": 3.8, "p10": 3.1, "p90": 4.4, "years": [2013, 2014, 2015]},
+            "overlap_months_excluded_for_outages": ["2014-02"], "validation": validation}}
+        got = record_check(cal)
+        self.assertEqual((got["ratio"], got["ratio_p10_p90"], got["fit_rows"]), (3.8, [3.1, 4.4], {"modis": 100, "viirs": 380}))
+        self.assertEqual((got["years_held_out"], got["months_tested"], got["overlap_months_excluded_for_outages"]), (3, 36, 1))
+        self.assertEqual((got["median_abs_relative_error_annual"], got["median_abs_relative_error_without_harmonization"]), (0.1, 0.7))
+        self.assertEqual((got["annual_interval_coverage"], got["monthly_interval_coverage"]), (0.6667, 0.5))
+        self.assertEqual(got["monthly_interval_coverage_modis_rows_ge_10"], 0.75)
+
     def test_featured_fires_and_the_default_follow_their_rules(self) -> None:
         from backend.firms.places import featured_periods, places_payload
 
@@ -330,6 +374,27 @@ class RoutesTests(unittest.TestCase):
         self.assertEqual(self._get("/api/firms/countries?country=Atlantis")[0], 404)
         self.assertEqual(self._get("/api/calendar?source=firms&box=23,38,24,39&region_id=evia_greece")[0], 400)
         self.assertEqual(self._get("/api/calendar/current?source=firms&box=1,2,3")[0], 400)
+
+    def test_the_check_of_every_place_in_one_answer(self) -> None:
+        from backend.firms.places import load_places
+
+        status, out = self._get("/api/calendar/checks")
+        self.assertEqual(status, 200, out)
+        self.assertIn("definition", out)
+        got = {p["id"]: p for p in out["places"]}
+        self.assertEqual({k for k, p in got.items() if p["kind"] == "region"}, set(fa.REGION_COUNTRY))
+        self.assertEqual({k for k, p in got.items() if p["kind"] == "box"}, {p["id"] for p in load_places().get("record_only_places", [])})
+        evia = got["evia_greece"]
+        self.assertNotIn("error", evia)
+        status, cal = self._get(evia["calendar"])
+        m = cal["summary_metrics"]
+        self.assertEqual(evia["ratio"], cal["harmonization_method"]["ratio_terra_aqua"]["ratio"])
+        self.assertEqual(round(evia["ratio"], 4), m["viirs_to_modis_overlap_ratio"])
+        self.assertEqual(evia["median_abs_relative_error_annual"], m["held_out_median_abs_relative_error"])
+        self.assertEqual(evia["median_abs_relative_error_without_harmonization"], m["held_out_median_abs_relative_error_without_harmonization"])
+        self.assertEqual((evia["annual_interval_coverage"], evia["monthly_interval_coverage"]),
+                         (m["held_out_annual_interval_coverage"], m["held_out_monthly_interval_coverage"]))
+        self.assertEqual(evia["fit_rows"], cal["harmonization_method"]["fit_rows"])
 
 
 if __name__ == "__main__":

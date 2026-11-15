@@ -138,7 +138,10 @@ class FirmsArchiveTests(unittest.TestCase):
         s = fa.cache_summary(self.cache)
         self.assertEqual(s["downloaded_rows"], 6 + 3 + 1)
         self.assertEqual(s["downloaded_files"], 3)
-        self.assertEqual(s["rows_in_region_boxes"], {"evia_greece": {"Terra": 2, "Aqua": 2, "Suomi NPP": 2, "NOAA-20": 1}})
+        # every region of the country file gets its extract; the fixture's rows all lie in Evia's box
+        want = {r: {} for r, c in fa.REGION_COUNTRY.items() if c == "Greece"}
+        want["evia_greece"] = {"Terra": 2, "Aqua": 2, "Suomi NPP": 2, "NOAA-20": 1}
+        self.assertEqual(s["rows_in_region_boxes"], want)
 
     def test_second_fetch_downloads_nothing(self) -> None:
         before = len(self.opener.urls)

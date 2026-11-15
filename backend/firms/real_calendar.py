@@ -642,6 +642,39 @@ def _calendar_payload(
     }
 
 
+RECORD_CHECK_WHAT: str = (
+    "the Record's held-out check of every place side by side, each read from that place's own calendar "
+    "(harmonization_method.validation): for each overlap year, the ratio and its interval are fitted on the other "
+    "years and that year's Suomi NPP count is predicted from its MODIS count"
+)
+
+
+def record_check(cal: dict[str, Any]) -> dict[str, Any]:
+    """The figures of a calendar's held-out check, for the answer that lists every place: the ratio in use and its
+    interval, the median yearly error with and without the correction, how often the stated interval held, and the
+    rows the fit was made from. Every value is copied from the calendar; nothing is fitted here."""
+    h = cal["harmonization_method"]
+    fit, v = h["ratio_terra_aqua"], h["validation"]
+    busy = f"monthly_interval_coverage_modis_rows_ge_{BUSY_MONTH_MODIS_ROWS}"
+    return {
+        "method": h["id"],
+        "ratio": fit.get("ratio"),
+        "ratio_p10_p90": [fit.get("p10"), fit.get("p90")],
+        "overlap_years": fit.get("years"),
+        "years_held_out": len(v["held_out_years"]),
+        "median_abs_relative_error_annual": v["median_abs_relative_error_annual"],
+        "median_abs_relative_error_without_harmonization": v["median_abs_relative_error_without_harmonization"],
+        "annual_interval_coverage": v["annual_interval_coverage"],
+        "monthly_interval_coverage": v["monthly_interval_coverage"],
+        "months_tested": v["months_tested"],
+        busy: v.get(busy),
+        f"months_tested_modis_rows_ge_{BUSY_MONTH_MODIS_ROWS}": v.get(f"months_tested_modis_rows_ge_{BUSY_MONTH_MODIS_ROWS}"),
+        "fit_rows": h["fit_rows"],
+        "overlap_months_excluded_for_outages": len(h["overlap_months_excluded_for_outages"]),
+        "counted_rows": h["counted_rows"],
+    }
+
+
 def month_climatology(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Per calendar month: the median, 10th and 90th percentile of ``harmonized_mean`` over every year in which that
     month is harmonized."""

@@ -11,6 +11,7 @@ Endpoints:
   - GET  /api/observer?frame=<0..23>&sensor=<all|modis|viirs>&min_frp=...&max_zenith=...&run_id=...
   - GET  /api/calendar                        (simulated; ?source=firms&region_id=<id> for the real calendar)
   - GET  /api/calendar/rows.csv?region_id=<id>&start=<date>&end=<date>[&platforms=Terra,Aqua]
+  - GET  /api/calendar/checks                 (the Record's held-out check of every place in one answer)
   - GET  /api/sensor-model
   - GET  /api/field-meta
   - POST /api/env/next_look/reset             {region_id, episode | start, tiles, budget, seed}
@@ -57,7 +58,8 @@ from backend.firms.pass_timeline import pass_timeline  # noqa: E402
 from backend.firms.box_index import BoxIndex  # noqa: E402
 from backend.firms.current_month import CurrentMonth  # noqa: E402
 from backend.firms.places import load_places, places_payload  # noqa: E402
-from backend.firms.real_calendar import box_calendar, box_text, firms_calendar, parse_box, rows_csv, rows_csv_box  # noqa: E402
+from backend.firms.real_calendar import RECORD_CHECK_WHAT, box_calendar, box_text, firms_calendar, parse_box, record_check  # noqa: E402
+from backend.firms.real_calendar import rows_csv, rows_csv_box  # noqa: E402
 from backend.model import MODEL_VERSION, PROVENANCE_NOTE  # noqa: E402
 from backend.model.calibrator import get_pretrained_calibrator  # noqa: E402
 from backend.model.gates import build_benchmark_gates  # noqa: E402
@@ -212,6 +214,26 @@ START_RULE_MODULES: tuple[str, ...] = (
     "backend.model.real_run", "backend.model.real_blind", "backend.eval.holdout", "backend.eval.blind_test",
     "backend.eval.overpass", "backend.eval.rows",
 )
+
+
+def read_rows_to_cache_end(box: tuple[float, float, float, float], start: Any, end: Any,
+                           platforms: Any = None) -> list[dict[str, str]]:
+    """`read_firms`, except that a window reaching into a year with no cached rows for its place is read to the end
+    of the year before. The start search reads 30 days past each month it searches, so the last month of the
+    country files reaches into a year that only the area API holds, and only for the places it was fetched for. A
+    start whose 24 overpasses would need those rows then has fewer than 24, which the start rule says of it, instead
+    of one missing year failing the place's whole start list."""
+    from backend.firms import read_firms
+    from backend.firms.archive import _as_utc
+
+    try:
+        return read_firms(box, start, end, platforms)
+    except FirmsCacheMissing:
+        t0, t1 = _as_utc(start), _as_utc(end)
+        cut = t1.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        if cut <= t0 or cut >= t1:
+            raise
+        return read_rows_to_cache_end(box, t0, cut, platforms)
 
 
 def start_rule_digest() -> str:
@@ -566,6 +588,50 @@ class IsogonDataStore:
     def firms_calendar_bytes(self, region_id: str) -> bytes:
         return self.firms_calendar_payload(region_id)[0]
 
+    def record_checks_payload(self) -> dict[str, Any]:
+        """The held-out check of the Record for every region with rows and every place of the Record only
+        (`record_only_places` in the places registry), each read from that place's own calendar. A region's check is
+        kept while its rows are unchanged; it is taken from the served calendar when that is built, and otherwise
+        from the calendar alone, without the start search."""
+        places: list[dict[str, Any]] = []
+        definition: dict[str, Any] = {}
+        for rid in REGION_COUNTRY:
+            spec = PRESET_BY_ID[rid]
+            entry: dict[str, Any] = {"kind": "region", "id": rid, "name": spec.name,
+                                     "countries": [REGION_COUNTRY[rid].replace("_", " ")],
+                                     "calendar": f"/api/calendar?source=firms&region_id={rid}"}
+            try:
+                key = self.region_rows_key(rid)
+                with self._lock:
+                    checks = self.__dict__.setdefault("_record_checks", {})
+                    hit = checks.get(rid)
+                    served = self.__dict__.get("_firms_calendars", {}).get(rid)
+                if hit is not None and hit[0] == key:
+                    check, defs = hit[1], hit[2]
+                else:
+                    cal = json.loads(served[1]) if served is not None and served[0] == key else firms_calendar(rid)
+                    v = cal["harmonization_method"]["validation"]
+                    check, defs = {"box": cal["bbox"], **record_check(cal)}, {k: v[k] for k in ("definition", "nominal_interval")}
+                    with self._lock:
+                        checks[rid] = (key, check, defs)
+                entry.update(check)
+                definition = definition or defs
+            except Exception as exc:  # noqa: BLE001  (one place that cannot answer does not stop the others)
+                entry["error"] = str(exc)
+            places.append(entry)
+        for place in load_places().get("record_only_places", []):
+            entry = {"kind": "box", "id": place["id"], "name": place["name"], "countries": [place["country"].replace("_", " ")],
+                     "calendar": "/api/calendar?source=firms&box=" + box_text(place["box"]), "record_only": place["why"]}
+            try:
+                cal = self.box_calendar_payload(tuple(float(v) for v in place["box"]))[0]
+                v = cal["harmonization_method"]["validation"]
+                entry.update({"box": cal["bbox"], **record_check(cal)})
+                definition = definition or {k: v[k] for k in ("definition", "nominal_interval")}
+            except Exception as exc:  # noqa: BLE001
+                entry["error"] = str(exc)
+            places.append(entry)
+        return {"what": RECORD_CHECK_WHAT, **definition, "places": places}
+
     def _warm_box_index(self) -> None:
         try:
             self.box_index.tables()
@@ -671,7 +737,7 @@ class IsogonDataStore:
         for ym in months:
             y, mo = int(ym[:4]), int(ym[5:7])
             last = _calendar.monthrange(y, mo)[1]
-            d = real_start_dates(spec, f"{ym}-01", f"{ym}-{last:02d}")
+            d = real_start_dates(spec, f"{ym}-01", f"{ym}-{last:02d}", read_firms=read_rows_to_cache_end)
             busiest = set(d.get("busiest") or [])
             for e in d["starts"]:
                 if not e.get("worth_showing"):
@@ -755,6 +821,7 @@ class IsogonDataStore:
                 "/api/calendar",
                 "/api/calendar?source=firms&region_id=plumas_ca",
                 "/api/calendar/rows.csv?region_id=plumas_ca&start=2021-08-01&end=2021-09-01",
+                "/api/calendar/checks",
                 "/api/sensor-model",
                 "/api/field-meta",
             ],
@@ -1322,6 +1389,10 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                 self._send_json_bytes(HTTPStatus.OK, body)
                 return
 
+            if route == "/api/calendar/checks":
+                self._send_json_obj(HTTPStatus.OK, store.record_checks_payload())
+                return
+
             if route == "/api/firms/countries":
                 country = qs.get("country", [""])[0] or None
                 rows = firms_country_files(country=country)
@@ -1596,6 +1667,7 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                         "/api/runs/<run_id>/terrain/<name>",
                         "/api/observer",
                         "/api/calendar",
+                        "/api/calendar/checks",
                         "/api/sensor-model",
                         "/api/field-meta",
                         "/api/env/next_look/reset (POST)",

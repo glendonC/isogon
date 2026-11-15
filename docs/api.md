@@ -36,6 +36,7 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 | `GET /api/calendar` | The burning calendar, simulated or real |
 | `GET /api/calendar/current` | This month so far against the same month's median |
 | `GET /api/calendar/rows.csv` | The FIRMS rows behind a calendar selection |
+| `GET /api/calendar/checks` | The held-out check of the calendar's harmonization, for every place in one answer |
 | `GET /api/firms/countries` | Every country file the FIRMS listing publishes, its size and whether it is cached |
 | `GET /api/runs/starts` | The start dates worth showing for a real run |
 | `POST /api/reconstruct` | Build or fetch a run |
@@ -239,7 +240,7 @@ Shortened: `summary_metrics` has 5 keys, `regime_markers` 7 entries, `annual_sum
 
 ### Real calendar (`source=firms`)
 
-`region_id=<id>` gives a region's calendar, built from the cached FIRMS rows of its context box by `backend/firms/real_calendar.py`. `box=<west>,<south>,<east>,<north>` (degrees) gives the calendar of any box instead, counted from every row of the cached FIRMS country files (United States, Canada, Greece) inside it; give one or the other. It has the simulated calendar's keys with real values, and adds `source`, `box_area_km2`, `harmonization_method`, `place`, `month_climatology`, `current_month` and, for a region, `real_run_starts`.
+`region_id=<id>` gives a region's calendar, built from the cached FIRMS rows of its context box by `backend/firms/real_calendar.py`. `box=<west>,<south>,<east>,<north>` (degrees) gives the calendar of any box instead, counted from every row of the cached FIRMS country files inside it (`GET /api/regions` lists the cached countries); give one or the other. It has the simulated calendar's keys with real values, and adds `source`, `box_area_km2`, `harmonization_method`, `place`, `month_climatology`, `current_month` and, for a region, `real_run_starts`.
 
 ```json
 {
@@ -264,20 +265,20 @@ Shortened: `summary_metrics` has 5 keys, `regime_markers` 7 entries, `annual_sum
     "platforms_in_fit": ["Suomi NPP", "Terra", "Aqua"],
     "platforms_counted_not_fitted": {"NOAA-20": "...", "NOAA-21": "..."},
     "not_in_calendar": "...",
-    "ratio_terra_aqua": {"ratio": 4.1223, "per_year": {"2012": 4.2762}, "p10": 3.1159, "p90": 4.3618, "years": [2012], "viirs_rows": 159754, "modis_rows": 38754},
-    "ratio_terra_only": {"ratio": 8.476, "p10": 7.3213, "p90": 8.9352},
+    "ratio_terra_aqua": {"ratio": 4.1217, "per_year": {"2012": 4.2874}, "p10": 3.1213, "p90": 4.3652, "years": [2012], "viirs_rows": 160105, "modis_rows": 38844},
+    "ratio_terra_only": {"ratio": 8.4757, "p10": 7.3213, "p90": 8.9392},
     "validation": {
       "held_out_years": [2012],
-      "per_year": [{"year": 2012, "months": 10, "viirs_observed": 16951, "modis_observed": 3964, "ratio_fitted_without_this_year": 4.1047, "viirs_predicted": 16271.1, "relative_error": -0.0401, "relative_error_without_harmonization": -0.7661, "inside_interval": true}],
+      "per_year": [{"year": 2012, "months": 11, "viirs_observed": 17021, "modis_observed": 3970, "ratio_fitted_without_this_year": 4.1029, "viirs_predicted": 16288.5, "relative_error": -0.043, "relative_error_without_harmonization": -0.7668, "inside_interval": true}],
       "median_abs_relative_error_annual": 0.1086,
-      "median_abs_relative_error_without_harmonization": 0.7347,
+      "median_abs_relative_error_without_harmonization": 0.7343,
       "annual_interval_coverage": 0.6429,
-      "monthly_interval_coverage": 0.4052,
-      "months_tested": 153
+      "monthly_interval_coverage": 0.414,
+      "months_tested": 157
     },
     "replaced_only_by": "a method that beats it on held-out overlap years"
   },
-  "summary_metrics": {"total_months": 302, "years_span": [2000, 2025], "first_month": "2000-11", "last_month": "2025-12", "viirs_to_modis_overlap_ratio": 4.1223},
+  "summary_metrics": {"total_months": 302, "years_span": [2000, 2025], "first_month": "2000-11", "last_month": "2025-12", "viirs_to_modis_overlap_ratio": 4.1217},
   "regime_markers": [{"year_month": "2000-11", "label": "MODIS Terra rows begin", "source": "first month with rows in the FIRMS country file"}],
   "annual_summary": [{"year": 2000, "months": 2, "modis_raw_mean": 0.0245, "viirs_raw_mean": null, "harmonized_mean": 0.2077, "harmonized_peak_month": 0.3686, "mean_coverage_fraction": null, "raw_counts": {"Terra": 69}}],
   "records": [
@@ -373,6 +374,41 @@ The FIRMS rows behind a calendar selection, as CSV (`text/csv; charset=utf-8`).
 Headers: `X-Row-Count` (the number of rows) and `Content-Disposition` (`isogon_firms_<region>_<start>_<end>.csv`, or `isogon_firms_box_<w>_<s>_<e>_<n>_<start>_<end>.csv`). The columns are `_acq_utc`, `_platform`, `_product`, then the source's own: `latitude`, `longitude`, `acq_date`, `acq_time`, `satellite`, `instrument`, `confidence`, `version`, `frp`, `scan`, `track`, `daynight`, `type`, `brightness`, `bright_t31`, `bright_ti4`, `bright_ti5`. MODIS-only and VIIRS-only columns are empty where a platform has none.
 
 Errors: `400` when `start` or `end` is not a date, when `end` is not after `start`, when the selection is over 500,000 rows, for a bad box, or for a box span over 400 days; `404` for a region with no FIRMS data, a box no cached country file has rows in, and a span the cache does not hold.
+
+## `GET /api/calendar/checks`
+
+The held-out check of every place's calendar side by side: each region with FIRMS rows, then each place of the calendar only (`record_only_places` in `backend/firms/places.json`, counted as a box). Every figure is copied from that place's own calendar (`harmonization_method`), whose route each entry names; nothing is fitted here (`record_check` in `backend/firms/real_calendar.py`).
+
+```json
+{
+  "what": "the Record's held-out check of every place side by side, ...",
+  "definition": "for each overlap year: fit the ratio of sums and the 10th to 90th percentile of per-year ratios on the other overlap years; ...",
+  "nominal_interval": "10th to 90th percentile of per-year ratios (80 percent if the yearly ratio spread held)",
+  "places": [
+    {
+      "kind": "region", "id": "plumas_ca", "name": "Feather River & Plumas, CA", "countries": ["United States"],
+      "calendar": "/api/calendar?source=firms&region_id=plumas_ca", "box": [-122.48, 39.1, -119.88, 41.0],
+      "method": "overlap_ratio_v1", "ratio": 4.1217, "ratio_p10_p90": [3.1213, 4.3652],
+      "overlap_years": [2012, 2013], "years_held_out": 14,
+      "median_abs_relative_error_annual": 0.1086, "median_abs_relative_error_without_harmonization": 0.7343,
+      "annual_interval_coverage": 0.6429, "monthly_interval_coverage": 0.414, "months_tested": 157,
+      "monthly_interval_coverage_modis_rows_ge_10": 0.4392, "months_tested_modis_rows_ge_10": 148,
+      "fit_rows": {"modis": 38844, "viirs": 160105}, "overlap_months_excluded_for_outages": 11,
+      "counted_rows": "..."
+    },
+    {
+      "kind": "box", "id": "northern_ghana", "name": "Northern Ghana savanna", "countries": ["Ghana"],
+      "calendar": "/api/calendar?source=firms&box=-2.5,7.25,0.1,9.15", "record_only": "many small fires lit by day ...",
+      "ratio": 4.2001, "median_abs_relative_error_annual": 0.0748, "fit_rows": {"modis": 253942, "viirs": 1066572}
+    }
+  ]
+}
+```
+
+Shortened: `overlap_years` cut to two of 14 years, the second entry cut to a few keys, and `places` to two of 12.
+
+- `ratio` and `ratio_p10_p90` are the Terra and Aqua ratio in use and its interval; `median_abs_relative_error_annual` and `..._without_harmonization` are the median over held-out years of the yearly error with the ratio and with MODIS counts taken as they are; the coverages are how often the observed Suomi NPP count of a held-out year, or month, lay inside the interval fitted without that year; `fit_rows` are the rows the ratio was fitted on.
+- A region's entry is kept while its rows are unchanged; the first answer after a start reads every calendar, about 30 seconds while the box index is built, then tens of milliseconds. A place whose calendar cannot be built carries `error` and the others still answer.
 
 ## `GET /api/firms/countries`
 

@@ -246,6 +246,34 @@ PRESET_REGIONS: list[RegionSpec] = [
     ),
 ]
 
+# Regions with FIRMS rows added after the first three. Each box has the preset span and is placed where it holds the
+# most MODIS rows in the dates of the fire it was chosen for (searched within a degree or two of the fire's reported
+# point, every 0.02 degrees); its context box meets no other region's. The fires and the figures are in
+# backend/firms/places.json.
+_ADDED_REGIONS: tuple[tuple[str, str, str, str, float, float], ...] = (
+    ("ventura_ca", "Ojai & Ventura River, CA", "Coastal Chaparral Ranges", "mediterranean", 34.45, -119.22),
+    ("kakisa_nt", "Kakisa & Enterprise, NT", "Boreal Plain Forest and Wetland", "boreal_montane", 60.80, -116.96),
+    ("okefenokee_ga", "Okefenokee Swamp, GA and FL", "Blackwater Swamp and Pine Flatwoods", "temperate_broadleaf", 30.66, -82.27),
+    ("evros_greece", "Dadia Forest & Soufli, Evros", "Pine and Oak Hills by the Evros", "mediterranean", 41.03, 25.97),
+    ("serra_acor_pt", "Serra do Açor & Covilhã, Portugal", "Schist Ranges of Pine and Eucalyptus", "mediterranean", 40.19, -7.70),
+    ("maule_cl", "Empedrado & Maule Coast Range, Chile", "Pine and Eucalyptus Plantation Hills", "mediterranean", -35.52, -72.19),
+    ("ljusdal_se", "Kårböle & Ljusdal, Sweden", "Boreal Pine Forest of Hälsingland", "boreal_montane", 61.90, 15.42),
+    ("semey_kz", "Semey Ormany, Kazakhstan", "Pine Belt of the Irtysh Steppe", "boreal_montane", 50.48, 80.76),
+)
+PRESET_REGIONS += [
+    RegionSpec(
+        id=rid,
+        name=name,
+        subtitle=subtitle,
+        biome=biome,
+        bbox=_make_bbox_from_center(lat, lon, DEFAULT_SPAN_LON_DEG, DEFAULT_SPAN_LAT_DEG)[0],
+        span_lon_deg=DEFAULT_SPAN_LON_DEG,
+        span_lat_deg=DEFAULT_SPAN_LAT_DEG,
+        is_preset=True,
+    )
+    for rid, name, subtitle, biome, lat, lon in _ADDED_REGIONS
+]
+
 PRESET_BY_ID: dict[str, RegionSpec] = {r.id: r for r in PRESET_REGIONS}
 
 # Gazetteer keywords -> either preset_id (str) or (lat, lon, name, subtitle, biome)
