@@ -63,6 +63,8 @@ interface LandingCompositionProps {
   /** The film presentation: the start state's film caption, in the headline's place; the headline, its sentence and
    *  the facts line give way to it. */
   caption?: string | null;
+  /** On a page of recorded answers: one quiet line saying so, with the commit they were recorded from. */
+  recorded?: string | null;
   onOpenSearch: () => void;
   onOpenSensor: () => void;
   onOpenMethod: () => void;
@@ -77,6 +79,7 @@ export function LandingComposition({
   lines,
   passHidden = false,
   caption = null,
+  recorded = null,
   onOpenSearch,
   onOpenSensor,
   onOpenMethod,
@@ -178,6 +181,7 @@ export function LandingComposition({
             )}
           </div>
 
+          {recorded && <p className="iso-land__recorded">{recorded}</p>}
           <p className="iso-land__credit">Imagery: {imageryCredit}</p>
 
           {/* The one hint that there is more below: the first application, a click or a scroll away. */}

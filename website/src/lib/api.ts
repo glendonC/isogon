@@ -101,6 +101,9 @@ interface RecordedIndex {
   periods_left_out?: { why?: string; periods?: unknown };
   /** The recorded rounds: each one's fire, its recorded line and the decision of the visitor's one look. */
   rounds?: unknown;
+  /** The backend's commit the answers were recorded from, when the recording names it, and when it was recorded. */
+  commit?: string | null;
+  recordedUtc?: string | null;
 }
 
 /** A recorded round of a fire, as the index lists it. */
@@ -119,7 +122,12 @@ function recordedIndex(): Promise<RecordedIndex> {
   if (!indexPromise) {
     indexPromise = fetch(`${RECORDED_BASE}index.json`)
       .then((r) => (r.ok ? (r.json() as Promise<RecordedIndex>) : ({ version: 1, entries: {} } as RecordedIndex)))
-      .then((idx): RecordedIndex => ({ version: idx.version, entries: idx.entries ?? {}, periods_left_out: idx.periods_left_out, rounds: idx.rounds }))
+      .then((idx): RecordedIndex => {
+        const raw = idx as RecordedIndex & { recorded_utc?: unknown; backend?: { commit?: unknown } };
+        const commit = typeof raw.commit === 'string' ? raw.commit : typeof raw.backend?.commit === 'string' ? raw.backend.commit : null;
+        const recordedUtc = typeof raw.recorded_utc === 'string' ? raw.recorded_utc : null;
+        return { version: idx.version, entries: idx.entries ?? {}, periods_left_out: idx.periods_left_out, rounds: idx.rounds, commit, recordedUtc };
+      })
       .catch((): RecordedIndex => ({ version: 1, entries: {} }))
       .then((idx) => (indexLoaded = idx));
   }
@@ -144,6 +152,16 @@ async function recorded<T>(key: string, signal?: AbortSignal): Promise<T> {
   const status = hit.status ?? resp.status;
   if (status < 200 || status >= 300) throw new HttpError(status, body);
   return body as T;
+}
+
+/**
+ * Where a page of recorded answers comes from: the backend's commit, when the recording's index names it, and the time
+ * it was recorded. Null on the live transport.
+ */
+export async function recordedProvenance(): Promise<{ commit: string | null; recordedUtc: string | null } | null> {
+  if (TRANSPORT !== 'recorded') return null;
+  const idx = await recordedIndex();
+  return { commit: idx.commit ?? null, recordedUtc: idx.recordedUtc ?? null };
 }
 
 /** The featured periods a page of recorded answers does not hold, by featured fire id; none on the live transport. */

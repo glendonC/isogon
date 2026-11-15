@@ -266,6 +266,17 @@
   color: rgba(243, 244, 246, 0.86);
 }
 
+/* A page of recorded answers says so, quietly, over the imagery credit. */
+.iso-land__recorded {
+  position: absolute;
+  left: var(--iso-gutter);
+  bottom: calc(var(--iso-gutter) + 20px);
+  max-width: min(720px, calc(100vw - 2 * var(--iso-gutter)));
+  margin: 0;
+  font: 400 11px/14px var(--font-mono);
+  color: rgba(243, 244, 246, 0.86);
+}
+
 /* Headline: crisp DOM text (375 m) over a cell canvas (1 km) that shows only on load and in the lens. */
 .iso-split {
   position: relative;

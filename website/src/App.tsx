@@ -85,7 +85,7 @@ import type {
   WorkspaceMode,
 } from './stage/types';
 
-import { API_BASE, assetUrl, assetUrlNow, getJson, postJson, runRequestBody, TRANSPORT } from './lib/api';
+import { API_BASE, assetUrl, assetUrlNow, getJson, postJson, recordedProvenance, runRequestBody, TRANSPORT } from './lib/api';
 
 /**
  * Landing world view: `landingSubjectFrame` names the rectangle the stage keeps calm (sky or haze) for the type.
@@ -1612,6 +1612,21 @@ export function App() {
     return frames ? [lines[0], frames] : lines;
   })();
 
+  // A page of recorded answers says so on the landing, with the commit the recording names and the day it was made.
+  const [recordedLine, setRecordedLine] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void recordedProvenance().then((p) => {
+      if (!live || !p) return;
+      const d = p.recordedUtc ? new Date(p.recordedUtc) : null;
+      const day = d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : null;
+      const at = p.commit ? ` at commit ${p.commit.slice(0, 7)}` : '';
+      setRecordedLine(`This page replays answers recorded from the project's backend${at}${day ? `, on ${day}` : ''}.`);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   // In the film presentation the start state's film caption stands in the landing's headline's place.
   const landingCaption = (() => {
     if (!filmMode) return null;
@@ -1640,6 +1655,7 @@ export function App() {
           lines={landingLines}
           passHidden={landingHidden}
           caption={landingCaption}
+          recorded={recordedLine}
           onOpenSearch={() => setAskOpen(true)}
           onOpenSensor={() => setReading('sensors')}
           onOpenMethod={() => setReading('method')}
