@@ -490,7 +490,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                 <span className="sys-title">{W.soFar(nowLabel.month)}</span>
                 <span className="sys-label">{W.soFarRate(nowLabel.value ?? 0, nowLabel.days)}</span>
                 {nowLabel.median !== null && <span className="sys-label">{W.usualIs(nowLabel.month, nowLabel.median)}</span>}
-                {nowLabel.caveats.length > 0 && (
+                {nowLabel.caveats.length > 0 && !guideSpeaks && (
                   <button type="button" className="rec__act" aria-pressed={rough} onClick={() => setRough((on) => !on)}>
                     {W.rough}
                   </button>
@@ -498,8 +498,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               </div>
             )}
 
-            {/* The way to this month so far stands after the last year: the month is the record's next square. */}
-            {rec.currentRoute && !thisMonth && afterYears <= size.w + 24 && (
+            {/* The way to this month so far stands after the last year: the month is the record's next square. Where
+                the guide speaks it offers the way, and the Record says only that the month is being counted. */}
+            {rec.currentRoute && !thisMonth && afterYears <= size.w + 24 && (now.state === 'loading' || !guideSpeaks) && (
               <div className="rec__after" style={{ right: size.w - afterYears, top: spansY + 2 }}>
                 {now.state === 'loading' ? (
                   <span className="sys-fine">{W.counting}</span>
@@ -512,7 +513,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
             )}
 
             {/* The way to the years as counted sits where the sharp satellite's line begins, the thing it is about. */}
-            {!rough && sharpX !== null && atJunction && (
+            {!rough && sharpX !== null && atJunction && !guideSpeaks && (
               <div className="rec__junction" style={{ right: size.w - sharpX + 14, top: spansY + 29 }}>
                 {correctionPrompt}
               </div>
@@ -557,8 +558,8 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   {W.close}
                 </button>
               )}
-              {sharpX !== null && !atJunction && <div className="rec__wide">{correctionPrompt}</div>}
-              {rec.currentRoute && !thisMonth && afterYears > size.w + 24 && now.state !== 'loading' && (
+              {sharpX !== null && !atJunction && !guideSpeaks && <div className="rec__wide">{correctionPrompt}</div>}
+              {rec.currentRoute && !thisMonth && afterYears > size.w + 24 && now.state !== 'loading' && !guideSpeaks && (
                 <button type="button" className="rec__act rec__wide" onClick={askNow}>
                   {W.thisMonth}
                 </button>
