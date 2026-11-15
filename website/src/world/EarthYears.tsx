@@ -470,6 +470,7 @@ export function EarthYears({
   const stripRef = useRef<HTMLDivElement | null>(null);
   const [stripH, setStripH] = useState(0);
   const [stripW, setStripW] = useState(0);
+  const [stripTop, setStripTop] = useState(0);
   const picked = useRef(false);
   picked.current = chosenYears !== null || noFile !== null;
   useLayoutEffect(() => {
@@ -484,6 +485,7 @@ export function EarthYears({
       else setStripH(h);
       boxH = box.clientHeight;
       setStripW(el.clientWidth);
+      setStripTop(Math.round(el.getBoundingClientRect().top));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -499,6 +501,14 @@ export function EarthYears({
   // The strip is the whole Earth's, or the chosen country's.
   const totals = chosenYears ? countryTotals(idx, chosenYears) : totalsOf(idx);
   const series = chosenYears ? seriesOfCountry(idx, chosenYears) : seriesFromCube(idx);
+  // The frame stays on the Earth: a country running under the strip is framed down to the strip's edge (the prompt
+  // pads its frame by 24 px, so the box stops 36 px above the strip), and one wholly under the strip is not framed.
+  const sceneBox: ScreenBox | null = (() => {
+    if (!countryBox) return null;
+    const floor = stripTop > 0 ? stripTop - 36 : Infinity;
+    const b = { ...countryBox, bottom: Math.min(countryBox.bottom, floor) };
+    return b.bottom - b.top < 8 ? null : b;
+  })();
   const ratio = chosenYears ? countryRatio(idx, chosenYears) : sharpRatio(idx);
   const inside = chosenYears && countries ? drawnInside(countries, chosenYears.key) : [];
   const n = totals.length;
@@ -538,9 +548,9 @@ export function EarthYears({
       {/* The pointed country framed in the scene (the plan's in-scene look): the ux lane's ScenePrompt on its screen
           box, the action beside the frame and one live readout under it, what the frame is on. A click on the globe
           and the frame's Enter do the same. */}
-      {!flat && pick && pointed && countryBox && under && (
+      {!flat && pick && pointed && sceneBox && under && (
         <ScenePrompt
-          box={countryBox}
+          box={sceneBox}
           label={chosen?.key === pointed.shape.key ? Y.wholeEarth : Y.countryAction}
           readout={countryReadout(pointed.shape, under, shown, mode, countries)}
           onSelect={() => (chosen?.key === pointed.shape.key ? setChosen(null) : countries && setChosen(pointed.shape))}
