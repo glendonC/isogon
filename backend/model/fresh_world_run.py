@@ -317,51 +317,62 @@ def fetch_passes(plan: dict[str, Any], work: Path, threads: int = 4, log: Callab
     return doc
 
 
-def pass_reader(work: Path, key: str) -> Callable[..., list[dict[str, Any]]]:
+class EpisodePasses:
     """The pass list of one episode in the shape the schedule reads, built from its kept granules as the cached
     region pass lists are (`cmr_passes.cmr_passes`), with the time the scan crossed the box's centre and its
     distance from the ground track worked out from the granule holding the centre (`schedule.swath_position`),
-    as the schedule does for a region. Raises CmrCacheMissing for a platform whose granules were not kept."""
+    as the schedule does for a region. Raises CmrCacheMissing for a platform whose granules were not kept. It is
+    a plain object, so a worker process can be handed it."""
+
+    def __init__(self, work: Path, key: str) -> None:
+        self.work, self.key = Path(work), key
+
+    def __call__(self, box: F.Box, start: Any, end: Any, platforms: Iterable[str] | None = None, tiles: Any = None) -> list[dict[str, Any]]:
+        return _read_passes(self.work, self.key, box, start, end, platforms)
+
+
+def pass_reader(work: Path, key: str) -> EpisodePasses:
+    return EpisodePasses(work, key)
+
+
+def _read_passes(work: Path, key: str, box: F.Box, start: Any, end: Any, platforms: Iterable[str] | None) -> list[dict[str, Any]]:
     from backend.eval import schedule as S
     from backend.firms import cmr_passes as C
 
-    def read(box: F.Box, start: Any, end: Any, platforms: Iterable[str] | None = None) -> list[dict[str, Any]]:
-        t0, t1 = C._parse_t(start), C._parse_t(end)
-        lon, lat = 0.5 * (box[0] + box[2]), 0.5 * (box[1] + box[3])
-        out: list[dict[str, Any]] = []
-        for plat in (list(platforms) if platforms is not None else []):
-            f = _pass_file(work, key, plat)
-            if not f.is_file():
-                raise C.CmrCacheMissing(f"no granules kept for {plat} in {key}")
-            doc = json.loads(gzip.decompress(f.read_bytes()).decode("utf-8"))
-            seen = {e["id"]: C._granule(e) for e in doc["entries"]}
-            granules = sorted(seen.values(), key=lambda g: (g["time_start"], g["id"]))
-            for grp in C._group(granules):
-                ts, te = C._parse_t(grp[0]["time_start"]), C._parse_t(grp[-1]["time_end"])
-                if te <= t0 or ts >= t1:
-                    continue
-                rings = [C.densify(r) for g in grp for r in g["rings"]]
-                share = C.share_inside(box, rings, C.BOX_SAMPLES)
-                if share <= 0.0:
-                    continue
-                item: dict[str, Any] = {
-                    "platform": plat, "time_start": grp[0]["time_start"], "time_end": grp[-1]["time_end"],
-                    "granules": [g["id"] for g in grp], "box_share": round(share, 4), "box_inside": share >= 1.0,
-                    "cloud_cover_pct": None,
-                }
-                for g in grp:
-                    hit = next((r for r in g["rings"] if len(r) >= 4 and S.ring_holds(r, lon, lat)), None)
-                    if hit is not None:
-                        where = S.swath_position(hit, lon, lat, plat, S._t(g["time_start"]), S._t(g["time_end"]))
-                        item["time_at_box"] = _iso(float(where["time_s"]))
-                        item["cross_track_km"] = float(where["cross_track_km"])
-                        item["satellite_side"] = where["satellite_side"]
-                        break
-                out.append(item)
-        out.sort(key=lambda d: (d["time_start"], d["platform"]))
-        return out
-
-    return read
+    t0, t1 = C._parse_t(start), C._parse_t(end)
+    lon, lat = 0.5 * (box[0] + box[2]), 0.5 * (box[1] + box[3])
+    out: list[dict[str, Any]] = []
+    for plat in (list(platforms) if platforms is not None else []):
+        f = _pass_file(work, key, plat)
+        if not f.is_file():
+            raise C.CmrCacheMissing(f"no granules kept for {plat} in {key}")
+        doc = json.loads(gzip.decompress(f.read_bytes()).decode("utf-8"))
+        seen = {e["id"]: C._granule(e) for e in doc["entries"]}
+        granules = sorted(seen.values(), key=lambda g: (g["time_start"], g["id"]))
+        for grp in C._group(granules):
+            ts, te = C._parse_t(grp[0]["time_start"]), C._parse_t(grp[-1]["time_end"])
+            if te <= t0 or ts >= t1:
+                continue
+            rings = [C.densify(r) for g in grp for r in g["rings"]]
+            share = C.share_inside(box, rings, C.BOX_SAMPLES)
+            if share <= 0.0:
+                continue
+            item: dict[str, Any] = {
+                "platform": plat, "time_start": grp[0]["time_start"], "time_end": grp[-1]["time_end"],
+                "granules": [g["id"] for g in grp], "box_share": round(share, 4), "box_inside": share >= 1.0,
+                "cloud_cover_pct": None,
+            }
+            for g in grp:
+                hit = next((r for r in g["rings"] if len(r) >= 4 and S.ring_holds(r, lon, lat)), None)
+                if hit is not None:
+                    where = S.swath_position(hit, lon, lat, plat, S._t(g["time_start"]), S._t(g["time_end"]))
+                    item["time_at_box"] = _iso(float(where["time_s"]))
+                    item["cross_track_km"] = float(where["cross_track_km"])
+                    item["satellite_side"] = where["satellite_side"]
+                    break
+            out.append(item)
+    out.sort(key=lambda d: (d["time_start"], d["platform"]))
+    return out
 
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -386,9 +397,11 @@ def episode_rows(work: Path, key: str) -> list[dict[str, str]]:
     return rows
 
 
-def run_episode(ep: dict[str, Any], params: dict[str, Any], work: Path) -> dict[str, Any]:
+def run_episode(ep: dict[str, Any], params: dict[str, Any], work: Path,
+                beside: tuple[tuple[str, dict[str, Any]], ...] = ()) -> dict[str, Any]:
     """The blind test of one episode, under protocol version 3, with the estimate's values given and the two
-    baselines as they are."""
+    baselines as they are. `beside` adds, by name, the estimate with other values in the same run, on the same
+    looks (test B's other methods)."""
     from backend.eval import schedule as S
     from backend.eval.baselines import overlap_ratio_factory, painted_modis_factory
     from backend.eval.blind_test import run_blind_test
@@ -410,7 +423,8 @@ def run_episode(ep: dict[str, Any], params: dict[str, Any], work: Path) -> dict[
     ratio = calendar_ratio(ep["place_id"], exclude_year=_window_years(ep), firms_calendar=lambda _r: cal)
     report = run_blind_test(
         det, tuple(ep["box"]),
-        [painted_modis_factory, overlap_ratio_factory(load_ratio_fit(), ratio), reconstruction_factory(OccupancyParams(**params))],
+        [painted_modis_factory, overlap_ratio_factory(load_ratio_fit(), ratio), reconstruction_factory(OccupancyParams(**params))]
+        + [reconstruction_factory(OccupancyParams(**p), name=name) for name, p in beside],
         window=(float(ep["start_s"]), float(ep["end_s"])), schedule=S.SOURCE_CMR, read_passes=pass_reader(work, ep["key"]),
     )
     report.pop("definitions", None)
@@ -423,10 +437,11 @@ def run_episode(ep: dict[str, Any], params: dict[str, Any], work: Path) -> dict[
 # ----------------------------------------------------------------------------------------------------------------
 
 
-def _look_job(job: tuple[dict[str, Any], dict[str, Any], str]) -> tuple[str, dict[str, Any] | None, str | None]:
-    ep, params, work_s = job
+def _look_job(job: tuple[Any, ...]) -> tuple[str, dict[str, Any] | None, str | None]:
+    ep, params, work_s = job[:3]
+    beside = job[3] if len(job) > 3 else ()
     try:
-        return ep["key"], run_episode(ep, params, Path(work_s)), None
+        return ep["key"], run_episode(ep, params, Path(work_s), beside), None
     except Exception as exc:  # noqa: BLE001  (an episode that cannot be scored is listed with its reason)
         return ep["key"], None, f"{type(exc).__name__}: {exc}"
 
@@ -468,6 +483,19 @@ def judge(reports: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
+def _headline_against(reports: list[dict[str, Any]], other: str) -> dict[str, Any]:
+    """The headline judged against another method of the same run with an interval (the other as the one
+    baseline)."""
+    from backend.eval.blind_test import bootstrap_verdict
+
+    if len(reports) < 2:
+        return {"episodes": len(reports), "why_no_interval": "one episode cannot be resampled"}
+    two = [{**r, "methods": {"reconstruction": r["methods"]["reconstruction"], other: r["methods"][other]}} for r in reports]
+    v = bootstrap_verdict(two, method="reconstruction", baselines=(other,))
+    return {"episodes": len(reports), "classes": {k: row.get("class") for k, row in v["scores"].items()},
+            "ahead": int(v["classes"]["ahead"]), "tied": int(v["classes"]["tie"]), "behind": int(v["classes"]["behind"])}
+
+
 def record_look(plan: dict[str, Any], role: str, results: list[tuple[str, dict[str, Any] | None, str | None]],
                 values: dict[str, Any], work: Path) -> dict[str, Any]:
     from backend.eval.blind_test import COUNTED_PLAIN, verdict
@@ -495,6 +523,14 @@ def record_look(plan: dict[str, Any], role: str, results: list[tuple[str, dict[s
     groups: dict[str, Any] = {"all": judge(list(reports.values()))}
     groups["by_continent"] = {c: judge([reports[k] for k in reports if by_key[k]["continent"] == c]) for c in F.CONTINENTS}
     groups["by_zone"] = {z: judge([reports[k] for k in reports if by_key[k]["zone"] == z]) for z in F.ZONES}
+    others = [m for m in (next(iter(reports.values()))["methods"] if reports else {})
+              if m not in ("reconstruction", "painted_modis", "overlap_ratio")]
+    beside_doc: dict[str, Any] = {}
+    for m in others:
+        as_main = [{**r, "methods": {**{k: v for k, v in r["methods"].items() if k in ("painted_modis", "overlap_ratio")},
+                                     "reconstruction": r["methods"][m]}} for r in reports.values()]
+        beside_doc[m] = {"against_the_baselines": judge(as_main),
+                         "the_headline_against_it": _headline_against(list(reports.values()), m)}
     return {
         "what": f"the fresh test's look at its {role} episodes",
         "look_name": F.LOOK_NAMES.get(role, role),
@@ -508,13 +544,14 @@ def record_look(plan: dict[str, Any], role: str, results: list[tuple[str, dict[s
         "unscored": unscored,
         "per_episode": per_episode,
         "judged": groups,
+        "beside_the_headline": beside_doc,
         "fuel": "the zone, from latitude, stands in for fuel; no map of fuel was read",
     }
 
 
 def look(plan: dict[str, Any], role: str, params: dict[str, Any], values: dict[str, Any], work: Path, workers: int,
-         log: Callable[[str], None] = print) -> dict[str, Any]:
-    jobs = [(ep, params, str(work)) for ep in plan["episodes"][role]]
+         log: Callable[[str], None] = print, beside: tuple[tuple[str, dict[str, Any]], ...] = ()) -> dict[str, Any]:
+    jobs = [(ep, params, str(work), beside) for ep in plan["episodes"][role]]
     t0 = time.time()
     if workers <= 1:
         results = [_look_job(j) for j in jobs]
@@ -522,6 +559,8 @@ def look(plan: dict[str, Any], role: str, params: dict[str, Any], values: dict[s
         with ProcessPoolExecutor(max_workers=workers) as pool:
             results = list(pool.map(_look_job, jobs, chunksize=1))
     doc = record_look(plan, role, results, values, work)
+    doc["beside_values"] = {name: "the estimate with these values, in the same run" for name, _ in beside}
+    doc["clear_looks"] = "no table: the hidden passes' cloud masks were not on hand at this look"
     doc["seconds"] = round(time.time() - t0, 1)
     log(f"look at {role}: {doc['episodes_scored']} of {doc['episodes_in_plan']} scored in {doc['seconds']} s")
     return doc
@@ -676,11 +715,13 @@ def test_b_values(refit_doc: dict[str, Any], plan: dict[str, Any]) -> tuple[dict
 
     if refit_doc.get("plan_sha256") != plan["plan_sha256"] or refit_doc.get("protocol_sha256") != F.protocol_sha256():
         raise ValueError("the refit on record is not of this plan and protocol")
-    if refit_doc["decision"]["test_b_values"] == "refit":
-        return dict(refit_doc["parameters"]), {"which": "refit", "refit_sha256": _canonical_sha(refit_doc)}
     F.refuse_unfrozen()
-    return load_params().as_dict(), {"which": "values in use", "files_sha256": F.values_now(),
-                                     "refit_sha256": _canonical_sha(refit_doc)}
+    in_use = load_params().as_dict()
+    if refit_doc["decision"]["test_b_values"] == "refit":
+        return dict(refit_doc["parameters"]), {"which": "refit", "refit_sha256": _canonical_sha(refit_doc),
+                                               "beside": {"values_in_use": in_use}}
+    return in_use, {"which": "values in use", "files_sha256": F.values_now(), "refit_sha256": _canonical_sha(refit_doc),
+                    "beside": {"refit": dict(refit_doc["parameters"])}}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -722,7 +763,8 @@ def main(argv: list[str] | None = None) -> int:
             if not REFIT_FILE.is_file():
                 raise SystemExit("test B waits for the refit and its decision to be on record")
             params, values = test_b_values(json.loads(REFIT_FILE.read_text(encoding="utf-8")), plan)
-        doc = look(plan, args.role, params, values, work, args.workers)
+        beside = tuple(values.pop("beside", {}).items()) if args.role == "test_b" else ()
+        doc = look(plan, args.role, params, values, work, args.workers, beside=beside)
         out.write_text(json.dumps(doc, indent=1, default=str) + "\n", encoding="utf-8")
         print(json.dumps({k: doc["judged"]["all"].get(k) for k in ("episodes", "ahead", "tied", "behind", "interval")}, indent=1))
     elif args.cmd == "refit":

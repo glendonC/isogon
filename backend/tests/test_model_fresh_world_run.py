@@ -287,5 +287,32 @@ class RefitTests(unittest.TestCase):
         self.assertEqual(len(ev.sets["validation"]), 1)
 
 
+class TestBTests(unittest.TestCase):
+    def test_the_other_values_run_beside_the_headline_on_the_same_looks_and_are_judged_both_ways(self) -> None:
+        from backend.model.occupancy import OccupancyParams
+
+        keys = [f"{PID}:2099:22", f"{PID}:2099:23"]
+        with tempfile.TemporaryDirectory() as tmp:
+            work = _fixture_work(Path(tmp), keys)
+            beside = (("values_in_use", OccupancyParams().as_dict()),)
+            with mock.patch.object(R, "pass_reader", lambda _w, _k: fx.fixture_pass_reader()):
+                results = [R._look_job((_ep(key=k), load_params().as_dict(), str(work), beside)) for k in keys]
+            rep = results[0][1]
+            self.assertIn("values_in_use", rep["methods"])
+            self.assertEqual(rep["methods"]["values_in_use"]["interval"]["n"], rep["methods"]["reconstruction"]["interval"]["n"])
+            plan = {"plan_sha256": "p", "episodes": {"test_b": [_ep(key=k) for k in keys]}}
+            doc = R.record_look(plan, "test_b", results, {"which": "refit"}, work)
+        side = doc["beside_the_headline"]["values_in_use"]
+        self.assertEqual(side["against_the_baselines"]["episodes"], 2)
+        self.assertEqual(side["the_headline_against_it"]["episodes"], 2)
+        self.assertEqual(sum(side["the_headline_against_it"][k] for k in ("ahead", "tied", "behind")), 7)
+
+    def test_the_pass_reader_can_be_handed_to_a_worker(self) -> None:
+        import pickle
+
+        r = pickle.loads(pickle.dumps(R.pass_reader(Path("/x"), "k")))
+        self.assertEqual((str(r.work), r.key), ("/x", "k"))
+
+
 if __name__ == "__main__":
     unittest.main()
