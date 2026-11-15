@@ -51,8 +51,13 @@ else:
         if o["done"]:
             break
     out["end"] = o["end"]
+import site, sysconfig
+# where the interpreter keeps its own files: its prefixes, its standard library and packages' folders, and every
+# entry of its import path (uv's ephemeral environments put numpy and Pillow in folders of their own)
+roots = {sys.prefix, sys.base_prefix, sys.exec_prefix, *sysconfig.get_paths().values(), *site.getsitepackages(),
+         site.getusersitepackages(), *(p for p in sys.path if p)}
 print(json.dumps({"opened": sorted(p for p in opened if os.path.isfile(p)),
-                  "python": sorted({sys.prefix, sys.base_prefix, sys.exec_prefix}), **out}, default=str))
+                  "python": sorted(r for r in roots if os.path.isdir(r)), **out}, default=str))
 """
 
 
@@ -83,9 +88,25 @@ def _child(tree: Path, region: str, start: str, what: str) -> dict:
     return json.loads(out.stdout.strip().splitlines()[-1])
 
 
+# The operating system's own folders, which Python's standard library reads (the system's version, time zones); no file
+# of ours is ever there
+OS_FOLDERS: tuple[str, ...] = tuple(os.path.realpath(p) + os.sep for p in ("/System", "/usr", "/etc", "/dev"))
+
 def _outside(doc: dict, tree: Path) -> list[str]:
-    allowed = tuple(os.path.realpath(p) + os.sep for p in doc["python"]) + (os.path.realpath(tree) + os.sep,)
-    return [p for p in doc["opened"] if not os.path.realpath(p).startswith(allowed)]
+    """The files the child opened outside the tree that are not the interpreter's own.
+
+    - The interpreter's own are under its folders (`doc["python"]`), or under the operating system's (`OS_FOLDERS`,
+      which Python's standard library reads, such as the system's version file).
+    - A folder of the interpreter's counts only when it is neither the tree nor inside the repository, nor holds the
+      repository. So a file of ours opened from the repository (a module or a data file the list lacks) is always
+      counted, whatever the import path holds, and so is a file of ours anywhere else (a cache in a temporary
+      folder)."""
+    real = lambda p: os.path.realpath(p)  # noqa: E731
+    ours = (real(tree) + os.sep, real(_REPO_ROOT) + os.sep)
+    interpreter = tuple(real(r) + os.sep for r in doc["python"]
+                        if not (real(r) + os.sep).startswith(ours) and not ours[1].startswith(real(r) + os.sep))
+    return [p for p in doc["opened"]
+            if real(p).startswith(ours[1]) or not real(p).startswith((ours[0],) + interpreter + OS_FOLDERS)]
 
 
 def _comparable(doc: dict) -> str:
