@@ -178,8 +178,8 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
     now.state === 'failed' ? W.notNow(W.whyNot.failed) : now.state === 'answered' && !thisMonth ? W.notNow(W.whyNot[now.month.status] ?? now.month.error ?? W.whyNot.failed) : null;
 
   // The latest of everything the keys and the published commands act on.
-  const live = useRef({ rec, shown, picked, marked, asCounted, rough, openable, onOpenMonth, onClose, guideSpeaks });
-  live.current = { rec, shown, picked, marked, asCounted, rough, openable, onOpenMonth, onClose, guideSpeaks };
+  const live = useRef({ rec, shown, picked, marked, asCounted, rough, nowOn, openable, onOpenMonth, onClose, guideSpeaks });
+  live.current = { rec, shown, picked, marked, asCounted, rough, nowOn, openable, onOpenMonth, onClose, guideSpeaks };
 
   const show = (ym?: string | null) => {
     const l = live.current;
@@ -241,7 +241,8 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
         asCounted,
       },
       now: {
-        state: now.state === 'idle' || now.state === 'loading' ? now.state : thisMonth ? 'ready' : 'unavailable',
+        // Once the visitor steps back from this month so far, the guide hears it as not asked
+        state: !nowOn && now.state !== 'loading' ? 'idle' : now.state === 'idle' || now.state === 'loading' ? now.state : thisMonth ? 'ready' : 'unavailable',
         ym: thisMonth?.month ?? null,
         words: thisMonth ? monthWords(thisMonth.month) : null,
         rate: thisMonth?.value ?? null,
@@ -258,11 +259,12 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
       browse: () => setBrowsing(true),
       showAsCounted: setAsCounted,
     });
-  }, [state, failure, rec, empty, marked, picked, asCounted, openable, place.name, now, waiting]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, failure, rec, empty, marked, picked, asCounted, openable, place.name, now, nowOn, waiting]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => publishRecordView(RECORD_CLOSED), []);
 
   // The Record's keys, while the focus is on it or on nothing: arrows move over the months, Enter shows the fire of a
-  // month in corner marks, Escape leaves the years as counted or closes back to the stage.
+  // month in corner marks, Escape steps back a view (why the figure is rough, this month so far, the years as counted)
+  // or closes back to the stage.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -286,7 +288,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
         // The fire of the month on show, or of the marked month when that one has none, as the guide's action does
         show(l.shown && l.openable.has(l.shown) ? l.shown : l.marked);
       } else if (e.key === 'Escape') {
+        // Escape steps back one view at a time: why this month's figure is rough, this month so far, the years as
+        // counted, and only then out of the Record
         if (l.rough) setRough(false);
+        else if (l.nowOn) setNowOn(false);
         else if (l.asCounted) setAsCounted(false);
         else if (l.onClose) l.onClose();
         else return;
