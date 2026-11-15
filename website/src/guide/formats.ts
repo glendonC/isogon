@@ -13,6 +13,12 @@ export const count = (n: number | null | undefined) => (finite(n) ? Math.round(n
 /** count_word: zero to twelve as a word, larger numbers as digits. */
 export const countWord = (n: number | null | undefined) =>
   finite(n) ? (n >= 0 && n <= 12 ? WORDS[Math.round(n)] : count(n)) : null;
+/** count_no: zero written as no, one to twelve as words, larger numbers as digits. */
+export const countNo = (n: number | null | undefined) => (finite(n) ? (Math.round(n) === 0 ? 'no' : countWord(n)) : null);
+/** count_none: a whole number, zero written as none. */
+export const countNone = (n: number | null | undefined) => (finite(n) ? (Math.round(n) === 0 ? 'none' : count(n)) : null);
+/** percent: the value times 100, rounded to a whole number. */
+export const percent = (v: number | null | undefined) => (finite(v) ? String(Math.round(v * 100)) : null);
 /** length: the number of items of a list, as count_word. */
 export const length = (xs: unknown[] | null | undefined) => (Array.isArray(xs) ? countWord(xs.length) : null);
 /** length_digits: the number of items of a list, in digits. */

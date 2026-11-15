@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 10,
   "what": "The words of the guide: for each step and each state inside it, the objective, what the guide says, the labels on things, the actions, and the questions a visitor can ask. Every sentence says which of the five places it sits in. Text in braces is a field: its value comes from an answer of the backend, named under fields. No figure is typed in a line.",
   "trail": [
     "Record",
@@ -54,7 +54,7 @@
     "place": "Every sentence carries place: objective, guide, label, prompt or sheet, as places_for_words says them. A sentence about one thing is at that thing; a sentence about the whole step is in the guide.",
     "objective": "Every state has one: a verb phrase for what the visitor does, with no full stop. A step's own objective is that of its main state.",
     "context": "A step's context is the fainter line that goes with the objective: the place and the days. It stands under the objective or beside the trail, never above it. It is not a sentence.",
-    "says": "The one or two sentences that stand at rest. They are shown together and stay; nothing passes by in turn. Each item is one sentence that can be read alone, with place, line and sometimes if or unless. Whatever the conditions, at least one stands and never more than two.",
+    "says": "The one or two sentences that stand at rest. They are shown together and stay; nothing passes by in turn. Each item is one sentence that can be read alone, with place, line and sometimes if or unless. Whatever the conditions, at least one stands and never more than two. A state may hold more items than two when their conditions exclude each other; whatever the conditions, one or two stand.",
     "says_if": "A line with an if is shown only when the named condition is true; with unless, only when it is false.",
     "labels": "Each has on, a thing named under things, and a line. A label with if or unless follows the same rule as a line. short, where present, is the label while the passes play: it must be readable in a second and a half.",
     "actions": "At most three, the next step first; the first is the only strong one. places says where an action is offered: the guide strip always, and a prompt beside the thing that beside names, shown only while the pointer or the keyboard's focus is on or near that thing. label_while_on, where present, is what the action reads while what it started is running.",
@@ -66,7 +66,8 @@
     "time": "See time. Every instant in a line is written with the format local_day_time.",
     "more": "What the guide says on demand in that state, beyond what stands: when the visitor asks to be told more (the command say:more). A state's on_demand questions are the other way to more.",
     "also": "A step's also lists actions that work in every state of the step, by their key and by asking, and are not in the guide strip unless a state lists them.",
-    "marks": "The key of marks, on demand. Each row has a name and a line for one mark, when it is on show, the served field it is drawn from, what of it is drawing, and where that was stated. action is the one action that shows the squares sized by chance."
+    "marks": "The key of marks, on demand. Each row has a name and a line for one mark, when it is on show, the served field it is drawn from, what of it is drawing, and where that was stated. action is the one action that shows the squares sized by chance.",
+    "exclusive": "Groups of conditions of which at most one is true at a time, read from the same answer; the check of what stands counts no case where two of a group hold."
   },
   "things": {
     "fire": "the fire on the land, in a round as well",
@@ -77,7 +78,8 @@
     "looked_square": "the square the visitor just looked at",
     "side_block": "one of the three small terrains, when the fire is shown side by side",
     "dotted_line": "the dotted line around the ground where the model gives fire a chance",
-    "learned_block": "the Learned Player's small terrain, when the players stand side by side"
+    "learned_block": "the Learned Player's small terrain, when the players stand side by side",
+    "fire_block": "one fire's block on the choice of a place"
   },
   "formats": {
     "text": "as served",
@@ -101,7 +103,11 @@
     "local_day_time": "the day, the month, the time and the part of the day at the fire, such as 11 August, 1:11 at night. Take the instant, add the middle longitude of the fire's box divided by fifteen, in hours, and cut to the minute without rounding. Write the hour on a twelve-hour clock, then the part of the day: in the morning from 5:00, in the afternoon from 12:00, in the evening from 18:00, at night from 21:00 until 5:00. One function for every line, never a decimal hour that was rounded.",
     "local_day_range": "the days of two instants, each moved to local time as local_day_time does, as one range, such as 9 to 12 August 2012",
     "ratio_whole": "the first value divided by the second, rounded to a whole number; no value when the second is zero",
-    "month_name": "the name of the month of the year, such as August"
+    "month_name": "the name of the month of the year, such as August",
+    "count_keys_with_fires": "the number of keys whose episodes are more than zero, written as count_word",
+    "score_names_ahead": "the scores whose class is ahead, each by its phrase under score_names, as list_and",
+    "score_names_behind": "the scores whose class is behind, each by its phrase under score_names, as list_and",
+    "count_no": "zero written as no, one to twelve as words, larger numbers as digits"
   },
   "conditions": {
     "model_is_experimental": {
@@ -117,8 +123,8 @@
       "route": "GET /api/regions"
     },
     "learned_trained_here": {
-      "true_when": "places[id].featured_fires[fire].to_the_learned_agent is fitted on",
-      "route": "GET /api/regions"
+      "true_when": "episode.split is fit: the round is one of those the Learned Player was trained on",
+      "route": "POST /api/env/next_look/reset"
     },
     "not_always_ahead": {
       "true_when": "the smallest of test_fires.fires[].new.ahead_of_both_on is less than scores_judged",
@@ -155,6 +161,34 @@
     "players_from_round": {
       "true_when": "from is round: the blocks are the round the visitor just played, not plays asked on the open fire",
       "route": "the page: usePlayersView() of the players' picture"
+    },
+    "block_is_test_fire": {
+      "true_when": "places[id].featured_fires[fire].closed is true",
+      "route": "GET /api/regions"
+    },
+    "method_replaced": {
+      "true_when": "harmonization_method.id is not overlap_ratio_v1: the Record serves the method the harmonize lane's rule chose",
+      "route": "GET /api/calendar?source=firms&region_id="
+    },
+    "test_a_not_taken": {
+      "true_when": "fresh_test.test_a is null",
+      "route": "GET /api/evidence"
+    },
+    "test_a_strict_behind": {
+      "true_when": "fresh_test.test_a.all.classes.csi_strict_375m is behind",
+      "route": "GET /api/evidence"
+    },
+    "test_a_strict_not_behind": {
+      "true_when": "fresh_test.test_a is not null and its csi_strict_375m is not behind",
+      "route": "GET /api/evidence"
+    },
+    "test_a_taken": {
+      "true_when": "fresh_test.test_a is not null",
+      "route": "GET /api/evidence"
+    },
+    "test_a_interval_short": {
+      "true_when": "fresh_test.test_a.all.interval.held is below its stated_level",
+      "route": "GET /api/evidence"
     }
   },
   "state_when": {
@@ -169,7 +203,8 @@
     "players_found": "the players' picture is ready and what the looks found is drawn (state ready, foundShown true)",
     "players_held": "the players' picture is asked for while a round is under way (state held)",
     "players_coming": "the plays are still coming (state loading)",
-    "players_failed": "the plays did not load (state failed)"
+    "players_failed": "the plays did not load (state failed)",
+    "place": "the choice of a place is open; it opens only when asked for (P, or the place's name beside the trail), and Escape returns to where it was opened from"
   },
   "commands": {
     "go:record": "open the fire record over the stage",
@@ -206,7 +241,8 @@
     "marks:key": "open or close the key of marks: one row for each mark now on show",
     "estimate:chance": "draw the squares sized by the chance of fire, which are off at rest; the same action hides them",
     "play:players_reveal": "draw what the players' looks found, which is the hidden satellite's; offered only while the picture says it can be asked (canReveal)",
-    "play:resume": "close the players' picture and go back to the round under way"
+    "play:resume": "close the players' picture and go back to the round under way",
+    "place:choose": "open the fire record of the marked fire's place, with that fire marked; the marked fire has the keyboard's focus when the choice opens"
   },
   "steps": [
     {
@@ -293,6 +329,106 @@
       "context": null
     },
     {
+      "id": "place",
+      "name": null,
+      "objective": "Choose a Place on Earth",
+      "context": null,
+      "states": [
+        {
+          "id": "loading",
+          "objective": "Wait while the places load",
+          "says": [
+            {
+              "place": "guide",
+              "line": "Loading the places and fires you can open."
+            }
+          ],
+          "actions": []
+        },
+        {
+          "id": "ready",
+          "objective": "Choose a Place on Earth",
+          "says": [
+            {
+              "place": "guide",
+              "line": "Brighter ground on the map means more fire detected by NASA's satellites since {world_first_year}."
+            },
+            {
+              "place": "guide",
+              "line": "You can follow a fire pass by pass in {places_followed_n} places, and draw an area anywhere to read its fire record."
+            }
+          ],
+          "labels": [
+            {
+              "place": "label",
+              "on": "fire_block",
+              "if": "block_is_test_fire",
+              "line": "Kept as the model's test: its record can be read, and it is not tested again."
+            }
+          ],
+          "actions": [
+            {
+              "label": "Open the marked fire",
+              "command": "place:choose",
+              "key": "Enter",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "Draw an area",
+              "command": "place:draw",
+              "key": "B",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "Back",
+              "command": "close",
+              "key": "Esc",
+              "places": [
+                "guide"
+              ]
+            }
+          ],
+          "on_demand": [
+            "why_not_this_fire",
+            "my_own_area",
+            "why_this_fire"
+          ]
+        },
+        {
+          "id": "failed",
+          "objective": "Load the places again",
+          "says": [
+            {
+              "place": "guide",
+              "line": "The places did not load, and nothing is shown in their place."
+            }
+          ],
+          "actions": [
+            {
+              "label": "Try again",
+              "command": "retry",
+              "key": "Enter",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "Back",
+              "command": "close",
+              "key": "Esc",
+              "places": [
+                "guide"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "record",
       "name": "Record",
       "states": [
@@ -317,13 +453,24 @@
             },
             {
               "place": "guide",
-              "line": "The newer satellite makes about {sharp_to_coarse} times as many detections of the same fires as the older ones, so that jump is taken out here and every year is on one scale."
+              "line": "The newer satellite makes about {sharp_to_coarse} times as many detections of the same fires as the older ones, so that jump is taken out here and every year is on one scale.",
+              "unless": "method_replaced"
+            },
+            {
+              "place": "guide",
+              "if": "method_replaced",
+              "line": "The newer satellite makes about {sharp_to_coarse} times as many detections of the same fires as the older ones, more in some months than in others, so that jump is taken out month by month and every year is on one scale."
             }
           ],
           "more": [
             {
               "place": "guide",
               "line": "Left as counted, recent years would look worse than they were, only because the newer satellite makes more detections of the same fires."
+            },
+            {
+              "place": "guide",
+              "if": "method_replaced",
+              "line": "The factor changes with the month of the year, because the share of a month's fires that the newer satellite catches changes with the dry season."
             }
           ],
           "actions": [
@@ -1161,16 +1308,41 @@
             },
             {
               "place": "guide",
-              "if": "not_always_ahead",
-              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
+              "if": "test_a_strict_behind",
+              "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores and behind on {test_a_behind}: it does not place fire square for square better than painting the coarse satellite's detections."
             },
             {
               "place": "guide",
-              "unless": "not_always_ahead",
-              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores."
+              "if": "test_a_strict_not_behind",
+              "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores, level on {test_a_level} and behind on {test_a_behind}."
+            },
+            {
+              "place": "guide",
+              "if": "test_a_not_taken",
+              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
             }
           ],
           "more": [
+            {
+              "place": "guide",
+              "if": "test_a_taken",
+              "line": "It led on {test_a_ahead_names}, and lost on {test_a_behind_names}."
+            },
+            {
+              "place": "guide",
+              "if": "test_a_interval_short",
+              "line": "The range it states for the total heat held on {test_a_interval_held} percent of those passes, short of the {test_a_interval_stated} percent it claims."
+            },
+            {
+              "place": "guide",
+              "if": "test_a_taken",
+              "line": "The test holds {test_a_europe_n} fires in Europe and {test_a_oceania_n} in Oceania, so it says little about those two."
+            },
+            {
+              "place": "guide",
+              "if": "test_a_taken",
+              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
+            },
             {
               "place": "guide",
               "line": "The scores compare the estimate with the {sharp_detections_all} detections the sharp satellite made on its {hidden_passes} passes of this fire."
@@ -1234,16 +1406,41 @@
             },
             {
               "place": "guide",
-              "if": "not_always_ahead",
-              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
+              "if": "test_a_strict_behind",
+              "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores and behind on {test_a_behind}: it does not place fire square for square better than painting the coarse satellite's detections."
             },
             {
               "place": "guide",
-              "unless": "not_always_ahead",
-              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores."
+              "if": "test_a_strict_not_behind",
+              "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores, level on {test_a_level} and behind on {test_a_behind}."
+            },
+            {
+              "place": "guide",
+              "if": "test_a_not_taken",
+              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
             }
           ],
           "more": [
+            {
+              "place": "guide",
+              "if": "test_a_taken",
+              "line": "It led on {test_a_ahead_names}, and lost on {test_a_behind_names}."
+            },
+            {
+              "place": "guide",
+              "if": "test_a_interval_short",
+              "line": "The range it states for the total heat held on {test_a_interval_held} percent of those passes, short of the {test_a_interval_stated} percent it claims."
+            },
+            {
+              "place": "guide",
+              "if": "test_a_taken",
+              "line": "The test holds {test_a_europe_n} fires in Europe and {test_a_oceania_n} in Oceania, so it says little about those two."
+            },
+            {
+              "place": "guide",
+              "if": "test_a_taken",
+              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
+            },
             {
               "place": "guide",
               "line": "The scores compare the estimate with the {sharp_detections_all} detections the sharp satellite made on its {hidden_passes} passes of this fire."
@@ -1627,12 +1824,12 @@
             {
               "place": "guide",
               "unless": "learned_beats_rule",
-              "line": "Over {rounds_n} other rounds Look Where Unsure gained more than Chance on {rule_ahead_rounds} of them, and the Learned Player does not beat Look Where Unsure."
+              "line": "Over {rounds_n} other rounds of fires of other years, Look Where Unsure gained more than Chance on {rule_ahead_rounds} of them, and the Learned Player does not beat Look Where Unsure."
             },
             {
               "place": "guide",
               "if": "learned_beats_rule",
-              "line": "Over {rounds_n} other rounds Look Where Unsure gained more than Chance on {rule_ahead_rounds} of them, and the Learned Player gained {learned_minus_rule} points more than Look Where Unsure."
+              "line": "Over {rounds_n} other rounds of fires of other years, Look Where Unsure gained more than Chance on {rule_ahead_rounds} of them, and the Learned Player gained {learned_minus_rule} points more than Look Where Unsure."
             }
           ],
           "actions": [
@@ -1741,7 +1938,7 @@
               "place": "label",
               "on": "learned_block",
               "if": "learned_trained_here",
-              "line": "Trained on fires of these years around here, so this round is not a test of it."
+              "line": "Trained on rounds that include this one, so this round is not a test of it."
             }
           ],
           "actions": [
@@ -1807,7 +2004,7 @@
               "place": "label",
               "on": "learned_block",
               "if": "learned_trained_here",
-              "line": "Trained on fires of these years around here, so this round is not a test of it."
+              "line": "Trained on rounds that include this one, so this round is not a test of it."
             }
           ],
           "actions": [
@@ -2168,7 +2365,11 @@
       "answer": [
         {
           "place": "guide",
-          "line": "Hide one year and predict it from the others: in a typical year the prediction is off by {record_error} percent. Without the correction for the change of satellite it is off by {record_error_raw} percent."
+          "line": "Hide one year and predict it from the others: in a typical year the prediction is off by {record_error} percent."
+        },
+        {
+          "place": "guide",
+          "line": "Without the correction for the change of satellite it is off by {record_error_raw} percent."
         }
       ],
       "command": "record:accuracy",
@@ -2217,11 +2418,12 @@
       ],
       "command": "place:open",
       "where": [
-        "start",
-        "record",
         "estimate",
-        "test",
-        "play"
+        "place",
+        "play",
+        "record",
+        "start",
+        "test"
       ],
       "place": "guide"
     },
@@ -2244,8 +2446,9 @@
       ],
       "command": "place:draw",
       "where": [
-        "record",
-        "finish"
+        "finish",
+        "place",
+        "record"
       ],
       "place": "guide"
     },
@@ -2411,11 +2614,17 @@
       "answer": [
         {
           "place": "guide",
+          "if": "test_a_not_taken",
           "line": "No. On the {test_fires_n} fires kept as its test it beat the simple methods on {test_fire_scores} of {test_scores_n} scores."
         },
         {
           "place": "guide",
-          "line": "On {other_fires_n} fires of other years, counting a score only when the gap is too large to be luck, it was ahead on {other_ahead}, level on {other_level} and behind on {other_behind}."
+          "if": "test_a_taken",
+          "line": "No. On {test_a_fires_n} fires it had never seen it was ahead on {test_a_ahead} of {test_scores_n} scores and behind on {test_a_behind}."
+        },
+        {
+          "place": "guide",
+          "line": "On {other_fires_n} fires of other years, counting a score only when the gap is too large to be luck, it was ahead on {other_ahead} of the {test_scores_n} scores, level on {other_level} and behind on {other_behind}."
         }
       ],
       "command": "tests:record",
@@ -2488,6 +2697,7 @@
       "command": "tests:record",
       "where": [
         "estimate",
+        "place",
         "play"
       ],
       "place": "guide"
@@ -2513,8 +2723,9 @@
         }
       ],
       "where": [
-        "start",
-        "estimate"
+        "estimate",
+        "place",
+        "start"
       ],
       "place": "guide"
     },
@@ -2580,7 +2791,11 @@
       "answer": [
         {
           "place": "guide",
-          "line": "A simple rule works: look where the model is least sure. Over {rounds_n} other rounds it gained more than random looks on {rule_ahead_rounds} of them."
+          "line": "A simple rule works: look where the model is least sure."
+        },
+        {
+          "place": "guide",
+          "line": "Over {rounds_n} other rounds, each a few days of one fire of other years, it gained more than random looks on {rule_ahead_rounds} of them."
         }
       ],
       "where": [
@@ -3194,6 +3409,84 @@
       "key": "summary_metrics.last_month",
       "format": "year",
       "is": "the last year of the record"
+    },
+    "test_a_fires_n": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.episodes_scored",
+      "format": "count",
+      "is": "fires of test A that were scored"
+    },
+    "test_a_continents_n": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.by_continent",
+      "format": "count_keys_with_fires",
+      "is": "continents with at least one fire in test A"
+    },
+    "test_a_ahead": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.ahead",
+      "format": "count",
+      "is": "scores on which the estimate was ahead of both simple methods over test A, judged with an interval"
+    },
+    "test_a_level": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.tied",
+      "format": "count",
+      "is": "scores too close to call"
+    },
+    "test_a_behind": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.behind",
+      "format": "count_none",
+      "is": "scores on which it was behind"
+    },
+    "test_a_ahead_names": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.classes",
+      "format": "score_names_ahead",
+      "is": "the plain names of the scores it led"
+    },
+    "test_a_behind_names": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.classes",
+      "format": "score_names_behind",
+      "is": "the plain names of the scores it lost"
+    },
+    "test_a_interval_held": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.interval.held",
+      "format": "percent",
+      "is": "the share of passes on which the real total heat stayed inside the range the model stated"
+    },
+    "test_a_interval_stated": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.all.interval.stated_level",
+      "format": "percent",
+      "is": "the share the range claims"
+    },
+    "world_first_year": {
+      "route": "GET /api/cube/countries",
+      "key": "cube.first_month",
+      "format": "year",
+      "is": "the first year of the world's record"
+    },
+    "places_followed_n": {
+      "route": "GET /api/regions",
+      "key": "places[rows == firms]",
+      "format": "length",
+      "is": "places with a fire the page can show pass by pass"
+    },
+    "test_a_europe_n": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.by_continent.Europe.episodes",
+      "format": "count_no",
+      "is": "fires of test A in Europe"
+    },
+    "test_a_oceania_n": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_a.by_continent.Oceania.episodes",
+      "format": "count_word",
+      "is": "fires of test A in Oceania"
     }
   },
   "marks": {
@@ -3291,5 +3584,21 @@
       ],
       "label_while_on": "Hide the less likely squares"
     }
-  }
+  },
+  "score_names": {
+    "csi_strict_375m": "agreement square for square",
+    "csi_one_cell_tolerance": "agreement give or take one square",
+    "hit_rate_at_equal_area": "hits with the same number of squares",
+    "brier": "the chance of fire it states",
+    "pixel_count_error_of_sums": "how many detections it expects",
+    "frp_error_of_sums": "the heat summed over the passes",
+    "frp_median_abs_relative_error": "the heat pass by pass"
+  },
+  "exclusive": [
+    [
+      "test_a_not_taken",
+      "test_a_strict_behind",
+      "test_a_strict_not_behind"
+    ]
+  ]
 }

@@ -33,6 +33,8 @@ export function recordFields(ws: WorkspaceBase, rv: RecordView): { fields: Field
   };
   const conds: Conditions = {
     fire_month_stands_out: m && m.usual !== null && m.timesUsual !== null ? m.usual > 0 && m.timesUsual >= 2 : null,
+    // The Record's method (harmonization_method.id): replaced when it is no longer the first ratio of the overlap.
+    method_replaced: ws.calendar.state.cal ? (ws.calendar.state.cal.method ?? 'overlap_ratio_v1') !== 'overlap_ratio_v1' : null,
     this_month_is_counted: rv.now.state === 'ready' ? rv.now.rate !== null && rv.now.why === null : rv.now.state === 'unavailable' ? false : null,
   };
   return { fields, conds };

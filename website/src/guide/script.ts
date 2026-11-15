@@ -109,6 +109,8 @@ interface Script {
   names: Record<string, string>;
   steps: ScriptStep[];
   marks?: ScriptMarks;
+  /** The plain phrase for each score, by its id (format score_names_ahead and score_names_behind). */
+  score_names?: Record<string, string>;
 }
 
 export const SCRIPT = raw as unknown as Script;

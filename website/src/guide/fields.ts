@@ -1,6 +1,7 @@
 import type { WorkspaceBase } from '../app/store';
 import type { Conditions, Fields } from './script';
-import { count, countWord, lengthDigits, listAnd, localDayRange, localDayTime, midLon, ordinal, times, year } from './formats';
+import { count, countNo, countNone, countWord, lengthDigits, listAnd, localDayRange, localDayTime, midLon, ordinal, percent, times, year } from './formats';
+import { SCRIPT } from './script';
 
 /**
  * The values the guide's lines name, read from the backend's answers the workspace already holds, written in the
@@ -45,6 +46,18 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     const x = fs[k];
     if (typeof x?.sensor === 'string' && !x.sensor.startsWith('VIIRS') && (num(x.detections_in_box) ?? 0) > 0) before = x;
   }
+  // The fresh test A (GET /api/evidence, fresh_test.test_a): null until its look is taken.
+  const fresh = obj(obj(ev as unknown)?.fresh_test);
+  const testA = fresh ? obj(fresh.test_a) : null;
+  const aAll = obj(testA?.all);
+  const aClasses = obj(aAll?.classes);
+  const aByContinent = obj(testA?.by_continent);
+  const aInterval = obj(aAll?.interval);
+  const aHeld = num(aInterval?.held);
+  const aStated = num(aInterval?.stated_level);
+  const scoreNames = (which: string) =>
+    aClasses ? listAnd(Object.entries(aClasses).filter(([, v]) => v === which).map(([k]) => SCRIPT.score_names?.[k] ?? k)) : null;
+  const continentFires = (name: string) => num(obj(aByContinent?.[name])?.episodes) ?? (aByContinent ? 0 : null);
   // The squares the model says are burning at the pass on show (the frames on the terrain).
   const looks = obj(r?.declared_cells)?.looks;
   const declared = Array.isArray(looks) ? looks.map((x) => obj(x)).find((x) => x && num(x.frame) === (num(f?.frame) ?? pass)) ?? null : null;
@@ -76,11 +89,28 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     coarse_before_when: localDayTime(str(before?.timestamp_utc), lon),
     coarse_before_detections: before ? count(num(before.detections_in_box)) : null,
     estimate_squares: Array.isArray(declared?.cells) ? lengthDigits(declared!.cells as unknown[]) : null,
+    test_a_fires_n: count(num(testA?.episodes_scored)),
+    test_a_continents_n: aByContinent ? countWord(Object.values(aByContinent).filter((v) => (num(obj(v)?.episodes) ?? 0) > 0).length) : null,
+    test_a_ahead: count(num(aAll?.ahead)),
+    test_a_behind: countNone(num(aAll?.behind)),
+    test_a_level: count(num(aAll?.tied)),
+    test_a_ahead_names: scoreNames('ahead') || null,
+    test_a_behind_names: scoreNames('behind') || null,
+    test_a_interval_held: percent(aHeld),
+    test_a_interval_stated: percent(aStated),
+    test_a_europe_n: countNo(continentFires('Europe')),
+    test_a_oceania_n: countWord(continentFires('Oceania')),
   };
   const conds: Conditions = {
     model_is_experimental: ws.run.model ? ws.run.model.status === 'experimental' : null,
     pass_is_sharp: f ? sensor.startsWith('VIIRS') : null,
     not_always_ahead: ev && testScoresN !== null && testFires.length > 0 ? Math.min(...testFires.map((t) => t.new.ahead_of_both_on)) < testScoresN : null,
+    // Test A taken or not, and how it came out; all false where the route answered without it.
+    test_a_taken: ev ? testA !== null : null,
+    test_a_not_taken: ev ? testA === null : null,
+    test_a_strict_behind: ev ? testA !== null && aClasses?.csi_strict_375m === 'behind' : null,
+    test_a_strict_not_behind: ev ? testA !== null && aClasses !== null && aClasses.csi_strict_375m !== 'behind' : null,
+    test_a_interval_short: ev ? testA !== null && aHeld !== null && aStated !== null && aHeld < aStated : null,
   };
   return { fields, conds };
 }
