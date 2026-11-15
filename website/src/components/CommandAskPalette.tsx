@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type TheaterId } from '../stage/earthCutawayTypes';
 import { formatLat, formatLon } from '../content/theaters';
-import type { DynamicRegionRun, PipelineStageRecord } from '../stage/types';
+import type { DynamicRegionRun } from '../stage/types';
 import { Locator } from '../ui/Locator';
-import { beforeSharpSatellite, isRealRun } from '../content/realRuns';
 import { plainText } from '../ui/plainText';
 import { useDialogFocus } from '../ui/useDialogFocus';
 
@@ -40,9 +39,7 @@ interface CommandAskPaletteProps {
   activeTheaterId: TheaterId;
   activeRun: DynamicRegionRun | null;
   holdoutViirs: boolean;
-  onToggleHoldoutViirs: () => void;
   cloudOverride: number | null;
-  onToggleCloudOverride: () => void;
   isExecuting: boolean;
   errorMessage: string | null;
   onExecute: (params: ReconstructRequestParams) => Promise<boolean>;
@@ -83,9 +80,7 @@ export function CommandAskPalette({
   activeTheaterId,
   activeRun,
   holdoutViirs,
-  onToggleHoldoutViirs,
   cloudOverride,
-  onToggleCloudOverride,
   isExecuting,
   errorMessage,
   onExecute,
@@ -195,7 +190,6 @@ export function CommandAskPalette({
   const caption = lat !== null && lon !== null ? `${formatLat(lat)}  ${formatLon(lon)}` : '';
 
   const unreachable = Boolean(errorMessage && /fetch|network|unreachable|refused/i.test(errorMessage));
-  const runStages: readonly PipelineStageRecord[] = activeRun?.pipeline_stages ?? [];
 
   return (
     <>
@@ -307,60 +301,9 @@ export function CommandAskPalette({
                   <p className="iso-finder__setting">{setting}</p>
                 </div>
                 <p className="iso-finder__note">{note}</p>
-                {focused && (
-                  <table className="iso-table iso-finder__facts">
-                    <tbody>
-                      <tr>
-                        <th scope="row">Record</th>
-                        <td>{placeOf(focused.id)?.sub ?? ''}</td>
-                      </tr>
-                      {runStages.length > 0 && activeRun?.region.id === focused.id && (
-                        <tr>
-                          <th scope="row">Last solve</th>
-                          <td>
-                            {Math.round(
-                              runStages.reduce((acc, st) => acc + (st.duration_ms || 0), 0),
-                            ).toLocaleString()}{' '}
-                            ms
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                )}
               </>
             )}
 
-            <div className="iso-finder__options" role="group" aria-label="Validation">
-              {/* Before 2012 no VIIRS flew, so there is nothing to hide. */}
-              {!beforeSharpSatellite(activeRun) && (
-                <button
-                  type="button"
-                  className="iso-check"
-                  data-active={holdoutViirs ? 'true' : 'false'}
-                  aria-pressed={holdoutViirs}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={onToggleHoldoutViirs}
-                >
-                  <span className="iso-check__box" aria-hidden="true" />
-                  <span>Blind test, hide VIIRS</span>
-                </button>
-              )}
-              {/* A synthetic cloud deck is a simulation setting: a real run keeps the clouds the satellites saw. */}
-              {!isRealRun(activeRun) && (
-                <button
-                  type="button"
-                  className="iso-check"
-                  data-active={cloudOverride !== null ? 'true' : 'false'}
-                  aria-pressed={cloudOverride !== null}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={onToggleCloudOverride}
-                >
-                  <span className="iso-check__box" aria-hidden="true" />
-                  <span>55% cloud</span>
-                </button>
-              )}
-            </div>
           </aside>
         </div>
 

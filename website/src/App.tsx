@@ -494,20 +494,6 @@ export function App() {
     });
   }, [holdoutViirs, revealed, revealing, activeRun, activeTheaterId, cloudOverride, executeWorldModel, realStart, hideRefused]);
 
-  const toggleCloudLive = useCallback(() => {
-    // A synthetic cloud deck would put simulated data on the real path.
-    if (realStart) return;
-    const nextCloud = cloudOverride === null ? 0.55 : null;
-    setCloudOverride(nextCloud);
-    if (!askOpen) {
-      void executeWorldModel({
-        regionId: activeRun?.region.id ?? activeTheaterId,
-        holdoutViirs,
-        cloudOverride: nextCloud,
-        enterWorkspace: false,
-      });
-    }
-  }, [cloudOverride, askOpen, activeRun?.region.id, activeTheaterId, holdoutViirs, executeWorldModel, realStart]);
 
   // Burning calendar: real when the backend serves FIRMS for this region, otherwise simulated. It
   // follows the region asked for, so opening a region can read its start list before any run arrives.
@@ -1414,20 +1400,24 @@ export function App() {
   }, [modelScene, dayRunId]);
 
   // What search offers: the registry's places with a real fire to open, under the registry's names.
-  const palettePlaces = placesState.places.places
+  // Kept between redraws (the stage redraws the shell several times a second), so search's focus on a place stays put.
+  const palettePlaces = useMemo(() => placesState.places.places
     .filter((p) => p.featured_fires.some((f) => f.default_start))
     .map((p) => {
       const fires = p.featured_fires.filter((f) => f.default_start).map((f) => f.label);
       const box = p.box as readonly number[];
+      // Which of them choosing the place opens (the registry's opening start), said once beside the months.
+      const start = openingStart(placesState.places, p.id);
+      const opens = start ? fireOfStart(placesState.places, p.id, start) : null;
       return {
         id: p.id,
         title: p.name,
         sub: fires.join(', '),
-        note: `Fires on record here: ${fires.join(', ')}.`,
+        note: opens ? `Choosing it opens the fire of ${opens.label}${opens.name ? `, the ${opens.name}` : ''}.` : '',
         lat: box.length === 4 ? (box[1] + box[3]) / 2 : null,
         lon: box.length === 4 ? (box[0] + box[2]) / 2 : null,
       };
-    });
+    }), [placesState.places]);
 
   // The landing's words: the script's start step for the fire on show (its place, its month, its name where an agency
   // list names it), loading and failure as the script says them. They follow the pass on show: on a pass the model
@@ -1648,9 +1638,7 @@ export function App() {
             activeTheaterId={activeTheaterId}
             activeRun={activeRun}
             holdoutViirs={holdoutViirs}
-            onToggleHoldoutViirs={toggleHoldoutLive}
             cloudOverride={cloudOverride}
-            onToggleCloudOverride={toggleCloudLive}
             isExecuting={isExecuting}
             errorMessage={execError}
             onExecute={handlePaletteExecute}
