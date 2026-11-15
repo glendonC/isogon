@@ -38,6 +38,23 @@ python3 -m http.server 5589 --bind 127.0.0.1 --directory dist/public
 The command prints the size of the recording and of the whole page. It gives the page the commit it was built from and the time its answers were recorded (`VITE_BUILD_COMMIT`, `VITE_RECORDED_UTC`), and writes both to `recorded/build.json`. It stops when the recording's index names a
 file the folder does not hold. The recording itself is made against a running backend (see `docs/architecture.md`).
 
+### The model in the visitor's browser
+
+With `--pack`, the page also runs the backend's own held-out run and round in the visitor's browser. The folder it
+names is the one `backend/browser_pack.py pack` writes (`browser-pack.json`, `core.zip` and `places/<region_id>.zip`);
+it is copied to `run/`, each archive checked against its size and sha256 in the manifest. The Python runtime it needs,
+Pyodide with its numpy and Pillow (17.9 MB, `scripts/runtime-files.json`), is copied to `runtime/pyodide/`, each file
+checked against its pin; fetch it once, into `data/cache/runtime/`, before the build:
+
+```bash
+node scripts/fetch-runtime.mjs
+node scripts/build-public.mjs --recording <folder> --cube <folder> --pack <folder written by backend/browser_pack.py> --base /isogon/ --out dist/public
+```
+
+The page's worker, `public/runtime/model-worker.js`, loads the runtime and the archives from the page itself and calls
+`backend/browser.py`; a place the pack does not hold, and a browser where the runtime does not load, replay the
+recording.
+
 ## The backend
 
 The site calls the backend at `http://127.0.0.1:8788` through one client module, `src/lib/api.ts`. Start the backend from the repository root:

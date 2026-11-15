@@ -3,6 +3,7 @@
 // as `recorded/`. Node built-ins only.
 //
 //   node scripts/build-public.mjs --recording <folder> [--cube <folder>] [--base /isogon/] [--out dist/public]
+//                                 [--pack <folder> [--runtime <folder>]]
 //
 // The site lands in `<out>/<base>` (for the default base, `dist/public/isogon/`), so `<out>` can be served as it is to
 // try the page under the same path it will have online. `<folder>` is a folder written by
@@ -12,6 +13,7 @@
 // (`website/src/world/publicAnswer.ts`). The yearly layers are recorded answers (`GET /api/cube/years`).
 
 import { spawnSync } from 'node:child_process';
+import { copyPack, copyRuntime } from './browser-files.mjs';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -92,8 +94,27 @@ if (cube) {
   cubeLine = `public cube in recorded/cube/public/ ${(bytesOf(cubeOut) / 1e6).toFixed(1)} MB`;
 }
 
+// The model in the visitor's browser: with --pack (a folder written by backend/browser_pack.py), its archives go to
+// run/ and the Python runtime to runtime/pyodide/ (from --runtime, by default the folder scripts/fetch-runtime.mjs
+// fills), every file checked; the page's worker (public/runtime/model-worker.js) loads both from the page itself.
+const pack = arg('pack', null);
+let browserLine = 'no browser model (give --pack <folder written by backend/browser_pack.py>)';
+if (pack) {
+  const pins = JSON.parse(readFileSync(path.join(site, 'scripts', 'runtime-files.json'), 'utf8'));
+  const runtime = path.resolve(arg('runtime', path.join(site, '..', 'data', 'cache', 'runtime', `pyodide-${pins.version}`)));
+  try {
+    const rt = copyRuntime(pins, runtime, path.join(target, 'runtime', 'pyodide'));
+    const pk = copyPack(path.resolve(pack), path.join(target, 'run'));
+    browserLine = `runtime ${pins.runtime} ${pins.version} ${(rt / 1e6).toFixed(1)} MB in runtime/pyodide/; run/ ${(pk.bytes / 1e6).toFixed(1)} MB, `
+      + `${pk.places.length} places computed in the browser (${pk.places.join(', ')}), ${pk.replayOnly.length} replayed`;
+  } catch (err) {
+    fail(`${err.message} (the runtime comes from node scripts/fetch-runtime.mjs)`);
+  }
+}
+
 const mb = (n) => `${(n / 1e6).toFixed(1)} MB`;
 console.log(`build-public: the page is in ${target}`);
 console.log(`build-public: commit ${commit ? commit.slice(0, 7) : 'unknown'}; answers recorded ${recordedUtc || 'at an unknown time'}`);
 console.log(`build-public: base ${base}; ${named.length} recorded files; recorded ${mb(bytesOf(recordedDir))}; ${cubeLine}; page in all ${mb(bytesOf(target))}`);
+console.log(`build-public: ${browserLine}`);
 console.log(`build-public: try it with  python3 -m http.server 5589 --directory ${out}  and open http://127.0.0.1:5589${base}`);

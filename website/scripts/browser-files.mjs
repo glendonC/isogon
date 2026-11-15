@@ -1,0 +1,59 @@
+// The files a public page needs to run the model in the visitor's browser, copied into the build and checked on the
+// way: the Python runtime (runtime-files.json beside this file) into runtime/pyodide/, and the archives the backend's
+// packer wrote (backend/browser_pack.py: browser-pack.json, core.zip, places/<region_id>.zip) into run/. A file whose
+// size or sha256 is not the one pinned or listed stops the build. Node built-ins only.
+
+import { createHash } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+
+const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
+
+function checkedCopy(src, dest, bytes, digest, what) {
+  if (!existsSync(src)) throw new Error(`${what}: ${src} does not exist`);
+  const buf = readFileSync(src);
+  if (bytes != null && buf.length !== bytes) throw new Error(`${what}: ${buf.length} bytes, not the ${bytes} listed`);
+  if (digest && sha256(buf) !== digest) throw new Error(`${what}: its sha256 is not the one listed`);
+  mkdirSync(path.dirname(dest), { recursive: true });
+  copyFileSync(src, dest);
+  return buf.length;
+}
+
+/** Copy the runtime's pinned files from `from` into `to`, each checked against its pin. Returns the bytes copied. */
+export function copyRuntime(pins, from, to) {
+  let n = 0;
+  for (const f of pins.files) {
+    if (f.name !== path.basename(f.name)) throw new Error(`runtime: ${f.name} is not a plain file name`);
+    n += checkedCopy(path.join(from, f.name), path.join(to, f.name), f.bytes, f.sha256, `runtime ${f.name}`);
+  }
+  return n;
+}
+
+/** An archive's path as the manifest names it: relative, inside the pack, a zip. */
+function archivePath(file) {
+  const norm = path.posix.normalize(String(file ?? ''));
+  if (!norm.endsWith('.zip') || norm.startsWith('..') || path.posix.isAbsolute(norm)) {
+    throw new Error(`browser pack: ${file} is not a zip inside the pack`);
+  }
+  return norm;
+}
+
+/**
+ * Copy a packer's folder (`from`, holding browser-pack.json) into `to`: the manifest and every archive it lists, each
+ * archive checked against its bytes and sha256 there. Returns {bytes, places, replayOnly}.
+ */
+export function copyPack(from, to) {
+  const manifestPath = path.join(from, 'browser-pack.json');
+  if (!existsSync(manifestPath)) throw new Error(`browser pack: ${manifestPath} does not exist`);
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (!manifest.core?.file) throw new Error('browser pack: the manifest names no core archive');
+  const entries = [['core', manifest.core], ...Object.entries(manifest.places ?? {})];
+  let bytes = 0;
+  for (const [name, e] of entries) {
+    const rel = archivePath(e.file);
+    if (e.bytes == null || !e.sha256) throw new Error(`browser pack: ${name} has no bytes or sha256 in the manifest`);
+    bytes += checkedCopy(path.join(from, rel), path.join(to, rel), e.bytes, e.sha256, `browser pack ${name}`);
+  }
+  bytes += checkedCopy(manifestPath, path.join(to, 'browser-pack.json'), null, null, 'browser pack manifest');
+  return { bytes, places: Object.keys(manifest.places ?? {}), replayOnly: Object.keys(manifest.replay_only ?? {}) };
+}
