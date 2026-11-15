@@ -1,7 +1,8 @@
-/* The search (components/CommandAskPalette.tsx) as a reading view over the scene, as the sheets are
-   (identity/sheet.css): the scene dims and blurs behind; the field is a line of type; the places are plain words, the
-   one pointed at white with the interface's one mark; the locator preview stands beside them; Open and Close are
-   words. No box and no printed key. */
+/* The search (components/CommandAskPalette.tsx) as a reading view over the scene, as the sheets are, to the ux lane's
+   values (its MOUNT.md, section 11): the scene dimmed and blurred behind; the field a line of type; the places plain
+   words, the one pointed at white with the signal mark, the one Enter opens framed by the corner brackets; the place
+   finder's window kept beside them with one lone action; Close a word at the top right. No box, no corner marks, no
+   footer, no number and no printed key. */
 
 .iso-backdrop.iso-backdrop--read {
   background: rgba(5, 7, 12, 0.8);
@@ -18,8 +19,11 @@
   width: auto;
   max-height: none;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  padding: 112px 0 40px;
+  grid-template-columns: minmax(0, 560px) minmax(0, 520px);
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: 72px;
+  align-content: start;
+  padding: 128px 0 40px;
   border: 0;
   border-radius: 0;
   background: none;
@@ -29,8 +33,34 @@
   font-family: var(--id-font, var(--sys-font));
 }
 
+.iso-finder.iso-finder--read::after,
+.iso-finder.iso-finder--read::before {
+  display: none;
+}
+
+/* Close, as the sheets' */
+.iso-finder--read .iso-finder__close {
+  position: fixed;
+  right: 40px;
+  top: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 300 19px var(--id-font, var(--sys-font));
+  color: var(--id-ink-2, rgba(244, 246, 249, 0.7));
+  cursor: pointer;
+}
+
+.iso-finder--read .iso-finder__close:hover,
+.iso-finder--read .iso-finder__close:focus-visible {
+  color: var(--id-ink, #f4f6f9);
+  outline: none;
+}
+
+/* The field: the first thing in the list's column */
 .iso-finder--read .iso-finder__field {
-  max-width: 760px;
+  grid-column: 1;
+  grid-row: 1;
   padding: 0;
   border: 0;
   background: none;
@@ -40,30 +70,39 @@
   width: 100%;
   padding: 0 0 12px;
   border: 0;
-  border-bottom: 1px solid rgba(244, 246, 249, 0.18);
+  border-bottom: 1px solid var(--id-line, rgba(244, 246, 249, 0.18));
   border-radius: 0;
   background: none;
   outline: none;
-  font: 300 34px / 1.2 var(--id-font, var(--sys-font));
+  font: 300 40px / 1.2 var(--id-font, var(--sys-font));
   color: var(--id-ink, #f4f6f9);
+  caret-color: var(--id-signal, #9fe3ff);
 }
 
 .iso-finder--read .iso-finder__input::placeholder {
-  color: rgba(244, 246, 249, 0.4);
+  color: var(--id-ink-3, rgba(244, 246, 249, 0.45));
 }
 
 .iso-finder--read .iso-finder__input:focus {
   border-bottom-color: var(--id-signal, #9fe3ff);
 }
 
+/* The list's column under the field, the preview's column beside both */
 .iso-finder--read .iso-finder__body {
-  display: grid;
-  grid-template-columns: minmax(0, 760px) 320px;
-  column-gap: 72px;
+  display: contents;
+}
+
+.iso-finder--read .iso-finder__body > div:first-child {
+  grid-column: 1;
+  grid-row: 2;
   min-height: 0;
-  margin-top: 24px;
-  border: 0;
-  background: none;
+}
+
+.iso-finder--read .iso-finder__count {
+  margin: 14px 0 28px;
+  padding: 0;
+  font: 300 16px var(--id-font, var(--sys-font));
+  color: var(--id-ink-3, rgba(244, 246, 249, 0.45));
 }
 
 .iso-finder--read .iso-finder__list {
@@ -74,16 +113,17 @@
   scrollbar-color: rgba(243, 244, 246, 0.2) transparent;
 }
 
-.iso-finder--read .iso-finder__item {
+/* A row */
+.iso-finder--read .iso-finder__item,
+.iso-finder--read .iso-finder__item[data-active='true'] {
   position: relative;
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
+  display: block;
   margin: 0 !important;
-  padding: 10px 0 10px 22px;
+  padding: 10px 16px 10px 18px;
   border: 0;
   border-radius: 0;
   background: none;
+  box-shadow: none;
   cursor: pointer;
 }
 
@@ -91,91 +131,127 @@
   content: '';
   position: absolute;
   left: 0;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  margin-top: -4px;
+  top: 20px;
+  width: 4px;
+  height: 4px;
   background: var(--id-signal, #9fe3ff);
   opacity: 0;
-  transform: scale(0.4);
-  transition:
-    opacity 300ms ease,
-    transform 450ms ease;
+  transition: opacity 300ms ease;
 }
 
 .iso-finder--read .iso-finder__item[data-active='true']::before {
   opacity: 1;
+}
+
+/* The row Enter opens: the corner brackets closed round it */
+.iso-finder--read .iso-finder__ticks {
+  opacity: 1;
   transform: none;
 }
 
+.iso-finder--read .iso-finder__main {
+  display: block;
+}
+
 .iso-finder--read .iso-finder__name {
+  display: block;
   font: 300 19px / 1.3 var(--id-font, var(--sys-font));
-  color: rgba(244, 246, 249, 0.55);
+  color: var(--id-ink-2, rgba(244, 246, 249, 0.7));
   transition: color 300ms ease;
 }
 
-.iso-finder--read .iso-finder__item[data-active='true'] .iso-finder__name,
-.iso-finder--read .iso-finder__item:hover .iso-finder__name {
+.iso-finder--read .iso-finder__item[data-active='true'] .iso-finder__name {
   color: var(--id-ink, #f4f6f9);
 }
 
-.iso-finder--read .iso-finder__sub {
-  font: 400 13px / 1.4 var(--id-mono, var(--sys-mono));
-  color: rgba(244, 246, 249, 0.45);
+.iso-finder--read .iso-finder__item .iso-finder__sub {
+  display: block;
+  font: 300 16px var(--id-font, var(--sys-font));
+  color: var(--id-ink-3, rgba(244, 246, 249, 0.45));
 }
 
 .iso-finder--read .iso-finder__tag {
+  display: block;
+  margin-top: 4px;
   padding: 0;
   border: 0;
   background: none;
-  font: 500 12px / 1 var(--id-mono, var(--sys-mono));
+  font: 400 16px var(--id-mono, var(--sys-mono));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--id-signal, #9fe3ff);
 }
 
+/* The preview: the place finder's window, then the place, its months, its sentence and one lone action */
 .iso-finder--read .iso-finder__preview {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
   padding: 0;
   border: 0;
   background: none;
 }
 
-.iso-finder--read .iso-finder__legend {
-  display: flex;
-  justify-content: flex-end;
-  gap: 32px;
-  padding: 16px 0 0;
-  border: 0;
-  background: none;
+.iso-finder--read .iso-finder__preview .iso-locator {
+  width: 100%;
+  max-width: 520px;
+  height: 300px;
 }
 
-.iso-finder--read .iso-finder__action {
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  font: 300 19px / 1.3 var(--id-font, var(--sys-font));
-  color: rgba(244, 246, 249, 0.7);
-  cursor: pointer;
-}
-
-.iso-finder--read .iso-finder__action:hover:not(:disabled),
-.iso-finder--read .iso-finder__action:focus-visible {
+.iso-finder--read .iso-finder__title {
+  margin: 20px 0 0;
+  font: 300 24px / 1.3 var(--id-font, var(--sys-font));
   color: var(--id-ink, #f4f6f9);
-  outline: none;
 }
 
-.iso-finder--read .iso-finder__action:disabled {
-  color: rgba(244, 246, 249, 0.3);
-  cursor: default;
+.iso-finder--read .iso-finder__setting {
+  margin: 6px 0 0;
+  font: 300 16px var(--id-font, var(--sys-font));
+  color: var(--id-ink-3, rgba(244, 246, 249, 0.45));
 }
 
-/* Nothing of the old box: no corner marks, no bar on the pointed row, no rule under the words. */
-.iso-finder.iso-finder--read::after,
-.iso-finder.iso-finder--read::before,
-.iso-finder--read .iso-finder__action::after {
-  display: none;
+.iso-finder--read .iso-finder__note {
+  margin: 16px 0 0;
+  font: 300 18px / 1.6 var(--id-font, var(--sys-font));
+  color: var(--id-ink-2, rgba(244, 246, 249, 0.7));
 }
 
-.iso-finder--read .iso-finder__item,
-.iso-finder--read .iso-finder__item[data-active='true'] {
-  box-shadow: none;
+.iso-finder--read .iso-finder__open {
+  margin-top: 24px;
+}
+
+/* A phone: one column, the window above the list */
+@media (max-width: 600px) {
+  .iso-finder.iso-finder--read {
+    left: 16px;
+    right: 16px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    padding-top: 84px;
+    overflow-y: auto;
+  }
+
+  .iso-finder--read .iso-finder__input {
+    font-size: 28px;
+  }
+
+  .iso-finder--read .iso-finder__preview {
+    grid-column: 1;
+    grid-row: 2;
+    margin-top: 16px;
+  }
+
+  .iso-finder--read .iso-finder__preview .iso-locator {
+    max-width: none;
+    height: 180px;
+  }
+
+  .iso-finder--read .iso-finder__body > div:first-child {
+    grid-row: 3;
+  }
+
+  .iso-finder--read .iso-finder__close {
+    right: 16px;
+    top: 24px;
+  }
 }

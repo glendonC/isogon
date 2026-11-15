@@ -7,6 +7,7 @@ import { Locator } from '../ui/Locator';
 import { plainText } from '../ui/plainText';
 import { useDialogFocus } from '../ui/useDialogFocus';
 import '../styles/finder.css';
+import { Control } from '../identity/Control';
 
 const API_BASE: string = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8788';
 
@@ -265,6 +266,9 @@ export function CommandAskPalette({
         aria-label="Choose a place with a real fire record"
         onKeyDown={handleKeyDown}
       >
+        <button type="button" className="iso-finder__close" onMouseDown={(e) => e.preventDefault()} onClick={onClose}>
+          Close
+        </button>
         <div className="iso-finder__field">
           <input
             ref={inputRef}
@@ -288,7 +292,7 @@ export function CommandAskPalette({
         <div className="iso-finder__body">
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           {places.length > 0 && (
-            <p ref={headRef} className="iso-finder__sub" style={{ margin: 0, padding: '10px 24px 0' }}>
+            <p ref={headRef} className="iso-finder__sub iso-finder__count">
               {listHead(options.length, places.length)}
             </p>
           )}
@@ -327,11 +331,12 @@ export function CommandAskPalette({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => void run(o)}
                 >
+                  {(isActive || isPending) && <span className="id-control__ticks iso-finder__ticks" aria-hidden="true" />}
                   <span className="iso-finder__main">
                     <span className="iso-finder__name">{placeOf(o.id)?.title ?? o.id}</span>
                     <span className="iso-finder__sub">{placeOf(o.id)?.sub ?? ''}</span>
+                    {isOpenNow && <span className="iso-finder__tag">Open now</span>}
                   </span>
-                  {isOpenNow && <span className="iso-finder__tag">open now</span>}
                 </li>
               );
             })}
@@ -351,6 +356,7 @@ export function CommandAskPalette({
             onMouseDown={(e) => e.preventDefault()}
             onClick={anywhere}
           >
+            {onAnywhere && <span className="id-control__ticks iso-finder__ticks" aria-hidden="true" />}
             <span className="iso-finder__main">
               <span className="iso-finder__name">{ANYWHERE.title}</span>
               <span className="iso-finder__sub">{ANYWHERE.sub}</span>
@@ -396,31 +402,17 @@ export function CommandAskPalette({
                   <p className="iso-finder__setting">{setting}</p>
                 </div>
                 <p className="iso-finder__note">{note}</p>
+                {(focused || onAnywhere) && (
+                  <Control variant="primary" className="iso-finder__open" onClick={submit}>
+                    {onAnywhere ? ANYWHERE.title : `Open ${title}`}
+                  </Control>
+                )}
               </>
             )}
 
           </aside>
         </div>
 
-        <div className="iso-finder__legend">
-          <button
-            type="button"
-            className="iso-finder__action"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={submit}
-            disabled={isExecuting || (!focused && !onAnywhere)}
-          >
-            {isExecuting ? 'Opening' : 'Open'}
-          </button>
-          <button
-            type="button"
-            className="iso-finder__action"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={onClose}
-          >
-            Close
-          </button>
-        </div>
       </div>
     </>
   );
