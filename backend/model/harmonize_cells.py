@@ -304,6 +304,8 @@ def _neighbours(pu: np.ndarray, py: np.ndarray, px: np.ndarray, n_lon_p: int) ->
 CUBE_MONTH_OFFSET: int = 10
 CUBE_VERSION: int = 1
 CUBE_GRID_ROWS_PER_CHUNK: int = 24
+# the countries the candidates were designed on, before the cube existed
+DESIGN_COUNTRIES: tuple[str, ...] = ("United_States", "Canada", "Greece")
 
 
 def world_dir() -> Path:
@@ -322,6 +324,7 @@ def cube_meta(cdir: Path) -> dict[str, Any]:
         raise ValueError(f"cube_version {grid.get('cube_version')} is not {CUBE_VERSION}")
     man = cdir / "manifest.json"
     countries = json.loads((cdir / "countries.json").read_text(encoding="utf-8"))
+    countries = countries.get("countries", countries)
     loaded = sorted(k for k, v in countries.items() if isinstance(v, dict) and v.get("loaded"))
     return {"build": cdir.resolve().name, "manifest_sha256": hashlib.sha256(man.read_bytes()).hexdigest(),
             "countries_loaded": loaded, "grid": grid}
@@ -398,7 +401,21 @@ def cube_place_table(cdir: Path, place_deg: float, month_first: int = 12 * 12, m
     src, dst = _neighbours(pu, py, px, n_lon_p)
     return {"deg": place_deg, "lat0": -90.0 + py * place_deg, "lon0": -180.0 + px * place_deg,
             "months": np.arange(month_first, month_last + 1), "channels": ch, "country": None,
-            "nb_src": src, "nb_dst": dst}
+            "nb_src": src, "nb_dst": dst, "with_country": _places_with_countries(cdir, pu, f, n_lon_p)}
+
+
+def _places_with_countries(cdir: Path, pu: np.ndarray, f: int, n_lon_p: int,
+                           names: tuple[str, ...] = DESIGN_COUNTRIES) -> np.ndarray:
+    """True for each place holding a cell with a row of one of `names`, by the cube's countries per cell."""
+    ids = json.loads((cdir / "countries.json").read_text(encoding="utf-8"))["ids"]
+    want = np.array([ids.index(n) for n in names if n in ids])
+    cs = np.load(cdir / "cell_countries_start.npy")
+    cc = np.load(cdir / "cell_countries.npy")
+    hit = np.isin(cc, want)
+    cell = np.repeat(np.arange(cs.size - 1), np.diff(cs))[hit]
+    row, col = cell // N_LON, cell % N_LON
+    raw = np.unique((((N_LAT - 1) - row) // f) * n_lon_p + col // f)
+    return np.isin(pu, raw)
 
 
 def cube_platform_months(cdir: Path, months: np.ndarray) -> tuple[dict[str, set[int]], dict[str, set[int]]]:

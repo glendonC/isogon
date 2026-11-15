@@ -147,7 +147,6 @@ def annual(a: np.ndarray, months: np.ndarray, clean: np.ndarray, years: np.ndarr
                      for y in years], axis=1)
 
 
-BY_BAND_MIN_PAIRS: int = 2000
 
 
 def interval_check(pred: np.ndarray, obs: np.ndarray, months: np.ndarray, clean: np.ndarray, closed: np.ndarray,
@@ -178,9 +177,9 @@ def interval_check(pred: np.ndarray, obs: np.ndarray, months: np.ndarray, clean:
         for rows, g in parts:
             r = rows[:, None]
             tab, taby = tab_w, taby_w
-            if g is not None and (cal & r).sum() >= BY_BAND_MIN_PAIRS:
-                tab = H.interval_table(pred[cal & r], obs[cal & r], unit)
-                taby = H.interval_table(ap[cy & r], ao[cy & r], unit)
+            if g is not None:
+                tab = H.interval_table(pred[cal & r], obs[cal & r], unit, fallback=tab_w)
+                taby = H.interval_table(ap[cy & r], ao[cy & r], unit, fallback=taby_w)
             t = test & r
             lo, hi = H.apply_interval(pred[t], tab)
             o = obs[t]
@@ -257,6 +256,81 @@ def _coverage(inside_m: np.ndarray, m_valid: np.ndarray, inside_y: np.ndarray, y
     return out
 
 
+def load_source(source: str, place_deg: float) -> tuple[dict[str, Any], Any, dict[str, Any]]:
+    if source == "cube":
+        cdir = C.cube_dir()
+        meta = C.cube_meta(cdir)
+        tab = C.cube_place_table(cdir, place_deg, month_first=12 * 12, month_last=LAST_MONTH)
+        read = {"source": "fire cube", "cube_build": meta["build"], "cube_manifest_sha256": meta["manifest_sha256"],
+                "countries": len(meta["countries_loaded"])}
+        return tab, C.cube_platform_months(cdir, tab["months"]), read
+    arrays, manifest = C.load()
+    tab = C.place_table(arrays, manifest["countries"], place_deg, month_first=12 * 12, month_last=LAST_MONTH)
+    return tab, None, {"source": "country files in the cache", "cells_npz_sha256": manifest["cells_npz_sha256"],
+                       "countries": len(manifest["countries"])}
+
+
+def fit_tables(source: str = "cube", place_deg: float = PL.PLACE_DEG) -> dict[str, Any]:
+    """The interval tables the Record uses: held-out errors of the method in use (and of Terra alone, for the
+    months before Aqua), every overlap year left out in turn over every place, per latitude band where a band has
+    enough pairs and for the world. Closed place-years are left out."""
+    tab, pm, read = load_source(source, place_deg)
+    X, months = tab["channels"], tab["months"]
+    clean, sharp, info = clean_months(months, pm)
+    places = places_of(tab)
+    years = np.arange(2012, 2026)
+    # places with no row in the clean months hold nothing to learn an error from; they are left out like closed
+    # place-years (their predictions would all be zero against zero)
+    any_rows = sum(X[f"n_{p}_{d}"] for p in "TASJ" for d in "DN")[:, clean].sum(axis=1) > 0
+    closed = closed_year_mask(tab, years) | ~any_rows[:, None]
+    yr = H._year(months)
+    obs = X["n_S_D"] + X["n_S_N"]
+    band_s = PL.band_of(tab["lat0"] + tab["deg"] / 2.0)
+    out: dict[str, Any] = {"month": {}, "year": {}}
+    pairs: dict[str, int] = {}
+    for regime, spec in (("terra_aqua", H.SPEC_BY_NAME["in_use"]), ("terra_only", H.TERRA_ONLY)):
+        pred = H.held_out(X, months, clean, spec, places, "n", 1.0, sharp)
+        ok_m = clean[None, :] & ~closed[:, np.searchsorted(years, yr)] & np.isfinite(pred)
+        ap, ao = annual(pred, months, clean, years), annual(obs, months, clean, years)
+        ok_y = ~closed
+        for scale, P, O, ok in (("month", pred, obs, ok_m), ("year", ap, ao, ok_y)):
+            t = {"world": H.interval_table(P[ok], O[ok], 1.0), "bands": {}}
+            for b in np.unique(band_s):
+                rows = (band_s == b)[:, None] & ok
+                if rows.sum():
+                    t["bands"][f"{b:g}"] = H.interval_table(P[rows], O[rows], 1.0, fallback=t["world"])
+            out[scale][regime] = t
+            pairs[f"{scale}_{regime}"] = int(ok.sum())
+    out["level"] = H.LEVEL
+    out["provenance"] = {**read, "place_deg": place_deg, "places": int(tab["lat0"].size), "pairs": pairs,
+                         "clean_months": info["clean_months"], "rule_sha256": RULE_SHA256,
+                         "held_out": "each overlap year 2012 to 2025 left out in turn over every place at once",
+                         "closed_place_years_left_out": int(closed_year_mask(tab, years).sum()),
+                         "places_with_rows_in_clean_months": int(any_rows.sum())}
+    return out
+
+
+def write_fitted(fitted: dict[str, Any], path: Path) -> str:
+    """Write the tables as a module that holds them as JSON text, one list to a line."""
+    import re
+
+    def clean_floats(o: Any) -> Any:
+        if isinstance(o, float):
+            return round(o, 6)
+        if isinstance(o, dict):
+            return {k: clean_floats(v) for k, v in o.items()}
+        if isinstance(o, list):
+            return [clean_floats(v) for v in o]
+        return o
+
+    body = json.dumps(clean_floats(fitted), indent=1)
+    body = re.sub(r"\[\s*([^\[\]{}]*?)\s*\]", lambda m: "[" + " ".join(m.group(1).split()) + "]", body)
+    text = ('"""The interval tables the Record uses, written by `python3 -m backend.model.harmonize_eval fit-tables`.\n\n'
+            'Held-out errors of the method in use over every place of the fit; see `harmonize.interval_table`. Do not\n'
+            'edit by hand: run the command again.\n"""\n\nimport json\n\nFITTED = json.loads(r"""\n' + body + '\n""")\n')
+    path.write_text(text, encoding="utf-8")
+    return hashlib.sha256(text.encode()).hexdigest()
+
 def run(out: Path, place_deg: float = PL.PLACE_DEG, quantities: tuple[str, ...] = ("n", "frp"),
         specs: tuple[H.Spec, ...] = H.SPECS, source: str = "cache") -> dict[str, Any]:
     t0 = time.time()
@@ -283,6 +357,9 @@ def run(out: Path, place_deg: float = PL.PLACE_DEG, quantities: tuple[str, ...] 
     labels = group_labels(tab)
     any_rows = sum(X[f"n_{p}_{d}"] for p in "TASJ" for d in "DN")[:, clean].sum(axis=1) > 0
     groups: dict[str, np.ndarray] = {"world": any_rows}
+    if tab.get("with_country") is not None:
+        groups["places outside the three design countries"] = any_rows & ~tab["with_country"]
+        groups["places in the three design countries"] = any_rows & tab["with_country"]
     for kind in ("region", "band"):
         for name in sorted(set(labels[kind])):
             groups[f"{kind}: {name}"] = any_rows & np.array([v == name for v in labels[kind]])
@@ -354,7 +431,8 @@ def decide(res: dict[str, Any], q: str) -> dict[str, Any]:
         gm = (bw["S_month"] - w["S_month"]) / bw["S_month"]
         gy = (bw["S_year"] - w["S_year"]) / bw["S_year"]
         t1 = (gm >= 0.10 or gy >= 0.10) and gm >= -0.02 and gy >= -0.02
-        sub = [g for g in c["groups"] if g != "world" and base["groups"][g]["place_years_scored"] >= MIN_GROUP_PLACE_YEARS]
+        sub = [g for g in c["groups"] if g.startswith(("region", "band"))
+               and base["groups"][g]["place_years_scored"] >= MIN_GROUP_PLACE_YEARS]
         better = [g for g in sub if c["groups"][g]["S_month"] < base["groups"][g]["S_month"]]
         worst = max(((c["groups"][g]["S_month"] - base["groups"][g]["S_month"]) / base["groups"][g]["S_month"] for g in sub),
                     default=0.0)
@@ -369,6 +447,12 @@ def decide(res: dict[str, Any], q: str) -> dict[str, Any]:
                      "bands_better": f"{sum(g in better for g in bands)} of {len(bands)}",
                      "worst_group_loss": round(worst, 4), "test3_pre_drift": t3, "test4_anywhere": t4,
                      "passes": bool(t1 and t2 and t3 and t4)}
+        o = "places outside the three design countries"
+        if o in c["groups"] and base["groups"][o]["S_month"]:
+            bo, co = base["groups"][o], c["groups"][o]
+            out[name]["outside_design_gain_S_month"] = round((bo["S_month"] - co["S_month"]) / bo["S_month"], 4)
+            out[name]["outside_design_gain_S_year"] = (round((bo["S_year"] - co["S_year"]) / bo["S_year"], 4)
+                                                       if bo["S_year"] else None)
     return out
 
 
@@ -413,12 +497,20 @@ def interval_md(res: dict[str, Any], q: str) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["run"])
+    ap.add_argument("cmd", choices=["run", "fit-tables"])
     ap.add_argument("--out", required=True)
     ap.add_argument("--deg", type=float, default=PL.PLACE_DEG)
     ap.add_argument("--only", default="")
     ap.add_argument("--source", choices=["cache", "cube"], default="cache")
     a = ap.parse_args()
+    if a.cmd == "fit-tables":
+        fitted = fit_tables(a.source, a.deg)
+        digest = write_fitted(fitted, Path(__file__).with_name("harmonize_fitted.py"))
+        Path(a.out).mkdir(parents=True, exist_ok=True)
+        (Path(a.out) / "fitted_provenance.json").write_text(json.dumps(fitted["provenance"], indent=1), encoding="utf-8")
+        print("harmonize_fitted.py sha256", digest)
+        print(json.dumps(fitted["provenance"], indent=1))
+        return
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     specs = tuple(s for s in H.SPECS if not a.only or s.name in a.only.split(",") or s.name in ("none", "in_use"))
