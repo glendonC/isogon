@@ -89,7 +89,9 @@ class SwitchOnTests(unittest.TestCase):
             if not a["held_out"]:
                 self.assertEqual({x: y for x, y in a.items() if x != "estimate_from"}, b)
         self.assertEqual(self.on.belief_u8_bytes, self.off.belief_u8_bytes)
-        self.assertEqual(self.on.export_geojson_bytes, self.off.export_geojson_bytes)
+        # the exports are the estimate in use's; only the run's id in them differs
+        self.assertEqual(self.on.export_geojson_bytes.replace(self.on.run_id.encode(), self.off.run_id.encode()),
+                         self.off.export_geojson_bytes)
 
     def test_on_the_run_is_still_blind_to_the_hidden_rows(self) -> None:
         want = _without_the_scorer(self.on)
@@ -97,6 +99,10 @@ class SwitchOnTests(unittest.TestCase):
             got = _solve(rows, estimate=RR.ESTIMATE_CHALLENGER)
             self.assertEqual(_without_the_scorer(got), want, case)
             self.assertEqual(got.reconstruction_u8_bytes, self.on.reconstruction_u8_bytes, case)
+
+    def test_a_run_answered_by_the_challenger_has_an_id_of_its_own(self) -> None:
+        self.assertNotEqual(self.on.run_id, self.off.run_id)
+        self.assertTrue(self.on.run_id.endswith(self.name))
 
     def test_a_run_with_every_satellite_is_never_touched(self) -> None:
         a = _solve(ROWS6, estimate=RR.ESTIMATE_CHALLENGER, holdout=False)

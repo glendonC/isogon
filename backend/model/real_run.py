@@ -598,7 +598,7 @@ def solve_real_reconstruction(
            if from_list else "pass geometry is derived from them.")
         + (" VIIRS detections were kept from the estimate and used only to score it." if holdout else "")
     )
-    c_tag = "holdoutviirs" if holdout else "allsensors"
+    c_tag = ("holdoutviirs" if holdout else "allsensors") + ("" if chal_doc is None else f"_{headline}")
     run_id = f"{spec.id}_firms_{_iso(win.start_s)[:16].replace('-', '').replace(':', '')}_{c_tag}"
 
     learned = learned_parts
