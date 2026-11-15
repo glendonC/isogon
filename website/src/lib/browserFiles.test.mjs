@@ -75,33 +75,51 @@ test('the browser pack is copied with its manifest when every archive is the one
   }
 });
 
-test('with a pack, what the browser makes of the packed places\' held-out runs leaves the recording, and nothing else', async () => {
-  const { leaveOutComputedRuns, COMPUTED_IN_THE_BROWSER } = await import('../../scripts/browser-files.mjs');
+test('with a pack, what the browser makes at the packed starts leaves the recording, and nothing else', async () => {
+  const { leaveOutComputedRuns, COMPUTED_IN_THE_BROWSER, SMALLER_PICTURE } = await import('../../scripts/browser-files.mjs');
   const held = 'plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend';
+  const held2017 = 'okefenokee_ga_firms_20170502T0400_holdoutviirs_challenger_blend';
   const shown = 'plumas_ca_firms_20120810T0619_allsensors';
   const other = 'lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend';
+  const run = (r, s) => `POST /api/reconstruct {"cloud_override":null,"holdout":"viirs","holdout_viirs":true,"region_id":"${r}","source":"firms","start":"${s}"}`;
+  const answers = { [run('plumas_ca', '2012-08-10')]: { run_id: held }, [run('okefenokee_ga', '2017-05-02')]: { run_id: held2017 } };
   const index = {
     recorded_utc: '2026-11-15T13:19:37Z',
+    rounds: [{ episode_from: { region_id: 'plumas_ca', start: '2012-08-10' }, round_id: 'nl-rec-aaaa', one_look: { decision: 3, actions: [-1, 0] }, line: [{ decision: 0, action: -1 }] },
+             { episode_from: { region_id: 'okefenokee_ga', start: '2017-05-02' }, round_id: 'nl-rec-bbbb', one_look: { decision: 1, actions: [-1] }, line: [] }],
     entries: {
+      [run('plumas_ca', '2012-08-10')]: { file: 'files/answer.json' },
+      [run('okefenokee_ga', '2017-05-02')]: { file: 'files/answer2017.json' },
       [`GET /api/runs/${held}/reconstruction_u8.bin`]: { file: 'files/r.bin' },
       [`GET /api/runs/${held}/belief_u8.bin`]: { file: 'files/b.bin' },
       [`GET /api/runs/${held}/export.csv`]: { file: 'files/shared.csv' },
       [`GET /api/runs/${held}/dem_f32.bin`]: { file: 'files/dem.bin' },
-      [`GET /api/runs/${held}/terrain/usgs_naip_ortho_4096.jpg`]: { file: 'files/o.jpg' },
+      [`GET /api/runs/${held}/terrain/usgs_naip_ortho_4096.jpg`]: { file: 'files/o4.jpg' },
+      [`GET /api/runs/${held}/terrain/usgs_naip_ortho_8192.jpg`]: { file: 'files/o8.jpg' },
+      [`GET /api/runs/${held2017}/reconstruction_u8.bin`]: { file: 'files/r2017.bin' },
       [`GET /api/runs/${shown}/reconstruction_u8.bin`]: { file: 'files/shown.bin' },
       [`GET /api/runs/${shown}/export.csv`]: { file: 'files/shared.csv' },
       [`GET /api/runs/${other}/reconstruction_u8.bin`]: { file: 'files/other.bin' },
-      'POST /api/reconstruct {"region_id":"plumas_ca"}': { file: 'files/answer.json' },
+      'POST /api/env/next_look/step {"action":-1,"decision":0,"round_id":"nl-rec-aaaa"}': { file: 'files/s0.json' },
+      'GET /api/env/next_look/state?round_id=nl-rec-aaaa': { file: 'files/st.json' },
+      'POST /api/env/next_look/step {"action":-1,"decision":0,"round_id":"nl-rec-bbbb"}': { file: 'files/s2017.json' },
     },
   };
-  const got = leaveOutComputedRuns(index, ['plumas_ca']);
-  assert.equal(got.entries, 3);
-  assert.deepEqual(got.leftOut, ['files/b.bin', 'files/r.bin']);            // the shared export stays: another entry names it
+  const got = leaveOutComputedRuns(index, { plumas_ca: '2012-08-10', okefenokee_ga: '2012-04-04' }, (k) => answers[k] ?? null);
+  assert.equal(got.entries, 5);
+  assert.deepEqual(got.leftOut, ['files/b.bin', 'files/r.bin', 'files/s0.json', 'files/st.json']);   // the shared export stays
   assert.deepEqual(got.index.entries[`GET /api/runs/${held}/reconstruction_u8.bin`], { withheld: COMPUTED_IN_THE_BROWSER });
-  assert.equal(got.index.entries[`GET /api/runs/${held}/dem_f32.bin`].file, 'files/dem.bin');
-  assert.equal(got.index.entries[`GET /api/runs/${shown}/reconstruction_u8.bin`].file, 'files/shown.bin');
-  assert.equal(got.index.entries[`GET /api/runs/${other}/reconstruction_u8.bin`].file, 'files/other.bin');
+  for (const kept of [`GET /api/runs/${held}/dem_f32.bin`, `GET /api/runs/${held}/terrain/usgs_naip_ortho_8192.jpg`,
+                      `GET /api/runs/${held2017}/reconstruction_u8.bin`, `GET /api/runs/${shown}/reconstruction_u8.bin`,
+                      `GET /api/runs/${other}/reconstruction_u8.bin`, 'POST /api/env/next_look/step {"action":-1,"decision":0,"round_id":"nl-rec-bbbb"}']) {
+    assert.ok(got.index.entries[kept].file, kept);              // another start, another place, all shown, the terrain
+  }
+  assert.equal(got.index.rounds[0].one_look, null);              // the packed round names no recorded look
+  assert.deepEqual(got.index.rounds[1].one_look, { decision: 1, actions: [-1] });
   assert.equal(got.index.recorded_utc, index.recorded_utc);
-  assert.deepEqual(got.index.computed_in_the_browser.places, ['plumas_ca']);
   assert.equal(index.entries[`GET /api/runs/${held}/reconstruction_u8.bin`].file, 'files/r.bin');   // the input is not changed
+
+  const small = leaveOutComputedRuns(index, {}, () => null, { ortho8192: false });
+  assert.deepEqual(small.leftOut, ['files/o8.jpg']);
+  assert.deepEqual(small.index.entries[`GET /api/runs/${held}/terrain/usgs_naip_ortho_8192.jpg`], { withheld: SMALLER_PICTURE });
 });

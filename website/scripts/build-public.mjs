@@ -3,7 +3,7 @@
 // as `recorded/`. Node built-ins only.
 //
 //   node scripts/build-public.mjs --recording <folder> [--cube <folder>] [--base /isogon/] [--out dist/public]
-//                                 [--pack <folder> [--runtime <folder>]]
+//                                 [--pack <folder> [--runtime <folder>]] [--ortho 4096]
 //
 // The site lands in `<out>/<base>` (for the default base, `dist/public/isogon/`), so `<out>` can be served as it is to
 // try the page under the same path it will have online. `<folder>` is a folder written by
@@ -49,7 +49,19 @@ const recordedIndexDoc = JSON.parse(readFileSync(indexFile, 'utf8'));
 // With a browser pack, what the browser makes itself (the frames, belief and exports of the packed places' held-out
 // runs) is left out of the page's recording and marked so in its index (scripts/browser-files.mjs).
 const packFolder = arg('pack', null);
-const leaving = packFolder ? leaveOutComputedRuns(recordedIndexDoc, packPlaces(path.resolve(packFolder))) : null;
+// --ortho 4096: the terrain pictures of 8192 pixels left out too (the stage draws each pack's 4096 instead).
+const ortho8192 = arg('ortho', '8192') !== '4096';
+const answerOf = (key) => {
+  const f = recordedIndexDoc.entries?.[key]?.file;
+  try {
+    return f ? JSON.parse(readFileSync(path.join(recordingDir, f), 'utf8')) : null;
+  } catch {
+    return null;
+  }
+};
+const leaving = packFolder || !ortho8192
+  ? leaveOutComputedRuns(recordedIndexDoc, packFolder ? packPlaces(path.resolve(packFolder)) : {}, answerOf, { ortho8192 })
+  : null;
 const index = leaving ? leaving.index : recordedIndexDoc;
 const leftOut = new Set(leaving?.leftOut ?? []);
 const named = [...new Set(Object.values(index.entries ?? {}).map((e) => e.file).filter(Boolean))].filter((f) => !leftOut.has(f));
@@ -115,7 +127,7 @@ if (pack) {
     const pk = copyPack(path.resolve(pack), path.join(target, 'run'));
     browserLine = `runtime ${pins.runtime} ${pins.version} ${(rt / 1e6).toFixed(1)} MB in runtime/pyodide/; run/ ${(pk.bytes / 1e6).toFixed(1)} MB, `
       + `${pk.places.length} places computed in the browser (${pk.places.join(', ')}), ${pk.replayOnly.length} replayed; `
-      + `left out of the recording, as the browser makes them: ${leaving.entries} entries, ${leftOut.size} files, ${(leftOutBytes / 1e6).toFixed(1)} MB`;
+      + `left out of the recording (what the browser makes${ortho8192 ? '' : ', and the 8192 pictures'}): ${leaving.entries} entries, ${leftOut.size} files, ${(leftOutBytes / 1e6).toFixed(1)} MB`;
   } catch (err) {
     fail(`${err.message} (the runtime comes from node scripts/fetch-runtime.mjs)`);
   }

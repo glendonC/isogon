@@ -236,7 +236,7 @@ async function inBrowser(method: 'GET' | 'POST', path: string, query: Query | un
       const t0 = Date.now();
       const answer = await m.run(region, b.start, b.reveal === true);
       const files = await m.pictures(String(answer.run_id), region);
-      const page = withPageAssets(answer, await recordedRunOfPlace(region, body), files);
+      const page = servedPictures(withPageAssets(answer, await recordedRunOfPlace(region, body), files), await recordedIndex());
       said({ source: 'browser', why: null, seconds: (Date.now() - t0) / 1000 });
       return page;
     }
@@ -261,7 +261,25 @@ async function recorded<T>(key: string, signal?: AbortSignal): Promise<T> {
   const body = await readBody(resp);
   const status = hit.status ?? resp.status;
   if (status < 200 || status >= 300) throw new HttpError(status, body);
-  return body as T;
+  return (key.startsWith('POST /api/reconstruct ') ? servedPictures(body, index) : body) as T;
+}
+
+/**
+ * A run answer with the terrain picture the page holds: where the recording holds no 8192 picture of the run's pack
+ * (a public build made with `--ortho 4096`), the pack's picture is its 4096 fallback, with the picture's source and
+ * credit kept, so the stage asks for no file the page does not have.
+ */
+export function servedPictures<T>(answer: T, index: { entries: Record<string, { file?: string }> } | null = indexLoaded): T {
+  const a = answer as { assets?: { terrain_pack?: { ortho?: { url?: string; size?: number }; ortho_fallback?: { url?: string; size?: number } } } };
+  const tp = a?.assets?.terrain_pack;
+  const url = tp?.ortho?.url;
+  if (!index || !tp?.ortho_fallback?.url || typeof url !== 'string' || /^(https?:|data:|blob:)/.test(url)) return answer;
+  const [p, q] = url.split('?');
+  const query: Query = {};
+  if (q) new URLSearchParams(q).forEach((v, k) => (query[k] = v));
+  if (index.entries[requestKey('GET', p, query)]?.file) return answer;
+  const ortho = { ...tp.ortho, url: tp.ortho_fallback.url, size: tp.ortho_fallback.size };
+  return { ...a, assets: { ...a.assets, terrain_pack: { ...tp, ortho } } } as T;
 }
 
 /**

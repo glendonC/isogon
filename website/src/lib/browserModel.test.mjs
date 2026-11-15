@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { answerSourceLine } from './api.ts';
+import { answerSourceLine, servedPictures } from './api.ts';
 import { BrowserModel, BrowserModelUnavailable, BrowserRefusal, splitPythonError, withPageAssets } from './browserModel.ts';
 
 const MANIFEST = {
@@ -128,4 +128,16 @@ test('the page\'s one line says what answered the fire', () => {
   assert.match(answerSourceLine({ source: 'browser', why: null, seconds: 3.26 }, at), /^This fire was computed in your browser by the project's own model in 3\.3 s; the rest/);
   assert.match(answerSourceLine({ source: 'recording', why: 'this fire is replayed (its page fire is the closed test fire)', seconds: null }, at),
     /15 November 2026; this fire is replayed \(its page fire is the closed test fire\)\.$/);
+});
+
+test('a run answer whose 8192 picture the page does not hold is drawn on its 4096, with its source and credit', () => {
+  const pack = { ortho: { url: '/api/runs/r/terrain/x_ortho_8192.jpg', size: 8192, source: 'usgs_naip', attribution: 'USDA' },
+                 ortho_fallback: { url: '/api/runs/r/terrain/x_ortho_4096.jpg', size: 4096 } };
+  const answer = { assets: { terrain_pack: pack } };
+  const without = { entries: { 'GET /api/runs/r/terrain/x_ortho_8192.jpg': { withheld: 'smaller' } } };
+  const served = servedPictures(answer, without);
+  assert.deepEqual(served.assets.terrain_pack.ortho, { url: '/api/runs/r/terrain/x_ortho_4096.jpg', size: 4096, source: 'usgs_naip', attribution: 'USDA' });
+  assert.equal(answer.assets.terrain_pack.ortho.size, 8192);                            // the answer itself is not changed
+  const withIt = { entries: { 'GET /api/runs/r/terrain/x_ortho_8192.jpg': { file: 'files/o8.jpg' } } };
+  assert.equal(servedPictures(answer, withIt), answer);
 });

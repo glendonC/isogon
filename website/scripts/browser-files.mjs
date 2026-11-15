@@ -33,39 +33,85 @@ export function copyRuntime(pins, from, to) {
 export const COMPUTED_IN_THE_BROWSER = "computed in the visitor's browser from the page's browser pack (run/), so not kept in the recording";
 
 const RUN_FILE = /^GET \/api\/runs\/([^/ ?]+)\/(reconstruction_u8\.bin|belief_u8\.bin|export\.geojson|export\.csv)$/;
+const ROUND_STEP = /^POST \/api\/env\/next_look\/step (\{.*\})$/;
+const ROUND_STATE = /^GET \/api\/env\/next_look\/state\?round_id=(\S+)$/;
+const ORTHO_8192 = /^GET \/api\/runs\/[^/ ?]+\/terrain\/[^/ ?]*ortho_8192\.jpg$/;
+
+/** Why a terrain picture of 8192 pixels is not in the page: the stage draws the pack's 4096 instead. */
+export const SMALLER_PICTURE = 'the 8192 picture is not in this page: the stage draws the pack\'s 4096 picture (ortho_fallback)';
 
 /**
- * The recording without what the browser makes itself: for each place the pack holds, the files of every recorded
- * held-out run there that a run in the browser gives (its frames, its belief and its exports) are marked withheld in
- * the index, and their files are left out unless a kept entry also names them. The run answers, the terrain and every
- * run with all the satellites shown stay. Returns {index, leftOut: files to leave out, entries: how many marked}.
+ * The recording without what the browser makes itself. `places` maps each place the pack holds to the start it is
+ * packed for (the manifest's `places.<id>.start`), and `answerOf(key)` reads a recorded answer. For each packed place
+ * and start:
+ * - the files a run in the browser gives (the 24 frames, the belief and the two exports) of its recorded held-out run;
+ * - the recorded steps and state of its round (the visitor's one look and the recorded line), since the round is
+ *   played in the browser; the index's round then names no look, so a page where the model cannot run says so;
+ * are marked withheld in the index. With `ortho8192: false`, every terrain picture of 8192 pixels is too (the stage
+ * draws the 4096 the pack names as its fallback). A file a kept entry also names stays. The run answers, the terrain
+ * and every run with all the satellites shown stay.
+ * Returns {index, leftOut: files to leave out, entries: how many marked}.
  */
-export function leaveOutComputedRuns(index, places) {
+export function leaveOutComputedRuns(index, places, answerOf = () => null, { ortho8192 = true } = {}) {
+  const packed = new Map(Object.entries(places));
   const entries = { ...(index.entries ?? {}) };
   const candidates = new Set();
   let marked = 0;
-  for (const [key, e] of Object.entries(entries)) {
-    const m = RUN_FILE.exec(key);
-    const region = m && m[1].includes('_holdoutviirs') ? m[1].split('_firms_')[0] : null;
-    if (region && places.includes(region) && e?.file) {
-      candidates.add(e.file);
-      entries[key] = { withheld: COMPUTED_IN_THE_BROWSER };
-      marked += 1;
+  const mark = (key, why) => {
+    const e = entries[key];
+    if (!e?.file) return;
+    candidates.add(e.file);
+    entries[key] = { withheld: why };
+    marked += 1;
+  };
+  // The held-out runs of the packed starts, by their recorded answers' run ids
+  const runIds = new Set();
+  for (const key of Object.keys(entries)) {
+    if (!key.startsWith('POST /api/reconstruct ')) continue;
+    let body;
+    try {
+      body = JSON.parse(key.slice('POST /api/reconstruct '.length));
+    } catch {
+      continue;
     }
+    if (body?.holdout_viirs !== true || packed.get(body.region_id) !== body.start) continue;
+    const answer = answerOf(key);
+    if (answer && typeof answer.run_id === 'string') runIds.add(answer.run_id);
+  }
+  // The rounds of the packed starts
+  const rounds = Array.isArray(index.rounds) ? index.rounds : [];
+  const roundIds = new Set(rounds.filter((r) => packed.get(r?.episode_from?.region_id) === r?.episode_from?.start).map((r) => r.round_id));
+  for (const key of Object.keys(entries)) {
+    const run = RUN_FILE.exec(key);
+    if (run && runIds.has(run[1])) mark(key, COMPUTED_IN_THE_BROWSER);
+    const step = ROUND_STEP.exec(key);
+    if (step) {
+      try {
+        if (roundIds.has(JSON.parse(step[1]).round_id)) mark(key, COMPUTED_IN_THE_BROWSER);
+      } catch {
+        // not a step body
+      }
+    }
+    const state = ROUND_STATE.exec(key);
+    if (state && roundIds.has(decodeURIComponent(state[1]))) mark(key, COMPUTED_IN_THE_BROWSER);
+    if (!ortho8192 && ORTHO_8192.test(key)) mark(key, SMALLER_PICTURE);
   }
   const kept = new Set(Object.values(entries).map((e) => e?.file).filter(Boolean));
   const leftOut = [...candidates].filter((f) => !kept.has(f)).sort();
+  const keptRounds = rounds.map((r) => (roundIds.has(r?.round_id) ? { ...r, one_look: null, line: [], played_in_the_browser: true } : r));
   return {
-    index: { ...index, entries, computed_in_the_browser: { why: COMPUTED_IN_THE_BROWSER, places: [...places].sort(), entries: marked } },
+    index: { ...index, entries, rounds: keptRounds,
+             computed_in_the_browser: { why: COMPUTED_IN_THE_BROWSER, places: Object.fromEntries([...packed].sort()), entries: marked,
+                                        runs: [...runIds].sort(), rounds: [...roundIds].sort(), ortho_8192: ortho8192 } },
     leftOut,
     entries: marked,
   };
 }
 
-/** The places a packer's folder holds, from its manifest, without copying anything. */
+/** The places a packer's folder holds and the start each is packed for, from its manifest, without copying anything. */
 export function packPlaces(from) {
   const manifest = JSON.parse(readFileSync(path.join(from, 'browser-pack.json'), 'utf8'));
-  return Object.keys(manifest.places ?? {});
+  return Object.fromEntries(Object.entries(manifest.places ?? {}).map(([id, p]) => [id, p.start ?? null]));
 }
 
 /** An archive's path as the manifest names it: relative, inside the pack, a zip. */
