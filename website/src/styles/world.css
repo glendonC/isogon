@@ -1410,3 +1410,8 @@
   font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
   color: var(--sys-ink-3);
 }
+
+/* The test across the world waits, dark, until it is whole (in the film: the Earth's fire in). */
+.world-earth[data-whole='false'] {
+  visibility: hidden;
+}

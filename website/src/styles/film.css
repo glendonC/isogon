@@ -319,3 +319,8 @@
 .iso-film .world-label--num {
   font-size: clamp(16px, 1vw, 20px);
 }
+
+/* A picture still reading its answer says nothing over the film's black: the caption and the picture arrive together. */
+.iso-film .world-screen .world-sealed--note {
+  visibility: hidden;
+}

@@ -182,30 +182,48 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
 
 function Test({ film, toWord }: Part) {
   const read = useRead<unknown>('/api/evidence');
+  // In the film the caption arrives with the picture, once it is whole (WorldTest's onReady); the host says so on itself.
+  const [whole, setWhole] = useState(false);
+  useEffect(() => {
+    document.querySelector('.world-screen')?.setAttribute('data-ready', whole ? 'true' : 'false');
+  }, [whole]);
   const control = useRef<WorldTestControl | null>(null);
   const ans = useMemo(() => (read.state === 'ready' ? parseFresh(read.value) : null), [read]);
-  const look = ans ? (ans.looks.find((l) => l.id === 'test_b') ?? ans.looks.find((l) => l.id === 'test_a') ?? null) : null;
-  const c = look?.all?.classes ?? null;
-  const fires = look?.fires.length ?? 0;
-  const of = look?.fires.length ? Math.max(...look.fires.map((f) => f.judged)) : 7;
-  const continents = new Set(look?.fires.map((f) => f.continent).filter(Boolean)).size;
-  const strictBehind = look?.all?.scores?.csi_strict_375m === 'behind';
-  const lines =
-    look && c
-      ? [
-          strictBehind ? S.test.strictBehind(fires, continents, c.ahead, of, c.behind) : S.test.notStrictBehind(fires, continents, c.ahead, of, c.tied, c.behind),
-          S.test.squares(of),
-        ]
-      : [];
-  const caption = look && c ? (look.id === 'test_b' ? S.test.filmB(fires, c.ahead, of, c.behind) : S.test.filmA(fires, c.ahead, of, c.behind)) : null;
+  // The guide speaks of test A, as the product lane's sentences do (their fields are test A's); the film's caption
+  // takes test B's line by itself once test B's record is served (the panel shows test B's look then too).
+  const testA = ans?.looks.find((l) => l.id === 'test_a') ?? null;
+  const testB = ans?.looks.find((l) => l.id === 'test_b') ?? null;
+  const facts = (l: typeof testA) => {
+    const c = l?.all?.classes ?? null;
+    if (!l || !c) return null;
+    return {
+      c,
+      fires: l.fires.length,
+      of: l.fires.length ? Math.max(...l.fires.map((f) => f.judged)) : 7,
+      continents: new Set(l.fires.map((f) => f.continent).filter(Boolean)).size,
+      strictBehind: l.all?.scores?.csi_strict_375m === 'behind',
+    };
+  };
+  const a = facts(testA);
+  const b = facts(testB);
+  const lines = a
+    ? [
+        a.strictBehind
+          ? S.test.strictBehind(a.fires, a.continents, a.c.ahead, a.of, a.c.behind)
+          : S.test.notStrictBehind(a.fires, a.continents, a.c.ahead, a.of, a.c.tied, a.c.behind),
+        S.test.squares(a.of),
+      ]
+    : [];
+  const caption = b ? S.test.filmB(b.fires, b.c.ahead, b.of, b.c.behind) : a ? S.test.filmA(a.fires, a.c.ahead, a.of, a.c.behind) : null;
   return (
     <>
       <div className="world-screen__test">
-        <WorldTest source="/api/evidence" control={control} caption={false} keepGuideRoom />
+        <WorldTest source="/api/evidence" control={control} caption={false} keepGuideRoom onReady={setWhole} />
       </div>
       <Frame
         film={film}
         toWord={toWord}
+        trail={!film || whole}
         objective={film ? caption ?? S.test.objective : S.test.objective}
         word="Test"
         lines={lines}

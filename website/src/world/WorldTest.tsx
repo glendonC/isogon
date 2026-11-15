@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { count } from '../guide/formats';
 import { listAnd } from './words';
 import { countryAt } from './countryAt';
@@ -100,11 +100,13 @@ export interface WorldTestControl {
  * (`--world-guide-room`). The host of the pictures of the world draws the caption where the page's objective stands
  * and passes `caption={false}` with `keepGuideRoom`, so the picture keeps clear of the host's guide.
  */
-export function WorldTest({ source, control, caption = true, keepGuideRoom }: {
+export function WorldTest({ source, control, caption = true, keepGuideRoom, onReady }: {
   source: string;
   control?: MutableRefObject<WorldTestControl | null>;
   caption?: boolean;
   keepGuideRoom?: boolean;
+  /** Told when the picture is whole: the answer read and, in the film, the Earth's fire in (or failed, or 15 s). */
+  onReady?: (ready: boolean) => void;
 }) {
   const read = useRead<unknown>(source);
   const ans = useMemo(() => (read.state === 'ready' ? parseFresh(read.value) : null), [read]);
@@ -124,6 +126,19 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom }: {
   // In the film the Earth carries the world's fire under the squares, as bright as the years' (the cube's layer of
   // every MODIS detection since 2000), so the tested fires stand where fire burns.
   const backdrop = useWorldLayer(film ? '/api/cube/layers' : null, 'rows_modis');
+  // In the film the picture appears whole: the squares and the panel wait for the Earth's fire, so a viewer never sees
+  // them on black while the layer loads. A layer that fails, or takes more than 15 s, lets the picture stand without it.
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    if (!film) return;
+    const id = window.setTimeout(() => setWaited(true), 15000);
+    return () => window.clearTimeout(id);
+  }, [film]);
+  const whole = read.state === 'ready' && (!film || backdrop.state !== 'loading' || waited);
+  useEffect(() => {
+    onReady?.(whole);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [whole]);
   const grid = useMemo<GridLayer[]>(
     () =>
       backdrop.state === 'ready'
@@ -196,7 +211,7 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom }: {
       : undefined;
 
   return (
-    <div className="world-earth" ref={root}>
+    <div className="world-earth" ref={root} data-whole={whole ? 'true' : 'false'}>
       <WorldCanvas label={TEST_WORDS.label} focus={TEST_VIEW} layers={grid} hatchLand={film} padLeft={room.left} padBottom={room.bottom + (keep && !room.stacked ? guideRoom : 0)} onClickMap={() => setOpen(null)}>
         {(p) => (
           <>
