@@ -361,19 +361,14 @@ SEARCH: tuple[tuple[str, tuple[Any, ...]], ...] = (
 )
 
 
-def fit_params(log: Any = print) -> dict[str, Any]:
-    """Coordinate search on training episodes, totals matched by day and night, intervals from training residuals,
-    then one look at validation episodes that decides what is switched on. Every value starts from the priors:
-    nothing of an earlier fit is read but the decision it reached, which is kept beside the new one."""
-    t0 = time.time()
-    path = FITTED_DIR / PARAMS_FILE
-    old = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
-    ev = Evaluator()
-    train_eps, val_eps = load_episodes("train"), load_episodes("validation")
-    log(f"training episodes {len(train_eps)}, validation episodes {len(val_eps)}")
-    prior = OccupancyParams()
-    best = prior
-    pooled, reps = ev.pooled(best, "train")
+def search_params(ev: Any, split: str, log: Any = print) -> dict[str, Any]:
+    """The search `fit_params` runs, on one split of any evaluator that has `pooled(params, split)`: from the
+    priors, two sweeps of `SEARCH` with the pixel counts matched by day and by night after each, then the power
+    scale by day and by night, then the stated intervals from the split's looks (`INTERVAL_RULE`). Returns the
+    values found (the intervals not yet written into them), the split's reports with them, the history and the
+    two intervals."""
+    best = OccupancyParams()
+    pooled, reps = ev.pooled(best, split)
     best_j = objective(pooled)
     history: list[dict[str, Any]] = [{"step": "priors", "objective": round(best_j, 4)}]
     log(f"priors: objective {best_j:.4f}")
@@ -389,7 +384,7 @@ def fit_params(log: Any = print) -> dict[str, Any]:
             trial_best = None
             for v in values:
                 cand = OccupancyParams(**{**best.as_dict(), name: v})
-                pooled_c, reps_c = ev.pooled(cand, "train")
+                pooled_c, reps_c = ev.pooled(cand, split)
                 j = objective(pooled_c)
                 if trial_best is None or j > trial_best[0]:
                     trial_best = (j, cand, reps_c)
@@ -401,7 +396,7 @@ def fit_params(log: Any = print) -> dict[str, Any]:
         # match the expected number of flagged pixels by day and by night, then re-evaluate
         for _ in range(2):
             cand = match_counts(best, reps)
-            pooled_c, reps_c = ev.pooled(cand, "train")
+            pooled_c, reps_c = ev.pooled(cand, split)
             best, reps, best_j = cand, reps_c, objective(pooled_c)
         history.append({"step": f"sweep {sweep}: pixel counts matched", "count_scale_day": round(best.count_scale_day, 3),
                         "count_scale_night": round(best.count_scale_night, 3), "objective": round(best_j, 4)})
@@ -412,11 +407,29 @@ def fit_params(log: Any = print) -> dict[str, Any]:
     best = OccupancyParams(**{**best.as_dict(),
                               "frp_scale": float(best.frp_scale * (r[True] or 1.0)),
                               "frp_scale_night": float(best.frp_scale_night * (r[False] or 1.0))})
-    _, reps = ev.pooled(best, "train")
+    _, reps = ev.pooled(best, split)
     # split conformal style intervals: the 5th and 95th percentile of hidden over predicted on training looks,
     # the looks that flagged nothing included (`INTERVAL_RULE`)
     iv_frp = _interval(_ratios(reps, "predicted_frp_mw", "hidden_frp_mw"))
     iv_pix = _interval(_ratios(reps, "predicted_pixels", "hidden_pixels_in_test_box"))
+    return {"best": best, "reports": reps, "history": history, "interval_frp": iv_frp, "interval_pixels": iv_pix,
+            "objective": best_j}
+
+
+def fit_params(log: Any = print) -> dict[str, Any]:
+    """Coordinate search on training episodes, totals matched by day and night, intervals from training residuals,
+    then one look at validation episodes that decides what is switched on. Every value starts from the priors:
+    nothing of an earlier fit is read but the decision it reached, which is kept beside the new one."""
+    t0 = time.time()
+    path = FITTED_DIR / PARAMS_FILE
+    old = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+    ev = Evaluator()
+    train_eps, val_eps = load_episodes("train"), load_episodes("validation")
+    log(f"training episodes {len(train_eps)}, validation episodes {len(val_eps)}")
+    prior = OccupancyParams()
+    found = search_params(ev, "train", log)
+    best, reps, history = found["best"], found["reports"], found["history"]
+    iv_frp, iv_pix = found["interval_frp"], found["interval_pixels"]
     label = (
         f"{len(train_eps)} real fire episodes of {', '.join(str(y) for y in sorted({e.year for e in train_eps}))} in the plumas_ca, lytton_bc "
         "and evia_greece context boxes; no window of 2021, the year of the three test fires (backend/model/episodes.py)"

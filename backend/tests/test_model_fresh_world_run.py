@@ -188,5 +188,104 @@ class EpisodeRunTests(unittest.TestCase):
         self.assertEqual(doc["look_name"], F.LOOK_NAMES["test_a"])
 
 
+def _fixture_work(tmp: Path, keys: list[str]) -> Path:
+    (tmp / "rows_step.json").write_text(json.dumps(_rows_step()))
+    cols = list(R.ROW_COLUMNS)
+    for key in keys:
+        dest = tmp / "rows" / key / "all.csv"
+        dest.parent.mkdir(parents=True)
+        dest.write_text(",".join(cols) + "\n" + "\n".join(",".join(str({**r, "_platform": ""}.get(c, "")) for c in cols) for r in ROWS) + "\n")
+        for plat in ("VIIRS_SNPP", "VIIRS_NOAA20", "VIIRS_NOAA21"):
+            f = R._pass_file(tmp, key, plat)
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(b"")
+    R._CACHE.clear()
+    return tmp
+
+
+class _FakeEvaluator:
+    """pooled() on made-up numbers: the objective is highest at tau_res_h 12, and the totals are matched as given."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def pooled(self, params, split):
+        self.calls += 1
+        good = 1.0 - abs(params.tau_res_h - 12.0) / 24.0
+        rec = {"strict_375m": {"csi": good}, "tolerant_1_cell": {"csi": good}, "equal_area": {"hit_rate": good}, "brier": 0.01}
+        pooled = {"methods": {"reconstruction": rec, "painted_modis": {"brier": 0.02}}}
+        rep = {"methods": {"reconstruction": {"per_overpass": [
+                   {"predicted_pixels": 10.0, "predicted_frp_mw": 100.0}, {"predicted_pixels": 5.0, "predicted_frp_mw": 50.0}]}},
+               "targets": [{"is_day": True, "hidden_pixels_in_test_box": 20, "hidden_frp_mw": 150.0},
+                           {"is_day": False, "hidden_pixels_in_test_box": 5, "hidden_frp_mw": 0.0}]}
+        return pooled, [rep]
+
+
+class RefitTests(unittest.TestCase):
+    def test_the_search_is_the_one_of_the_fit_in_use_on_any_evaluator(self) -> None:
+        from backend.model import fit_real as FR
+
+        ev = _FakeEvaluator()
+        found = FR.search_params(ev, "fitting", log=lambda _m: None)
+        self.assertEqual(found["best"].tau_res_h, 12.0)
+        grid = sum(len(v) for _, v in FR.SEARCH)
+        self.assertEqual(ev.calls, 1 + 2 * (grid + 2) + 1)          # priors, two sweeps with two matchings, power scale
+        self.assertEqual(found["history"][0]["step"], "priors")
+        self.assertIn("lo", found["interval_frp"])
+
+    def test_the_refit_against_the_values_in_use_on_the_same_episodes(self) -> None:
+        from backend.model.occupancy import OccupancyParams
+
+        keys = [f"{PID}:2099:22", f"{PID}:2099:23"]
+        with tempfile.TemporaryDirectory() as tmp:
+            work = _fixture_work(Path(tmp), keys)
+            with mock.patch.object(R, "pass_reader", lambda _w, _k: fx.fixture_pass_reader()):
+                a = [R.run_episode(_ep(key=k), load_params().as_dict(), work) for k in keys]
+                b = [R.run_episode(_ep(key=k), OccupancyParams().as_dict(), work) for k in keys]
+        same = R.against_values_in_use(a, a)
+        self.assertEqual(same["classes"]["behind"], 0)
+        self.assertEqual(same["classes"]["ahead"], 0)
+        other = R.against_values_in_use(a, b)
+        self.assertEqual(sum(other["classes"].values()), 7)
+        with self.assertRaises(ValueError):
+            R.against_values_in_use(a, list(reversed(b)))
+
+    def test_the_decision_takes_the_refit_only_when_both_parts_of_the_rule_hold(self) -> None:
+        def verdict(ahead, behind, cov=0.9):
+            keys = ("csi_strict_375m", "csi_one_cell_tolerance", "hit_rate_at_equal_area", "brier",
+                    "pixel_count_error_of_sums", "frp_error_of_sums", "frp_median_abs_relative_error")
+            cls = ["ahead"] * ahead + ["behind"] * behind + ["tie"] * (7 - ahead - behind)
+            return {"classes": {"ahead": ahead, "tie": 7 - ahead - behind, "behind": behind},
+                    "scores": {k: {"class": c, "beats_every_baseline": c == "ahead"} for k, c in zip(keys, cls)},
+                    "interval": {"observed_coverage": cov}}
+
+        self.assertEqual(R.decide_test_b(verdict(2, 0), verdict(1, 0))["test_b_values"], "refit")
+        self.assertEqual(R.decide_test_b(verdict(2, 0), verdict(3, 1))["test_b_values"], "values in use")
+        self.assertEqual(R.decide_test_b(verdict(2, 1), verdict(3, 0))["test_b_values"], "values in use")
+        self.assertEqual(R.decide_test_b(verdict(0, 0), verdict(3, 0))["test_b_values"], "values in use")
+
+    def test_test_b_takes_the_values_the_decision_chose_and_no_other_plan_s(self) -> None:
+        plan = {"plan_sha256": "p"}
+        doc = {"plan_sha256": "p", "protocol_sha256": F.protocol_sha256(), "parameters": {"tau_res_h": 3.0},
+               "decision": {"test_b_values": "refit"}}
+        params, values = R.test_b_values(doc, plan)
+        self.assertEqual(params, {"tau_res_h": 3.0})
+        self.assertEqual(values["which"], "refit")
+        params, values = R.test_b_values({**doc, "decision": {"test_b_values": "values in use"}}, plan)
+        self.assertEqual(params, load_params().as_dict())
+        with self.assertRaises(ValueError):
+            R.test_b_values({**doc, "plan_sha256": "q"}, plan)
+
+    def test_the_world_evaluator_leaves_out_what_cannot_be_scored_and_adds_the_open_episodes(self) -> None:
+        keys = [f"{PID}:2099:22"]
+        plan = {"episodes": {"fitting": [_ep(key=keys[0]), _ep(key="gone")], "validation": [_ep(key=keys[0])]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = _fixture_work(Path(tmp), keys)
+            ev = R.WorldEvaluator(plan, work, workers=1, open_training=3)
+        self.assertEqual(ev.left_out, {"gone": "no rows kept"})
+        self.assertEqual([k for k, _ in ev.sets["fitting"]], ["world", "open", "open", "open"])
+        self.assertEqual(len(ev.sets["validation"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

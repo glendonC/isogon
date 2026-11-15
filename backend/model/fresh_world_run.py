@@ -527,6 +527,162 @@ def look(plan: dict[str, Any], role: str, params: dict[str, Any], values: dict[s
     return doc
 
 
+# ----------------------------------------------------------------------------------------------------------------
+# The refit, its validation and the decision; then test B
+# ----------------------------------------------------------------------------------------------------------------
+
+REFIT_FILE: Path = W.PLAN_FILE.with_name("fresh_world_refit.json")
+LOOK_FILES: dict[str, Path] = {role: W.PLAN_FILE.with_name(f"fresh_world_{role}.json") for role in ("test_a", "test_b")}
+# The open training episodes of the three first regions that join the fitting set (fit_real.TRAIN_OPEN).
+OPEN_TRAINING_EPISODES: int = 17
+
+
+def _world_job(job: tuple[str, Any, dict[str, Any], str]) -> dict[str, Any]:
+    kind, item, pdict, work_s = job
+    if kind == "world":
+        return run_episode(item, pdict, Path(work_s))
+    from backend.model import fit_real as FR
+
+    return FR._run_episode((FR.TRAIN_OPEN, int(item), pdict))
+
+
+def scorable(ep: dict[str, Any], work: Path) -> str | None:
+    """None when an episode's rows and pass lists are all kept, else the reason it cannot be scored. Reads no row."""
+    if not any((work / "rows" / ep["key"]).glob("*.csv")):
+        return "no rows kept"
+    missing = [p for p in hidden_platforms(ep) if not _pass_file(work, ep["key"], p).is_file()]
+    return f"no pass list for {', '.join(missing)}" if missing else None
+
+
+class WorldEvaluator:
+    """`fit_real.search_params` on the fresh test's sets: `fitting` is the plan's fitting episodes that can be
+    scored and the open training episodes of the three first regions; `validation` is the plan's validation
+    episodes that can be scored."""
+
+    def __init__(self, plan: dict[str, Any], work: Path, workers: int, open_training: int = OPEN_TRAINING_EPISODES) -> None:
+        self.work = work
+        self.left_out: dict[str, str] = {}
+        self.sets: dict[str, list[tuple[str, Any]]] = {}
+        for role in ("fitting", "validation"):
+            items: list[tuple[str, Any]] = []
+            for ep in plan["episodes"][role]:
+                why = scorable(ep, work)
+                if why is None:
+                    items.append(("world", ep))
+                else:
+                    self.left_out[ep["key"]] = why
+            self.sets[role] = items
+        self.sets["fitting"] += [("open", i) for i in range(open_training)]
+        self.pool = ProcessPoolExecutor(max_workers=workers) if workers > 1 else None
+        self.calls = 0
+
+    def reports(self, params: Any, split: str) -> list[dict[str, Any]]:
+        self.calls += 1
+        jobs = [(kind, item, params.as_dict(), str(self.work)) for kind, item in self.sets[split]]
+        if self.pool is None:
+            return [_world_job(j) for j in jobs]
+        return list(self.pool.map(_world_job, jobs, chunksize=1))
+
+    def pooled(self, params: Any, split: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        from backend.eval.blind_test import pool_reports
+
+        reps = self.reports(params, split)
+        return pool_reports(reps), reps
+
+    def close(self) -> None:
+        if self.pool is not None:
+            self.pool.shutdown()
+
+
+def against_values_in_use(refit_reports: list[dict[str, Any]], in_use_reports: list[dict[str, Any]]) -> dict[str, Any]:
+    """The refit judged against the values in use on the same episodes, with an interval: the same looks, the same
+    truth, the values in use standing as the one baseline."""
+    from backend.eval.blind_test import bootstrap_verdict
+
+    merged = []
+    for a, b in zip(refit_reports, in_use_reports):
+        if a["episode"] != b["episode"]:
+            raise ValueError("the two runs are not of the same episodes in the same order")
+        merged.append({**a, "methods": {"reconstruction": a["methods"]["reconstruction"],
+                                        "values_in_use": b["methods"]["reconstruction"]}})
+    return bootstrap_verdict(merged, method="reconstruction", baselines=("values_in_use",))
+
+
+def decide_test_b(v_refit: dict[str, Any], v_against: dict[str, Any]) -> dict[str, Any]:
+    """The protocol's decision: the refit is test B's values when the rule in use holds for it on validation and no
+    score is behind the values in use; otherwise the values in use are."""
+    from backend.model import fit_real as FR
+
+    rule_in_use, words, _parts, _strict = FR.decide(v_refit)
+    none_behind = int(v_against["classes"]["behind"]) == 0
+    use = bool(rule_in_use and none_behind)
+    return {
+        "test_b_values": "refit" if use else "values in use",
+        "rule_in_use_holds": bool(rule_in_use), "rule_in_use_words": words,
+        "behind_the_values_in_use_on": int(v_against["classes"]["behind"]),
+        "ahead_of_the_values_in_use_on": int(v_against["classes"]["ahead"]),
+        "rule": F.PROTOCOL["decision"],
+    }
+
+
+def refit(plan: dict[str, Any], work: Path, workers: int, log: Callable[[str], None] = print) -> dict[str, Any]:
+    """The refit on the fitting set, both values on the validation set, and the decision, in one record."""
+    from backend.eval.blind_test import bootstrap_verdict
+    from backend.model import fit_real as FR
+    from backend.model.fitted import load_params
+    from backend.model.occupancy import OccupancyParams
+
+    t0 = time.time()
+    ev = WorldEvaluator(plan, work, workers)
+    n_world = sum(1 for kind, _ in ev.sets["fitting"] if kind == "world")
+    log(f"refit: {n_world} world fitting episodes and {OPEN_TRAINING_EPISODES} open training episodes; "
+        f"{len(ev.sets['validation'])} validation episodes; {len(ev.left_out)} left out")
+    found = FR.search_params(ev, "fitting", log)
+    label = (f"{n_world} fire episodes of the fresh test's fitting places (plan {plan['plan_sha256'][:12]}) and the "
+             f"{OPEN_TRAINING_EPISODES} open training episodes of plumas_ca, lytton_bc and evia_greece; no window of 2021 "
+             "in those three regions")
+    iv_frp, iv_pix = found["interval_frp"], found["interval_pixels"]
+    best = OccupancyParams(**{**found["best"].as_dict(), "frp_interval_lo": iv_frp["lo"], "frp_interval_hi": iv_frp["hi"],
+                              "pixel_interval_lo": iv_pix["lo"], "pixel_interval_hi": iv_pix["hi"], "fitted_on": label})
+    in_use = load_params()
+    reps_refit = ev.reports(best, "validation")
+    reps_in_use = ev.reports(in_use, "validation")
+    calls = ev.calls
+    ev.close()
+    v_refit, v_in_use = bootstrap_verdict(reps_refit), bootstrap_verdict(reps_in_use)
+    v_against = against_values_in_use(reps_refit, reps_in_use)
+    decision = decide_test_b(v_refit, v_against)
+    return {
+        "what": "the fresh test's refit on its fitting set, both values on its validation set, and the decision for test B",
+        "protocol_id": F.PROTOCOL_ID, "protocol_sha256": F.protocol_sha256(), "plan_sha256": plan["plan_sha256"],
+        "parameters": best.as_dict(),
+        "values_in_use_sha256": F.values_now(),
+        "fitting": {"world_episodes": n_world, "open_training_episodes": OPEN_TRAINING_EPISODES,
+                    "left_out": {k: v for k, v in ev.left_out.items() if any(k == ep["key"] for ep in plan["episodes"]["fitting"])}},
+        "validation": {"episodes": len(reps_refit),
+                       "left_out": {k: v for k, v in ev.left_out.items() if any(k == ep["key"] for ep in plan["episodes"]["validation"])},
+                       "refit_against_the_baselines": v_refit, "values_in_use_against_the_baselines": v_in_use,
+                       "refit_against_the_values_in_use": v_against},
+        "intervals": {"rule": FR.INTERVAL_RULE, "level": 0.90, "frp": iv_frp, "pixels": iv_pix},
+        "search": {"grid": {k: list(v) for k, v in FR.SEARCH}, "history": found["history"], "blind_test_passes": calls,
+                   "seconds": round(time.time() - t0, 1)},
+        "decision": decision,
+    }
+
+
+def test_b_values(refit_doc: dict[str, Any], plan: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The values test B is looked at with, by the decision on record, and how the record names them."""
+    from backend.model.fitted import load_params
+
+    if refit_doc.get("plan_sha256") != plan["plan_sha256"] or refit_doc.get("protocol_sha256") != F.protocol_sha256():
+        raise ValueError("the refit on record is not of this plan and protocol")
+    if refit_doc["decision"]["test_b_values"] == "refit":
+        return dict(refit_doc["parameters"]), {"which": "refit", "refit_sha256": _canonical_sha(refit_doc)}
+    F.refuse_unfrozen()
+    return load_params().as_dict(), {"which": "values in use", "files_sha256": F.values_now(),
+                                     "refit_sha256": _canonical_sha(refit_doc)}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="the fresh test after its plan")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -538,10 +694,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--work", default=str(W.WORK_DEFAULT))
     p.add_argument("--threads", type=int, default=4)
     lk = sub.add_parser("look")
-    lk.add_argument("--role", required=True, choices=["test_a"])
+    lk.add_argument("--role", required=True, choices=["test_a", "test_b"])
     lk.add_argument("--work", default=str(W.WORK_DEFAULT))
     lk.add_argument("--workers", type=int, default=16)
-    lk.add_argument("--out", required=True)
+    lk.add_argument("--out", default=None)
+    rf = sub.add_parser("refit")
+    rf.add_argument("--work", default=str(W.WORK_DEFAULT))
+    rf.add_argument("--workers", type=int, default=16)
+    rf.add_argument("--out", default=str(REFIT_FILE))
     args = ap.parse_args(argv)
     plan = load_plan()
     work = Path(args.work)
@@ -552,14 +712,26 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "look":
         from backend.model.fitted import load_params
 
-        F.refuse_unfrozen()
-        out = Path(args.out)
+        out = Path(args.out) if args.out else LOOK_FILES[args.role]
         if out.exists():
             raise SystemExit(f"{out} exists: a look is taken once")
-        doc = look(plan, args.role, load_params().as_dict(), {"files_sha256": F.values_now(), "which": "values in use"},
-                   work, args.workers)
+        if args.role == "test_a":
+            F.refuse_unfrozen()
+            params, values = load_params().as_dict(), {"files_sha256": F.values_now(), "which": "values in use"}
+        else:
+            if not REFIT_FILE.is_file():
+                raise SystemExit("test B waits for the refit and its decision to be on record")
+            params, values = test_b_values(json.loads(REFIT_FILE.read_text(encoding="utf-8")), plan)
+        doc = look(plan, args.role, params, values, work, args.workers)
         out.write_text(json.dumps(doc, indent=1, default=str) + "\n", encoding="utf-8")
         print(json.dumps({k: doc["judged"]["all"].get(k) for k in ("episodes", "ahead", "tied", "behind", "interval")}, indent=1))
+    elif args.cmd == "refit":
+        out = Path(args.out)
+        if out.exists():
+            raise SystemExit(f"{out} exists: the refit is made once")
+        doc = refit(plan, work, args.workers)
+        out.write_text(json.dumps(doc, indent=1, default=str) + "\n", encoding="utf-8")
+        print(json.dumps(doc["decision"], indent=1))
     return 0
 
 
