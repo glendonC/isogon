@@ -99,6 +99,11 @@ def closed_masks(closed: list[dict[str, Any]]) -> dict[int, np.ndarray]:
     return out
 
 
+def total(arr: np.ndarray) -> float:
+    """The sum of a layer's cells, in float64: summed in float32, a total above 2**24 (16,777,216) loses rows."""
+    return float(np.nansum(arr, dtype=np.float64))
+
+
 def palette() -> tuple[list[int], bytes]:
     """(RGB palette of 256 entries, alpha per entry): the special indices, then the ramp from low to high."""
     n = 256 - INDEX_RAMP0
@@ -219,7 +224,7 @@ def write(root: Path | None = None, out: Path | None = None, public: bool = True
             idx, clipped = to_index(arr.reshape(C.N_ROWS, C.N_COLS), cmask.reshape(C.N_ROWS, C.N_COLS), vmax)
             _write_png(out / f"{name}.png", idx)
             layers[name] = {"family": fam, "year": y["year"], "scale": spec["scale"],
-                            "rows": int(np.nansum(arr)), "cells_with_rows": int(np.nansum(arr > 0)),
+                            "rows": int(round(total(arr))), "cells_with_rows": int(np.nansum(arr > 0)),
                             "max_cell": float(np.nanmax(arr)) if np.isfinite(arr).any() else 0.0,
                             "closed_cells": int(cmask.sum()), "clipped_cells": clipped,
                             "npy": f"{name}.npy", "npy_sha256": _sha(out / f"{name}.npy"),
@@ -252,7 +257,7 @@ def write(root: Path | None = None, out: Path | None = None, public: bool = True
             idx, clipped = to_index(arr.reshape(C.N_ROWS, C.N_COLS), cmask.reshape(C.N_ROWS, C.N_COLS), vmax)
             _write_png(out / f"{name}.png", idx)
             layers[name] = {"family": "harmonized", "year": y["year"], "scale": "suomi_npp",
-                            "rows": float(np.nansum(arr)), "cells_with_rows": int(np.nansum(arr > 0)),
+                            "rows": total(arr), "cells_with_rows": int(np.nansum(arr > 0)),
                             "max_cell": float(np.nanmax(arr)) if np.isfinite(arr).any() else 0.0,
                             "closed_cells": int(cmask.sum()), "clipped_cells": clipped,
                             "source_sha256": _sha(src),

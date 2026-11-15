@@ -106,6 +106,11 @@ class YearlyLayers(unittest.TestCase):
         pal, alpha = Y.palette()
         self.assertEqual((len(pal), len(alpha)), (768, 256))
 
+    def test_a_total_above_two_to_the_24_keeps_every_row(self) -> None:
+        a = np.array([[16777216.0, 1.0, np.nan]], dtype=np.float32)
+        self.assertEqual(float(np.nansum(a)), 16777216.0)                  # a float32 sum loses the row
+        self.assertEqual(Y.total(a), 16777217.0)
+
 
 if __name__ == "__main__":
     unittest.main()

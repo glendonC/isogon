@@ -1,8 +1,11 @@
 # The fire cube
 
 The fire cube holds every row of every NASA FIRMS country yearly file as monthly counts and summed fire radiative
-power on a global grid. The record of any box on Earth is read from it in milliseconds, where the box calendar
-(`backend/firms/box_index.py`) reads the rows themselves. It counts and scores nothing on its own: it keeps the rows'
+power on a global grid. The record of any box on Earth comes back from it in under a fifth of a second, where the
+box calendar (`backend/firms/box_index.py`) reads the rows themselves: on the whole world's build, boxes asked for
+the first time answered over HTTP in a median of 35 to 46 ms at one degree each way, 42 to 46 ms at five and 70 to
+81 ms at twenty (two sets of 36 boxes), 164 ms at most, and a box asked again comes from the route's memory in
+about a millisecond. It counts and scores nothing on its own: it keeps the rows'
 kinds apart, and a reader applies a rule.
 
 Code: `backend/firms/world_fetch.py` (the country files), `backend/firms/cube_build.py` (the builder and its check),

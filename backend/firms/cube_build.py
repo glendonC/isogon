@@ -538,7 +538,7 @@ def layers(out: Path, records: np.ndarray, cell_start: np.ndarray, loaded: np.nd
         meta["png_sha256"] = _sha256_file(d / f"{name}.png")
         info["layers"][name] = {**{k: v for k, v in spec.items() if k != "platforms"},
                                 "platforms": [C.PLATFORMS[p] for p in spec["platforms"]],
-                                "max": vmax, "total": float(arr.sum()), "cells_with_rows": int(has.sum()), **meta}
+                                "max": vmax, "total": float(grid.sum()), "cells_with_rows": int(has.sum()), **meta}
     info["png"] = {"scale": "log10(1 + value) / log10(1 + max of the layer)", "ramp_low_to_high": [list(c) for c in RAMP],
                    "transparent": "cells no loaded country file has a row in (not loaded)",
                    "grey": f"loaded cells with none of the layer's rows, RGBA {list(NO_ROWS_RGBA)}",
