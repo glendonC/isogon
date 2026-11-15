@@ -1,5 +1,5 @@
 {
-  "version": 16,
+  "version": 17,
   "what": "The words of the guide: for each step and each state inside it, the objective, what the guide says, the labels on things, the actions, and the questions a visitor can ask. Every sentence says which of the five places it sits in. Text in braces is a field: its value comes from an answer of the backend, named under fields. No figure is typed in a line.",
   "trail": [
     "Record",
@@ -359,7 +359,7 @@
           "film": [
             {
               "place": "objective",
-              "line": "Isogon: two NASA satellites, one fire record, its error stated."
+              "line": "Isogon: one fire record from two NASA satellites."
             }
           ]
         },
@@ -596,7 +596,7 @@
           "film": [
             {
               "place": "objective",
-              "line": "The fire record of any area, month by month since {world_first_year}."
+              "line": "Any area's fire record, month by month since {world_first_year}."
             }
           ]
         },
@@ -1090,7 +1090,7 @@
             {
               "place": "objective",
               "if": "years_on_one_scale",
-              "line": "On one scale, the years since {world_first_year} show no jump."
+              "line": "On one scale, no jump."
             }
           ]
         }
