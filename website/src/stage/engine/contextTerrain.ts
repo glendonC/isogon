@@ -245,7 +245,7 @@ void main() {
     vec3 halfVec = normalize(sunDir + viewDir);
     float fresnel = pow(1.0 - max(0.0, dot(up, viewDir)), 4.0);
     float spec = pow(max(0.0, dot(up, halfVec)), 96.0);
-    lit = waterSurface(lit, water, lake, fresnel, spec, uNight);
+    lit = waterSurface(lit, water, max(lake, sea), fresnel, spec, uNight);
   }
 
   // The same air as over the pack: distance takes the ground into what the dome draws behind it

@@ -46,7 +46,7 @@ vec3 pictureToScene(vec3 displayLinear) {
 // Water. Where it is comes from the data: the sea at 0 m, a lake as ground that is exactly level
 // in the elevation (see ./shadowBake.ts and ./contextTerrain.ts). Its colour is drawn: on a lake
 // mostly one deep tone, so the strips and glints of an aerial mosaic do not cut the lake into
-// pieces, with a little of the picture left in it. The pack and the land around it use the
+// pieces, with a little of the picture left in it; the sea the same. The pack and the land around it use the
 // same terms, so a lake that crosses the pack's edge is one body of water.
 const vec3 WATER_DEEP = vec3(0.05, 0.13, 0.21);
 const float WATER_PICTURE_LEFT = 0.14;  // share of the picture's own colour kept on a lake
@@ -811,7 +811,9 @@ void main() {
     vec3 waterN = normalize(N + vec3(rippleA, 0.0, rippleB) * (0.05 * rippleFade * waterMask));
     float spec = pow(max(0.0, dot(waterN, halfVec)), 96.0) * shadow;
     float fresnel = pow(1.0 - max(0.0, dot(waterN, viewDir)), 4.0);
-    litEarth = waterSurface(litEarth, waterMask, lake, fresnel, spec, uNight);
+    // (the sea, from the elevation's 0 m, takes one deep tone as a lake does: imagery at sea is
+    // often tiles of other dates and brightness)
+    litEarth = waterSurface(litEarth, waterMask, max(lake, seaMask), fresnel, spec, uNight);
   }
 
   // Aerial perspective: Rayleigh and Mie scattering along the true-scale path from the camera
