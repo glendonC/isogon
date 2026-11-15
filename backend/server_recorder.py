@@ -61,6 +61,10 @@ PUBLISHABLE_IMAGERY: tuple[str, ...] = ("usgs_naip", "eox_s2cloudless_2016")
 # and SEES_THE_ANSWER; a test holds them equal).
 PAGE_PLAYERS: tuple[str, ...] = ("random", "latest_modis", "least_sure", "learned", "oracle")
 SEES_THE_ANSWER: str = "oracle"
+# Chance is said as a mean over this many rounds of random looks: its own play, then seeds 1 to CHANCE_ROUNDS - 1
+# (website/src/beats/agent/usePlays.ts, CHANCE_ROUNDS; a test holds them equal).
+CHANCE: str = "random"
+CHANCE_ROUNDS: int = 10
 # The observer reading the page asks for by default (website/src/App.tsx: every sensor, the sensitivity slider at rest).
 OBSERVER_DEFAULT: dict[str, str] = {"sensor": "all", "min_frp": "8.4"}
 ROUND_PLAYER: str = "least_sure"     # the reference player whose looks the recorded round takes
@@ -394,8 +398,8 @@ class Recorder:
 
     def record_plays(self, episode: dict[str, Any]) -> None:
         """The play of each player the page shows on one episode, step by step (`POST /api/env/next_look/play`), with
-        the page's body: the episode's own keys and the player, `ceiling` for the one that reads the hidden rows.
-        Skipped, and said so, when the backend has no play yet."""
+        the page's body: the episode's own keys and the player, `ceiling` for the one that reads the hidden rows; then
+        Chance's other rounds by seed, as the page asks them. Skipped, and said so, when the backend has no play yet."""
         listing = self.fetch("GET", "/api/env/next_look/players")
         if not isinstance(listing, dict) or "players" not in listing:
             self.plays_note = "the backend serves no step by step play (GET /api/env/next_look/players did not answer)"
@@ -404,6 +408,10 @@ class Recorder:
             body = {**episode, "player": pid, **({"ceiling": True} if pid == SEES_THE_ANSWER else {})}
             self.fetch("POST", "/api/env/next_look/play", body=body)
             self.plays.append({"episode_from": episode, "player": pid})
+        # Chance's other rounds of random looks, so the page can give its gain as a mean with its range
+        for seed in range(1, CHANCE_ROUNDS):
+            self.fetch("POST", "/api/env/next_look/play", body={**episode, "player": CHANCE, "seed": seed})
+            self.plays.append({"episode_from": episode, "player": CHANCE, "seed": seed})
 
     # ---- the default plan ----------------------------------------------------------------------------------------
 

@@ -183,6 +183,14 @@ class PublishableImageryTests(unittest.TestCase):
 
 
 class PagePlayersTests(unittest.TestCase):
+    def test_chance_is_the_mean_of_as_many_rounds_as_the_page_asks(self) -> None:
+        from backend.server_recorder import CHANCE, CHANCE_ROUNDS
+
+        src = (REPO_ROOT / "website" / "src" / "beats" / "agent" / "usePlays.ts").read_text(encoding="utf-8")
+        self.assertIn(f"const CHANCE_ROUNDS = {CHANCE_ROUNDS};", src)
+        blocks = (REPO_ROOT / "website" / "src" / "compare" / "blocks.ts").read_text(encoding="utf-8")
+        self.assertIn(f"'{CHANCE}'", blocks)
+
     def test_the_players_are_the_pages(self) -> None:
         import re
 
@@ -259,8 +267,12 @@ class RecorderTests(unittest.TestCase):
             self.assertNotIn(LIVE_ROUND, text)
             # the play of each player the page shows, with the page's body; only the one that reads the hidden rows
             # is asked with ceiling; the round is reset with the page's body too
-            plays = [b for m, path, b in backend.seen if path == "/api/env/next_look/play"]
+            plays = [b for m, path, b in backend.seen if path == "/api/env/next_look/play" and "seed" not in b]
             self.assertEqual([b["player"] for b in plays], ["random", "latest_modis", "least_sure", "learned", "oracle"])
+            # Chance's nine other rounds by seed, as the page asks them for its mean
+            seeded = [b for m, path, b in backend.seen if path == "/api/env/next_look/play" and "seed" in b]
+            self.assertEqual([(b["player"], b["seed"]) for b in seeded], [("random", s) for s in range(1, 10)])
+            self.assertIn('POST /api/env/next_look/play {"player":"random","region_id":"plumas_ca","seed":1,"start":"2012-08-10"}', entries)
             self.assertEqual([b.get("ceiling") for b in plays if b["player"] == "oracle"], [True])
             self.assertFalse(any(b.get("ceiling") for b in plays if b["player"] != "oracle"))
             self.assertIn('POST /api/env/next_look/play {"player":"least_sure","region_id":"plumas_ca","start":"2012-08-10"}', entries)
