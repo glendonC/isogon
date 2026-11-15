@@ -346,7 +346,7 @@
 .guide-marks .guide-marks__plate {
   max-width: 600px;
   display: grid;
-  grid-template-columns: 22px max-content minmax(0, 300px);
+  grid-template-columns: 22px max-content minmax(0, 260px);
   column-gap: var(--sys-s3);
   row-gap: var(--sys-s2);
   align-items: baseline;
@@ -377,7 +377,8 @@
 
 .guide-marks__swatch {
   position: relative;
-  align-self: center;
+  align-self: start;
+  margin-top: 4px;
   justify-self: center;
   display: block;
   width: 12px;
