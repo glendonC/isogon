@@ -705,11 +705,14 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   </>
                 )}
               </span>
-              {/* The record as a file: quiet, the Record's own, where the guide speaks too */}
-              <button type="button" className="rec__act rec__download" onClick={download}>
-                <span className="rec__key">G</span>
-                {W.download}
-              </button>
+              {/* The record as a file: quiet, the Record's own, where the guide speaks too. A phone's narrow foot under
+                  the guide has no row for it (the guide's sentence stands over it there); key G still takes it. */}
+              {!(narrowFoot && guideSpeaks) && (
+                <button type="button" className="rec__act rec__download" onClick={download}>
+                  <span className="rec__key">G</span>
+                  {W.download}
+                </button>
+              )}
               {onClose && !guideSpeaks && (
                 <button type="button" className="rec__act rec__close" onClick={onClose}>
                   <span className="rec__key">Esc</span>
