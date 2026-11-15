@@ -22,6 +22,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from backend.firms.archive import redact_key  # noqa: E402
 from backend.firms.area_api import _key  # noqa: E402
+from backend.live import answer  # noqa: E402
 from backend.live import protocol as PR  # noqa: E402
 from backend.live.fetch import AreaFetcher, CmrFetcher, ModisOnly, now_s  # noqa: E402
 from backend.live.ledger import Lock, Witness  # noqa: E402
@@ -45,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--witness", type=Path, default=None, help="Markdown file every digest is also appended to")
     ap.add_argument("--once", action="store_true", help="run one cycle and stop")
     ap.add_argument("--no-score", action="store_true", help="seal only")
+    ap.add_argument("--page-json", type=Path, default=None, help="also write the page's answer here each cycle")
     args = ap.parse_args(argv)
     live = args.live_dir.resolve()
     live.mkdir(parents=True, exist_ok=True)
@@ -82,6 +84,12 @@ def main(argv: list[str] | None = None) -> int:
                     scorer.cycle()
                 except Exception:  # noqa: BLE001
                     log("scoring cycle failed: " + traceback.format_exc().replace("\n", " | ")[-1500:])
+            try:
+                answer.write(live)
+                if args.page_json is not None:
+                    answer.write(live, args.page_json)
+            except Exception:  # noqa: BLE001
+                log("answer not written: " + traceback.format_exc().replace("\n", " | ")[-800:])
             if args.once:
                 return 0
             time.sleep(max(5.0, PR.CYCLE_S - (now_s() - t)))
