@@ -118,8 +118,13 @@ interface LiveObserverTelemetry {
   reconstructedMw: number;
 }
 
+/**
+ * The places the page can open: every place the registry serves (`GET /api/regions`), and the typed catalogue's until the
+ * registry has answered. Nothing here assumes a number of places: a place the registry adds opens like the others.
+ */
+const KNOWN_PLACES = new Set<string>(THEATER_CATALOG.map((t) => t.id));
 function isKnownTheaterId(value: string | undefined): value is TheaterId {
-  return THEATER_CATALOG.some((t) => t.id === value);
+  return value !== undefined && KNOWN_PLACES.has(value);
 }
 
 /** How long a pass holds while the passes play, ms. */
@@ -250,6 +255,8 @@ export function App() {
    */
   const placesRef = useRef(placesState);
   placesRef.current = placesState;
+  // Every place the registry serves can be opened, however many there are.
+  for (const pl of placesState.places.places) KNOWN_PLACES.add(pl.id);
   const hideRefused = useCallback(
     (regionId: string, start: string | null) =>
       placesRef.current.state !== 'ready' || isClosedWindow(placesRef.current.places, regionId, start),
@@ -407,9 +414,11 @@ export function App() {
   );
 
   const cycleNextTheaterSlew = useCallback(() => {
-    const idx = THEATER_CATALOG.findIndex((t) => t.id === activeTheaterId);
-    const nextTheater = THEATER_CATALOG[(idx + 1) % THEATER_CATALOG.length];
-    slewToTheater(nextTheater.id);
+    // The next place with a fire to open, in the registry's order (the typed catalogue's until the registry has answered).
+    const withFires = placesRef.current.places.places.filter((p) => p.featured_fires.some((f) => f.default_start));
+    const ids = placesRef.current.state === 'ready' && withFires.length > 0 ? withFires.map((p) => p.id) : THEATER_CATALOG.map((t) => t.id);
+    const idx = ids.indexOf(activeTheaterId);
+    slewToTheater(ids[(idx + 1) % ids.length]);
   }, [activeTheaterId, slewToTheater]);
 
   const handleCinemaStepTheater = useCallback(
