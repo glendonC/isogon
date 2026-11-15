@@ -85,6 +85,12 @@ export interface EarthStageTelemetry {
     day: string;
     insteadOfHidden: boolean;
   };
+  /**
+   * The stage's picture as the film sees it: `holding` while the film presentation's landing is held
+   * dark (its ground still coming in), `fading` while it fades in (FILM_FADE_SECONDS), `shown` once it
+   * is fully in; always `shown` outside the film presentation. A film's first shot starts on `shown`.
+   */
+  picture?: 'holding' | 'fading' | 'shown';
   /** The film's camera move running, and how far through it is (0 to 1; 1 holds the last pose). */
   film?: { move: StageFilmMove; progress: number };
   /** Vertical exaggeration of the relief (one value for every region). */

@@ -441,10 +441,10 @@ const FIRE_DAY_REACH_KM = 5;
 // The landing in the film presentation: its picture stays dark until the run's own ground is complete
 // (terrain pack and land around in, or failed) and frames have run smoothly for a while, then fades in
 // and the record move starts from there, so the shot holds no stand-in, no change of ground and no cut
-const FILM_SETTLE_SECONDS = 0.5;
+const FILM_SETTLE_SECONDS = 0.25;
 const FILM_SLOW_FRAME_MS = 50;
 const FILM_HOLD_MAX_SECONDS = 15;
-const FILM_FADE_SECONDS = 0.8;
+const FILM_FADE_SECONDS = 0.4;
 const FIRE_PATCH_GRID_KM = 0.375;
 
 /**
@@ -2706,6 +2706,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let filmAskedLast: StageFilmMove | 'auto' | null = null;
     let filmHolding = Boolean(propsRef.current.filmMove ?? filmAddress) && !propsRef.current.inWorkspace;
     let filmSettledSec = 0;
+    // When the held landing began to fade in (seconds of the stage's clock), for telemetry.picture
+    let filmFadeStartSec = -1;
+    let pictureSent: 'holding' | 'fading' | 'shown' | null = null;
     if (filmHolding) renderer.domElement.style.opacity = '0';
     let filmCancelled = false;
     let filmStartSec = 0;
@@ -3175,7 +3178,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
       // A. Step GPU Elevation + Satellite Ortho Morph (950ms cubic-bezier ease)
       if (morphActive) {
-        morphElapsed += dtSec;
+        // (while the film's landing is held dark a change of ground is done at once: nobody sees it)
+        morphElapsed += filmHolding ? 1e3 : dtSec;
         const rawM = Math.min(1.0, morphElapsed / morphDuration);
         morphValue = easeSubOrbitalMorph(rawM);
         terrainUniforms.uMorph.value = morphValue;
@@ -3521,6 +3525,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           filmSettledSec = groundDone && frameGapMs < FILM_SLOW_FRAME_MS ? filmSettledSec + dtSec : 0;
           if (filmSettledSec > FILM_SETTLE_SECONDS || elapsedSec > FILM_HOLD_MAX_SECONDS || !filmAsked || p.inWorkspace) {
             filmHolding = false;
+            filmFadeStartSec = elapsedSec;
             renderer.domElement.style.transition = `opacity ${FILM_FADE_SECONDS}s ease-out`;
             renderer.domElement.style.opacity = '1';
           }
@@ -4183,7 +4188,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             ? 1.0
             : 0.0;
         const hasContext = nextBundle.context !== null && !morphActive;
-        contextMix = THREE.MathUtils.lerp(contextMix, hasContext ? worldShown : 0.0, dampMed);
+        // (and the land around comes in at once while the film's landing is held dark)
+        contextMix = filmHolding ? (hasContext ? worldShown : 0.0) : THREE.MathUtils.lerp(contextMix, hasContext ? worldShown : 0.0, dampMed);
         terrainUniforms.uContextMix.value = contextMix;
         contextTerrain.mesh.visible = contextMix > 0.003;
         // World view: no block sides and no floor mark under the block at all. The same where the
@@ -4752,13 +4758,21 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       // H. Emit Live Telemetry every ~320ms
       fpsFrames += 1;
       fpsAccumSec += dtSec;
-      if (fpsAccumSec >= 0.32) {
-        const instFps = fpsFrames / fpsAccumSec;
+      // (the picture's word goes out the frame it changes, so a film's driver starts on time)
+      const pictureNow = filmHolding
+        ? 'holding'
+        : filmFadeStartSec >= 0 && elapsedSec - filmFadeStartSec < FILM_FADE_SECONDS
+          ? 'fading'
+          : 'shown';
+      const pictureChanged = pictureNow !== pictureSent;
+      pictureSent = pictureNow;
+      if (fpsAccumSec >= 0.32 || pictureChanged) {
+        const instFps = fpsFrames / Math.max(1e-3, fpsAccumSec);
         smoothedFps = smoothedFps * 0.55 + Math.min(120, instFps) * 0.45;
         fpsFrames = 0;
         fpsAccumSec = 0;
 
-        if (elapsedSec - lastTelemetryEmitSec >= 0.3) {
+        if (elapsedSec - lastTelemetryEmitSec >= 0.3 || pictureChanged) {
           lastTelemetryEmitSec = elapsedSec;
           const telemetry: EarthStageTelemetry = {
             fps: Math.round(smoothedFps),
@@ -4781,6 +4795,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             lastSeen: lastSeenNow,
             passOnShow: passOnShowNow,
             dayPicture: dayNow,
+            picture: pictureNow,
             regionGrid: p.regionGridDivisions ? regionGridOf(nextBundle, p.regionGridDivisions) : undefined,
           };
           p.onTelemetry?.(telemetry);
