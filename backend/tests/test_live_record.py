@@ -50,8 +50,10 @@ class RecordTests(unittest.TestCase):
             self.assertEqual(lines[0], R.HEADER)
             self.assertEqual(lines[1], f"2026-11-20T01:00:00Z,{1:064x},c0f01,NOAA-20,2026-11-20T01:30:00Z")
             self.assertIsNone(R.sync(repo, [_seal(1)], notes, log=lambda m: None))
-            sha2 = R.sync(repo, [_seal(1), _seal(2), _seal(3)], notes, log=lambda m: None)
+            sha2 = R.sync(repo, [_seal(1), _seal(3), _seal(2)], notes, log=lambda m: None)
             self.assertEqual(len((repo / R.RECORD_PATH).read_text().splitlines()), 4)
+            # sealed out of the order of their passes: the message names the earliest pass and the latest
+            self.assertIn("from 2026-11-20T02:30:00Z to 2026-11-20T03:30:00Z", _git(repo, "log", "-1", "--format=%s", sha2))
             self.assertIn("other.txt", _git(repo, "diff", "--cached", "--name-only"))   # still staged, not committed
             index = (notes / "RECORD.md").read_text()
             self.assertIn(sha, index)

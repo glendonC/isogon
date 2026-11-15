@@ -71,8 +71,8 @@ def sync(repo: Path, seals: list[dict[str, Any]], notes: Path | None, log: Calla
         msg = (f"Add the seal of fire {s['fire']['id']} for the {SATELLITE.get(s['slot']['platform'])} pass of "
                f"{s['slot']['time_utc']} to the record of live seals.")
     else:
-        msg = (f"Add {len(added)} seals, for passes from {added[0]['slot']['time_utc']} to "
-               f"{added[-1]['slot']['time_utc']}, to the record of live seals.")
+        times = sorted(s["slot"]["time_utc"] for s in added)
+        msg = f"Add {len(added)} seals, for passes from {times[0]} to {times[-1]}, to the record of live seals."
     _git(repo, "add", "--", RECORD_PATH)
     _git(repo, "commit", "-q", "--only", "-m", msg, "--", RECORD_PATH)
     sha = _git(repo, "rev-parse", "HEAD")
