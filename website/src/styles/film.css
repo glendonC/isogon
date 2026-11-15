@@ -156,7 +156,7 @@
   width: min(600px, 32vw);
 }
 
-/* The Earth's years: the year is the shot's caption, the strip and its sentence a step larger. */
+/* The Earth's years: the year is the shot's caption; the strip of totals lower, so the Earth takes the width. */
 .iso-film .world-years__year {
   font-size: clamp(72px, 6.4vw, 128px);
 }
@@ -166,7 +166,7 @@
 }
 
 .iso-film .world-years__step {
-  font-size: clamp(17px, 1.15vw, 22px);
+  font-size: clamp(15px, 0.94vw, 18px);
 }
 
 .iso-film .world-years__strip-head {
@@ -176,3 +176,11 @@
 .iso-film .world-years__controls {
   display: none;
 }
+
+.iso-film .world-years__strip {
+  grid-template-rows: auto clamp(36px, 4cqh, 48px) 16px;
+  gap: 2px;
+  padding: 6px var(--sys-s3) 2px;
+  background: rgba(8, 11, 17, 0.55);
+}
+

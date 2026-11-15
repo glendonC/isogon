@@ -4,6 +4,7 @@ import { FIRE_RAMP } from './layers';
 import { useRead } from './read';
 import { Ticks } from './Ticks';
 import { WorldCanvas, type GridLayer } from './WorldCanvas';
+import type { Box } from './projection';
 import { EARTH_WORDS, millions, YEAR_WORDS as Y } from './words';
 import {
   familyOf,
@@ -32,7 +33,11 @@ export interface EarthYearsProps {
   /** The year large in the caption's place, top left; a screen that says the year in its own objective passes false. */
   caption?: boolean;
   onYear?: (year: number, mode: YearsMode) => void;
+  /** The box first in view: the land where fire is detected, without the poles, so the Earth takes the width. */
+  focus?: Box;
 }
+
+const YEARS_VIEW: Box = [-170, -44, 180, 74];
 
 // A pass through the years lasts about six seconds: the coarse years quickly, 2012 long enough to read its sentence.
 const beat = (year: number) => (year < SHARP_FROM ? 170 : year === SHARP_FROM ? 1500 : 190);
@@ -62,7 +67,7 @@ const ramp = (stops: Array<[number, [number, number, number]]>) =>
  * detected as bars, the harmonized record as a line, the year on show marked. Enter and Space play and stop, the
  * arrows step a year, Y switches the view (the script's keys).
  */
-export function EarthYears({ source = '/api/cube/years', mode: startMode = 'detected', year: startYear, autoplay, caption = true, onYear }: EarthYearsProps) {
+export function EarthYears({ source = '/api/cube/years', mode: startMode = 'detected', year: startYear, autoplay, caption = true, onYear, focus = YEARS_VIEW }: EarthYearsProps) {
   const read = useRead<YearsIndex>(source);
   const idx = read.state === 'ready' ? read.value : null;
   const years = useMemo(() => (idx ? idx.years.map((y) => y.year) : []), [idx]);
@@ -249,7 +254,9 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
 
   return (
     <div className="world-years" data-mode={mode}>
-      <WorldCanvas label={Y.label} layers={grid} hatchLand padBottom={stripH} className="world-years__earth" />
+      <WorldCanvas label={Y.label} layers={grid} hatchLand focus={focus} padBottom={stripH} className="world-years__earth" />
+      {/* The ground under the strip and the guide: the Earth's far south stays out of the shot. */}
+      <div className="world-years__floor" style={{ height: stripH }} aria-hidden="true" />
       {caption && (
         <div className="world-years__caption" aria-live="polite">
           <div className="world-years__year">{shown}</div>
@@ -307,16 +314,17 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
         {inCount < years.length && <div className="world-legend__fine">{`${Y.loading}: ${inCount} of ${years.length}`}</div>}
       </div>
       <div className="world-years__strip" ref={stripRef} data-world-ui>
-        {shown >= SHARP_FROM && sharpAt >= 0 && (
-          <div className="world-years__step" style={{ ['--at' as string]: String(sharpAt / n) }}>
-            <span>{mode === 'harmonized' ? Y.stepHarmonized : Y.stepDetected(ratio)}</span>
+        <div className="world-years__strip-head" style={{ ['--at' as string]: String(Math.max(sharpAt, 0) / n) }}>
+          <div className="world-years__strip-keys">
+            <span className="world-years__strip-title">{Y.totals}</span>
+            <span className="world-years__key world-years__key--modis">{Y.barsModis}</span>
+            <span className="world-years__key world-years__key--sharp">{Y.barsSharp}</span>
+            {line && <span className="world-years__key world-years__key--line">{Y.lineHarmonized}</span>}
           </div>
-        )}
-        <div className="world-years__strip-head">
-          <span className="world-years__strip-title">{Y.totals}</span>
-          <span className="world-years__key world-years__key--modis">{Y.barsModis}</span>
-          <span className="world-years__key world-years__key--sharp">{Y.barsSharp}</span>
-          {line && <span className="world-years__key world-years__key--line">{Y.lineHarmonized}</span>}
+          {/* The label on the 2012 bar: its room is always kept, so the Earth does not move when it is said. */}
+          <div className="world-years__step" data-on={shown >= SHARP_FROM && sharpAt >= 0} aria-hidden={shown < SHARP_FROM}>
+            {mode === 'harmonized' ? Y.stepHarmonized : Y.stepDetected(ratio)}
+          </div>
         </div>
         <div className="world-years__plot">
           {[10e6, 20e6].filter((v) => v < top).map((v) => (

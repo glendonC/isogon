@@ -976,6 +976,15 @@
   inset: 0;
 }
 
+.world-years__floor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, rgba(8, 11, 17, 0), var(--sys-night) 40px);
+  pointer-events: none;
+}
+
 .world-years__state {
   position: absolute;
   left: var(--sys-gutter);
@@ -1058,12 +1067,20 @@
 }
 
 .world-years__strip-head {
+  display: grid;
+  grid-template-columns: calc((100% - 84px) * var(--at, 0.46)) minmax(0, 1fr);
+  align-items: start;
+  margin-right: 84px;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-years__strip-keys {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--sys-s2) var(--sys-s4);
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
-  color: var(--sys-ink-3);
+  gap: var(--sys-s1) var(--sys-s4);
+  padding-right: var(--sys-s3);
 }
 
 .world-years__strip-title {
@@ -1202,18 +1219,16 @@
   border: 1.5px solid var(--sys-ink);
 }
 
-/* The sentence at 2012: above the strip, starting over the step itself (`--at`, its place along the plot). */
+/* The label on the 2012 bar: in the strip's head, from the step's place along the plot (`--at`) to the end. */
 .world-years__step {
-  position: absolute;
-  bottom: calc(100% + var(--sys-s2));
-  left: calc(var(--sys-s3) + (100% - 2 * var(--sys-s3) - 84px) * var(--at, 0.46));
-  max-width: min(560px, 52cqw);
-  padding-left: var(--sys-s3);
+  padding-left: var(--sys-s2);
   border-left: 1.5px solid var(--sys-ink);
-  font: var(--sys-weight) clamp(14px, 0.95vw, 19px) / 1.4 var(--sys-font);
+  font: var(--sys-weight) clamp(13px, 0.86vw, 17px) / 1.35 var(--sys-font);
   color: var(--sys-ink);
-  text-shadow: 0 1px 10px rgba(8, 11, 17, 0.9);
-  pointer-events: none;
+}
+
+.world-years__step[data-on='false'] {
+  visibility: hidden;
 }
 
 .world-years__axis {
@@ -1240,10 +1255,10 @@
     bottom: var(--years-bottom, var(--film-room-bottom, 150px));
   }
 
-  .world-years__step {
-    left: 0;
-    max-width: none;
-    width: 100%;
+  .world-years__strip-head {
+    grid-template-columns: 1fr;
+    gap: var(--sys-s1);
+    margin-right: 0;
   }
 
   .world-years__caption {
