@@ -189,6 +189,35 @@ class SwitchOnTests(unittest.TestCase):
         on_rows = real_response(self.on, {})["blind_test"]["verdict"]["scores"]
         self.assertNotEqual(on_rows["brier"]["value"], self.on.extras["blind_test"]["methods"]["reconstruction"]["brier"])
 
+    def test_the_frames_loop_is_a_stage_of_its_own_and_the_stages_come_to_the_solve(self) -> None:
+        import time
+
+        real, wall = RR.solve_real_reconstruction, []
+
+        def timed(*a, **k):
+            t = time.perf_counter()
+            out = real(*a, **k)
+            wall.append((time.perf_counter() - t) * 1000.0)
+            return out
+
+        with mock.patch.object(RR, "solve_real_reconstruction", timed):
+            run = _solve(ROWS6, estimate=RR.ESTIMATE_CHALLENGER)
+        wall_ms = wall[0]
+        ids = [s["stage_id"] for s in run.pipeline_stages]
+        self.assertEqual(ids, ["terrain_ingest", "sensor_operator", "hurdle_quantile", "kalman_smoother", "frames",
+                               "conformal_gate"])
+        frames = run.pipeline_stages[4]
+        held = sum(1 for f in run.observer_passes["frames"] if f["held_out"])
+        self.assertTrue(frames["detail"].startswith(f"24 frames, {held} of them held out and answered by {self.name}"))
+        self.assertIn(self.name.removeprefix("challenger_"), frames["model_name"])
+        self.assertNotIn("answered by", next(s for s in self.off.pipeline_stages if s["stage_id"] == "frames")["detail"])
+        # the solve's stages (all but the terrain, loaded before it) hold its time, less what follows the scoring
+        in_solve = sum(s["duration_ms"] for s in run.pipeline_stages if s["stage_id"] != "terrain_ingest")
+        self.assertLessEqual(in_solve, wall_ms)
+        self.assertGreater(in_solve, 0.8 * wall_ms)
+        for cp in (0x2014, 0x2013, 0x00B7):
+            self.assertNotIn(chr(cp), frames["label"] + frames["detail"])
+
     def test_a_run_answered_by_the_challenger_has_an_id_of_its_own(self) -> None:
         self.assertNotEqual(self.on.run_id, self.off.run_id)
         self.assertTrue(self.on.run_id.endswith(self.name))

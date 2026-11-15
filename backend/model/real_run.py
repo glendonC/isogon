@@ -721,6 +721,15 @@ def solve_real_reconstruction(
         {"stage_id": "kalman_smoother", "label": "Forward and Backward Occupancy Filter (375 m)",
          "model_name": "backend/model/occupancy.py", "duration_ms": round((t_model - t_rows) * 1000.0, 1),
          "status": "completed", "detail": hidden_text},
+        # the frames loop: the estimate at each of the 24 passes, and the challenger's answer at each held-out pass
+        # when it answers; then the belief frames between passes
+        {"stage_id": "frames", "label": "The Estimate at Each Pass and the Belief Between Passes",
+         "model_name": "backend/model/occupancy.py, backend/model/belief.py"
+                       + ("" if chal_doc is None else f", {chal_doc['bundle']}"),
+         "duration_ms": round((t_frames - t_model) * 1000.0, 1), "status": "completed",
+         "detail": f"{len(frames)} frames, {sum(1 for fr in frames if fr.hidden)} of them held out"
+                   + ("" if chal_doc is None else f" and answered by {headline}")
+                   + f"; {belief_desc['steps']} belief frames, one every {belief_desc['step_minutes']:g} minutes"},
         {"stage_id": "conformal_gate", "label": "Blind Test Against Hidden VIIRS" if holdout else "Fit Residuals (no holdout)",
          "model_name": "backend/eval/blind_test.py", "duration_ms": round((t_score - t_frames) * 1000.0, 1),
          "status": "completed" if report is not None else "skipped",

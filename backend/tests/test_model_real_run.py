@@ -105,7 +105,9 @@ class RealRunShapeTests(unittest.TestCase):
         ]
         for r, s in pairs:
             self.assertEqual([k for k in s if k not in r], [])
-        self.assertEqual([st["stage_id"] for st in real["pipeline_stages"]], [st["stage_id"] for st in sim["pipeline_stages"]])
+        # the simulated run's stages, in their order, and one more of a real run's own: its frames loop, timed
+        self.assertEqual([st["stage_id"] for st in real["pipeline_stages"] if st["stage_id"] != "frames"],
+                         [st["stage_id"] for st in sim["pipeline_stages"]])
         self.assertEqual(real["observer_passes"]["footprint_schema"], sim["observer_passes"]["footprint_schema"])
         self.assertEqual(len(real["observer_passes"]["frames"]), 24)
         self.assertEqual(len(real["epoch_summaries"]), 24)
