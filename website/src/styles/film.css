@@ -245,7 +245,8 @@
   font-size: clamp(18px, 1.2vw, 24px);
 }
 
-.iso-film .world-tests__over {
+.iso-film .world-tests__over,
+.iso-film .world-tests__beside {
   font-size: clamp(15px, 0.95vw, 19px);
 }
 

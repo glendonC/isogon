@@ -34,8 +34,20 @@ export interface Group {
   scores: Record<string, string> | null;
 }
 
+/** A method scored beside the headline on the same look (the refit, each challenger), against the simple methods. */
+export interface Beside {
+  key: string;
+  ahead: number;
+  tied: number;
+  behind: number;
+}
+
 export interface FreshLook {
   id: 'test_a' | 'test_b';
+  /** The challengers scored beside the headline (`beside_the_headline`, the keys that begin `challenger_`). */
+  challengers: Beside[];
+  /** The estimate with the other values, scored beside it. */
+  refit: Beside | null;
   name: string | null;
   values: string | null;
   scored: number | null;
@@ -158,8 +170,17 @@ function look(id: 'test_a' | 'test_b', v: unknown, names: Obj, grid: typeof FRES
     ];
   });
   const by = (m: unknown) => Object.entries((m ?? {}) as Obj).map(([k, g]) => group(k, g));
+  const beside = Object.entries((o.beside_the_headline ?? {}) as Obj).flatMap(([key, v]): Beside[] => {
+    const g = ((v ?? {}) as Obj).against_the_baselines as Obj | undefined;
+    const a = num(g?.ahead);
+    const t = num(g?.tied);
+    const b = num(g?.behind);
+    return a !== null && t !== null && b !== null ? [{ key, ahead: a, tied: t, behind: b }] : [];
+  });
   return {
     id,
+    challengers: beside.filter((x) => x.key.startsWith('challenger_')),
+    refit: beside.find((x) => x.key === 'refit') ?? null,
     name: str(o.look_name) ?? str(names[id]),
     values: str(o.values),
     scored: num(o.episodes_scored),
@@ -170,6 +191,18 @@ function look(id: 'test_a' | 'test_b', v: unknown, names: Obj, grid: typeof FRES
     byZone: by(o.by_zone),
     fires,
   };
+}
+
+/** The challengers' figures as the script says them: one number when all agree, else the least to the most ("5 to 6"). */
+export function challengersSaid(look: FreshLook | null): { n: number; ahead: string; behind: string } | null {
+  const cs = look?.challengers ?? [];
+  if (!cs.length) return null;
+  const span = (xs: number[]) => {
+    const lo = Math.min(...xs);
+    const hi = Math.max(...xs);
+    return lo === hi ? String(lo) : `${lo} to ${hi}`;
+  };
+  return { n: cs.length, ahead: span(cs.map((c) => c.ahead)), behind: span(cs.map((c) => c.behind)) };
 }
 
 export function parseFresh(body: unknown): FreshAnswer {

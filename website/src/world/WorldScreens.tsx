@@ -3,7 +3,8 @@ import { GuideStrip } from '../guide/GuideStrip';
 import type { ScriptAction } from '../guide/script';
 import { Trail, type TrailWord } from '../guide/Trail';
 import { EarthYears, type YearsControl, type YearsState } from './EarthYears';
-import { parseFresh } from './freshTest';
+import { challengersSaid, parseFresh } from './freshTest';
+import { countWord } from '../guide/formats';
 import { useWorldKeys } from './keys';
 import { parseLive } from './live';
 import { useRead } from './read';
@@ -189,8 +190,8 @@ function Test({ film, toWord }: Part) {
   }, [whole]);
   const control = useRef<WorldTestControl | null>(null);
   const ans = useMemo(() => (read.state === 'ready' ? parseFresh(read.value) : null), [read]);
-  // The guide speaks of test A, as the product lane's sentences do (their fields are test A's); the film's caption
-  // takes test B's line by itself once test B's record is served (the panel shows test B's look then too).
+  // The guide says test B's sentence first once test B's record is served, then test A's (GUIDE-script.json version 23);
+  // the film's caption takes test B's line by itself then (the panel shows test B's look too).
   const testA = ans?.looks.find((l) => l.id === 'test_a') ?? null;
   const testB = ans?.looks.find((l) => l.id === 'test_b') ?? null;
   const facts = (l: typeof testA) => {
@@ -206,15 +207,18 @@ function Test({ film, toWord }: Part) {
   };
   const a = facts(testA);
   const b = facts(testB);
+  const others = challengersSaid(testB);
   const lines = a
     ? [
+        ...(b ? [S.test.testB(b.fires, b.c.ahead, b.of, b.c.tied, b.c.behind, others ? { n: countWord(others.n) ?? String(others.n), ahead: others.ahead } : null)] : []),
         a.strictBehind
           ? S.test.strictBehind(a.fires, a.continents, a.c.ahead, a.of, a.c.behind)
           : S.test.notStrictBehind(a.fires, a.continents, a.c.ahead, a.of, a.c.tied, a.c.behind),
-        S.test.squares(a.of),
+        // What a square's fill means is the panel's own foot too; with test B's sentence it is left to the panel.
+        ...(b ? [] : [S.test.squares(a.of)]),
       ]
     : [];
-  const caption = b ? S.test.filmB(b.fires, b.c.ahead, b.of, b.c.behind) : a ? S.test.filmA(a.fires, a.c.ahead, a.of, a.c.behind) : null;
+  const caption = b ? S.test.filmB(b.c.ahead, b.of, b.c.behind, others?.ahead ?? null) : a ? S.test.filmA(a.fires, a.c.ahead, a.of, a.c.behind) : null;
   return (
     <>
       <div className="world-screen__test">

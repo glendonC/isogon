@@ -1511,3 +1511,14 @@
   font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
   color: var(--sys-ink-3);
 }
+
+/* The challengers beside the headline: one plain line under the figures. */
+.world-tests__beside {
+  margin-top: var(--sys-s2);
+  color: var(--sys-ink-2);
+}
+
+.world-tests__film .world-tests__beside {
+  max-width: 30ch;
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+}

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { count } from '../guide/formats';
+import { count, countWord } from '../guide/formats';
 import { listAnd } from './words';
 import { countryAt } from './countryAt';
-import { parseFresh, type FreshFire, type FreshLook, type Group } from './freshTest';
+import { challengersSaid, parseFresh, type FreshFire, type FreshLook, type Group } from './freshTest';
 import { useRead } from './read';
 import { inFilm, useGuideRoom, WorldCaption } from './WorldCaption';
 import { useWorldLayer } from './layers';
@@ -27,7 +27,11 @@ export const TEST_WORDS = {
   // names of the two looks, shown in place of the served ones.
   objective: 'See where the estimate was tested',
   filmA: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} unseen fires: ahead on ${ahead} of ${of} scores, behind on ${behind}.`,
-  filmB: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} untouched fires: ahead on ${ahead} of ${of}, behind on ${behind}.`,
+  filmB: (ahead: number, of: number, behind: number, others: string | null) =>
+    `Untouched fires: ${ahead} of ${of} ahead, ${behind} behind.${others ? ` Other models: ${others} ahead.` : ''}`,
+  /** The challengers beside the headline, in one plain line under it. */
+  beside: (n: string, ahead: string, of: number, behind: string) =>
+    `Beside it, ${n} other models looked at once on these fires: each ahead on ${ahead} of ${of} scores, behind on ${behind}.`,
   lookNames: { test_a: 'Test A: fires it had never seen', test_b: 'Test B: fires that nothing had touched' } as Record<string, string>,
   // The film's panel: the scores over every fire, three figures a viewer reads at once.
   filmAhead: 'ahead',
@@ -196,7 +200,9 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
     };
   }
   const c = look?.all?.classes ?? null;
-  const filmLine = look && c ? (look.id === 'test_b' ? TEST_WORDS.filmB : TEST_WORDS.filmA)(look.fires.length, c.ahead, judged, c.behind) : null;
+  const others = challengersSaid(look);
+  const filmLine = look && c ? (look.id === 'test_b' ? TEST_WORDS.filmB(c.ahead, judged, c.behind, others?.ahead ?? null) : TEST_WORDS.filmA(look.fires.length, c.ahead, judged, c.behind)) : null;
+  const besideLine = others ? TEST_WORDS.beside(countWord(others.n) ?? String(others.n), others.ahead, judged, others.behind) : null;
   const captionLine = caption ? (film ? filmLine ?? TEST_WORDS.objective : TEST_WORDS.objective) : null;
   // With its own caption, the panel stands under it and above the guide's room, or under the Earth on a narrow screen.
   // Without its own caption but keeping the guide's room (the host), the panel keeps its place and ends above the room.
@@ -276,6 +282,7 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
               </span>
             </div>
             <div className="world-tests__over">{TEST_WORDS.filmOver(judged, look.fires.length)}</div>
+            {besideLine && <div className="world-tests__beside">{besideLine}</div>}
           </div>
         ) : (
           <>
@@ -312,6 +319,7 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
               </span>
               {cls(look.all?.classes ?? null)}
             </div>
+            {besideLine && <div className="world-legend__fine world-tests__beside">{besideLine}</div>}
             <div className="iso-choice" role="radiogroup">
               <button type="button" role="radio" aria-checked={by === 'continent'} className="iso-choice__opt" data-active={by === 'continent'} onClick={() => setBy('continent')}>
                 {TEST_WORDS.byContinent}
