@@ -60,6 +60,9 @@ interface LandingCompositionProps {
   lines?: string[];
   /** The pass on show is hidden from the model: the legend shows the white frame of its estimate, not a light. */
   passHidden?: boolean;
+  /** The film presentation: the start state's film caption, in the headline's place; the headline, its sentence and
+   *  the facts line give way to it. */
+  caption?: string | null;
   onOpenSearch: () => void;
   onOpenSensor: () => void;
   onOpenMethod: () => void;
@@ -73,6 +76,7 @@ export function LandingComposition({
   realPass,
   lines,
   passHidden = false,
+  caption = null,
   onOpenSearch,
   onOpenSensor,
   onOpenMethod,
@@ -141,8 +145,14 @@ export function LandingComposition({
           </nav>
 
           <div className="iso-land__hero">
-            <SplitHeadline lines={HEADLINE} className="iso-land__headline" play={ready} />
-            <p className="iso-land__sentence">{SENTENCE}</p>
+            {caption ? (
+              <p className="iso-land__caption">{caption}</p>
+            ) : (
+              <>
+                <SplitHeadline lines={HEADLINE} className="iso-land__headline" play={ready} />
+                <p className="iso-land__sentence">{SENTENCE}</p>
+              </>
+            )}
             <button type="button" className="iso-entry" onClick={onEnter} data-landing-ui="true">
               <kbd className="iso-entry__key">Enter</kbd>
               <span className="iso-entry__label">{entry}</span>
@@ -161,7 +171,7 @@ export function LandingComposition({
                 <span className="iso-land__legend-item iso-land__legend-item--detection">Satellite detection</span>
               )}
             </div>
-            {lines && lines.length > 0 ? (
+            {caption ? null : lines && lines.length > 0 ? (
               <p className="iso-land__facts">{lines.join(' ')}</p>
             ) : (
               realPass && <p className="iso-land__facts">{passFacts(realPass)}</p>

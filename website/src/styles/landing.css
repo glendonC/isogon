@@ -141,6 +141,18 @@
   text-shadow: 0 1px 18px rgba(8, 11, 17, 0.45);
 }
 
+/* The film presentation: the start state's caption where the headline stands, as large as the film's objective. */
+.iso-land__caption {
+  margin: 0;
+  max-width: 22ch;
+  font-size: clamp(30px, 2.3vw, 48px);
+  font-weight: var(--sys-weight-strong);
+  line-height: 1.16;
+  letter-spacing: -0.01em;
+  color: var(--iso-ink);
+  text-wrap: balance;
+}
+
 .iso-land__sentence {
   margin: 18px 0 0;
   max-width: 72ch;

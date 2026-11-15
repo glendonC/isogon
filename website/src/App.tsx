@@ -30,7 +30,7 @@ import { keyMatches, says, stateOf } from './guide/script';
 import { StageBoundary } from './ui/StageBoundary';
 // Read first: the pictures' keys listen before any screen of the page installs its own.
 import './world/keys';
-import { openWorldScreen, useWorldScreen } from './world/screens';
+import { openWorldScreen, useWorldScreen, worldScreenOnShow } from './world/screens';
 import { useWorldFirstYear, useWorldYears } from './guide/world';
 import { dayPictureCredit, nextDayPicture, type DayPictureKind } from './guide/dayPicture';
 import { openingHiddenPass, type OpeningFrame } from './app/openingPass';
@@ -260,6 +260,15 @@ export function App() {
    * to what is under it, which stays as it was.
    */
   const worldScreen = useWorldScreen();
+  /**
+   * The stage is mounted once no picture of the world covers the page: a page opened on a picture (its address, or
+   * ?years) loads and draws no ground under it until it closes. Once mounted, it stays.
+   */
+  const [stageOn, setStageOn] = useState(() => worldScreenOnShow() === null && !new URLSearchParams(window.location.search).has('years'));
+  useEffect(() => {
+    // The picture on show now, not this render's; and ?years, whose own effect (below) opens its picture.
+    if (!stageOn && worldScreenOnShow() === null && !new URLSearchParams(window.location.search).has('years')) setStageOn(true);
+  }, [stageOn, worldScreen]);
   const [recordBox, setRecordBox] = useState<{ box: Box; name: string } | null>(null);
   /** A featured fire chosen on the place screen: its start replaces the place's opening start once. */
   const fireStartRef = useRef<{ region: string; start: string } | null>(null);
@@ -1539,13 +1548,24 @@ export function App() {
     const st = stateOf('start', id);
     const fields = { place: regionTitle || null, fire_month: fire?.label ?? null, fire_name: fire?.name ?? null };
     const lines = says(st, fields, { fire_is_named: fire ? Boolean(fire.name) : null }).slice(0, 2);
-    // In the film presentation the landing says the start state's film caption alone.
-    const film = filmMode && st?.film ? says({ ...st, says: st.film.map((l) => ({ ...l, place: 'guide' })) }, fields, {})[0] : undefined;
-    if (film) return [film];
     if (id !== 'ready' || !landingHidden) return lines;
     const frames = says(stateOf('estimate', 'hidden'), {}, {})[0];
     return frames ? [lines[0], frames] : lines;
   })();
+
+  // In the film presentation the start state's film caption stands in the landing's headline's place.
+  const landingCaption = (() => {
+    if (!filmMode) return null;
+    const fire = activeRun && realStart ? fireOfStart(placesState.places, activeRun.region.id, realStart) : null;
+    const st = stateOf('start', realFailed && !runIsReal ? 'failed' : runIsReal && fire ? 'ready' : 'loading');
+    const fields = { place: regionTitle || null, fire_month: fire?.label ?? null, fire_name: fire?.name ?? null };
+    return st?.film ? (says({ ...st, says: st.film.map((l) => ({ ...l, place: 'guide' })) }, fields, {})[0] ?? null) : null;
+  })();
+  // The root says when the landing's fire is in (its real run loaded and a pass of it drawn), for the film's driver.
+  const fireIn = !inWorkspace && runIsReal && !isExecuting && stageTelemetry?.realPass != null;
+  useEffect(() => {
+    document.documentElement.setAttribute('data-fire', fireIn ? 'in' : inWorkspace ? 'workspace' : 'loading');
+  }, [fireIn, inWorkspace]);
 
   return (
     <WorkspaceProvider value={store}>
@@ -1558,6 +1578,7 @@ export function App() {
           realPass={stageTelemetry?.realPass ?? null}
           lines={landingLines}
           passHidden={landingHidden}
+          caption={landingCaption}
           onOpenSearch={() => setAskOpen(true)}
           onOpenSensor={() => setReading('sensors')}
           onOpenMethod={() => setReading('method')}
@@ -1693,50 +1714,52 @@ export function App() {
       {/* The stage comes after the interface in DOM order so Tab reaches the triggers first;
           stacking is by z-index, not order. */}
       <div className="iso-stage-clip" data-workspace={inWorkspace ? 'true' : 'false'}>
-        <StageBoundary>
-          <Suspense fallback={<div style={{ width: '100%', height: '100%', backgroundColor: '#080b11' }} />}>
-            <EarthCutawayStage
-              apiBase={API_BASE}
-              resolveAsset={assetUrlNow}
-              inWorkspace={inWorkspace}
-              mode={round ? 'reconstruction' : effectiveMode}
-              activeTheaterId={activeTheaterId}
-              activeRun={stageRun}
-              timeProgress={timeProgress / 23}
-              observerFilter={observerFilter}
-              showUncertainty={showUncertainty}
-              holdoutViirs={round ? !round.done : holdoutViirs}
-              sensitivityThreshold={sensitivityThreshold}
-              cutawaySplit={cutawaySplit}
-              // On a narrow screen the close view would crop the fire off the sides: Estimate and Test show the whole box,
-              // fitted into the part the words leave free (modelFrame).
-              cameraPreset={viewportWidth < 960 && modelScene && cameraPreset === 'canyon' ? 'region' : cameraPreset}
-              cinemaActive={cinemaActive}
-          dayPicture={modelScene ? dayPicture : null}
-              cleanHud={cleanHud}
-              slewRequest={slewRequest}
-              selectedFindingId={selectedFinding?.id ?? null}
-              onSelectFinding={runIsReal ? undefined : setSelectedFinding}
-              onEnterWorkspace={() => enterWorkspace('cutaway')}
-              onCinemaStepTheater={handleCinemaStepTheater}
-              onTelemetry={handleTelemetry}
-              landingView="world"
-              landingTour
-              landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
-              workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
-              regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
-              chanceSquares={chanceOn}
-              onFireAnchor={modelScene || step === 'look' ? emitAnchor : undefined}
-              tileBoard={rnd.board}
-              onTilePick={(tile) => {
-                if (rnd.canPick) playCue('look');
-                rnd.pick(tile);
-              }}
-              onTileHover={rnd.board ? rnd.onHover : undefined}
-              onTileAnchors={rnd.board ? rnd.onAnchors : undefined}
-            />
-          </Suspense>
-        </StageBoundary>
+        {stageOn && (
+          <StageBoundary>
+            <Suspense fallback={<div style={{ width: '100%', height: '100%', backgroundColor: '#080b11' }} />}>
+              <EarthCutawayStage
+                apiBase={API_BASE}
+                resolveAsset={assetUrlNow}
+                inWorkspace={inWorkspace}
+                mode={round ? 'reconstruction' : effectiveMode}
+                activeTheaterId={activeTheaterId}
+                activeRun={stageRun}
+                timeProgress={timeProgress / 23}
+                observerFilter={observerFilter}
+                showUncertainty={showUncertainty}
+                holdoutViirs={round ? !round.done : holdoutViirs}
+                sensitivityThreshold={sensitivityThreshold}
+                cutawaySplit={cutawaySplit}
+                // On a narrow screen the close view would crop the fire off the sides: Estimate and Test show the whole box,
+                // fitted into the part the words leave free (modelFrame).
+                cameraPreset={viewportWidth < 960 && modelScene && cameraPreset === 'canyon' ? 'region' : cameraPreset}
+                cinemaActive={cinemaActive}
+            dayPicture={modelScene ? dayPicture : null}
+                cleanHud={cleanHud}
+                slewRequest={slewRequest}
+                selectedFindingId={selectedFinding?.id ?? null}
+                onSelectFinding={runIsReal ? undefined : setSelectedFinding}
+                onEnterWorkspace={() => enterWorkspace('cutaway')}
+                onCinemaStepTheater={handleCinemaStepTheater}
+                onTelemetry={handleTelemetry}
+                landingView="world"
+                landingTour
+                landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
+                workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
+                regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
+                chanceSquares={chanceOn}
+                onFireAnchor={modelScene || step === 'look' ? emitAnchor : undefined}
+                tileBoard={rnd.board}
+                onTilePick={(tile) => {
+                  if (rnd.canPick) playCue('look');
+                  rnd.pick(tile);
+                }}
+                onTileHover={rnd.board ? rnd.onHover : undefined}
+                onTileAnchors={rnd.board ? rnd.onAnchors : undefined}
+              />
+            </Suspense>
+          </StageBoundary>
+        )}
       </div>
 
       {(openedSheetsRef.current.ask ||= askOpen) && (
