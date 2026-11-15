@@ -278,29 +278,34 @@ def load_source(source: str, place_deg: float) -> tuple[dict[str, Any], Any, dic
                        "countries": len(manifest["countries"])}
 
 
-def fit_tables(source: str = "cube", place_deg: float = PL.PLACE_DEG) -> dict[str, Any]:
-    """The interval tables the Record uses: held-out errors of the method in use (and of Terra alone, for the
-    months before Aqua), every overlap year left out in turn over every place, per latitude band where a band has
-    enough pairs and for the world. Closed place-years are left out."""
+def fit_tables(source: str = "cube", place_deg: float = PL.PLACE_DEG, serve_rows: str = "overlap_ratio_v1"
+               ) -> dict[str, Any]:
+    """What the Record's call reads, for every method it can serve: interval tables from held-out errors (each
+    overlap year left out in turn over every place, per latitude band with a world fallback bin by bin), for the
+    method on Terra and Aqua and on Terra alone (the months before Aqua), and, for a method that leans on the world
+    fit, the world parts a single place needs (`harmonize.served_params`). FRP is fitted for the method in use.
+    Closed place-years and places with no row in the clean months are left out of the tables. `serve_rows` names
+    the method served for rows."""
     tab, pm, read = load_source(source, place_deg)
     X, months = tab["channels"], tab["months"]
     clean, sharp, info = clean_months(months, pm)
     places = places_of(tab)
     years = np.arange(2012, 2026)
-    # places with no row in the clean months hold nothing to learn an error from; they are left out like closed
-    # place-years (their predictions would all be zero against zero)
     any_rows = sum(X[f"n_{p}_{d}"] for p in "TASJ" for d in "DN")[:, clean].sum(axis=1) > 0
     closed = closed_year_mask(tab, years) | ~any_rows[:, None]
     yr = H._year(months)
     band_s = PL.band_of(tab["lat0"] + tab["deg"] / 2.0)
-    out: dict[str, Any] = {"month": {}, "year": {}}
     pairs: dict[str, int] = {}
     n_modis = H._plain_modis(X, "n")[:, clean].sum()
     frp_unit = float(H._plain_modis(X, "frp")[:, clean].sum() / n_modis) if n_modis > 0 else 1.0
-    for regime, spec, q, unit in (("terra_aqua", H.SPEC_BY_NAME["in_use"], "n", 1.0),
-                                  ("terra_only", H.TERRA_ONLY, "n", 1.0),
-                                  ("frp_terra_aqua", H.SPEC_BY_NAME["in_use"], "frp", frp_unit),
-                                  ("frp_terra_only", H.TERRA_ONLY, "frp", frp_unit)):
+    methods: dict[str, Any] = {}
+    jobs = []
+    for mid, (spec_ta, spec_t) in H.SERVED.items():
+        jobs += [(mid, "terra_aqua", spec_ta, "n", 1.0), (mid, "terra_only", spec_t, "n", 1.0)]
+    jobs += [("overlap_ratio_v1", "frp_terra_aqua", H.SERVED["overlap_ratio_v1"][0], "frp", frp_unit),
+             ("overlap_ratio_v1", "frp_terra_only", H.SERVED["overlap_ratio_v1"][1], "frp", frp_unit)]
+    for mid, regime, spec, q, unit in jobs:
+        m = methods.setdefault(mid, {"month": {}, "year": {}})
         obs = X[f"{q}_S_D"] + X[f"{q}_S_N"]
         pred = H.held_out(X, months, clean, spec, places, q, unit, sharp)
         ok_m = clean[None, :] & ~closed[:, np.searchsorted(years, yr)] & np.isfinite(pred)
@@ -312,16 +317,25 @@ def fit_tables(source: str = "cube", place_deg: float = PL.PLACE_DEG) -> dict[st
                 rows = (band_s == b)[:, None] & ok
                 if rows.sum():
                     t["bands"][f"{b:g}"] = H.interval_table(P[rows], O[rows], unit, fallback=t["world"])
-            out[scale][regime] = t
-            pairs[f"{scale}_{regime}"] = int(ok.sum())
-    out["level"] = H.LEVEL
-    out["provenance"] = {**read, "place_deg": place_deg, "places": int(tab["lat0"].size), "pairs": pairs,
-                         "frp_unit_mw": round(frp_unit, 3),
-                         "clean_months": info["clean_months"], "rule_sha256": RULE_SHA256,
-                         "held_out": "each overlap year 2012 to 2025 left out in turn over every place at once",
-                         "closed_place_years_left_out": int(closed_year_mask(tab, years).sum()),
-                         "places_with_rows_in_clean_months": int(any_rows.sum())}
-    return out
+            m[scale][regime] = t
+            pairs[f"{mid} {scale} {regime}"] = int(ok.sum())
+        if spec.pool or spec.size or spec.groups != "none":
+            f = H.Fit()
+            H.fit_predict(X, months, clean, spec, places, q, unit, sharp, f)
+            m.setdefault("params", {})[regime] = H.served_params(f, places, unit)
+    if serve_rows not in methods:
+        raise ValueError(f"{serve_rows} is not a method the Record can serve")
+    return {
+        "serve": {"rows": serve_rows, "frp": "overlap_ratio_v1"},
+        "level": H.LEVEL,
+        "provenance": {**read, "place_deg": place_deg, "places": int(tab["lat0"].size), "pairs": pairs,
+                       "frp_unit_mw": round(frp_unit, 3), "clean_months": info["clean_months"],
+                       "rule_sha256": RULE_SHA256,
+                       "held_out": "each overlap year 2012 to 2025 left out in turn over every place at once",
+                       "closed_place_years_left_out": int(closed_year_mask(tab, years).sum()),
+                       "places_with_rows_in_clean_months": int(any_rows.sum())},
+        "methods": methods,
+    }
 
 
 def write_fitted(fitted: dict[str, Any], path: Path) -> str:
@@ -516,9 +530,10 @@ def main() -> None:
     ap.add_argument("--deg", type=float, default=PL.PLACE_DEG)
     ap.add_argument("--only", default="")
     ap.add_argument("--source", choices=["cache", "cube"], default="cache")
+    ap.add_argument("--serve", default="overlap_ratio_v1", help="fit-tables: the method served for rows")
     a = ap.parse_args()
     if a.cmd == "fit-tables":
-        fitted = fit_tables(a.source, a.deg)
+        fitted = fit_tables(a.source, a.deg, a.serve)
         digest = write_fitted(fitted, Path(__file__).with_name("harmonize_fitted.py"))
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "fitted_provenance.json").write_text(json.dumps(fitted["provenance"], indent=1), encoding="utf-8")

@@ -62,5 +62,36 @@ class RecordTest(unittest.TestCase):
         self.assertEqual(len(out["check"]["per_year"]), 13)
 
 
+class ServedTest(unittest.TestCase):
+    def test_one_place_is_predicted_as_the_world_fit_predicts_it(self) -> None:
+        from backend.tests.test_model_harmonize_heldout import invented
+
+        X, months, places = invented(seed=5, places=16, years=8)
+        train = np.ones(months.size, dtype=bool)
+        train[-14:] = False
+        spec = H.SPEC_BY_NAME["pooled_month_size"]
+        f = H.Fit()
+        world = H.fit_predict(X, months, train, spec, places, "n", 1.0, None, f)
+        params = H.served_params(f, places, 1.0)
+        V = X["n_S_D"] + X["n_S_N"]
+        M = sum(X[f"n_{p}_{d}"] for p in "TA" for d in "DN")
+        for p in (0, 5, 9):
+            nb = places.nb_dst[places.nb_src == p]
+            lat = float(places.band[p]) * 10.0 - 90.0 + 5.0
+            one = H.served_predict(V[p], M[p], months % 12, train, params, lat,
+                                   float(V[nb][:, train].sum()), float(M[nb][:, train].sum()))
+            np.testing.assert_allclose(one, world[p], rtol=1e-9, atol=1e-9)
+
+    def test_the_pooled_method_can_be_served(self) -> None:
+        fitted = {**FITTED, "serve": {"rows": "pooled_month_size_v1", "frp": "overlap_ratio_v1"}}
+        out = H.record_series(records(), area_km2=40000.0, center_lat=40.5, closed_years=(2021,), fitted=fitted)
+        self.assertEqual(out["method"]["id"], "pooled_month_size_v1")
+        self.assertIn("latitude band", out["method"]["fitted_on"]["prior"])
+        self.assertNotIn(2021, [r["year"] for r in out["check"]["per_year"]])
+        done = [r for r in out["months"] if r["harmonized_count"] is not None]
+        self.assertGreater(len(done), 300)
+        self.assertTrue(all(r["p10_count"] <= r["harmonized_count"] + 1e-6 <= r["p90_count"] + 2e-6 for r in done))
+
+
 if __name__ == "__main__":
     unittest.main()

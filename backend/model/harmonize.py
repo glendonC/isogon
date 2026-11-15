@@ -70,9 +70,13 @@ class Spec:
 
 @dataclass
 class Fit:
-    """What a fit learned, for the record of a run (not needed to predict)."""
+    """What a fit learned: for the record of a run, and for predicting one place as the world fit would."""
     world_ratio: float = float("nan")
     weights: dict[str, float] = field(default_factory=dict)
+    band_ratio: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    size_factor: np.ndarray = field(default_factory=lambda: np.ones(SIZE_BINS))
+    empty_band_mean: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    empty_world_mean: float = 0.0
 
 
 def _year(month_index: np.ndarray) -> np.ndarray:
@@ -176,6 +180,7 @@ def fit_predict(X: dict[str, np.ndarray], months: np.ndarray, train: np.ndarray,
     r_p, band_r, world = place_ratio(sum(Vsum.values()), sum(Msum.values()), places, spec.pool, k)
     if fit_out is not None:
         fit_out.world_ratio = world
+        fit_out.band_ratio = band_r
     grp = _group_of(months, spec.groups)
     n_grp = int(grp.max()) + 1
     pred = np.zeros_like(next(iter(Mp.values())), dtype=np.float64)
@@ -204,7 +209,7 @@ def fit_predict(X: dict[str, np.ndarray], months: np.ndarray, train: np.ndarray,
         fill = band_r[places.band][no_ratio, None] * M_all[no_ratio] if spec.fallback == "band" else _plain_modis(X, q)[no_ratio]
         pred[no_ratio] = fill
     if spec.size:
-        pred = _size_factor(pred, M_all, sum(Vp.values()), tr, places, unit)
+        pred = _size_factor(pred, M_all, sum(Vp.values()), tr, places, unit, fit_out)
     return pred
 
 
@@ -219,7 +224,8 @@ def size_bin(M: np.ndarray, unit: float) -> np.ndarray:
     return np.clip(b, 0, SIZE_BINS - 1).astype(np.int64)
 
 
-def _size_factor(pred: np.ndarray, M: np.ndarray, V: np.ndarray, tr: np.ndarray, places: Places, unit: float) -> np.ndarray:
+def _size_factor(pred: np.ndarray, M: np.ndarray, V: np.ndarray, tr: np.ndarray, places: Places, unit: float,
+                 fit_out: Fit | None = None) -> np.ndarray:
     """A world factor for each size of the month's input, fitted on the training months, and for months with no
     input the place's mean Suomi NPP value in such months, shrunk toward its band's."""
     b = size_bin(M, unit)
@@ -237,6 +243,8 @@ def _size_factor(pred: np.ndarray, M: np.ndarray, V: np.ndarray, tr: np.ndarray,
     world = v0.sum() / n0.sum() if n0.sum() > 0 else 0.0
     band_mean = _shrink(bv, bn, np.full(nb_band, world), EMPTY_PSEUDO_MONTHS)
     alpha = _shrink(v0, n0, band_mean[places.band], EMPTY_PSEUDO_MONTHS)
+    if fit_out is not None:
+        fit_out.size_factor, fit_out.empty_band_mean, fit_out.empty_world_mean = f, band_mean, float(world)
     return np.where(b == 0, alpha[:, None], out)
 
 
@@ -382,13 +390,26 @@ def apply_interval(pred: np.ndarray, table: dict[str, Any]) -> tuple[np.ndarray,
     return np.maximum(base * np.exp(lo) - unit, 0.0), np.maximum(base * np.exp(hi) - unit, 0.0)
 
 
-# The Record's call. The method stays one ratio per place (it is the method in use until one wins by the rule);
-# what changes is the interval, which comes from held-out errors (`backend/model/harmonize_fitted.py`) and covers
-# what it states.
-RECORD_METHOD_ID: str = "overlap_ratio_v1"
+# The Record's call. Which method it serves is one field of `backend/model/harmonize_fitted.py` (`serve`), set from
+# the rule's decision; the interval comes from the held-out errors of the method served and covers what it states.
 INTERVAL_ID: str = "heldout_log_error_quantiles_v1"
-TERRA_ONLY: Spec = Spec("terra_only", "Terra alone, as the Record harmonizes the months before Aqua", inputs="terra")
 FIRST_FIT_MONTH: str = "2012-02"     # Suomi NPP rows begin on 20 January 2012: that month is partial
+TERRA_ONLY: Spec = Spec("terra_only", "Terra alone, as the Record harmonizes the months before Aqua", inputs="terra")
+# Each method the Record can serve, with the candidate it is and that candidate on Terra alone (before Aqua).
+SERVED: dict[str, tuple[Spec, Spec]] = {
+    "overlap_ratio_v1": (SPEC_BY_NAME["in_use"], TERRA_ONLY),
+    "pooled_month_size_v1": (SPEC_BY_NAME["pooled_month_size"],
+                             replace(SPEC_BY_NAME["pooled_month_size"], name="pooled_month_size_terra", inputs="terra")),
+}
+SERVED_WHAT: dict[str, str] = {
+    "overlap_ratio_v1": "Suomi NPP equivalent rows = MODIS rows (Terra plus Aqua) x the place's ratio of Suomi NPP "
+                        "rows to MODIS rows over its clean overlap months; Terra alone x its own ratio before Aqua",
+    "pooled_month_size_v1": "Suomi NPP equivalent rows = MODIS rows (Terra plus Aqua) x the place's ratio for that "
+                            "month of the year x a factor for the size of the month's MODIS count. The month's ratio "
+                            "leans on the place's ratio over the year, which leans on its surroundings and its "
+                            "latitude band; a month in which MODIS saw nothing gets the place's mean Suomi NPP count "
+                            "in such months. Terra alone, fitted the same way, before Aqua",
+}
 
 
 def _total(rc: dict[str, Any], plat: str, quantity: str = "rows") -> float | None:
@@ -404,64 +425,152 @@ def _clean(rc: dict[str, Any], plats: tuple[str, ...]) -> bool:
     return all((rc or {}).get(p) is not None and not (rc[p].get("outage_days") or 0) for p in plats)
 
 
-def tables_for(lat: float | None, fitted: dict[str, Any], scale: str, regime: str) -> tuple[dict[str, Any], str]:
+def _band_key(lat: float | None) -> str | None:
+    return None if lat is None else f"{float(np.floor(lat / 10.0) * 10.0):g}"
+
+
+def tables_for(lat: float | None, tables: dict[str, Any], scale: str, regime: str) -> tuple[dict[str, Any], str]:
     """The interval table of a latitude band where the fit had one, else the world's."""
-    t = fitted[scale][regime]
-    if lat is not None:
-        south = float(np.floor(lat / 10.0) * 10.0)
-        key = f"{south:g}"
-        if key in t["bands"]:
-            return t["bands"][key], f"band {key}"
+    t = tables[scale][regime]
+    key = _band_key(lat)
+    if key is not None and key in t["bands"]:
+        return t["bands"][key], f"band {key}"
     return t["world"], "world"
+
+
+def served_params(fit: "Fit", places: Places, unit: float) -> dict[str, Any]:
+    """What a single place needs from the world fit to be predicted like every place of it: the world's and each
+    band's ratio, the factor for each size of the month's count, and each band's mean in months MODIS saw nothing."""
+    south = lambda i: f"{float(i) * 10.0 - 90.0:g}"  # noqa: E731
+    return {"world_ratio": fit.world_ratio, "unit": unit, "pseudo_rows": PSEUDO_ROWS,
+            "empty_pseudo_months": EMPTY_PSEUDO_MONTHS,
+            "band_ratio": {south(i): float(r) for i, r in enumerate(fit.band_ratio)},
+            "size_factor": [float(v) for v in fit.size_factor],
+            "empty_band_mean": {south(i): float(v) for i, v in enumerate(fit.empty_band_mean)},
+            "empty_world_mean": fit.empty_world_mean}
+
+
+def served_predict(V: np.ndarray, M: np.ndarray, month_of_year: np.ndarray, fit: np.ndarray, params: dict[str, Any],
+                   lat: float | None, prior_V: float = 0.0, prior_M: float = 0.0) -> np.ndarray:
+    """One place's predictions by the pooled, month of the year, count factor method (the candidate
+    `pooled_month_size`), as `fit_predict` makes them for a place of the world fit. `fit` marks the months it may
+    fit on; `prior_V`, `prior_M` are its surroundings' Suomi NPP and MODIS sums over those months (zero when they
+    are not known, and then the place leans on its band alone)."""
+    k = params["pseudo_rows"] * params["unit"]
+    key = _band_key(lat)
+    r_band = params["band_ratio"].get(key, params["world_ratio"]) if key else params["world_ratio"]
+    r_nb = float(_shrink(np.float64(prior_V), np.float64(prior_M), np.float64(r_band), k))
+    ok = fit & np.isfinite(V) & np.isfinite(M)
+    r_p = float(_shrink(np.float64(V[ok].sum()), np.float64(M[ok].sum()), np.float64(r_nb), k))
+    r_c = np.array([float(_shrink(np.float64(V[ok & (month_of_year == c)].sum()),
+                                  np.float64(M[ok & (month_of_year == c)].sum()), np.float64(r_p), k))
+                    for c in range(12)])
+    Mz = np.where(np.isfinite(M), M, 0.0)
+    pred = r_c[month_of_year] * Mz
+    b = size_bin(Mz, params["unit"])
+    pred = pred * np.array(params["size_factor"])[b]
+    empty = ok & (Mz == 0)
+    band_mean = params["empty_band_mean"].get(key, params["empty_world_mean"]) if key else params["empty_world_mean"]
+    alpha = float(_shrink(np.float64(V[empty].sum()), np.float64(empty.sum()), np.float64(band_mean),
+                          params["empty_pseudo_months"]))
+    pred = np.where(b == 0, alpha, pred)
+    return np.where(np.isfinite(M), pred, np.nan)
+
+
+def surround_from_cube(box: tuple[float, float, float, float], grow_deg: float = 2.0) -> dict[str, Any] | None:
+    """Fire rows of the box grown by `grow_deg` on every side, per month and platform, from the fire cube; None when
+    no cube is on hand. The Record subtracts its own rows to get its surroundings."""
+    try:
+        from backend.firms.cube import Cube, month_label
+    except ImportError:
+        return None
+    w, s, e, n = box
+    try:
+        cube = Cube()
+        t = cube.box((max(-180.0, w - grow_deg), max(-90.0, s - grow_deg), min(180.0, e + grow_deg),
+                      min(90.0, n + grow_deg)))
+        build = cube.build_id() if callable(cube.build_id) else cube.build_id
+    except Exception:  # noqa: BLE001  any missing or unreadable cube means: no surroundings
+        return None
+    rows = t["rows"][..., 0].sum(axis=2)          # (months, platform), fire rows (kind 0), day and night together
+    return {"year_month": [month_label(m) for m in range(rows.shape[0])], "Terra": rows[:, 0], "Aqua": rows[:, 1],
+            "Suomi NPP": rows[:, 2], "box": t["box"], "build": build}
 
 
 def record_series(records: list[dict[str, Any]], area_km2: float | None = None, center_lat: float | None = None,
                   closed_years: tuple[int, ...] = (), fitted: dict[str, Any] | None = None,
-                  quantity: str = "rows") -> dict[str, Any]:
+                  quantity: str = "rows", surround: dict[str, Any] | None = None) -> dict[str, Any]:
     """Monthly tables in, the harmonized series with its interval out.
 
     `records` are the Record route's monthly records (each with `year_month` and `raw_counts` per platform, a
     platform's entry null when it delivers no data that month, with `total` and `outage_days`). `area_km2` gives
     rates per 1000 km2 per day beside counts. `center_lat` picks the interval table of the place's band.
     `closed_years` are years whose held-out check is neither computed nor published (a test fire's year).
+    `surround` (from `surround_from_cube`) gives the rows around the place, which the pooled method leans on.
     With `quantity="frp"` each platform's entry must carry `frp`, its summed fire radiative power in MW, and the
-    series is Suomi NPP equivalent FRP with the FRP interval tables."""
+    series is Suomi NPP equivalent FRP; FRP is served by the method in use whatever rows are served by."""
     if fitted is None:
         from backend.model.harmonize_fitted import FITTED as fitted
+    method = fitted["serve"]["frp" if quantity == "frp" else "rows"]
+    tables = fitted["methods"][method]
+    pre = "frp_" if quantity == "frp" else ""
     ym = [r["year_month"] for r in records]
     rc = [r.get("raw_counts") or {} for r in records]
-    T = np.array([_total(c, "Terra", quantity) if c.get("Terra") is not None else np.nan for c in rc])
-    A = np.array([_total(c, "Aqua", quantity) if c.get("Aqua") is not None else np.nan for c in rc])
-    S = np.array([_total(c, "Suomi NPP", quantity) if c.get("Suomi NPP") is not None else np.nan for c in rc])
-    pre = "frp_" if quantity == "frp" else ""
+
+    def series(plat: str) -> np.ndarray:
+        return np.array([_total(c, plat, quantity) if c.get(plat) is not None else np.nan for c in rc])
+
+    T, A, S = series("Terra"), series("Aqua"), series("Suomi NPP")
     year = np.array([int(m[:4]) for m in ym])
+    moy = np.array([int(m[5:7]) - 1 for m in ym])
     fit_ta = np.array([m >= FIRST_FIT_MONTH and _clean(c, ("Suomi NPP", "Terra", "Aqua")) for m, c in zip(ym, rc)])
     fit_t = np.array([m >= FIRST_FIT_MONTH and _clean(c, ("Suomi NPP", "Terra")) for m, c in zip(ym, rc)])
     MA = T + A
+    prior_note = None
+    sur_T = sur_A = sur_S = None
+    if method != "overlap_ratio_v1" and surround is not None and quantity == "rows":
+        idx = {m: i for i, m in enumerate(surround["year_month"])}
+        pick = lambda a: np.array([float(a[idx[m]]) if m in idx else np.nan for m in ym])  # noqa: E731
+        sur_T, sur_A, sur_S = pick(surround["Terra"]), pick(surround["Aqua"]), pick(surround["Suomi NPP"])
+        prior_note = f"surroundings: the box grown to {surround.get('box')}, from the fire cube, less the place's rows"
+    elif method != "overlap_ratio_v1":
+        prior_note = "no surroundings given: the place leans on its latitude band"
 
-    def ratio(num: np.ndarray, den: np.ndarray, use: np.ndarray) -> float | None:
-        d = float(np.nansum(den[use]))
-        return float(np.nansum(num[use]) / d) if d > 0 else None
+    def prior(fit: np.ndarray, own_M: np.ndarray, sM: np.ndarray | None) -> tuple[float, float]:
+        if sM is None:
+            return 0.0, 0.0
+        ok = fit & np.isfinite(sM) & np.isfinite(sur_S) & np.isfinite(own_M) & np.isfinite(S)
+        return (max(0.0, float(sur_S[ok].sum() - S[ok].sum())), max(0.0, float(sM[ok].sum() - own_M[ok].sum())))
 
-    r_ta, r_t = ratio(S, MA, fit_ta), ratio(S, T, fit_t)
-    tab_ta, where_ta = tables_for(center_lat, fitted, "month", pre + "terra_aqua")
-    tab_t, where_t = tables_for(center_lat, fitted, "month", pre + "terra_only")
-    out_months = []
+    def predict(M: np.ndarray, fit: np.ndarray, regime: str, sM: np.ndarray | None) -> tuple[np.ndarray, Any]:
+        if method == "overlap_ratio_v1":
+            d = float(np.nansum(M[fit]))
+            r = float(np.nansum(S[fit]) / d) if d > 0 else None
+            return (r * M if r is not None else np.full(M.shape, np.nan)), r
+        pv, pm = prior(fit, M, sM)
+        return served_predict(S, M, moy, fit, tables["params"][pre + regime], center_lat, pv, pm), {"prior_suomi_npp": pv,
+                                                                                                    "prior_modis": pm}
+
+    p_ta, info_ta = predict(MA, fit_ta, "terra_aqua", None if sur_T is None else sur_T + sur_A)
+    p_t, info_t = predict(T, fit_t, "terra_only", sur_T)
+    tab_ta, where_ta = tables_for(center_lat, tables, "month", pre + "terra_aqua")
+    tab_t, where_t = tables_for(center_lat, tables, "month", pre + "terra_only")
     pred = np.full(len(records), np.nan)
     lo_m = np.full(len(records), np.nan)
     hi_m = np.full(len(records), np.nan)
     used: list[str | None] = []
-    for i, m in enumerate(ym):
-        if np.isfinite(MA[i]) and r_ta is not None:
-            p, tab, u = r_ta * MA[i], tab_ta, "terra_aqua"
-        elif np.isfinite(T[i]) and r_t is not None:
-            p, tab, u = r_t * T[i], tab_t, "terra_only"
+    for i in range(len(records)):
+        if np.isfinite(MA[i]) and np.isfinite(p_ta[i]):
+            p, tab, u = p_ta[i], tab_ta, "terra_aqua"
+        elif np.isfinite(T[i]) and np.isfinite(p_t[i]):
+            p, tab, u = p_t[i], tab_t, "terra_only"
         else:
             used.append(None)
             continue
         lo, hi = apply_interval(np.array([p]), tab)
         pred[i], lo_m[i], hi_m[i] = p, float(lo[0]), float(hi[0])
         used.append(u)
+    out_months = []
     for i, m in enumerate(ym):
         row: dict[str, Any] = {"year_month": m, "ratio_used": used[i],
                                "harmonized_count": None if np.isnan(pred[i]) else round(float(pred[i]), 2),
@@ -475,7 +584,7 @@ def record_series(records: list[dict[str, Any]], area_km2: float | None = None, 
             for a, b in (("harmonized_count", "harmonized_rate"), ("p10_count", "p10_rate"), ("p90_count", "p90_rate")):
                 row[b] = None if row[a] is None else round(row[a] * k, 4)
         out_months.append(row)
-    tab_y, where_y = tables_for(center_lat, fitted, "year", pre + "terra_aqua")
+    tab_y, where_y = tables_for(center_lat, tables, "year", pre + "terra_aqua")
     out_years = []
     for y in sorted(set(year.tolist())):
         sel = (year == y) & np.isfinite(pred)
@@ -485,16 +594,25 @@ def record_series(records: list[dict[str, Any]], area_km2: float | None = None, 
         lo, hi = apply_interval(np.array([s]), tab_y)
         out_years.append({"year": int(y), "months": int(sel.sum()), "harmonized_count": round(s, 1),
                           "p10_count": round(float(lo[0]), 1), "p90_count": round(float(hi[0]), 1)})
+
+    def check_predict(fit: np.ndarray) -> np.ndarray:
+        return predict(MA, fit, "terra_aqua", None if sur_T is None else sur_T + sur_A)[0]
+
+    fitted_on: dict[str, Any] = {"months": [m for m, f in zip(ym, fit_ta) if f],
+                                 "suomi_npp_rows": float(np.nansum(S[fit_ta])), "modis_rows": float(np.nansum(MA[fit_ta]))}
+    if method == "overlap_ratio_v1":
+        fitted_on.update({"ratio_terra_aqua": info_ta, "ratio_terra_only": info_t})
+    else:
+        fitted_on.update({"prior": prior_note, **info_ta,
+                          "ratio_over_the_overlap": (float(np.nansum(S[fit_ta]) / np.nansum(MA[fit_ta]))
+                                                     if np.nansum(MA[fit_ta]) > 0 else None)})
     return {
         "method": {
-            "id": RECORD_METHOD_ID,
+            "id": method,
             "quantity": quantity,
             "unit": "MW of fire radiative power" if quantity == "frp" else "rows",
-            "what": "Suomi NPP equivalent rows = MODIS rows (Terra plus Aqua) x the place's ratio of Suomi NPP rows to "
-                    "MODIS rows over its clean overlap months; Terra alone x its own ratio before Aqua",
-            "fitted_on": {"months": [m for m, f in zip(ym, fit_ta) if f], "ratio_terra_aqua": r_ta,
-                          "ratio_terra_only": r_t, "suomi_npp_rows": float(np.nansum(S[fit_ta])),
-                          "modis_rows": float(np.nansum(MA[fit_ta]))},
+            "what": SERVED_WHAT[method],
+            "fitted_on": fitted_on,
             "fit_months_rule": f"from {FIRST_FIT_MONTH}, months in which Suomi NPP, Terra and Aqua each deliver with no "
                                "outage day",
             "interval": {"id": INTERVAL_ID, "level": fitted["level"], "tables": pre + "terra_aqua", "table_month": where_ta,
@@ -505,25 +623,31 @@ def record_series(records: list[dict[str, Any]], area_km2: float | None = None, 
         },
         "months": out_months,
         "years": out_years,
-        "check": record_check(S, MA, year, fit_ta, tab_ta, tab_y, closed_years),
+        "check": record_check(S, MA, year, fit_ta, tab_ta, tab_y, closed_years, check_predict),
     }
 
 
 def record_check(S: np.ndarray, M: np.ndarray, year: np.ndarray, fit: np.ndarray, tab_m: dict[str, Any],
-                 tab_y: dict[str, Any], closed_years: tuple[int, ...] = ()) -> dict[str, Any]:
-    """The place's own held-out check: each overlap year left out in turn, the ratio fitted on the others. Closed
-    years are not held out and their figures are not given."""
+                 tab_y: dict[str, Any], closed_years: tuple[int, ...] = (),
+                 predict: Callable[[np.ndarray], np.ndarray] | None = None) -> dict[str, Any]:
+    """The place's own held-out check: each overlap year left out in turn, the method fitted on the others (by
+    `predict`, given the months it may fit on; one ratio of sums when not given). Closed years are not held out and
+    their figures are not given."""
     rows = []
     inside_m = []
     for y in sorted(set(year[fit].tolist())):
         if y in closed_years:
             continue
         tr, te = fit & (year != y), fit & (year == y)
-        d = float(M[tr].sum())
-        if d <= 0:
-            continue
-        r = float(S[tr].sum()) / d
-        p = r * M[te]
+        if predict is None:
+            d = float(M[tr].sum())
+            if d <= 0:
+                continue
+            p = float(S[tr].sum()) / d * M[te]
+        else:
+            p = predict(tr)[te]
+            if not np.isfinite(p).all():
+                continue
         lo, hi = apply_interval(p, tab_m)
         inside_m.extend(((S[te] >= lo - 1e-9) & (S[te] <= hi + 1e-9)).tolist())
         vo, vp = float(S[te].sum()), float(p.sum())
@@ -543,6 +667,7 @@ def record_check(S: np.ndarray, M: np.ndarray, year: np.ndarray, fit: np.ndarray
         "monthly_interval_coverage": round(float(np.mean(inside_m)), 4) if inside_m else None,
         "months_tested": len(inside_m),
         "interval_note": "the interval checked here is the one in use, whose table holds held-out errors of every "
-                         "year in other places; the coverage measured on years that did not set the table is in "
+                         "year in other places, and the world factors of the pooled method are fitted on every "
+                         "year; the coverage measured on years that did not set the table is in "
                          "docs/harmonization.md",
     }
