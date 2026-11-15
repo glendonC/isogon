@@ -292,25 +292,31 @@ def fit_tables(source: str = "cube", place_deg: float = PL.PLACE_DEG) -> dict[st
     any_rows = sum(X[f"n_{p}_{d}"] for p in "TASJ" for d in "DN")[:, clean].sum(axis=1) > 0
     closed = closed_year_mask(tab, years) | ~any_rows[:, None]
     yr = H._year(months)
-    obs = X["n_S_D"] + X["n_S_N"]
     band_s = PL.band_of(tab["lat0"] + tab["deg"] / 2.0)
     out: dict[str, Any] = {"month": {}, "year": {}}
     pairs: dict[str, int] = {}
-    for regime, spec in (("terra_aqua", H.SPEC_BY_NAME["in_use"]), ("terra_only", H.TERRA_ONLY)):
-        pred = H.held_out(X, months, clean, spec, places, "n", 1.0, sharp)
+    n_modis = H._plain_modis(X, "n")[:, clean].sum()
+    frp_unit = float(H._plain_modis(X, "frp")[:, clean].sum() / n_modis) if n_modis > 0 else 1.0
+    for regime, spec, q, unit in (("terra_aqua", H.SPEC_BY_NAME["in_use"], "n", 1.0),
+                                  ("terra_only", H.TERRA_ONLY, "n", 1.0),
+                                  ("frp_terra_aqua", H.SPEC_BY_NAME["in_use"], "frp", frp_unit),
+                                  ("frp_terra_only", H.TERRA_ONLY, "frp", frp_unit)):
+        obs = X[f"{q}_S_D"] + X[f"{q}_S_N"]
+        pred = H.held_out(X, months, clean, spec, places, q, unit, sharp)
         ok_m = clean[None, :] & ~closed[:, np.searchsorted(years, yr)] & np.isfinite(pred)
         ap, ao = annual(pred, months, clean, years), annual(obs, months, clean, years)
         ok_y = ~closed
         for scale, P, O, ok in (("month", pred, obs, ok_m), ("year", ap, ao, ok_y)):
-            t = {"world": H.interval_table(P[ok], O[ok], 1.0), "bands": {}}
+            t = {"world": H.interval_table(P[ok], O[ok], unit), "bands": {}}
             for b in np.unique(band_s):
                 rows = (band_s == b)[:, None] & ok
                 if rows.sum():
-                    t["bands"][f"{b:g}"] = H.interval_table(P[rows], O[rows], 1.0, fallback=t["world"])
+                    t["bands"][f"{b:g}"] = H.interval_table(P[rows], O[rows], unit, fallback=t["world"])
             out[scale][regime] = t
             pairs[f"{scale}_{regime}"] = int(ok.sum())
     out["level"] = H.LEVEL
     out["provenance"] = {**read, "place_deg": place_deg, "places": int(tab["lat0"].size), "pairs": pairs,
+                         "frp_unit_mw": round(frp_unit, 3),
                          "clean_months": info["clean_months"], "rule_sha256": RULE_SHA256,
                          "held_out": "each overlap year 2012 to 2025 left out in turn over every place at once",
                          "closed_place_years_left_out": int(closed_year_mask(tab, years).sum()),

@@ -22,7 +22,7 @@ def records(seed: int = 1) -> list[dict]:
 
             def c(n: float) -> dict:
                 n = int(rng.poisson(n))
-                return {"day": n // 2, "night": n - n // 2, "total": n, "outage_days": 0}
+                return {"day": n // 2, "night": n - n // 2, "total": n, "outage_days": 0, "frp": 30.0 * n}
 
             rc = {"Terra": c(fire * 0.5), "Aqua": c(fire * 0.5) if (y, m) >= (2002, 7) else None,
                   "Suomi NPP": c(fire * 4.0) if y >= 2012 else None, "NOAA-20": None, "NOAA-21": None}
@@ -45,6 +45,15 @@ class RecordTest(unittest.TestCase):
         before_aqua = [r for r in out["months"] if r["year_month"] < "2002-07"]
         self.assertTrue(all(r["ratio_used"] == "terra_only" for r in before_aqua))
         self.assertNotIn("2012-01", out["method"]["fitted_on"]["months"])
+
+    def test_frp_uses_its_own_tables(self) -> None:
+        out = H.record_series(records(), center_lat=40.5, quantity="frp")
+        self.assertEqual(out["method"]["unit"], "MW of fire radiative power")
+        self.assertEqual(out["method"]["interval"]["tables"], "frp_terra_aqua")
+        rows = H.record_series(records(), center_lat=40.5)
+        a = [m["harmonized_count"] for m in out["months"] if m["harmonized_count"]]
+        b = [m["harmonized_count"] for m in rows["months"] if m["harmonized_count"]]
+        self.assertGreater(sum(a), 10 * sum(b))
 
     def test_a_closed_year_is_not_held_out_or_published(self) -> None:
         out = H.record_series(records(), center_lat=40.5, closed_years=(2021,), fitted=FITTED)

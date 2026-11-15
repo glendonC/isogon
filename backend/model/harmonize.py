@@ -391,9 +391,13 @@ TERRA_ONLY: Spec = Spec("terra_only", "Terra alone, as the Record harmonizes the
 FIRST_FIT_MONTH: str = "2012-02"     # Suomi NPP rows begin on 20 January 2012: that month is partial
 
 
-def _total(rc: dict[str, Any], plat: str) -> float | None:
+def _total(rc: dict[str, Any], plat: str, quantity: str = "rows") -> float | None:
     c = (rc or {}).get(plat)
-    return None if c is None else float(c.get("total", c.get("day", 0) + c.get("night", 0)))
+    if c is None:
+        return None
+    if quantity == "frp":
+        return float(c["frp"])
+    return float(c.get("total", c.get("day", 0) + c.get("night", 0)))
 
 
 def _clean(rc: dict[str, Any], plats: tuple[str, ...]) -> bool:
@@ -412,20 +416,24 @@ def tables_for(lat: float | None, fitted: dict[str, Any], scale: str, regime: st
 
 
 def record_series(records: list[dict[str, Any]], area_km2: float | None = None, center_lat: float | None = None,
-                  closed_years: tuple[int, ...] = (), fitted: dict[str, Any] | None = None) -> dict[str, Any]:
+                  closed_years: tuple[int, ...] = (), fitted: dict[str, Any] | None = None,
+                  quantity: str = "rows") -> dict[str, Any]:
     """Monthly tables in, the harmonized series with its interval out.
 
     `records` are the Record route's monthly records (each with `year_month` and `raw_counts` per platform, a
     platform's entry null when it delivers no data that month, with `total` and `outage_days`). `area_km2` gives
     rates per 1000 km2 per day beside counts. `center_lat` picks the interval table of the place's band.
-    `closed_years` are years whose held-out check is neither computed nor published (a test fire's year)."""
+    `closed_years` are years whose held-out check is neither computed nor published (a test fire's year).
+    With `quantity="frp"` each platform's entry must carry `frp`, its summed fire radiative power in MW, and the
+    series is Suomi NPP equivalent FRP with the FRP interval tables."""
     if fitted is None:
         from backend.model.harmonize_fitted import FITTED as fitted
     ym = [r["year_month"] for r in records]
     rc = [r.get("raw_counts") or {} for r in records]
-    T = np.array([_total(c, "Terra") if c.get("Terra") is not None else np.nan for c in rc])
-    A = np.array([_total(c, "Aqua") if c.get("Aqua") is not None else np.nan for c in rc])
-    S = np.array([_total(c, "Suomi NPP") if c.get("Suomi NPP") is not None else np.nan for c in rc])
+    T = np.array([_total(c, "Terra", quantity) if c.get("Terra") is not None else np.nan for c in rc])
+    A = np.array([_total(c, "Aqua", quantity) if c.get("Aqua") is not None else np.nan for c in rc])
+    S = np.array([_total(c, "Suomi NPP", quantity) if c.get("Suomi NPP") is not None else np.nan for c in rc])
+    pre = "frp_" if quantity == "frp" else ""
     year = np.array([int(m[:4]) for m in ym])
     fit_ta = np.array([m >= FIRST_FIT_MONTH and _clean(c, ("Suomi NPP", "Terra", "Aqua")) for m, c in zip(ym, rc)])
     fit_t = np.array([m >= FIRST_FIT_MONTH and _clean(c, ("Suomi NPP", "Terra")) for m, c in zip(ym, rc)])
@@ -436,8 +444,8 @@ def record_series(records: list[dict[str, Any]], area_km2: float | None = None, 
         return float(np.nansum(num[use]) / d) if d > 0 else None
 
     r_ta, r_t = ratio(S, MA, fit_ta), ratio(S, T, fit_t)
-    tab_ta, where_ta = tables_for(center_lat, fitted, "month", "terra_aqua")
-    tab_t, where_t = tables_for(center_lat, fitted, "month", "terra_only")
+    tab_ta, where_ta = tables_for(center_lat, fitted, "month", pre + "terra_aqua")
+    tab_t, where_t = tables_for(center_lat, fitted, "month", pre + "terra_only")
     out_months = []
     pred = np.full(len(records), np.nan)
     lo_m = np.full(len(records), np.nan)
@@ -467,7 +475,7 @@ def record_series(records: list[dict[str, Any]], area_km2: float | None = None, 
             for a, b in (("harmonized_count", "harmonized_rate"), ("p10_count", "p10_rate"), ("p90_count", "p90_rate")):
                 row[b] = None if row[a] is None else round(row[a] * k, 4)
         out_months.append(row)
-    tab_y, where_y = tables_for(center_lat, fitted, "year", "terra_aqua")
+    tab_y, where_y = tables_for(center_lat, fitted, "year", pre + "terra_aqua")
     out_years = []
     for y in sorted(set(year.tolist())):
         sel = (year == y) & np.isfinite(pred)
@@ -480,6 +488,8 @@ def record_series(records: list[dict[str, Any]], area_km2: float | None = None, 
     return {
         "method": {
             "id": RECORD_METHOD_ID,
+            "quantity": quantity,
+            "unit": "MW of fire radiative power" if quantity == "frp" else "rows",
             "what": "Suomi NPP equivalent rows = MODIS rows (Terra plus Aqua) x the place's ratio of Suomi NPP rows to "
                     "MODIS rows over its clean overlap months; Terra alone x its own ratio before Aqua",
             "fitted_on": {"months": [m for m, f in zip(ym, fit_ta) if f], "ratio_terra_aqua": r_ta,
@@ -487,7 +497,7 @@ def record_series(records: list[dict[str, Any]], area_km2: float | None = None, 
                           "modis_rows": float(np.nansum(MA[fit_ta]))},
             "fit_months_rule": f"from {FIRST_FIT_MONTH}, months in which Suomi NPP, Terra and Aqua each deliver with no "
                                "outage day",
-            "interval": {"id": INTERVAL_ID, "level": fitted["level"], "table_month": where_ta,
+            "interval": {"id": INTERVAL_ID, "level": fitted["level"], "tables": pre + "terra_aqua", "table_month": where_ta,
                          "table_month_terra_only": where_t, "table_year": where_y,
                          "what": "the 10th to 90th percentile of held-out errors of predictions of about the same "
                                  "size, from every overlap year left out in turn over every place of the fit",
