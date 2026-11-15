@@ -1117,6 +1117,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     // Per patch reported: the patch's own cell nearest to its centre (distance squared, u, v)
     const patchNear = new Float64Array(FIRE_PATCH_LIMIT * 3);
     let fireAnchorSent = false;
+    let fireAnchorViewKey = '';
+    const fireAnchorViewSig = new Float64Array(38).fill(Number.NaN);
+    let lastFireAnchor: StageFireAnchor | null = null;
 
     const syncEpochTextures = (tensor: Uint8Array, frameCount: number, timeProg: number): number => {
       const clampedT = Math.min(1, Math.max(0, timeProg));
@@ -3927,131 +3930,169 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         if (count === 0) {
           if (fireAnchorSent) p.onFireAnchor(null);
           fireAnchorSent = false;
+          fireAnchorViewKey = '';
+          lastFireAnchor = null;
         } else {
-          let sumU = 0;
-          let sumV = 0;
-          let sumW = 0;
-          let left = Infinity;
-          let right = -Infinity;
-          let top = Infinity;
-          let bottom = -Infinity;
-          const patchCount = Math.min(FIRE_PATCH_LIMIT, fireAnchorPatches.sizes.length);
-          for (let k = 0; k < patchCount; k++) {
-            patchSums[k * 7] = 0;
-            patchSums[k * 7 + 1] = 0;
-            patchSums[k * 7 + 2] = 0;
-            patchSums[k * 7 + 3] = Infinity;
-            patchSums[k * 7 + 4] = Infinity;
-            patchSums[k * 7 + 5] = -Infinity;
-            patchSums[k * 7 + 6] = -Infinity;
-          }
-          for (let i = 0; i < count; i++) {
-            const u = fireAnchorPoints[i * 3];
-            const v = fireAnchorPoints[i * 3 + 1];
-            const w = fireAnchorPoints[i * 3 + 2];
-            sumU += u * w;
-            sumV += v * w;
-            sumW += w;
-            const k = fireAnchorPatches.patchOf[i] < patchCount ? fireAnchorPatches.patchOf[i] * 7 : -1;
-            if (k >= 0) {
-              patchSums[k] += u * w;
-              patchSums[k + 1] += v * w;
-              patchSums[k + 2] += w;
-            }
-            projVec.set(worldX(u), sampleCpuTerrainY(u, v), worldZ(v)).project(camera);
-            if (projVec.z <= -1 || projVec.z >= 1) continue;
-            const sx = (projVec.x * 0.5 + 0.5) * viewportW;
-            const sy = (-projVec.y * 0.5 + 0.5) * viewportH;
-            left = Math.min(left, sx);
-            right = Math.max(right, sx);
-            top = Math.min(top, sy);
-            bottom = Math.max(bottom, sy);
-            if (k >= 0) {
-              patchSums[k + 3] = Math.min(patchSums[k + 3], sx);
-              patchSums[k + 4] = Math.min(patchSums[k + 4], sy);
-              patchSums[k + 5] = Math.max(patchSums[k + 5], sx);
-              patchSums[k + 6] = Math.max(patchSums[k + 6], sy);
+          const nextViewKey = `${fireAnchorKey}:${prevBundle.key}:${nextBundle.key}`;
+          const mw = camera.matrixWorld.elements;
+          const pm = camera.projectionMatrix.elements;
+          let sameView =
+            lastFireAnchor !== null &&
+            nextViewKey === fireAnchorViewKey &&
+            fireAnchorViewSig[0] === epochIdx &&
+            fireAnchorViewSig[1] === morphValue &&
+            fireAnchorViewSig[2] === viewportW &&
+            fireAnchorViewSig[3] === viewportH &&
+            fireAnchorViewSig[4] === slabNow.width &&
+            fireAnchorViewSig[5] === slabNow.depth;
+          if (sameView) {
+            for (let m = 0; m < 16; m++) {
+              if (fireAnchorViewSig[6 + m] !== mw[m] || fireAnchorViewSig[22 + m] !== pm[m]) {
+                sameView = false;
+                break;
+              }
             }
           }
-          // A point of the ground on screen: its place in CSS px, and whether it can be seen (in
-          // front of the camera, on screen, and no ground between the eye and it above the sight line)
-          let seenX = 0;
-          let seenY = 0;
-          const seen = (pu: number, pv: number): boolean => {
-            const py = sampleCpuTerrainY(pu, pv);
-            projVec.set(worldX(pu), py, worldZ(pv)).project(camera);
-            seenX = (projVec.x * 0.5 + 0.5) * viewportW;
-            seenY = (-projVec.y * 0.5 + 0.5) * viewportH;
-            if (!(projVec.z > -1 && projVec.z < 1 && seenX >= 0 && seenX <= viewportW && seenY >= 0 && seenY <= viewportH)) {
-              return false;
+          if (!sameView) {
+            let sumU = 0;
+            let sumV = 0;
+            let sumW = 0;
+            let left = Infinity;
+            let right = -Infinity;
+            let top = Infinity;
+            let bottom = -Infinity;
+            const patchCount = Math.min(FIRE_PATCH_LIMIT, fireAnchorPatches.sizes.length);
+            for (let k = 0; k < patchCount; k++) {
+              patchSums[k * 7] = 0;
+              patchSums[k * 7 + 1] = 0;
+              patchSums[k * 7 + 2] = 0;
+              patchSums[k * 7 + 3] = Infinity;
+              patchSums[k * 7 + 4] = Infinity;
+              patchSums[k * 7 + 5] = -Infinity;
+              patchSums[k * 7 + 6] = -Infinity;
             }
-            const ex = camera.position.x;
-            const ey = camera.position.y;
-            const ez = camera.position.z;
-            const tx = worldX(pu);
-            const tz = worldZ(pv);
-            for (let k = 1; k < 48; k++) {
-              const a = k / 48;
-              const su = slabU(ex + (tx - ex) * a);
-              const sv = slabV(ez + (tz - ez) * a);
-              if (su < 0 || su > 1 || sv < 0 || sv > 1) continue;
-              if (sampleCpuTerrainY(su, sv) > ey + (py - ey) * a + 0.012) return false;
+            for (let i = 0; i < count; i++) {
+              const u = fireAnchorPoints[i * 3];
+              const v = fireAnchorPoints[i * 3 + 1];
+              const w = fireAnchorPoints[i * 3 + 2];
+              sumU += u * w;
+              sumV += v * w;
+              sumW += w;
+              const k = fireAnchorPatches.patchOf[i] < patchCount ? fireAnchorPatches.patchOf[i] * 7 : -1;
+              if (k >= 0) {
+                patchSums[k] += u * w;
+                patchSums[k + 1] += v * w;
+                patchSums[k + 2] += w;
+              }
+              projVec.set(worldX(u), sampleCpuTerrainY(u, v), worldZ(v)).project(camera);
+              if (projVec.z <= -1 || projVec.z >= 1) continue;
+              const sx = (projVec.x * 0.5 + 0.5) * viewportW;
+              const sy = (-projVec.y * 0.5 + 0.5) * viewportH;
+              left = Math.min(left, sx);
+              right = Math.max(right, sx);
+              top = Math.min(top, sy);
+              bottom = Math.max(bottom, sy);
+              if (k >= 0) {
+                patchSums[k + 3] = Math.min(patchSums[k + 3], sx);
+                patchSums[k + 4] = Math.min(patchSums[k + 4], sy);
+                patchSums[k + 5] = Math.max(patchSums[k + 5], sx);
+                patchSums[k + 6] = Math.max(patchSums[k + 6], sy);
+              }
             }
-            return true;
-          };
-          // A patch's point is its own cell nearest to its weighted centre, so that it lies on the
-          // patch whatever the patch's shape (the centre of a bent patch can lie beside it)
-          for (let k = 0; k < patchCount; k++) patchNear[k * 3] = Infinity;
-          const kmU = nextBundle.widthKm;
-          const kmV = nextBundle.depthKm;
-          for (let i = 0; i < count; i++) {
-            const k = fireAnchorPatches.patchOf[i];
-            if (k >= patchCount) continue;
-            const du = (fireAnchorPoints[i * 3] - patchSums[k * 7] / patchSums[k * 7 + 2]) * kmU;
-            const dv = (fireAnchorPoints[i * 3 + 1] - patchSums[k * 7 + 1] / patchSums[k * 7 + 2]) * kmV;
-            const d2 = du * du + dv * dv;
-            if (d2 < patchNear[k * 3]) {
-              patchNear[k * 3] = d2;
-              patchNear[k * 3 + 1] = fireAnchorPoints[i * 3];
-              patchNear[k * 3 + 2] = fireAnchorPoints[i * 3 + 1];
+            // A point of the ground on screen: its place in CSS px, and whether it can be seen (in
+            // front of the camera, on screen, and no ground between the eye and it above the sight line)
+            let seenX = 0;
+            let seenY = 0;
+            const seen = (pu: number, pv: number): boolean => {
+              const py = sampleCpuTerrainY(pu, pv);
+              projVec.set(worldX(pu), py, worldZ(pv)).project(camera);
+              seenX = (projVec.x * 0.5 + 0.5) * viewportW;
+              seenY = (-projVec.y * 0.5 + 0.5) * viewportH;
+              if (!(projVec.z > -1 && projVec.z < 1 && seenX >= 0 && seenX <= viewportW && seenY >= 0 && seenY <= viewportH)) {
+                return false;
+              }
+              const ex = camera.position.x;
+              const ey = camera.position.y;
+              const ez = camera.position.z;
+              const tx = worldX(pu);
+              const tz = worldZ(pv);
+              for (let k = 1; k < 48; k++) {
+                const a = k / 48;
+                const su = slabU(ex + (tx - ex) * a);
+                const sv = slabV(ez + (tz - ez) * a);
+                if (su < 0 || su > 1 || sv < 0 || sv > 1) continue;
+                if (sampleCpuTerrainY(su, sv) > ey + (py - ey) * a + 0.012) return false;
+              }
+              return true;
+            };
+            // A patch's point is its own cell nearest to its weighted centre, so that it lies on the
+            // patch whatever the patch's shape (the centre of a bent patch can lie beside it)
+            for (let k = 0; k < patchCount; k++) patchNear[k * 3] = Infinity;
+            const kmU = nextBundle.widthKm;
+            const kmV = nextBundle.depthKm;
+            for (let i = 0; i < count; i++) {
+              const k = fireAnchorPatches.patchOf[i];
+              if (k >= patchCount) continue;
+              const du = (fireAnchorPoints[i * 3] - patchSums[k * 7] / patchSums[k * 7 + 2]) * kmU;
+              const dv = (fireAnchorPoints[i * 3 + 1] - patchSums[k * 7 + 1] / patchSums[k * 7 + 2]) * kmV;
+              const d2 = du * du + dv * dv;
+              if (d2 < patchNear[k * 3]) {
+                patchNear[k * 3] = d2;
+                patchNear[k * 3 + 1] = fireAnchorPoints[i * 3];
+                patchNear[k * 3 + 2] = fireAnchorPoints[i * 3 + 1];
+              }
+            }
+            const patches: StageFirePatch[] = [];
+            for (let k = 0; k < patchCount; k++) {
+              const o = k * 7;
+              const patchSeen = seen(patchNear[k * 3 + 1], patchNear[k * 3 + 2]);
+              patches.push({
+                x: seenX,
+                y: seenY,
+                left: Number.isFinite(patchSums[o + 3]) ? patchSums[o + 3] : seenX,
+                top: Number.isFinite(patchSums[o + 4]) ? patchSums[o + 4] : seenY,
+                right: Number.isFinite(patchSums[o + 5]) ? patchSums[o + 5] : seenX,
+                bottom: Number.isFinite(patchSums[o + 6]) ? patchSums[o + 6] : seenY,
+                cells: fireAnchorPatches.sizes[k],
+                visible: patchSeen,
+              });
+            }
+            const visible = seen(sumU / sumW, sumV / sumW);
+            const x = seenX;
+            const yPx = seenY;
+            lastFireAnchor = {
+              frame: epochIdx,
+              from: fireAnchorFrom,
+              x,
+              y: yPx,
+              left: Number.isFinite(left) ? left : x,
+              top: Number.isFinite(top) ? top : yPx,
+              right: Number.isFinite(right) ? right : x,
+              bottom: Number.isFinite(bottom) ? bottom : yPx,
+              visible,
+              patches,
+            };
+            fireAnchorViewKey = nextViewKey;
+            fireAnchorViewSig[0] = epochIdx;
+            fireAnchorViewSig[1] = morphValue;
+            fireAnchorViewSig[2] = viewportW;
+            fireAnchorViewSig[3] = viewportH;
+            fireAnchorViewSig[4] = slabNow.width;
+            fireAnchorViewSig[5] = slabNow.depth;
+            for (let m = 0; m < 16; m++) {
+              fireAnchorViewSig[6 + m] = mw[m];
+              fireAnchorViewSig[22 + m] = pm[m];
             }
           }
-          const patches: StageFirePatch[] = [];
-          for (let k = 0; k < patchCount; k++) {
-            const o = k * 7;
-            const patchSeen = seen(patchNear[k * 3 + 1], patchNear[k * 3 + 2]);
-            patches.push({
-              x: seenX,
-              y: seenY,
-              left: Number.isFinite(patchSums[o + 3]) ? patchSums[o + 3] : seenX,
-              top: Number.isFinite(patchSums[o + 4]) ? patchSums[o + 4] : seenY,
-              right: Number.isFinite(patchSums[o + 5]) ? patchSums[o + 5] : seenX,
-              bottom: Number.isFinite(patchSums[o + 6]) ? patchSums[o + 6] : seenY,
-              cells: fireAnchorPatches.sizes[k],
-              visible: patchSeen,
-            });
-          }
-          const visible = seen(sumU / sumW, sumV / sumW);
-          const x = seenX;
-          const yPx = seenY;
-          p.onFireAnchor({
-            frame: epochIdx,
-            from: fireAnchorFrom,
-            x,
-            y: yPx,
-            left: Number.isFinite(left) ? left : x,
-            top: Number.isFinite(top) ? top : yPx,
-            right: Number.isFinite(right) ? right : x,
-            bottom: Number.isFinite(bottom) ? bottom : yPx,
-            visible,
-            patches,
-          });
+          p.onFireAnchor(lastFireAnchor!);
           fireAnchorSent = true;
         }
       } else if (fireAnchorSent) {
         p.onFireAnchor?.(null);
         fireAnchorSent = false;
         fireAnchorKey = '';
+        fireAnchorViewKey = '';
+        lastFireAnchor = null;
       }
 
       // The scale bar: a round number of kilometres from the run's own ground size, along the
