@@ -161,13 +161,37 @@ export interface StageTileAnchor {
   visible: boolean;
 }
 
+/**
+ * One patch of the fire on show: cells that touch (by a side or a corner, on the grid the cells
+ * are on; a detection counts for the squares its pixel lies on).
+ */
+export interface StageFirePatch {
+  /**
+   * CSS px of the viewport: the patch's point on the terrain surface. It is the patch's own cell
+   * nearest to its centre (weighted by fire power), so it always lies on the patch.
+   */
+  x: number;
+  y: number;
+  /** CSS px: the screen box of the patch's cells. */
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  /** How many cells (detections, or the estimate's cells) the patch holds. */
+  cells: number;
+  /** False when the centre is behind the camera, off screen or behind a ridge. */
+  visible: boolean;
+}
+
 /** Where the fire on show sits on screen (see `onFireAnchor`). */
 export interface StageFireAnchor {
   /** The frame (pass index) the anchor describes. */
   frame: number;
   /**
    * What it was taken from: the pass's own detections (a pass on show, or a hidden pass once its
-   * detections are laid on), or the estimate's cells on a pass whose detections are hidden.
+   * detections are laid on), or the estimate on a pass whose detections are hidden: the cells the
+   * run says its model declared there (the frames on the terrain), or, for a run that gives no
+   * such list, the cells inside the dotted line.
    */
   from: 'detections' | 'estimate';
   /** CSS px of the viewport: the centre of those cells on the terrain surface, weighted by fire power. */
@@ -180,6 +204,12 @@ export interface StageFireAnchor {
   bottom: number;
   /** False when the centre is behind the camera, off screen or behind a ridge. */
   visible: boolean;
+  /**
+   * The patches the fire is made of, the one with the most cells first; the eight largest at
+   * most. A label hangs on a patch, since the centre of two patches can lie on bare ground
+   * between them.
+   */
+  patches?: StageFirePatch[];
 }
 
 export interface EarthCutawayStageProps {

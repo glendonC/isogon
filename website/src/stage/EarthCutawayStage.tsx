@@ -28,6 +28,7 @@ import type {
   LandingStandpointCheck,
   InspectorCameraPreset,
   StageFireAnchor,
+  StageFirePatch,
   StageTileAnchor,
   TheaterId,
   StageMissingFile,
@@ -89,6 +90,7 @@ import {
   type ScanPassUniform,
 } from './engine/scanGeometry';
 import { SunShadowBaker } from './engine/shadowBake';
+import { firePatches, type FirePatches } from './engine/firePatches';
 import { SpacecraftFleet, buildOrbitEnvironment, type FleetPass } from './engine/spacecraft';
 import { SmokePass, buildSmokeHeightTexture } from './engine/smokeVolume';
 import {
@@ -363,6 +365,9 @@ const LANDING_TOUR_HOLD_SECONDS = 6;
 /** The scale bar shows from this camera distance (the block views), starts this far along the near edge, and ticks the two pixel sizes. */
 const SCALE_BAR_FROM_DISTANCE = 9.5;
 const SCALE_BAR_INSET = 0.08;
+// The fire's anchor: how many of its patches are reported, and the grid detections are grouped on
+const FIRE_PATCH_LIMIT = 8;
+const FIRE_PATCH_GRID_KM = 0.375;
 
 /**
  * How much brighter the moonlit ground is drawn in the workspace than on the landing: in a close
@@ -1056,6 +1061,12 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let fireAnchorKey = '';
     let fireAnchorFrom: StageFireAnchor['from'] = 'detections';
     let fireAnchorPoints: Float32Array = new Float32Array(0);
+    // The patch of each point and how many points each patch holds, largest first
+    let fireAnchorPatches: FirePatches = { patchOf: new Uint16Array(0), sizes: [] };
+    // Per patch reported: weighted sums of u and v, the weight, and the screen box
+    const patchSums = new Float64Array(FIRE_PATCH_LIMIT * 7);
+    // Per patch reported: the patch's own cell nearest to its centre (distance squared, u, v)
+    const patchNear = new Float64Array(FIRE_PATCH_LIMIT * 3);
     let fireAnchorSent = false;
 
     const syncEpochTextures = (tensor: Uint8Array, frameCount: number, timeProg: number): number => {
@@ -3615,18 +3626,49 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           if (own.length > 0) {
             fireAnchorFrom = 'detections';
             fireAnchorPoints = new Float32Array(own.length * 3);
+            // A detection counts for the ground its pixel lies on, on a grid as fine as the
+            // sharper instrument's pixel
+            const half = new Float32Array(own.length * 2);
             own.forEach((fp, i) => {
               fireAnchorPoints[i * 3] = (fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin);
               fireAnchorPoints[i * 3 + 1] = (fp.lat - latMin) / Math.max(1e-9, latMax - latMin);
               fireAnchorPoints[i * 3 + 2] = Math.max(1, fp.frpMw);
+              half[i * 2] = (0.5 * fp.acrossTrackKm) / Math.max(1e-6, nextBundle.widthKm);
+              half[i * 2 + 1] = (0.5 * fp.alongTrackKm) / Math.max(1e-6, nextBundle.depthKm);
             });
+            fireAnchorPatches = firePatches(
+              fireAnchorPoints,
+              THREE.MathUtils.clamp(Math.round(nextBundle.widthKm / FIRE_PATCH_GRID_KM), 8, 512),
+              THREE.MathUtils.clamp(Math.round(nextBundle.depthKm / FIRE_PATCH_GRID_KM), 8, 512),
+              half,
+            );
           } else {
             fireAnchorFrom = 'estimate';
-            fireAnchorPoints = beliefNow
-              ? beliefField.cellsAbove(beliefNow, FIRE_ANCHOR_PROBABILITY, (v) =>
-                  fieldScaleValue(nextBundle.fieldScale ?? DEFAULT_FIELD_INTENSITY_SCALE, v),
-                )
-              : new Float32Array(0);
+            // The estimate on a hidden pass is the frames on the terrain: the cells the run says its
+            // model declared there. A run that gives no such list: the cells inside the dotted line.
+            const listed =
+              beliefNow?.declared && beliefNow.declared.nx === beliefNow.info.nx && beliefNow.declared.ny === beliefNow.info.ny
+                ? beliefNow.declared.byFrame.get(epochIdx)
+                : undefined;
+            if (beliefNow && listed && listed.length > 0) {
+              const { nx, ny } = beliefNow.info;
+              fireAnchorPoints = new Float32Array(listed.length * 3);
+              listed.forEach((cell, i) => {
+                fireAnchorPoints[i * 3] = ((cell % nx) + 0.5) / nx;
+                fireAnchorPoints[i * 3 + 1] = 1 - (Math.floor(cell / nx) + 0.5) / ny;
+                fireAnchorPoints[i * 3 + 2] = 1;
+              });
+            } else {
+              fireAnchorPoints = beliefNow
+                ? beliefField.cellsAbove(beliefNow, FIRE_ANCHOR_PROBABILITY, (v) =>
+                    fieldScaleValue(nextBundle.fieldScale ?? DEFAULT_FIELD_INTENSITY_SCALE, v),
+                  )
+                : new Float32Array(0);
+            }
+            // The estimate's cells are on the model's own grid
+            fireAnchorPatches = beliefNow
+              ? firePatches(fireAnchorPoints, beliefNow.info.nx, beliefNow.info.ny)
+              : { patchOf: new Uint16Array(0), sizes: [] };
           }
         }
         const count = fireAnchorPoints.length / 3;
@@ -3641,6 +3683,16 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           let right = -Infinity;
           let top = Infinity;
           let bottom = -Infinity;
+          const patchCount = Math.min(FIRE_PATCH_LIMIT, fireAnchorPatches.sizes.length);
+          for (let k = 0; k < patchCount; k++) {
+            patchSums[k * 7] = 0;
+            patchSums[k * 7 + 1] = 0;
+            patchSums[k * 7 + 2] = 0;
+            patchSums[k * 7 + 3] = Infinity;
+            patchSums[k * 7 + 4] = Infinity;
+            patchSums[k * 7 + 5] = -Infinity;
+            patchSums[k * 7 + 6] = -Infinity;
+          }
           for (let i = 0; i < count; i++) {
             const u = fireAnchorPoints[i * 3];
             const v = fireAnchorPoints[i * 3 + 1];
@@ -3648,6 +3700,12 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             sumU += u * w;
             sumV += v * w;
             sumW += w;
+            const k = fireAnchorPatches.patchOf[i] < patchCount ? fireAnchorPatches.patchOf[i] * 7 : -1;
+            if (k >= 0) {
+              patchSums[k] += u * w;
+              patchSums[k + 1] += v * w;
+              patchSums[k + 2] += w;
+            }
             projVec.set(worldX(u), sampleCpuTerrainY(u, v), worldZ(v)).project(camera);
             if (projVec.z <= -1 || projVec.z >= 1) continue;
             const sx = (projVec.x * 0.5 + 0.5) * viewportW;
@@ -3656,29 +3714,74 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             right = Math.max(right, sx);
             top = Math.min(top, sy);
             bottom = Math.max(bottom, sy);
+            if (k >= 0) {
+              patchSums[k + 3] = Math.min(patchSums[k + 3], sx);
+              patchSums[k + 4] = Math.min(patchSums[k + 4], sy);
+              patchSums[k + 5] = Math.max(patchSums[k + 5], sx);
+              patchSums[k + 6] = Math.max(patchSums[k + 6], sy);
+            }
           }
-          const cu = sumU / sumW;
-          const cv = sumV / sumW;
-          const cy = sampleCpuTerrainY(cu, cv);
-          projVec.set(worldX(cu), cy, worldZ(cv)).project(camera);
-          const x = (projVec.x * 0.5 + 0.5) * viewportW;
-          const yPx = (-projVec.y * 0.5 + 0.5) * viewportH;
-          let visible = projVec.z > -1 && projVec.z < 1 && x >= 0 && x <= viewportW && yPx >= 0 && yPx <= viewportH;
-          if (visible) {
-            // Behind a ridge: some ground between the eye and the centre stands above the sight line
+          // A point of the ground on screen: its place in CSS px, and whether it can be seen (in
+          // front of the camera, on screen, and no ground between the eye and it above the sight line)
+          let seenX = 0;
+          let seenY = 0;
+          const seen = (pu: number, pv: number): boolean => {
+            const py = sampleCpuTerrainY(pu, pv);
+            projVec.set(worldX(pu), py, worldZ(pv)).project(camera);
+            seenX = (projVec.x * 0.5 + 0.5) * viewportW;
+            seenY = (-projVec.y * 0.5 + 0.5) * viewportH;
+            if (!(projVec.z > -1 && projVec.z < 1 && seenX >= 0 && seenX <= viewportW && seenY >= 0 && seenY <= viewportH)) {
+              return false;
+            }
             const ex = camera.position.x;
             const ey = camera.position.y;
             const ez = camera.position.z;
-            const tx = worldX(cu);
-            const tz = worldZ(cv);
-            for (let k = 1; k < 48 && visible; k++) {
+            const tx = worldX(pu);
+            const tz = worldZ(pv);
+            for (let k = 1; k < 48; k++) {
               const a = k / 48;
               const su = slabU(ex + (tx - ex) * a);
               const sv = slabV(ez + (tz - ez) * a);
               if (su < 0 || su > 1 || sv < 0 || sv > 1) continue;
-              if (sampleCpuTerrainY(su, sv) > ey + (cy - ey) * a + 0.012) visible = false;
+              if (sampleCpuTerrainY(su, sv) > ey + (py - ey) * a + 0.012) return false;
+            }
+            return true;
+          };
+          // A patch's point is its own cell nearest to its weighted centre, so that it lies on the
+          // patch whatever the patch's shape (the centre of a bent patch can lie beside it)
+          for (let k = 0; k < patchCount; k++) patchNear[k * 3] = Infinity;
+          const kmU = nextBundle.widthKm;
+          const kmV = nextBundle.depthKm;
+          for (let i = 0; i < count; i++) {
+            const k = fireAnchorPatches.patchOf[i];
+            if (k >= patchCount) continue;
+            const du = (fireAnchorPoints[i * 3] - patchSums[k * 7] / patchSums[k * 7 + 2]) * kmU;
+            const dv = (fireAnchorPoints[i * 3 + 1] - patchSums[k * 7 + 1] / patchSums[k * 7 + 2]) * kmV;
+            const d2 = du * du + dv * dv;
+            if (d2 < patchNear[k * 3]) {
+              patchNear[k * 3] = d2;
+              patchNear[k * 3 + 1] = fireAnchorPoints[i * 3];
+              patchNear[k * 3 + 2] = fireAnchorPoints[i * 3 + 1];
             }
           }
+          const patches: StageFirePatch[] = [];
+          for (let k = 0; k < patchCount; k++) {
+            const o = k * 7;
+            const patchSeen = seen(patchNear[k * 3 + 1], patchNear[k * 3 + 2]);
+            patches.push({
+              x: seenX,
+              y: seenY,
+              left: Number.isFinite(patchSums[o + 3]) ? patchSums[o + 3] : seenX,
+              top: Number.isFinite(patchSums[o + 4]) ? patchSums[o + 4] : seenY,
+              right: Number.isFinite(patchSums[o + 5]) ? patchSums[o + 5] : seenX,
+              bottom: Number.isFinite(patchSums[o + 6]) ? patchSums[o + 6] : seenY,
+              cells: fireAnchorPatches.sizes[k],
+              visible: patchSeen,
+            });
+          }
+          const visible = seen(sumU / sumW, sumV / sumW);
+          const x = seenX;
+          const yPx = seenY;
           p.onFireAnchor({
             frame: epochIdx,
             from: fireAnchorFrom,
@@ -3689,6 +3792,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             right: Number.isFinite(right) ? right : x,
             bottom: Number.isFinite(bottom) ? bottom : yPx,
             visible,
+            patches,
           });
           fireAnchorSent = true;
         }
