@@ -775,12 +775,13 @@
   cursor: default;
 }
 
-/* The test's panel is wide enough for the overlap chart's three rows to read: the chart keeps fixed room for its labels
-   and its readout, and its bars take what is left of the panel's inner width. */
+/* The test's panel is wide enough for the overlap chart's three rows to read, and its inner width is at least 600 px,
+   where the chart sets its pointer's readout beside the bars and not in a band above them: the panel's last note then
+   stands above the guide. */
 .world-tests {
   top: 148px;
   bottom: auto;
-  width: min(640px, max(560px, 38vw), calc(100% - 32px));
+  width: min(640px, max(624px, 38vw), calc(100% - 32px));
   gap: var(--sys-s2);
 }
 

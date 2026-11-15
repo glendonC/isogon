@@ -146,6 +146,7 @@ function useQuiet(quietMs = 700, cap = 5000): boolean {
 
 function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
   const start = screen.years ?? {};
+  const tested = useTestedFires(film);
   const quiet = useQuiet();
   const control = useRef<YearsControl | null>(null);
   const [st, setSt] = useState<YearsState | null>(null);
@@ -186,7 +187,7 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
         objective={st ? S.years.objective(st.first) : null}
         where={S.years.where}
         story="world"
-        figures={{ jumpYear: SHARP_FROM }}
+        figures={{ jumpYear: SHARP_FROM, testedFires: tested }}
         word="Record"
         context={st ? S.years.context(st.first, st.last) : null}
         lines={lines}
@@ -199,6 +200,13 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
       />
     </>
   );
+}
+
+/** The tested fires' count for the story line, as the page's own story line gives it ("57 fires"), so the part has one
+ * name on every screen. The film shows no story line and reads nothing for it. */
+function useTestedFires(film: boolean): number | null {
+  const read = useRead<unknown>(film ? null : '/api/evidence');
+  return useMemo(() => (read.state === 'ready' ? parseFresh(read.value)?.looks.find((l) => l.id === 'test_b')?.fires.length ?? null : null), [read]);
 }
 
 function Test({ film, toWord }: Part) {
@@ -266,6 +274,7 @@ function TestKeys({ onEnter }: { onEnter: () => void }) {
 
 function Sealed({ film, toWord }: Part) {
   const read = useRead<unknown>('/api/live');
+  const tested = useTestedFires(film);
   const live = useMemo(() => (read.state === 'ready' ? parseLive(read.value) : null), [read]);
   const scored = live ? live.seals.filter((s) => s.state === 'scored').length : 0;
   const o = live?.overFires ?? null;
@@ -289,7 +298,7 @@ function Sealed({ film, toWord }: Part) {
         objective={film ? caption ?? S.sealed.objective : S.sealed.objective}
         where={S.sealed.where}
         story="live"
-        figures={{ jumpYear: SHARP_FROM }}
+        figures={{ jumpYear: SHARP_FROM, testedFires: tested }}
         word="Test"
         lines={lines}
         actions={[{ label: S.sealed.back, command: 'close', key: 'Enter' }]}
