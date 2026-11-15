@@ -1021,6 +1021,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const lightRange = new THREE.Vector2(0.02, 1.0);
     const uLightModis = { value: 0.0 };
     const uRevealed = new THREE.Vector2(0, 0);
+    // 1 when the page asks for the estimate's squares sized by chance (eased in and out)
+    const uChanceSquares = { value: 0.0 };
     // Real runs: 1 on a night overpass (see NIGHT_GLSL). Shared by every surface that is not emitted light.
     const uNight = { value: 0.0 };
     // The landing's own tour of the night passes (prop landingTour)
@@ -1304,6 +1306,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uBeliefMix,
       uHeldOut,
       uDeclaredGiven,
+      uChanceSquares,
       uAfterglow,
       uLightGain,
       uFarView,
@@ -3303,6 +3306,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       // The legend ramp's sampler carries the belief on a real run (the ramp is not drawn there)
       terrainUniforms.uLipariTex.value = beliefField.grid.x > 0 ? beliefField.texture : lipariTex;
       uDeclaredGiven.value = beliefField.grid.x > 0 && beliefField.declaredGiven ? 1.0 : 0.0;
+      uChanceSquares.value = THREE.MathUtils.lerp(uChanceSquares.value, p.chanceSquares ? 1.0 : 0.0, dampFast);
       // A pass kept from the model: every pass of the frame is hidden, or was laid on after scoring
       const heldOutTarget =
         realRun && rawPasses.length > 0 && rawPasses.every((sp) => sp.revealed || passIsHidden(sp, p.holdoutViirs))

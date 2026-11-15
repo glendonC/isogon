@@ -192,6 +192,7 @@ uniform vec2 uBeliefGrid;    // cells east-west and north-south; (0, 0) when the
 uniform float uBeliefMix;    // position between the two steps
 uniform vec4 uBeliefBox;     // the part of the region that holds any belief: (u west, v south, u east, v north)
 uniform float uHeldOut;      // 1 on a pass whose detections were kept from the estimate
+uniform float uChanceSquares; // 1 when the squares sized by chance are asked for (eased)
 uniform float uDeclaredGiven; // 1 when the run says which cells its model declares at the hidden pass on show (the low bit of a cell's intensity byte)
 // A hidden pass: above 0 the light texture holds the last visible pass, drawn as an afterglow at
 // this share of its light. 0: the lights are the detections of the pass on show.
@@ -500,7 +501,8 @@ vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   // a square no smaller than BELIEF_DECLARED_FAR stands for, whatever its probability, so the
   // model's answer is still the shape seen from far, as a field of squares and not a fill)
   float framed = smoothstep(5.5, 8.0, cellPx);
-  p = max(p, BELIEF_DECLARED_FAR * declaredCell * (1.0 - framed));
+  // (the squares sized by chance only when asked for; a declared cell keeps its mark)
+  p = max(p * uChanceSquares, BELIEF_DECLARED_FAR * declaredCell * (1.0 - framed));
   float some = step(0.004, p);
 
   // The cell's square: its area grows with the probability. Even a certain cell leaves ground
@@ -537,7 +539,8 @@ vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   // Cells too small to draw one by one run together into a tone of the same coverage
   float resolved = smoothstep(2.0, 3.6, cellPx);
   vec4 near = texture2D(uLipariTex, uv);
-  float tone = BELIEF_CELL_FILL * BELIEF_CELL_FILL * mix(near.r, near.b, uBeliefMix);
+  float tone = BELIEF_CELL_FILL * BELIEF_CELL_FILL
+             * max(mix(near.r, near.b, uBeliefMix) * uChanceSquares, BELIEF_DECLARED_FAR * declaredCell);
   float cells = mix(tone * 0.8, mark, resolved);
 
   // The dotted line around the ground that may burn

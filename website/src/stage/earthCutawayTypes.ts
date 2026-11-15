@@ -283,6 +283,13 @@ export interface EarthCutawayStageProps {
   onCurtainScreen?: (seam: CurtainScreenSeam) => void;
   /** Asks for `telemetry.regionGrid` with this many cells each way (1 to 32). */
   regionGridDivisions?: number;
+  /**
+   * Real runs. Draws the estimate's squares sized by chance: one square in each cell of the
+   * model's grid, its area growing with the probability that the cell burns. Off by default:
+   * the estimate is then the open frames of the cells the model declared burning at a hidden
+   * pass and the dotted line around ground that may burn.
+   */
+  chanceSquares?: boolean;
   /** Where the fire on show sits on screen, every rendered frame in the workspace. Null when nothing is drawn. */
   onFireAnchor?: (anchor: StageFireAnchor | null) => void;
   /** A board of tiles over the region's box, drawn on the terrain. Null or absent: no board. */
