@@ -7,6 +7,8 @@ import { useSyncExternalStore } from 'react';
 export interface PageLink {
   label: string;
   onClick: () => void;
+  /** It opens over a picture of the world (the search), which stays under it: do not close the picture first. */
+  over?: boolean;
 }
 
 let links: PageLink[] = [];

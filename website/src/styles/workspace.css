@@ -762,3 +762,12 @@
 .iso-film .place {
   --place-rail: -48px;
 }
+
+/* Search opened over a picture of the world stands above it; the picture stays under it until a place is chosen. */
+body:has(.world-screen) .iso-backdrop--soft {
+  z-index: 79;
+}
+
+body:has(.world-screen) .iso-finder {
+  z-index: 80;
+}

@@ -527,6 +527,8 @@ export function App() {
   /** The palette opens a known region the same way a tab does; searches go to the backend. */
   const handlePaletteExecute = useCallback(
     async (params: ReconstructRequestParams): Promise<boolean> => {
+      // Search opened over a picture of the world keeps it under it until a place is chosen; then the picture closes.
+      if (worldScreenOnShow()) closeWorldScreen();
       if (params.theaterId && !params.queryText) {
         slewToTheater(params.theaterId);
         if (params.enterWorkspace) {
@@ -1646,7 +1648,7 @@ export function App() {
   const barLon = runMatchesRegion && activeRun ? activeRun.region.center_lon : registryBox.length === 4 ? (registryBox[0] + registryBox[2]) / 2 : null;
   const barLinks = useMemo(
     () => [
-      { label: WORDS.links.search, onClick: () => setAskOpen(true) },
+      { label: WORDS.links.search, onClick: () => setAskOpen(true), over: true },
       { label: WORDS.links.method, onClick: () => setReading('method') },
       { label: WORDS.links.sources, onClick: () => setReading('sources') },
     ],
