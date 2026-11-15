@@ -1752,6 +1752,8 @@ export function App() {
                 onTelemetry={handleTelemetry}
                 landingView="world"
                 landingTour
+                // Behind the Record and the choice of a place the stage rests: dark and calm, no estimate, no film move.
+                backdrop={inWorkspace && step === 'record'}
                 landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
                 workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
                 regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
