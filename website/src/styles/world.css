@@ -305,12 +305,9 @@
   white-space: nowrap;
 }
 
-.world-ticks span:first-child {
+/* Placed by measure (Ticks.tsx): each number centred on its place and kept inside the ramp, none touching. */
+.world-ticks span[data-placed='true'] {
   transform: none;
-}
-
-.world-ticks span[data-end='true'] {
-  transform: translateX(-100%);
 }
 
 .world-swatch {

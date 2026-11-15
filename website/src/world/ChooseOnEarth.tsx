@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { FeaturedFire, Place } from '../app/places';
 import { factorAt, factorCanvas, FACTOR_HIGH, FACTOR_LOW, FACTOR_RAMP, FACTOR_STEPS, factorT, useFactor } from './factor';
 import { placeLabels } from './labels';
+import { Ticks } from './Ticks';
 import { cellAt, FIRE_RAMP, GRID, loadedShare, NOT_LOADED, rampAt, tOfValue, useWorldLayer } from './layers';
 import { boxAreaKm2, type Box, type Projector } from './projection';
 import { EARTH_WORDS as W, monthYear } from './words';
@@ -375,23 +376,15 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
         <>
           <div className="world-legend__line">{W.factorLegend(m.placeDeg)}</div>
           <div className="world-ramp" style={{ background: ramp(FACTOR_RAMP) }} />
-          <div className="world-ticks">
-            {FACTOR_STEPS.map((f) => (
-              <span key={f} style={{ left: `${factorT(f) * 100}%` }} data-end={factorT(f) > 0.9 ? 'true' : 'false'}>
-                {W.factorTick(f, FACTOR_LOW, FACTOR_HIGH)}
-              </span>
-            ))}
-          </div>
+          <Ticks ticks={FACTOR_STEPS.map((f) => ({ key: f, t: factorT(f), label: W.factorTick(f, FACTOR_LOW, FACTOR_HIGH) }))} />
           {m.median !== null && m.p10 !== null && m.p90 !== null && <div className="world-legend__fine">{W.factorSpread(m.median, m.p10, m.p90)}</div>}
           <div className="world-legend__fine">{W.factorUnmeasured}</div>
         </>
       );
     }
     const max = world.layer.meta.max;
-    // Powers of ten on the log scale, none closer than a sixth of the ramp to the one before, so none touch.
-    const ticks = [1, 10, 100, 1000, 10000, 100000]
-      .filter((v) => v <= max)
-      .filter((v, i, xs) => i === 0 || tOfValue(v, max) - tOfValue(xs[i - 1], max) >= 1 / 6 || xs.length <= 4);
+    // Powers of ten on the log scale; the ticks leave out one that would touch its neighbour at the legend's width.
+    const ticks = [1, 10, 100, 1000, 10000, 100000].filter((v) => v <= max).map((v) => ({ key: v, t: tOfValue(v, max), label: W.tick(v) }));
     return (
       <>
         <div className="world-legend__line">
@@ -399,13 +392,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
           <span className="world-legend__short">{W.fireLegendShort(since)}</span>
         </div>
         <div className="world-ramp" style={{ background: ramp(FIRE_RAMP) }} />
-        <div className="world-ticks">
-          {ticks.map((v) => (
-            <span key={v} style={{ left: `${tOfValue(v, max) * 100}%` }} data-end={tOfValue(v, max) > 0.9 ? 'true' : 'false'}>
-              {W.tick(v)}
-            </span>
-          ))}
-        </div>
+        <Ticks ticks={ticks} />
         <div className="world-legend__fine">
           <span className="world-swatch world-swatch--hatch" aria-hidden="true" />
           <span>

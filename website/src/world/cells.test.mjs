@@ -85,3 +85,21 @@ test('a value beyond the top of its scale is flagged, so it is said as that much
   assert.equal(c.atHigh, true);
   assert.ok(Math.abs(c.value - 1) < 1e-6);
 });
+
+// The numbers under the Earth's ramp (the cube's largest cell 12,639 rows, numbers 6.6 px a character): on a ramp of
+// 260 px, 1,000 and 10,000 both show with room between them; on 150 px, 1,000 gives way to the ramp's end.
+import { layoutTicks } from './tickLayout.ts';
+
+test('legend numbers never touch: the last stays, the one before it gives way', () => {
+  const max = 12639;
+  const vals = [1, 10, 100, 1000, 10000];
+  const labels = ['1', '10', '100', '1,000', '10,000'];
+  const ticks = vals.map((v, i) => ({ key: v, t: tOfValue(v, max), label: labels[i] }));
+  const widths = labels.map((l) => l.length * 6.6);
+  const wide = layoutTicks(ticks, widths, 260);
+  assert.deepEqual(wide.map((x) => x.shown), [true, true, true, true, true]);
+  assert.ok(wide[4].x - (wide[3].x + widths[3]) >= 10);
+  assert.ok(wide[4].x + widths[4] <= 260 + 1e-9);
+  const narrow = layoutTicks(ticks, widths, 150);
+  assert.deepEqual(narrow.map((x) => x.shown), [true, true, true, false, true]);
+});
