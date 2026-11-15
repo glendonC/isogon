@@ -38,6 +38,7 @@ import type {
 } from './earthCutawayTypes';
 import { burnedBounds, burnedClasses, slabToPicture } from './engine/burnedArea';
 import { markStageLoading, markStageReady } from './stageReady';
+import { revealLine } from './revealProgress';
 import {
   CinemaDirector,
   LANDING_HERO_POSE,
@@ -1262,6 +1263,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     let dayNow: EarthStageTelemetry['dayPicture'];
     // The front behind which detections laid on after scoring arrive (see uRevealArrive)
     const uRevealArrive = new THREE.Vector4(0, 1, 1e4, 0.4);
+    // The page's sweep line at the reveal (see revealProgress): its share of the width, -1 for none; the width in pixels
+    const uRevealLine = new THREE.Vector2(-1, 1);
     let revealArriveFrom = 0;
     let revealArriveTo = 0;
     let revealArriveStartSec = -1e9;
@@ -1568,6 +1571,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uDayFalse,
       uMicroDetail,
       uRevealArrive: { value: uRevealArrive },
+      uRevealLine: { value: uRevealLine },
       uAfterglow,
       uLightGain,
       uFarView,
@@ -4348,6 +4352,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         );
         const eased = filmOn ? t * t * (3 - 2 * t) : 1 - (1 - t) * (1 - t);
         uRevealArrive.z = t >= 1 ? 1e4 : THREE.MathUtils.lerp(revealArriveFrom, revealArriveTo, eased);
+        // The page's sweep, when one runs (see revealProgress): the line stands in for the arrival along the track
+        const line = revealLine();
+        uRevealLine.set(line ?? -1, renderer.domElement.width);
+        if (line !== null) uRevealArrive.z = 1e4;
       }
       // A pass kept from the model: every pass of the frame is hidden, or was laid on after scoring
       const heldOutTarget =

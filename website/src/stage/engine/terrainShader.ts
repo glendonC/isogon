@@ -220,6 +220,7 @@ uniform float uHeldOutOther; // 1 on a run whose hidden passes another model ans
 uniform float uBurnedMix;
 uniform vec4 uBurnedBox;
 uniform vec2 uBurnedSize;
+uniform vec2 uRevealLine;    // the page's sweep at the reveal: x the share of the screen's width it has crossed (-1: no sweep), y that width in pixels
 uniform vec4 uRevealArrive;  // detections laid on after scoring arrive: xy the pass's direction of travel (east, north), z the front along it (km from the box's centre), w the front's soft width (km)
 uniform float uDayJoin;       // share of the box's side over which a day's photograph blends into the land around (0: none)
 uniform float uDayFalse;      // 1 while the day's photograph on the box is the false-colour one (bands 7, 2, 1)
@@ -1077,6 +1078,8 @@ void main() {
         // (they arrive behind a front that crosses the fire along the pass's own ground track: the
         // order the satellite acquired them in; the timing is drawing)
         float arrived = smoothstep(-uRevealArrive.w, 0.0, uRevealArrive.z - dot(pKm, uRevealArrive.xy));
+        // (while the page's sweep runs, they show only behind its line, left of it on screen)
+        arrived *= uRevealLine.x < 0.0 ? 1.0 : step(gl_FragCoord.x, uRevealLine.x * uRevealLine.y);
         coreM *= arrived;
         coreV *= arrived;
         float core = clamp(coreM + coreV, 0.0, 1.0);
