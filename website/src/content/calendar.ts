@@ -60,6 +60,11 @@ export interface Calendar {
   runStarts: RealRunStart[];
   /** Share of held-out months whose true value fell inside the record's p10 to p90 (real: 15 to 41%). */
   intervalHeldMonths: number | null;
+  /**
+   * The range's check year by year (`harmonization_method.validation.per_year[].inside_interval`, its
+   * `held_out_years`, and `harmonization_method.interval.level`): years it held, years hidden, the share it is meant to.
+   */
+  rangeCheck: { held: number; years: number; meant: number | null } | null;
   /** The real calendar's overlap ratio and its held-out check (`summary_metrics`); null on a simulated one. */
   overlap: OverlapEvidence | null;
   firstYear: number;
@@ -211,12 +216,23 @@ export function parseCalendar(raw: unknown): Calendar | null {
     method,
     runStarts: real ? parseRunStarts(rec.real_run_starts) : [],
     intervalHeldMonths: num((rec.summary_metrics as Record<string, unknown> | undefined)?.held_out_monthly_interval_coverage),
+    rangeCheck: rangeCheckOf(hm),
     overlap: real ? readOverlap(rec.summary_metrics) : null,
     firstYear: Math.min(...years),
     lastYear: Math.max(...years),
     sharpSince: sharpSinceOf(rec.regime_markers),
     months,
   };
+}
+
+function rangeCheckOf(hm: unknown): Calendar['rangeCheck'] {
+  const o = hm && typeof hm === 'object' ? (hm as Record<string, unknown>) : null;
+  const v = o?.validation && typeof o.validation === 'object' ? (o.validation as Record<string, unknown>) : null;
+  const per = Array.isArray(v?.per_year) ? (v!.per_year as Array<Record<string, unknown>>) : null;
+  if (!per) return null;
+  const years = Array.isArray(v?.held_out_years) ? (v!.held_out_years as unknown[]).length : per.length;
+  const interval = o?.interval && typeof o.interval === 'object' ? (o.interval as Record<string, unknown>) : null;
+  return { held: per.filter((y) => y.inside_interval === true).length, years, meant: num(interval?.level) };
 }
 
 export function valueOf(m: CalendarMonth, view: CalendarView): number | null {

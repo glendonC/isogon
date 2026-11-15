@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 16,
   "what": "The words of the guide: for each step and each state inside it, the objective, what the guide says, the labels on things, the actions, and the questions a visitor can ask. Every sentence says which of the five places it sits in. Text in braces is a field: its value comes from an answer of the backend, named under fields. No figure is typed in a line.",
   "trail": [
     "Record",
@@ -67,7 +67,10 @@
     "more": "What the guide says on demand in that state, beyond what stands: when the visitor asks to be told more (the command say:more). A state's on_demand questions are the other way to more.",
     "also": "A step's also lists actions that work in every state of the step, by their key and by asking, and are not in the guide strip unless a state lists them.",
     "marks": "The key of marks, on demand. Each row has a name and a line for one mark, when it is on show, the served field it is drawn from, what of it is drawing, and where that was stated. action is the one action that shows the squares sized by chance.",
-    "exclusive": "Groups of conditions of which at most one is true at a time, read from the same answer; the check of what stands counts no case where two of a group hold."
+    "exclusive": "Groups of conditions of which at most one is true at a time, read from the same answer; the check of what stands counts no case where two of a group hold.",
+    "photo": "On Estimate and Test, a step's photo holds the sentences said while the day's photograph is on, each replacing the first standing sentence; the action photo:next is the one fourth action of the guide's row, quiet, at its end (the lead's decision of 00:05), and reads label, then label_when_true_color, then label_when_false_color.",
+    "keys_shared": "One key runs one command, but for keys_shared: a key that does the same thing for the visitor on different screens (Space plays what the screen plays). An action's also_key is a second key for the same command.",
+    "film": "In the film presentation (any film= in the address) a state's film caption stands where the objective stands, one at a time, and the guide's sentences are off; thirteen words at most, every figure a field. A state with no film caption shows its objective, as now."
   },
   "things": {
     "fire": "the fire on the land, in a round as well",
@@ -79,7 +82,11 @@
     "side_block": "one of the three small terrains, when the fire is shown side by side",
     "dotted_line": "the dotted line around the ground where the model gives fire a chance",
     "learned_block": "the Learned Player's small terrain, when the players stand side by side",
-    "fire_block": "one fire's block on the choice of a place"
+    "fire_block": "one fire's block on the choice of a place",
+    "the_year": "the year on show, large, at the top left of the Earth's years, where the objective stands in the film",
+    "years_views": "the two names of the Earth's views at its top right, the one on show marked",
+    "years_strip": "the strip of the world's yearly totals under the Earth, a bar a year and a line for the years on one scale",
+    "change_bar": "the strip's bar of the newer satellite's first year, where the sentence of the step stands"
   },
   "formats": {
     "text": "as served",
@@ -107,7 +114,13 @@
     "count_keys_with_fires": "the number of keys whose episodes are more than zero, written as count_word",
     "score_names_ahead": "the scores whose class is ahead, each by its phrase under score_names, as list_and",
     "score_names_behind": "the scores whose class is behind, each by its phrase under score_names, as list_and",
-    "count_no": "zero written as no, one to twelve as words, larger numbers as digits"
+    "count_no": "zero written as no, one to twelve as words, larger numbers as digits",
+    "metres_tens": "kilometres times 1000, rounded to the nearest ten",
+    "count_true": "the number of items that are true, in digits",
+    "ratio_of_yearly_sums": "the sum over the years of the first family's rows divided by the sum of the second's, over whole years holding both, one decimal place (about 4.4, never rounded to a half)",
+    "yearly_ratio_low": "the lowest year's ratio, one decimal place",
+    "yearly_ratio_high": "the highest year's ratio, one decimal place",
+    "last_year": "the largest of the years, in digits"
   },
   "conditions": {
     "model_is_experimental": {
@@ -189,6 +202,42 @@
     "test_a_interval_short": {
       "true_when": "fresh_test.test_a.all.interval.held is below its stated_level",
       "route": "GET /api/evidence"
+    },
+    "photo_instead_of_hidden": {
+      "true_when": "telemetry.dayPicture.insteadOfHidden: the pass on show is hidden, so the photograph is the coarse satellite's",
+      "route": "the page: the stage's telemetry"
+    },
+    "photo_day_pass": {
+      "true_when": "the pass on show was given to the model and crossed by day (observer_passes.frames[pass].is_day is true)",
+      "route": "POST /api/reconstruct"
+    },
+    "photo_night_pass": {
+      "true_when": "the pass on show was given to the model and crossed at night",
+      "route": "POST /api/reconstruct"
+    },
+    "record_method_pooled": {
+      "true_when": "harmonization_method.id is pooled_month_size_v1",
+      "route": "GET /api/calendar?source=firms&region_id="
+    },
+    "years_on_one_scale": {
+      "true_when": "the Earth's years show every year on the newer satellite's scale (the view on one scale)",
+      "route": "the page: the Earth's years, its view and the year on show"
+    },
+    "years_older_counted": {
+      "true_when": "the view is as the satellites counted and the year on show is before the newer satellite's first",
+      "route": "the page: the Earth's years, its view and the year on show"
+    },
+    "years_newer_counted": {
+      "true_when": "the view is as the satellites counted and the year on show is the newer satellite's first or later",
+      "route": "the page: the Earth's years, its view and the year on show"
+    },
+    "years_change_as_counted": {
+      "true_when": "the view is as the satellites counted and the year on show is the newer satellite's first",
+      "route": "the page: the Earth's years, its view and the year on show"
+    },
+    "years_change_one_scale": {
+      "true_when": "the view is on one scale and the year on show is the newer satellite's first",
+      "route": "the page: the Earth's years, its view and the year on show"
     }
   },
   "state_when": {
@@ -242,7 +291,11 @@
     "estimate:chance": "draw the squares sized by the chance of fire, which are off at rest; the same action hides them",
     "play:players_reveal": "draw what the players' looks found, which is the hidden satellite's; offered only while the picture says it can be asked (canReveal)",
     "play:resume": "close the players' picture and go back to the round under way",
-    "place:choose": "open the fire record of the marked fire's place, with that fire marked; the marked fire has the keyboard's focus when the choice opens"
+    "place:choose": "open the fire record of the marked fire's place, with that fire marked; the marked fire has the keyboard's focus when the choice opens",
+    "photo:next": "step the day's photograph on: true colour, then false colour, then off (the stage's dayPicture); never on by default",
+    "years:open": "open the Earth's years, a screen of its own with its own address, as the satellites counted them at the first year; Escape goes back to where it was opened from",
+    "years:play": "play the years once from the first, or stop; in the film presentation the screen plays once by itself",
+    "years:step": "show the year before or the year after"
   },
   "steps": [
     {
@@ -301,6 +354,12 @@
               "places": [
                 "guide"
               ]
+            }
+          ],
+          "film": [
+            {
+              "place": "objective",
+              "line": "Isogon: two NASA satellites, one fire record, its error stated."
             }
           ]
         },
@@ -396,6 +455,12 @@
             "why_not_this_fire",
             "my_own_area",
             "why_this_fire"
+          ],
+          "film": [
+            {
+              "place": "objective",
+              "line": "The same test can be put to any two instruments."
+            }
           ]
         },
         {
@@ -425,6 +490,13 @@
               ]
             }
           ]
+        }
+      ],
+      "also": [
+        {
+          "label": "Play the Earth's years since {world_first_year}",
+          "command": "years:open",
+          "key": "O"
         }
       ]
     },
@@ -520,6 +592,12 @@
               "unless": "fire_month_stands_out",
               "line": "{default_fire_month}: {fire_month_rate} detections per 1,000 square kilometres a day, where {fire_month_usual} is usual. The page opens on this fire."
             }
+          ],
+          "film": [
+            {
+              "place": "objective",
+              "line": "The fire record of any area, month by month since {world_first_year}."
+            }
           ]
         },
         {
@@ -548,6 +626,14 @@
               "label": "See this month so far",
               "command": "record:now",
               "key": "U",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "See the same jump across the whole Earth",
+              "command": "years:open",
+              "key": "O",
               "places": [
                 "guide"
               ]
@@ -758,7 +844,7 @@
             {
               "label": "Show the fire of {default_fire_month}",
               "command": "record:default_fire",
-              "key": "D",
+              "key": "Z",
               "places": [
                 "guide"
               ]
@@ -850,6 +936,162 @@
           "key": "M",
           "places": [
             "guide"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "years",
+      "name": null,
+      "under": "Record",
+      "address": "a screen of its own under the Record's step, with an address of its own that the film opens directly",
+      "objective": "Watch the Earth's fire year by year since {world_first_year}",
+      "context": "{world_first_year} to {years_last}",
+      "states": [
+        {
+          "id": "earth_years",
+          "objective": "Watch the Earth's fire year by year since {world_first_year}",
+          "says": [
+            {
+              "place": "guide",
+              "unless": "years_on_one_scale",
+              "line": "Each year as the satellites counted it: the older satellites' detections before {sharp_since}, the newer one's from then, about {world_ratio} times as many for the same fires."
+            },
+            {
+              "place": "guide",
+              "if": "years_on_one_scale",
+              "line": "Each year on one scale: the older satellites' detections are put on the newer one's scale, so the years can be set side by side and {sharp_since} shows no jump."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Year by year the newer satellite makes from {world_ratio_low} to {world_ratio_high} times as many detections as the older ones, so about {world_ratio} is the figure over all the years both flew."
+            },
+            {
+              "place": "guide",
+              "line": "The factor of a single place differs from the Earth's, which is why the Record of a place gives its own."
+            },
+            {
+              "place": "guide",
+              "line": "Lava is listed as fire too, so a few volcanoes stand out in the years they flowed."
+            },
+            {
+              "place": "guide",
+              "line": "The last year shown is {years_last}, the last whole year of NASA's yearly files; the months since are not in them."
+            }
+          ],
+          "labels": [
+            {
+              "place": "label",
+              "on": "the_year",
+              "if": "years_older_counted",
+              "line": "Counted by the older satellites (MODIS)"
+            },
+            {
+              "place": "label",
+              "on": "the_year",
+              "if": "years_newer_counted",
+              "line": "Counted by the newer, sharper satellite (VIIRS)"
+            },
+            {
+              "place": "label",
+              "on": "the_year",
+              "if": "years_on_one_scale",
+              "line": "On the newer satellite's scale"
+            },
+            {
+              "place": "label",
+              "on": "change_bar",
+              "if": "years_change_as_counted",
+              "line": "{sharp_since}: the newer, sharper satellite begins and makes about {world_ratio} times as many detections of the same fires as the older ones, so the Earth brightens with no more fire."
+            },
+            {
+              "place": "label",
+              "on": "change_bar",
+              "if": "years_change_one_scale",
+              "line": "{sharp_since}: the newer, sharper satellite begins, and on one scale there is no step, because the older satellites' detections are put on its scale."
+            },
+            {
+              "place": "label",
+              "on": "years_views",
+              "line": "As the satellites counted"
+            },
+            {
+              "place": "label",
+              "on": "years_views",
+              "line": "On one scale"
+            },
+            {
+              "place": "label",
+              "on": "years_strip",
+              "line": "Detections each year, the whole Earth"
+            },
+            {
+              "place": "label",
+              "on": "years_strip",
+              "line": "Older satellites (MODIS)"
+            },
+            {
+              "place": "label",
+              "on": "years_strip",
+              "line": "Newer satellite (VIIRS)"
+            },
+            {
+              "place": "label",
+              "on": "years_strip",
+              "line": "On one scale"
+            }
+          ],
+          "actions": [
+            {
+              "label": "Play the years",
+              "command": "years:play",
+              "key": "Enter",
+              "also_key": "Space",
+              "label_while_on": "Stop",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "See the years on one scale",
+              "command": "record:as_counted",
+              "key": "Y",
+              "label_while_on": "See the years as the satellites counted them",
+              "places": [
+                "guide"
+              ],
+              "note": "label while the view on one scale is on show; the same key and command as on the Record"
+            },
+            {
+              "label": "Back",
+              "command": "close",
+              "key": "Esc",
+              "places": [
+                "guide"
+              ]
+            }
+          ],
+          "keys_too": [
+            {
+              "label": "A year back or on",
+              "command": "years:step",
+              "key": "Left and Right",
+              "note": "a key hint beside the views, not a fourth action in the guide"
+            }
+          ],
+          "film": [
+            {
+              "place": "objective",
+              "unless": "years_on_one_scale",
+              "line": "{sharp_since}: a sharper satellite begins. Same fires, {world_ratio} times the detections."
+            },
+            {
+              "place": "objective",
+              "if": "years_on_one_scale",
+              "line": "On one scale, the years since {world_first_year} show no jump."
+            }
           ]
         }
       ]
@@ -953,6 +1195,12 @@
               "on": "dotted_line",
               "unless": "pass_is_sharp",
               "line": "The dotted line is around all the ground where the model gives fire a chance at this pass."
+            }
+          ],
+          "film": [
+            {
+              "place": "objective",
+              "line": "Sharp satellite hidden. An experimental model estimates the fire."
             }
           ]
         },
@@ -1291,8 +1539,62 @@
           "places": [
             "guide"
           ]
+        },
+        {
+          "label": "Show that day's photograph from the satellite",
+          "command": "photo:next",
+          "key": "D",
+          "places": [
+            "guide"
+          ],
+          "label_when_true_color": "Show the burned ground",
+          "label_when_false_color": "Hide the photograph",
+          "quiet_fourth": true
         }
-      ]
+      ],
+      "photo": {
+        "when": "a day's photograph is on (telemetry.dayPicture.state is shown); it replaces the state's first standing sentence, the second stands, and the label at the fire keeps saying the pass",
+        "true_color": [
+          {
+            "place": "guide",
+            "if": "photo_day_pass",
+            "line": "This is NASA's photograph of that day from {photo_satellite}, stitched from its daytime passes at about {photo_pixel_m} metres a pixel: one picture a day, not a pass, with its smoke and cloud real."
+          },
+          {
+            "place": "guide",
+            "if": "photo_night_pass",
+            "line": "This pass crossed at night, so this is NASA's photograph of that day by daylight from {photo_satellite}, at about {photo_pixel_m} metres a pixel: one picture a day, not a pass, with its smoke and cloud real."
+          },
+          {
+            "place": "guide",
+            "if": "photo_instead_of_hidden",
+            "line": "This is NASA's photograph of that day by daylight from the coarse satellite, since the sharp satellite's own would show what is hidden: one picture a day, not a pass, with its smoke and cloud real."
+          }
+        ],
+        "false_color": [
+          {
+            "place": "guide",
+            "if": "photo_day_pass",
+            "line": "In false colour the same photograph shows plants green, burned ground brown and smoke pale blue: one picture a day, not a pass."
+          },
+          {
+            "place": "guide",
+            "if": "photo_night_pass",
+            "line": "This pass crossed at night, and the day's photograph by daylight shows, in false colour, plants green, burned ground brown and smoke pale blue."
+          },
+          {
+            "place": "guide",
+            "if": "photo_instead_of_hidden",
+            "line": "In false colour the coarse satellite's photograph of that day shows plants green, burned ground brown and smoke pale blue: one picture a day, not a pass."
+          }
+        ],
+        "missing": [
+          {
+            "place": "guide",
+            "line": "That day's photograph is not stored for this place, so the ground keeps its own picture."
+          }
+        ]
+      }
     },
     {
       "id": "test",
@@ -1393,6 +1695,12 @@
               "unless": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
               "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
+            }
+          ],
+          "film": [
+            {
+              "place": "objective",
+              "line": "Revealed: on this fire, ahead of {simple_methods_n} simple methods on {ahead_on} of {scores_n}."
             }
           ]
         },
@@ -1635,8 +1943,62 @@
             "guide"
           ],
           "label_while_on": "Pause the passes"
+        },
+        {
+          "label": "Show that day's photograph from the satellite",
+          "command": "photo:next",
+          "key": "D",
+          "places": [
+            "guide"
+          ],
+          "label_when_true_color": "Show the burned ground",
+          "label_when_false_color": "Hide the photograph",
+          "quiet_fourth": true
         }
-      ]
+      ],
+      "photo": {
+        "when": "a day's photograph is on (telemetry.dayPicture.state is shown); it replaces the state's first standing sentence, the second stands, and the label at the fire keeps saying the pass",
+        "true_color": [
+          {
+            "place": "guide",
+            "if": "photo_day_pass",
+            "line": "This is NASA's photograph of that day from {photo_satellite}, stitched from its daytime passes at about {photo_pixel_m} metres a pixel: one picture a day, not a pass, with its smoke and cloud real."
+          },
+          {
+            "place": "guide",
+            "if": "photo_night_pass",
+            "line": "This pass crossed at night, so this is NASA's photograph of that day by daylight from {photo_satellite}, at about {photo_pixel_m} metres a pixel: one picture a day, not a pass, with its smoke and cloud real."
+          },
+          {
+            "place": "guide",
+            "if": "photo_instead_of_hidden",
+            "line": "This is NASA's photograph of that day by daylight from the coarse satellite, since the sharp satellite's own would show what is hidden: one picture a day, not a pass, with its smoke and cloud real."
+          }
+        ],
+        "false_color": [
+          {
+            "place": "guide",
+            "if": "photo_day_pass",
+            "line": "In false colour the same photograph shows plants green, burned ground brown and smoke pale blue: one picture a day, not a pass."
+          },
+          {
+            "place": "guide",
+            "if": "photo_night_pass",
+            "line": "This pass crossed at night, and the day's photograph by daylight shows, in false colour, plants green, burned ground brown and smoke pale blue."
+          },
+          {
+            "place": "guide",
+            "if": "photo_instead_of_hidden",
+            "line": "In false colour the coarse satellite's photograph of that day shows plants green, burned ground brown and smoke pale blue: one picture a day, not a pass."
+          }
+        ],
+        "missing": [
+          {
+            "place": "guide",
+            "line": "That day's photograph is not stored for this place, so the ground keeps its own picture."
+          }
+        ]
+      }
     },
     {
       "id": "play",
@@ -1905,7 +2267,19 @@
               }
             ],
             "unit": "points"
-          }
+          },
+          "film": [
+            {
+              "place": "objective",
+              "unless": "learned_beats_rule",
+              "line": "Pick where to look. The learned player does not beat a simple rule."
+            },
+            {
+              "place": "objective",
+              "if": "learned_beats_rule",
+              "line": "Pick where to look. The learned player beats a simple rule."
+            }
+          ]
         },
         {
           "id": "players_open",
@@ -2365,11 +2739,21 @@
       "answer": [
         {
           "place": "guide",
-          "line": "Hide one year and predict it from the others: in a typical year the prediction is off by {record_error} percent."
+          "unless": "method_replaced",
+          "line": "The Record puts the older satellites on the newer one's scale with one ratio per place: their detections against the newer one's in the years both flew."
         },
         {
           "place": "guide",
-          "line": "Without the correction for the change of satellite it is off by {record_error_raw} percent."
+          "if": "method_replaced",
+          "line": "The Record puts the older satellites on the newer one's scale with a factor for each month of the year and for how much fire the month had, leaning on nearby places where a place has few detections of its own."
+        },
+        {
+          "place": "guide",
+          "line": "Hide one year and predict it from the others: in a typical year the prediction is off by {record_error} percent, against {record_error_raw} percent with no correction."
+        },
+        {
+          "place": "guide",
+          "line": "Hiding each year in turn, the range the Record gives for a year held the newer satellite's own count in {record_held} of {record_years} years, where it is meant to hold in {record_meant} percent."
         }
       ],
       "command": "record:accuracy",
@@ -3487,6 +3871,67 @@
       "key": "fresh_test.test_a.by_continent.Oceania.episodes",
       "format": "count_word",
       "is": "fires of test A in Oceania"
+    },
+    "photo_satellite": {
+      "route": "the day photograph's manifest, served with the picture (GET /api/gibs/day)",
+      "key": "platform",
+      "format": "said_as",
+      "said_as": {
+        "MODIS_TERRA": "the coarse satellite",
+        "MODIS_AQUA": "the coarse satellite",
+        "VIIRS_SNPP": "the sharp satellite",
+        "VIIRS_NOAA20": "the sharp satellite",
+        "VIIRS_NOAA21": "the sharp satellite"
+      },
+      "is": "which kind of satellite took the photograph"
+    },
+    "photo_pixel_m": {
+      "route": "the day photograph's manifest, served with the picture (GET /api/gibs/day)",
+      "key": "pixel_km",
+      "format": "metres_tens",
+      "is": "the side of one pixel of the photograph, in metres, to the nearest ten"
+    },
+    "world_ratio": {
+      "route": "GET /api/cube/years",
+      "key": "layers, years",
+      "format": "ratio_of_yearly_sums",
+      "is": "how many times as many detections the newer satellite made as the older ones over the whole Earth, summed over the whole years both flew: the sum of layers.viirs_<year>.rows over the sum of layers.modis_<year>.rows, for years whose partial is false and that hold both"
+    },
+    "record_held": {
+      "route": "GET /api/calendar?source=firms&region_id=",
+      "key": "harmonization_method.validation.per_year[].inside_interval",
+      "format": "count_true",
+      "is": "years hidden in turn on which the range given for that year held the newer satellite's own count"
+    },
+    "record_years": {
+      "route": "GET /api/calendar?source=firms&region_id=",
+      "key": "harmonization_method.validation.held_out_years",
+      "format": "length_digits",
+      "is": "years hidden in turn"
+    },
+    "record_meant": {
+      "route": "GET /api/calendar?source=firms&region_id=",
+      "key": "harmonization_method.interval.level",
+      "format": "percent",
+      "is": "the share of years the range is meant to hold"
+    },
+    "world_ratio_low": {
+      "route": "GET /api/cube/years",
+      "key": "layers, years",
+      "format": "yearly_ratio_low",
+      "is": "the lowest of the same ratio taken year by year"
+    },
+    "world_ratio_high": {
+      "route": "GET /api/cube/years",
+      "key": "layers, years",
+      "format": "yearly_ratio_high",
+      "is": "the highest of the same ratio taken year by year"
+    },
+    "years_last": {
+      "route": "GET /api/cube/years",
+      "key": "years[partial == False].year",
+      "format": "last_year",
+      "is": "the last whole year of NASA's yearly files that the Earth plays"
     }
   },
   "marks": {
@@ -3599,6 +4044,26 @@
       "test_a_not_taken",
       "test_a_strict_behind",
       "test_a_strict_not_behind"
+    ],
+    [
+      "photo_day_pass",
+      "photo_night_pass",
+      "photo_instead_of_hidden"
+    ],
+    [
+      "years_older_counted",
+      "years_newer_counted",
+      "years_on_one_scale"
+    ],
+    [
+      "years_change_as_counted",
+      "years_change_one_scale"
     ]
-  ]
+  ],
+  "keys_shared": {
+    "Space": [
+      "passes:play",
+      "years:play"
+    ]
+  }
 }

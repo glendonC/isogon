@@ -7,7 +7,9 @@ import { marksOnShow, type MarkRow } from './marks';
 import { missingLine } from './missing';
 import { playStateId } from './playState';
 import { recordFields, recordStateId } from './recordFields';
-import { dayPictureAction, dayPictureLine, type DayPictureKind } from './dayPicture';
+import type { DayPictureKind } from './dayPicture';
+import { SCRIPT } from './script';
+import type { WorldYears } from './world';
 import type { EarthStageTelemetry } from '../stage/earthCutawayTypes';
 import { countWord, dayWords } from './formats';
 import { resultRows, type ResultRow } from './Results';
@@ -29,7 +31,7 @@ import {
 
 export interface Guide {
   /** The script's step and state on show; null where the guide does not speak (Choose a Place). */
-  step: 'place' | 'record' | 'estimate' | 'test' | 'play' | 'finish' | null;
+  step: 'place' | 'record' | 'years' | 'estimate' | 'test' | 'play' | 'finish' | null;
   stateId: string | null;
   state: ScriptState | null;
   /** Top left: what the visitor is doing now, and the fainter line of the place and the days. */
@@ -56,14 +58,6 @@ export interface Guide {
   conds: Conditions;
 }
 
-/**
- * The Earth's years (a screen of its own, world/EarthYears.tsx): from the choice of a place, and from the Record's view
- * of the years as the satellites counted them, where the same jump stands across the whole Earth. The page's own words
- * until the product lane writes them.
- */
-const YEARS_FROM_PLACE: ScriptAction = { label: 'Play the years since 2000', command: 'years:open', key: 'W', places: ['guide'] };
-const YEARS_FROM_RECORD: ScriptAction = { label: 'See the same jump across the whole Earth', command: 'years:open', key: 'W', places: ['guide'] };
-
 /** How many of a state's lines stand together in the guide. */
 const STANDING = 2;
 
@@ -85,7 +79,10 @@ export interface GuideLive {
    */
   recordedNow?: string | false;
   /** The day's photograph on Estimate and Test (guide/dayPicture.ts): what is asked for and what the stage shows. */
-  day?: { asked: DayPictureKind | null; shown: EarthStageTelemetry['dayPicture'] | null };
+  day?: { asked: DayPictureKind | null; shown: EarthStageTelemetry['dayPicture'] | null; pixelKm: number | null };
+  /** The Earth's years on screen (world/EarthYears.tsx): the year and view on show, and the world's figures. */
+  years?: { year: number | null; mode: 'detected' | 'harmonized' } | null;
+  worldYears?: WorldYears | null;
 }
 
 /** Which command's thing is running, by command. */
@@ -107,6 +104,31 @@ function actionsOf(list: ScriptAction[] | undefined, fields: Fields, on: Record<
     })
     .filter((a): a is ScriptAction => a !== null)
     .slice(0, most);
+}
+
+/**
+ * The day's photograph's sentence, in the step's words (`photo`): by the pass on show (by day, at night, or hidden, so
+ * the coarse satellite's), with the photograph's satellite and pixel from its manifest; that it is not stored, plainly.
+ * Null while it loads, or when none is asked for.
+ */
+function photoLine(step: string, day: NonNullable<GuideLive['day']>, ws: WorkspaceBase, fields: Fields): string | null {
+  const t = day.shown;
+  const words = stepOf(step)?.photo;
+  if (!t || !words || t.state === 'loading') return null;
+  if (t.state === 'missing') return says({ id: 'photo', says: words.missing ?? [], actions: [] }, fields, {})[0] ?? null;
+  const fs = ((ws.run.active as unknown as { observer_passes?: { frames?: Array<{ is_day?: boolean }> } } | null)?.observer_passes?.frames) ?? [];
+  const isDay = fs[Math.min(ws.time.pass, Math.max(0, fs.length - 1))]?.is_day;
+  const c: Conditions = {
+    photo_instead_of_hidden: t.insteadOfHidden,
+    photo_day_pass: !t.insteadOfHidden && isDay === true,
+    photo_night_pass: !t.insteadOfHidden && isDay === false,
+  };
+  const f: Fields = {
+    ...fields,
+    photo_satellite: SCRIPT.fields?.photo_satellite?.said_as?.[t.platform] ?? null,
+    photo_pixel_m: day.pixelKm !== null ? String(Math.round((day.pixelKm * 1000) / 10) * 10) : null,
+  };
+  return says({ id: 'photo', says: (t.kind === 'true_color' ? words.true_color : words.false_color) ?? [], actions: [] }, f, c)[0] ?? null;
 }
 
 /** The state's lines on demand (`more`), conditions applied and fields filled. */
@@ -158,6 +180,46 @@ export function useGuide(
   const { fields, conds } = guideFields(ws);
   const on = onOf(live, record);
 
+  if (live.years) {
+    // The Earth's years (a step under the Record): the script's objective and sentence by the view on show, and Back;
+    // the screen's own controls (play, a year, the switch) are its own, so the guide does not repeat them.
+    entry.current = { key: '', pass: -1 };
+    const w = live.worldYears ?? null;
+    const one = live.years.mode === 'harmonized';
+    const yr = live.years.year;
+    const sharp = Number(fields.sharp_since ?? 2012);
+    const yf: Fields = {
+      world_first_year: live.worldFirstYear ?? (w?.first != null ? String(w.first) : null),
+      years_last: w?.last != null ? String(w.last) : null,
+      world_ratio: w?.ratio != null ? w.ratio.toFixed(1) : null,
+      world_ratio_low: w?.low != null ? w.low.toFixed(1) : null,
+      world_ratio_high: w?.high != null ? w.high.toFixed(1) : null,
+      sharp_since: fields.sharp_since ?? '2012',
+    };
+    const yc: Conditions = {
+      years_on_one_scale: one,
+      years_older_counted: !one && yr !== null && yr < sharp,
+      years_newer_counted: !one && yr !== null && yr >= sharp,
+      years_change_as_counted: !one && yr === sharp,
+      years_change_one_scale: one && yr === sharp,
+    };
+    const state = stateOf('years', 'earth_years');
+    const yfAll = { ...fields, ...yf };
+    return {
+      ...NONE,
+      step: 'years',
+      stateId: 'earth_years',
+      state,
+      objective: objectiveOf('years', state, yfAll),
+      context: contextOf('years', yfAll),
+      lines: says(state, yfAll, yc).slice(0, STANDING),
+      more: moreOf(state, yfAll, yc),
+      fields: yfAll,
+      conds: { ...conds, ...yc },
+      actions: actionsOf(state?.actions.filter((a) => a.command === 'close'), yfAll, on),
+    };
+  }
+
   if (ws.step === 'record' && ws.calendar.placesOpen) {
     // The choice of a place: what the map shows and what can be opened. Its keys are the screen's own (the list, the
     // card's Enter, Back), so the guide adds none of its own there.
@@ -165,7 +227,7 @@ export function useGuide(
     const id = live.places === 'failed' ? 'failed' : live.places === 'ready' ? 'ready' : 'loading';
     const state = stateOf('place', id);
     const followed = ws.places.places.filter((p) => p.featured_fires.some((x) => x.default_start)).length;
-    const pf: Fields = { world_first_year: live.worldFirstYear ?? null, places_followed_n: live.places === 'ready' ? countWord(followed) : null };
+    const pf: Fields = { world_first_year: live.worldFirstYear ?? (live.worldYears?.first != null ? String(live.worldYears.first) : null), places_followed_n: live.places === 'ready' ? countWord(followed) : null };
     return {
       ...NONE,
       step: 'place',
@@ -177,8 +239,8 @@ export function useGuide(
       more: moreOf(state, pf, conds),
       fields: { ...fields, ...pf },
       conds,
-      // The Earth's years since 2000, the one action of the guide's own here (the screen's own keys do the rest).
-      actions: id === 'ready' ? [YEARS_FROM_PLACE] : [],
+      // The Earth's years, the one action of the guide's own here (the step's `also`); the screen's own keys do the rest.
+      actions: id === 'ready' ? actionsOf(stepOf('place')?.also?.filter((a) => a.command === 'years:open'), { ...fields, ...pf }, on) : [],
     };
   }
 
@@ -207,7 +269,7 @@ export function useGuide(
           : live.recordedNow === false
             ? []
             : [{ ...a, label: `See this month so far, as it stood on ${dayWords(live.recordedNow) ?? live.recordedNow}` }],
-      ).concat(id === 'as_counted' ? [YEARS_FROM_RECORD] : []),
+      ),
       also: actionsOf(stepOf('record')?.also, r.fields, on, 9),
     };
   }
@@ -272,7 +334,10 @@ export function useGuide(
   // sentences: its first two lines, shown together.
   const missing = id === 'loading' || id === 'failed' ? null : missingLine(ws.model.missingFiles);
   const dayOffered = Boolean(live.day) && ws.run.isReal && id !== 'loading' && id !== 'failed' && id !== 'revealing';
-  const dayLine = dayOffered && live.day?.asked ? dayPictureLine(live.day.shown) ?? null : null;
+  // The day's photograph, in the step's own words (`photo`): its sentence takes the place of the first standing one.
+  const photo = dayOffered && live.day?.asked ? photoLine(step, live.day, ws, fields) : null;
+  const standing = [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)];
+  const photoAct = dayOffered ? stepOf(step)?.also?.find((a) => a.command === 'photo:next') : undefined;
   const settled = id !== 'loading' && id !== 'failed' && id !== 'revealing';
   return {
     ...NONE,
@@ -281,13 +346,18 @@ export function useGuide(
     state,
     objective: objectiveOf(step, state, fields),
     context: contextOf(step, fields),
-    // While a photograph of the day is on, the guide's standing sentence is about it; the label keeps saying the pass.
-    lines: dayLine ? [dayLine] : [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)],
+    // While a photograph of the day is on, its sentence stands first; the label keeps saying the pass.
+    lines: photo ? [photo, ...standing.slice(1)] : standing,
     more: moreOf(state, fields, conds),
     fields,
     conds,
     // The day's photograph: a fourth, quiet action at the end of the row, on these two steps only.
-    actions: [...actionsOf(state?.actions, fields, on), ...(dayOffered ? [dayPictureAction(live.day?.asked ?? null)] : [])],
+    actions: [
+      ...actionsOf(state?.actions, fields, on),
+      ...(photoAct
+        ? [{ ...photoAct, quiet: true, label: (live.day?.asked === 'true_color' ? photoAct.label_when_true_color : live.day?.asked === 'false_color' ? photoAct.label_when_false_color : null) ?? photoAct.label }]
+        : []),
+    ],
     also: actionsOf(stepOf(step)?.also, fields, on, 9),
     fireLabel: labelOn(state, 'fire', fields, conds, live.playing),
     besideFire: promptBeside(state, 'fire'),

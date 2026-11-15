@@ -30,8 +30,14 @@ export interface ScriptAction {
   beside?: string;
   /** What the action reads while what it started is running ("Pause the passes"). */
   label_while_on?: string;
-  /** The page's own: an action shown quietly at the end of the guide's row (the day's photograph). */
+  /** Shown quietly at the end of the guide's row (the day's photograph; the script's `quiet_fourth`). */
   quiet?: boolean;
+  quiet_fourth?: boolean;
+  /** Another key that does the same (Space beside Enter). */
+  also_key?: string;
+  /** The day's photograph: what the action reads while true colour, then false colour, is on. */
+  label_when_true_color?: string;
+  label_when_false_color?: string;
 }
 
 export interface ScriptLabel extends When {
@@ -67,6 +73,8 @@ export interface ScriptState {
   results?: ScriptResults;
   /** What the guide says on demand beyond what stands. */
   more?: Array<string | ScriptLine>;
+  /** The film's caption for this state, in the objective's place in the film presentation. */
+  film?: ScriptLine[];
 }
 
 export interface ScriptStartCard {
@@ -85,6 +93,10 @@ export interface ScriptStep {
   start_card?: ScriptStartCard;
   /** Actions that work in every state of the step, by their key and by asking; not in the strip unless a state lists them. */
   also?: ScriptAction[];
+  /** The step the trail shows this one under (the Earth's years: the Record). */
+  under?: string;
+  /** While the day's photograph is on: its sentence, which takes the place of the state's first standing one. */
+  photo?: { true_color?: ScriptLine[]; false_color?: ScriptLine[]; missing?: ScriptLine[] };
   states: ScriptState[];
 }
 
@@ -113,6 +125,8 @@ interface Script {
   marks?: ScriptMarks;
   /** The plain phrase for each score, by its id (format score_names_ahead and score_names_behind). */
   score_names?: Record<string, string>;
+  /** Where each field is read from; the photograph's satellite is said by its `said_as` table. */
+  fields?: Record<string, { said_as?: Record<string, string> }>;
 }
 
 export const SCRIPT = raw as unknown as Script;

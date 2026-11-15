@@ -31,8 +31,15 @@ export function recordFields(ws: WorkspaceBase, rv: RecordView): { fields: Field
     test_fires_n: ev ? countWord(ev.test_fires.fires.length) : null,
     places_with_fires: listAnd(ws.places.places.map((x) => x.name)),
   };
+  // The range's check year by year, for its sentence on demand.
+  const check = ws.calendar.state.cal?.rangeCheck ?? null;
+  fields.record_held = check ? String(check.held) : null;
+  fields.record_years = check ? String(check.years) : null;
+  fields.record_meant = check && check.meant !== null ? String(Math.round(check.meant * 100)) : null;
   const conds: Conditions = {
     fire_month_stands_out: m && m.usual !== null && m.timesUsual !== null ? m.usual > 0 && m.timesUsual >= 2 : null,
+    // The method served pooled month by size (harmonization_method.id).
+    record_method_pooled: ws.calendar.state.cal ? ws.calendar.state.cal.method === 'pooled_month_size_v1' : null,
     // The Record's method (harmonization_method.id): replaced when it is no longer the first ratio of the overlap.
     method_replaced: ws.calendar.state.cal ? (ws.calendar.state.cal.method ?? 'overlap_ratio_v1') !== 'overlap_ratio_v1' : null,
     this_month_is_counted: rv.now.state === 'ready' ? rv.now.rate !== null && rv.now.why === null : rv.now.state === 'unavailable' ? false : null,

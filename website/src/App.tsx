@@ -27,7 +27,7 @@ import { AskField } from './guide/AskField';
 import { useGuide, type Guide } from './guide/useGuide';
 import { keyMatches, says, stateOf } from './guide/script';
 import { StageBoundary } from './ui/StageBoundary';
-import { useWorldFirstYear } from './guide/world';
+import { useWorldFirstYear, useWorldYears } from './guide/world';
 import { dayPictureCredit, nextDayPicture, type DayPictureKind } from './guide/dayPicture';
 import { openingHiddenPass, type OpeningFrame } from './app/openingPass';
 import { BEATS, type BeatId } from './app/names';
@@ -251,6 +251,8 @@ export function App() {
   const [yearsFrom, setYearsFrom] = useState<'place' | 'record' | 'address' | null>(() =>
     new URLSearchParams(window.location.search).has('years') ? 'address' : null,
   );
+  /** The year and view the Earth's years show, for the guide's sentence on that screen. */
+  const [yearsView, setYearsView] = useState<{ year: number | null; mode: 'detected' | 'harmonized' } | null>(null);
   /** The Record was on the years as counted when the years were opened from it: its view comes back with it. */
   const restoreAsCountedRef = useRef(false);
   const [recordBox, setRecordBox] = useState<{ box: Box; name: string } | null>(null);
@@ -958,7 +960,7 @@ export function App() {
         if (e.key === 'Escape') {
           e.preventDefault();
           setPlacesOpen(false);
-        } else if (e.key.toLowerCase() === 'w' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        } else if (e.key.toLowerCase() === 'o' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
           setPlacesOpen(false);
           setYearsFrom('place');
@@ -1338,6 +1340,21 @@ export function App() {
   }, [yearsFrom, recordView]);
   const playersView = usePlayersView();
   const worldFirstYear = useWorldFirstYear();
+  const worldYears = useWorldYears();
+  // The day's photograph's manifest (the same route with format=json): the side of its pixel, for the guide's sentence.
+  const dayShown = stageTelemetry?.dayPicture?.state === 'shown' ? stageTelemetry.dayPicture : null;
+  const photoKey = dayShown && activeRun ? `${activeRun.region.id}|${dayShown.day}|${dayShown.platform}|${dayShown.kind}` : null;
+  const [photoPixel, setPhotoPixel] = useState<{ key: string; km: number | null } | null>(null);
+  useEffect(() => {
+    if (!photoKey || !dayShown || !activeRun || photoPixel?.key === photoKey) return;
+    let live = true;
+    getJson<{ pixel_km?: number }>('/api/gibs/day', { region_id: activeRun.region.id, day: dayShown.day, platform: dayShown.platform, kind: dayShown.kind, format: 'json' })
+      .then((m) => live && setPhotoPixel({ key: photoKey, km: typeof m?.pixel_km === 'number' ? m.pixel_km : null }))
+      .catch(() => live && setPhotoPixel({ key: photoKey, km: null }));
+    return () => {
+      live = false;
+    };
+  }, [photoKey, dayShown, activeRun, photoPixel?.key]);
   const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays, finish: finishOpen }, recordView, playersView, {
     playing,
     chance: chanceOn,
@@ -1345,7 +1362,12 @@ export function App() {
     places: placesState.state,
     worldFirstYear,
     recordedNow: TRANSPORT === 'recorded' ? (recordedNow?.place === calendarRegionId && recordedNow.day ? recordedNow.day : false) : undefined,
-    day: inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen ? { asked: dayPicture, shown: stageTelemetry?.dayPicture ?? null } : undefined,
+    day:
+      inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen
+        ? { asked: dayPicture, shown: stageTelemetry?.dayPicture ?? null, pixelKm: photoPixel && photoPixel.key === photoKey ? photoPixel.km : null }
+        : undefined,
+    years: yearsFrom ? yearsView ?? { year: null, mode: 'detected' } : null,
+    worldYears,
   });
   const guideKey = `${guide.step}:${guide.stateId}:${realStart}`;
   guideRef.current = guide;
@@ -1359,8 +1381,12 @@ export function App() {
       setPlacesOpen(false);
       return;
     }
-    if (command === 'day:next') {
+    if (command === 'photo:next') {
       setDayPicture(nextDayPicture);
+      return;
+    }
+    if (command === 'close' && yearsFrom) {
+      closeYears();
       return;
     }
     if (command === 'go:test') {
@@ -1570,16 +1596,8 @@ export function App() {
             {yearsFrom && (
               <div className="iso-years" role="region" aria-label="The Earth year by year">
                 <Suspense fallback={null}>
-                  <EarthYears source="/api/cube/years" />
+                  <EarthYears source="/api/cube/years" onYear={(year, mode) => setYearsView({ year, mode })} />
                 </Suspense>
-                <button
-                  type="button"
-                  className="iso-years__back"
-                  onClick={closeYears}
-                >
-                  <kbd className="guide-key">Esc</kbd>
-                  <span>Back</span>
-                </button>
               </div>
             )}
 
