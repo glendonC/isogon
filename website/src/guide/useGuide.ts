@@ -84,6 +84,12 @@ function recordCheckLine(fields: Fields): string | null {
  * Test it is said in place of test A's sentence, its loss as plainly.
  */
 function testBLine(f: Fields, c: Conditions): string | null {
+  // A challenger answering: the test that counts for it is its own on test B, the estimate shown before in one clause.
+  if (c.answered_by_challenger && c.test_b_taken && f.test_b_fires_n && f.test_b_challenger_ahead && f.test_b_challenger_level && f.test_b_challenger_behind && f.test_scores_n) {
+    const loss = c.test_b_challenger_strict_behind ? ", though it does not place fire square for square better than painting the coarse satellite's detections" : '';
+    const before = f.test_b_ahead && f.test_b_behind ? `; the estimate shown before was ahead on ${f.test_b_ahead} and behind on ${f.test_b_behind} there` : '';
+    return `On ${f.test_b_fires_n} fires that nothing had touched, the challenger was ahead of the simple methods on ${f.test_b_challenger_ahead} of ${f.test_scores_n} scores, level on ${f.test_b_challenger_level} and behind on ${f.test_b_challenger_behind}${loss}${before}.`;
+  }
   if (!c.test_b_taken || !f.test_b_fires_n || !f.test_b_ahead || !f.test_b_level || !f.test_b_behind || !f.test_scores_n) return null;
   const across = f.test_b_continents_n ? `, across ${f.test_b_continents_n} continents` : '';
   const head = `On ${f.test_b_fires_n} fires that nothing had touched${across}, the experimental model was ahead of the simple methods on ${f.test_b_ahead} of ${f.test_scores_n} scores, level on ${f.test_b_level} and behind on ${f.test_b_behind}`;

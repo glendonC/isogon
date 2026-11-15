@@ -31,8 +31,24 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   const cellKm = num(obj(obj(r?.belief_frames)?.grid)?.cell_km);
   const score = ws.test.score;
   const verdict = score?.verdict ?? [];
-  const ahead = score ? verdict.filter((v) => v.ahead).length : null;
-  const baselines = score ? score.methods.filter((m) => m.id !== 'reconstruction' && !m.id.includes('viirs')).length : null;
+  // Which estimate answered a held-out run's hidden passes (`held_out_passes_answered_by`): the estimate in use, or a
+  // challenger in its place when the backend's switch says so; its words are the run's own.
+  const answered = obj(r?.held_out_passes_answered_by);
+  const byChallenger = answered ? typeof answered.method === 'string' && answered.method !== 'reconstruction' : null;
+  const headline = byChallenger && typeof answered?.method === 'string' ? answered.method : 'reconstruction';
+  // The simple methods: never the answering estimate, the estimate that was in use, a challenger, or the sharp satellite.
+  const simpleIds = score
+    ? score.methods.map((m) => m.id).filter((id) => id !== headline && id !== 'reconstruction' && !id.startsWith('challenger') && !id.includes('viirs'))
+    : [];
+  // With a challenger answering, a score is won when it beats both simple methods (the estimate that was in use is
+  // scored beside them and is not one of them); otherwise the verdict's own count.
+  const beatsSimple = (v: (typeof verdict)[number]) => {
+    const mine = v.values[headline];
+    if (typeof mine !== 'number') return false;
+    return simpleIds.every((id) => typeof v.values[id] !== 'number' || (v.better === 'lower' ? mine < v.values[id] : mine > v.values[id]));
+  };
+  const ahead = score ? (byChallenger ? verdict.filter(beatsSimple).length : verdict.filter((v) => v.ahead).length) : null;
+  const baselines = score ? simpleIds.length : null;
   const ev = ws.model.evidence;
   const testFires = ev?.test_fires.fires ?? [];
   const testScoresN = ev ? ev.test_fires.scores.length : null;
@@ -64,6 +80,9 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   const bAll = obj(testB?.all);
   const bClasses = obj(bAll?.classes);
   const bByContinent = obj(testB?.by_continent);
+  // The answering challenger's own figures on test B, beside the headline estimate's (`beside_the_headline`).
+  const bChal = byChallenger ? obj(obj(obj(testB?.beside_the_headline)?.[headline])?.against_the_baselines) : null;
+  const bChalClasses = obj(bChal?.classes);
   const continentFires = (name: string) => num(obj(aByContinent?.[name])?.episodes) ?? (aByContinent ? 0 : null);
   // The squares the model says are burning at the pass on show (the frames on the terrain).
   const looks = obj(r?.declared_cells)?.looks;
@@ -108,6 +127,9 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_b_ahead: count(num(bAll?.ahead)),
     test_b_behind: countNone(num(bAll?.behind)),
     test_b_level: count(num(bAll?.tied)),
+    test_b_challenger_ahead: count(num(bChal?.ahead)),
+    test_b_challenger_level: count(num(bChal?.tied)),
+    test_b_challenger_behind: countNone(num(bChal?.behind)),
     test_a_ahead_names: scoreNames('ahead') || null,
     test_a_behind_names: scoreNames('behind') || null,
     test_a_interval_held: percent(aHeld),
@@ -115,10 +137,6 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_a_europe_n: countNo(continentFires('Europe')),
     test_a_oceania_n: countWord(continentFires('Oceania')),
   };
-  // Which estimate answered a held-out run's hidden passes (`held_out_passes_answered_by`): the estimate in use, or a
-  // challenger in its place when the backend's switch says so; its words are the run's own.
-  const answered = obj(r?.held_out_passes_answered_by);
-  const byChallenger = answered ? typeof answered.method === 'string' && answered.method !== 'reconstruction' : null;
   fields.answered_by = byChallenger && typeof answered?.words === 'string' ? answered.words : null;
   const conds: Conditions = {
     answered_by_challenger: byChallenger,
@@ -129,6 +147,7 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_a_taken: ev ? testA !== null : null,
     test_b_taken: ev ? testB !== null && bAll !== null : null,
     test_b_strict_behind: ev ? testB !== null && bClasses?.csi_strict_375m === 'behind' : null,
+    test_b_challenger_strict_behind: bChal ? bChalClasses?.csi_strict_375m === 'behind' : null,
     test_a_not_taken: ev ? testA === null : null,
     test_a_strict_behind: ev ? testA !== null && aClasses?.csi_strict_375m === 'behind' : null,
     test_a_strict_not_behind: ev ? testA !== null && aClasses !== null && aClasses.csi_strict_375m !== 'behind' : null,
