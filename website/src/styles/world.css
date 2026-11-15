@@ -1587,6 +1587,12 @@
   pointer-events: none;
 }
 
+/* Hosted on the page, the year stands under the top bar, on its margin. */
+.world-screen[data-film='false'] .world-years {
+  --years-caption-top: 128px;
+  --years-caption-left: 40px;
+}
+
 /* The sealed board's table (the dataviz lane's LiveTable): a row opens its result under the table. */
 .world-ledger tbody tr {
   cursor: pointer;

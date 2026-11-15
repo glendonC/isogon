@@ -591,8 +591,10 @@ export function EarthYears({
           {note && <div className="world-years__note">{note}</div>}
         </div>
       )}
+      {/* The screen's own controls stand alone (the harness); hosted, the guide's actions and the keys do their work. */}
+      {ownPlay && (
       <div className="world-years__controls" data-world-ui>
-        {ownPlay && (
+        {(
           <button type="button" className="world-act" onClick={play}>
             <kbd>Space</kbd>
             <span>{playing ? Y.pause : Y.play}</span>
@@ -623,6 +625,7 @@ export function EarthYears({
           </button>
         </div>
       </div>
+      )}
       <div className="world-legend world-years__legend" data-world-ui style={{ bottom: stripH + 4 }}>
         <div className="world-legend__line">{Y.legend}</div>
         <div className="world-ramp" style={{ background: ramp(FIRE_RAMP) }} />

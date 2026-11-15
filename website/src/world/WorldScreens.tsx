@@ -1,5 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GuideStrip } from '../guide/GuideStrip';
+import { LocatorBar } from '../identity/LocatorBar';
+import { StoryLine } from '../identity/StoryLine';
+import type { StoryPart } from '../identity/story';
+import { SHARP_FROM } from './yearsData';
 import type { ScriptAction } from '../guide/script';
 import { Trail, type TrailWord } from '../guide/Trail';
 import { EarthYears, type YearsControl, type YearsState } from './EarthYears';
@@ -61,14 +65,25 @@ function Host({ screen, onWord }: { screen: WorldScreen; onWord?: (word: TrailWo
 
 type Part = { film: boolean; toWord: (w: TrailWord) => void };
 
-function Frame({ objective, word, context, lines, actions, onAction, film, trail = true, toWord }: Part & {
+/**
+ * A picture's frame. On the page, the plan's look (the ux lane's pieces, as the page itself mounts them): the top bar
+ * with the path and the place finder's window (its first step closes the picture), the story along the bottom edge,
+ * and the guide's title and line. In the film presentation, the shot's caption where the objective stands.
+ */
+function Frame({ objective, word, lines, actions, onAction, film, trail = true, toWord, where, story, figures }: Part & {
   objective: string | null;
   word: TrailWord;
+  /** The years a picture spans; the page's title says them. */
   context?: string | null;
   lines: string[];
   actions: ScriptAction[];
   onAction: (command: string) => void;
   trail?: boolean;
+  /** The name in view, the last step of the top bar's path. */
+  where: string;
+  /** Where the picture stands in the story. */
+  story: StoryPart;
+  figures?: { jumpYear?: number | null; testedFires?: number | null };
 }) {
   // The pictures keep clear of this guide: its height (from the bottom of the page) is the room they keep.
   useLayoutEffect(() => {
@@ -86,10 +101,12 @@ function Frame({ objective, word, context, lines, actions, onAction, film, trail
     ro.observe(host);
     return () => ro.disconnect();
   }, [film, lines.length, actions.length]);
+  if (film) return <>{trail && <Trail objective={objective} current={word} context={null} onWord={toWord} closed={{}} onPlace={() => {}} />}</>;
   return (
     <>
-      {trail && <Trail objective={objective} current={word} context={film ? null : context ?? null} onWord={toWord} closed={{}} onPlace={() => {}} />}
-      {!film && <GuideStrip lines={lines} actions={actions} onAction={onAction} />}
+      <LocatorBar path={['World', where]} onTrail={() => closeWorldScreen()} />
+      <StoryLine current={story} jumpYear={figures?.jumpYear ?? null} testedFires={figures?.testedFires ?? null} />
+      <GuideStrip title={objective} lines={lines} actions={actions} onAction={onAction} />
     </>
   );
 }
@@ -167,6 +184,9 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
         toWord={toWord}
         trail={!film}
         objective={st ? S.years.objective(st.first) : null}
+        where={S.years.where}
+        story="world"
+        figures={{ jumpYear: SHARP_FROM }}
         word="Record"
         context={st ? S.years.context(st.first, st.last) : null}
         lines={lines}
@@ -216,6 +236,9 @@ function Test({ film, toWord }: Part) {
         toWord={toWord}
         trail={!film || whole}
         objective={film ? caption ?? S.test.objective : S.test.objective}
+        where={S.test.where(testB?.fires.length ?? testA?.fires.length ?? null)}
+        story="tested"
+        figures={{ jumpYear: SHARP_FROM, testedFires: testB?.fires.length ?? null }}
         word="Test"
         lines={lines}
         actions={[
@@ -264,6 +287,9 @@ function Sealed({ film, toWord }: Part) {
         film={film}
         toWord={toWord}
         objective={film ? caption ?? S.sealed.objective : S.sealed.objective}
+        where={S.sealed.where}
+        story="live"
+        figures={{ jumpYear: SHARP_FROM }}
         word="Test"
         lines={lines}
         actions={[{ label: S.sealed.back, command: 'close', key: 'Enter' }]}
