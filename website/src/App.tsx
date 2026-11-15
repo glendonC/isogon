@@ -109,6 +109,8 @@ function useViewportWidth(): number {
  * the readout and keys along the bottom. Under 960 px the top half.
  */
 function roundFrame(width: number) {
+  // A phone: the board under the trail and the pass's label, above the guide's sentence and actions.
+  if (width < 600) return { left: 0.02, top: 0.26, right: 0.98, bottom: 0.73 };
   if (width < 960) return { left: 0.0, top: 0.12, right: 1.0, bottom: 0.5 };
   return { left: 0.04, top: 0.14, right: 0.96, bottom: 0.84 };
 }
@@ -126,6 +128,8 @@ function workspaceFrame(width: number) {
  * narrow screen, the part the words leave free: under the objective and the trail, above the guide's sentence.
  */
 function modelFrame(width: number) {
+  // A phone: under the fire's label (which hangs under the trail), above the guide's sentence.
+  if (width < 600) return { left: 0.03, top: 0.3, right: 0.97, bottom: 0.6 };
   if (width < 960) return { left: 0.03, top: 0.2, right: 0.97, bottom: 0.58 };
   return { left: 0.04, top: 0.2, right: 0.96, bottom: 0.78 };
 }

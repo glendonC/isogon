@@ -659,3 +659,40 @@
   font-size: 14px;
   line-height: 21px;
 }
+
+/* A phone: the guide keeps to the lower part, so the fire has the middle. The sentence a step smaller, the actions
+   closer, no keycaps (a phone has no keys; the next action keeps its bar), the quiet ones in a tight row, and the
+   strip clear of the imagery credit under it. */
+@media (max-width: 600px) {
+  .guide-strip {
+    bottom: 40px;
+    gap: var(--sys-s2);
+  }
+
+  .guide-strip__line {
+    min-height: 0;
+    font-size: 15px;
+    line-height: 21px;
+  }
+
+  .guide-strip__acts {
+    gap: 6px 10px;
+  }
+
+  .guide-act {
+    padding: 6px 8px;
+  }
+
+  .guide-strip__acts .guide-key {
+    display: none;
+  }
+
+  .guide-strip__acts--quiet {
+    margin-top: -2px;
+    gap: 2px 10px;
+  }
+
+  .guide-act--quiet {
+    padding: 2px 4px;
+  }
+}
