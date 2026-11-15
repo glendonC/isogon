@@ -61,3 +61,25 @@ export function overlapAxisMax(rows: readonly OverlapRow[]): number {
   const top = Math.max(0, ...rows.flatMap((r) => [r.exact, r.within])) * 100;
   return Math.max(40, Math.ceil(top / 10) * 10);
 }
+
+export interface OverlapLayout {
+  labelW: number;
+  numW: number;
+  axisW: number;
+  /** Room for the pointer's readout beside the chart; 0 when narrow, and the readout goes above. */
+  readoutW: number;
+  narrow: boolean;
+  /** The width the chart takes: the width given, unless that is below the smallest that reads. */
+  width: number;
+}
+
+/** The chart's columns at a given width: the plot never narrower than 160 px, the readout above under 600 px. */
+export function overlapLayout(width: number): OverlapLayout {
+  const w = Math.max(320, Math.round(Number.isFinite(width) ? width : 560));
+  const narrow = w < 600;
+  const labelW = Math.min(150, Math.max(96, Math.round(w * 0.26)));
+  const numW = 60;
+  const readoutW = narrow ? 0 : Math.round(Math.min(290, w * 0.3));
+  const axisW = Math.max(160, w - labelW - numW - readoutW);
+  return { labelW, numW, axisW, readoutW, narrow, width: Math.max(w, labelW + axisW + numW + readoutW) };
+}

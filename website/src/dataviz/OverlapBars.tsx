@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CSS, MARK } from './tokens';
 import { Frame } from './Frame';
-import { overlapAxisMax } from './overlapRows';
+import { overlapAxisMax, overlapLayout } from './overlapRows';
 import type { Overlap } from './overlapRows';
 import { useCount } from './useCount';
 
@@ -34,14 +34,14 @@ function Figure({ value, x, y }: { value: number; x: number; y: number }) {
  */
 export function OverlapBars({ overlap, width = 860, words = DEFAULT_WORDS }: OverlapBarsProps) {
   const [hover, setHover] = useState<string | null>(null);
-  const labelW = 150;
-  const numW = 64;
-  const readoutW = Math.round(Math.min(290, width * 0.3));
-  const axisW = width - labelW - numW - readoutW;
+  const layout = overlapLayout(width);
+  const { labelW, numW, axisW, narrow } = layout;
+  width = layout.width;
   const max = overlapAxisMax(overlap.rows) / 100;
   const sx = (v: number) => labelW + (v / max) * axisW;
-  const keyY = 18;
-  const top = 46;
+  const head = narrow ? 54 : 0;
+  const keyY = head + 18;
+  const top = head + 46;
   const group = MARK.bar * 2 + 6 + 26;
   const axisY = top + overlap.rows.length * group;
   const height = axisY + 26;
@@ -94,7 +94,8 @@ export function OverlapBars({ overlap, width = 860, words = DEFAULT_WORDS }: Ove
               const right = sx(Math.max(row.exact, row.within)) + numW;
               return (
                 <Frame key={row.key} box={{ x: labelW - 10, y: y - 8, w: right - labelW + 10, h: 2 * MARK.bar + 22 }} bounds={{ w: width, h: height }}
-                  readout={[row.label, `${(row.exact * 100).toFixed(1)}% exact`, `${(row.within * 100).toFixed(1)}% within 1 pixel`]} maxChars={20} />
+                  readout={[row.label, `${(row.exact * 100).toFixed(1)}% ${words.exact.toLowerCase()}`, `${(row.within * 100).toFixed(1)}% ${words.within.toLowerCase()}`]}
+                  maxChars={narrow ? 38 : 20} above={narrow ? { bottom: head - 8 } : undefined} leader={false} />
               );
             })()}
       </svg>

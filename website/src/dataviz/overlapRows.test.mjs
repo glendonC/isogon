@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { overlapAxisMax, overlapFromEvidence } from './overlapRows.ts';
+import { overlapAxisMax, overlapFromEvidence, overlapLayout } from './overlapRows.ts';
 
 // Test B as GET /api/evidence serves it (fresh_test.test_b), trimmed to what the figure reads.
 const score = (value, modis) => ({ value, painted_modis: modis, overlap_ratio: modis, better_is: 'higher' });
@@ -52,4 +52,17 @@ test('a missing value gives no figure rather than a wrong one', () => {
 test('the axis runs to 40 percent unless a value goes past it', () => {
   assert.equal(overlapAxisMax([{ exact: 0.2, within: 0.369 }]), 40);
   assert.equal(overlapAxisMax([{ exact: 0.2, within: 0.52 }]), 60);
+});
+
+test('the chart keeps a plot that reads at every width it is mounted at', () => {
+  for (const w of [320, 440, 520, 640, 860, 1200]) {
+    const l = overlapLayout(w);
+    assert.ok(l.axisW >= 160, `plot at ${w}: ${l.axisW}`);
+    assert.ok(l.labelW >= 96 && l.labelW <= 150);
+    assert.equal(l.labelW + l.axisW + l.numW + l.readoutW, l.width, `columns add up at ${w}`);
+    assert.equal(l.narrow, w < 600);
+  }
+  assert.equal(overlapLayout(440).readoutW, 0, 'narrow: the readout goes above');
+  assert.equal(overlapLayout(440).width, 440);
+  assert.equal(overlapLayout(NaN).width >= 320, true);
 });
