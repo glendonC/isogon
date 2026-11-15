@@ -31,7 +31,7 @@ export function CalendarBeat({ guideSpeaks = false }: CalendarBeatProps) {
     };
     return (
       <Suspense fallback={null}>
-        <PlaceScreen places={ws.places} currentFire={ws.currentFire} onFire={c.chooseFire} onBox={c.chooseBox} onClose={back} />
+        <PlaceScreen places={ws.places} currentFire={ws.currentFire} onFire={c.chooseFire} onBox={c.chooseBox} onClose={back} draw={c.placesDraw} />
       </Suspense>
     );
   }

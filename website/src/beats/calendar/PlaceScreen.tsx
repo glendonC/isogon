@@ -89,6 +89,8 @@ export interface PlaceScreenProps {
   onFire: (place: Place, fire: FeaturedFire) => void;
   onBox: (box: Box) => void;
   onClose: () => void;
+  /** Opened to draw an area (Finish's "Draw your own area"): the Earth starts ready to draw. */
+  draw?: boolean;
 }
 
 /**
@@ -98,7 +100,7 @@ export interface PlaceScreenProps {
  * opens where it stands: the fire's own terrain, what it is to the model, what showing it will do, and the action
  * that shows it. Nothing of the list stands over the Earth. Find brings a place or coordinates into view.
  */
-export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: PlaceScreenProps) {
+export function PlaceScreen({ places, currentFire, onFire, onBox, onClose, draw = false }: PlaceScreenProps) {
   const rootRef = useRef<HTMLElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   // The row that was open when a pointer pressed a row: pressing gives the row the focus, which opens it, before the
@@ -397,8 +399,12 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
         return;
       }
       // The Earth listens the same way and may be mounted after this screen: while it is drawing, or has a card or a
-      // box open, its Escape closes that first, and this screen leaves the key to it
-      if (rootRef.current?.querySelector('.world-hint, .world-card, .world-box')) return;
+      // box open, its Escape closes that first, and this screen leaves the key to it. The focus then goes to Find,
+      // so what is typed next goes there and not to the page's keys.
+      if (rootRef.current?.querySelector('.world-hint, .world-card, .world-box')) {
+        window.setTimeout(() => rootRef.current?.querySelector<HTMLInputElement>('.place__input')?.focus({ preventScroll: true }), 0);
+        return;
+      }
       live.current.onClose();
       e.preventDefault();
       e.stopPropagation();
@@ -441,6 +447,7 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
             onFire={onFire}
             onBox={onBox}
             focus={earth.focus}
+            startDrawing={draw && earth.key === 0}
             startOpen={earth.open}
             startBox={earth.box}
           />
