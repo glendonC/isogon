@@ -51,6 +51,8 @@ export const TEST_WORDS = {
 };
 
 const ZONE_ORDER = ['tropical', 'subtropical', 'temperate', 'boreal'];
+// The land where fires are tested, without the poles: the Earth is drawn larger and Antarctica stays out of the view.
+const TEST_VIEW: [number, number, number, number] = [-170, -48, 180, 76];
 const centre = (b: [number, number, number, number]): [number, number] => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
 const fill = (a: number, of: number): React.CSSProperties => ({ ['--fill' as string]: `${of > 0 ? (a / of) * 100 : 0}%` });
 
@@ -154,7 +156,7 @@ export function WorldTest({ source, control, caption = true }: { source: string;
 
   return (
     <div className="world-earth" ref={root}>
-      <WorldCanvas label={TEST_WORDS.label} padLeft={room.left} padBottom={room.bottom + (caption && !room.stacked ? guideRoom : 0)} onClickMap={() => setOpen(null)}>
+      <WorldCanvas label={TEST_WORDS.label} focus={TEST_VIEW} padLeft={room.left} padBottom={room.bottom + (caption && !room.stacked ? guideRoom : 0)} onClickMap={() => setOpen(null)}>
         {(p) => (
           <>
             {fires.map((f) => {
@@ -270,7 +272,7 @@ export function WorldTest({ source, control, caption = true }: { source: string;
                 );
               })}
             </ol>
-            <div className="world-legend__fine">{TEST_WORDS.classesKey(judged)}</div>
+            <div className="world-legend__fine world-tests__key">{TEST_WORDS.classesKey(judged)}</div>
             {by === 'zone' && <div className="world-legend__fine">{TEST_WORDS.zoneNote}</div>}
             {look.all?.interval && (
               <div className="world-legend__fine">{TEST_WORDS.held(look.all.interval.stated, look.all.interval.held, look.all.interval.looks)}</div>

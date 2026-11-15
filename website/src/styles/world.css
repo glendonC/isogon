@@ -1357,3 +1357,8 @@
 .world-sealed[data-captioned='true'] {
   box-sizing: border-box;
 }
+
+/* Without the 2012 label (the film's caption says it), the strip's keys take the whole head in one line. */
+.world-years__strip-head[data-step='off'] {
+  grid-template-columns: minmax(0, 1fr);
+}

@@ -72,7 +72,7 @@ const YEARS_VIEW: Box = [-170, -44, 180, 74];
 // A pass through the years lasts about six seconds: the coarse years quickly, 2012 long enough to read its sentence.
 const beat = (year: number) => (year < SHARP_FROM ? 170 : year === SHARP_FROM ? 1500 : 190);
 // A short pass (the film's 2010 to 2012) gives each year time to be seen before the last.
-const SHORT_BEAT = 650;
+const SHORT_BEAT = 500;
 
 /** The years named under the strip: the one on show first, then 2012, the ends and every fifth, none closer than 44 px. */
 function axisYears(years: number[], shown: number, width: number): number[] {
@@ -141,7 +141,12 @@ export function EarthYears({
     if (!idx) return;
     let live = true;
     const want = idx.years.map((y) => layerOf(idx, mode, y.year)).filter((m): m is NonNullable<typeof m> => m !== null);
-    const order = shown === null ? want : [...want].sort((a, b) => Math.abs(a.year - shown) - Math.abs(b.year - shown));
+    // The years of a pass that plays come first (the film's 2010 to 2012), then the rest from the year on show outwards.
+    const lo = startYear ?? -Infinity;
+    const hi = until ?? -Infinity;
+    const inPass = (y: number) => y >= lo && y <= hi;
+    const near = (y: number) => (shown === null ? 0 : Math.abs(y - shown));
+    const order = [...want].sort((a, b) => Number(inPass(b.year)) - Number(inPass(a.year)) || near(a.year) - near(b.year));
     let i = 0;
     const next = async (): Promise<void> => {
       while (live && i < order.length) {
@@ -208,12 +213,14 @@ export function EarthYears({
 
   // In the film presentation (or when asked) it plays once by itself as soon as every year of the record is in.
   const played = useRef(false);
+  // A short pass (the film's 2010 to 2012) starts as soon as its own years are in; a whole pass when every year is.
+  const passIn = years.length > 0 && years.slice(years.indexOf(firstOfPass), years.indexOf(lastOfPass) + 1).every((y) => have(y));
   useEffect(() => {
-    if (played.current || !idx || inCount < years.length || !(autoplay ?? isFilm())) return;
+    if (played.current || !idx || !(short ? passIn : inCount >= years.length) || !(autoplay ?? isFilm())) return;
     played.current = true;
     setYear(firstOfPass);
     setPlaying(true);
-  }, [idx, inCount, years, autoplay, firstOfPass]);
+  }, [idx, inCount, years, autoplay, firstOfPass, short, passIn]);
 
   const play = useCallback(() => {
     if (!years.length) return;
@@ -381,7 +388,7 @@ export function EarthYears({
         {inCount < years.length && <div className="world-legend__fine">{`${Y.loading}: ${inCount} of ${years.length}`}</div>}
       </div>
       <div className="world-years__strip" ref={stripRef} data-world-ui>
-        <div className="world-years__strip-head" style={{ ['--at' as string]: String(Math.max(sharpAt, 0) / n) }}>
+        <div className="world-years__strip-head" data-step={stepLabel ? 'on' : 'off'} style={{ ['--at' as string]: String(Math.max(sharpAt, 0) / n) }}>
           <div className="world-years__strip-keys">
             <span className="world-years__strip-title">{Y.totals}</span>
             <span className="world-years__key world-years__key--modis">{Y.barsModis}</span>

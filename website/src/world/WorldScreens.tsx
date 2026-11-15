@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GuideStrip } from '../guide/GuideStrip';
 import type { ScriptAction } from '../guide/script';
 import { Trail, type TrailWord } from '../guide/Trail';
@@ -78,8 +78,42 @@ function Frame({ objective, word, context, lines, actions, onAction, film, trail
   );
 }
 
+/**
+ * True once the page under a picture has gone a moment with no long task (or after `cap` ms): the page's stage loads
+ * its ground under the picture at first, and a pass that plays starts after that, at its own pace.
+ */
+function useQuiet(quietMs = 700, cap = 5000): boolean {
+  const [quiet, setQuiet] = useState(false);
+  useEffect(() => {
+    let last = performance.now();
+    let obs: PerformanceObserver | null = null;
+    try {
+      obs = new PerformanceObserver((l) => {
+        for (const e of l.getEntries()) last = Math.max(last, e.startTime + e.duration);
+      });
+      obs.observe({ type: 'longtask', buffered: false });
+    } catch {
+      obs = null;
+    }
+    const began = performance.now();
+    const id = window.setInterval(() => {
+      const now = performance.now();
+      if (now - last >= quietMs || now - began >= cap) {
+        setQuiet(true);
+        window.clearInterval(id);
+      }
+    }, 100);
+    return () => {
+      window.clearInterval(id);
+      obs?.disconnect();
+    };
+  }, [quietMs, cap]);
+  return quiet;
+}
+
 function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
   const start = screen.years ?? {};
+  const quiet = useQuiet();
   const control = useRef<YearsControl | null>(null);
   const [st, setSt] = useState<YearsState | null>(null);
   const ratio = st?.ratio ? oneDecimal(st.ratio) : null;
@@ -90,14 +124,21 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
     ...(st?.oneScaleReady ? [{ label: oneScale ? S.years.toCounted : S.years.toOneScale, command: 'record:as_counted', key: 'Y' }] : []),
     { label: S.years.back, command: 'close', key: 'Esc' },
   ];
-  const caption = film && st ? (oneScale ? S.years.filmOneScale(st.first) : ratio ? S.years.filmCounted(ratio) : null) : null;
+  // In the film the caption stands under the year: on one scale its line throughout; as counted, the step's line from
+  // 2012, so a year before it is not captioned with 2012 (the line under the year says who counted it until then).
+  const caption = film && st ? (oneScale ? S.years.filmOneScale(st.first) : ratio && st.year >= 2012 ? S.years.filmCounted(ratio) : null) : null;
+  // What a film driver waits for: the pass begins once the page under it is quiet (`data-pass` on the host).
+  const pass = !start.play ? 'none' : st?.playing ? 'playing' : quiet && st && st.year === (start.until ?? st.last) ? 'done' : 'waiting';
+  useEffect(() => {
+    document.querySelector('.world-screen')?.setAttribute('data-pass', pass);
+  }, [pass]);
   return (
     <>
       <EarthYears
         mode={start.view === 'onescale' ? 'harmonized' : 'detected'}
         year={start.from}
         until={start.until}
-        autoplay={start.play ?? false}
+        autoplay={(start.play ?? false) && quiet}
         captionLine={caption}
         stepLabel={!film}
         ownPlay={false}

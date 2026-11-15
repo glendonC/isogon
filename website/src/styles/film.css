@@ -202,3 +202,30 @@
   line-height: 1.16;
   letter-spacing: -0.01em;
 }
+
+/* The film's shots of the host read in three seconds: the years with the year, its caption and a strip tall enough to
+   show the step, no legend; the test with squares large enough to see what each fire won, its panel's fine print left
+   to the page (the caption says the result; the interval's line stays). */
+.iso-film .world-screen[data-name='years'] {
+  --years-bottom: 24px;
+}
+
+.iso-film .world-screen[data-name='years'] .world-years__legend {
+  display: none;
+}
+
+.iso-film .world-screen[data-name='years'] .world-years__strip {
+  grid-template-rows: auto clamp(52px, 6.2cqh, 76px) 16px;
+}
+
+.iso-film .world-gauge:not(.world-gauge--mini) {
+  width: 17px;
+  height: 17px;
+  margin: -8.5px 0 0 -8.5px;
+  border-width: 1.5px;
+}
+
+.iso-film .world-tests__key,
+.iso-film .world-tests__kept {
+  display: none;
+}
