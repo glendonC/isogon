@@ -6,6 +6,7 @@ import {
   countWord,
   gainScale,
   groundOfRun,
+  overlapMove,
   playBlocks,
   points,
   readPlay,
@@ -36,10 +37,9 @@ export const PLAYERS_WORDS = {
   playing: 'The other players are playing this round.',
   noFire: 'The players play on a real fire. Choose a place with fires first.',
   otherGround: 'This round is on other ground than the fire on the land, so it cannot be drawn here.',
-  points: 'points',
   chanceMean: (rounds: number, least: number, most: number) =>
     `The mean of ${countWord(rounds)} rounds of random looks, from ${points(least)} to ${points(most)}`,
-  chanceDrawn: (rounds: number, gain: number | null) => `Drawn here: one of the ${countWord(rounds)}${gain !== null ? `, ${points(gain)} points` : ''}`,
+  chanceDrawn: (rounds: number, gain: number | null) => `Drawn here: one of the ${countWord(rounds)}${gain !== null ? `, ${overlapMove(gain).toLowerCase()}` : ''}`,
   chanceOne: 'One round of random looks',
   /** What the fire is to the learned player, by the registry's word for it. */
   learned: {
@@ -74,19 +74,15 @@ interface LabelProps {
   notes: string[];
 }
 
-/** Under a block: the player, its gain in points on a bar of the picture's one scale, and what is to be said of it. */
+/** Under a block: the player, its gain in overlap on a bar of the picture's one scale, and what is to be said of it. */
 function PlayerLabel({ play, width, gain, range, scale, notes }: LabelProps) {
   const share = (g: number) => (scale ? `${Math.min(100, Math.max(0, (g / scale) * 100))}%` : '0%');
   return (
     <div className="agent-label" style={{ width }}>
       <span className="agent-label__name">{play.name}</span>
       <span className="agent-label__gain">
-        {gain !== null && (
-          <>
-            <span className="agent-label__points">{points(gain)}</span>
-            <span className="sys-label">{PLAYERS_WORDS.points}</span>
-          </>
-        )}
+        {/* The player's gain in the product lane's words: "Overlap up 11.4 points", a loss as plainly */}
+        {gain !== null && <span className="agent-label__points">{overlapMove(gain)}</span>}
       </span>
       <span className="agent-bar" aria-hidden="true">
         {gain !== null && scale !== null && <i style={{ width: share(gain) }} />}
