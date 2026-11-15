@@ -14,6 +14,7 @@ import { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../styles/tokens.css';
 import '../../styles/system.css';
+import '../../styles/film.css';
 import { parsePlaces, type Places } from '../../app/places';
 import { GuideStrip } from '../../guide/GuideStrip';
 import { Trail } from '../../guide/Trail';
@@ -25,6 +26,8 @@ import type { Box } from '../projection';
 import { useRead } from '../read';
 
 const Q = new URLSearchParams(location.search);
+// The film presentation, as the page takes it from `film` in its address.
+if (Q.has('film')) document.documentElement.classList.add('iso-film');
 const USE = Q.get('use') ?? 'earth';
 const SAMPLE = 'http://127.0.0.1:9488';
 const boxParam = (s: string | null): Box | null => {
@@ -96,7 +99,7 @@ function Sealed() {
       lines={['Each prediction was written down and sealed before the sharp satellite passed over the fire. The white square always stands before the ring.']}
       actions={['Show a sealed prediction', 'Back to the test']}
     >
-      <div style={{ position: 'absolute', inset: '96px 0 150px 0' }}>
+      <div style={{ position: 'absolute', inset: 'var(--film-room-top, 96px) 0 var(--film-room-bottom, 150px) 0' }}>
         <SealedTonight source={Q.get('seals') ?? `${SAMPLE}/live-example.json`} now={Q.get('now')} />
       </div>
     </Frame>

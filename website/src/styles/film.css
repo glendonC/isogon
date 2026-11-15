@@ -1,0 +1,152 @@
+/* The film presentation. When the page's address carries `film` (the parameter the stage reads for its camera moves),
+   the root element takes the class `iso-film` and the page says its own words large enough to read in a shot of three
+   to four seconds at 1920 by 1080: the objective is the shot's caption, the guide says its first standing sentence,
+   the actions keep their words and lose their keycaps, the label on the fire is a step larger, and the controls a
+   visitor would use (sound, search, the field to ask) leave the screen. No word is added or changed; sizes follow the
+   window's width so the same rules hold at 1440 by 900. The imagery credit stays, in a corner, at its smallest
+   legible size, because some imagery on the stage requires its credit whenever it is shown. */
+
+/* The room the caption and its trail take at the top, and the guide at the bottom: a screen that opens over the stage
+   keeps clear of both (`inset: var(--film-room-top) 0 var(--film-room-bottom) 0` for a wrapper of the page's). */
+:root.iso-film {
+  --film-room-top: clamp(96px, 7.9vw, 152px);
+  --film-room-bottom: clamp(150px, 11vw, 212px);
+}
+
+/* The objective: the caption of the shot, top left, about 44 px at 1920 wide; the trail small under it. */
+.iso-film .guide-trail {
+  top: clamp(22px, 2.2vw, 44px);
+  left: clamp(24px, 2.4vw, 48px);
+  max-width: min(72vw, 1400px);
+  gap: clamp(6px, 0.6vw, 12px);
+}
+
+.iso-film .guide-trail__objective {
+  font-size: clamp(30px, 2.3vw, 48px);
+  line-height: 1.16;
+  letter-spacing: -0.01em;
+}
+
+.iso-film .guide-trail__word,
+.iso-film .guide-trail__where {
+  font-size: clamp(13px, 0.78vw, 16px);
+}
+
+/* The guide: its first standing sentence only, larger; its actions as words, the next step the strong one. */
+.iso-film .guide-strip {
+  bottom: clamp(28px, 3.3vw, 64px);
+  width: min(74vw, 1400px);
+  gap: clamp(12px, 1vw, 20px);
+}
+
+.iso-film .guide-strip::before {
+  /* A soft scrim under the sentence where it lies on bright ground; no edge, no plate. */
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -48px -14vw -72px;
+  background: radial-gradient(ellipse 50% 60% at 50% 55%, rgba(8, 11, 17, 0.66), rgba(8, 11, 17, 0));
+  pointer-events: none;
+}
+
+.iso-film .guide-strip__line {
+  min-height: 0;
+  font-size: clamp(20px, 1.46vw, 30px);
+  line-height: 1.3;
+}
+
+/* With one sentence to a span (the guide's own markup), the second and later sentences wait for the visitor. */
+.iso-film .guide-strip__said + .guide-strip__said {
+  display: none;
+}
+
+.iso-film .guide-key,
+.iso-film .iso-entry__key {
+  display: none;
+}
+
+.iso-film .guide-act {
+  padding: 4px 6px;
+  background: none;
+  font-size: clamp(15px, 0.94vw, 19px);
+  line-height: 1.3;
+  color: var(--sys-ink-3);
+}
+
+.iso-film .guide-act--next {
+  padding: 4px 6px;
+  border-left: 0;
+  background: none;
+  color: var(--sys-ink);
+}
+
+/* A screen that opens over the stage under the caption starts below the caption and its trail. */
+.iso-film .wm-three {
+  top: var(--film-room-top);
+}
+
+/* The players side by side keep room for the caption above and the guide below (the room it lets the page set). */
+.iso-film .players {
+  --players-top: var(--film-room-top);
+  --players-guide: var(--film-room-bottom);
+}
+
+/* The label on the fire, a step larger. */
+.iso-film .guide-label {
+  max-width: clamp(420px, 28vw, 560px);
+  font-size: clamp(15px, 0.9vw, 18px);
+  line-height: 1.35;
+}
+
+/* Nothing a visitor would use: no sound, no search, no field to ask, no reference links on the landing. */
+.iso-film .iso-ws__util,
+.iso-film .iso-land__menu,
+.iso-film .guide-ask {
+  display: none !important;
+}
+
+/* The imagery credit: kept, bottom right, at its smallest legible size, away from the guide's line. */
+.iso-film .iso-credit,
+.iso-film .iso-land__credit {
+  left: auto;
+  right: 12px;
+  bottom: 8px;
+  max-width: 46vw;
+  font-size: 10px;
+  line-height: 12px;
+  text-align: right;
+  color: rgba(243, 244, 246, 0.55);
+}
+
+/* The pictures of the world, a step larger where a shot rests on them. */
+.iso-film .world-label {
+  font-size: clamp(13px, 0.86vw, 17px);
+  line-height: 1.3;
+}
+
+.iso-film .world-legend__line,
+.iso-film .world-board__where,
+.iso-film .world-board__words,
+.iso-film .world-tests__name,
+.iso-film .world-tests__num {
+  font-size: clamp(13px, 0.86vw, 17px);
+  line-height: 1.35;
+}
+
+.iso-film .world-legend__fine,
+.iso-film .world-board__rule,
+.iso-film .world-board__key,
+.iso-film .world-board__axis,
+.iso-film .world-board__rest {
+  font-size: clamp(12px, 0.72vw, 14px);
+  line-height: 1.35;
+}
+
+.iso-film .world-earth__tools {
+  display: none;
+}
+
+.iso-film .world-tests {
+  top: var(--film-room-top);
+  width: min(600px, 32vw);
+}
