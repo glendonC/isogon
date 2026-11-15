@@ -84,9 +84,13 @@ interface Entry {
 }
 
 export interface PlaneLayout {
-  perRow?: number;
+  /** Blocks in a row; `fit` takes the count of columns that draws the blocks largest in the plane's room. */
+  perRow?: number | 'fit';
   labelSpace: number;
 }
+
+/** The narrowest a block may stand on screen when the columns are chosen to fit, so its label can be read. CSS px. */
+const FIT_MIN_ACROSS = 136;
 
 export class PlaneEngine {
   private renderer: THREE.WebGLRenderer;
@@ -141,8 +145,11 @@ export class PlaneEngine {
   setBlocks(blocks: readonly CompareBlock[], layout: PlaneLayout): void {
     if (this.disposed) return;
     this.layout = layout;
-    this.imageSide = new Set(blocks.map((b) => b.ground.imageUrl)).size <= 1 ? 4096 : 2048;
-    const posts = blocks.length <= 4 ? 384 : 256;
+    // Detail by how many blocks share the screen: a dozen or more blocks are each small on screen, and keeping them
+    // all at full detail would hold a few hundred megabytes on the graphics card for nothing anyone can see
+    const many = blocks.length > 8;
+    this.imageSide = new Set(blocks.map((b) => b.ground.imageUrl)).size <= 1 ? 4096 : many ? 1024 : 2048;
+    const posts = blocks.length <= 4 ? 384 : many ? 192 : 256;
     const next: Entry[] = [];
     for (const block of blocks) {
       const g = block.ground;
@@ -232,7 +239,7 @@ export class PlaneEngine {
       entry.image = image !== null;
 
       const marks = document.createElement('canvas');
-      marks.width = count <= 4 ? 2048 : 1024;
+      marks.width = count <= 4 ? 2048 : count <= 8 ? 1024 : 768;
       marks.height = Math.max(2, Math.round((marks.width * terrain.depthKm) / terrain.widthKm));
       entry.marks = marks;
       entry.marksTexture = new THREE.CanvasTexture(marks);
@@ -398,8 +405,6 @@ export class PlaneEngine {
     const a = AZIMUTH * DEG;
     const e = ELEVATION * DEG;
     const n = this.entries.length;
-    const cols = Math.max(1, Math.min(n, this.layout.perRow ?? (n <= 4 ? n : 3)));
-    const rows = Math.ceil(n / cols);
     const sizes = this.entries.map((x) => {
       const cut = x.terrain ?? { ...cutOf(x.block.ground), topKm: 0 };
       return {
@@ -412,10 +417,20 @@ export class PlaneEngine {
     const cellTall = Math.max(...sizes.map((s) => s.deep + s.tall));
     const gap = cellAcross * GAP;
     const label = this.layout.labelSpace;
-    const scale = Math.max(
-      0.01,
-      Math.min((this.width - 2 * PAD_X) / (cols * cellAcross + (cols - 1) * gap), (this.height - PAD_TOP - rows * label) / (rows * cellTall)),
-    );
+    const scaleFor = (c: number) => {
+      const r = Math.ceil(n / c);
+      return Math.min((this.width - 2 * PAD_X) / (c * cellAcross + (c - 1) * gap), (this.height - PAD_TOP - r * label) / (r * cellTall));
+    };
+    let cols: number;
+    if (this.layout.perRow === 'fit') {
+      // The count of columns that draws the blocks largest, among those that keep a block wide enough for its label;
+      // when none does, the largest of all
+      const tried = Array.from({ length: n }, (_, i) => ({ c: i + 1, sc: scaleFor(i + 1) }));
+      const wide = tried.filter((t) => t.sc * cellAcross >= FIT_MIN_ACROSS);
+      cols = (wide.length > 0 ? wide : tried).reduce((a, b) => (b.sc > a.sc ? b : a)).c;
+    } else cols = Math.max(1, Math.min(n, this.layout.perRow ?? (n <= 4 ? n : 3)));
+    const rows = Math.ceil(n / cols);
+    const scale = Math.max(0.01, scaleFor(cols));
     this.scale = scale;
     const rowHeight = cellTall * scale + label;
     const top = PAD_TOP + Math.max(0, (this.height - PAD_TOP - rows * rowHeight) / 2);

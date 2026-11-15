@@ -157,7 +157,8 @@ export interface ComparePlaneProps {
   /** The cut-outs, in reading order. One to nine. */
   blocks: CompareBlock[];
   /** Blocks per row. Default: one row up to four blocks, rows of three above that. */
-  perRow?: number;
+  /** Blocks in a row; `fit` takes the count of columns that draws the blocks largest. */
+  perRow?: number | 'fit';
   /** Pixels kept free under each row for labels. Default 88. */
   labelSpace?: number;
   /** The block under the pointer or holding the keyboard's place, or null. */

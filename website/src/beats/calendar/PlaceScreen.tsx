@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { feature } from 'topojson-client';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 import countries from 'world-atlas/countries-50m.json';
 import type { Box, FeaturedFire, Places, Place } from '../../app/places';
-import { FeaturedFiresPlane } from '../../compare/FeaturedFiresPlane';
+import { FireBlock } from '../../compare/FireBlock';
 import '../../styles/place-screen.css';
 
 /** Plate carree with longitude shortened by the cosine of 45 degrees, so the middle latitudes keep their shape. */
@@ -50,14 +50,6 @@ interface View {
   scale: number;
 }
 
-const fitView = (box: Box, w: number, h: number, pad = 1.25): View => {
-  const x0 = toX(box[0]);
-  const x1 = toX(box[2]);
-  const y0 = toY(box[3]);
-  const y1 = toY(box[1]);
-  return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, scale: (Math.max((x1 - x0) / w, (y1 - y0) / h) || 0.05) * pad };
-};
-
 const lat = (v: number) => `${Math.abs(v).toFixed(2)} ${v < 0 ? 'S' : 'N'}`;
 const lon = (v: number) => `${Math.abs(v).toFixed(2)} ${v < 0 ? 'W' : 'E'}`;
 /** "39.31 N to 40.31 N, 121.55 W to 120.55 W", as the box calendar labels a box. */
@@ -78,15 +70,17 @@ export const PLACE_WORDS = {
   } as Record<string, string>,
   among: (name: string) => `Fires here in this period, among them the ${name}`,
   show: 'Show this fire',
-  find: 'A name, or latitude, longitude',
+  find: 'Find a place, a fire, or latitude, longitude',
   findLabel: 'Find a place by name or coordinates',
+  fires: 'Featured fires',
   draw: 'Draw an area',
   drawing: 'Drag on the map to draw an area',
   showArea: "Show this area's fire record",
   back: 'Back',
-  lighter: 'Lighter land: an area drawn there has a fire record.',
-  noneNamed: (q: string) => `No place or fire named "${q}" here. Coordinates work anywhere: latitude, longitude.`,
-  imagery: (credits: string[]) => `Imagery: ${credits.join('; ')}`,
+  loadingFire: "Loading this fire's ground",
+  failedFire: "This fire's ground did not load.",
+  noneNamed: (q: string) => `No place or fire named "${q}". Coordinates work anywhere: latitude, longitude.`,
+  imagery: (credit: string) => `Imagery: ${credit}`,
 };
 
 /** What the fire is to the model, in a few words. */
@@ -108,100 +102,142 @@ export interface PlaceScreenProps {
 }
 
 /**
- * Choose a Place, opened over the stage. The featured fires lead: one block of real terrain per fire, at one scale,
- * each with its period, its place and what it is to the model; a pick shows the fire. The map supports them: it says
- * where the places are, finds a place by name or coordinates, and takes an area the visitor draws, whose fire record
- * then opens. Nothing here stands on anything else: the map's labels are pushed apart, and a block's longer sentence
- * appears in room kept under it.
+ * Choose a Place, opened over the stage. The world is the screen: every featured fire is a mark on it, and the
+ * fires are a list beside it, grouped by place, as long as the registry makes it. A fire under the pointer or the
+ * keyboard's focus, on the list or on the map, opens one card at its mark: the fire's own terrain, its period, its
+ * place, what it is to the model, and the action that shows it. Any area drawn on the map opens its fire record.
+ * Names on the map are written only where they meet no other; the rest are marks until the pointer is near.
  */
 export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: PlaceScreenProps) {
   const rootRef = useRef<HTMLElement | null>(null);
-  const [over, setOver] = useState<string | null>(null);
-  const [credits, setCredits] = useState<string[]>([]);
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [size, setSize] = useState({ w: 440, h: 440 });
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState({ w: 1440, h: 900 });
+  const [measured, setMeasured] = useState(false);
   const shapes = useMemo(countryShapes, []);
-  const cached = new Set(places.boxCalendar?.countries ?? []);
-  const firms = places.places.filter((p) => p.rows === 'firms' && p.featured_fires.length > 0);
+  const firms = useMemo(() => places.places.filter((p) => p.rows === 'firms' && p.featured_fires.some((f) => f.default_start)), [places]);
+  const fires = useMemo(() => firms.flatMap((place) => place.featured_fires.filter((f) => f.default_start).map((fire) => ({ place, fire }))), [firms]);
   const [view, setView] = useState<View | null>(null);
+  // The fire whose card is open: under the pointer, under the keyboard's focus, or pinned by a click on its mark
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [focused, setFocused] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
+  const [credit, setCredit] = useState<string | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [box, setBox] = useState<Box | null>(null);
   const [query, setQuery] = useState('');
   const [note, setNote] = useState<string | null>(null);
-  const drag = useRef<{ x: number; y: number; view: View; mode: 'pan' | 'box'; lon0?: number; lat0?: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; view: View; mode: 'pan' | 'box'; lon0?: number; lat0?: number; moved: boolean } | null>(null);
 
   useLayoutEffect(() => {
-    const el = ref.current;
+    const el = rootRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
+    const ro = new ResizeObserver(([e]) => {
+      setSize({ w: e.contentRect.width, h: e.contentRect.height });
+      setMeasured(true);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  // First view: every place with fire rows, with room around them.
+  // The part of the screen the map is read in: clear of the trail above, the list on the right and the guide below
+  const css = rootRef.current ? getComputedStyle(rootRef.current) : null;
+  const px = (name: string, fallback: number) => Number.parseFloat(css?.getPropertyValue(name) ?? '') || fallback;
+  // On a narrow screen the list lies under the map, so the map is read across the whole width above it
+  const narrow = size.w < 900;
+  const region = narrow
+    ? { left: 16, top: px('--place-top', 104), right: size.w - 16, bottom: Math.round(size.h * 0.52) }
+    : { left: 24, top: px('--place-top', 104), right: size.w - px('--place-rail', 340) - 48, bottom: size.h - px('--place-guide', 170) };
+
+  /** A view that holds a box inside the region the map is read in. */
+  const viewOf = (b: Box, pad: number): View => {
+    const rw = Math.max(80, region.right - region.left);
+    const rh = Math.max(80, region.bottom - region.top);
+    const x0 = toX(b[0]);
+    const x1 = toX(b[2]);
+    const y0 = toY(b[3]);
+    const y1 = toY(b[1]);
+    const scale = (Math.max((x1 - x0) / rw, (y1 - y0) / rh) || 0.05) * pad;
+    const cx = (x0 + x1) / 2 - ((region.left + region.right) / 2 - size.w / 2) * scale;
+    const cy = (y0 + y1) / 2 - ((region.top + region.bottom) / 2 - size.h / 2) * scale;
+    return { cx, cy, scale };
+  };
+
+  // First view: every place with a featured fire, with room around them
   useEffect(() => {
-    if (view || firms.length === 0) return;
+    if (view || firms.length === 0 || !measured) return;
     const w = Math.min(...firms.map((p) => p.box[0]));
     const s = Math.min(...firms.map((p) => p.box[1]));
     const e = Math.max(...firms.map((p) => p.box[2]));
     const n = Math.max(...firms.map((p) => p.box[3]));
-    setView(fitView([w - 6, s - 8, e + 6, n + 8], size.w, size.h, 1.05));
-  }, [firms.length, size.w, size.h]); // eslint-disable-line react-hooks/exhaustive-deps
+    setView(viewOf([w - 8, s - 8, e + 8, n + 8], 1.05));
+  }, [firms.length, measured]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const v = view ?? { cx: 0, cy: -40, scale: 0.12 };
   const sx = (x: number) => (x - v.cx) / v.scale + size.w / 2;
   const sy = (y: number) => (y - v.cy) / v.scale + size.h / 2;
-  const lonAt = (px: number) => (v.cx + (px - size.w / 2) * v.scale) / K;
-  const latAt = (py: number) => -(v.cy + (py - size.h / 2) * v.scale);
+  const lonAt = (p: number) => (v.cx + (p - size.w / 2) * v.scale) / K;
+  const latAt = (p: number) => -(v.cy + (p - size.h / 2) * v.scale);
 
-  const zoomAt = (px: number, py: number, f: number) => {
-    const mx = v.cx + (px - size.w / 2) * v.scale;
-    const my = v.cy + (py - size.h / 2) * v.scale;
+  const zoomAt = (x: number, y: number, f: number) => {
+    const mx = v.cx + (x - size.w / 2) * v.scale;
+    const my = v.cy + (y - size.h / 2) * v.scale;
     const scale = Math.min(0.5, Math.max(0.0004, v.scale * f));
-    setView({ cx: mx - (px - size.w / 2) * scale, cy: my - (py - size.h / 2) * scale, scale });
+    setView({ cx: mx - (x - size.w / 2) * scale, cy: my - (y - size.h / 2) * scale, scale });
   };
 
   const limits = places.boxCalendar;
   const boxProblem = (b: Box): string | null => {
     const span = Math.max(b[2] - b[0], b[3] - b[1]);
-    if (limits && span > limits.max_span_deg) return `A box can span at most ${limits.max_span_deg} degrees.`;
-    if (limits && Math.min(b[2] - b[0], b[3] - b[1]) < limits.min_span_deg) return `A box must span at least ${limits.min_span_deg} degrees.`;
-    const inside = Object.values(limits?.country_extents ?? {}).some((ext) => b[0] < ext[2] && b[2] > ext[0] && b[1] < ext[3] && b[3] > ext[1]);
-    if (limits && !inside) return `Records are served inside ${limits.countries.join(', ')} for now.`;
+    if (limits && span > limits.max_span_deg) return `An area can span at most ${limits.max_span_deg} degrees.`;
+    if (limits && Math.min(b[2] - b[0], b[3] - b[1]) < limits.min_span_deg) return `An area must span at least ${limits.min_span_deg} degrees.`;
+    const extents = Object.values(limits?.country_extents ?? {});
+    if (limits && extents.length > 0 && !extents.some((ext) => b[0] < ext[2] && b[2] > ext[0] && b[1] < ext[3] && b[3] > ext[1])) {
+      return `Fire records are served inside ${limits.countries.join(', ')} so far.`;
+    }
     return null;
   };
 
   const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('button, input, a')) return;
     const r = e.currentTarget.getBoundingClientRect();
-    const px = e.clientX - r.left;
-    const py = e.clientY - r.top;
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
     e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = drawing ? { x: px, y: py, view: v, mode: 'box', lon0: lonAt(px), lat0: latAt(py) } : { x: px, y: py, view: v, mode: 'pan' };
+    drag.current = drawing
+      ? { x, y, view: v, mode: 'box', lon0: lonAt(x), lat0: latAt(y), moved: false }
+      : { x, y, view: v, mode: 'pan', moved: false };
   };
   const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
     const r = e.currentTarget.getBoundingClientRect();
-    const px = e.clientX - r.left;
-    const py = e.clientY - r.top;
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    if (Math.abs(x - d.x) + Math.abs(y - d.y) > 3) d.moved = true;
     if (d.mode === 'pan') {
-      setView({ ...d.view, cx: d.view.cx - (px - d.x) * d.view.scale, cy: d.view.cy - (py - d.y) * d.view.scale });
+      setView({ ...d.view, cx: d.view.cx - (x - d.x) * d.view.scale, cy: d.view.cy - (y - d.y) * d.view.scale });
     } else {
-      const lon1 = lonAt(px);
-      const lat1 = latAt(py);
-      const b: Box = [
-        Math.min(d.lon0!, lon1),
-        Math.min(d.lat0!, lat1),
-        Math.max(d.lon0!, lon1),
-        Math.max(d.lat0!, lat1),
-      ].map((n) => Math.round(n * 100) / 100) as Box;
+      const lon1 = lonAt(x);
+      const lat1 = latAt(y);
+      const b: Box = [Math.min(d.lon0!, lon1), Math.min(d.lat0!, lat1), Math.max(d.lon0!, lon1), Math.max(d.lat0!, lat1)].map(
+        (n) => Math.round(n * 100) / 100,
+      ) as Box;
       setBox(b);
       setNote(boxProblem(b));
     }
   };
   const onUp = () => {
+    // A click on the open map, not a drag, closes a pinned card
+    if (drag.current && !drag.current.moved && drag.current.mode === 'pan') setPinned(null);
     drag.current = null;
+  };
+
+  const pinPlace = (place: Place, fire?: FeaturedFire) => {
+    const f = fire ?? place.featured_fires.find((x) => x.default_start);
+    if (!f) return;
+    setPinned(f.id);
+    listRef.current?.querySelector<HTMLElement>(`[data-fire="${CSS.escape(f.id)}"]`)?.scrollIntoView({ block: 'nearest' });
   };
 
   const search = () => {
@@ -209,33 +245,34 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
     if (!q) return;
     const m = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (m) {
-      const lat = Number(m[1]);
-      const lon = Number(m[2]);
-      if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
-        const b: Box = [lon - 0.5, lat - 0.5, lon + 0.5, lat + 0.5].map((n) => Math.round(n * 100) / 100) as Box;
+      const la = Number(m[1]);
+      const lo = Number(m[2]);
+      if (Math.abs(la) <= 90 && Math.abs(lo) <= 180) {
+        const b: Box = [lo - 0.5, la - 0.5, lo + 0.5, la + 0.5].map((n) => Math.round(n * 100) / 100) as Box;
         setBox(b);
         setNote(boxProblem(b));
-        setView(fitView(b, size.w, size.h, 6));
+        setView(viewOf(b, 6));
         return;
       }
     }
     const t = q.toLowerCase();
-    for (const p of firms) {
-      const fire = p.featured_fires.find((f) => (f.name ?? '').toLowerCase().includes(t) || f.label.toLowerCase().includes(t));
-      if (p.name.toLowerCase().includes(t) || fire) {
-        setView(fitView(p.box, size.w, size.h, 8));
+    for (const { place, fire } of fires) {
+      if ((fire.name ?? '').toLowerCase().includes(t) || fire.label.toLowerCase().includes(t) || place.name.toLowerCase().includes(t)) {
+        setView(viewOf(place.box, 30));
         setNote(null);
+        pinPlace(place, place.name.toLowerCase().includes(t) ? undefined : fire);
         return;
       }
     }
     setNote(PLACE_WORDS.noneNamed(q));
   };
 
-
-  // The screen's keys, while the focus is on it or on nothing: B draws an area, Enter shows the drawn area's record,
-  // Escape stops drawing or goes back.
-  const live = useRef({ drawing, box, note, onBox, onClose });
-  live.current = { drawing, box, note, onBox, onClose };
+  // The screen's keys, while the focus is on it or on nothing: B draws an area, Enter shows the drawn area's record or
+  // the fire whose card is open, + and - zoom, Escape stops drawing, closes a pinned card, or goes back.
+  const active = hovered ?? focused ?? pinned;
+  const activeHit = fires.find((f) => f.fire.id === active) ?? null;
+  const live = useRef({ drawing, box, note, onBox, onClose, pinned, activeHit, onFire });
+  live.current = { drawing, box, note, onBox, onClose, pinned, activeHit, onFire };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -246,99 +283,188 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
       const l = live.current;
       if (e.key === 'Escape') {
         if (l.drawing) setDrawing(false);
+        else if (l.pinned) setPinned(null);
         else l.onClose();
       } else if (typing) return;
       else if (e.key.toLowerCase() === 'b') setDrawing((d) => !d);
-      else if (e.key === 'Enter' && !t?.closest('button, a') && l.box && !l.note) l.onBox(l.box);
-      else return;
+      else if (e.key === '+' || e.key === '=') zoomAt(size.w / 2, size.h / 2, 0.7);
+      else if (e.key === '-') zoomAt(size.w / 2, size.h / 2, 1.4);
+      else if (e.key === 'Enter' && !t?.closest('button, a')) {
+        if (l.box && !l.note) l.onBox(l.box);
+        else if (l.activeHit) l.onFire(l.activeHit.place, l.activeHit.fire);
+        else return;
+      } else return;
       e.preventDefault();
       e.stopPropagation();
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, []);
-  const tellCredits = useCallback((c: string[]) => setCredits(c), []);
+  }); // the latest view and size: zoomAt reads them
 
-  // Each place's name beside its mark, on the side with room; names are pushed apart so that places close together
-  // on the map (two on one coast) never stand on each other. A thin leader joins name and mark.
-  const NAME_W = 190;
-  const NAME_H = 20;
-  const items = firms
+  // Marks, and the names written beside them where they meet no other name and no mark. The place whose card is open
+  // and the place of the fire on the land are named first; the rest in the registry's order.
+  const NAME_H = 18;
+  const marks = firms
     .map((p) => ({ p, x: sx(toX((p.box[0] + p.box[2]) / 2)), y: sy(toY((p.box[1] + p.box[3]) / 2)) }))
-    .filter((it) => it.x > 0 && it.x < size.w && it.y > 0 && it.y < size.h)
-    .sort((a, b) => a.y - b.y);
-  let bottomLeft = -Infinity;
-  let bottomRight = -Infinity;
-  const placed = items.map((it) => {
-    const right = it.x + 18 + NAME_W < size.w;
-    const top = Math.min(size.h - NAME_H, Math.max(it.y - NAME_H / 2, (right ? bottomRight : bottomLeft) + 4, 0));
-    if (right) bottomRight = top + NAME_H;
-    else bottomLeft = top + NAME_H;
-    return { ...it, right, top };
-  });
+    .filter((it) => it.x > -20 && it.x < size.w + 20 && it.y > -20 && it.y < size.h + 20);
+  const placeOfFire = (id: string | null) => (id ? firms.find((p) => p.featured_fires.some((f) => f.id === id))?.id ?? null : null);
+  const activePlace = placeOfFire(active);
+  const currentPlace = placeOfFire(currentFire);
+  const firstNamed = (id: string) => (id === activePlace ? 0 : id === currentPlace ? 1 : 2);
+  // The card at the open fire's mark: on the side of the mark with room, inside the region the map is read in
+  const CARD_W = 320;
+  const CARD_H = 330;
+  const anchor = activeHit ? marks.find((m) => m.p.id === activeHit.place.id) ?? null : null;
+  const cardAt = (() => {
+    if (!activeHit) return null;
+    const mx = anchor ? anchor.x : region.right;
+    const my = anchor ? anchor.y : (region.top + region.bottom) / 2;
+    const toRight = mx + 24 + CARD_W <= region.right + 40 || mx - 24 - CARD_W < region.left;
+    const left = toRight ? mx + 24 : mx - 24 - CARD_W;
+    const top = Math.min(Math.max(region.top, my - CARD_H / 2), Math.max(region.top, region.bottom - CARD_H));
+    return { left: Math.max(region.left, Math.min(left, region.right + 40 - CARD_W)), top, toRight, mx, my, onMap: anchor !== null };
+  })();
+
+  const taken: { l: number; r: number; t: number; b: number }[] = marks.map((m) => ({ l: m.x - 5, r: m.x + 5, t: m.y - 5, b: m.y + 5 }));
+  // No name is written under the open card
+  if (cardAt) taken.push({ l: cardAt.left - 8, r: cardAt.left + CARD_W + 8, t: cardAt.top - 8, b: cardAt.top + CARD_H + 8 });
+  const names = [...marks]
+    .sort((a, b) => firstNamed(a.p.id) - firstNamed(b.p.id))
+    .flatMap((m) => {
+      if (m.x > region.right + 40 || m.y < region.top - 10 || m.y > region.bottom + 10) return [];
+      const w = m.p.name.length * 6.6 + 4;
+      const right = m.x + 12 + w < region.right + 40;
+      const l = right ? m.x + 12 : m.x - 12 - w;
+      const box = { l, r: l + w, t: m.y - NAME_H / 2, b: m.y + NAME_H / 2 };
+      // The open fire's place is named first, unless the card stands there: the card names it then
+      const underCard = cardAt !== null && box.l < cardAt.left + CARD_W + 8 && box.r > cardAt.left - 8 && box.t < cardAt.top + CARD_H + 8 && box.b > cardAt.top - 8;
+      if (m.p.id === activePlace && underCard) return [];
+      const forced = m.p.id === activePlace;
+      if (!forced && taken.some((o) => box.l < o.r && box.r > o.l && box.t < o.b && box.b > o.t)) return [];
+      taken.push(box);
+      return [{ ...m, right, l }];
+    });
+
+  // The fires as a list, grouped by place in the registry's order. Up and Down move the focus between fires.
+  const onListKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const items = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('.place__fire') ?? [])];
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next = items[Math.max(0, Math.min(items.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))];
+    next?.focus();
+    next?.scrollIntoView({ block: 'nearest' });
+    e.preventDefault();
+  };
 
   return (
     <section className="place" aria-label={PLACE_WORDS.name} ref={rootRef}>
-      <div className="place__side">
-        <div
-          ref={ref}
-          className="place__map"
-          data-drawing={drawing ? 'true' : 'false'}
-          onPointerDown={onDown}
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerCancel={onUp}
-          onWheel={(e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(e.deltaY * 0.0015));
-          }}
-        >
-          <svg width={size.w} height={size.h} viewBox={`${v.cx - (size.w / 2) * v.scale} ${v.cy - (size.h / 2) * v.scale} ${size.w * v.scale} ${size.h * v.scale}`}>
-            {shapes.map((s) => (
-              <path key={s.name + s.d.length} d={s.d} className={cached.has(s.name) ? 'place__land place__land--cached' : 'place__land'} vectorEffect="non-scaling-stroke" />
-            ))}
-            {firms.map((p) => (
-              <rect key={p.id} x={toX(p.box[0])} y={toY(p.box[3])} width={toX(p.box[2]) - toX(p.box[0])} height={p.box[3] - p.box[1]} className="place__box" vectorEffect="non-scaling-stroke" />
-            ))}
-            {box && (
-              <rect
-                x={toX(box[0])}
-                y={toY(box[3])}
-                width={toX(box[2]) - toX(box[0])}
-                height={box[3] - box[1]}
-                className={note ? 'place__drawn place__drawn--bad' : 'place__drawn'}
-                vectorEffect="non-scaling-stroke"
-              />
-            )}
-          </svg>
-          <svg className="place__marks" width={size.w} height={size.h} aria-hidden="true">
-            {placed.map((it) => (
-              <g key={it.p.id} data-over={over === it.p.id ? 'true' : 'false'}>
-                <line x1={it.x} y1={it.y} x2={it.right ? it.x + 14 : it.x - 14} y2={it.top + NAME_H / 2} />
-                <rect x={it.x - 3} y={it.y - 3} width={6} height={6} />
-              </g>
-            ))}
-          </svg>
-          {placed.map((it) => (
-            <span
-              key={it.p.id}
-              className="place__name sys-label"
-              data-over={over === it.p.id ? 'true' : 'false'}
-              style={it.right ? { left: it.x + 18, top: it.top } : { right: size.w - it.x + 18, top: it.top }}
-            >
-              {it.p.name}
-            </span>
+      <div
+        ref={mapRef}
+        className="place__map"
+        data-drawing={drawing ? 'true' : 'false'}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        onWheel={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(e.deltaY * 0.0015));
+        }}
+      >
+        <svg width={size.w} height={size.h} viewBox={`${v.cx - (size.w / 2) * v.scale} ${v.cy - (size.h / 2) * v.scale} ${size.w * v.scale} ${size.h * v.scale}`}>
+          {shapes.map((s) => (
+            <path key={s.name + s.d.length} d={s.d} className="place__land" vectorEffect="non-scaling-stroke" />
           ))}
-          <div className="place__zoom">
-            <button type="button" className="place__act" aria-label="Zoom in" onClick={() => zoomAt(size.w / 2, size.h / 2, 0.6)}>
-              +
-            </button>
-            <button type="button" className="place__act" aria-label="Zoom out" onClick={() => zoomAt(size.w / 2, size.h / 2, 1.6)}>
-              -
-            </button>
+          {box && (
+            <rect
+              x={toX(box[0])}
+              y={toY(box[3])}
+              width={toX(box[2]) - toX(box[0])}
+              height={box[3] - box[1]}
+              className={note ? 'place__drawn place__drawn--bad' : 'place__drawn'}
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+        </svg>
+        <svg className="place__marks" width={size.w} height={size.h} aria-hidden="true">
+          {marks.map((m) => (
+            <rect key={m.p.id} data-on={m.p.id === activePlace ? 'true' : m.p.id === currentPlace ? 'current' : undefined} x={m.x - 3.5} y={m.y - 3.5} width={7} height={7} />
+          ))}
+          {cardAt && cardAt.onMap && (
+            <line className="place__leader" x1={cardAt.mx} y1={cardAt.my} x2={cardAt.toRight ? cardAt.left : cardAt.left + CARD_W} y2={cardAt.my < cardAt.top + 20 ? cardAt.top + 20 : Math.min(cardAt.my, cardAt.top + CARD_H - 20)} />
+          )}
+        </svg>
+        {/* A mark is the way to its place's card */}
+        {marks.map((m) => (
+          <button
+            key={m.p.id}
+            type="button"
+            className="place__pick"
+            aria-label={m.p.name}
+            tabIndex={-1}
+            style={{ left: m.x - 10, top: m.y - 10 }}
+            onClick={() => pinPlace(m.p)}
+            onPointerEnter={() => {
+              const f = m.p.featured_fires.find((x) => x.default_start);
+              if (f) setHovered(f.id);
+            }}
+            onPointerLeave={() => setHovered(null)}
+          />
+        ))}
+        {names.map((n) => (
+          <span key={n.p.id} className="place__name sys-label" data-on={n.p.id === activePlace ? 'true' : undefined} style={{ left: n.l, top: n.y - NAME_H / 2 }}>
+            {n.p.name}
+          </span>
+        ))}
+        {box && (
+          // The drawn area's own words, and the action beside it
+          <div className="place__boxlabel" style={{ left: Math.max(8, sx(toX(box[0]))), top: Math.max(8, sy(toY(box[1])) + 8) }}>
+            <span className="sys-value">{boxWords(box)}</span>
+            {note ? (
+              <span className="sys-label place__note">{note}</span>
+            ) : (
+              !drag.current && (
+                <button type="button" className="place__act place__act--next" onClick={() => onBox(box)}>
+                  <span className="place__key">Enter</span>
+                  {PLACE_WORDS.showArea}
+                </button>
+              )
+            )}
           </div>
-        </div>
+        )}
+      </div>
 
+      {cardAt && activeHit && (
+        <div
+          className="place__card"
+          style={{ left: cardAt.left, top: cardAt.top, width: CARD_W }}
+          onPointerEnter={() => setHovered(activeHit.fire.id)}
+          onPointerLeave={() => setHovered(null)}
+        >
+          <div className="place__cardblock">
+            <FireBlock
+              key={activeHit.fire.id}
+              place={activeHit.place}
+              fire={activeHit.fire}
+              onPick={() => onFire(activeHit.place, activeHit.fire)}
+              onCredit={setCredit}
+              loadingWords={PLACE_WORDS.loadingFire}
+              failedWords={PLACE_WORDS.failedFire}
+            />
+          </div>
+          <span className="place__cardperiod">{activeHit.fire.label}</span>
+          <span className="sys-label">{activeHit.place.name}</span>
+          {standingOf(activeHit.fire) && <span className="sys-label place__standing">{standingOf(activeHit.fire)}</span>}
+          {aboutOf(activeHit.fire) && <span className="sys-fine">{aboutOf(activeHit.fire)}</span>}
+          <button type="button" className="place__act place__act--next" onClick={() => onFire(activeHit.place, activeHit.fire)}>
+            <span className="place__key">Enter</span>
+            {PLACE_WORDS.show}
+          </button>
+        </div>
+      )}
+
+      <div className="place__railground" aria-hidden="true" />
+      <div className="place__rail">
         <form
           className="place__find"
           onSubmit={(e) => {
@@ -347,45 +473,51 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
           }}
         >
           <input className="place__input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={PLACE_WORDS.find} aria-label={PLACE_WORDS.findLabel} />
+          {note && !box && <span className="sys-label place__note">{note}</span>}
         </form>
+        <div className="place__list" ref={listRef} role="list" aria-label={PLACE_WORDS.fires} onKeyDown={onListKey}>
+          {firms.map((place) => (
+            <div key={place.id} className="place__group" role="listitem">
+              <button type="button" className="place__placename sys-label" tabIndex={-1} onClick={() => setView(viewOf(place.box, 30))}>
+                {place.name}
+              </button>
+              {place.featured_fires
+                .filter((f) => f.default_start)
+                .map((fire) => (
+                  <button
+                    key={fire.id}
+                    type="button"
+                    data-fire={fire.id}
+                    className="place__fire sys-sel"
+                    data-selected={fire.id === currentFire ? 'true' : 'false'}
+                    data-on={fire.id === active ? 'true' : undefined}
+                    aria-label={[fire.label, place.name, standingOf(fire)].filter(Boolean).join(', ')}
+                    onClick={() => onFire(place, fire)}
+                    onFocus={() => setFocused(fire.id)}
+                    onBlur={() => setFocused(null)}
+                    onPointerEnter={() => setHovered(fire.id)}
+                    onPointerLeave={() => setHovered(null)}
+                  >
+                    <span className="place__period">{fire.label}</span>
+                    <span className="sys-fine">{standingOf(fire)}</span>
+                  </button>
+                ))}
+            </div>
+          ))}
+        </div>
         <div className="place__acts">
           <button type="button" className="place__act" aria-pressed={drawing} onClick={() => setDrawing((d) => !d)}>
             <span className="place__key">B</span>
             {drawing ? PLACE_WORDS.drawing : PLACE_WORDS.draw}
           </button>
-          {box && !note && (
-            <button type="button" className="place__act place__act--next" onClick={() => onBox(box)}>
-              <span className="place__key">Enter</span>
-              {PLACE_WORDS.showArea}
-            </button>
-          )}
           <button type="button" className="place__act" onClick={onClose}>
             <span className="place__key">Esc</span>
             {PLACE_WORDS.back}
           </button>
         </div>
-        {box && <span className="sys-value">{boxWords(box)}</span>}
-        {note && <span className="sys-label place__note">{note}</span>}
-        <span className="sys-fine">{PLACE_WORDS.lighter}</span>
       </div>
 
-      {/* The featured fires as blocks of terrain on one plane at one scale; a pick shows the fire. */}
-      <div className="place__plane" data-slot="featured-fires">
-        <FeaturedFiresPlane
-          places={places}
-          currentFire={currentFire}
-          onFire={onFire}
-          include="all"
-          perRow={3}
-          standing={standingOf}
-          about={aboutOf}
-          showWords={PLACE_WORDS.show}
-          onHoverPlace={setOver}
-          onCredits={tellCredits}
-        />
-      </div>
-
-      {credits.length > 0 && <p className="place__credit sys-fine">{PLACE_WORDS.imagery(credits)}</p>}
+      {credit && <p className="place__credit sys-fine">{PLACE_WORDS.imagery(credit)}</p>}
     </section>
   );
 }

@@ -1,19 +1,16 @@
-/* Choose a Place (beats/calendar/PlaceScreen.tsx), opened over the stage: the featured fires lead on the right, the
-   map supports them on the left. Sizes and inks from system.css. */
+/* Choose a Place (beats/calendar/PlaceScreen.tsx), opened over the stage. The world is the screen; the featured fires
+   are a list on the right; one card opens at the mark of the fire under the pointer or the focus. Sizes and inks
+   from system.css. */
 
 .place {
-  /* Room kept for the trail above and for the guide's strip below. The page may set either. */
+  /* Room kept for the trail above, the list on the right and the guide's strip below. The page may set them. */
   --place-top: 104px;
-  --place-guide: 150px;
+  --place-rail: 340px;
+  --place-guide: 170px;
   position: absolute;
   inset: 0;
   z-index: 2;
-  display: grid;
-  grid-template-columns: minmax(280px, 30%) minmax(0, 1fr);
-  column-gap: var(--sys-s6);
-  padding: var(--place-top) var(--sys-gutter) var(--place-guide);
-  /* The land steps back further than under the Record: the blocks are terrain themselves and need a calm ground. */
-  background: linear-gradient(180deg, rgba(8, 11, 17, 0.72) 0%, rgba(8, 11, 17, 0.9) 18%, rgba(8, 11, 17, 0.92) 100%);
+  background: rgba(8, 11, 17, 0.9);
   color: var(--sys-ink);
   overflow: hidden;
   pointer-events: auto;
@@ -32,45 +29,54 @@
   }
 }
 
-.place__side {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  grid-auto-rows: auto;
-  gap: var(--sys-s2);
-  min-height: 0;
-  align-content: start;
-}
-
+/* The world, edge to edge. */
 .place__map {
-  position: relative;
-  min-height: 0;
-  overflow: hidden;
+  position: absolute;
+  inset: 0;
   cursor: grab;
   touch-action: none;
+}
+
+.place__map:active {
+  cursor: grabbing;
 }
 
 .place__map[data-drawing='true'] {
   cursor: crosshair;
 }
 
-.place__map svg {
+.place__map > svg {
+  position: absolute;
+  inset: 0;
   display: block;
 }
 
 .place__land {
-  fill: #141922;
-  stroke: #2b303a;
-  stroke-width: 0.6;
+  fill: #161b24;
+  stroke: #2e3541;
+  stroke-width: 0.5;
 }
 
-.place__land--cached {
-  fill: #252d3a;
-  stroke: #4a5262;
+.place__marks {
+  pointer-events: none;
 }
 
-.place__box {
-  fill: none;
-  stroke: var(--sys-ink);
+.place__marks rect {
+  fill: var(--sys-detection);
+}
+
+.place__marks rect[data-current] {
+  fill: var(--sys-ink);
+}
+
+.place__marks rect[data-on='true'] {
+  fill: var(--sys-ink);
+  outline: 1px solid var(--sys-ink);
+  outline-offset: 3px;
+}
+
+.place__leader {
+  stroke: var(--sys-ink-2);
   stroke-width: 1;
 }
 
@@ -85,57 +91,97 @@
   stroke-dasharray: 4 3;
 }
 
-.place__marks {
+/* A mark taken by the pointer: an invisible square over it, larger than it. */
+.place__pick {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.place__marks line {
-  stroke: var(--sys-ink-3);
-  stroke-width: 1;
-}
-
-.place__marks rect {
-  fill: var(--sys-ink-2);
-}
-
-.place__marks [data-over='true'] line {
-  stroke: var(--sys-ink);
-}
-
-.place__marks [data-over='true'] rect {
-  fill: var(--sys-ink);
-  outline: 1px solid var(--sys-ink);
-  outline-offset: 3px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  cursor: pointer;
 }
 
 .place__name {
   position: absolute;
   white-space: nowrap;
   pointer-events: none;
-  transition: color var(--sys-fast) var(--sys-ease);
+  color: var(--sys-ink-2);
+  text-shadow: 0 1px 6px rgba(8, 11, 17, 0.9);
 }
 
-.place__name[data-over='true'] {
+.place__name[data-on='true'] {
   color: var(--sys-ink);
 }
 
-.place__zoom {
+.place__boxlabel {
   position: absolute;
-  right: 0;
-  bottom: 0;
   display: grid;
+  justify-items: start;
+  gap: 2px;
+  text-shadow: 0 1px 6px rgba(8, 11, 17, 0.9);
 }
 
-.place__zoom .place__act {
-  justify-content: center;
-  width: 28px;
-  font-size: var(--sys-size-body);
+/* One fire's card at its mark: its own terrain, then its words. A soft dark ground, no edge. */
+.place__card {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  padding: var(--sys-s3) var(--sys-s4) var(--sys-s4);
+  background: rgba(8, 11, 17, 0.88);
+  box-shadow: 0 0 40px 24px rgba(8, 11, 17, 0.88);
+  animation: place-open var(--sys-fast) var(--sys-ease);
+}
+
+.place__cardblock {
+  position: relative;
+  width: 100%;
+  height: 190px;
+  margin-bottom: var(--sys-s2);
+}
+
+.place__cardperiod {
+  font: var(--sys-weight-strong) 17px / 24px var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.place__standing {
+  color: var(--sys-ink-3);
+}
+
+.place__card .place__act--next {
+  margin-top: var(--sys-s2);
+}
+
+/* The list of featured fires on the right, over a soft ground that lets the map show through at its edge. */
+.place__railground {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: calc(var(--place-rail) + 120px);
+  background: linear-gradient(90deg, rgba(8, 11, 17, 0), rgba(8, 11, 17, 0.86) 30%);
+  pointer-events: none;
+}
+
+.place__rail {
+  position: absolute;
+  top: var(--place-top);
+  right: var(--sys-gutter);
+  bottom: var(--place-guide);
+  width: var(--place-rail);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--sys-s4);
 }
 
 .place__find {
-  margin: var(--sys-s2) 0 0;
+  display: grid;
+  gap: var(--sys-s1);
+  margin: 0;
 }
 
 /* A field is a line to write on, not a box. */
@@ -144,11 +190,11 @@
   box-sizing: border-box;
   padding: var(--sys-s2) 0;
   border: 0;
-  border-bottom: 1px solid var(--sys-edge);
+  border-bottom: 1px solid var(--sys-rule);
   border-radius: 0;
   background: transparent;
   color: var(--sys-ink);
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
 }
 
 .place__input::placeholder {
@@ -158,6 +204,71 @@
 .place__input:focus-visible {
   outline: none;
   border-bottom-color: var(--sys-focus);
+}
+
+.place__list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--sys-s2) var(--sys-s3) var(--sys-s4) 6px;
+  margin-left: -6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--sys-rule) transparent;
+  mask-image: linear-gradient(transparent, #000 12px, #000 calc(100% - 28px), transparent);
+}
+
+.place__list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.place__list::-webkit-scrollbar-thumb {
+  background: var(--sys-rule);
+}
+
+.place__group {
+  display: grid;
+  margin-bottom: var(--sys-s4);
+}
+
+.place__placename {
+  justify-self: start;
+  padding: 0 0 var(--sys-s1);
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--sys-ink-3);
+  cursor: pointer;
+}
+
+.place__placename:hover {
+  color: var(--sys-ink-2);
+}
+
+.place__fire {
+  display: grid;
+  justify-items: start;
+  padding: 6px var(--sys-s2) 6px var(--sys-s3);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+  color: var(--sys-ink-2);
+  cursor: pointer;
+}
+
+.place__period {
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+}
+
+.place__fire[data-on='true'],
+.place__fire:hover {
+  color: var(--sys-ink);
+}
+
+/* The keyboard's place on a fire is the fire's row lit, with a line of focus ink at its left. */
+.place__fire:focus-visible {
+  outline: none;
+  color: var(--sys-ink);
+  box-shadow: inset 2px 0 0 var(--sys-focus);
 }
 
 .place__acts {
@@ -224,6 +335,8 @@
   padding: 5px 12px 5px 8px;
   border-left: 2px solid var(--sys-ink);
   background: rgba(243, 244, 246, 0.08);
+  font-size: var(--sys-size-body);
+  line-height: var(--sys-lh-body);
   font-weight: var(--sys-weight-strong);
   color: var(--sys-ink);
 }
@@ -249,16 +362,7 @@
   color: var(--sys-fail);
 }
 
-/* The plane may stand higher than the map: the objective and the trail keep to the left. */
-.place__plane {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  margin-top: calc(40px - var(--place-top));
-}
-
-/* The one imagery line of the screen. The blocks stand on more than one source of images, so the line names them
-   all, and the page's own line for the stage's imagery steps aside while this screen is open. */
+/* The one imagery line of the screen: the open card's block. The page's own line for the stage steps aside. */
 body:has(.place) .iso-credit {
   visibility: hidden;
 }
@@ -270,14 +374,22 @@ body:has(.place) .iso-credit {
   max-width: 70%;
   margin: 0;
   text-align: right;
-  background: var(--sys-night);
-  box-shadow: 0 0 10px 10px var(--sys-night);
 }
 
 @media (max-width: 900px) {
   .place {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 34% minmax(0, 1fr);
-    row-gap: var(--sys-s4);
+    --place-rail: 100%;
+  }
+
+  .place__rail {
+    left: var(--sys-gutter);
+    top: auto;
+    height: 38%;
+    width: auto;
+  }
+
+  .place__railground {
+    width: 100%;
+    background: linear-gradient(180deg, rgba(8, 11, 17, 0) 40%, rgba(8, 11, 17, 0.9) 60%);
   }
 }

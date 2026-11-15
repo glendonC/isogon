@@ -130,6 +130,30 @@
   color: var(--sys-ink-3);
 }
 
+/* A dense plane: smaller words under smaller blocks, a long place name on two lines at most. */
+.cmp-fires[data-dense='true'] .cmp-fire__period {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.cmp-fires[data-dense='true'] .cmp-fire__place,
+.cmp-fires[data-dense='true'] .cmp-fire__standing {
+  font-size: var(--sys-size-fine);
+  line-height: var(--sys-lh-fine);
+}
+
+.cmp-fires[data-dense='true'] .cmp-fire__place {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cmp-fires[data-dense='true'] .cmp-fire__show {
+  font-size: var(--sys-size-label);
+  line-height: var(--sys-lh-label);
+}
+
 .cmp-fire__show {
   padding-top: 2px;
   font: var(--sys-weight-strong) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
@@ -157,4 +181,12 @@
 
 .cmp-stop:focus-visible ~ .cmp-label .cmp-fire__key {
   display: inline;
+}
+
+/* One fire's block alone (compare/FireBlock.tsx): the words while its run comes in. */
+.cmp-fireblock__status {
+  position: absolute;
+  inset: 45% 0 auto;
+  margin: 0;
+  text-align: center;
 }

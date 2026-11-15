@@ -11,7 +11,8 @@
  *   ?use=reveal   one fire three ways as World model mounts it, inside a stand-in for the workspace (region, start, pass)
  *   ?use=record   The Record over a still of the stage, with stand-ins for the trail and the guide's strip
  *                 (region, box=w,s,e,n, marked, pick, counted=1, now=1, speaks=1, still=0, guide=0, events=1)
- *   ?use=place    Choose a Place over the same still, with the same stand-ins (current, still=0, guide=0, events=1)
+ *   ?use=place    Choose a Place over the same still, with the same stand-ins (current, repeat=N, still=0, guide=0,
+ *                 events=1)
  */
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -461,7 +462,25 @@ function PlaceHarness() {
   const [places, setPlaces] = useState<Places | null>(null);
   const [event, setEvent] = useState('none');
   useEffect(() => {
-    void getJson<unknown>('/api/regions').then((body) => setPlaces(parsePlaces(body)));
+    void getJson<unknown>('/api/regions').then((body) => {
+      const read = parsePlaces(body);
+      // repeat=N: the registry's places N times over, each copy moved on the map, to see a plane of many fires.
+      // For this page only: a copy is the same fire and run under another id, never shown as a place of its own.
+      const n = Math.max(1, Number(Q.get('repeat') ?? 1));
+      const copies = Array.from({ length: n }, (_, k) =>
+        read.places.map((p) =>
+          k === 0
+            ? p
+            : {
+                ...p,
+                id: `${p.id}~${k}`,
+                box: [p.box[0] + 40 * k, p.box[1] - 9 * k, p.box[2] + 40 * k, p.box[3] - 9 * k] as typeof p.box,
+                featured_fires: p.featured_fires.map((f) => ({ ...f, id: `${f.id}~${k}` })),
+              },
+        ),
+      ).flat();
+      setPlaces({ ...read, places: copies });
+    });
   }, []);
   const withFires = places?.places.filter((p) => p.rows === 'firms' && p.featured_fires.length > 0) ?? [];
   const fires = withFires.reduce((n, p) => n + p.featured_fires.length, 0);

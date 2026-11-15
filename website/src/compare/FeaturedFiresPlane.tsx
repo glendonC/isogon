@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FeaturedFire, Place, Places } from '../app/places';
 import { useWorkspace } from '../app/store';
-import { canonicalJson, postJson, runRequestBody } from '../lib/api';
 import { ComparePlane } from './ComparePlane';
 import { fireBlock } from './blocks';
+import { fireRun, fireRunBody } from './fireRuns';
 import type { CompareBlock } from './types';
 
 /**
@@ -35,39 +35,35 @@ export interface FeaturedFiresPlaneProps {
   showWords?: string;
   /** The body of a fire's run request, when the page has its own. Default: the page's client builds it. */
   runBody?: (place: Place, fire: FeaturedFire) => unknown;
-  /** How many blocks stand in a row. Default: as many as fit. */
-  perRow?: number;
+  /** How many blocks stand in a row. Default: by how many fires there are (`rowOf`). */
+  perRow?: number | 'fit';
+  /** Only the fires of these places, when given. */
+  onlyPlaces?: readonly string[] | null;
   /** The place whose block the pointer or the focus is on, or none. */
   onHoverPlace?: (placeId: string | null) => void;
+  /** The fire whose block the pointer or the focus is on, or none. */
+  onHoverFire?: (fire: { place: Place; fire: FeaturedFire } | null) => void;
+  /** The plane's progress while the fires' runs come in, and whether it is complete. */
+  onProgress?: (got: number, of: number) => void;
   /** The credits of the images the blocks are drawn on, for the page's one imagery line. */
   onCredits?: (credits: string[]) => void;
 }
 
+const defaultBody = fireRunBody;
+const runOf = fireRun;
+
 /**
- * The body the page shows a fire with, from the client's one builder: a recorded test fire with every satellite, any
- * other fire with the sharp one held out.
+ * How many blocks stand in a row: up to three fires in one row, up to six in rows of three. With more than six the
+ * plane is dense and takes the count of columns that draws its blocks largest in its room; a label then carries the
+ * period, the place and what the fire is to the model, and the longer sentence about a fire is the page's to show
+ * beside the plane (`onHoverFire`).
  */
-const defaultBody = (place: Place, fire: FeaturedFire): unknown =>
-  runRequestBody(place.id, fire.default_start ?? '', fire.blind_test_fire ? null : 'VIIRS');
-
-/** Runs already asked for, by their request, so that opening the place screen again costs nothing. */
-const asked = new Map<string, Promise<unknown | null>>();
-
-function runOf(body: unknown): Promise<unknown | null> {
-  const key = canonicalJson(body);
-  let hit = asked.get(key);
-  if (!hit) {
-    hit = postJson<unknown>('/api/reconstruct', body).catch(() => null);
-    void hit.then((run) => {
-      if (run === null) asked.delete(key);
-    });
-    asked.set(key, hit);
-  }
-  return hit;
-}
+export const rowOf = (n: number): number | 'fit' => (n <= 3 ? Math.max(1, n) : n <= 6 ? 3 : 'fit');
 
 /** Room under a block for its label and the action that appears at it, so nothing a label grows into is covered. */
 const LABEL_SPACE = 112;
+// Two lines for the period, two for the place, one or two for what the fire is to the model, and the action
+const LABEL_SPACE_DENSE = 124;
 
 export function FeaturedFiresPlane({
   places,
@@ -79,10 +75,13 @@ export function FeaturedFiresPlane({
   showWords = 'Show this fire',
   runBody,
   perRow,
+  onlyPlaces = null,
   onHoverPlace,
+  onHoverFire,
+  onProgress,
   onCredits,
 }: FeaturedFiresPlaneProps) {
-  const fires = useMemo(
+  const every = useMemo(
     () =>
       places.places.flatMap((place) =>
         place.featured_fires
@@ -91,6 +90,11 @@ export function FeaturedFiresPlane({
       ),
     [places, include],
   );
+  const onlyKey = onlyPlaces ? onlyPlaces.join('|') : '';
+  // The runs are asked for every fire once; a narrowing to some places only draws fewer of them
+  const fires = useMemo(() => (onlyKey ? every.filter((f) => onlyKey.split('|').includes(f.place.id)) : every), [every, onlyKey]);
+  const progress = useRef(onProgress);
+  progress.current = onProgress;
   // The runs arrive one at a time and the plane is drawn once all have answered, so nothing moves as they come in
   const [runs, setRuns] = useState<Map<string, unknown> | null>(null);
   useEffect(() => {
@@ -99,18 +103,21 @@ export function FeaturedFiresPlane({
     void (async () => {
       const got = new Map<string, unknown>();
       // The open fires first, then the recorded test fires
-      const order = [...fires].sort((a, b) => Number(a.fire.blind_test_fire) - Number(b.fire.blind_test_fire));
+      const order = [...every].sort((a, b) => Number(a.fire.blind_test_fire) - Number(b.fire.blind_test_fire));
+      let done = 0;
+      progress.current?.(0, order.length);
       for (const { place, fire } of order) {
         const run = await runOf((runBody ?? defaultBody)(place, fire));
         if (!live) return;
         if (run !== null) got.set(fire.id, run);
+        progress.current?.(++done, order.length);
       }
       setRuns(got);
     })();
     return () => {
       live = false;
     };
-  }, [fires, runBody]);
+  }, [every, runBody]);
 
   const blocks = useMemo(() => {
     if (!runs) return [];
@@ -133,29 +140,37 @@ export function FeaturedFiresPlane({
 
   if (blocks.length === 0) return null;
   const of = (id: string) => fires.find((f) => f.fire.id === id);
+  const dense = blocks.length > 6;
   return (
-    <div className="cmp-fires">
+    <div className="cmp-fires" data-dense={dense ? 'true' : 'false'}>
       <ComparePlane
         blocks={blocks}
-        perRow={perRow}
-        labelSpace={LABEL_SPACE}
+        perRow={perRow ?? rowOf(blocks.length)}
+        labelSpace={dense ? LABEL_SPACE_DENSE : LABEL_SPACE}
         ariaLabel="Featured fires"
-        onHover={(id) => onHoverPlace?.(id ? of(id)?.place.id ?? null : null)}
+        onHover={(id) => {
+          const hit = id ? of(id) ?? null : null;
+          onHoverPlace?.(hit ? hit.place.id : null);
+          onHoverFire?.(hit);
+        }}
         onPick={(id) => {
           const hit = of(id);
           if (hit) onFire(hit.place, hit.fire);
         }}
-        renderLabel={(block, _anchor, hovered) => {
+        renderLabel={(block, anchor, hovered) => {
           const hit = of(block.id);
           if (!hit) return null;
           const more = about?.(hit.fire) ?? null;
           const what = standing?.(hit.fire) ?? null;
+          // A label is as wide as its block's column and no wider, so labels side by side never meet
+          const width = Math.max(130, Math.min(300, Math.round(anchor.rect.width * 1.07 - 8)));
           return (
-            <div className="cmp-fire" data-hovered={hovered ? 'true' : 'false'}>
+            <div className="cmp-fire" data-hovered={hovered ? 'true' : 'false'} style={{ width }}>
               <span className="cmp-fire__period">{hit.fire.label}</span>
               {/* While the pointer or the focus is on the block, the sentence about the fire stands where its place
-                  is named at rest: the page's map says the place then. */}
-              <span className="sys-label">{hovered && more ? more : hit.place.name}</span>
+                  is named at rest: the page's map says the place then. On a dense plane the sentence is too long for
+                  the room under a block and the page shows it beside the plane instead. */}
+              <span className="sys-label cmp-fire__place">{hovered && more && !dense ? more : hit.place.name}</span>
               {what && <span className="sys-label cmp-fire__standing">{what}</span>}
               <span className="cmp-fire__show">
                 <span className="cmp-fire__key">Enter</span>
