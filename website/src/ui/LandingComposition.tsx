@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ENTRY } from '../app/names';
 import { IsogonMark } from './IsogonMark';
+import { LandingBelow } from './LandingBelow';
 import { SplitHeadline } from './SplitHeadline';
 import type { PartId, PartStatus } from '../content/partsStatus';
 import type { EarthStageTelemetry } from '../stage/earthCutawayTypes';
@@ -149,26 +150,13 @@ export function LandingComposition({
             </svg>
           </button>
 
-          <section className="iso-land__parts" aria-labelledby="iso-land-parts-title" data-landing-ui="true">
-            <p id="iso-land-parts-title" className="iso-land__first">
-              First application: wildfire, across 26 years of NASA satellite observations.
-            </p>
-            <ol className="iso-land__partlist">
-              {parts.map((p, i) => (
-                <li key={p.id} className="iso-land__part">
-                  <span className="iso-land__partnum" aria-hidden="true">
-                    {i + 1}
-                  </span>
-                  <h2 className="iso-land__partname">{p.name}</h2>
-                  <p className="iso-land__partdoes">{p.does}</p>
-                  {p.status && <p className="iso-land__partstatus">{p.status}</p>}
-                  <button type="button" className="iso-land__partopen" onClick={() => onOpenPart(p.id)}>
-                    {p.open}
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </section>
+          <LandingBelow
+            parts={parts}
+            onOpenPart={onOpenPart}
+            onOpenMethod={onOpenMethod}
+            onOpenSensor={onOpenSensor}
+            onEnter={onEnter}
+          />
         </>
       )}
     </div>
