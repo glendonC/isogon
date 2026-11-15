@@ -621,6 +621,13 @@
   }
 }
 
+/* Where the question field stands at the bottom right, the guide's words keep clear of it on both sides. */
+@media (min-width: 1181px) {
+  .guide-strip {
+    width: min(880px, calc(100vw - 2 * (var(--sys-gutter) + 260px + var(--sys-s4))));
+  }
+}
+
 /* A step's start card at its thing (guide/StartCardView.tsx): the step's name, what to do, what counts as done, the key
    that starts it. On the scene over the soft scrim, folding back once the visitor acts. */
 .guide-card .guide-card__plate {
