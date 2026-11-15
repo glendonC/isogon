@@ -26,6 +26,7 @@ import json
 import math
 from pathlib import Path
 import sys
+import threading
 from typing import Any, Callable, Iterable
 
 import numpy as np
@@ -121,28 +122,61 @@ def _months(first: str, last: str) -> list[str]:
 
 
 OUTAGE_MIN_OTHER_ROWS: int = 100
+_CAL_CACHE_LOCK = threading.Lock()
+_PLATFORM_DAYS_CACHE: collections.OrderedDict[str, tuple[tuple[Any, ...], dict[str, dict[str, int]]]] = collections.OrderedDict()
+_EXTRACT_MONTHLY_CACHE: collections.OrderedDict[tuple[Any, ...], tuple[Any, dict[str, dict[str, dict[str, int]]], dict[str, int], dict[str, int], int]] = collections.OrderedDict()
 
 
 def platform_days(cache_dir: Path = FIRMS_CACHE_DIR) -> dict[str, collections.Counter[str]]:
     """{platform: {date: rows}} summed over every cached country file. A platform's delivery is global, so a quiet
     month in one small country does not read as the platform being off."""
-    out: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
+    manifests: list[tuple[str, Path]] = []
+    sig_parts: list[tuple[Any, ...]] = []
     for p in PRODUCTS:
         base = cache_dir / "raw" / p
-        for m in base.rglob("*.csv.manifest.json") if base.is_dir() else []:
-            d = json.loads(m.read_text(encoding="utf-8"))
-            days = d.get("satellite_day_rows")
-            if days is None:
-                raise KeyError(f"{m.name} has no satellite_day_rows; run `archive.py reingest`")
-            for sat, by_day in days.items():
-                out[_platform(p, sat)].update(by_day)
+        for m in sorted(base.rglob("*.csv.manifest.json")) if base.is_dir() else []:
+            try:
+                st = m.stat()
+            except OSError:
+                continue
+            manifests.append((p, m))
+            sig_parts.append((p, str(m), st.st_ino, st.st_mtime_ns, st.st_size))
+    sig = tuple(sig_parts)
+    root_key = str(cache_dir.resolve())
+    with _CAL_CACHE_LOCK:
+        hit = _PLATFORM_DAYS_CACHE.get(root_key)
+        if hit is not None and hit[0] == sig:
+            _PLATFORM_DAYS_CACHE.move_to_end(root_key)
+            return collections.defaultdict(
+                collections.Counter,
+                {k: collections.Counter(v) for k, v in hit[1].items()},
+            )
+
+    out: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
+    for p, m in manifests:
+        d = json.loads(m.read_text(encoding="utf-8"))
+        days = d.get("satellite_day_rows")
+        if days is None:
+            raise KeyError(f"{m.name} has no satellite_day_rows; run `archive.py reingest`")
+        for sat, by_day in days.items():
+            out[_platform(p, sat)].update(by_day)
+
+    stored = {k: dict(v) for k, v in out.items()}
+    with _CAL_CACHE_LOCK:
+        _PLATFORM_DAYS_CACHE[root_key] = (sig, stored)
+        _PLATFORM_DAYS_CACHE.move_to_end(root_key)
+        while len(_PLATFORM_DAYS_CACHE) > 8:
+            _PLATFORM_DAYS_CACHE.popitem(last=False)
     return out
 
 
 def outage_days(days: dict[str, collections.Counter[str]], min_other: int = OUTAGE_MIN_OTHER_ROWS) -> dict[str, set[str]]:
     """Days inside a platform's operating span (first to last day with rows) on which it has no row in any cached
     country file while the other platforms together have at least ``min_other``: the platform delivered no data."""
-    all_days = sorted(set().union(*[set(c) for c in days.values()])) if days else []
+    totals: collections.Counter[str] = collections.Counter()
+    for c in days.values():
+        totals.update(c)
+    all_days = sorted(totals) if days else []
     out: dict[str, set[str]] = {}
     for p, c in days.items():
         active = sorted(d for d, n in c.items() if n > 0)
@@ -152,7 +186,7 @@ def outage_days(days: dict[str, collections.Counter[str]], min_other: int = OUTA
         first, last = active[0], active[-1]
         out[p] = {
             d for d in all_days
-            if first <= d <= last and c.get(d, 0) == 0 and sum(days[q].get(d, 0) for q in days if q != p) >= min_other
+            if first <= d <= last and c.get(d, 0) == 0 and totals[d] - c.get(d, 0) >= min_other
         }
     return out
 
@@ -169,6 +203,65 @@ def noaa21_months(region_id: str, cache_dir: Path = FIRMS_CACHE_DIR) -> set[str]
             continue
         out.update(_months(first[:7], last[:7]))
     return out
+
+
+def _extract_file_monthly(
+    path: Path, product: str, is_sea: Callable[[float, float], bool] | None
+) -> tuple[dict[str, dict[str, dict[str, int]]], dict[str, int], dict[str, int], int]:
+    st = path.stat()
+    key = (str(path), st.st_ino, st.st_mtime_ns, st.st_size, id(is_sea))
+    with _CAL_CACHE_LOCK:
+        hit = _EXTRACT_MONTHLY_CACHE.get(key)
+        if hit is not None and hit[0] is is_sea:
+            _EXTRACT_MONTHLY_CACHE.move_to_end(key)
+            return hit[1], hit[2], hit[3], hit[4]
+
+    f_counts: dict[str, dict[str, dict[str, int]]] = {}
+    f_static: collections.Counter[str] = collections.Counter()
+    f_offshore: collections.Counter[str] = collections.Counter()
+    f_n = 0
+    plat_map: dict[str, str] = {}
+    with path.open(encoding="utf-8", newline="") as fh:
+        r = csv.reader(fh)
+        col = {c: i for i, c in enumerate(next(r))}
+        i_d, i_s, i_dn = col["acq_date"], col["satellite"], col["daynight"]
+        i_t = col.get("type")
+        i_lat, i_lon = col["latitude"], col["longitude"]
+        for rec in r:
+            f_n += 1
+            sat = rec[i_s]
+            plat = plat_map.get(sat)
+            if plat is None:
+                plat = _platform(product, sat)
+                plat_map[sat] = plat
+            ym = rec[i_d][:7]
+            by_plat = f_counts.get(ym)
+            if by_plat is None:
+                by_plat = {}
+                f_counts[ym] = by_plat
+            cell = by_plat.get(plat)
+            if cell is None:
+                cell = {"day": 0, "night": 0, "static": 0, "offshore": 0}
+                by_plat[plat] = cell
+            if i_t is not None and rec[i_t] == STATIC_TYPE:
+                cell["static"] += 1
+                f_static[plat] += 1
+            elif (i_t is not None and rec[i_t] == OFFSHORE_TYPE and is_sea is not None
+                  and is_sea(float(rec[i_lon]), float(rec[i_lat]))):
+                cell["offshore"] += 1
+                f_offshore[plat] += 1
+            elif rec[i_dn] == "D":
+                cell["day"] += 1
+            else:
+                cell["night"] += 1
+
+    res = (is_sea, f_counts, dict(f_static), dict(f_offshore), f_n)
+    with _CAL_CACHE_LOCK:
+        _EXTRACT_MONTHLY_CACHE[key] = res
+        _EXTRACT_MONTHLY_CACHE.move_to_end(key)
+        while len(_EXTRACT_MONTHLY_CACHE) > 512:
+            _EXTRACT_MONTHLY_CACHE.popitem(last=False)
+    return res[1], res[2], res[3], res[4]
 
 
 def monthly_counts(
@@ -195,27 +288,18 @@ def monthly_counts(
             if ignored is not None:
                 ignored.append(f"{region_id}/{path.name}")
             continue
-        with path.open(encoding="utf-8", newline="") as fh:
-            r = csv.reader(fh)
-            col = {c: i for i, c in enumerate(next(r))}
-            i_d, i_s, i_dn = col["acq_date"], col["satellite"], col["daynight"]
-            i_t = col.get("type")
-            i_lat, i_lon = col["latitude"], col["longitude"]
-            for rec in r:
-                n += 1
-                plat = _platform(product, rec[i_s])
-                cell = counts[rec[i_d][:7]][plat]
-                if i_t is not None and rec[i_t] == STATIC_TYPE:
-                    cell["static"] += 1
-                    static[plat] += 1
-                elif (i_t is not None and rec[i_t] == OFFSHORE_TYPE and is_sea is not None
-                      and is_sea(float(rec[i_lon]), float(rec[i_lat]))):
-                    cell["offshore"] += 1
-                    offshore[plat] += 1
-                elif rec[i_dn] == "D":
-                    cell["day"] += 1
-                else:
-                    cell["night"] += 1
+        f_counts, f_static, f_offshore, f_n = _extract_file_monthly(path, product, is_sea)
+        n += f_n
+        static.update(f_static)
+        offshore.update(f_offshore)
+        for ym, by_plat in f_counts.items():
+            dst_plat = counts[ym]
+            for plat, cell in by_plat.items():
+                dst = dst_plat[plat]
+                dst["day"] += cell["day"]
+                dst["night"] += cell["night"]
+                dst["static"] += cell["static"]
+                dst["offshore"] += cell["offshore"]
     return counts, {"static": dict(static), "offshore_on_sea": dict(offshore), "sea_check": is_sea is not None}, n
 
 
