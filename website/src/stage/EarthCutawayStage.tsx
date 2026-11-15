@@ -1343,6 +1343,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uReliefScale: { value: uReliefScale },
       uSlabSize: { value: uSlabSize },
       uAuxTex: { value: (nextBundle.auxTex ?? neutralAuxTex) as THREE.Texture },
+      uAuxNormals: { value: 1.0 },
       uAuxMix: { value: 0.0 },
       uShadowTex: { value: ensureShadow(nextBundle) },
       uUnitsPerMetre: { value: uUnitsPerMetre },
@@ -1567,6 +1568,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       keyLight.position.copy(sunDir).multiplyScalar(20);
       terrainUniforms.uShadowTex.value = ensureShadow(nextBundle);
       terrainUniforms.uAuxTex.value = nextBundle.auxTex ?? neutralAuxTex;
+      // (a pack whose elevation came in whole metres is lit by its own smoothed elevation's normals)
+      terrainUniforms.uAuxNormals.value = nextBundle.pack && nextBundle.levelIsWater === false ? 0.0 : 1.0;
       terrainUniforms.uOrthoTexelKm.value = nextBundle.orthoTexelKm;
       terrainUniforms.uSatSharpen.value = nextBundle.sharpen;
       terrainUniforms.uDetailTex.value = nextBundle.detailTex ?? whiteTex;
@@ -1617,8 +1620,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         key: `pack-${lite.key}`,
         demTex: pack.demTexture,
         alignedDem: pack.alignedDem,
-        // (found again from the pack's own elevation)
-        levelIsWater: undefined,
+        // (from the pack's own elevation as it came, before its display smoothing)
+        levelIsWater: !pack.levelInWholeMetres,
         demGridRes: pack.demGridRes,
         minElevM: pack.minElevM,
         maxElevM: pack.maxElevM,

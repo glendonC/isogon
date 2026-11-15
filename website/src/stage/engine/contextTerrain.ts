@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { COMMON_HEIGHTFIELD_GLSL, createDemR32FTexture } from '../earthCutawayShaders';
 import { ATMOSPHERE_GLSL, NIGHT_GLSL, SKY_VIEW_MAPPING_GLSL } from './atmosphere';
-import { levelGround, levelIsWholeMetres, lowPatchesAtSea, seaPosts } from './levelGround';
+import { levelGround, levelIsWholeMetres, lowPatchesAtSea, seaPosts, smoothTerraces } from './levelGround';
 import { loadPackImage } from './terrainPack';
 import { TERRAIN_LOOK_GLSL } from './terrainShader';
 
@@ -66,11 +66,11 @@ export interface TerrainContextLoadOptions {
 }
 
 /** Normals, the sea mask and the lakes of the context grid, computed once when it is loaded. */
-function buildShadeTexture(dem: Float32Array, n: number, extentKm: [number, number]): THREE.DataTexture {
+function buildShadeTexture(dem: Float32Array, n: number, extentKm: [number, number], wholeMetres: boolean): THREE.DataTexture {
   const out = new Uint8Array(n * n * 4);
   // (elevation from a source in whole metres is level in terraces, not only on lakes: no lake is
   // taken from it)
-  const lakes = levelIsWholeMetres(dem, n) ? new Uint8Array(n * n) : levelGround(dem, n);
+  const lakes = wholeMetres ? new Uint8Array(n * n) : levelGround(dem, n);
   const sea = seaPosts(dem, n);
   const maybeSea = lowPatchesAtSea(dem, n, sea);
   const dx = (extentKm[0] * 1000) / (n - 1);
@@ -120,8 +120,13 @@ export async function loadTerrainContext(
       orthoTexture?.dispose();
       return null;
     }
-    const dem = createDemR32FTexture(new Float32Array(demBuf), true);
-    const shadeTexture = buildShadeTexture(dem.aligned, dem.gridRes, manifest.extent_km);
+    // (elevation in whole metres: the test is read as it came, then flat ground is smoothed for display,
+    // the sea at 0 m left as it is; see smoothTerraces)
+    const raw = new Float32Array(demBuf);
+    const wholeMetres = levelIsWholeMetres(raw, n);
+    if (wholeMetres) smoothTerraces(raw, n);
+    const dem = createDemR32FTexture(raw, true);
+    const shadeTexture = buildShadeTexture(dem.aligned, dem.gridRes, manifest.extent_km, wholeMetres);
     return {
       manifest,
       scale: manifest.scale,

@@ -159,6 +159,7 @@ uniform vec2 uWindDirUv;
 uniform sampler2D uAuxTex;      // r normal x (east), g normal z (south), b sky view, a canopy
 uniform float uMicroDetail;   // 1: the drawn fine texture (crowns, rock) where the picture is magnified; 0 on a stand-in
 uniform float uAuxMix;
+uniform float uAuxNormals;    // 1: light by the baked normals; 0: by the stage's own (elevation in whole metres, smoothed)
 uniform sampler2D uShadowTex;   // baked once: r the sun shadow factor (1 = lit), g level ground
 uniform sampler2D uSmokeShadowTex; // transmittance of the smoke toward the sun at ground level
 uniform float uSmokeShadowMix;
@@ -696,17 +697,20 @@ void main() {
   float slopeMag = 0.0;   // stage-space gradient magnitude
   vec3 N = vec3(0.0, 1.0, 0.0);
   vec4 aux = texture2D(uAuxTex, vUv);
-  if (uAuxMix < 0.999) {
+  // (the baked normals come from the elevation as it came: in whole metres they hold its terraces,
+  // so such a pack is lit by normals from its own smoothed elevation; see smoothTerraces)
+  float auxNormalMix = uAuxMix * uAuxNormals;
+  if (auxNormalMix < 0.999) {
     N = computeTerrainNormal(vUv, slopeMag);
   }
-  if (uAuxMix > 0.001) {
+  if (auxNormalMix > 0.001) {
     // True-scale unit normal, y rebuilt, then mapped into the scaled stage space
     vec2 nxz = aux.rg * 2.0 - 1.0;
     vec3 nTrue = vec3(nxz.x, sqrt(max(1e-4, 1.0 - dot(nxz, nxz))), nxz.y);
     vec3 nAux = normalize(nTrue / uUnitsPerMetre);
     float slopeAux = length(nAux.xz) / max(nAux.y, 1e-3);
-    N = normalize(mix(N, nAux, uAuxMix));
-    slopeMag = mix(slopeMag, slopeAux, uAuxMix);
+    N = normalize(mix(N, nAux, auxNormalMix));
+    slopeMag = mix(slopeMag, slopeAux, auxNormalMix);
   }
   // Tangent of the true slope angle (the stage exaggerates relief)
   float trueSlope = slopeMag * uUnitsPerMetre.x / max(uUnitsPerMetre.y, 1e-9);

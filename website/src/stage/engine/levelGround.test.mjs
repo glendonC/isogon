@@ -95,3 +95,29 @@ test('a low strip off a coast may be sea, a low plain joined to the land may not
   for (let r = 1; r < M - 1; r++) assert.equal(maybe[r * M + 16], 0, `the plain at row ${r}`);
   for (let i = 0; i < M * M; i++) if (sea[i]) assert.equal(maybe[i], 0, 'a sea post is not a patch');
 });
+
+test('terraces of whole metres are smoothed on flat ground, relief and the sea are kept', async () => {
+  const { smoothTerraces } = await import('./levelGround.ts');
+  const M = 64;
+  const dem = new Float32Array(M * M);
+  // a gentle slope in whole metres (a terrace every five posts), a steep hill, and sea in the west
+  for (let r = 0; r < M; r++) {
+    for (let c = 0; c < M; c++) {
+      const hill = Math.max(0, 60 - 12 * Math.hypot(r - 40, c - 40));
+      dem[r * M + c] = c < 6 ? 0 : Math.floor(100 + c / 5) + hill;
+    }
+  }
+  const before = dem.slice();
+  smoothTerraces(dem, M);
+  // the largest step between neighbours along a row of the slope, away from the hill and the sea
+  const step = (g) => {
+    let worst = 0;
+    for (let c = 12; c < 24; c++) worst = Math.max(worst, Math.abs(g[10 * M + c + 1] - g[10 * M + c]));
+    return worst;
+  };
+  assert.equal(step(before), 1);
+  assert.ok(step(dem) < 0.5, `steps on the slope after: ${step(dem)}`);
+  assert.ok(Math.abs(dem[40 * M + 40] - before[40 * M + 40]) < 1.5, 'the hill keeps its top');
+  for (let r = 0; r < M; r++) for (let c = 0; c < 6; c++) assert.equal(dem[r * M + c], 0, 'the sea stays at 0 m');
+  assert.ok(dem[10 * M + 6] > 99, 'the coast is not pulled down by the sea');
+});

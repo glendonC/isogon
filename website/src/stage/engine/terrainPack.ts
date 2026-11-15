@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createDemR32FTexture } from '../earthCutawayShaders';
+import { levelIsWholeMetres, smoothTerraces } from './levelGround';
 
 /**
  * Consumer side of terrain pack v1.
@@ -83,6 +84,8 @@ export interface LoadedTerrainPack {
   orthoSize: number;
   auxTexture: THREE.Texture;
   attribution: string;
+  /** The elevation came in whole metres (read before any smoothing): no lake is taken from its level ground. */
+  levelInWholeMetres: boolean;
   dispose: () => void;
 }
 
@@ -226,6 +229,10 @@ export async function loadTerrainPack(
     }
 
     const demRaw = new Float32Array(demBuf);
+    // (elevation in whole metres is a staircase on flat ground: smoothed there for display, after the
+    // test for it is read on the elevation as it came)
+    const levelInWholeMetres = levelIsWholeMetres(demRaw, manifest.dem.size);
+    if (levelInWholeMetres) smoothTerraces(demRaw, manifest.dem.size);
     smoothDemForDisplay(demRaw, manifest.dem.size);
     const demPack = createDemR32FTexture(demRaw, true);
 
@@ -248,6 +255,7 @@ export async function loadTerrainPack(
       orthoSize: ortho.size,
       auxTexture,
       attribution: manifest.ortho.attribution ?? '',
+      levelInWholeMetres,
       dispose: () => {
         demPack.texture.dispose();
         orthoTexture.dispose();

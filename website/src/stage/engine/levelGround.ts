@@ -169,3 +169,64 @@ export function lowPatchesAtSea(dem: Float32Array, n: number, sea: Uint8Array): 
   }
   return out;
 }
+
+/** Radius of the terrace smoothing, in posts, and the difference from its blur beyond which a post is relief. */
+const TERRACE_RADIUS = 4;
+const TERRACE_KEEP_FROM_M = 1.5;
+const TERRACE_KEEP_FULL_M = 4.0;
+
+/**
+ * Display smoothing for elevation in whole metres, in place: flat ground there is a staircase of
+ * terraces one metre high and several posts wide, which a low sun draws as contour bands. Each post
+ * takes the mean of the posts around it (a box of TERRACE_RADIUS posts, twice, about a Gaussian)
+ * where it differs from that mean by little, that is on nearly flat ground; where it differs by
+ * metres it is relief and keeps its own height. The sea (posts at exactly 0 m) neither moves nor
+ * counts in a mean, so the coast is not pulled down and the sea is not raised. A rendering treatment;
+ * the test for whole metres and the sea are read on the elevation before it.
+ */
+export function smoothTerraces(dem: Float32Array, n: number): void {
+  if (n < 2 * TERRACE_RADIUS + 1 || dem.length !== n * n) return;
+  const r = TERRACE_RADIUS;
+  let value = new Float32Array(n * n);
+  let weight = new Float32Array(n * n);
+  for (let i = 0; i < n * n; i++) {
+    const land = dem[i] !== 0 ? 1 : 0;
+    value[i] = dem[i] * land;
+    weight[i] = land;
+  }
+  const sumV = new Float32Array(n * n);
+  const sumW = new Float32Array(n * n);
+  const pass = (src: Float32Array, out: Float32Array, alongRows: boolean) => {
+    for (let line = 0; line < n; line++) {
+      let acc = 0;
+      const at = (k: number) => (alongRows ? line * n + k : k * n + line);
+      for (let k = 0; k <= r && k < n; k++) acc += src[at(k)];
+      for (let k = 0; k < n; k++) {
+        out[at(k)] = acc;
+        const add = k + r + 1;
+        const drop = k - r;
+        if (add < n) acc += src[at(add)];
+        if (drop >= 0) acc -= src[at(drop)];
+      }
+    }
+  };
+  for (let round = 0; round < 2; round++) {
+    pass(value, sumV, true);
+    pass(weight, sumW, true);
+    pass(sumV, value, false);
+    pass(sumW, weight, false);
+    // (normalise between the rounds, so the second round blurs means and not sums)
+    for (let i = 0; i < n * n; i++) {
+      const w = weight[i];
+      value[i] = w > 0 ? value[i] / w : 0;
+      weight[i] = w > 0 ? 1 : 0;
+    }
+  }
+  for (let i = 0; i < n * n; i++) {
+    const raw = dem[i];
+    if (raw === 0 || weight[i] === 0) continue;
+    const t = Math.min(1, Math.max(0, (Math.abs(raw - value[i]) - TERRACE_KEEP_FROM_M) / (TERRACE_KEEP_FULL_M - TERRACE_KEEP_FROM_M)));
+    const keep = t * t * (3 - 2 * t);
+    dem[i] = raw + (value[i] - raw) * (1 - keep);
+  }
+}
