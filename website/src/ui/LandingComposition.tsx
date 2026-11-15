@@ -69,7 +69,18 @@ interface LandingCompositionProps {
   onOpenSensor: () => void;
   onOpenMethod: () => void;
   onEnter: () => void;
+  /**
+   * The first screen's three ways in, of equal weight (Play, Explore the Earth, Search a place). Given, they stand in
+   * the one entry's place, the name stands alone at the top left, the screen does not scroll and nothing lies below it,
+   * and its words wait for the stage (`stageIn`). Absent (the film's address), the landing is as it was.
+   */
+  ways?: { onPlay: () => void; onExplore: () => void; onSearch: () => void } | null;
+  /** The stage's first whole picture is in (stage/stageReady.ts). */
+  stageIn?: boolean;
 }
+
+/** The three ways in, in the page's words until the product lane gives them. */
+const WAYS = { play: 'Play', explore: 'Explore the Earth', search: 'Search a place' };
 
 export function LandingComposition({
   imageryCredit,
@@ -84,13 +95,16 @@ export function LandingComposition({
   onOpenSensor,
   onOpenMethod,
   onEnter,
+  ways = null,
+  stageIn = true,
 }: LandingCompositionProps) {
-  const [ready, setReady] = useState(facesLoaded);
+  const [fontsIn, setReady] = useState(facesLoaded);
+  const ready = fontsIn && (ways ? stageIn : true);
   const [showBelow, setShowBelow] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (ready) return;
+    if (fontsIn) return;
     let done = false;
     const finish = () => {
       if (done) return;
@@ -103,10 +117,10 @@ export function LandingComposition({
       .catch(() => undefined)
       .then(finish);
     return () => window.clearTimeout(timer);
-  }, [ready]);
+  }, [fontsIn]);
 
   useEffect(() => {
-    if (!ready || showBelow) return;
+    if (!ready || showBelow || ways) return;
     const el = scrollRef.current;
     const reveal = () => setShowBelow(true);
     el?.addEventListener('scroll', reveal, { passive: true, once: true });
@@ -115,30 +129,32 @@ export function LandingComposition({
       el?.removeEventListener('scroll', reveal);
       window.clearTimeout(timer);
     };
-  }, [ready, showBelow]);
+  }, [ready, showBelow, ways]);
 
   // The entry leads with the idea, not one fire: it opens the choice of a place.
   const entry = ENTRY;
 
   return (
-    <div className="iso-land" data-ready={ready ? 'true' : 'false'} ref={scrollRef}>
-      {/* The picture under the first screen: a click on it enters the workspace. Keyboard: Enter. */}
-      <div className="iso-land__picture" aria-hidden="true" onClick={onEnter} />
+    <div className="iso-land" data-ready={ready ? 'true' : 'false'} data-first={ways ? 'true' : undefined} ref={scrollRef}>
+      {/* The picture under the first screen: a click on it enters the workspace (the film's landing). Keyboard: Enter. */}
+      <div className="iso-land__picture" aria-hidden="true" onClick={ways ? undefined : onEnter} />
       <div className="iso-land__scrim" aria-hidden="true" />
       <div className="iso-land__scrim iso-land__scrim--bottom" aria-hidden="true" />
       {ready && (
         <>
           <div className="iso-land__brand">
-            <IsogonMark />
+            {!ways && <IsogonMark />}
             <span>Isogon</span>
           </div>
 
           <nav className="iso-land__menu" aria-label="Sound, search and reference" data-landing-ui="true">
             <SoundControl />
-            <button type="button" className="iso-navlink" onClick={onOpenSearch}>
-              <kbd>/</kbd>
-              <span>Search</span>
-            </button>
+            {!ways && (
+              <button type="button" className="iso-navlink" onClick={onOpenSearch}>
+                <kbd>/</kbd>
+                <span>Search</span>
+              </button>
+            )}
             <button type="button" className="iso-navlink iso-navlink--sensor" onClick={onOpenSensor}>
               Sensor physics
             </button>
@@ -156,6 +172,19 @@ export function LandingComposition({
                 <p className="iso-land__sentence">{SENTENCE}</p>
               </>
             )}
+            {ways ? (
+              <div className="iso-land__ways" data-landing-ui="true">
+                <button type="button" className="iso-way" onClick={ways.onPlay}>
+                  {WAYS.play}
+                </button>
+                <button type="button" className="iso-way" onClick={ways.onExplore}>
+                  {WAYS.explore}
+                </button>
+                <button type="button" className="iso-way" onClick={ways.onSearch}>
+                  {WAYS.search}
+                </button>
+              </div>
+            ) : (
             <button type="button" className="iso-entry" onClick={onEnter} data-landing-ui="true">
               <kbd className="iso-entry__key">Enter</kbd>
               <span className="iso-entry__label">{entry}</span>
@@ -163,6 +192,7 @@ export function LandingComposition({
                 <path d="M2 6h7.5M6.5 3l3 3-3 3" stroke="currentColor" strokeWidth="1.35" strokeLinecap="square" />
               </svg>
             </button>
+            )}
           </div>
 
           <div className="iso-land__legend">
@@ -188,6 +218,7 @@ export function LandingComposition({
           </div>
 
           {/* The one hint that there is more below: the first application, a click or a scroll away. */}
+          {!ways && (
           <button
             type="button"
             className="iso-land__more"
@@ -203,8 +234,9 @@ export function LandingComposition({
               <path d="M2 3.5 5 6.5 8 3.5" />
             </svg>
           </button>
+          )}
 
-          {showBelow ? (
+          {ways ? null : showBelow ? (
             <Suspense fallback={<div style={{ minHeight: '100dvh' }} aria-hidden="true" />}>
               <LandingBelow
                 parts={parts}

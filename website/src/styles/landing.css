@@ -477,3 +477,38 @@
   text-shadow: 0 1px 8px rgba(8, 11, 17, 0.9);
   pointer-events: none;
 }
+
+/* The first screen does not scroll: nothing lies below it. */
+.iso-land[data-first='true'] {
+  overflow: hidden;
+}
+
+/* The first screen's three ways in, of equal weight: plain words, white, with the interface's one colour (cyan) as a
+   rule under the one pointed at or reached by the keys. */
+.iso-land__ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 44px;
+  margin-top: 36px;
+}
+
+.iso-way {
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(#9fe3ff, #9fe3ff) no-repeat 0 100% / 0 1px;
+  font: 500 clamp(18px, 1.4vw, 24px) / 1.25 var(--font-sans);
+  color: #fff;
+  text-shadow: 0 1px 12px rgba(5, 7, 12, 0.85);
+  cursor: pointer;
+  transition:
+    background-size 200ms ease,
+    color 160ms ease;
+}
+
+.iso-way:hover,
+.iso-way:focus-visible {
+  background-size: 100% 1px;
+  color: #9fe3ff;
+  outline: none;
+}

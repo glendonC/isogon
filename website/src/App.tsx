@@ -25,7 +25,6 @@ import type { TrailWord } from './guide/Trail';
 import { LocatorBar } from './identity/LocatorBar';
 import { StoryLine } from './identity/StoryLine';
 import { RevealSweep } from './identity/RevealSweep';
-import { Entry } from './identity/Entry';
 import { stageReady } from './stage/stageReady';
 import type { StageThingBox } from './stage/earthCutawayTypes';
 import { setPageLinks } from './ui/pageLinks';
@@ -162,6 +161,9 @@ interface LiveObserverTelemetry {
 /** Play's two shots of the Earth's years, as the film takes them. */
 const YEARS_COUNTED = { view: 'counted', from: 2010, until: 2012, play: true } as const;
 const YEARS_ONE_SCALE = { view: 'onescale', from: 2010, until: 2012, play: true } as const;
+
+/** The word on every bar that returns to the first screen, the page's own until the product lane gives it. */
+const START = 'Start';
 
 const KNOWN_PLACES = new Set<string>(THEATER_CATALOG.map((t) => t.id));
 function isKnownTheaterId(value: string | undefined): value is TheaterId {
@@ -335,6 +337,8 @@ export function App() {
   }, []);
   /** The guide on show and its commands, for the key handler defined before them. */
   const guideRef = useRef<Guide | null>(null);
+  const startPlayRef = useRef<() => void>(() => {});
+  const toStartRef = useRef<() => void>(() => {});
   const runCommandRef = useRef<(command: string) => void>(() => {});
   const marksOpenRef = useRef(false);
   /** The guide's field for asking, for the key that puts the focus in it. */
@@ -1095,9 +1099,11 @@ export function App() {
       // Enter on a focused trigger activates that trigger; only a bare Enter opens the terrain.
       const onControl = Boolean(target?.closest('button, a, [role="slider"], [role="option"]'));
       // Entry plays on Enter itself; the recorder's landing (the film's address) still opens the Record.
-      if (!inWorkspace && filmByAddress && e.key === 'Enter' && !onControl) {
+      if (!inWorkspace && e.key === 'Enter' && !onControl) {
         e.preventDefault();
-        enterRecord();
+        // The first screen plays the story on Enter; the recorder's landing (the film's address) opens the Record.
+        if (filmByAddress) enterRecord();
+        else startPlayRef.current();
         return;
       }
 
@@ -1643,6 +1649,7 @@ export function App() {
   const barLon = runMatchesRegion && activeRun ? activeRun.region.center_lon : registryBox.length === 4 ? (registryBox[0] + registryBox[2]) / 2 : null;
   const barLinks = useMemo(
     () => [
+      { label: START, onClick: () => toStartRef.current() },
       { label: WORDS.links.search, onClick: () => setAskOpen(true) },
       { label: WORDS.links.method, onClick: () => setReading('method') },
       { label: WORDS.links.sources, onClick: () => setReading('sources') },
@@ -1657,8 +1664,15 @@ export function App() {
     const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v.replace(/,/g, '')) : NaN;
     return Number.isFinite(n) && n > 0 ? n : null;
   };
+  // Back to the first screen from anywhere: a picture of the world closes, the workspace is left.
+  const toStart = () => {
+    if (worldScreenOnShow()) closeWorldScreen();
+    if (inWorkspace) exitToOverview();
+  };
+  toStartRef.current = toStart;
   const goStory = (part: StoryPart) => {
-    if (part === 'world' || part === 'jump') openWorldScreen('years');
+    if (part === 'world') toStart();
+    else if (part === 'jump') openWorldScreen('years');
     else if (part === 'place') goStep('record');
     else if (part === 'fire') onTrailWord('Estimate');
     else if (part === 'tested') openWorldScreen('test');
@@ -1742,6 +1756,7 @@ export function App() {
     setFilmMode(true);
     play.start();
   };
+  startPlayRef.current = startPlay;
   /** World model on a real run: in place on the terrain (beats/world-model/WorldModelScene.tsx), no column. */
   const modelScene = inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen;
   // The day's photograph is put away when Estimate and Test are left or another run comes in.
@@ -1846,41 +1861,26 @@ export function App() {
     <WorkspaceProvider value={store}>
     <div className="iso-app" data-workspace={inWorkspace ? 'true' : 'false'} data-sel={selStyle}>
       <AgentWalkLine />
-      {/* The first screen: the identity's Entry (Play or Explore). The film's address keeps the recorder's landing. */}
-      {!inWorkspace &&
-        (filmByAddress ? (
-          <LandingComposition
-            imageryCredit={credit}
-            parts={landingParts}
-            onOpenPart={openPart}
-            realPass={stageTelemetry?.realPass ?? null}
-            lines={landingLines}
-            passHidden={landingHidden}
-            caption={landingCaption}
-            recorded={recordedLine}
-            onOpenSearch={() => setAskOpen(true)}
-            onOpenSensor={() => setReading('sensors')}
-            onOpenMethod={() => setReading('method')}
-            onEnter={enterRecord}
-          />
-        ) : (
-          !worldScreen && !play.playing && (
-            <>
-              <Entry
-                ready={stageIn}
-                firstYear={worldYears?.first ?? null}
-                lastYear={worldYears?.last ?? null}
-                onPlay={startPlay}
-                onExplore={() => openWorldScreen('years')}
-                links={barLinks}
-              />
-              <div className="iso-entry-foot iso-land__foot">
-                {recordedLine && <p className="iso-land__recorded">{recordedLine}</p>}
-                <p className="iso-land__credit">Imagery: {credit}</p>
-              </div>
-            </>
-          )
-        ))}
+      {/* The first screen: the landing, the owner's headline over the hero scene with three ways in (Play, Explore the
+          Earth, Search a place). The film's address keeps the recorder's landing as it was. */}
+      {!inWorkspace && !worldScreen && !play.playing && (
+        <LandingComposition
+          imageryCredit={credit}
+          parts={landingParts}
+          onOpenPart={openPart}
+          realPass={stageTelemetry?.realPass ?? null}
+          lines={landingLines}
+          passHidden={landingHidden}
+          caption={landingCaption}
+          recorded={recordedLine}
+          onOpenSearch={() => setAskOpen(true)}
+          onOpenSensor={() => setReading('sensors')}
+          onOpenMethod={() => setReading('method')}
+          onEnter={enterRecord}
+          ways={filmByAddress ? null : { onPlay: startPlay, onExplore: () => openWorldScreen('years'), onSearch: () => setAskOpen(true) }}
+          stageIn={stageIn}
+        />
+      )}
       {play.playing && <p className="iso-play-stop">{WORDS.stop}</p>}
 
       {inWorkspace && (
