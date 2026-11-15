@@ -916,7 +916,10 @@ export function App() {
 
       if (e.key.toLowerCase() === 'v' && inWorkspace && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        testAction();
+        // Before the reveal V does what Enter and the Reveal button do: the nearest pass of the sharp satellite, then
+        // the reveal. After it, the score.
+        if ((step === 'fire' || step === 'test') && holdoutViirs && !revealed) runCommandRef.current('go:test');
+        else testAction();
         return;
       }
 
