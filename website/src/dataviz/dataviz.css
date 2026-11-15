@@ -1,0 +1,75 @@
+/*
+ * The displays of data. Each variable reads the identity's first (website/src/identity/identity.css); the fallbacks
+ * are its agreed values. Colour is only for data. No rounded corner, no shadow, nothing fades.
+ */
+:root {
+  --dv-ground: var(--id-ground, #05070c);
+  --dv-ink: var(--id-ink, #f4f6f9);
+  --dv-ink-2: var(--id-ink-2, rgba(244, 246, 249, 0.7));
+  --dv-ink-3: var(--id-ink-3, rgba(244, 246, 249, 0.4));
+  --dv-line: var(--id-line, rgba(244, 246, 249, 0.18));
+  --dv-modis: var(--id-modis, #ff7a45);
+  --dv-viirs: var(--id-viirs, #8fd6f5);
+  --dv-estimate: var(--id-estimate, #f4f6f9);
+  --dv-reference: #8a8f99;
+  --dv-font: var(--sys-font, 'Geist', -apple-system, sans-serif);
+  --dv-mono: var(--sys-mono, 'IBM Plex Mono', ui-monospace, Menlo, monospace);
+  --dv-ease: var(--id-ease, cubic-bezier(0.22, 1, 0.36, 1));
+  --dv-fast: var(--id-fast, 160ms);
+}
+
+.dv-figure {
+  position: relative;
+  color: var(--dv-ink);
+  font-family: var(--dv-font);
+  font-size: 16px;
+  line-height: 1.4;
+  border-radius: 0;
+}
+
+.dv-title {
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--dv-ink);
+  margin: 0 0 12px;
+}
+
+.dv-line {
+  font-size: 16px;
+  color: var(--dv-ink-2);
+  margin: 12px 0 0;
+}
+
+.dv-label {
+  font-family: var(--dv-font);
+  font-size: 16px;
+  fill: var(--dv-ink-2);
+}
+
+.dv-num {
+  font-family: var(--dv-font);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  fill: var(--dv-ink);
+}
+
+/* The exact readout that follows the pointer. */
+.dv-readout {
+  position: absolute;
+  pointer-events: none;
+  font-family: var(--dv-font);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  color: var(--dv-ink);
+  background: var(--dv-ground);
+  border: 1px solid var(--dv-line);
+  padding: 6px 8px;
+  white-space: nowrap;
+  border-radius: 0;
+}
+
+.dv-cell {
+  cursor: pointer;
+  transition: stroke var(--dv-fast) var(--dv-ease);
+}
