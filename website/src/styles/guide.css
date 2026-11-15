@@ -266,6 +266,8 @@
 
 /* A round's end (guide/Results.tsx): rows on one scale, centred above the guide's sentence, the visitor's row strong.
    Text on the scene, no plate; a bar is a thin rule from zero. */
+/* The round's end rows stand on a dark ground of their own, so they read on any pass: a day pass's bright ground, the
+   board's lines under them. */
 .guide-results {
   display: grid;
   grid-template-columns: max-content minmax(160px, 260px) max-content;
@@ -274,6 +276,8 @@
   align-items: baseline;
   justify-content: center;
   margin-bottom: var(--sys-s3);
+  padding: 12px 20px 14px;
+  background: rgba(8, 11, 17, 0.86);
   text-align: left;
 }
 
