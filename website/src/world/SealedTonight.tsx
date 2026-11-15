@@ -57,13 +57,13 @@ export const SEAL_WORDS = {
   none: 'No fire is followed yet tonight.',
   protocol: (sha: string, at: string | null) => `Every prediction here is sealed under the rules with digest ${sha.slice(0, 10)}${at ? `, written ${at}` : ''}, before the first seal.`,
   keySeal: 'Written down and sealed',
-  keyPass: 'The sharp satellite passes',
+  keyPass: 'VIIRS passes',
   keyRows: 'Its detections published',
   keyScored: 'Scored',
   now: 'Now',
   ago: (h: number) => (h === 1 ? '1 hour ago' : `${h} hours ago`),
   ahead: (h: number) => (h === 1 ? 'in 1 hour' : `in ${h} hours`),
-  chosen: (rows: number | null) => (rows !== null ? `Chosen from ${rows} coarse detections in 48 hours; no pass sealed yet` : 'No pass sealed yet'),
+  chosen: (rows: number | null) => (rows !== null ? `Chosen from ${rows} MODIS detections in 48 hours; no pass sealed yet` : 'No pass sealed yet'),
   sealed: (at: string | null, mins: number | null, pass: string | null, part: string | null) =>
     `Sealed${at ? ` at ${at}` : ''}${mins !== null ? `, ${Math.round(mins)} minutes before the pass` : ''}${pass ? ` at about ${pass}` : ''}${part ? ` ${part}` : ''}`,
   waitingPass: (pass: string | null) => `Pass due${pass ? ` at ${pass}` : ''}; not yet listed by NASA`,
@@ -80,10 +80,10 @@ export const SEAL_WORDS = {
   // pass it was sealed.
   proofLabel: 'The fingerprint of one sealed prediction',
   proofLine: (minutes: number, where: string) =>
-    `Written down and sealed ${Math.round(minutes)} minutes before the sharp satellite passed over ${where}, then scored.`,
+    `Written down and sealed ${Math.round(minutes)} minutes before VIIRS passed over ${where}, then scored.`,
   close: (k: number, n: number, where: string) => `${k} of the ${n} fires scored lie close together in ${where}, so they are not ${n} separate tests.`,
   rest: (items: string[], any: boolean) => `${any ? 'Also followed' : 'Followed tonight'}, no pass sealed yet: ${items.join(', ')}`,
-  restAbout: 'Each was chosen from the coarse satellite alone, by its detections in the last 48 hours.',
+  restAbout: 'Each was chosen from MODIS alone, by its detections in the last 48 hours.',
   digest: 'Digest',
   whole: 'The whole digest of this seal',
   copy: 'Copy',

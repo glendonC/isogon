@@ -26,10 +26,10 @@ const deg = (v: number) => (v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1) : v.t
 export const EARTH_WORDS = {
   label: 'The Earth, with every fire NASA satellites detected since 2000',
   layerFire: 'Where fire is detected',
-  layerFactor: 'How much more the sharp satellite sees',
+  layerFactor: 'How much more VIIRS sees',
   /** The legend of the fire layer, from the layer's own first month. */
   fireLegend: (since: string | null) =>
-    `Coarse detections in each quarter degree, about 28 km${since ? `, since ${since}` : ''}.`,
+    `MODIS detections in each quarter degree, about 28 km${since ? `, since ${since}` : ''}.`,
   tick: (v: number) => roughly(v),
   hatch: (complete: boolean, since: string | null, loaded: string[] | number | null | undefined) =>
     complete
@@ -38,10 +38,10 @@ export const EARTH_WORDS = {
           typeof loaded === 'number' ? ` The files of ${count(loaded)} countries are loaded.` : Array.isArray(loaded) && loaded.length ? ` Loaded: ${listAnd(loaded)}.` : ''
         }`,
   halo: 'The soft glow round the squares is drawing only.',
-  fireLegendShort: (since: string | null) => `Coarse detections per 28 km square${since ? ` since ${since}` : ''}.`,
+  fireLegendShort: (since: string | null) => `MODIS detections per 28 km square${since ? ` since ${since}` : ''}.`,
   hatchShort: (complete: boolean) => (complete ? 'Hatched: no detection there.' : 'Hatched: nothing loaded there yet, not no fire.'),
   factorLegend: (step: number | null) =>
-    `Sharp detections for each coarse one, over the months both flew without a gap${step ? `, in squares of ${step} degrees` : ''}.`,
+    `VIIRS detections for each MODIS one, over the months both flew without a gap${step ? `, in squares of ${step} degrees` : ''}.`,
   factorSpread: (median: number, p10: number, p90: number) =>
     `The middle place: ${median.toFixed(1)} times. Eight places in ten lie between ${p10.toFixed(1)} and ${p90.toFixed(1)} times.`,
   factorTick: (f: number, low: number, high: number) => (f <= low ? `${f}× or less` : f >= high ? `${f}× or more` : `${f}×`),
@@ -50,13 +50,13 @@ export const EARTH_WORDS = {
   factorFailed: 'The factor between the two satellites did not load. The map of detections is unchanged.',
   /** At the pointer. */
   atCell: (v: number, since: string | null) =>
-    `About ${roughly(v)} detections of the coarse satellite in this 28 km square${since ? ` since ${since}` : ''}`,
-  atEmpty: (since: string | null) => `No detection of the coarse satellite in this square${since ? ` since ${since}` : ''}`,
+    `About ${roughly(v)} MODIS detections in this 28 km square${since ? ` since ${since}` : ''}`,
+  atEmpty: (since: string | null) => `No MODIS detection in this square${since ? ` since ${since}` : ''}`,
   atNotLoaded: 'Not loaded: no file loaded so far holds a detection in this square',
   atFactor: (f: number, end: -1 | 0 | 1) =>
-    `Here the sharp satellite detects ${end === 1 ? `${Math.round(f)} times as many or more` : end === -1 ? `${f.toFixed(1)} times as many or fewer` : `${f.toFixed(1)} times as many`}`,
+    `Here VIIRS detects ${end === 1 ? `${Math.round(f)} times as many or more` : end === -1 ? `${f.toFixed(1)} times as many or fewer` : `${f.toFixed(1)} times as many`}`,
   atFactorError: (e: number, end: -1 | 0 | 1) =>
-    `With this factor, a month of a year left out was off by ${end === 1 ? `${Math.round(e * 100)} percent or more` : `${Math.round(e * 100)} percent`} of what the sharp satellite saw`,
+    `With this factor, a month of a year left out was off by ${end === 1 ? `${Math.round(e * 100)} percent or more` : `${Math.round(e * 100)} percent`} of what VIIRS saw`,
   atNoFactor: 'Too few detections here to measure the factor',
   /** The featured fires. */
   fireLabel: (name: string | null, place: string, year: string | null) => (name ? `${name}${year ? ` ${year}` : ''}` : place),
@@ -149,7 +149,7 @@ export const gridWords = (v: number) => (v >= 1e6 ? `${Math.round(v / 1e5) / 10}
 /** "4.4": a factor to one decimal, as the product lane writes the Earth's (EARTH-YEARS.md). */
 export const oneDecimal = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
 
-/** The Earth's years, in the product lane's words (isogon-notes/product/EARTH-YEARS.md, script version 15; the 2012 label as version 23). */
+/** The Earth's years, in the product lane's words (isogon-notes/product/EARTH-YEARS.md, script version 27). */
 export const YEAR_WORDS = {
   label: 'The Earth year by year, 2000 to 2025: detections in each square of a quarter degree',
   loading: 'Loading the years',
@@ -160,23 +160,23 @@ export const YEAR_WORDS = {
   play: 'Play the years',
   pause: 'Stop',
   step: 'A year',
-  modis: 'Counted by the coarse satellites',
-  sharp: 'Counted by the sharp satellite',
-  onScale: "On the sharp satellite's scale",
+  modis: 'Counted by MODIS',
+  sharp: 'Counted by VIIRS',
+  onScale: 'On the VIIRS scale',
   partialYear: (months: number) => `${months === 2 ? 'November and December' : `${months} months`} only: the archive begins in November 2000`,
   terraAlone: 'Terra alone: Aqua joins in July 2002',
   aquaJoins: 'Aqua joins in July',
   stepDetected: (ratio: number | null) =>
     ratio
-      ? `2012: the sharp satellite begins and makes ${oneDecimal(ratio)} times as many detections, so the Earth brightens with no more fire.`
-      : '2012: the sharp satellite begins and makes more detections, so the Earth brightens with no more fire.',
-  stepHarmonized: '2012: the sharp satellite begins, and on one scale there is no step.',
+      ? `2012: VIIRS begins and makes ${oneDecimal(ratio)} times as many detections, so the Earth brightens with no more fire.`
+      : '2012: VIIRS begins and makes more detections, so the Earth brightens with no more fire.',
+  stepHarmonized: '2012: VIIRS begins, and on one scale there is no step.',
   legend: 'Fire detected in a square of a quarter degree, about 28 km, in the year',
   closed: 'Test fires of 2021, not tested again',
   hatch: 'Hatched land: no detection there.',
   totals: 'Detections each year, the whole Earth',
-  barsModis: 'Coarse satellites',
-  barsSharp: 'Sharp satellite',
+  barsModis: 'MODIS',
+  barsSharp: 'VIIRS',
   lineHarmonized: 'On one scale',
   partialBar: 'two months',
   /** A country picked on the Earth: its own strip, and the way back to the whole Earth. */
@@ -204,7 +204,7 @@ export const YEAR_WORDS = {
 
 /**
  * The guide's words on the pictures of the world, as the product lane writes them: the Earth's years from the
- * script's state `earth_years` (GUIDE-script.json version 26, EARTH-YEARS.md), the test across the world and the
+ * script's state `earth_years` (GUIDE-script.json version 27, EARTH-YEARS.md), the test across the world and the
  * sealed predictions from WORDS-wider.json version 4 (`world_pictures`). Every figure is a field filled from an answer.
  */
 export const SCREEN_WORDS = {
@@ -212,20 +212,20 @@ export const SCREEN_WORDS = {
     objective: (first: number) => `Watch the Earth's fire since ${first}`,
     context: (first: number, last: number) => `${first} to ${last}`,
     counted: (ratio: string) =>
-      `These are the years as counted, and from 2012 the sharp satellite makes ${ratio} times as many detections.`,
-    oneScale: "On one scale the coarse satellites' years are scaled up to match, so 2012 shows no jump.",
+      `These are the years as counted, and from 2012 VIIRS makes ${ratio} times as many detections.`,
+    oneScale: 'On one scale the MODIS years are scaled up to match, so 2012 shows no jump.',
     play: 'Play the years',
     stop: 'Stop',
-    toOneScale: 'Show the years on one scale',
+    toOneScale: 'Show one scale',
     toCounted: 'Show the years as counted',
     back: 'Back',
-    filmCounted: (ratio: string) => `2012: a sharper satellite begins, seeing smaller fires too: ${ratio} times the detections.`,
+    filmCounted: (ratio: string) => `2012: VIIRS begins, seeing smaller fires too: ${ratio} times the detections.`,
     filmOneScale: (_first: number) => 'On one scale, no jump.',
   },
   test: {
     objective: 'See where the estimate was tested',
     strictBehind: (fires: number, _continents: number, ahead: number, _of: number, behind: number) =>
-      `On ${fires} fires it never saw, it won ${ahead} scores and lost ${behind}, and pixel for pixel the coarse guess does better.`,
+      `On ${fires} fires it never saw, it won ${ahead} scores and lost ${behind}, and pixel for pixel MODIS alone does better.`,
     notStrictBehind: (fires: number, _continents: number, ahead: number, of: number, level: number, behind: number) =>
       `On ${fires} fires it never saw, it won ${ahead}, tied ${level} and lost ${behind} of ${of} scores.`,
     squares: (of: number) =>
@@ -233,19 +233,19 @@ export const SCREEN_WORDS = {
     fireScores: "Show a fire's scores",
     back: 'Back to the test',
     filmA: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} unseen fires: won ${ahead} of ${of} scores, lost ${behind}.`,
-    // WORDS-wider.json version 14, world_pictures, the test across the world's film line once test B is taken: the
+    // WORDS-wider.json version 15, world_pictures, the test across the world's film line once test B is taken: the
     // second model (the challenger the runs answer with) and the first; version 12's line where no second is scored.
     filmB: (ahead: number, of: number, behind: number, others: string | null, second: { ahead: number; behind: number } | null) =>
       second
         ? `Untouched fires: second model won ${second.ahead}, lost ${second.behind}. First: won ${ahead}, lost ${behind}.`
         : `Untouched fires: won ${ahead} of ${of}, lost ${behind}.${others ? ` Other models: won ${others}.` : ''}`,
-    // GUIDE-script.json version 26, step test, `test_b_by_estimate` (the world's test has no run): said before test A's.
+    // GUIDE-script.json version 27, step test, `test_b_by_estimate` (the world's test has no run): said before test A's.
     testB: (fires: number, ahead: number, of: number, _level: number, behind: number, others: { n: string; ahead: string } | null) =>
       `On ${fires} untouched fires the first model won ${ahead} of ${of} scores and lost ${behind}${others ? `, and ${others.n} others each won ${others.ahead}` : ''}.`,
   },
   sealed: {
     objective: 'See predictions written before the pass',
-    marks: 'Each mark is a fire burning now, where a prediction was written down with its fingerprint before NASA published what the sharp satellite saw.',
+    marks: 'Each mark is a fire burning now, where a prediction was written down with its fingerprint before NASA published what VIIRS saw.',
     soFar: (scored: number, ahead: number, level: number, behind: number) =>
       `So far ${scored} are scored: they won ${ahead}, tied ${level} and lost ${behind} against both simple guesses.`,
     back: 'Back to the fire',

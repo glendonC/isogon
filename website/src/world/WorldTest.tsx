@@ -32,9 +32,9 @@ export const TEST_WORDS = {
     second
       ? `Untouched fires: second model won ${second.ahead}, lost ${second.behind}. First: won ${ahead}, lost ${behind}.`
       : `Untouched fires: won ${ahead} of ${of}, lost ${behind}.${others ? ` Other models: won ${others}.` : ''}`,
-  /** The challengers beside the headline, in one plain line under it. */
+  /** The challengers beside the headline, in one plain line under it (the product lane's words, in the identity). */
   beside: (n: string, ahead: string, of: number, behind: string) =>
-    `Beside it, ${n} other models, tested once on these fires: each won ${ahead} of ${of} scores and lost ${behind}.`,
+    `Beside it, ${n} other models, looked at once on these fires: each won ${ahead} of ${of} scores and lost ${behind === '0' ? 'none' : behind}.`,
   lookNames: { test_a: 'Test A: fires it had never seen', test_b: 'Test B: fires that nothing had touched' } as Record<string, string>,
   // The film's panel: the scores over every fire, three figures a viewer reads at once.
   filmAhead: 'won',
