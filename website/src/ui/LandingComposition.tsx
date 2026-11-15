@@ -25,6 +25,11 @@ function facesLoaded(): boolean {
   return LANDING_FACES.every((f) => document.fonts.check(f));
 }
 
+/** The longest the legend waits, unseen, for the stage to draw a pass of each kind before it takes its corner. */
+const LEGEND_HOLD_MS = 12000;
+/** After a pass of each kind is drawn, the wait for the boxes of the pass just come before the legend shows. */
+const LEGEND_SETTLE_MS = 700;
+
 /** A screen narrow enough that landing.css stands the legend at the left whatever the fire covers. */
 function narrowScreen(): boolean {
   return typeof window !== 'undefined' && window.matchMedia?.('(max-width: 760px)').matches === true;
@@ -123,20 +128,40 @@ export function LandingComposition({
   const [fontsIn, setReady] = useState(facesLoaded);
   const ready = fontsIn && (ways ? stageIn : true);
   const [showBelow, setShowBelow] = useState(false);
-  // The legend and its caption take the bottom corner the drawn fire covers less (right by default). On a narrow
-  // screen they always stand at the left over the credit.
+  // The legend and its caption take the bottom corner the drawn fire covers less (right by default), chosen before
+  // they show and kept: they wait, unseen, until the stage has drawn a pass of each kind (the detections, and the
+  // estimate, which reaches further), or LEGEND_HOLD_MS after the first screen is ready, and never move after. On a
+  // narrow screen they stand at the left over the credit from the start.
   const legendRef = useRef<HTMLDivElement | null>(null);
   const footRef = useRef<HTMLDivElement | null>(null);
   const [side, setSide] = useState<'right' | 'left'>(() => (narrowScreen() ? 'left' : 'right'));
+  const [held, setHeld] = useState(() => Boolean(subscribeFireBox) && !narrowScreen());
+  const placed = useRef({ locked: !subscribeFireBox || narrowScreen(), right: 0, left: 0, detections: false, estimate: false, settle: 0 });
+  const passHiddenNow = useRef(passHidden);
+  passHiddenNow.current = passHidden;
+  const lockSide = () => {
+    const p = placed.current;
+    if (p.locked) return;
+    p.locked = true;
+    window.clearTimeout(p.settle);
+    setHeld(false);
+  };
+  useEffect(() => {
+    if (!ready || placed.current.locked) return;
+    const t = window.setTimeout(lockSide, LEGEND_HOLD_MS);
+    return () => window.clearTimeout(t);
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!subscribeFireBox) return;
     return subscribeFireBox((box) => {
       const el = legendRef.current;
+      const p = placed.current;
       if (narrowScreen()) {
         setSide('left');
+        lockSide();
         return;
       }
-      if (!box || !el) return;
+      if (p.locked || !box || !el) return;
       const w = el.offsetWidth;
       const h = el.offsetHeight;
       const W = window.innerWidth;
@@ -155,11 +180,16 @@ export function LandingComposition({
               Math.max(0, Math.min(t + h + M, b.bottom) - Math.max(t - M, b.top)),
           0,
         );
-      const right = covered(W - g - w, H - g - h);
-      const left = covered(g, H - g - footH - 16 - h);
-      setSide((s) => (s === 'right' ? (right > 0 && left < right * 0.5 ? 'left' : 'right') : left > 0 && right < left * 0.5 ? 'right' : 'left'));
+      // the most each corner has been covered by any pass drawn so far
+      p.right = Math.max(p.right, covered(W - g - w, H - g - h));
+      p.left = Math.max(p.left, covered(g, H - g - footH - 16 - h));
+      setSide(p.right > 0 && p.left < p.right * 0.5 ? 'left' : 'right');
+      if (passHiddenNow.current) p.estimate = true;
+      else p.detections = true;
+      // both kinds drawn: a short wait for the boxes of the pass just come, then show, in that corner for good
+      if (p.estimate && p.detections && !p.settle) p.settle = window.setTimeout(lockSide, LEGEND_SETTLE_MS);
     });
-  }, [subscribeFireBox]);
+  }, [subscribeFireBox]); // eslint-disable-line react-hooks/exhaustive-deps
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -279,6 +309,7 @@ export function LandingComposition({
             className="iso-land__legend"
             ref={legendRef}
             data-side={side}
+            data-held={held ? 'true' : undefined}
             style={side === 'left' ? { bottom: `calc(var(--iso-gutter) + ${(footRef.current?.offsetHeight ?? 0) + 16}px)` } : undefined}
           >
             <div className="iso-land__keys" aria-label="What the picture shows">

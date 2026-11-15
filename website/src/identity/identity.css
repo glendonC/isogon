@@ -92,7 +92,6 @@
 }
 
 .id-control--primary,
-.iso-land__ways > .iso-way:first-child,
 .iso-plain-action[data-primary='true'],
 body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label {
   --c-fill: var(--id-ink);
