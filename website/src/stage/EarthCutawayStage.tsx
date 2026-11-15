@@ -434,6 +434,10 @@ const CLOSE_FRAME_SHARE = 0.75;
 // Steeper angles (polar, from the vertical) the close view tries, in order, for an estimate that does not fit
 const CLOSE_FRAME_STEEPER = [1.1, 0.95, 0.8, 0.65];
 const CLOSE_VIEW_FOV = 39.0;
+// The answer on Test (the hidden detections laid on): drawn in pixels this wide, and taken in from
+// higher where more than this share of its main patches stands behind ground seen from the close view
+const ANSWER_PIXEL_KM = 0.375;
+const ANSWER_HIDDEN_LIMIT = 0.3;
 // The whole-box views in the workspace are fitted to the page's frame by shrinking the picture, never
 // below this share of its size. A board's pose stands closer than its box needs (REGION_BOARD_POSE);
 // where the page's frame is too short even for that (the players' rows at a round's end, a narrow
@@ -2116,6 +2120,64 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         distance = pose.distance;
         polar = pose.polar;
       }
+      // On Test, once the hidden detections of the pass on show are laid on (the answer), the close view
+      // takes them in with the estimate where some of them stand outside its frame or behind its ridges:
+      // the main patches of both, from higher where they hide (they are on screen by then, so the
+      // framing tells nothing early). Where the answer already stands in view, nothing moves
+      const answer = preset === 'canyon' ? answerAt(nextBundle, frameNow) : null;
+      if (answer && answer.length > 0) {
+        const ku = ANSWER_PIXEL_KM / Math.max(1e-3, nextBundle.widthKm);
+        const kv = ANSWER_PIXEL_KM / Math.max(1e-3, nextBundle.depthKm);
+        const nx = Math.max(1, Math.round(1 / ku));
+        const ny = Math.max(1, Math.round(1 / kv));
+        const centres = new Float32Array((answer.length / 2) * 3);
+        for (let i = 0, j = 0; i < answer.length; i += 2, j += 3) {
+          centres[j] = answer[i];
+          centres[j + 1] = answer[i + 1];
+          centres[j + 2] = 1;
+        }
+        const grouped = firePatches(centres, nx, ny);
+        let keepPatches = 0;
+        const count = answer.length / 2;
+        for (let held = 0; keepPatches < grouped.sizes.length && held < CLOSE_FRAME_SHARE * count; keepPatches++) {
+          held += grouped.sizes[keepPatches];
+        }
+        const union = cellCorners ? [...cellCorners] : [];
+        const answerKept: number[] = [];
+        for (let i = 0; i < count; i++) {
+          if (grouped.patchOf[i] >= keepPatches) continue;
+          const u0 = answer[i * 2] - ku / 2;
+          const v0 = answer[i * 2 + 1] - kv / 2;
+          union.push(u0, v0, u0 + ku, v0, u0, v0 + kv, u0 + ku, v0 + kv);
+          answerKept.push(answer[i * 2], answer[i * 2 + 1]);
+        }
+        const outside = cornersOutsideFrame(union, target, bestAz, polar, distance * FILM_PUSH_TO);
+        if (outside || hiddenShare(answerKept, target, bestAz, polar, distance) > ANSWER_HIDDEN_LIMIT) {
+          const start = target;
+          let best: { target: [number, number, number]; distance: number; polar: number; fits: boolean; hidden: number } | null = null;
+          for (const tryPolar of [polar, ...CLOSE_FRAME_STEEPER].filter((x) => x <= polar)) {
+            let at = start;
+            let fit = { distance, fits: false };
+            for (let round = 0; round < 3; round++) {
+              fit = fitCloseDistance(union, at, bestAz, tryPolar);
+              if (round === 2) break;
+              at = recentreOnCells(union, at, bestAz, tryPolar, fit.distance);
+            }
+            const hidden = hiddenShare(answerKept, at, bestAz, tryPolar, fit.distance);
+            const here = { target: at, distance: fit.distance, polar: tryPolar, fits: fit.fits, hidden };
+            if (fit.fits && hidden <= ANSWER_HIDDEN_LIMIT) {
+              best = here;
+              break;
+            }
+            if (!best || (here.fits && (!best.fits || hidden < best.hidden))) best = here;
+          }
+          if (best) {
+            target = best.target;
+            distance = best.distance;
+            polar = best.polar;
+          }
+        }
+      }
       return {
         ...dest,
         azimuth: bestAz,
@@ -2123,6 +2185,81 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         distance,
         target,
       };
+    };
+
+    /** The hidden detections laid on at a pass (box uv pairs), or null where none are. */
+    const answerAt = (bundle: CachedTheaterBundle, frameIdx: number): number[] | null => {
+      if (bundle.observerDataset.dataSource !== 'firms') return null;
+      const [lonMin, latMin, lonMax, latMax] = bundle.bbox;
+      const out: number[] = [];
+      for (const sp of bundle.observerDataset.frames[frameIdx] ?? []) {
+        if (!sp.revealed || sp.revealedByLook) continue;
+        for (const fp of sp.footprints) {
+          out.push((fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin), (fp.lat - latMin) / Math.max(1e-9, latMax - latMin));
+        }
+      }
+      return out.length > 0 ? out : null;
+    };
+
+    /** Whether any corner stands outside the page's frame, seen from the pose (the close views' lens). */
+    const cornersOutsideFrame = (
+      cornersUv: number[],
+      target: [number, number, number],
+      azimuth: number,
+      polar: number,
+      distance: number,
+    ): boolean => {
+      const frame = sanitizeSubjectFrame(propsRef.current.workspaceSubjectFrame) ?? { left: 0, top: 0, right: 1, bottom: 1 };
+      const tanHalf = Math.tan(THREE.MathUtils.degToRad(CLOSE_VIEW_FOV / 2));
+      const halfW = (frame.right - frame.left) * tanHalf * camera.aspect;
+      const halfH = (frame.bottom - frame.top) * tanHalf;
+      const dir = new THREE.Vector3().setFromSphericalCoords(1, polar, azimuth);
+      const fwd = dir.clone().negate();
+      const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+      const up = new THREE.Vector3().crossVectors(right, fwd);
+      const cam = new THREE.Vector3(target[0], target[1], target[2]).addScaledVector(dir, distance);
+      const rel = new THREE.Vector3();
+      for (let i = 0; i < cornersUv.length; i += 2) {
+        rel.set(worldX(cornersUv[i]), sampleCpuTerrainY(cornersUv[i], cornersUv[i + 1]), worldZ(cornersUv[i + 1])).sub(cam);
+        const zf = rel.dot(fwd);
+        if (zf <= 0.05) return true;
+        if (Math.abs(rel.dot(right) / zf) > halfW || Math.abs(rel.dot(up) / zf) > halfH) return true;
+      }
+      return false;
+    };
+
+    /** The share of the points (box uv pairs, on the terrain) that ground between the eye and them hides. */
+    const hiddenShare = (
+      pointsUv: number[],
+      target: [number, number, number],
+      azimuth: number,
+      polar: number,
+      distance: number,
+    ): number => {
+      if (pointsUv.length === 0) return 0;
+      const dir = new THREE.Vector3().setFromSphericalCoords(1, polar, azimuth);
+      const ex = target[0] + dir.x * distance;
+      const ey = target[1] + dir.y * distance;
+      const ez = target[2] + dir.z * distance;
+      let hidden = 0;
+      for (let i = 0; i < pointsUv.length; i += 2) {
+        const pu = pointsUv[i];
+        const pv = pointsUv[i + 1];
+        const tx = worldX(pu);
+        const ty = sampleCpuTerrainY(pu, pv);
+        const tz = worldZ(pv);
+        for (let k = 1; k < 32; k++) {
+          const a = k / 32;
+          const su = slabU(ex + (tx - ex) * a);
+          const sv = slabV(ez + (tz - ez) * a);
+          if (su < 0 || su > 1 || sv < 0 || sv > 1) continue;
+          if (sampleCpuTerrainY(su, sv) > ey + (ty - ey) * a + 0.012) {
+            hidden += 1;
+            break;
+          }
+        }
+      }
+      return hidden / (pointsUv.length / 2);
     };
 
     /** Whether any corner stands below the page's frame (into the guide's room), seen from the pose. */
@@ -3545,10 +3682,14 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           const declaredHere = (nextBundle.declared?.byFrame.get(fIdx)?.length ?? 0) > 0;
           if (declaredHere || (fireAnchorFrom === 'estimate' && fireAnchorPoints.length > 0)) {
             const sf = p.workspaceSubjectFrame;
-            // (the place and the window, not the run: the revealed run of the same window does not
-            // move the camera)
+            // (the place and the window, not the run: the revealed run of the same window moves the
+            // camera only where its answer does not stand in view, see resolveLivePreset)
             const windowKey = `${nextBundle.regionId}:${nextBundle.observerDataset.frames[0]?.[0]?.timeUtc ?? ''}`;
-            const key = `${windowKey}:${fIdx}:${declaredHere ? 'declared' : fireAnchorKey}:${sf ? [sf.left, sf.top, sf.right, sf.bottom].map((x) => x.toFixed(3)).join(',') : ''}:${viewportW}x${viewportH}`;
+            let answerHere = 0;
+            for (const sp of nextBundle.observerDataset.frames[fIdx] ?? []) {
+              if (sp.revealed && !sp.revealedByLook) answerHere += sp.footprints.length;
+            }
+            const key = `${windowKey}:${fIdx}:${declaredHere ? 'declared' : fireAnchorKey}:${answerHere}:${sf ? [sf.left, sf.top, sf.right, sf.bottom].map((x) => x.toFixed(3)).join(',') : ''}:${viewportW}x${viewportH}`;
             if (key !== closeFrameKey) {
               closeFrameKey = key;
               if (!cameraTouched && !pointerDown) {
