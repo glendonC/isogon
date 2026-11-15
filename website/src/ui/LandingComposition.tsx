@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ENTRY } from '../app/names';
 import { SoundControl } from '../audio';
 import { IsogonMark } from './IsogonMark';
-import { LandingBelow } from './LandingBelow';
 import { SplitHeadline } from './SplitHeadline';
 import type { PartId, PartStatus } from '../content/partsStatus';
 import type { EarthStageTelemetry } from '../stage/earthCutawayTypes';
+
+const LandingBelow = lazy(() =>
+  import('./LandingBelow').then((m) => ({ default: m.LandingBelow })),
+);
 
 /**
  * The landing's copy: the headline, the second line and one entry that names the first application.
@@ -76,6 +79,7 @@ export function LandingComposition({
   onEnter,
 }: LandingCompositionProps) {
   const [ready, setReady] = useState(facesLoaded);
+  const [showBelow, setShowBelow] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -93,6 +97,18 @@ export function LandingComposition({
       .then(finish);
     return () => window.clearTimeout(timer);
   }, [ready]);
+
+  useEffect(() => {
+    if (!ready || showBelow) return;
+    const el = scrollRef.current;
+    const reveal = () => setShowBelow(true);
+    el?.addEventListener('scroll', reveal, { passive: true, once: true });
+    const timer = window.setTimeout(reveal, 250);
+    return () => {
+      el?.removeEventListener('scroll', reveal);
+      window.clearTimeout(timer);
+    };
+  }, [ready, showBelow]);
 
   // The entry leads with the idea, not one fire: it opens the choice of a place.
   const entry = ENTRY;
@@ -159,6 +175,7 @@ export function LandingComposition({
             type="button"
             className="iso-land__more"
             onClick={() => {
+              setShowBelow(true);
               const el = scrollRef.current;
               const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
               el?.scrollTo({ top: el.clientHeight, behavior: reduce ? 'auto' : 'smooth' });
@@ -170,13 +187,19 @@ export function LandingComposition({
             </svg>
           </button>
 
-          <LandingBelow
-            parts={parts}
-            onOpenPart={onOpenPart}
-            onOpenMethod={onOpenMethod}
-            onOpenSensor={onOpenSensor}
-            onEnter={onEnter}
-          />
+          {showBelow ? (
+            <Suspense fallback={<div style={{ minHeight: '100dvh' }} aria-hidden="true" />}>
+              <LandingBelow
+                parts={parts}
+                onOpenPart={onOpenPart}
+                onOpenMethod={onOpenMethod}
+                onOpenSensor={onOpenSensor}
+                onEnter={onEnter}
+              />
+            </Suspense>
+          ) : (
+            <div style={{ minHeight: '100dvh' }} aria-hidden="true" />
+          )}
         </>
       )}
     </div>
