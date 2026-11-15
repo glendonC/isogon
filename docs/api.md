@@ -37,6 +37,7 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 | `GET /api/calendar/current` | This month so far against the same month's median |
 | `GET /api/calendar/rows.csv` | The FIRMS rows behind a calendar selection |
 | `GET /api/calendar/checks` | The held-out check of the calendar's harmonization, for every place in one answer |
+| `GET /api/cube/record`, `/api/cube/tables`, `/api/cube/countries`, `/api/cube/layers` | The Record of any box on Earth from the fire cube, its tables, the loaded countries and the world layers ([cube.md](cube.md)) |
 | `GET /api/firms/countries` | Every country file the FIRMS listing publishes, its size and whether it is cached |
 | `GET /api/runs/starts` | The start dates worth showing for a real run |
 | `POST /api/reconstruct` | Build or fetch a run |
@@ -410,6 +411,10 @@ Shortened: `overlap_years` cut to two of 14 years, the second entry cut to a few
 
 - `ratio` and `ratio_p10_p90` are the Terra and Aqua ratio in use and its interval; `median_abs_relative_error_annual` and `..._without_harmonization` are the median over held-out years of the yearly error with the ratio and with MODIS counts taken as they are; the coverages are how often the observed Suomi NPP count of a held-out year, or month, lay inside the interval fitted without that year; `fit_rows` are the rows the ratio was fitted on.
 - A region's entry is kept while its rows are unchanged; the first answer after a start reads every calendar, about 30 seconds while the box index is built, then tens of milliseconds. A place whose calendar cannot be built carries `error` and the others still answer.
+
+## The fire cube
+
+`GET /api/cube/record?box=w,s,e,n[&snap=outer|inner]` returns the Record of any box read from the fire cube ([cube.md](cube.md)), in the shape of `GET /api/calendar?source=firms&box=`, with fire radiative power per platform and month and a `cube` block. `GET /api/cube/tables`, `GET /api/cube/countries` and `GET /api/cube/layers` give the box's tables, the loaded countries and the world layers. A box with no loaded row answers 404, not zeros; before any build of the cube the routes answer 503. The server finds the cube through `ISOGON_WORLD_DIR`, or through `data/cache/world` in the checkout.
 
 ## `GET /api/firms/countries`
 

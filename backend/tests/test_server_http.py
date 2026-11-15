@@ -252,6 +252,18 @@ class RealRunServingTests(unittest.TestCase):
         self.assertIn("MODIS", starts["chosen_from"])
 
 
+class CubeMountTests(unittest.TestCase):
+    def test_the_cube_routes_answer_through_the_main_server(self) -> None:
+        """The cube's routes are mounted before every other route: they answer (200 from a built cube, 503 before
+        any build), never as an unknown route, and the other routes are untouched."""
+        status, headers, raw = _req("/api/cube/countries")
+        self.assertIn(status, (200, 503), raw[:200])
+        self.assertIn("json", headers.get("Content-Type", ""))
+        self.assertNotIn("Unknown endpoint", raw.decode("utf-8", "replace"))
+        self.assertEqual(_req("/api/cube/record?box=1,2,3")[0], 400 if status == 200 else 503)
+        self.assertEqual(_req("/api/health")[0], 200)
+
+
 class DefaultStartTests(unittest.TestCase):
     def test_default_follows_the_model_and_falls_back_to_most_modis_pixels(self) -> None:
         from backend.server import with_default_start

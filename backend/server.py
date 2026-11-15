@@ -12,6 +12,8 @@ Endpoints:
   - GET  /api/calendar                        (simulated; ?source=firms&region_id=<id> for the real calendar)
   - GET  /api/calendar/rows.csv?region_id=<id>&start=<date>&end=<date>[&platforms=Terra,Aqua]
   - GET  /api/calendar/checks                 (the Record's held-out check of every place in one answer)
+  - GET  /api/cube/record?box=..., /api/cube/tables?box=..., /api/cube/countries, /api/cube/layers[/<name>]
+                                               (the fire cube, backend/server_cube.py; docs/cube.md)
   - GET  /api/sensor-model
   - GET  /api/field-meta
   - POST /api/env/next_look/reset             {region_id, episode | start, tiles, budget, seed}
@@ -90,6 +92,7 @@ from backend.model.solver import (  # noqa: E402
     SolvedReconstructionRun,
     solve_region_reconstruction,
 )
+from backend.server_cube import cube_route  # noqa: E402
 from backend.server_next_look import (  # noqa: E402
     ClosedWindow,
     NextLookRounds,
@@ -822,6 +825,8 @@ class IsogonDataStore:
                 "/api/calendar?source=firms&region_id=plumas_ca",
                 "/api/calendar/rows.csv?region_id=plumas_ca&start=2021-08-01&end=2021-09-01",
                 "/api/calendar/checks",
+                "/api/cube/record?box=-9.5,37,-6,42",
+                "/api/cube/layers",
                 "/api/sensor-model",
                 "/api/field-meta",
             ],
@@ -1351,6 +1356,11 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
         store = self.server.store
 
         try:
+            hit = cube_route(route, qs)
+            if hit is not None:
+                self._send_bytes(hit[0], hit[1], hit[2])
+                return
+
             if route == "/api/health":
                 self._send_json_obj(HTTPStatus.OK, store.health_payload())
                 return
@@ -1668,6 +1678,10 @@ class IsogonRequestHandler(BaseHTTPRequestHandler):
                         "/api/observer",
                         "/api/calendar",
                         "/api/calendar/checks",
+                        "/api/cube/record",
+                        "/api/cube/tables",
+                        "/api/cube/countries",
+                        "/api/cube/layers",
                         "/api/sensor-model",
                         "/api/field-meta",
                         "/api/env/next_look/reset (POST)",
