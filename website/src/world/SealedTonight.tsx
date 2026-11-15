@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
-import { countryAt, pointWords } from './countryAt';
+import { countryAt, countryShapeAt, pointWords } from './countryAt';
 import { placeLabels } from './labels';
-import { parseLive, platformWords, type Live, type LiveFire, type LiveSeal } from './live';
+import { closeGroup, parseLive, platformWords, type Live, type LiveFire, type LiveSeal } from './live';
 import { type Box } from './projection';
 import { useRead } from './read';
 import { clockAt, clockOnly, dayAt, partAt } from './words';
@@ -48,9 +48,9 @@ const PARTS: Record<string, string> = {
 };
 
 export const SEAL_WORDS = {
-  // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open; version 9 for the film's caption).
+  // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open; version 11 for the film's caption).
   objective: 'See predictions written before the pass',
-  film: (ahead: number, level: number, behind: number) => `Sealed before the pass: ${ahead} ahead, ${level} level, ${behind} behind.`,
+  film: (ahead: number, level: number, behind: number) => `Sealed before the pass. Scores: ${ahead} ahead, ${level} level, ${behind} behind.`,
   label: 'The Earth, with the fires whose predictions are sealed tonight',
   loading: "Loading tonight's sealed predictions.",
   failed: "Tonight's sealed predictions did not load.",
@@ -73,6 +73,10 @@ export const SEAL_WORDS = {
     (none ? '; no fire in the pass' : ''),
   notScored: (why: string | null) => `Not scored${why ? `: ${why}` : ''}`,
   title: (platform: string | null, day: string | null, point: string) => [platform ? `Predicted pass of ${platform}` : null, day, point].filter(Boolean).join(', '),
+  // The judge's two readings of the board, as the product lane asked for them, from the answer's own figures.
+  listed: (followed: number, sealed: number, scored: number) =>
+    `Of the ${followed} fires followed tonight, the ${sealed} with a pass sealed are listed here; ${scored} of them are scored.`,
+  close: (k: number, n: number, where: string) => `${k} of the ${n} fires scored lie close together in ${where}, so they are not ${n} separate tests.`,
   rest: (items: string[], any: boolean) => `${any ? 'Also followed' : 'Followed tonight'}, no pass sealed yet: ${items.join(', ')}`,
   restAbout: 'Each was chosen from the coarse satellite alone, by its detections in the last 48 hours.',
   digest: 'Digest',
@@ -179,6 +183,18 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
   const o = live.overFires;
   const filmLine = scored > 0 && o && o.ahead !== null && o.tied !== null && o.behind !== null ? SEAL_WORDS.film(o.ahead, o.tied, o.behind) : null;
   const captionLine = caption ? (film ? filmLine ?? SEAL_WORDS.objective : SEAL_WORDS.objective) : null;
+  // The fires scored, and whether most of them lie close together (one weather, one day: not separate tests).
+  const scoredFires = fires.filter((f) => (byFire.get(f.id) ?? []).some((x) => x.state === 'scored'));
+  const group = closeGroup(scoredFires);
+  const groupWhere = (() => {
+    if (!group) return null;
+    const c: [number, number] = [group.reduce((a, f) => a + f.centre[0], 0) / group.length, group.reduce((a, f) => a + f.centre[1], 0) / group.length];
+    const shape = countryShapeAt(c[0], c[1]) ?? countryShapeAt(group[0].centre[0], group[0].centre[1]);
+    if (!shape) return whereOf(group[0]);
+    // Northern or southern where the group lies in the country's top or bottom third.
+    const at = (c[1] - shape.box[1]) / (shape.box[3] - shape.box[1] || 1);
+    return `${at > 2 / 3 ? 'northern ' : at < 1 / 3 ? 'southern ' : ''}${shape.name}`;
+  })();
 
   return (
     <div
@@ -328,6 +344,12 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
             </li>
           )}
         </ol>
+        {scoredFires.length > 0 && (
+          <div className="world-board__rule">
+            {SEAL_WORDS.listed(fires.length, shown.length, scoredFires.length)}
+            {group && groupWhere ? ` ${SEAL_WORDS.close(group.length, scoredFires.length, groupWhere)}` : ''}
+          </div>
+        )}
         {live.overFires && live.overFires.fires !== null && live.overFires.ahead !== null && live.overFires.tied !== null && live.overFires.behind !== null && (
           <div className="world-board__rule world-board__rule--strong">
             {SEAL_WORDS.over(live.overFires.fires, live.overFires.ahead, live.overFires.tied, live.overFires.behind, live.overFires.scores)}

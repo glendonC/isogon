@@ -156,3 +156,25 @@ export function platformWords(p: string | null): string | null {
   if (/SNPP|SUOMI/i.test(p)) return 'Suomi NPP';
   return p;
 }
+
+/** Kilometres between two points on the Earth (haversine, a sphere of 6371 km). */
+export function kmBetween(a: [number, number], b: [number, number]): number {
+  const r = Math.PI / 180;
+  const dLat = (b[1] - a[1]) * r;
+  const dLon = (b[0] - a[0]) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.sin(dLon / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * The largest group of fires that lie close together (each within `km` of the group's first), where it holds more
+ * than half of them and at least three: such fires burn in one weather on one day, so they are not separate tests.
+ */
+export function closeGroup<T extends { centre: [number, number] }>(fires: T[], km = 600): T[] | null {
+  let best: T[] = [];
+  for (const f of fires) {
+    const g = fires.filter((o) => kmBetween(f.centre, o.centre) <= km);
+    if (g.length > best.length) best = g;
+  }
+  return best.length >= 3 && best.length * 2 > fires.length ? best : null;
+}
