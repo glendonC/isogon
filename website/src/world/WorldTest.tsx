@@ -21,6 +21,8 @@ export const TEST_WORDS = {
   failed: 'The test across the world did not load.',
   noLook: 'No look of the test across the world has been taken yet. Its plan of fires is written before any score.',
   title: (fires: number, groups: number) => `${count(fires)} fires in ${count(groups)} continents. Each square is one fire.`,
+  held: (stated: number, held: number, looks: number) =>
+    `Its stated ${Math.round(stated * 100)} percent interval held on ${Math.round(held * 100)} percent of the ${count(looks)} looks.`,
   byContinent: 'By continent',
   byZone: 'By zone',
   zoneNote: 'A zone is a band of latitude standing in for the kind of land that burns; no map of fuel is read.',
@@ -163,6 +165,7 @@ export function WorldTest({ source }: { source: string }) {
                 ))}
               </div>
             )}
+            {ans.looks.length === 1 && look.name && <div className="world-tests__look">{look.name[0].toUpperCase() + look.name.slice(1)}</div>}
             <div className="world-legend__line">{TEST_WORDS.title(fires.length, new Set(fires.map((f) => f.continent)).size)}</div>
             <div className="world-tests__row world-tests__row--head">
               <span />
@@ -223,6 +226,9 @@ export function WorldTest({ source }: { source: string }) {
             </ol>
             <div className="world-legend__fine">{TEST_WORDS.classesKey(judged)}</div>
             {by === 'zone' && <div className="world-legend__fine">{TEST_WORDS.zoneNote}</div>}
+            {look.all?.interval && (
+              <div className="world-legend__fine">{TEST_WORDS.held(look.all.interval.stated, look.all.interval.held, look.all.interval.looks)}</div>
+            )}
             {look.notScored > 0 && <div className="world-legend__fine">{TEST_WORDS.notScored(look.notScored)}</div>}
           </>
         )}

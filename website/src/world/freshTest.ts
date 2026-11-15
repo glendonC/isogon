@@ -28,6 +28,8 @@ export interface Group {
   name: string;
   fires: number | null;
   classes: Classes | null;
+  /** How often the estimate's stated interval held over the group's looks. */
+  interval: { stated: number; held: number; looks: number } | null;
 }
 
 export interface FreshLook {
@@ -80,8 +82,7 @@ export function tileOfKey(key: string, grid = FRESH_GRID): { box: [number, numbe
   return { box: [w + i * d, s + j * d, w + (i + 1) * d, s + (j + 1) * d], year: m[3] };
 }
 
-function classes(v: unknown): Classes | null {
-  const c = (v ?? null) as Obj | null;
+function counts(c: Obj | null): Classes | null {
   if (!c) return null;
   const a = num(c.ahead);
   const t = num(c.tied ?? c.tie);
@@ -89,9 +90,36 @@ function classes(v: unknown): Classes | null {
   return a !== null && t !== null && b !== null ? { ahead: a, tied: t, behind: b } : null;
 }
 
+/** A group's scores ahead, tied and behind: counted where the answer gives them (M30 puts them on the group, its
+ * `classes` naming each score's class), or counted from `classes` when that holds the class of each score. */
+function classesOf(g: Obj): Classes | null {
+  const own = counts(g);
+  if (own) return own;
+  const c = (g.classes ?? null) as Obj | null;
+  const given = counts(c);
+  if (given) return given;
+  if (!c) return null;
+  const words = Object.values(c).filter((w): w is string => typeof w === 'string');
+  if (!words.length) return null;
+  return {
+    ahead: words.filter((w) => w === 'ahead').length,
+    tied: words.filter((w) => w === 'tie' || w === 'tied').length,
+    behind: words.filter((w) => w === 'behind').length,
+  };
+}
+
 function group(name: string, v: unknown): Group {
   const g = (v ?? {}) as Obj;
-  return { name, fires: num(g.episodes), classes: classes(g.classes) };
+  const i = (g.interval ?? null) as Obj | null;
+  const stated = num(i?.stated_level);
+  const held = num(i?.held);
+  const looks = num(i?.looks);
+  return {
+    name,
+    fires: num(g.episodes),
+    classes: classesOf(g),
+    interval: stated !== null && held !== null && looks !== null ? { stated, held, looks } : null,
+  };
 }
 
 function look(id: 'test_a' | 'test_b', v: unknown, names: Obj, grid: typeof FRESH_GRID): FreshLook | null {

@@ -1274,3 +1274,10 @@
     transition: none;
   }
 }
+
+/* The look's own name, when the test across the world has one look so far. */
+.world-tests__look {
+  font: var(--sys-weight-strong) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
+
