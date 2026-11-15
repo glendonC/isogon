@@ -32,6 +32,7 @@ import type {
   StageTileAnchor,
   TheaterId,
   StageMissingFile,
+  StageFilmMove,
 } from './earthCutawayTypes';
 import {
   CinemaDirector,
@@ -323,6 +324,13 @@ function plainGroundTexture(): THREE.Texture {
   return tex;
 }
 
+/** The page address's `film` parameter, when it names a film move (see the prop `filmMove`). */
+function filmFromAddress(): StageFilmMove | 'auto' | null {
+  if (typeof window === 'undefined') return null;
+  const v = new URLSearchParams(window.location.search).get('film');
+  return v === 'record' || v === 'estimate' || v === 'test' || v === 'play' || v === 'auto' ? v : null;
+}
+
 /** The files of the run on show that did not load, the estimate's among them. Undefined when none is missing. */
 function missingFilesOf(bundle: CachedTheaterBundle, beliefFailed: ReadonlySet<string>): StageMissingFile[] | undefined {
   const estimate = bundle.runId !== null && beliefFailed.has(bundle.runId);
@@ -373,6 +381,13 @@ const FIRE_PATCH_LIMIT = 8;
  * twenty kilometres in about three seconds. Never under reduced motion.
  */
 const REVEAL_ARRIVE_SECONDS = 1.0;
+/** The film's moves: seconds of each, and the push's distances as shares of the close view's. */
+const FILM_RECORD_SECONDS = 12;
+const FILM_RECORD_TURN = 0.12;
+const FILM_ESTIMATE_SECONDS = 9;
+const FILM_PUSH_FROM = 1.22;
+const FILM_PUSH_TO = 0.94;
+const FILM_PLAY_SECONDS = 5;
 const FIRE_PATCH_GRID_KM = 0.375;
 
 /**
@@ -2304,6 +2319,19 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
     // True once the user has orbited, panned or zoomed since the last preset was applied
     let cameraTouched = false;
+    // The film's camera move (prop filmMove, or the address parameter film)
+    const filmAddress = filmFromAddress();
+    let filmMoveNow: StageFilmMove | null = null;
+    let filmAskedLast: StageFilmMove | 'auto' | null = null;
+    let filmCancelled = false;
+    let filmStartSec = 0;
+    let filmSeconds = 0;
+    let filmEase = true;
+    let filmFrom: CameraPresetSpec | null = null;
+    let filmTo: CameraPresetSpec | null = null;
+    let filmProgress = 0;
+    // The preset the fit and the land around the box follow while a move runs
+    let filmPreset: InspectorCameraPreset | null = null;
     // Set when the terrain under the camera changed, so the preset target is resolved again
     let presetDirty = false;
 
@@ -2807,24 +2835,26 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       if (p.inWorkspace && workspaceFrame) {
         const frameCx = (workspaceFrame.left + workspaceFrame.right) * 0.5;
         const frameCy = (workspaceFrame.top + workspaceFrame.bottom) * 0.5;
-        if (p.cameraPreset === 'overview' || p.cameraPreset === 'nadir' || p.cameraPreset === 'region') {
+        // (while a film move runs, the move's own preset)
+        const presetNow = filmPreset ?? p.cameraPreset;
+        if (presetNow === 'overview' || presetNow === 'nadir' || presetNow === 'region') {
           // Whole-slab views: fit the slab of that preset inside the frame, never magnified
           workspaceFitAge += 1;
-          const fitSky = p.mode === 'observer' && p.cameraPreset === 'overview';
+          const fitSky = p.mode === 'observer' && presetNow === 'overview';
           if (
             workspaceFitAge >= SUBJECT_REFIT_INTERVAL_FRAMES ||
-            workspaceFitPreset !== p.cameraPreset ||
+            workspaceFitPreset !== presetNow ||
             workspaceFitSky !== fitSky
           ) {
             refitSubject(
               workspaceFrame,
-              resolvePresetForContext(p.cameraPreset, true, p.mode, p.activeTheaterId),
+              resolvePresetForContext(presetNow, true, p.mode, p.activeTheaterId),
               0,
               workspaceFit,
               fitSky,
             );
             workspaceFitAge = 0;
-            workspaceFitPreset = p.cameraPreset;
+            workspaceFitPreset = presetNow;
             workspaceFitSky = fitSky;
           }
           const s = THREE.MathUtils.clamp(workspaceFit.scale, 0.4, 1.0);
@@ -3043,6 +3073,92 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           dampFast,
         );
         orbitCurrent.target.lerp(orbitTarget.target, dampFast);
+
+        // The film's camera move: the pose is a function of the time since the move began, aimed
+        // from the fire's own centre and the presets, so a move is the same every time it runs
+        const filmAsked = p.filmMove !== undefined ? p.filmMove : filmAddress;
+        if (filmAsked !== filmAskedLast) {
+          filmAskedLast = filmAsked;
+          filmCancelled = false;
+        }
+        if (filmMoveNow && (cameraTouched || pointerDown)) filmCancelled = true;
+        let filmWanted: StageFilmMove | null = null;
+        if (filmAsked && !filmCancelled && !morphActive) {
+          filmWanted =
+            filmAsked !== 'auto'
+              ? filmAsked
+              : !p.inWorkspace
+                ? 'record'
+                : p.tileBoard
+                  ? 'play'
+                  : uRevealed.x + uRevealed.y > 0.5
+                    ? 'test'
+                    : 'estimate';
+          const realOnShow = nextBundle.observerDataset.dataSource === 'firms';
+          if (filmWanted !== 'record' && (!p.inWorkspace || !realOnShow)) filmWanted = null;
+        }
+        if (filmWanted !== filmMoveNow) {
+          filmMoveNow = filmWanted;
+          filmStartSec = elapsedSec;
+          filmProgress = 0;
+          filmPreset = null;
+          filmFrom = null;
+          filmTo = null;
+          if (filmWanted) {
+            cameraTouched = false;
+            const close = resolveLivePreset('canyon', true, p.mode, p.activeTheaterId);
+            const near: CameraPresetSpec = { ...close, distance: close.distance * FILM_PUSH_TO, azimuth: close.azimuth + 0.04 };
+            if (filmWanted === 'estimate') {
+              filmFrom = { ...close, distance: close.distance * FILM_PUSH_FROM, azimuth: close.azimuth - 0.06 };
+              filmTo = near;
+              filmSeconds = FILM_ESTIMATE_SECONDS;
+              filmEase = true;
+              filmPreset = 'canyon';
+            } else if (filmWanted === 'test') {
+              filmFrom = near;
+              filmTo = near;
+              filmSeconds = 0;
+              filmPreset = 'canyon';
+            } else if (filmWanted === 'play') {
+              filmFrom = near;
+              filmTo = resolveLivePreset('region', true, p.mode, p.activeTheaterId);
+              filmSeconds = FILM_PLAY_SECONDS;
+              filmEase = true;
+              filmPreset = 'region';
+            } else {
+              // The record: the whole box on its land in the workspace, or the landing's own pose
+              const base = p.inWorkspace
+                ? resolveLivePreset('region', true, p.mode, p.activeTheaterId)
+                : (landingWorldPose ?? LANDING_HERO_POSE);
+              filmFrom = { ...base, azimuth: base.azimuth - FILM_RECORD_TURN / 2 };
+              filmTo = { ...base, azimuth: base.azimuth + FILM_RECORD_TURN / 2 };
+              filmSeconds = FILM_RECORD_SECONDS;
+              filmEase = false;
+              filmPreset = p.inWorkspace ? 'region' : null;
+            }
+          }
+        }
+        if (filmMoveNow && filmFrom && filmTo) {
+          const t = filmSeconds > 0 ? THREE.MathUtils.clamp((elapsedSec - filmStartSec) / filmSeconds, 0, 1) : 1;
+          const k = filmEase ? t * t * (3 - 2 * t) : t;
+          let turn = filmTo.azimuth - filmFrom.azimuth;
+          while (turn > Math.PI) turn -= Math.PI * 2;
+          while (turn < -Math.PI) turn += Math.PI * 2;
+          orbitCurrent.azimuth = filmFrom.azimuth + turn * k;
+          orbitCurrent.polar = THREE.MathUtils.lerp(filmFrom.polar, filmTo.polar, k);
+          // (distance by ratio, so a rise reads at one pace near and far)
+          orbitCurrent.distance = filmFrom.distance * Math.pow(filmTo.distance / filmFrom.distance, k);
+          orbitCurrent.target.set(
+            THREE.MathUtils.lerp(filmFrom.target[0], filmTo.target[0], k),
+            THREE.MathUtils.lerp(filmFrom.target[1], filmTo.target[1], k),
+            THREE.MathUtils.lerp(filmFrom.target[2], filmTo.target[2], k),
+          );
+          orbitTarget.azimuth = orbitCurrent.azimuth;
+          orbitTarget.polar = orbitCurrent.polar;
+          orbitTarget.distance = orbitCurrent.distance;
+          orbitTarget.target.copy(orbitCurrent.target);
+          filmProgress = t;
+        }
 
         const sinP = Math.sin(orbitCurrent.polar);
         camera.position.set(
@@ -3516,7 +3632,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         // the close presets), once the region's own terrain has settled
         // (and in the preset that shows the whole box with its land, from any distance)
         const worldShown = p.inWorkspace
-          ? p.cameraPreset === 'region'
+          ? (filmPreset ?? p.cameraPreset) === 'region'
             ? 1.0
             : 1.0 - THREE.MathUtils.smoothstep(orbitCurrent.distance, 8.5, 11.5)
           : landingWorld
@@ -4071,6 +4187,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             wavePosition: 0,
             imageryAttribution: creditWithContext(nextBundle),
             missingFiles: missingFilesOf(nextBundle, beliefFailedRef.current),
+            film: filmMoveNow ? { move: filmMoveNow, progress: filmProgress } : undefined,
             verticalExaggeration: VERTICAL_EXAGGERATION,
             landingStandpoint: landingWorld && landingWorldPose ? landingWorldStats : undefined,
             intensityLegend: intensityLegendOf(nextBundle),

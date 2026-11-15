@@ -73,6 +73,8 @@ export interface EarthStageTelemetry {
    * are not listed. Absent when nothing is missing.
    */
   missingFiles?: StageMissingFile[];
+  /** The film's camera move running, and how far through it is (0 to 1; 1 holds the last pose). */
+  film?: { move: StageFilmMove; progress: number };
   /** Vertical exaggeration of the relief (one value for every region). */
   verticalExaggeration?: number;
   /**
@@ -183,6 +185,16 @@ export interface StageFirePatch {
   visible: boolean;
 }
 
+/**
+ * A camera move for the film, one for each of the four steps (see `filmMove`):
+ *   record    the whole box on its land, a slow turn of about seven degrees in twelve seconds
+ *   estimate  a slow push on the fire, from a little farther than the close view to a little
+ *             nearer, in nine seconds
+ *   test      a hold on the fire, at the push's last pose, through the reveal
+ *   play      from that pose, a rise to the whole box on its land in five seconds, then a hold
+ */
+export type StageFilmMove = 'record' | 'estimate' | 'test' | 'play';
+
 /** Where the fire on show sits on screen (see `onFireAnchor`). */
 export interface StageFireAnchor {
   /** The frame (pass index) the anchor describes. */
@@ -290,6 +302,15 @@ export interface EarthCutawayStageProps {
    * pass and the dotted line around ground that may burn.
    */
   chanceSquares?: boolean;
+  /**
+   * Runs a camera move for the film. Each move is a function of the time since it began, aimed
+   * from the fire on show and the presets, so it is the same every time it runs; it starts when
+   * the value changes and holds its last pose when done. `auto` picks the move from what is on
+   * the stage (a board: play; detections laid on after scoring: test; the workspace: estimate;
+   * the landing: record). A drag or a wheel ends it. Without this prop the stage reads the
+   * page address's parameter `film` (the same values), so a recorder can start it from a link.
+   */
+  filmMove?: StageFilmMove | 'auto' | null;
   /** Where the fire on show sits on screen, every rendered frame in the workspace. Null when nothing is drawn. */
   onFireAnchor?: (anchor: StageFireAnchor | null) => void;
   /** A board of tiles over the region's box, drawn on the terrain. Null or absent: no board. */
