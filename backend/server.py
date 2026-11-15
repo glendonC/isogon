@@ -264,36 +264,9 @@ def start_rule_digest() -> str:
     return h.hexdigest()
 
 
-REVEAL_WITH: str = 'POST /api/reconstruct again with the same body and "reveal": true'
 FITTED_VALUES_DIR: Path = _REPO_ROOT / "backend" / "model" / "fitted_values"
-
-
-def withhold_scorer_keys(resp: dict[str, Any]) -> dict[str, Any]:
-    """A held-out run's response without what the scorer wrote from the hidden rows, until the page asks for the
-    reveal. The paths are the run's own declaration (`hidden_rows.payload_keys_from_the_scorer`), with
-    `blind_test` and every name in `metrics.from_hidden_rows` added in case the declaration misses one. Nested
-    objects are copied before a key is removed, so the stored run is never changed."""
-    hr = resp.get("hidden_rows") if isinstance(resp.get("hidden_rows"), dict) else {}
-    paths = list(hr.get("payload_keys_from_the_scorer") or [])
-    paths.append("blind_test")
-    paths += [f"metrics.{k}" for k in ((resp.get("metrics") or {}).get("from_hidden_rows") or [])]
-    out = dict(resp)
-    withheld: list[str] = []
-    for path in dict.fromkeys(paths):
-        parts = path.split(".")
-        parent = out
-        for name in parts[:-1]:
-            child = parent.get(name)
-            if not isinstance(child, dict):
-                parent = None
-                break
-            parent[name] = dict(child)
-            parent = parent[name]
-        if parent is not None and parts[-1] in parent:
-            del parent[parts[-1]]
-            withheld.append(path)
-    out["hidden_rows"] = {**hr, "withheld_until_reveal": withheld, "reveal_with": REVEAL_WITH}
-    return out
+# The first answer of a held-out run and how its reveal is asked for, shared with the browser's entry point
+from backend.model.withhold import REVEAL_WITH, withhold_scorer_keys  # noqa: E402,F401
 
 
 def fitted_values_digest() -> str:
