@@ -15,13 +15,14 @@ export function recordFields(ws: WorkspaceBase, rv: RecordView): { fields: Field
   const fields: Fields = {
     place: rv.place || ws.place.title || null,
     record_first_year: rv.firstYear === null ? null : String(rv.firstYear),
-    // Beside the trail: the record's span, so the place is not said twice.
-    record_span: rv.firstYear !== null && rv.lastYear !== null ? `${rv.firstYear} to ${rv.lastYear}` : null,
+    record_last_year: rv.lastYear === null ? null : String(rv.lastYear),
     sharp_to_coarse: times(rv.correction.ratio),
     sharp_since: rv.correction.sharpFromYear === null ? null : String(rv.correction.sharpFromYear),
     default_fire_month: m?.words ?? null,
     fire_times_usual: m && m.usual !== null && m.usual > 0 ? ratioWhole(m.timesUsual) : null,
     fire_month_name: monthName(m?.ym),
+    fire_month_rate: rate(m?.rate ?? null),
+    fire_month_usual: rate(m?.usual ?? null),
     picked_month: p?.words ?? null,
     month_rank: count(p?.rank ?? null),
     month_years: count(p?.rankOf ?? null),
@@ -32,6 +33,7 @@ export function recordFields(ws: WorkspaceBase, rv: RecordView): { fields: Field
   };
   const conds: Conditions = {
     fire_month_stands_out: m && m.usual !== null && m.timesUsual !== null ? m.usual > 0 && m.timesUsual >= 2 : null,
+    this_month_is_counted: rv.now.state === 'ready' ? rv.now.rate !== null && rv.now.why === null : rv.now.state === 'unavailable' ? false : null,
   };
   return { fields, conds };
 }
@@ -42,6 +44,8 @@ export function recordStateId(ws: WorkspaceBase, rv: RecordView): string | null 
   if (rv.state === 'loading') return 'loading';
   if (rv.state === 'failed' || rv.state === 'not recorded') return 'failed';
   if (ws.calendar.place.kind !== 'region') return 'own_area';
+  if (rv.correction.asCounted) return 'as_counted';
+  if (rv.now.state !== 'idle') return 'this_month';
   const p = rv.picked;
   if (!p) return 'ready';
   const regionId = ws.calendar.place.regionId;

@@ -28,12 +28,16 @@ export interface ScriptAction {
   places?: string[];
   /** The thing on the stage the action also stands beside, as a prompt, while the pointer or focus is near it. */
   beside?: string;
+  /** What the action reads while what it started is running ("Pause the passes"). */
+  label_while_on?: string;
 }
 
 export interface ScriptLabel extends When {
   place?: string;
   on: string;
   line: string;
+  /** The label while the passes play: readable in a second and a half. */
+  short?: string;
 }
 
 export interface ScriptResultRow {
@@ -59,6 +63,8 @@ export interface ScriptState {
   labels?: ScriptLabel[];
   on_demand?: string[];
   results?: ScriptResults;
+  /** What the guide says on demand beyond what stands. */
+  more?: Array<string | ScriptLine>;
 }
 
 export interface ScriptStartCard {
@@ -75,7 +81,26 @@ export interface ScriptStep {
   /** The fainter line that goes with the objective: the place and the days. Not a sentence. */
   context?: string | null;
   start_card?: ScriptStartCard;
+  /** Actions that work in every state of the step, by their key and by asking; not in the strip unless a state lists them. */
+  also?: ScriptAction[];
   states: ScriptState[];
+}
+
+export interface ScriptMarkRow {
+  id: string;
+  name: string;
+  line: string;
+  on_show: string;
+  from?: string;
+  drawing?: string;
+}
+
+/** The key of marks, on demand: a row for each mark on show, and the one action that shows the squares sized by chance. */
+export interface ScriptMarks {
+  name: string;
+  open: ScriptAction;
+  action: ScriptAction;
+  rows: ScriptMarkRow[];
 }
 
 interface Script {
@@ -83,6 +108,7 @@ interface Script {
   trail: string[];
   names: Record<string, string>;
   steps: ScriptStep[];
+  marks?: ScriptMarks;
 }
 
 export const SCRIPT = raw as unknown as Script;
@@ -138,11 +164,11 @@ export function contextOf(step: string, fields: Fields): string | null {
   return t ? fill(t, fields) : null;
 }
 
-/** The label a state puts on one thing of the stage. */
-export function labelOn(state: ScriptState | null, thing: string, fields: Fields, conds: Conditions): string | null {
+/** The label a state puts on one thing of the stage; its short form while the passes play, where it has one. */
+export function labelOn(state: ScriptState | null, thing: string, fields: Fields, conds: Conditions, short = false): string | null {
   for (const l of state?.labels ?? []) {
     if (l.on !== thing || !holds(l, conds)) continue;
-    const text = fill(l.line, fields);
+    const text = fill(short && l.short ? l.short : l.line, fields);
     if (text) return text;
   }
   return null;

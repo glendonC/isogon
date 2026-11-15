@@ -191,6 +191,11 @@ export function App() {
   const [debriefOpen, setDebriefOpen] = useState(false);
   /** After a round: the script's last words (step "finish") on the stage. */
   const [finishOpen, setFinishOpen] = useState(false);
+  /** The key of marks is open; the estimate's squares sized by chance are drawn (off at rest). */
+  const [marksOpen, setMarksOpen] = useState(false);
+  const [chanceOn, setChanceOn] = useState(false);
+  /** Sentences said on demand in place of the standing ones, for the state they were asked in. */
+  const [said, setSaid] = useState<{ key: string; lines: string[] } | null>(null);
   /** A new try at the Record after it failed to load: it is mounted afresh. */
   const [recordTry, setRecordTry] = useState(0);
   const telemetryRef = useRef<EarthStageTelemetry | null>(null);
@@ -222,6 +227,7 @@ export function App() {
   /** The guide on show and its commands, for the key handler defined before them. */
   const guideRef = useRef<Guide | null>(null);
   const runCommandRef = useRef<(command: string) => void>(() => {});
+  const marksOpenRef = useRef(false);
   /** The round of Test world (beats/test-world/useRound.ts), for the callbacks defined before it. */
   const roundRef = useRef<RoundApi | null>(null);
   // The places registry: the default fire, each place's opening start, and the recorded test fires.
@@ -612,6 +618,11 @@ export function App() {
       if (next === step && next !== 'look') return;
       // Leaving a round for World model keeps the round's held-out run: the test opens blind on it at once.
       setFinishOpen(false);
+      // The key of marks and the squares sized by chance belong to Estimate and Test.
+      if (next !== 'fire' && next !== 'test') {
+        setMarksOpen(false);
+        setChanceOn(false);
+      }
       // The players open over the round's end and keep it; anything else leaves the round.
       if ((step === 'look' || step === 'agent') && next !== 'look' && next !== 'agent' && round) leaveRound(next === 'test');
       if (next === 'record' || next === 'fire') {
@@ -832,10 +843,15 @@ export function App() {
       const g = guideRef.current;
       if (inWorkspace && g?.step && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const onCtl = Boolean(target?.closest('button, a, [role="slider"], [role="option"]'));
-        const a = g.actions.find((x) => keyMatches(x.key, e));
+        const a = g.actions.find((x) => keyMatches(x.key, e)) ?? g.also.find((x) => keyMatches(x.key, e));
         if (a && !(onCtl && (e.key === 'Enter' || e.key === ' '))) {
           e.preventDefault();
           runCommandRef.current(a.command);
+          return;
+        }
+        if (marksOpenRef.current && e.key === 'Escape') {
+          e.preventDefault();
+          setMarksOpen(false);
           return;
         }
         if (g.step === 'finish' && e.key === 'Escape') {
@@ -1138,6 +1154,7 @@ export function App() {
       threeWays,
       toggleThreeWays: () => setThreeWays((t) => !t),
       lastSeen: stageTelemetry?.lastSeen ?? null,
+      marksOpen,
       missingFiles: stageTelemetry?.missingFiles ?? null,
       evidence: evidenceLive,
       openEvidence: () => setEvidenceOpen(true),
@@ -1175,8 +1192,14 @@ export function App() {
   // What the Record publishes for the guide (the compare-view lane's view), and the guide worked out from the store.
   const recordView = useRecordView();
   const playersView = usePlayersView();
-  const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays, finish: finishOpen }, recordView, playersView);
+  const guide = useGuide(storeBase, { scores: debriefOpen, sideBySide: threeWays, finish: finishOpen }, recordView, playersView, {
+    playing,
+    chance: chanceOn,
+    marksOpen,
+  });
+  const guideKey = `${guide.step}:${guide.stateId}:${realStart}`;
   guideRef.current = guide;
+  marksOpenRef.current = marksOpen;
   /** The commands the guide's actions name (script.json, "commands"). */
   const runCommand = (command: string) => {
     if (command === 'go:test') {
@@ -1224,7 +1247,16 @@ export function App() {
       if (round?.done) nextLook();
       else startRound();
     } else if (command === 'play:watch') playersView.watch();
-    else if (command === 'players:reveal') playersView.reveal();
+    else if (command === 'play:players_reveal') playersView.reveal();
+    else if (command === 'play:resume') setStep('look');
+    else if (command === 'marks:key') setMarksOpen((o) => !o);
+    else if (command === 'estimate:chance') setChanceOn((o) => !o);
+    else if (command === 'record:as_counted') recordView.showAsCounted(!recordView.correction.asCounted);
+    else if (command === 'record:now') recordView.askNow();
+    else if (command === 'record:now_caveats') {
+      // Why this month's figure is rough, in the sentences the route serves, said in the guide for this state.
+      if (recordView.now.caveats.length > 0) setSaid({ key: guideKey, lines: recordView.now.caveats });
+    }
     else if (command === 'go:finish') setFinishOpen(true);
     else if (command === 'go:record') goStep('record');
     else if (command === 'place:open') {
@@ -1341,7 +1373,7 @@ export function App() {
               <>
                 <div className="guide-scrim" aria-hidden="true" />
                 <GuideStrip
-                  lines={guide.lines}
+                  lines={said && said.key === guideKey ? said.lines : guide.lines}
                   actions={guide.actions}
                   onAction={runCommand}
                   results={guide.results}
@@ -1418,6 +1450,7 @@ export function App() {
           landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
           workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
           regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
+          chanceSquares={chanceOn}
           onFireAnchor={modelScene || step === 'look' ? emitAnchor : undefined}
           tileBoard={rnd.board}
           onTilePick={(tile) => {

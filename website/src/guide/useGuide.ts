@@ -2,14 +2,27 @@ import { useRef } from 'react';
 import type { WorkspaceBase } from '../app/store';
 import type { RecordView } from '../beats/calendar/recordView';
 import type { PlayersView } from '../beats/agent/playersView';
-import { PLAYERS_WORDS } from '../beats/agent/AgentPicture';
 import { guideFields } from './fields';
+import { marksOnShow, type MarkRow } from './marks';
 import { missingLine } from './missing';
 import { playStateId } from './playState';
 import { recordFields, recordStateId } from './recordFields';
 import { resultRows, type ResultRow } from './Results';
 import { roundFields } from './roundFields';
-import { contextOf, fill, labelOn, objectiveOf, promptBeside, says, stateOf, type Fields, type ScriptAction, type ScriptState } from './script';
+import {
+  contextOf,
+  fill,
+  labelOn,
+  objectiveOf,
+  promptBeside,
+  says,
+  stateOf,
+  stepOf,
+  type Conditions,
+  type Fields,
+  type ScriptAction,
+  type ScriptState,
+} from './script';
 
 export interface Guide {
   /** The script's step and state on show; null where the guide does not speak (Choose a Place). */
@@ -21,6 +34,8 @@ export interface Guide {
   context: string | null;
   lines: string[];
   actions: ScriptAction[];
+  /** The step's actions that work in every state by their key, not shown in the strip unless a state lists them. */
+  also: ScriptAction[];
   /** The label on the fire, and the action that stands beside the fire as a prompt. */
   fireLabel: string | null;
   besideFire: ScriptAction | null;
@@ -29,26 +44,42 @@ export interface Guide {
   besideSquare: ScriptAction | null;
   /** A round's end: the results' line and rows, above the guide's sentences. */
   results: { line: string; rows: ResultRow[] } | null;
+  /** The key of marks: a row for each mark now on show (Estimate and Test). */
+  marks: MarkRow[];
 }
 
 /** How many of a state's lines stand together in the guide. */
 const STANDING = 2;
 
-/**
- * With the players open and what their looks found not drawn yet, the guide offers it first, in the picture's own
- * words (the script's players_open has no such action, since there the picture opens after the visitor's round).
- */
-const REVEAL: ScriptAction = { label: PLAYERS_WORDS.reveal, command: 'players:reveal', key: 'Enter', places: ['guide'] };
+/** What is running now, for the actions that read otherwise while it runs (`label_while_on`) and the short labels. */
+export interface GuideLive {
+  /** The passes are playing. */
+  playing: boolean;
+  /** The squares sized by chance are drawn. */
+  chance: boolean;
+  /** The key of marks is open. */
+  marksOpen: boolean;
+}
 
-/** A state's actions with their labels' fields filled; an action whose label names a field not served is left out. */
-function actionsOf(state: ScriptState | null, fields: Fields): ScriptAction[] {
-  return (state?.actions ?? [])
+/** Which command's thing is running, by command. */
+function onOf(live: GuideLive, record: RecordView): Record<string, boolean> {
+  return {
+    'passes:play': live.playing,
+    'estimate:chance': live.chance,
+    'marks:key': live.marksOpen,
+    'record:as_counted': record.correction.asCounted,
+  };
+}
+
+/** Actions with their labels' fields filled and their running words where their thing runs; one naming a field not served is left out. */
+function actionsOf(list: ScriptAction[] | undefined, fields: Fields, on: Record<string, boolean>, most = 3): ScriptAction[] {
+  return (list ?? [])
     .map((a) => {
-      const label = fill(a.label, fields);
+      const label = fill(on[a.command] && a.label_while_on ? a.label_while_on : a.label, fields);
       return label ? { ...a, label } : null;
     })
     .filter((a): a is ScriptAction => a !== null)
-    .slice(0, 3);
+    .slice(0, most);
 }
 
 const NONE: Guide = {
@@ -59,12 +90,22 @@ const NONE: Guide = {
   context: null,
   lines: [],
   actions: [],
+  also: [],
   fireLabel: null,
   besideFire: null,
   squareLabel: null,
   besideSquare: null,
   results: null,
+  marks: [],
 };
+
+/** The players' states over a round's end (or plays asked on the open fire), from what the picture publishes. */
+function playersStateId(players: PlayersView): string {
+  if (players.state === 'held') return 'players_held';
+  if (players.state === 'loading') return 'players_coming';
+  if (players.state === 'failed') return 'players_failed';
+  return players.foundShown ? 'players_found' : 'players_open';
+}
 
 /**
  * Which step and state of the script the workspace is in, and what the guide says there. A state's own pass is the one
@@ -75,13 +116,15 @@ export function useGuide(
   open: { scores: boolean; sideBySide: boolean; finish: boolean },
   record: RecordView,
   players: PlayersView,
+  live: GuideLive,
 ): Guide {
   const entry = useRef<{ key: string; pass: number }>({ key: '', pass: -1 });
   const model = ws.step === 'fire' || ws.step === 'test';
   const { fields, conds } = guideFields(ws);
+  const on = onOf(live, record);
+
   if (ws.step === 'record') {
-    // The Record speaks from what it publishes. Beside the trail its span, not the place a second time; nothing while
-    // Choose a Place is open over it.
+    // The Record speaks from what it publishes; nothing while Choose a Place is open over it.
     entry.current = { key: '', pass: -1 };
     const r = recordFields(ws, record);
     const id = recordStateId(ws, record);
@@ -93,19 +136,22 @@ export function useGuide(
       stateId: id,
       state,
       objective: objectiveOf('record', state, r.fields),
-      context: r.fields.record_span ?? null,
+      context: contextOf('record', r.fields),
       lines: says(state, r.fields, r.conds).slice(0, STANDING),
-      actions: actionsOf(state, r.fields),
+      actions: actionsOf(state?.actions, r.fields, on),
+      also: actionsOf(stepOf('record')?.also, r.fields, on, 9),
     };
   }
+
   if (!model) {
-    // Play, and Finish after a round: the round's own answers and the evidence route.
+    // Play, and Finish after a round: the round's own answers, the players' picture and the evidence route.
     entry.current = { key: '', pass: -1 };
     const r = roundFields(ws);
-    const f = { ...fields, ...r.fields };
-    const c = { ...conds, ...r.conds };
+    const f: Fields = { ...fields, ...r.fields };
+    const c: Conditions = { ...conds, ...r.conds, players_from_round: players.state === 'closed' ? null : players.from === 'round' };
     const step = open.finish ? 'finish' : 'play';
-    const id = open.finish ? 'ready' : playStateId(ws);
+    let id = open.finish ? 'ready' : playStateId(ws);
+    if (id === 'players_open') id = playersStateId(players);
     const state = stateOf(step, id);
     const missing = step === 'play' && id !== 'loading' && id !== 'failed' ? missingLine(ws.model.missingFiles) : null;
     return {
@@ -116,13 +162,15 @@ export function useGuide(
       objective: objectiveOf(step, state, f),
       context: contextOf(step, f),
       lines: [...(missing ? [missing] : []), ...says(state, f, c).slice(0, STANDING)],
-      actions: id === 'players_open' && players.canReveal ? [REVEAL, ...actionsOf(state, f)].slice(0, 3) : actionsOf(state, f),
-      fireLabel: labelOn(state, 'fire', f, c),
+      actions: actionsOf(state?.actions, f, on).filter((a) => a.command !== 'play:players_reveal' || players.canReveal),
+      also: actionsOf(stepOf(step)?.also, f, on, 9),
+      fireLabel: labelOn(state, 'fire', f, c, live.playing),
       squareLabel: labelOn(state, 'looked_square', f, c),
       besideSquare: promptBeside(state, 'marked_square'),
       results: state?.results ? { line: state.results.line, rows: resultRows(state.results, f, r.gains, c) } : null,
     };
   }
+
   const failed = Boolean(ws.run.failed && (ws.run.failed.start === ws.run.pendingStart || !ws.run.isReal));
   let step: 'estimate' | 'test' = 'estimate';
   let id: string;
@@ -146,10 +194,10 @@ export function useGuide(
   }
 
   const state = stateOf(step, id);
-  const actions = actionsOf(state, fields);
   // A file that did not load is said first, while the run it belongs to is on show. Then the state's standing
   // sentences: its first two lines, shown together.
   const missing = id === 'loading' || id === 'failed' ? null : missingLine(ws.model.missingFiles);
+  const settled = id !== 'loading' && id !== 'failed' && id !== 'revealing';
   return {
     ...NONE,
     step,
@@ -158,8 +206,10 @@ export function useGuide(
     objective: objectiveOf(step, state, fields),
     context: contextOf(step, fields),
     lines: [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)],
-    actions,
-    fireLabel: labelOn(state, 'fire', fields, conds),
+    actions: actionsOf(state?.actions, fields, on),
+    also: actionsOf(stepOf(step)?.also, fields, on, 9),
+    fireLabel: labelOn(state, 'fire', fields, conds, live.playing),
     besideFire: promptBeside(state, 'fire'),
+    marks: settled ? marksOnShow(ws, fields, conds, { chance: live.chance, revealed: step === 'test' }) : [],
   };
 }

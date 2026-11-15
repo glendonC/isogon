@@ -6,13 +6,13 @@ import {
   promptPlace,
   sameFireAnchor,
   sameTileAnchors,
-  StageLabel,
   StagePrompt,
   usePointerNear,
   useStageValue,
   type Box,
 } from '../../guide/StageWords';
 import { labelPoint } from '../../guide/anchor';
+import { ClearPin, patchBoxes } from '../../guide/ClearPin';
 import '../../styles/test-world.css';
 
 /** A tile's box on screen, from the north-west corners the stage reports for it and its neighbours. */
@@ -48,6 +48,8 @@ export function PlayScene() {
   const [labelFocus, setLabelFocus] = useState(false);
   // The fire's label hangs on its larger patch.
   const fireAt = labelPoint(fire);
+  // The labels stand clear of the fire's patches.
+  const avoid = patchBoxes(fire);
 
   const cols = round.start?.episode.tiles[1] ?? 0;
   const looked = round.takenTile !== null ? tileBox(anchors, round.takenTile, cols) : null;
@@ -59,8 +61,16 @@ export function PlayScene() {
 
   return (
     <div className="tw-scene" data-scene={guide.stateId ?? undefined}>
-      {fireAt && guide.fireLabel && !guide.squareLabel && <StageLabel at={fireAt} text={guide.fireLabel} className="tw-pin" />}
-      {looked && guide.squareLabel && <StageLabel at={centre(looked)} text={guide.squareLabel} className="tw-pin tw-pin--square" onFocusChange={setLabelFocus} />}
+      {fireAt && guide.fireLabel && !guide.squareLabel && (
+        <ClearPin at={fireAt} avoid={avoid} className="tw-pin" label={guide.fireLabel}>
+          <span className="guide-label">{guide.fireLabel}</span>
+        </ClearPin>
+      )}
+      {looked && guide.squareLabel && (
+        <ClearPin at={centre(looked)} avoid={[looked, ...avoid]} className="tw-pin tw-pin--square" label={guide.squareLabel} focusable onFocusChange={setLabelFocus}>
+          <span className="guide-label">{guide.squareLabel}</span>
+        </ClearPin>
+      )}
       {prompt && guide.besideSquare && <StagePrompt at={prompt} act={guide.besideSquare} onAct={ws.runCommand} />}
     </div>
   );

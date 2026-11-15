@@ -341,3 +341,129 @@
   height: 4px;
   background: var(--sys-ink);
 }
+
+/* The key of marks (guide/MarksKey.tsx): a short list on the scene joined to the fire, each row its mark drawn small. */
+.guide-marks .guide-marks__plate {
+  max-width: 600px;
+  display: grid;
+  grid-template-columns: 22px max-content minmax(0, 300px);
+  column-gap: var(--sys-s3);
+  row-gap: var(--sys-s2);
+  align-items: baseline;
+  max-width: 560px;
+}
+
+.guide-marks__title {
+  grid-column: 1 / -1;
+  margin: 0 0 var(--sys-s1);
+  font: var(--sys-weight-strong) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.guide-marks__row {
+  display: contents;
+}
+
+.guide-marks__name {
+  font: var(--sys-weight-strong) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.guide-marks__line {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-2);
+  white-space: normal;
+}
+
+.guide-marks__swatch {
+  position: relative;
+  align-self: center;
+  justify-self: center;
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.guide-marks__swatch[data-mark='frames'] {
+  border: 1.5px solid #ffffff;
+}
+
+.guide-marks__swatch[data-mark='dotted_line'] {
+  height: 0;
+  width: 18px;
+  border-top: 2px dotted #ffffff;
+}
+
+.guide-marks__swatch[data-mark='darker_inside'] {
+  background: rgba(8, 11, 17, 0.55);
+  border: 1px dotted rgba(255, 255, 255, 0.7);
+}
+
+.guide-marks__swatch[data-mark='chance_squares'] {
+  width: 6px;
+  height: 6px;
+  background: #ffffff;
+}
+
+.guide-marks__swatch[data-mark='sharp_detections'] {
+  width: 9px;
+  height: 9px;
+  background: #5fb6ff;
+}
+
+.guide-marks__swatch[data-mark='lights'] {
+  width: 7px;
+  height: 7px;
+  background: #ffc46b;
+  box-shadow: 0 0 4px 1px rgba(255, 170, 70, 0.9);
+}
+
+.guide-marks__swatch[data-mark='glow_around'] {
+  width: 16px;
+  height: 16px;
+  background: radial-gradient(circle, rgba(255, 170, 70, 0.75), rgba(255, 120, 40, 0) 70%);
+}
+
+.guide-marks__swatch[data-mark='afterglow'] {
+  width: 16px;
+  height: 16px;
+  background: radial-gradient(circle, rgba(230, 60, 40, 0.8), rgba(200, 40, 30, 0) 70%);
+}
+
+/* Words joined to a point by a leader, standing clear of the fire's patches (guide/ClearPin.tsx). On the scene over a
+   soft scrim, never a framed plate. */
+.guide-clear {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.guide-clear__leader {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.guide-clear__leader line {
+  stroke: var(--sys-ink-2);
+  stroke-width: 1;
+}
+
+.guide-clear__anchor {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--sys-ink);
+}
+
+.guide-clear__plate {
+  position: absolute;
+  max-width: 440px;
+  padding: var(--sys-s2) var(--sys-s3);
+  background: rgba(8, 11, 17, 0.58);
+  box-shadow: 0 0 22px 14px rgba(8, 11, 17, 0.58);
+  pointer-events: auto;
+  text-shadow: 0 1px 6px rgba(8, 11, 17, 0.9);
+}

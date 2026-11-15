@@ -1,6 +1,6 @@
 import type { WorkspaceBase } from '../app/store';
 import type { Conditions, Fields } from './script';
-import { count, countWord, listAnd, localDayRange, localDayTime, midLon, ordinal, year } from './formats';
+import { count, countWord, lengthDigits, listAnd, localDayRange, localDayTime, midLon, ordinal, year } from './formats';
 
 /**
  * The values the guide's lines name, read from the backend's answers the workspace already holds, written in the
@@ -39,6 +39,15 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   const hiddenFromFrames = fs.filter((x) => x.held_out === true).length;
   const allSharp = num(obj(r?.blind_test)?.hidden_rows_in_test_box) ?? ws.model.revealedTotal?.detections ?? null;
   const cal = ws.calendar.state.regionId === ws.place.regionId ? ws.calendar.state.cal : null;
+  // The coarse satellite's last pass with a detection before the pass on show.
+  let before: Obj | null = null;
+  for (let k = pass - 1; k >= 0 && !before; k -= 1) {
+    const x = fs[k];
+    if (typeof x?.sensor === 'string' && !x.sensor.startsWith('VIIRS') && (num(x.detections_in_box) ?? 0) > 0) before = x;
+  }
+  // The squares the model says are burning at the pass on show (the frames on the terrain).
+  const looks = obj(r?.declared_cells)?.looks;
+  const declared = Array.isArray(looks) ? looks.map((x) => obj(x)).find((x) => x && num(x.frame) === (num(f?.frame) ?? pass)) ?? null : null;
 
   const fields: Fields = {
     place: ws.place.title || null,
@@ -61,6 +70,9 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_scores_n: count(testScoresN),
     this_test_fire_ahead: thisTest ? count(thisTest.new.ahead_of_both_on) : null,
     sharp_since: year(cal?.sharpSince),
+    coarse_before_when: localDayTime(str(before?.timestamp_utc), lon),
+    coarse_before_detections: before ? count(num(before.detections_in_box)) : null,
+    estimate_squares: Array.isArray(declared?.cells) ? lengthDigits(declared!.cells as unknown[]) : null,
   };
   const conds: Conditions = {
     model_is_experimental: ws.run.model ? ws.run.model.status === 'experimental' : null,

@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 7,
   "what": "The words of the guide: for each step and each state inside it, the objective, what the guide says, the labels on things, the actions, and the questions a visitor can ask. Every sentence says which of the five places it sits in. Text in braces is a field: its value comes from an answer of the backend, named under fields. No figure is typed in a line.",
   "trail": [
     "Record",
@@ -45,25 +45,28 @@
   },
   "places_for_words": {
     "objective": "place 1, top left, one line: what the visitor is doing now. The trail and the context line sit with it.",
-    "guide": "place 2, bottom centre: one or two sentences about the whole step, or about what just happened. A question's answer is said here. The results rows of a round's end stand above it as part of what it says.",
+    "guide": "place 2, bottom centre: the one or two sentences of a state that stand together and stay. A question's answer and a state's more lines are said here on demand, and the standing sentences return. The results rows of a round's end stand above it as part of what it says.",
     "label": "place 3, joined to one thing on the stage by a thin leader: one or two short sentences about that thing.",
     "prompt": "place 4, beside the thing it acts on, with its key, only while the pointer or the keyboard's focus is on or near that thing. A start card is a prompt opened out.",
-    "sheet": "place 5, the document viewer from the side, only when asked. Its words are in SHEETS-copy.json, not in this file. UTC is written only there."
+    "sheet": "place 5, on demand only: the document viewer from the side, whose words are in SHEETS-copy.json, and the key of marks, whose rows are under marks. UTC is written only in the document viewer."
   },
   "reading": {
     "place": "Every sentence carries place: objective, guide, label, prompt or sheet, as places_for_words says them. A sentence about one thing is at that thing; a sentence about the whole step is in the guide.",
     "objective": "Every state has one: a verb phrase for what the visitor does, with no full stop. A step's own objective is that of its main state.",
     "context": "A step's context is the fainter line that goes with the objective: the place and the days. It stands under the objective or beside the trail, never above it. It is not a sentence.",
-    "says": "The guide's lines. Each has place, line and sometimes if or unless. A line is one or two sentences. The guide shows them in turn and the last one stays.",
+    "says": "The one or two sentences that stand at rest. They are shown together and stay; nothing passes by in turn. Each item is one sentence that can be read alone, with place, line and sometimes if or unless. Whatever the conditions, at least one stands and never more than two.",
     "says_if": "A line with an if is shown only when the named condition is true; with unless, only when it is false.",
-    "labels": "Each has on, a thing named under things, and a line. A label with if or unless follows the same rule as a line.",
-    "actions": "At most three, the next step first; the first is the only strong one. places says where an action is offered: the guide strip always, and a prompt beside the thing that beside names, shown only while the pointer or the keyboard's focus is on or near that thing.",
+    "labels": "Each has on, a thing named under things, and a line. A label with if or unless follows the same rule as a line. short, where present, is the label while the passes play: it must be readable in a second and a half.",
+    "actions": "At most three, the next step first; the first is the only strong one. places says where an action is offered: the guide strip always, and a prompt beside the thing that beside names, shown only while the pointer or the keyboard's focus is on or near that thing. label_while_on, where present, is what the action reads while what it started is running.",
     "start_card": "A step's first screen may open its prompt into a small card at the thing named by at: the step's name, the line do, the line done, and the key of the state's first action. It folds back once the visitor acts.",
-    "results": "At a round's end: one line and rows. Each row has a name, a field in points, sometimes a note; a note with note_if is shown only when that condition is true.",
+    "results": "At a round's end: rows. Each row has a name, a field written with the unit, sometimes a note; a note with note_if is shown only when that condition is true.",
     "fields": "route and key say where the value is. format says how to write it. A key with a comma is several values the format takes together. A line whose field has no value is not shown, and no stand-in number is.",
     "questions": "ask is the question as the picker shows it. match holds words and phrases; a typed question is matched on them. answer is what the guide says. command, when present, is carried out as well. where lists the steps in which the picker offers it; it can be asked anywhere.",
     "keys with words": "A key such as frames[last coarse before pass] is a rule in words: the last pass before the one on show that is the coarse satellite's and has a detection in the box. records[fire month] is the record of the month of the fire the page opens on.",
-    "time": "See time. Every instant in a line is written with the format local_day_time."
+    "time": "See time. Every instant in a line is written with the format local_day_time.",
+    "more": "What the guide says on demand in that state, beyond what stands: when the visitor asks to be told more (the command say:more). A state's on_demand questions are the other way to more.",
+    "also": "A step's also lists actions that work in every state of the step, by their key and by asking, and are not in the guide strip unless a state lists them.",
+    "marks": "The key of marks, on demand. Each row has a name and a line for one mark, when it is on show, the served field it is drawn from, what of it is drawing, and where that was stated. action is the one action that shows the squares sized by chance."
   },
   "things": {
     "fire": "the fire on the land, in a round as well",
@@ -72,8 +75,9 @@
     "fire_month": "the month of the fire the page opens on, marked in the record",
     "marked_square": "the square a look would go to: under the pointer, or chosen with the keyboard",
     "looked_square": "the square the visitor just looked at",
-    "player_block": "one player's small terrain, when the players stand side by side",
-    "side_block": "one of the three small terrains, when the fire is shown side by side"
+    "side_block": "one of the three small terrains, when the fire is shown side by side",
+    "dotted_line": "the dotted line around the ground where the model gives fire a chance",
+    "learned_block": "the Learned Player's small terrain, when the players stand side by side"
   },
   "formats": {
     "text": "as served",
@@ -140,13 +144,17 @@
       "true_when": "observer_passes.frames[pass].sensor begins VIIRS",
       "route": "POST /api/reconstruct"
     },
-    "first_pass_of_round": {
-      "true_when": "observation.decision is zero",
-      "route": "POST /api/env/next_look/reset or step, the latest"
-    },
     "fire_month_stands_out": {
-      "true_when": "records[fire month].harmonized_mean is at least twice records[fire month].month_median, and that median is above zero",
+      "true_when": "records[fire month].harmonized_mean divided by records[fire month].month_median is at least two and under a hundred, and that median is above zero",
       "route": "GET /api/calendar?source=firms&region_id="
+    },
+    "this_month_is_counted": {
+      "true_when": "the answer holds a rate for the days counted and no error",
+      "route": "GET /api/calendar/current?source=firms&region_id="
+    },
+    "players_from_round": {
+      "true_when": "from is round: the blocks are the round the visitor just played, not plays asked on the open fire",
+      "route": "the page: usePlayersView() of the players' picture"
     }
   },
   "state_when": {
@@ -154,12 +162,19 @@
     "no_sharp_satellite": "the month is before regime_markers[label begins VIIRS].year_month (GET /api/calendar)",
     "no_fire_to_rebuild": "no start of real_run_starts.starts lies in the month (GET /api/calendar)",
     "own_area": "place.kind is not region (GET /api/calendar with a box)",
-    "looks_spent": "observation.budget_left is zero and done is false (POST /api/env/next_look/step)"
+    "looks_spent": "observation.budget_left is zero and done is false (POST /api/env/next_look/step)",
+    "as_counted": "the visitor asked to see the years as counted (record:as_counted is on)",
+    "this_month": "the visitor asked for this month so far (record:now); GET /api/calendar/current has answered or failed",
+    "players_open": "the players' picture is ready and what the looks found can still be revealed (usePlayersView: state ready, canReveal true)",
+    "players_found": "the players' picture is ready and what the looks found is drawn (state ready, foundShown true)",
+    "players_held": "the players' picture is asked for while a round is under way (state held)",
+    "players_coming": "the plays are still coming (state loading)",
+    "players_failed": "the plays did not load (state failed)"
   },
   "commands": {
     "go:record": "open the fire record over the stage",
     "go:estimate": "close what is open and show the fire with the sharp satellite hidden",
-    "go:test": "reveal what the sharp satellite saw",
+    "go:test": "reveal what the sharp satellite saw; asked on a pass of the coarse satellite, move first to the nearest pass of the sharp satellite (the next one, else the one before)",
     "go:play": "start a round on this fire",
     "go:finish": "show the closing line",
     "place:open": "open Choose a Place",
@@ -168,7 +183,7 @@
     "record:default_fire": "mark the default fire's month in the grid",
     "record:accuracy": "annotate the record with the left-out-year check",
     "record:csv": "give the picked month's detections as a CSV file",
-    "passes:play": "play the passes in order",
+    "passes:play": "play the passes in order, each held about a second and a half, the fire's label in its short form; the same key and the same action pause them, and while they play the action reads label_while_on",
     "passes:hidden_next": "go to the next hidden pass",
     "estimate:hide": "hide the sharp satellite again",
     "test:side_by_side": "open Side by Side",
@@ -178,13 +193,20 @@
     "play:skip": "let this pass go by without a look",
     "play:next": "go to the next pass",
     "play:again": "start the round again",
-    "play:players": "show the other players' looks side by side",
+    "play:players": "show the other players side by side: their looks, gains and lines; what the looks found only once seen or asked for",
     "play:watch": "play the other players' looks in order",
     "method:open": "open Method and Data",
-    "say:again": "say the current state's lines again",
     "close": "close what is open, or leave the round, and return to the fire as it was before",
     "retry": "ask the backend again",
-    "play:end": "let the passes that are left go by without a look and end the round"
+    "play:end": "let the passes that are left go by without a look and end the round",
+    "say:more": "say the state's more lines in the guide, one after another at the reader's pace, then let the standing sentences return; where a state has none, offer its on_demand questions",
+    "record:as_counted": "draw the years as the satellites counted them, before the correction; the same action goes back to one scale",
+    "record:now": "ask for this month so far and mark it as the record's next square",
+    "record:now_caveats": "list why this month's figure is rough, in the sentences the route serves under caveats",
+    "marks:key": "open or close the key of marks: one row for each mark now on show",
+    "estimate:chance": "draw the squares sized by the chance of fire, which are off at rest; the same action hides them",
+    "play:players_reveal": "draw what the players' looks found, which is the hidden satellite's; offered only while the picture says it can be asked (canReveal)",
+    "play:resume": "close the players' picture and go back to the round under way"
   },
   "steps": [
     {
@@ -218,7 +240,13 @@
             },
             {
               "place": "guide",
-              "line": "Each light is a spot where a NASA satellite saw the heat of fire. Two kinds of satellite watched it, and they do not see the same amount."
+              "line": "Each light is a spot where a NASA satellite saw the heat of fire."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Two kinds of satellite watched this fire, and they do not see the same amount."
             }
           ],
           "actions": [
@@ -246,7 +274,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "The fire did not load. Nothing is shown in its place."
+              "line": "The fire did not load, and nothing is shown in its place."
             }
           ],
           "actions": [
@@ -285,11 +313,17 @@
           "says": [
             {
               "place": "guide",
-              "line": "This is every fire NASA's satellites detected around {place} since {record_first_year}. Each square is one month, and brighter means more fire."
+              "line": "Every square is one month of the fires NASA's satellites detected around {place} since {record_first_year}, and brighter means more fire."
             },
             {
               "place": "guide",
-              "line": "The newer satellite sees about {sharp_to_coarse} times as many fires as the older ones, so recent years would look worse than they were. Here that jump is taken out and every year is on one scale."
+              "line": "The newer satellite makes about {sharp_to_coarse} times as many detections of the same fires as the older ones, so that jump is taken out here and every year is on one scale."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Left as counted, recent years would look worse than they were, only because the newer satellite makes more detections of the same fires."
             }
           ],
           "actions": [
@@ -304,17 +338,18 @@
               "beside": "fire_month"
             },
             {
-              "label": "Pick a month",
-              "command": "record:pick",
-              "key": "M",
+              "label": "See the years as the satellites counted them",
+              "command": "record:as_counted",
+              "key": "Y",
               "places": [
                 "guide"
-              ]
+              ],
+              "label_while_on": "Back to one scale"
             },
             {
-              "label": "Choose another place",
-              "command": "place:open",
-              "key": "P",
+              "label": "See this month so far",
+              "command": "record:now",
+              "key": "U",
               "places": [
                 "guide"
               ]
@@ -336,7 +371,93 @@
               "place": "label",
               "on": "fire_month",
               "unless": "fire_month_stands_out",
-              "line": "{default_fire_month}: the fire this page opens on."
+              "line": "{default_fire_month}: {fire_month_rate} detections per 1,000 square kilometres a day, where {fire_month_usual} is usual. The page opens on this fire."
+            }
+          ]
+        },
+        {
+          "id": "as_counted",
+          "objective": "See the jump that the change of satellite makes",
+          "says": [
+            {
+              "place": "guide",
+              "line": "These are the years as the satellites counted them, before the correction."
+            },
+            {
+              "place": "guide",
+              "line": "The newer satellite makes about {sharp_to_coarse} times as many detections of the same fires, so the years before {sharp_since} look quieter than they were."
+            }
+          ],
+          "actions": [
+            {
+              "label": "Back to one scale",
+              "command": "record:as_counted",
+              "key": "Enter",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "See this month so far",
+              "command": "record:now",
+              "key": "U",
+              "places": [
+                "guide"
+              ]
+            }
+          ],
+          "on_demand": [
+            "how_good_is_record",
+            "why_disagree"
+          ]
+        },
+        {
+          "id": "this_month",
+          "objective": "See how this month compares so far",
+          "says": [
+            {
+              "place": "guide",
+              "if": "this_month_is_counted",
+              "line": "The dashed square is this month so far: the full days NASA has published, with today left out."
+            },
+            {
+              "place": "guide",
+              "if": "this_month_is_counted",
+              "line": "A rate over the first days of a month is rough, and these newest detections have not had NASA's final processing."
+            },
+            {
+              "place": "guide",
+              "unless": "this_month_is_counted",
+              "line": "This month so far cannot be counted now, and the label at its square says why."
+            }
+          ],
+          "actions": [
+            {
+              "label": "Show the fire of {default_fire_month}",
+              "command": "go:estimate",
+              "key": "Enter",
+              "places": [
+                "guide",
+                "prompt"
+              ],
+              "beside": "fire_month"
+            },
+            {
+              "label": "See why the figure is rough",
+              "command": "record:now_caveats",
+              "key": "Q",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "See the years as the satellites counted them",
+              "command": "record:as_counted",
+              "key": "Y",
+              "places": [
+                "guide"
+              ],
+              "label_while_on": "Back to one scale"
             }
           ]
         },
@@ -391,7 +512,11 @@
           "says": [
             {
               "place": "guide",
-              "line": "Too few satellite passes saw fire here in {picked_month} to show a fire pass by pass. Pick a brighter month."
+              "line": "Too few satellite passes saw fire here in {picked_month} to show a fire pass by pass."
+            },
+            {
+              "place": "guide",
+              "line": "Pick a brighter month."
             }
           ],
           "actions": [
@@ -426,7 +551,11 @@
           "says": [
             {
               "place": "guide",
-              "line": "{picked_month} is before {sharp_since}, when the sharp satellite began. The older satellites saw this month, so it is in the record, and there is nothing to hide and test."
+              "line": "{picked_month} is before {sharp_since}, when the sharp satellite began."
+            },
+            {
+              "place": "guide",
+              "line": "The older satellites saw this month, so the month is in the record, and there is nothing to hide and test."
             }
           ],
           "actions": [
@@ -461,7 +590,11 @@
           "says": [
             {
               "place": "guide",
-              "line": "{picked_month} here holds one of the {test_fires_n} fires kept as the model's test. You can look at it with every satellite shown; it is not hidden and tested again."
+              "line": "{picked_month} here holds one of the {test_fires_n} fires kept as the model's test."
+            },
+            {
+              "place": "guide",
+              "line": "A fire kept as the test can be looked at with every satellite shown, and is not hidden and tested again."
             }
           ],
           "actions": [
@@ -554,7 +687,25 @@
         }
       ],
       "objective": "Read the fire record of {place}",
-      "context": "{place}"
+      "context": "{record_first_year} to {record_last_year}",
+      "also": [
+        {
+          "label": "Choose another place",
+          "command": "place:open",
+          "key": "P",
+          "places": [
+            "guide"
+          ]
+        },
+        {
+          "label": "Pick a month",
+          "command": "record:pick",
+          "key": "M",
+          "places": [
+            "guide"
+          ]
+        }
+      ]
     },
     {
       "id": "estimate",
@@ -577,16 +728,22 @@
           "says": [
             {
               "place": "guide",
-              "line": "Two kinds of satellite passed over this fire: a coarse one (MODIS) and a sharp one (VIIRS), which sees squares {sharp_square_m} metres across. The sharp one is hidden."
-            },
-            {
-              "place": "guide",
-              "line": "From the {coarse_passes} coarse passes alone, a model works out where the fire is, in squares as small as the sharp satellite's."
+              "line": "The white frames are a model's estimate of where this fire is burning, made from the coarse satellite (MODIS) alone while the sharp satellite (VIIRS) is hidden."
             },
             {
               "place": "guide",
               "if": "model_is_experimental",
               "line": "The model is experimental: it is shown and tested here, and it is not switched on as a product."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Two kinds of satellite passed over this fire: a coarse one (MODIS) and a sharp one (VIIRS), which sees squares {sharp_square_m} metres across."
+            },
+            {
+              "place": "guide",
+              "line": "From the {coarse_passes} coarse passes alone, the model works out where the fire is, in squares as small as the sharp satellite's."
             }
           ],
           "actions": [
@@ -606,12 +763,13 @@
               "key": "Space",
               "places": [
                 "guide"
-              ]
+              ],
+              "label_while_on": "Pause the passes"
             },
             {
-              "label": "Choose another fire",
-              "command": "place:open",
-              "key": "P",
+              "label": "Explain the marks",
+              "command": "marks:key",
+              "key": "K",
               "places": [
                 "guide"
               ]
@@ -627,25 +785,54 @@
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Hidden."
+              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Hidden.",
+              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: hidden."
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model."
+              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
+              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
             },
             {
               "place": "label",
               "on": "frames",
-              "line": "Each white frame is a square the model says is burning at that moment."
+              "if": "pass_is_sharp",
+              "line": "Each white frame is one square, {sharp_square_m} metres across, that the model says is burning at this pass. The dotted line is around all the ground where the model gives fire a chance."
+            },
+            {
+              "place": "label",
+              "on": "dotted_line",
+              "unless": "pass_is_sharp",
+              "line": "The dotted line is around all the ground where the model gives fire a chance at this pass."
             }
           ]
         },
         {
           "id": "on_a_coarse_pass",
           "objective": "Watch a model estimate the fire from the coarse satellite alone",
-          "says": [],
+          "says": [
+            {
+              "place": "guide",
+              "line": "The dotted line is around the ground a model says may be burning, worked out from the coarse satellite (MODIS) alone while the sharp satellite (VIIRS) is hidden."
+            },
+            {
+              "place": "guide",
+              "if": "model_is_experimental",
+              "line": "The model is experimental: it is shown and tested here, and it is not switched on as a product."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Two kinds of satellite passed over this fire: a coarse one (MODIS) and a sharp one (VIIRS), which sees squares {sharp_square_m} metres across."
+            },
+            {
+              "place": "guide",
+              "line": "From the {coarse_passes} coarse passes alone, the model works out where the fire is, in squares as small as the sharp satellite's."
+            }
+          ],
           "actions": [
             {
               "label": "Reveal what the sharp satellite saw",
@@ -663,7 +850,8 @@
               "key": "Space",
               "places": [
                 "guide"
-              ]
+              ],
+              "label_while_on": "Pause the passes"
             },
             {
               "label": "Go to a hidden pass",
@@ -679,26 +867,54 @@
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Hidden."
+              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Hidden.",
+              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: hidden."
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model."
+              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
+              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
             },
             {
               "place": "label",
               "on": "frames",
-              "line": "Each white frame is a square the model says is burning at that moment."
+              "if": "pass_is_sharp",
+              "line": "Each white frame is one square, {sharp_square_m} metres across, that the model says is burning at this pass. The dotted line is around all the ground where the model gives fire a chance."
+            },
+            {
+              "place": "label",
+              "on": "dotted_line",
+              "unless": "pass_is_sharp",
+              "line": "The dotted line is around all the ground where the model gives fire a chance at this pass."
             }
-          ],
-          "note": "The objective and the guide's lines of the state hidden stand; only the label on the fire changes with the pass."
+          ]
         },
         {
           "id": "on_a_hidden_pass",
           "objective": "Watch a model estimate the fire from the coarse satellite alone",
-          "says": [],
+          "says": [
+            {
+              "place": "guide",
+              "line": "The white frames are a model's estimate of where this fire is burning, made from the coarse satellite (MODIS) alone while the sharp satellite (VIIRS) is hidden."
+            },
+            {
+              "place": "guide",
+              "if": "model_is_experimental",
+              "line": "The model is experimental: it is shown and tested here, and it is not switched on as a product."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "Two kinds of satellite passed over this fire: a coarse one (MODIS) and a sharp one (VIIRS), which sees squares {sharp_square_m} metres across."
+            },
+            {
+              "place": "guide",
+              "line": "From the {coarse_passes} coarse passes alone, the model works out where the fire is, in squares as small as the sharp satellite's."
+            }
+          ],
           "actions": [
             {
               "label": "Reveal what the sharp satellite saw",
@@ -716,6 +932,15 @@
               "key": "Space",
               "places": [
                 "guide"
+              ],
+              "label_while_on": "Pause the passes"
+            },
+            {
+              "label": "Explain the marks",
+              "command": "marks:key",
+              "key": "K",
+              "places": [
+                "guide"
               ]
             }
           ],
@@ -724,21 +949,29 @@
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Hidden."
+              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Hidden.",
+              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: hidden."
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model."
+              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
+              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
             },
             {
               "place": "label",
               "on": "frames",
-              "line": "Each white frame is a square the model says is burning at that moment."
+              "if": "pass_is_sharp",
+              "line": "Each white frame is one square, {sharp_square_m} metres across, that the model says is burning at this pass. The dotted line is around all the ground where the model gives fire a chance."
+            },
+            {
+              "place": "label",
+              "on": "dotted_line",
+              "unless": "pass_is_sharp",
+              "line": "The dotted line is around all the ground where the model gives fire a chance at this pass."
             }
-          ],
-          "note": "The objective and the guide's lines of the state hidden stand; only the label on the fire changes with the pass."
+          ]
         },
         {
           "id": "revealing",
@@ -757,11 +990,11 @@
           "says": [
             {
               "place": "guide",
-              "line": "This is one of the {test_fires_n} fires kept as the model's test. Nothing is hidden here: you see every satellite, and the fire is not tested again."
+              "line": "This is one of the {test_fires_n} fires kept as the model's test, so nothing is hidden here and the fire is not tested again."
             },
             {
               "place": "guide",
-              "line": "At its final test the estimate beat the simple methods on {this_test_fire_ahead} of {test_scores_n} scores."
+              "line": "At this fire's final test the estimate beat the simple methods on {this_test_fire_ahead} of {test_scores_n} scores."
             }
           ],
           "actions": [
@@ -787,7 +1020,8 @@
               "key": "Space",
               "places": [
                 "guide"
-              ]
+              ],
+              "label_while_on": "Pause the passes"
             }
           ],
           "labels": [
@@ -795,13 +1029,15 @@
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections.",
+              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
             },
             {
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. {pass_detections} detections.",
+              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: {pass_detections} detections."
             }
           ]
         },
@@ -811,7 +1047,11 @@
           "says": [
             {
               "place": "guide",
-              "line": "These days are before {sharp_since}, when the sharp satellite began, so there is nothing to hide. You see what the coarse satellite saw."
+              "line": "These days are before {sharp_since}, when the sharp satellite began, so there is nothing to hide."
+            },
+            {
+              "place": "guide",
+              "line": "You see what the coarse satellite saw."
             }
           ],
           "actions": [
@@ -829,14 +1069,16 @@
               "key": "Space",
               "places": [
                 "guide"
-              ]
+              ],
+              "label_while_on": "Pause the passes"
             }
           ],
           "labels": [
             {
               "place": "label",
               "on": "fire",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections."
+              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections.",
+              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
             }
           ]
         },
@@ -846,7 +1088,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "This fire's passes did not load. Nothing is shown in their place."
+              "line": "This fire's passes did not load, and nothing is shown in their place."
             }
           ],
           "actions": [
@@ -876,7 +1118,34 @@
         "do": "The sharp satellite is hidden. Watch what the model makes of the coarse passes.",
         "done": "Reveal the sharp satellite when you have looked."
       },
-      "context": "{place}, {run_days}"
+      "context": "{place}, {run_days}",
+      "also": [
+        {
+          "label": "Explain the marks",
+          "command": "marks:key",
+          "key": "K",
+          "places": [
+            "guide"
+          ]
+        },
+        {
+          "label": "Show the less likely squares",
+          "command": "estimate:chance",
+          "key": "L",
+          "places": [
+            "guide"
+          ],
+          "label_while_on": "Hide the less likely squares"
+        },
+        {
+          "label": "Choose another fire",
+          "command": "place:open",
+          "key": "P",
+          "places": [
+            "guide"
+          ]
+        }
+      ]
     },
     {
       "id": "test",
@@ -888,17 +1157,23 @@
           "says": [
             {
               "place": "guide",
-              "line": "On this fire the estimate beat {simple_methods_n} simple methods on {ahead_on} of {scores_n} scores, against the {sharp_detections_all} detections the sharp satellite made on its {hidden_passes} passes."
+              "line": "On this fire the estimate beat {simple_methods_n} simple methods on {ahead_on} of {scores_n} scores."
             },
             {
               "place": "guide",
               "if": "not_always_ahead",
-              "line": "On the {test_fires_n} fires kept as its test it beat them on {test_fire_scores} of {test_scores_n} scores. It does not always win."
+              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
             },
             {
               "place": "guide",
               "unless": "not_always_ahead",
-              "line": "On the {test_fires_n} fires kept as its test it beat them on {test_fire_scores} of {test_scores_n} scores."
+              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "The scores compare the estimate with the {sharp_detections_all} detections the sharp satellite made on its {hidden_passes} passes of this fire."
             }
           ],
           "actions": [
@@ -937,20 +1212,43 @@
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. {sharp_detections_pass} detections, now shown over the estimate."
+              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Its {sharp_detections_pass} detections are now shown as blue squares over the white frames of the estimate.",
+              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: {sharp_detections_pass} detections."
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model."
+              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
+              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
             }
           ]
         },
         {
           "id": "on_another_pass",
           "objective": "Check the estimate against what the sharp satellite saw",
-          "says": [],
+          "says": [
+            {
+              "place": "guide",
+              "line": "On this fire the estimate beat {simple_methods_n} simple methods on {ahead_on} of {scores_n} scores."
+            },
+            {
+              "place": "guide",
+              "if": "not_always_ahead",
+              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores: it does not always win."
+            },
+            {
+              "place": "guide",
+              "unless": "not_always_ahead",
+              "line": "On the {test_fires_n} fires kept as the model's test, the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "The scores compare the estimate with the {sharp_detections_all} detections the sharp satellite made on its {hidden_passes} passes of this fire."
+            }
+          ],
           "actions": [
             {
               "label": "Now you try",
@@ -982,16 +1280,17 @@
               "place": "label",
               "on": "fire",
               "if": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. {sharp_detections_pass} detections, now shown over the estimate."
+              "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Its {sharp_detections_pass} detections are now shown as blue squares over the white frames of the estimate.",
+              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: {sharp_detections_pass} detections."
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
-              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model."
+              "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
+              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
             }
-          ],
-          "note": "The objective and the guide's lines of the state revealed stand; only the label on the fire changes with the pass."
+          ]
         },
         {
           "id": "side_by_side_open",
@@ -1052,7 +1351,11 @@
           "says": [
             {
               "place": "guide",
-              "line": "Each row is one way of comparing the estimate with what the sharp satellite saw, beside the simple methods. The estimate was ahead on {ahead_on} of {scores_n} here, and the table shows every row, won or lost."
+              "line": "Each row is one way of comparing the estimate with what the sharp satellite saw, beside the simple methods."
+            },
+            {
+              "place": "guide",
+              "line": "The estimate was ahead on {ahead_on} of {scores_n} here, and the table shows every row, won or lost."
             }
           ],
           "actions": [
@@ -1088,7 +1391,11 @@
           "says": [
             {
               "place": "guide",
-              "line": "The reveal did not load. The sharp satellite stays hidden."
+              "line": "The reveal did not load."
+            },
+            {
+              "place": "guide",
+              "line": "The sharp satellite stays hidden."
             }
           ],
           "actions": [
@@ -1104,7 +1411,35 @@
         }
       ],
       "objective": "Check the estimate against what the sharp satellite saw",
-      "context": "{place}, {run_days}"
+      "context": "{place}, {run_days}",
+      "also": [
+        {
+          "label": "Explain the marks",
+          "command": "marks:key",
+          "key": "K",
+          "places": [
+            "guide"
+          ]
+        },
+        {
+          "label": "Show the less likely squares",
+          "command": "estimate:chance",
+          "key": "L",
+          "places": [
+            "guide"
+          ],
+          "label_while_on": "Hide the less likely squares"
+        },
+        {
+          "label": "Play the passes",
+          "command": "passes:play",
+          "key": "Space",
+          "places": [
+            "guide"
+          ],
+          "label_while_on": "Pause the passes"
+        }
+      ]
     },
     {
       "id": "play",
@@ -1116,7 +1451,11 @@
           "says": [
             {
               "place": "guide",
-              "line": "Setting up a round on this fire. The sharp satellite is hidden again."
+              "line": "Setting up a round on this fire."
+            },
+            {
+              "place": "guide",
+              "line": "The sharp satellite is hidden again."
             }
           ],
           "actions": []
@@ -1127,12 +1466,17 @@
           "says": [
             {
               "place": "guide",
-              "if": "first_pass_of_round",
-              "line": "Your turn. The sharp satellite will pass {round_passes} times, and on {looks_to_spend} of those passes you may look at one square."
+              "line": "You have {looks_left} of {looks_to_spend} looks left."
             },
             {
               "place": "guide",
-              "line": "You have {looks_left} of {looks_to_spend} looks left. A look shows the model what the sharp satellite saw in one square on this pass."
+              "line": "A look shows the model what the sharp satellite saw in one square on this pass."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "line": "The sharp satellite passes {round_passes} times in this round, and on {looks_to_spend} of those passes you may look at one square."
             }
           ],
           "actions": [
@@ -1183,7 +1527,12 @@
             {
               "place": "guide",
               "if": "look_found_nothing",
-              "line": "That look found nothing: no fire in that square on this pass, or cloud. It teaches the model nothing and scores nothing."
+              "line": "That look found nothing: no fire in that square on this pass, or cloud."
+            },
+            {
+              "place": "guide",
+              "if": "look_found_nothing",
+              "line": "A look that finds nothing teaches the model nothing and scores nothing."
             },
             {
               "place": "guide",
@@ -1234,7 +1583,11 @@
           "says": [
             {
               "place": "guide",
-              "line": "You have used all {looks_to_spend} of your looks. The passes the sharp satellite has left go by without one."
+              "line": "You have used all {looks_to_spend} of your looks."
+            },
+            {
+              "place": "guide",
+              "line": "The passes the sharp satellite has left go by without a look."
             }
           ],
           "labels": [
@@ -1269,17 +1622,17 @@
           "says": [
             {
               "place": "guide",
-              "line": "The round is over. Your looks took the estimate's agreement with the sharp satellite from {round_start} to {round_end} percent of the burning ground: {your_gain} points."
+              "line": "Your looks took the estimate's agreement with the sharp satellite from {round_start} to {round_end} percent of the burning ground: {your_gain} points."
             },
             {
               "place": "guide",
               "unless": "learned_beats_rule",
-              "line": "Over {rounds_n} other rounds, Look Where Unsure gained more than Chance on {rule_ahead_rounds} of them. The Learned Player does not beat it."
+              "line": "Over {rounds_n} other rounds Look Where Unsure gained more than Chance on {rule_ahead_rounds} of them, and the Learned Player does not beat Look Where Unsure."
             },
             {
               "place": "guide",
               "if": "learned_beats_rule",
-              "line": "Over {rounds_n} other rounds, Look Where Unsure gained more than Chance on {rule_ahead_rounds} of them, and the Learned Player gained {learned_minus_rule} points more than it."
+              "line": "Over {rounds_n} other rounds Look Where Unsure gained more than Chance on {rule_ahead_rounds} of them, and the Learned Player gained {learned_minus_rule} points more than Look Where Unsure."
             }
           ],
           "actions": [
@@ -1322,8 +1675,7 @@
           ],
           "results": {
             "place": "guide",
-            "how": "rows on one scale, centred above the guide's line, as part of what the guide says; the visitor's row is the strong one",
-            "line": "The same round by each player, in points of agreement gained.",
+            "how": "rows on one scale, centred above the guide's sentences, as part of what the guide says; each row is a name and its figure in points; the visitor's row is the strong one",
             "rows": [
               {
                 "name": "You",
@@ -1354,7 +1706,8 @@
                 "field": "answer_gain",
                 "note": "Not a fair player: it reads the hidden detections, and looks at evenly spaced passes."
               }
-            ]
+            ],
+            "unit": "points"
           }
         },
         {
@@ -1363,17 +1716,98 @@
           "says": [
             {
               "place": "guide",
-              "line": "Each small terrain is one player on the round you just played. Lit squares are where it looked, in order, and filled marks are what its looks found."
+              "if": "players_from_round",
+              "line": "Each small terrain is one player on the round you just played, with your own looks first."
             },
+            {
+              "place": "guide",
+              "unless": "players_from_round",
+              "line": "Each small terrain is one player on a round of this fire that you have not played yourself."
+            },
+            {
+              "place": "guide",
+              "line": "Lit squares are where each player looked, in order, and outlines are what the coarse satellite showed every player; filled marks, for what the looks found, appear when you reveal them."
+            }
+          ],
+          "more": [
             {
               "place": "guide",
               "if": "learned_same_looks_as_rule",
               "line": "On this round the Learned Player made the same looks as Look Where Unsure."
+            }
+          ],
+          "labels": [
+            {
+              "place": "label",
+              "on": "learned_block",
+              "if": "learned_trained_here",
+              "line": "Trained on fires of these years around here, so this round is not a test of it."
+            }
+          ],
+          "actions": [
+            {
+              "label": "Reveal what their looks found",
+              "command": "play:players_reveal",
+              "key": "Enter",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "Watch them play",
+              "command": "play:watch",
+              "key": "W",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "Play a round",
+              "command": "play:again",
+              "key": "R",
+              "places": [
+                "guide"
+              ]
+            }
+          ],
+          "on_demand": [
+            "who_are_the_players",
+            "does_the_learned_player_win",
+            "what_is_the_best_possible"
+          ]
+        },
+        {
+          "id": "players_found",
+          "objective": "See where the other players looked and what they found",
+          "says": [
+            {
+              "place": "guide",
+              "if": "players_from_round",
+              "line": "Each small terrain is one player on the round you just played, with your own looks first."
             },
             {
               "place": "guide",
+              "unless": "players_from_round",
+              "line": "Each small terrain is one player on a round of this fire that you have not played yourself."
+            },
+            {
+              "place": "guide",
+              "line": "Lit squares are where each player looked, in order, filled marks are what the looks found, and outlines are what the coarse satellite showed every player."
+            }
+          ],
+          "more": [
+            {
+              "place": "guide",
+              "if": "learned_same_looks_as_rule",
+              "line": "On this round the Learned Player made the same looks as Look Where Unsure."
+            }
+          ],
+          "labels": [
+            {
+              "place": "label",
+              "on": "learned_block",
               "if": "learned_trained_here",
-              "line": "The Learned Player was trained on fires of these years around here, so this round is not a test of it."
+              "line": "Trained on fires of these years around here, so this round is not a test of it."
             }
           ],
           "actions": [
@@ -1394,7 +1828,7 @@
               ]
             },
             {
-              "label": "Play again",
+              "label": "Play a round",
               "command": "play:again",
               "key": "R",
               "places": [
@@ -1402,31 +1836,68 @@
               ]
             }
           ],
-          "labels": [
+          "on_demand": [
+            "who_are_the_players",
+            "does_the_learned_player_win",
+            "what_is_the_best_possible"
+          ]
+        },
+        {
+          "id": "players_held",
+          "objective": "Finish your round first",
+          "says": [
             {
-              "place": "label",
-              "on": "player_block",
-              "line": "Chance: {chance_gain} points."
+              "place": "guide",
+              "line": "The other players' looks stay hidden until your round is over, because where they looked would show you what is still hidden."
+            }
+          ],
+          "actions": [
+            {
+              "label": "Back to your round",
+              "command": "play:resume",
+              "key": "Enter",
+              "places": [
+                "guide"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "players_coming",
+          "objective": "Wait while the other players play",
+          "says": [
+            {
+              "place": "guide",
+              "line": "The other players are playing the same round, and their terrains appear when their plays arrive."
+            }
+          ],
+          "actions": []
+        },
+        {
+          "id": "players_failed",
+          "objective": "Load the other players' looks again",
+          "says": [
+            {
+              "place": "guide",
+              "line": "The other players' looks did not load, and nothing is drawn in their place."
+            }
+          ],
+          "actions": [
+            {
+              "label": "Try again",
+              "command": "retry",
+              "key": "Enter",
+              "places": [
+                "guide"
+              ]
             },
             {
-              "place": "label",
-              "on": "player_block",
-              "line": "Follow the Coarse Satellite: {coarse_rule_gain} points."
-            },
-            {
-              "place": "label",
-              "on": "player_block",
-              "line": "Look Where Unsure: {unsure_rule_gain} points."
-            },
-            {
-              "place": "label",
-              "on": "player_block",
-              "line": "Learned Player: {learned_gain} points."
-            },
-            {
-              "place": "label",
-              "on": "player_block",
-              "line": "Sees the Answer: {answer_gain} points."
+              "label": "Back to the fire",
+              "command": "close",
+              "key": "Esc",
+              "places": [
+                "guide"
+              ]
             }
           ]
         },
@@ -1484,7 +1955,11 @@
           "says": [
             {
               "place": "guide",
-              "line": "The round did not start. Nothing was scored."
+              "line": "The round did not start."
+            },
+            {
+              "place": "guide",
+              "line": "Nothing was scored."
             }
           ],
           "actions": [
@@ -1530,7 +2005,7 @@
             },
             {
               "place": "guide",
-              "line": "The same test can be put to any two instruments that watched the same thing. Here it is done for one pair."
+              "line": "The same test can be put to any two instruments that watched the same thing; here it is done for one pair."
             }
           ],
           "actions": [
@@ -1573,10 +2048,12 @@
         "what is this",
         "what am i looking at",
         "explain",
-        "help"
+        "help",
+        "tell me more",
+        "more"
       ],
       "answer": [],
-      "command": "say:again",
+      "command": "say:more",
       "where": [
         "start",
         "record",
@@ -1590,11 +2067,11 @@
       "id": "what_is_a_light",
       "ask": "What is one light?",
       "match": [
-        "light",
         "dot",
         "detection",
         "hot spot",
-        "hotspot"
+        "hotspot",
+        "one light"
       ],
       "answer": [
         {
@@ -1774,13 +2251,19 @@
     },
     {
       "id": "what_are_frames",
-      "ask": "What are the white frames?",
+      "ask": "What do the marks mean?",
       "match": [
         "frame",
         "white",
         "square",
-        "outline",
-        "estimate"
+        "estimate",
+        "marks",
+        "dotted",
+        "key",
+        "legend",
+        "glow",
+        "blue",
+        "lights"
       ],
       "answer": [
         {
@@ -1793,7 +2276,8 @@
         "test",
         "play"
       ],
-      "place": "guide"
+      "place": "guide",
+      "command": "marks:key"
     },
     {
       "id": "what_was_model_given",
@@ -2118,11 +2602,11 @@
       "answer": [
         {
           "place": "guide",
-          "line": "Chance looks at random squares. One rule follows the coarse satellite's latest fire, another looks where the model is least sure."
+          "line": "Chance looks at random squares, Follow the Coarse Satellite looks where that satellite last saw fire, and Look Where Unsure looks where the model is least sure."
         },
         {
           "place": "guide",
-          "line": "The last player learned its choices from past fires."
+          "line": "The Learned Player learned its choices from past fires, and Sees the Answer is not a fair player: it reads the hidden detections."
         }
       ],
       "command": "play:players",
@@ -2692,6 +3176,120 @@
       "key": "records[fire month].year_month",
       "format": "month_name",
       "is": "the month of the year of the default fire's month"
+    },
+    "fire_month_rate": {
+      "route": "GET /api/calendar?source=firms&region_id=",
+      "key": "records[fire month].harmonized_mean",
+      "format": "rate",
+      "is": "detections per 1,000 square kilometres a day in the default fire's month"
+    },
+    "fire_month_usual": {
+      "route": "GET /api/calendar?source=firms&region_id=",
+      "key": "records[fire month].month_median",
+      "format": "rate",
+      "is": "the usual rate for that month of the year: the median over the record"
+    },
+    "record_last_year": {
+      "route": "GET /api/calendar?source=firms&region_id=",
+      "key": "summary_metrics.last_month",
+      "format": "year",
+      "is": "the last year of the record"
+    }
+  },
+  "marks": {
+    "name": "The Marks",
+    "place": "sheet",
+    "how": "a short list on demand, joined to the fire by a leader: each row draws its mark, then its name and its line. Only rows whose mark is on show are listed. Where the stage gives an anchor for a mark, its row may stand at the mark as a label instead.",
+    "open": {
+      "label": "Explain the marks",
+      "command": "marks:key",
+      "key": "K",
+      "places": [
+        "guide"
+      ]
+    },
+    "rows": [
+      {
+        "id": "frames",
+        "name": "White frame",
+        "line": "One square, {sharp_square_m} metres across, that the model says is burning at this pass.",
+        "on_show": "a pass of the sharp satellite, before and after the reveal",
+        "from": "declared_cells.looks[frame == pass].cells, POST /api/reconstruct; a run without that list: belief_frames cells at a chance of one half or more",
+        "drawing": "the frame's shape; a smaller filled square where a cell is too small on screen for a frame",
+        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+      },
+      {
+        "id": "dotted_line",
+        "name": "Dotted line",
+        "line": "Around all the ground where the model gives fire a chance at this pass.",
+        "on_show": "every pass",
+        "from": "belief_frames.p_burning where it crosses 0.02, POST /api/reconstruct",
+        "drawing": "the smoothing over neighbouring squares, the dots; by day the ground inside is drawn 30 percent darker so the line can be found",
+        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25. The level, 0.02, is a constant of the stage and not served, so no line says it"
+      },
+      {
+        "id": "darker_inside",
+        "name": "Darker ground inside the line, by day",
+        "line": "The same ground shaded so the dotted line can be found by day: a drawing, not a measurement.",
+        "on_show": "a pass by day",
+        "from": "belief_frames.p_burning, POST /api/reconstruct",
+        "drawing": "how much darker",
+        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+      },
+      {
+        "id": "chance_squares",
+        "name": "Small white square",
+        "line": "A square of ground where the model gives fire a chance: the larger it is drawn, the higher the chance, and the brighter, the more heat it expects.",
+        "on_show": "only when asked for",
+        "from": "belief_frames.p_burning (its area) and expected_frp_density (its strength), at the step after the pass, POST /api/reconstruct",
+        "drawing": "the square's shape; one tone where squares are under three pixels wide",
+        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+      },
+      {
+        "id": "sharp_detections",
+        "name": "Blue square",
+        "line": "One detection by the sharp satellite at this pass, shown after the reveal or found by a look. It is drawn a little smaller than the ground it covers, so the white frame under it still shows.",
+        "on_show": "a pass of the sharp satellite, after the reveal; a looked square, after a look",
+        "from": "blind_test.reveal.overpasses[frame == pass].footprints, POST /api/reconstruct with reveal; the rows a look returned, POST /api/env/next_look/step",
+        "drawing": "its size, six tenths of the pixel, and its blue",
+        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+      },
+      {
+        "id": "lights",
+        "name": "Warm light",
+        "line": "One detection at this pass by a satellite the model was given: the brighter, the more heat was measured.",
+        "on_show": "a pass of the coarse satellite; on a fire kept as the test, every pass",
+        "from": "observer_passes.frames[pass].footprints (lon, lat, scan_km, track_km, frp_mw), POST /api/reconstruct",
+        "drawing": "the falloff inside its pixel, its warm colour, the fade between passes; by day the ground under it is darkened so it shows",
+        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+      },
+      {
+        "id": "glow_around",
+        "name": "Glow around a light",
+        "line": "The light of a detection spread on the ground around it; how far it reaches is a drawing, not a measurement.",
+        "on_show": "with every warm light",
+        "from": "the same rows as the light",
+        "drawing": "its reach past the pixel, about half a kilometre and two kilometres",
+        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25. G33 asks whether it should stay inside the pixel; the product lane's view is in GUIDE-script.md, section 2"
+      },
+      {
+        "id": "afterglow",
+        "name": "Red glow",
+        "line": "Where the coarse satellite last saw fire before this hidden pass, fading with the hours since; its red is a drawing.",
+        "on_show": "a hidden pass, on a run that says how long a burning square stays lit",
+        "from": "the rows of the last pass given to the model before it, faded by the hours since over model.parameters.tau_res_h, POST /api/reconstruct",
+        "drawing": "its red colour",
+        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+      }
+    ],
+    "action": {
+      "label": "Show the less likely squares",
+      "command": "estimate:chance",
+      "key": "L",
+      "places": [
+        "guide"
+      ],
+      "label_while_on": "Hide the less likely squares"
     }
   }
 }

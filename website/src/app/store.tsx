@@ -91,6 +91,8 @@ export interface WorkspaceStore {
     /** After the reveal: one fire three ways in the stage's place (compare/ThreeWaysPlane.tsx), and its toggle. */
     threeWays: boolean;
     toggleThreeWays: () => void;
+    /** The key of marks is open (the guide's `marks:key`). */
+    marksOpen: boolean;
     /** On a hidden pass: the earlier pass whose detections the stage draws as an afterglow (`telemetry.lastSeen`). */
     lastSeen: EarthStageTelemetry['lastSeen'] | null;
     /** The files of the run on show that did not load (`telemetry.missingFiles`); null when none is missing. */
