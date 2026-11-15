@@ -5,7 +5,7 @@ from, with its sha256). A part is rebuilt only when one of its files changes, so
 country's part alone. The parts are then merged into one build, `<cube>/builds/<build id>/`, and the `current` link
 moves to it in one step, so a reader never sees half a build. Parts are built in parallel, one process per country.
 
-Every row of a file goes in; none is dropped or deduplicated (the country files hold no exact duplicate rows). A row
+Every row of a file goes in; none is dropped or deduplicated (no line repeats inside a country's files). A row
 whose position or date cannot be read is counted in the manifest as skipped. The file's rows must equal the rows its
 raw manifest records, and its sha256 the manifest's, or the country is not built.
 
@@ -498,8 +498,9 @@ LAYERS: dict[str, dict[str, Any]] = {
     "frp_viirs": {"what": "summed fire radiative power of fire rows per cell over every month, VIIRS, MW",
                   "platforms": (2, 3), "measure": "frp", "first_month": None},
 }
-# Colour ramp of the PNGs (log scale, low to high): dark red, red, orange, yellow, near white.
-RAMP: tuple[tuple[int, int, int], ...] = ((90, 10, 10), (200, 30, 20), (245, 120, 20), (255, 210, 60), (255, 250, 220))
+# Colour ramp of the PNGs (log scale, low to high): dark red, red, orange, amber. Neither end is near white or near
+# black, so the layer reads on a light page and on a dark one.
+RAMP: tuple[tuple[int, int, int], ...] = ((110, 0, 30), (185, 20, 30), (228, 75, 20), (245, 135, 20), (250, 185, 45))
 NO_ROWS_RGBA: tuple[int, int, int, int] = (128, 128, 128, 70)  # loaded, none of this family's rows
 
 
@@ -642,7 +643,10 @@ def check_regions(regions: Iterable[str] = ("plumas_ca", "lytton_bc", "evia_gree
     nm = cube.n_months
     index = BoxIndex(cache_dir)
     report: dict[str, Any] = {"cube_build": cube.build_id, "regions": {}}
-    cal_countries = sorted({archive.REGION_COUNTRY[r] for r in archive.REGION_COUNTRY})
+    # The calendar's outage rule runs over every country file in its cache, so its countries are those of the files.
+    cal_countries = sorted({archive._split_name(m.name[:-len(".manifest.json")])[2] for p in PRODUCTS
+                            for m in ((cache_dir / "raw" / p).rglob("*.csv.manifest.json")
+                                      if (cache_dir / "raw" / p).is_dir() else [])})
     for r in regions:
         cal = RC.firms_calendar(r, cache_dir)
         box = tuple(cal["bbox"])

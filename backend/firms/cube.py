@@ -242,28 +242,30 @@ class Cube:
         class and by confidence class; the cells, how many are loaded, and the countries that gave rows there."""
         self._open()
         c0, c1, r0, r1 = snap(box, how)
-        parts = [self.records[int(self.cell_start[r * N_COLS + c0]):int(self.cell_start[r * N_COLS + c1])]
-                 for r in range(r0, r1)]
-        part = np.concatenate(parts) if parts else np.empty(0, dtype=RECORD_DTYPE)
         nm = self.n_months
-        m = part["month"].astype(np.int64)
-        code = part["code"].astype(np.int64)
-        rows = part["rows"].astype(np.float64)
-        frp = part["frp"].astype(np.float64)
-        dec = decode(code)
-        pdk = (dec["platform"] * 2 + dec["daynight"]) * len(KINDS) + dec["kind"]
-        k1 = m * (len(PLATFORMS) * 2 * len(KINDS)) + pdk
-        size = nm * len(PLATFORMS) * 2 * len(KINDS)
-        shape = (nm, len(PLATFORMS), 2, len(KINDS))
-        out_rows = np.bincount(k1, weights=rows, minlength=size).reshape(shape)
-        out_frp = np.bincount(k1, weights=frp, minlength=size).reshape(shape)
-        fire = dec["kind"] == 0
-        pd_ = dec["platform"] * 2 + dec["daynight"]
-        ks = (m * (len(PLATFORMS) * 2) + pd_) * N_SCAN + dec["scan"]
-        kc = (m * (len(PLATFORMS) * 2) + pd_) * len(CONF_CLASSES) + dec["conf"]
-        by_scan = np.bincount(ks[fire], weights=rows[fire], minlength=nm * 8 * N_SCAN).reshape(nm, 4, 2, N_SCAN)
-        frp_scan = np.bincount(ks[fire], weights=frp[fire], minlength=nm * 8 * N_SCAN).reshape(nm, 4, 2, N_SCAN)
-        by_conf = np.bincount(kc[fire], weights=rows[fire], minlength=nm * 8 * 3).reshape(nm, 4, 2, 3)
+        # One sum per month and code over the box's records, a slice per row of the grid. The code is a mixed radix
+        # number of its five fields, so the (month, code) table reshapes to one axis per field.
+        size = nm * N_CODES
+        sum_rows = np.zeros(size, dtype=np.float64)
+        sum_frp = np.zeros(size, dtype=np.float64)
+        n_read = 0
+        for r in range(r0, r1):
+            a, b = int(self.cell_start[r * N_COLS + c0]), int(self.cell_start[r * N_COLS + c1])
+            if a == b:
+                continue
+            seg = self.records[a:b]
+            key = seg["month"].astype(np.int64) * N_CODES + seg["code"]
+            sum_rows += np.bincount(key, weights=seg["rows"], minlength=size)
+            sum_frp += np.bincount(key, weights=seg["frp"], minlength=size)
+            n_read += b - a
+        fields = (nm, len(PLATFORMS), 2, len(KINDS), N_SCAN, len(CONF_CLASSES))
+        t_rows = sum_rows.reshape(fields)
+        t_frp = sum_frp.reshape(fields)
+        out_rows = t_rows.sum(axis=(4, 5))
+        out_frp = t_frp.sum(axis=(4, 5))
+        by_scan = t_rows[:, :, :, 0].sum(axis=4)
+        frp_scan = t_frp[:, :, :, 0].sum(axis=4)
+        by_conf = t_rows[:, :, :, 0].sum(axis=3)
         lw = np.asarray(self.loaded[r0:r1, c0:c1])
         sb = snapped_box(c0, c1, r0, r1)
         return {
@@ -274,7 +276,7 @@ class Cube:
             "cells_loaded": int((lw > 0).sum()),
             "loaded": bool((lw > 0).any()),
             "countries": self.countries_in(c0, c1, r0, r1),
-            "records_read": int(part.size),
+            "records_read": n_read,
             "rows": out_rows.astype(np.int64),
             "frp": out_frp,
             "fire_rows_by_scan": by_scan.astype(np.int64),

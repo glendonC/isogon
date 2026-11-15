@@ -53,9 +53,13 @@ Each row lands in one key of cell, month and code. The code packs five fields:
 `code = (((platform * 2 + daynight) * 4 + kind) * 4 + scan_class) * 3 + confidence_class`. Each record holds `rows`
 and `frp`, the sum of the rows' fire radiative power in MW. Every marginal is a sum of records.
 
-No row is dropped. The country files hold no exact duplicate rows, so none is removed. A row whose position or date
-cannot be read is counted as skipped in the manifest. Before a file is read, its sha256 must equal its manifest's,
-and after it, its rows must equal the rows the manifest records.
+No row is dropped. A row whose position or date cannot be read is counted as skipped in the manifest. Before a file is
+read, its sha256 must equal its manifest's, and after it, its rows must equal the rows the manifest records.
+
+No line of the country files repeats inside one country's files. A few pairs of rows share position, day, time and
+platform but differ in brightness and fire power: two detections whose positions round alike, both kept. A row can
+sit in two countries' files only where their outlines meet; in the files as downloaded that is 8 rows, all in one
+cell on the water at Point Roberts (United States and Canada), and the cube counts them twice, as the box route does.
 
 ## Which rows count
 
@@ -97,7 +101,9 @@ All arrays are `.npy`, little endian, read with `np.load(path, mmap_mode="r")`.
 | `manifest.json` | | every source file with its sha256, bytes, rows in the file and rows in the cube; the sha256 of every array; the build's code |
 | `layers/` | | world layers, below |
 
-The cells of one row of the grid have consecutive ids, so a box is one slice of `records` per row of the grid:
+The cells of one row of the grid have consecutive ids, so a box is one slice of `records` per row of the grid. The
+reader sums each slice by month and code; the code is a mixed radix number of its five fields, so that one table
+reshapes into an axis per field, and the time of a read grows with the records in the box, not with its tables:
 
 ```python
 from backend.firms.cube import Cube
@@ -158,8 +164,9 @@ a reader of the same files separate from the cube's:
 `layers/` holds `(720, 1440)` float32 arrays on the grid and a PNG of each, north up, one pixel per cell, drawn from
 the records with nothing interpolated or smoothed: fire rows of MODIS (Terra and Aqua) and of VIIRS (Suomi NPP and
 NOAA-20) over every month; the same from 2012-01 for MODIS and for Suomi NPP alone; summed fire radiative power of
-each family. The PNGs are on a log scale (`layers.json` gives the scale and each layer's maximum); a cell that is not
-loaded is transparent, a loaded cell without the layer's rows is grey.
+each family. The PNGs are on a log scale from dark red to amber, so they read on a light page and on a dark one
+(`layers.json` gives the scale, the ramp and each layer's maximum); a cell that is not loaded is transparent, a
+loaded cell without the layer's rows is grey.
 
 ## What is not in it
 
