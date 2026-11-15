@@ -15,8 +15,8 @@ export interface ControlProps {
 }
 
 /**
- * One action on its own. A screen's actions stand together in an ActionDock; this is for an action that stands alone
- * (a top bar's Pause, a sheet's Close). Primary is the bar of light; secondary is the lit glass.
+ * One action on its own, where no thing in the scene can carry it (the first screen, a sheet's Close): plain words;
+ * the place finder's corner brackets close round them on hover and focus. The primary is only brighter.
  */
 export function Control({ children, variant = 'secondary', selected, disabled, reason, onClick, className, shortcut }: ControlProps) {
   const state = { variant, selected, disabled, reason };
@@ -37,6 +37,7 @@ export function Control({ children, variant = 'secondary', selected, disabled, r
       }}
     >
       <span className="id-control__label">{children}</span>
+      <span className="id-control__ticks" aria-hidden="true" />
     </button>
   );
 }

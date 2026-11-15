@@ -86,7 +86,7 @@
   text-align: left;
   cursor: pointer;
   font-family: var(--id-font);
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 300;
   color: var(--id-ink-3);
   transition: color 300ms var(--id-move);
@@ -128,8 +128,8 @@
 
 .iso-viewer__trail-meta {
   font-family: var(--id-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-size: 16px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--id-signal);
 }
@@ -147,7 +147,7 @@
   background: none;
   cursor: pointer;
   font-family: var(--id-font);
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 300;
   color: var(--id-ink-2);
   transition: color 300ms var(--id-move);
@@ -181,7 +181,7 @@
 
 .iso-viewer__title {
   margin: 0 0 28px;
-  font-size: 34px;
+  font-size: 40px;
   font-weight: 300;
   line-height: 1.2;
   letter-spacing: -0.01em;
@@ -198,7 +198,7 @@
 
 .iso-viewer .iso-doc-section__p,
 .iso-viewer .iso-doc-lead__p {
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.6;
   color: var(--id-ink-2);
 }
@@ -216,12 +216,12 @@
   border-bottom: 1px solid var(--id-line);
   background: none;
   text-align: left;
-  font-size: 15px;
+  font-size: 17px;
   color: var(--id-ink);
 }
 
 .iso-viewer .iso-doc-table th {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 400;
   color: var(--id-ink-3);
 }
@@ -249,7 +249,7 @@
 .iso-viewer .iso-doc-lead__p {
   max-width: 62ch;
   margin: 0 0 12px;
-  font: 300 16px / 1.6 var(--id-font);
+  font: 300 18px / 1.6 var(--id-font);
 }
 
 .iso-viewer .iso-doc-table {
@@ -259,7 +259,7 @@
 .iso-viewer .iso-doc-table thead th,
 .iso-viewer .iso-doc-table thead th:not(:first-child) {
   padding: 0 18px 10px 0;
-  font: 400 13px / 1.4 var(--id-font);
+  font: 400 16px / 1.4 var(--id-font);
   color: var(--id-ink-3);
   text-align: left;
 }

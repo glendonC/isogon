@@ -31,54 +31,57 @@
 }
 
 /*
- * A single action that stands alone, where there is no thing in the scene to put it on (the first screen, a sheet):
- * the scene prompt's words without its frame. Plain text; on hover or focus the signal mark arrives and the words step
- * in. The next step is brighter. No box, no icon, no key letter.
+ * A single action that stands alone, where there is no thing in the scene to carry it (the first screen, a sheet):
+ * plain words, no body, no box, no mark. On hover or focus the place finder's four corner brackets close round the
+ * words in the signal colour. The next step is only brighter. Disabled is dimmed and says why.
  */
 .id-control {
   position: relative;
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 6px 0 6px 0;
+  align-items: center;
+  padding: 10px 16px;
   border: 0;
   border-radius: 0;
   background: none;
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
-  text-align: left;
   font-family: var(--id-font);
   color: var(--id-ink-2);
 }
 
 .id-control__label {
   position: relative;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 300;
   letter-spacing: 0.01em;
   white-space: nowrap;
   text-shadow: 0 1px 12px rgba(5, 7, 12, 0.8);
   transition:
-    transform 450ms var(--id-move),
     color 300ms var(--id-move),
     text-shadow 450ms var(--id-move);
 }
 
-.id-control__label::before {
-  content: '';
+.id-control__ticks {
   position: absolute;
-  left: -8px;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  margin-top: -2px;
-  background: var(--id-signal);
+  inset: 0;
+  pointer-events: none;
   opacity: 0;
+  transform: scale(1.18);
   transition:
-    opacity 300ms var(--id-move),
-    left 450ms var(--id-move);
+    opacity 260ms var(--id-move),
+    transform 450ms var(--id-move);
+  --t: var(--id-signal);
+  filter: drop-shadow(0 0 5px rgba(159, 227, 255, 0.55));
+  background:
+    linear-gradient(var(--t), var(--t)) top left / 12px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) top left / 1.5px 12px no-repeat,
+    linear-gradient(var(--t), var(--t)) top right / 12px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) top right / 1.5px 12px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom left / 12px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom left / 1.5px 12px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom right / 12px 1.5px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom right / 1.5px 12px no-repeat;
 }
 
 .id-control--primary,
@@ -89,44 +92,47 @@
 .id-control:hover .id-control__label,
 .id-control:focus-visible .id-control__label {
   color: var(--id-ink);
-  transform: translateX(14px);
-  text-shadow: 0 0 18px rgba(159, 227, 255, 0.55), 0 1px 12px rgba(5, 7, 12, 0.8);
+  text-shadow: 0 0 18px rgba(159, 227, 255, 0.5), 0 1px 12px rgba(5, 7, 12, 0.8);
 }
 
-.id-control:hover .id-control__label::before,
-.id-control:focus-visible .id-control__label::before,
-.id-control--selected .id-control__label::before {
+.id-control:hover .id-control__ticks,
+.id-control:focus-visible .id-control__ticks,
+.id-control--selected .id-control__ticks {
   opacity: 1;
-  left: -14px;
+  transform: none;
 }
 
 .id-control:focus-visible {
   outline: none;
 }
 
-.id-control:active .id-control__label {
-  transform: translateX(16px);
+.id-control:focus-visible .id-control__ticks {
+  --t: var(--id-ink);
+}
+
+.id-control:active .id-control__ticks {
+  transform: scale(0.96);
 }
 
 .id-control--disabled,
 .id-control--disabled:hover {
-  color: rgba(243, 244, 246, 0.3);
+  color: rgba(243, 244, 246, 0.32);
   cursor: not-allowed;
 }
 
 .id-control--disabled .id-control__label,
 .id-control--disabled:hover .id-control__label {
-  transform: none;
   text-shadow: none;
 }
 
-.id-control--disabled .id-control__label::before {
+.id-control--disabled .id-control__ticks,
+.id-control--disabled:hover .id-control__ticks {
   opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .id-control__label,
-  .id-control__label::before {
+  .id-control__ticks {
     transition: none;
   }
 }
@@ -156,8 +162,8 @@
 }
 
 .id-bar__win {
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   flex: none;
   border: 1px solid var(--id-line-2);
   overflow: hidden;
@@ -176,7 +182,7 @@
 .id-bar__trail {
   display: flex;
   flex-wrap: wrap;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--id-ink-3);
   margin: 0 0 4px;
 }
@@ -206,14 +212,14 @@
 
 .id-bar__here {
   margin: 0;
-  font-size: 19px;
+  font-size: 22px;
   color: var(--id-ink);
 }
 
 .id-bar__coord {
   margin: 4px 0 0;
   font-family: var(--id-mono);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--id-ink-3);
   white-space: pre;
 }
@@ -227,7 +233,7 @@
 
 .id-bar__link {
   font: inherit;
-  font-size: 15px;
+  font-size: 17px;
   color: var(--id-ink-2);
   background: none;
   border: 0;
@@ -261,7 +267,7 @@
   background: none;
   text-align: left;
   font: inherit;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--id-ink-3);
 }
 
@@ -340,15 +346,15 @@ button.id-story__part:focus-visible {
 
 .id-entry__title {
   margin: 0;
-  font-size: 34px;
-  font-weight: 400;
+  font-size: 40px;
+  font-weight: 300;
   line-height: 1.2;
   letter-spacing: -0.01em;
 }
 
 .id-entry__line {
   margin: 14px 0 0;
-  font-size: 17px;
+  font-size: 20px;
   line-height: 1.5;
   color: var(--id-ink-2);
 }
@@ -539,7 +545,7 @@ button.id-story__part:focus-visible {
   position: relative;
   display: inline-block;
   padding: 2px 0 6px;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 300;
   letter-spacing: 0.01em;
   color: var(--id-ink);
@@ -577,8 +583,8 @@ button.id-story__part:focus-visible {
 .id-scene__readout {
   display: block;
   font-family: var(--id-mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  font-size: 16px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: pre;
   color: var(--id-signal);
