@@ -45,10 +45,12 @@ files and the fire cube, and explained in [`docs/method.md`](docs/method.md) and
 | The estimate on the three fires kept as its first test (Dixie, Lytton Creek, northern Evia, 2021) | Ahead of both simple methods on 6, 7 and 3 of 7 scores. Those fires are closed and are not scored again. |
 | On 7 fires of 2024 and 2025 held back for validation | Ahead on 2 of 7 scores, level on 5, behind on none, a score counted only when the gap is beyond the noise of resampling the fires. |
 | On 73 fires on five continents, chosen by a rule before any was read (test A) | Ahead on 3 of 7 scores, level on 2, behind on 2. It does not place fire square for square better than painting the MODIS detections (agreement 16.8 against 19.7 percent); give or take one square it does better (35.6 against 32.6). Its stated 90 percent range for a pass's total heat held on 87.8 percent of 1,184 passes. No fire of test A is in Europe and seven are in Oceania, so it says little about those two. |
+| On 57 fires kept closed until one last look (test B) | The estimate in use: ahead on 2 of 7 scores, level on 2, behind on 3; its stated 90 percent range for a pass's total heat held on 87.2 percent of 932 passes. The challenger, scored in the same run under the same rules (a blend of a small neural network and boosted decision trees, chosen on validation fires before the look): ahead on 6 of 7, level on 1, behind on none; its range held on 88.9 percent. The page's hidden passes are answered by the challenger since this result. |
 | Where should the next sharp look go? (13 rounds of fires of 2024 and 2025) | Looking where the model is least sure gains 4.8 points of agreement from four looks, against 0.6 for random looks and 1.7 for the best fixed square in hindsight, and beats random looks in 13 of 13 rounds. The learned player does not beat it: +0.2 points, most likely between -0.7 and +1.3. |
 
 The truth the estimate is scored against is another instrument, not the fire, and the model is experimental: it is
-shown and tested, and nothing switches it on.
+shown and tested, and nothing switches it on as a product. On the page a run's hidden passes are answered by the
+challenger; the coarse passes, the spread and the frames between passes are the estimate in use.
 
 ## What it uses
 
