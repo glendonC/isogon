@@ -110,6 +110,13 @@ sealed predictions (`GET /api/live`): `J` there too. The address says the pictur
 `?world=years` (with `view`, `from`, `until` and `play`), `?world=test`, `?world=sealed`; `?years` opens the years over
 the Record (with `film`, they play once by themselves).
 
+The film presentation (`film` in the address; the root takes the class `iso-film`) is the page as a film shows it: each
+state's film caption from the script stands in the objective's place (on the landing, in the headline's), the guide's
+sentences are off, only the step's strong action stands, the labels on the stage take their short form, and the choice
+of a place is the Earth without its list. Until the landing's fire is in, the page is dark with only the mark. The
+root's `data-fire` says where the page is, for a film's driver: `loading`, `in` (the landing's real run loaded and a
+pass of it drawn), `failed`, or `workspace`.
+
 A real run and a simulated run are kept apart. When the site asks for a real run and the answer is not one, it is refused, so modelled numbers are never shown as observations.
 
 One surface reads a stand-in file in `src/content/demo/` instead of a route and says "Demo data" on screen: the calendar of a box outside the three regions with FIRMS rows. The Terra morning result (`src/content/demo/terraMorning.ts`) is kept but not shown until it has a clean measurement and a route. The evidence sheet reads `GET /api/evidence` and shows no figure until it answers. On the pass track, the passes that looked and flagged nothing come from the run itself when its frames are the NASA CMR pass list, and otherwise from `GET /api/passes`; where neither has them (before 2012), the track says it shows passes with fire only. [`../docs/architecture.md`](../docs/architecture.md) lists them.
