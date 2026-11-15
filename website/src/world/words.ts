@@ -187,6 +187,10 @@ export const YEAR_WORDS = {
   wholeEarth: 'The whole Earth',
   pickCountry: 'Click a country for its own years',
   noFile: 'no file of its own',
+  /** The pointed country's frame in the scene: its action, and its readout's count for the year on show. */
+  countryAction: 'Show its years',
+  readoutYear: (n: string, year: number, oneScale: boolean) => `${n} detections${oneScale ? ' on one scale' : ''} in ${year}`,
+  readoutNone: (year: number) => `none counted in ${year}`,
   /** The square under the pointer on the globe, for the year on show. */
   squareNone: (year: number) => `No detection in this square in ${year}`,
   squareClosed: (year: number) => `A test fire of ${year}, not tested again`,

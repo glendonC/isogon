@@ -1536,37 +1536,6 @@
   color: var(--sys-ink-2);
 }
 
-/* The pointed spot on the globe (the design language's readout): beside the pointer, in mono, white on the night ground. */
-.world-pointer {
-  position: absolute;
-  z-index: 3;
-  display: grid;
-  gap: 2px;
-  padding: 10px 14px 12px;
-  pointer-events: none;
-  white-space: nowrap;
-  background: rgba(6, 8, 12, 0.78);
-  -webkit-backdrop-filter: var(--sys-plate-blur);
-  backdrop-filter: var(--sys-plate-blur);
-}
-
-.world-pointer__coords,
-.world-pointer__count {
-  font: 400 16px / 1.35 var(--sys-mono);
-  color: var(--sys-ink);
-  font-variant-numeric: tabular-nums;
-}
-
-.world-pointer__place {
-  font: 400 17px / 1.35 var(--sys-font);
-  color: var(--sys-ink);
-}
-
-.world-pointer__more,
-.world-pointer__count {
-  color: var(--sys-ink-2);
-}
-
 /* A panel draws on by its outline, edge after edge, once; nothing fades in (the design language). */
 .world-drawn::before {
   content: '';
@@ -1608,4 +1577,10 @@
 /* A sealed row opens its result. */
 .world-board__row[data-opens='true'] {
   cursor: pointer;
+}
+
+/* The pointed country's frame on the globe (the ux lane's ScenePrompt): the globe keeps the pointer, so the readout
+   follows it and a drag still turns the Earth; the frame is reached by Tab and Enter, and a click on the globe picks. */
+.world-years .id-scene__frame {
+  pointer-events: none;
 }

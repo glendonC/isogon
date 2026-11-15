@@ -31,7 +31,9 @@ export interface GlobeProps {
    */
   fly?: { rings: number[][][] } | null;
   /** Outlines drawn on the globe (the country under the pointer, the one chosen), as rings of [lon, lat]. */
-  outlines?: Array<{ rings: number[][][]; strong: boolean }>;
+  outlines?: Array<{ rings: number[][][]; strong: boolean; report?: boolean }>;
+  /** The screen box (viewport CSS px) of the near side of the outline marked `report`, as the globe turns; null with none. */
+  onBox?: (box: { left: number; top: number; right: number; bottom: number } | null) => void;
   /** The point under the pointer, or null off the globe; called again as the globe turns under a still pointer. */
   onPoint?: (at: { lon: number; lat: number; x: number; y: number } | null) => void;
   /** A click: the point under it, or null off the globe. */
@@ -235,7 +237,7 @@ const AUTO_DEG_S = 4;
 const FILM_FROM = -82;
 const FILM_TO = 52;
 
-export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, film = null, fly = null, outlines = [], onPoint, onPick, onSlow, className }: GlobeProps) {
+export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, film = null, fly = null, outlines = [], onBox, onPoint, onPick, onSlow, className }: GlobeProps) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const over = useRef<HTMLCanvasElement | null>(null);
@@ -251,8 +253,10 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     lut: WebGLTexture;
     has: boolean;
   } | null>(null);
-  const props = useRef({ ix, lut, padTop, padBottom, padLeft, film, outlines, onPoint, onPick, onSlow });
-  props.current = { ix, lut, padTop, padBottom, padLeft, film, outlines, onPoint, onPick, onSlow };
+  const props = useRef({ ix, lut, padTop, padBottom, padLeft, film, outlines, onBox, onPoint, onPick, onSlow });
+  props.current = { ix, lut, padTop, padBottom, padLeft, film, outlines, onBox, onPoint, onPick, onSlow };
+  const lastBox = useRef<string>('none');
+  const lastBoxAt = useRef(0);
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const dirty = useRef(true);
   const filmT0 = useRef<number | null>(null);
@@ -560,6 +564,7 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     const m = rotation(turn.current.lon, turn.current.lat);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.lineJoin = 'round';
+    let box: { left: number; top: number; right: number; bottom: number } | null = null;
     for (const o of list) {
       g.beginPath();
       for (const ring of o.rings) {
@@ -582,37 +587,41 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
           if (pen) g.lineTo(x, y);
           else g.moveTo(x, y);
           pen = true;
+          if (o.report) {
+            if (!box) box = { left: x, top: y, right: x, bottom: y };
+            else {
+              box.left = Math.min(box.left, x);
+              box.top = Math.min(box.top, y);
+              box.right = Math.max(box.right, x);
+              box.bottom = Math.max(box.bottom, y);
+            }
+          }
         }
       }
-      g.fillStyle = o.strong ? 'rgba(237, 239, 243, 0.1)' : 'rgba(237, 239, 243, 0.06)';
-      g.strokeStyle = o.strong ? 'rgba(237, 239, 243, 1)' : 'rgba(237, 239, 243, 0.7)';
+      // The interface's one colour (the plan's pale cyan): the chosen country strong, the pointed one quiet.
+      g.strokeStyle = o.strong ? 'rgba(159, 227, 255, 0.95)' : 'rgba(159, 227, 255, 0.55)';
       g.lineWidth = o.strong ? 1.5 : 1;
       g.stroke();
     }
-    // The cross hairs on the pointed spot, as the place finder draws them: hairs across the globe, a square at the spot.
+    // The pointed country's box on the screen, told only when it moves by more than a pixel.
+    const report = props.current.onBox;
+    if (report) {
+      const wr = wrap.current?.getBoundingClientRect();
+      const b = box && wr ? { left: Math.round(wr.left + box.left), top: Math.round(wr.top + box.top), right: Math.round(wr.left + box.right), bottom: Math.round(wr.top + box.bottom) } : null;
+      const key = b ? `${b.left},${b.top},${b.right},${b.bottom}` : 'none';
+      const now = performance.now();
+      if (key !== lastBox.current && (!b || now - lastBoxAt.current > 50)) {
+        lastBox.current = key;
+        lastBoxAt.current = now;
+        report(b);
+      }
+    }
+    // The pointed square: the one the readout's count is for, in the interface's pale cyan.
     const p = pointer.current;
     if (p && !props.current.film && (p.x - cx) ** 2 + (p.y - cy) ** 2 < r * r) {
-      const x = Math.round(p.x) + 0.5;
-      const y = Math.round(p.y) + 0.5;
-      g.save();
-      g.beginPath();
-      g.arc(cx, cy, r, 0, Math.PI * 2);
-      g.clip();
-      g.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+      g.strokeStyle = 'rgba(159, 227, 255, 0.95)';
       g.lineWidth = 1;
-      g.beginPath();
-      g.moveTo(cx - r, y);
-      g.lineTo(x - 12, y);
-      g.moveTo(x + 12, y);
-      g.lineTo(cx + r, y);
-      g.moveTo(x, cy - r);
-      g.lineTo(x, y - 12);
-      g.moveTo(x, y + 12);
-      g.lineTo(x, cy + r);
-      g.stroke();
-      g.restore();
-      g.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-      g.strokeRect(x - 7, y - 7, 14, 14);
+      g.strokeRect(Math.round(p.x) - 6.5, Math.round(p.y) - 6.5, 13, 13);
     }
   };
 
