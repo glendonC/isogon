@@ -113,7 +113,7 @@ Each is a small pure function of the monthly counts (`SPECS` in `harmonize.py`):
 
 ### The whole world (the decision)
 
-The fire cube with all 238 countries of the FIRMS listing (build `20261115T034227Z-aec5a74a`): 5,227 places of 2
+The fire cube with all 238 countries of the FIRMS listing (the build named in `provenance.cube_build` of `harmonize_fitted.py`): 5,227 places of 2
 degrees, 41,112 scored place-years, 156 clean overlap months.
 
 | Candidate | rows, monthly | rows, annual | FRP, monthly | FRP, annual |
