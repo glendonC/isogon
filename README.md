@@ -1,63 +1,99 @@
 # Isogon
 
-Isogon answers the NASA Space Apps challenge "Harmonization of MODIS and VIIRS Hot Spots". Two kinds of NASA satellite
-watch the Earth's fires: MODIS since 2000, which sees squares about 1 km across, and VIIRS since 2012, which sees
-squares 375 m across, finds smaller and cooler fires the older satellites miss, and so makes about 4.4 times as many
-detections over the same Earth. Isogon does three things with them, and the site walks through them as four steps,
-Record, Estimate, Test and Play:
+Isogon is built on real NASA FIRMS fire detections. It has three parts: a scientific world model, an experimental
+environment, and a learning agent, which is the research direction. Putting the detections of two NASA satellites on
+one scale, the challenge "Harmonization of MODIS and VIIRS Hot Spots" of the NASA Space Apps Challenge, is its first
+result.
 
-1. **A fire record for any area on Earth.** Every NASA FIRMS detection from November 2000 to December 2025, in all
-   238 countries, with the MODIS years put on the VIIRS scale so the jump of 2012 is gone, and a range for each
-   month and year that says how far it may be off.
-2. **An estimate, tested.** With VIIRS hidden, an experimental model rebuilds a real fire from MODIS alone on
-   VIIRS's 375 m grid. Then the hidden detections are revealed and the estimate is scored beside two simple
-   methods, on fires it was never fitted on.
-3. **A game of where to look.** The hidden satellite is the answer key: a person, simple rules and a learned player
-   choose where a sharp look should go, and each look is scored by how much it improves the estimate.
+Two kinds of NASA satellite watch the Earth's fires. MODIS has flown since 2000 and sees squares about 1 km across.
+VIIRS has flown since 2012, sees squares 375 m across, detects smaller and cooler fires that MODIS misses, and so makes
+about 4.4 times as many detections over the same Earth. Counted as they come, the detections jump in 2012 though the
+burning did not.
+
+## What the page opens on
+
+The public page opens on a landing page. Its headline reads "Turn real-world observations into testable worlds." A
+second line under it says that scientific world models reconstruct physical systems from imperfect measurements,
+predict what other instruments will see, and learn what to investigate next. Three ways in stand side by side, of equal
+weight: Play, Explore the Earth and Search a place.
+
+## The three parts
+
+1. **A scientific world model.** It rebuilds what was observed from imperfect measurements and predicts what another
+   instrument will detect. Here the observations are fire detections. The model has two layers. The first is an
+   occupancy filter: three numbers per 375 m cell, corrected at each satellite pass and run forward and backward in
+   time. The second is a learned layer, a small neural network and boosted decision trees written in numpy only, that
+   reads the filter's fields and the detections near each cell. Putting the MODIS years on the VIIRS scale is the
+   first result, and the record of any place on Earth is built on it.
+2. **An experimental environment.** A real fire with VIIRS hidden becomes a decision problem. At each real VIIRS pass a
+   player may spend one of a few looks on one square of the fire. The hidden detections of that look are revealed, the
+   model takes them in, and the look is scored by how much it improves the overlap with VIIRS's detections.
+3. **A learning agent, the research direction.** Players choose where to look: some read nothing, some read what the
+   model is unsure of, and one is fitted by regression. The learned player in the repository is small. In the
+   tables below it does not beat the simple rule that looks where the model is least sure.
+
+## Results
+
+**The record.** With each overlap year held out in turn, over 5,227 places of two degrees in all 238 countries, the
+disagreement between the two satellites' monthly detection counts is cut from 78 percent to 14. One ratio per place,
+the method used before, leaves 18 percent.
+
+**The model.** Rebuilding single fires from MODIS alone, with VIIRS hidden, the estimate overlaps VIIRS's detections
+about 40 percent better than MODIS alone: 36.9 against 26.4 percent within one square, on 57 fires it had never seen,
+chosen by a rule before any was read and looked at once (test B). The result is the blend's, the learned layer reading
+the filter. The filter alone did worse than MODIS alone on exact overlap, 13.1 against 15.8 percent, and was level
+within one square, 26.6 against 26.4.
+
+Overlap is the squares both mark as detections, out of the squares either marks. The truth these results are scored
+against is VIIRS, another instrument, not the fire, and what the model gives is an estimate, not ground truth. The
+model is experimental: it is shown and tested, and nothing switches it on as a product.
+
+| Question | Figure | Source |
+| --- | --- | --- |
+| How many more detections does VIIRS make than MODIS? | About 4.4 times over the whole Earth, summed over 2012 to 2025 (261,995,596 against 59,386,593). | [`docs/harmonization.md`](docs/harmonization.md), `backend/model/harmonize_years.py` |
+| How far do the monthly counts differ from VIIRS's own, each overlap year held out? | 77.7 percent with no correction, 18.3 with one ratio per place, 14.1 with the record in use. | [`docs/harmonization.md`](docs/harmonization.md), `backend/model/harmonize_eval.py` |
+| Did the stated range hold? | The 80 percent range held on 79 percent of the years that did not set it. | [`docs/harmonization.md`](docs/harmonization.md) |
+| Overlap on the 57 fires of test B: the blend, the filter alone, MODIS alone | Exact: 20.4, 13.1, 15.8 percent. Within one square: 36.9, 26.6, 26.4. | `backend/model/fitted_values/fresh_world_test_b.json`, `backend.model.evidence` |
+| The stated 90 percent range for a pass's total heat | Held on 88.9 percent of 932 passes for the blend and 87.2 for the filter alone. | `backend/model/fitted_values/fresh_world_test_b.json` |
+| Overlap on the 73 fires of test A, chosen by the same rule, the filter alone against MODIS alone | Exact: 16.8 against 19.7 percent, worse. Within one square: 35.6 against 32.6. | `backend/model/fitted_values/fresh_world_test_a.json` |
+| Overlap on the three first test fires, 2021, the filter alone against MODIS alone | Exact at Dixie 31.9 against 25.9, at Lytton Creek 19.2 against 12.8, at northern Evia 27.7 against 28.7, worse. Those fires are closed and are not scored again. | `backend/model/fitted_values/test_fire_looks.json` |
+| Where should the next look go? 13 rounds of fires of 2024 and 2025 | Looking where the model is least sure raises overlap by 4.8 points from four looks, against 0.6 for random looks and 1.7 for the best fixed square in hindsight, and beats random looks in 13 of 13. The learned player adds 0.25 points to it, most likely between -0.72 and +1.25, so no difference beyond the noise. | `backend/env/fitted/next_look.json`, [`docs/method.md`](docs/method.md) |
+
+The figures of the tests are served by the backend at `GET /api/evidence`, which reads the tracked files named above.
+The figures of the record come from the fire cube, measured by `python3 -m backend.model.harmonize_eval`. Both are
+explained in [`docs/method.md`](docs/method.md) and [`docs/harmonization.md`](docs/harmonization.md).
 
 ![Detections each year, the whole Earth, 2000 to 2025: as the satellites counted and on one scale](docs/detections-each-year.png)
 
 *Fire detections each year over the whole Earth. Bars: as the satellites counted, MODIS on Terra and Aqua to 2011,
-VIIRS on Suomi NPP from 2012, which sees smaller fires and so makes about 4.4 times as many detections over the same
-Earth. Line: on one scale, the harmonized record. Figures: every country's NASA FIRMS yearly
-files, summed by `backend/model/harmonize_years.py` (its yearly totals) and drawn by
-`backend/model/harmonize_figure.py`.*
+VIIRS on Suomi NPP from 2012. Line: on one scale, the harmonized record. Figures: every country's NASA FIRMS yearly
+files, summed by `backend/model/harmonize_years.py` and drawn by `backend/model/harmonize_figure.py`.*
 
-![Fire across the Earth in 2011 and 2012, as the satellites counted them and on one scale](docs/earth-2011-2012.png)
+![Fire detections across the Earth in 2011 and 2012, as the satellites counted them and on one scale](docs/earth-2011-2012.png)
 
-*Fire across the Earth in 2011 and 2012. Top, as the satellites counted: the older satellites (MODIS) in 2011, and in
-2012 the newer, sharper one (VIIRS), which sees smaller fires and so makes about 4.4 times as many detections over the
-same Earth: the Earth brightens with the instrument, not with more burning. Bottom, on one scale: the older satellites' detections put on the newer one's scale, and
-2012 shows no jump. Source: NASA FIRMS country yearly files (MODIS Collection 6.1, VIIRS 375 m Suomi NPP), summed per
-square of a quarter degree in the fire cube; drawn by `backend/firms/cube_figure.py`.*
+*Fire detections across the Earth in 2011 and 2012. Top, as the satellites counted: MODIS in 2011, and in 2012 VIIRS,
+which sees smaller fires and so makes about 4.4 times as many detections over the same Earth. The Earth brightens with
+the instrument, not with more burning. Bottom, on one scale: MODIS's detections put on VIIRS's scale, and 2012 shows no
+jump. Source: NASA FIRMS country yearly files (MODIS Collection 6.1, VIIRS 375 m Suomi NPP), summed per square of a
+quarter degree in the fire cube; drawn by `backend/firms/cube_figure.py`.*
 
-## What is measured
+## Predictions sealed before the pass
 
-Every figure is served by the backend (`GET /api/evidence`, `GET /api/calendar`, `GET /api/cube/years`) from tracked
-files and the fire cube, and explained in [`docs/method.md`](docs/method.md) and
-[`docs/harmonization.md`](docs/harmonization.md).
-
-| Question | Result |
-| --- | --- |
-| How many more detections does VIIRS make? | About 4.4 times over the whole Earth: Suomi NPP against Terra and Aqua together, summed over 2012 to 2025. Year by year, counting 2012 from February (Suomi NPP's rows begin on 20 January), it runs from 4.2 to 4.9, and each place has its own (4.1 around the Feather River). |
-| How well does the record put MODIS on the VIIRS scale? | Over 5,227 places of two degrees in all 238 countries, month by month, the method in use misses VIIRS's own count by 14.1 percent, against 18.3 percent for one ratio per place and 77.7 percent with no correction. Its 80 percent range held on 79 percent of the years that did not set it. |
-| And on the three places of the first test? | A year hidden and predicted from the others is off by 8 to 12 percent, against 72 to 73 percent with no correction; the range held in 12, 13 and 12 of 13 years. |
-| The estimate on the three fires kept as its first test (Dixie, Lytton Creek, northern Evia, 2021) | Ahead of both simple methods on 6, 7 and 3 of 7 scores. Those fires are closed and are not scored again. |
-| On 7 fires of 2024 and 2025 held back for validation | Ahead on 2 of 7 scores, level on 5, behind on none, a score counted only when the gap is beyond the noise of resampling the fires. |
-| On 73 fires on five continents, chosen by a rule before any was read (test A) | Ahead on 3 of 7 scores, level on 2, behind on 2. It does not place fire square for square better than painting the MODIS detections (agreement 16.8 against 19.7 percent); give or take one square it does better (35.6 against 32.6). Its stated 90 percent range for a pass's total heat held on 87.8 percent of 1,184 passes. No fire of test A is in Europe and seven are in Oceania, so it says little about those two. |
-| On 57 fires kept closed until one last look (test B) | The estimate in use: ahead on 2 of 7 scores, level on 2, behind on 3; its stated 90 percent range for a pass's total heat held on 87.2 percent of 932 passes. The challenger, scored in the same run under the same rules (a blend of a small neural network and boosted decision trees, chosen on validation fires before the look): ahead on 6 of 7, level on 1, behind on none; its range held on 88.9 percent. The page's hidden passes are answered by the challenger since this result. |
-| Where should the next sharp look go? (13 rounds of fires of 2024 and 2025) | Looking where the model is least sure gains 4.8 points of agreement from four looks, against 0.6 for random looks and 1.7 for the best fixed square in hindsight, and beats random looks in 13 of 13 rounds. The learned player does not beat it: +0.2 points, most likely between -0.7 and +1.3. |
-
-The truth the estimate is scored against is another instrument, not the fire, and the model is experimental: it is
-shown and tested, and nothing switches it on as a product. On the page a run's hidden passes are answered by the
-challenger; the coarse passes, the spread and the frames between passes are the estimate in use.
+For fires burning now, the sealer predicts what VIIRS on NOAA-20 and NOAA-21 will detect on each coming pass, from MODIS
+detections alone. It writes the prediction down before the pass, with a SHA-256 fingerprint and the time.
+`data/live_seals.csv` is the seal log: the time sealed, the fingerprint, the fire, the satellite and the predicted time
+of the pass. A line is added as soon as a seal is made and a line already written is never changed. Only a seal that was
+pushed to the public repository before its pass has a public timestamp; the time in the log is the sealer's own clock.
+When NASA publishes the pass's detections, the sealed prediction is scored, against near real time detections that are
+not the checked archive. The scores are served at `GET /api/live`, and [`docs/live.md`](docs/live.md) says how they are
+judged.
 
 ## What it uses
 
 - **NASA FIRMS** active fire detections (MODIS Collection 6.1; VIIRS 375 m for Suomi NPP, NOAA-20 and NOAA-21): the
   country yearly files of all 238 countries (10,095 files, 43.5 GB, no key), read into a monthly cube on a
   quarter-degree grid of 548,501,203 rows; the FIRMS area API, with a free key, for NOAA-21 and the days after the
-  last yearly file; near real time rows for the live test.
+  last yearly file; near real time rows for the sealed predictions.
 - **NASA CMR**, for the times and footprints of every satellite pass.
 - **NASA GIBS**, for the day's photograph of a fire's ground, the share of a box under cloud beside each pass, and the
   Earth's picture.
@@ -77,8 +113,8 @@ flowchart LR
   rows[/"backend/firms/archive.py<br/>FIRMS rows"/]:::nasa --> seal{"backend/eval/holdout.py<br/>seal"}:::wall
   server --> run["backend/model/real_run.py"]:::module
   run --> seal
-  seal --> env["backend/env/next_look.py<br/>the game"]:::module
-  seal -->|"MODIS rows"| models["the first model and the second<br/>backend/model/occupancy.py, backend/model/challenger/"]:::model
+  seal --> env["backend/env/next_look.py<br/>the environment"]:::module
+  seal -->|"MODIS rows"| models["the occupancy filter and the learned layer<br/>backend/model/occupancy.py, backend/model/challenger/"]:::model
   models -->|"predictions"| bt["backend/eval/blind_test.py"]:::test
   seal -.->|"VIIRS rows, sealed"| bt
   look["backend/model/fresh_world_run.py"]:::test -->|"one look"| bt
@@ -147,12 +183,15 @@ and set `FIRMS_MAP_KEY` ([`docs/data.md`](docs/data.md)). The site reads the bac
 
 ## Limits
 
-- **Truth is another instrument.** The estimate is scored against what VIIRS reported, not against the fire.
-- **Cloud is not known.** FIRMS lists detections and no cloud mask, so a pass that flagged nothing may have looked
+- **Truth is another instrument.** The estimate is scored against what VIIRS detected, not against the fire.
+- **Cloud is not known.** FIRMS lists detections and no cloud mask, so a pass that detected nothing may have looked
   at cloud.
 - **The tests across the world cover 2018 to 2022**, because the country files hold no NOAA-21 rows.
+- **The model is small and experimental.** The blend was chosen on validation fires before the look at the 57 fires and
+  scored beside the filter in the same look. The filter alone is behind MODIS alone on exact overlap on both test A and
+  test B. The learned player of the agent does not beat a simple rule.
 - **Lava is listed as fire.** Where lava flows every ratio fails, and the record says so.
-- **The live scores are on near real time rows**, NASA's first detections, not the checked archive.
+- **The sealed predictions are scored on near real time detections**, NASA's first detections, not the checked archive.
 - **Imagery terms.** Esri World Imagery is published for viewing and not for export; `usgs_naip` is free to share;
   the 2016 EOxCloudless layer may be passed on for non-commercial use with its credit (CC BY-NC-SA 4.0)
   ([`docs/sources.md`](docs/sources.md)).
@@ -161,10 +200,10 @@ and set `FIRMS_MAP_KEY` ([`docs/data.md`](docs/data.md)). The site reads the bac
 
 | Document | Contents |
 | --- | --- |
-| [`docs/method.md`](docs/method.md) | The estimate, the protocol of each test, the results and the limits |
+| [`docs/method.md`](docs/method.md) | The model, the protocol of each test, the results and the limits |
 | [`docs/harmonization.md`](docs/harmonization.md) | How the record puts MODIS on the VIIRS scale, the methods measured and the rule that chose one |
 | [`docs/cube.md`](docs/cube.md) | The fire cube: its files, its build and its checks |
-| [`docs/live.md`](docs/live.md) | Predictions sealed before the pass, and how they are scored |
+| [`docs/live.md`](docs/live.md) | Predictions sealed before the pass, the seal log and how they are scored |
 | [`docs/data.md`](docs/data.md) | Where the data comes from and what the rows can and cannot say |
 | [`docs/architecture.md`](docs/architecture.md) | The backend's packages, the file formats and the site |
 | [`docs/api.md`](docs/api.md) | Every route of the backend |
