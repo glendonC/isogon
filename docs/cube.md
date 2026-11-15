@@ -194,6 +194,12 @@ array (NaN where not loaded or closed) and an 8 bit indexed PNG: index 0 not loa
 fire row (grey), 2 closed (slate), 3 to 255 the ramp. Cells the closed rule closes hold no value in their closed
 years. `GET /api/cube/years` lists them; `GET /api/cube/years/<family>_<year>.png` or `.npy` serves one.
 
+Every layer also has a lighter twin, `lite_<layer>` (720 by 360, the same palette), for the first look at the whole
+Earth: each pixel is the largest index of the 2 by 2 cells under it, so a fire shows over a closed cell and a closed
+cell carries no fire into it. A twin is about a third of its layer's bytes (a median of 42 KB against 121 KB for
+MODIS, 48 against 142 KB for Suomi NPP), so every year of a view can be in before the full layer of the year on
+show follows. `GET /api/cube/years/lite_<layer>.png` serves one; it has no `.npy`.
+
 `backend/firms/cube_figure.py write` draws the README's picture, `docs/earth-2011-2012.png`, from these layers: 2011
 and 2012 as the satellites counted them (`modis_on_snpp_2011`, `viirs_2012`) and on one scale (`harmonized_2011`,
 `harmonized_2012`, read from `<world>/harmonize/years/` with the closed rule applied), all four on the Suomi NPP

@@ -88,6 +88,36 @@ class YearlyLayers(unittest.TestCase):
             st, body, _ = cube_route("/api/cube/years/modis_on_snpp_2020.npy", {}, cube=cube)
             self.assertEqual(body, (out / "modis_2020.npy").read_bytes())
 
+    def test_every_layer_has_a_lighter_twin(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = _make_whole_year(Path(d))
+            info = Y.write(root=root, log=lambda s: None)
+            out = Y.years_dir(root)
+            twin = info["layers"]["lite_modis_2020"]
+            self.assertEqual((twin["of"], twin["grid"], twin["npy"], twin["family"]), ("modis_2020", [360, 720], None, "lite"))
+            full = np.array(Image.open(out / "modis_2020.png"))
+            small = np.array(Image.open(out / "lite_modis_2020.png"))
+            self.assertEqual(small.shape, (360, 720))
+            self.assertTrue((small == full.reshape(360, 2, 720, 2).max(axis=(1, 3))).all())
+            r, c = C.row_of(45.1), C.col_of(10.1)
+            self.assertGreaterEqual(int(small[r // 2, c // 2]), Y.INDEX_RAMP0)       # the fire shows at half the grid
+            names = {n for n in info["layers"] if not n.startswith("lite_")}
+            self.assertEqual(names, {s["of"] for n, s in info["layers"].items() if n.startswith("lite_")})
+            self.assertTrue((Y.public_dir(root) / "years" / "lite_modis_2020.png").is_file())
+            # A closed cell carries no fire index: its block shows its open cells' fire, or the slate of closed.
+            self.assertEqual(int(Y.lite(np.array([[2, 1], [0, 0]], dtype=np.uint8))[0, 0]), Y.INDEX_CLOSED)
+            self.assertEqual(int(Y.lite(np.array([[2, 200], [1, 0]], dtype=np.uint8))[0, 0]), 200)
+            from backend.server_cube import cube_route
+
+            cube = C.Cube(root)
+            st, body, _ = cube_route("/api/cube/years", {}, cube=cube)
+            spec = json.loads(body)["layers"]["lite_viirs_2020"]
+            self.assertEqual(spec["png_route"], "/api/cube/years/lite_viirs_2020.png")
+            self.assertNotIn("npy_route", spec)
+            st, body, ctype = cube_route("/api/cube/years/lite_viirs_2020.png", {}, cube=cube)
+            self.assertEqual((st, ctype, body), (200, "image/png", (out / "lite_viirs_2020.png").read_bytes()))
+            self.assertEqual(cube_route("/api/cube/years/lite_viirs_2020.npy", {}, cube=cube)[0], 404)
+
     def test_a_year_not_whole_at_the_end_is_left_out(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             _store, root = _make(Path(d))                # rows end in 2020-08

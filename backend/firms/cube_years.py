@@ -51,6 +51,12 @@ ALSO_DRAWN: dict[str, dict[str, Any]] = {
 HARMONIZED: dict[str, Any] = {"scale": "suomi_npp",
                               "what": "the harmonize lane's harmonized fire rows on the Suomi NPP scale"}
 INDEX_NOT_LOADED, INDEX_NO_ROWS, INDEX_CLOSED, INDEX_RAMP0 = 0, 1, 2, 3
+# A lighter twin of every layer, for the first look at the whole Earth: half the grid each way, about a third of the
+# bytes, so every year of a view is in quickly and the full layer follows for the year on show.
+LITE: str = "lite"
+LITE_RULE: str = ("each pixel the largest index of the 2 by 2 cells under it, so a fire shows over a closed cell, a "
+                  "closed cell over one with no row, and one with no row over one not loaded; a closed cell carries "
+                  "no fire index, so the twin shows none of it")
 PALETTE_SPECIAL: tuple[tuple[int, int, int, int], ...] = ((0, 0, 0, 0), (128, 128, 128, 70), (90, 110, 140, 200))
 
 
@@ -144,6 +150,12 @@ def _write_png(path: Path, idx: np.ndarray) -> None:
     tmp = path.with_name("." + path.name + ".tmp")
     im.save(tmp, format="PNG", optimize=True, transparency=alpha)
     tmp.replace(path)
+
+
+def lite(idx: np.ndarray) -> np.ndarray:
+    """The lighter twin of an index image: half the grid each way, each pixel the largest index under it."""
+    r, c = idx.shape
+    return idx.reshape(r // 2, 2, c // 2, 2).max(axis=(1, 3))
 
 
 def _write_npy(path: Path, arr: np.ndarray) -> None:
@@ -264,6 +276,17 @@ def write(root: Path | None = None, out: Path | None = None, public: bool = True
                             "npy": f"{name}.npy", "npy_sha256": _sha(out / f"{name}.npy"),
                             "png": f"{name}.png", "png_sha256": _sha(out / f"{name}.png"),
                             "png_bytes": (out / f"{name}.png").stat().st_size}
+    from PIL import Image
+
+    for name, spec in list(layers.items()):
+        with Image.open(out / spec["png"]) as im:
+            twin = lite(np.array(im))
+        lname = f"{LITE}_{name}"
+        _write_png(out / f"{lname}.png", twin)
+        layers[lname] = {"family": LITE, "of": name, "year": spec["year"], "scale": spec["scale"],
+                         "grid": list(twin.shape), "npy": None,
+                         "png": f"{lname}.png", "png_sha256": _sha(out / f"{lname}.png"),
+                         "png_bytes": (out / f"{lname}.png").stat().st_size}
     pal, alpha = palette()
     info = {
         "version": VERSION,
@@ -286,6 +309,9 @@ def write(root: Path | None = None, out: Path | None = None, public: bool = True
                                     "folder": "<world>/harmonize/years/ (harmonized_<year>.npy, harmonized.json)",
                                     "source": hman}},
         "scales": scales,
+        "lite": {"what": "a lighter twin of every layer, for the first look at the whole Earth",
+                 "layers": f"{LITE}_<layer name>, with `of` naming its layer", "grid": [C.N_ROWS // 2, C.N_COLS // 2],
+                 "rule": LITE_RULE, "palette": "the same palette and indices as the layers"},
         "png": {"mode": "8 bit indexed with transparency, one pixel per cell, north up",
                 "indices": {"0": "not loaded (transparent)", "1": "loaded, no fire row (grey)",
                             "2": "closed by the closed rule (slate)", "3..255": "the ramp, low to high"},

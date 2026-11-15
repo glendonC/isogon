@@ -12,6 +12,7 @@ world layers and the yearly layers.
   GET /api/cube/years                                   the yearly layers (backend/firms/cube_years.py): years,
                                                          scales, families, every layer with its files
   GET /api/cube/years/<family>_<year>.png | .npy        one yearly layer
+  GET /api/cube/years/lite_<family>_<year>.png          its lighter twin, half the grid each way
   GET /api/cube/years/countries                         each country's fire rows each year, as counted and on
                                                          one scale (backend/firms/cube_countries.py)
 
@@ -241,7 +242,8 @@ def years_payload(cube: C.Cube) -> dict[str, Any] | None:
     info = json.loads(path.read_text(encoding="utf-8"))
     for name, spec in info["layers"].items():
         spec["png_route"] = f"{PREFIX}/years/{name}.png"
-        spec["npy_route"] = f"{PREFIX}/years/{name}.npy"
+        if spec.get("npy"):
+            spec["npy_route"] = f"{PREFIX}/years/{name}.npy"
     return info
 
 
@@ -301,7 +303,7 @@ def cube_route(route: str, qs: dict[str, list[str]], cube: C.Cube | None = None)
                 return _json(HTTPStatus.OK, info)
             name = route.rsplit("/", 1)[1]
             stem, _, ext = name.rpartition(".")
-            if stem not in info["layers"] or ext not in ("png", "npy"):
+            if stem not in info["layers"] or ext not in ("png", "npy") or not info["layers"][stem].get(ext):
                 return _json(HTTPStatus.NOT_FOUND, {"error": f"no yearly layer '{name}'", "layers": sorted(info["layers"])})
             from backend.firms.cube_years import years_dir
 
