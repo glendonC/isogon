@@ -406,6 +406,8 @@ const FIRE_PATCH_LIMIT = 8;
  * twenty kilometres in about three seconds. Never under reduced motion.
  */
 const REVEAL_ARRIVE_SECONDS = 1.0;
+/** And in the film presentation, where the reveal is a shot of its own (drawing: the satellite crosses a fire in seconds). */
+const REVEAL_ARRIVE_FILM_SECONDS = 1.8;
 /** The film's moves: seconds of each, and the push's distances as shares of the close view's. */
 /** Share of the box's side over which a day's photograph blends into the land around (drawing). */
 const DAY_PICTURE_JOIN = 0.05;
@@ -1550,6 +1552,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
     // GPU Elevation + Satellite Ortho Morph state
     let morphActive = false;
+    // (whether the change of ground under way is to another place: the film's moves wait only for that)
+    let morphCrossRegion = false;
     let morphElapsed = 0.0;
     let morphDuration = SUB_ORBITAL_MORPH_DURATION_SEC;
     let morphValue = 1.0;
@@ -1810,6 +1814,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       }
       if (bundle.demGridRes >= 1024) ensureHiResGeometry();
       const crossRegion = nextBundle.regionId !== bundle.regionId;
+      morphCrossRegion = crossRegion;
 
       if (!animateMorph) {
         prevBundle = bundle;
@@ -3485,7 +3490,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           const declaredHere = (nextBundle.declared?.byFrame.get(fIdx)?.length ?? 0) > 0;
           if (declaredHere || (fireAnchorFrom === 'estimate' && fireAnchorPoints.length > 0)) {
             const sf = p.workspaceSubjectFrame;
-            const key = `${nextBundle.key}:${fIdx}:${declaredHere ? 'declared' : fireAnchorKey}:${sf ? [sf.left, sf.top, sf.right, sf.bottom].map((x) => x.toFixed(3)).join(',') : ''}:${viewportW}x${viewportH}`;
+            // (the place and the window, not the run: the revealed run of the same window does not
+            // move the camera)
+            const windowKey = `${nextBundle.regionId}:${nextBundle.observerDataset.frames[0]?.[0]?.timeUtc ?? ''}`;
+            const key = `${windowKey}:${fIdx}:${declaredHere ? 'declared' : fireAnchorKey}:${sf ? [sf.left, sf.top, sf.right, sf.bottom].map((x) => x.toFixed(3)).join(',') : ''}:${viewportW}x${viewportH}`;
             if (key !== closeFrameKey) {
               closeFrameKey = key;
               if (!cameraTouched && !pointerDown) {
@@ -3518,7 +3526,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           }
         }
         let filmWanted: StageFilmMove | null = null;
-        if (filmAsked && !filmCancelled && !morphActive && !filmHolding && !p.backdrop) {
+        // (a new run of the same place, such as the reveal's, does not stop a move: only a change of
+        // ground to another place does)
+        if (filmAsked && !filmCancelled && !(morphActive && morphCrossRegion) && !filmHolding && !p.backdrop) {
           filmWanted =
             filmAsked !== 'auto'
               ? filmAsked
@@ -3533,6 +3543,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           if (filmWanted !== 'record' && (!p.inWorkspace || !realOnShow)) filmWanted = null;
         }
         if (filmWanted !== filmMoveNow) {
+          const filmMoveBefore = filmMoveNow;
           filmMoveNow = filmWanted;
           filmStartSec = elapsedSec;
           filmProgress = 0;
@@ -3550,8 +3561,16 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
               filmEase = true;
               filmPreset = 'canyon';
             } else if (filmWanted === 'test') {
-              filmFrom = near;
-              filmTo = near;
+              // (after the push the hold keeps exactly the pose the push ended on: the reveal lands
+              // its squares over the frames just seen, with no cut)
+              const held: CameraPresetSpec = {
+                azimuth: orbitCurrent.azimuth,
+                polar: orbitCurrent.polar,
+                distance: orbitCurrent.distance,
+                target: [orbitCurrent.target.x, orbitCurrent.target.y, orbitCurrent.target.z],
+              };
+              filmFrom = filmMoveBefore === 'estimate' ? held : near;
+              filmTo = filmFrom;
               filmSeconds = 0;
               filmPreset = 'canyon';
             } else if (filmWanted === 'play') {
@@ -3919,8 +3938,15 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       {
         // The front of the detections laid on after scoring, eased out so they settle; at rest it
         // stands past the last of them
-        const t = THREE.MathUtils.clamp((elapsedSec - revealArriveStartSec) / REVEAL_ARRIVE_SECONDS, 0, 1);
-        const eased = 1 - (1 - t) * (1 - t);
+        // (in the film presentation slower and eased at both ends, so the answer is seen arriving
+        // within the shot)
+        const filmOn = Boolean(p.filmMove ?? filmAddress);
+        const t = THREE.MathUtils.clamp(
+          (elapsedSec - revealArriveStartSec) / (filmOn ? REVEAL_ARRIVE_FILM_SECONDS : REVEAL_ARRIVE_SECONDS),
+          0,
+          1,
+        );
+        const eased = filmOn ? t * t * (3 - 2 * t) : 1 - (1 - t) * (1 - t);
         uRevealArrive.z = t >= 1 ? 1e4 : THREE.MathUtils.lerp(revealArriveFrom, revealArriveTo, eased);
       }
       // A pass kept from the model: every pass of the frame is hidden, or was laid on after scoring
