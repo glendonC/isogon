@@ -695,6 +695,31 @@ def _fresh_look(doc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+NUMBER_WORDS: tuple[str, ...] = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+                                 "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+                                 "nineteen", "twenty")
+
+
+def _fires(n: int) -> str:
+    word = NUMBER_WORDS[n] if 0 <= n < len(NUMBER_WORDS) else str(n)
+    return f"{word} fire" + ("" if n == 1 else "s")
+
+
+def thin_continents(counts: dict[str, dict[str, int]], below: int = 5) -> str | None:
+    """One sentence, from the plan's counts, on the continents with too few fires in one of the two tests to say
+    anything on their own (fewer than `below`, five, in either), for the page to carry beside the tests' results;
+    None when there is none."""
+    thin = [c for c in ("Africa", "Asia", "Europe", "North America", "Oceania", "South America")
+            if min(counts["test_a"].get(c, 0), counts["test_b"].get(c, 0)) < below]
+    if not thin:
+        return None
+    parts = [f"{c} has {_fires(counts['test_a'].get(c, 0))} in test A and {_fires(counts['test_b'].get(c, 0))} in test B"
+             for c in thin]
+    body = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+    return body[0].upper() + body[1:] + ", so on " + ("its own" if len(thin) == 1 else "their own") + \
+        " the test says little about " + ("it." if len(thin) == 1 else "them.")
+
+
 def _fresh_test() -> dict[str, Any]:
     """The fresh test across the world: its protocol, and each step's record once it exists. Beside the three
     looks at the 2021 test fires, under its own names; it does not reopen them."""
@@ -707,7 +732,7 @@ def _fresh_test() -> dict[str, Any]:
     out["plan"] = None if plan is None else {
         "plan_sha256": plan["plan_sha256"], "episodes_found": plan["episodes_found"], "counts": plan["counts"],
         "countries_read": len(plan["store"]["countries_read"]), "countries_left_out": plan["store"]["countries_left_out"],
-        "places_by_role": plan["places"]["by_role"]}
+        "places_by_role": plan["places"]["by_role"], "thin": thin_continents(plan["counts"])}
     out["test_a"] = None if docs["test_a"] is None else _fresh_look(docs["test_a"])
     out["refit"] = None if docs["refit"] is None else {"decision": docs["refit"]["decision"],
                                                        "fitting": docs["refit"]["fitting"],

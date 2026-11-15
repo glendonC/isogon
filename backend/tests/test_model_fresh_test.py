@@ -167,6 +167,20 @@ class EvidenceTests(unittest.TestCase):
         if fresh["plan"] is None:
             self.assertEqual(fresh["state"], "the protocol is on record and nothing has been read for it yet")
 
+    def test_the_sentence_on_thin_continents_is_counted_from_the_plan(self) -> None:
+        from backend.model.evidence import thin_continents
+
+        conts = ("Africa", "Asia", "Europe", "North America", "Oceania", "South America")
+        counts = {"test_a": {c: 20 for c in conts}, "test_b": {c: 20 for c in conts}}
+        self.assertIsNone(thin_continents(counts))
+        counts["test_a"]["Europe"], counts["test_b"]["Europe"] = 0, 2
+        counts["test_b"]["Oceania"] = 1
+        self.assertEqual(thin_continents(counts),
+                         "Europe has no fires in test A and two fires in test B and Oceania has twenty fires in test A "
+                         "and one fire in test B, so on their own the test says little about them.")
+        for cp in (0x2014, 0x2013, 0x00B7):
+            self.assertNotIn(chr(cp), thin_continents(counts))
+
 
 LJUSDAL = (14.12, 60.95, 16.72, 62.85)        # the context box of a region the page offers, in test B places
 MAULE = (-73.49, -36.47, -70.89, -34.57)
