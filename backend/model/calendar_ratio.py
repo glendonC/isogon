@@ -17,6 +17,12 @@ from typing import Any, Callable, Iterable
 import numpy as np
 
 
+# The second baseline's own method for its pixel count, whatever method the Record serves: the ratio of Suomi NPP
+# rows to Terra and Aqua rows over the clean overlap months of the other years, read from the calendar's raw monthly
+# counts. It is the rule the Record's first method used; the label is this file's, never the calendar's.
+METHOD_ID: str = "overlap_ratio_v1"
+
+
 @dataclass(frozen=True)
 class CalendarRatio:
     region_id: str
@@ -112,6 +118,6 @@ def calendar_ratio(
         region_id=region_id,
         ratio=float(sum(a for a, _ in kept.values()) / sum(b for _, b in kept.values())),
         p10=float(np.percentile(vals, 10)), p90=float(np.percentile(vals, 90)),
-        excluded_year=own[0] if own else None, years=tuple(sorted(kept)), method_id=str(cal["harmonization_method"]["id"]),
+        excluded_year=own[0] if own else None, years=tuple(sorted(kept)), method_id=METHOD_ID,
         dropped_years=tuple(sorted(dropped)), excluded_years=own,
     )

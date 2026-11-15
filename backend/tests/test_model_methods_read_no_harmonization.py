@@ -119,6 +119,16 @@ class CountRatioTests(unittest.TestCase):
             self.assertEqual(got.as_dict(), want.as_dict(), poison)
         self.assertAlmostEqual(want.ratio, (30 + 20) / (20 + 20))
 
+    def test_the_second_baseline_names_its_own_method_never_the_one_the_record_serves(self) -> None:
+        from backend.model.calendar_ratio import METHOD_ID
+
+        for served in ("overlap_ratio_v1", "pooled_month_size_v1", "a method not yet written"):
+            cal = _calendar(None)
+            cal["harmonization_method"]["id"] = served
+            got = calendar_ratio("made_up_place", exclude_year=2017, firms_calendar=lambda _r, c=cal: c)
+            self.assertEqual(got.method_id, METHOD_ID, served)
+            self.assertEqual(got.as_dict()["method_id"], METHOD_ID, served)
+
 
 PROBE = r"""
 import json, sys
