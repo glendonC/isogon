@@ -19,6 +19,7 @@ from backend.model.grid import DEG_TO_KM_LAT
 from backend.model.platforms import PLATFORMS, scan_axis_deg
 
 CELL_KM: float = 0.375
+_EMPTY_I64: NDArray[np.int64] = np.empty(0, dtype=np.int64)
 
 
 @dataclass(frozen=True)
@@ -104,25 +105,30 @@ def footprint_cells(
     `track_km` across it, centred on (lon, lat). A cell is covered when its centre lies inside the rectangle; the
     cell holding the pixel centre is always covered. A pixel centred outside the grid covers nothing.
     """
-    r0, c0 = grid.row_col(lon, lat)
-    r0, c0 = int(r0), int(c0)
-    if r0 < 0:
-        return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64)
-    x0, y0 = grid.xy_km(lon, lat)
-    x0, y0 = float(x0), float(y0)
+    x0 = (float(lon) - grid.west) * grid.km_per_deg_lon
+    y0 = (float(lat) - grid.south) * grid.km_per_deg_lat
+    if not (math.isfinite(x0) and math.isfinite(y0)):
+        return _EMPTY_I64, _EMPTY_I64
+    c0 = math.floor(x0 / grid.cell_km)
+    r0 = grid.ny - 1 - math.floor(y0 / grid.cell_km)
+    if c0 < 0 or c0 >= grid.nx or r0 < 0 or r0 >= grid.ny:
+        return _EMPTY_I64, _EMPTY_I64
     half_diag = 0.5 * math.hypot(scan_km, track_km)
     reach = int(math.ceil(half_diag / grid.cell_km)) + 1
     r_lo, r_hi = max(0, r0 - reach), min(grid.ny - 1, r0 + reach)
     c_lo, c_hi = max(0, c0 - reach), min(grid.nx - 1, c0 + reach)
-    rr, cc = np.meshgrid(np.arange(r_lo, r_hi + 1), np.arange(c_lo, c_hi + 1), indexing="ij")
+    rr = np.arange(r_lo, r_hi + 1, dtype=np.int64)[:, None]
+    cc = np.arange(c_lo, c_hi + 1, dtype=np.int64)[None, :]
     dx = (cc + 0.5) * grid.cell_km - x0
     dy = (grid.ny - rr - 0.5) * grid.cell_km - y0
     a = math.radians(axis_deg)
-    u = dx * math.sin(a) + dy * math.cos(a)        # along scan
-    v = dx * math.cos(a) - dy * math.sin(a)        # along track
+    sin_a, cos_a = math.sin(a), math.cos(a)
+    u = dx * sin_a + dy * cos_a        # along scan
+    v = dx * cos_a - dy * sin_a        # along track
     inside = (np.abs(u) <= 0.5 * scan_km + 1e-9) & (np.abs(v) <= 0.5 * track_km + 1e-9)
-    inside |= (rr == r0) & (cc == c0)
-    return rr[inside].astype(np.int64), cc[inside].astype(np.int64)
+    inside[r0 - r_lo, c0 - c_lo] = True
+    nz_r, nz_c = np.nonzero(inside)
+    return nz_r + r_lo, nz_c + c_lo
 
 
 def paint(grid: EvalGrid, det: Detections) -> Painted:
@@ -155,14 +161,15 @@ def paint(grid: EvalGrid, det: Detections) -> Painted:
 
 def dilate(mask: NDArray[np.bool_], cells: int) -> NDArray[np.bool_]:
     """Cells within `cells` grid steps (Chebyshev distance) of a True cell."""
-    if cells <= 0:
+    if cells <= 0 or not mask.any():
         return mask.copy()
-    out = mask.copy()
+    horiz = mask.copy()
     ny, nx = mask.shape
-    for dr in range(-cells, cells + 1):
-        for dc in range(-cells, cells + 1):
-            if dr == 0 and dc == 0:
-                continue
-            src = mask[max(0, -dr) : ny - max(0, dr), max(0, -dc) : nx - max(0, dc)]
-            out[max(0, dr) : ny - max(0, -dr), max(0, dc) : nx - max(0, -dc)] |= src
+    for dc in range(1, min(cells, nx - 1) + 1):
+        horiz[:, dc:] |= mask[:, : nx - dc]
+        horiz[:, : nx - dc] |= mask[:, dc:]
+    out = horiz.copy()
+    for dr in range(1, min(cells, ny - 1) + 1):
+        out[dr:, :] |= horiz[: ny - dr, :]
+        out[: ny - dr, :] |= horiz[dr:, :]
     return out
