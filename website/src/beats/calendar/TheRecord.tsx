@@ -72,8 +72,9 @@ export interface TheRecordProps {
   onClose: (() => void) | null;
   /**
    * The guide speaks on this screen. The Record then leaves to the guide what the guide says and offers: the sentence
-   * while the record loads or fails, the sentence on how well the correction holds, and the action that closes the
-   * Record. Its labels on things, its prompts beside them and its legend stay. Escape still closes it.
+   * while the record loads or fails, the sentence on how well the correction holds, the action that closes the
+   * Record, and Enter with the prompt that shows a fire beside a month (a click on a month with a fire still shows
+   * it). Its labels on things and its legend stay. Escape still closes it, and the arrows still move.
    */
   guideSpeaks?: boolean;
 }
@@ -151,8 +152,8 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
     now.state === 'failed' ? W.notNow(W.whyNot.failed) : now.state === 'answered' && !thisMonth ? W.notNow(W.whyNot[now.month.status] ?? now.month.error ?? W.whyNot.failed) : null;
 
   // The latest of everything the keys and the published commands act on.
-  const live = useRef({ rec, shown, picked, marked, asCounted, rough, openable, onOpenMonth, onClose });
-  live.current = { rec, shown, picked, marked, asCounted, rough, openable, onOpenMonth, onClose };
+  const live = useRef({ rec, shown, picked, marked, asCounted, rough, openable, onOpenMonth, onClose, guideSpeaks });
+  live.current = { rec, shown, picked, marked, asCounted, rough, openable, onOpenMonth, onClose, guideSpeaks };
 
   const show = (ym?: string | null) => {
     const l = live.current;
@@ -251,8 +252,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
           pick(ymOf(year, month));
         }
       } else if (e.key === 'Enter') {
-        if (t?.closest('button, a')) return;
-        show(l.shown);
+        // Where the guide speaks, Enter is its first action's key and the Record lets it through
+        if (l.guideSpeaks || t?.closest('button, a')) return;
+        // The fire of the month on show, or of the marked month when that one has none, as the guide's action does
+        show(l.shown && l.openable.has(l.shown) ? l.shown : l.marked);
       } else if (e.key === 'Escape') {
         if (l.rough) setRough(false);
         else if (l.asCounted) setAsCounted(false);
@@ -458,7 +461,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               >
                 <span className="sys-title">{monthWords(fm.ym)}</span>
                 <span className="sys-label">{monthLine(fm.ym, fm.value, fm.timesUsual, fm.median)}</span>
-                {openable.has(fm.ym) && (
+                {/* The prompt beside the month. Where the guide speaks it offers the same action in its strip, and a
+                    click on the month's square still shows its fire, so the Record draws no prompt of its own. */}
+                {openable.has(fm.ym) && !guideSpeaks && (
                   <button type="button" className="rec__act rec__act--next" onClick={() => show(fm.ym)}>
                     {!hover && <span className="rec__key">Enter</span>}
                     {W.show}
