@@ -8,7 +8,10 @@
   height: 100%;
   overflow: hidden;
   background: var(--sys-night);
+  container-type: size;
 }
+
+
 
 .world-canvas {
   position: absolute;
@@ -707,4 +710,31 @@
 .world-band__fine {
   font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
   color: var(--sys-ink-3);
+}
+
+/* A small Earth (a slot in another screen): a narrower legend with the short form of each sentence; the long form
+   and the drawing note come back when the legend is pointed at or focused. Last in the file, so it wins. */
+.world-legend__short {
+  display: none;
+}
+
+@container (max-width: 900px) {
+  .world-legend {
+    width: min(232px, calc(100% - 32px));
+    padding: var(--sys-s2) var(--sys-s3);
+  }
+
+  .world-legend .iso-choice__opt {
+    white-space: normal;
+    text-align: left;
+  }
+
+  .world-legend:not(:hover):not(:focus-within) .world-legend__long,
+  .world-legend:not(:hover):not(:focus-within) .world-legend__more {
+    display: none;
+  }
+
+  .world-legend:not(:hover):not(:focus-within) .world-legend__short {
+    display: inline;
+  }
 }

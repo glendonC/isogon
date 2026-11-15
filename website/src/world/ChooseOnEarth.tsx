@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FeaturedFire, Place } from '../app/places';
 import { factorCanvas, factorCellAt, FACTOR_HIGH, FACTOR_LOW, FACTOR_RAMP, FACTOR_STEPS, factorT, useFactor } from './factor';
 import { placeLabels } from './labels';
@@ -40,6 +40,8 @@ export interface ChooseOnEarthProps {
   startBox?: Box | null;
   /** Open with this place's card open. */
   startOpen?: string | null;
+  /** The box first in view; the land a visitor picks on when left out. */
+  focus?: Box;
 }
 
 type Mode = 'fire' | 'factor';
@@ -63,9 +65,34 @@ function ramp(ramp: Array<[number, [number, number, number]]>): string {
   return `linear-gradient(to right, ${ramp.map(([t, [r, g, b]]) => `rgb(${r | 0} ${g | 0} ${b | 0}) ${(t * 100).toFixed(0)}%`).join(', ')})`;
 }
 
-export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, places, currentFire = null, limits = null, onFire, onPlace, onBox, startDrawing = false, startOnFactor = false, startBox = null, startOpen = null }: ChooseOnEarthProps) {
+export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, places, currentFire = null, limits = null, onFire, onPlace, onBox, startDrawing = false, startOnFactor = false, startBox = null, startOpen = null, focus }: ChooseOnEarthProps) {
   const world = useWorldLayer(layers, layer);
   const [mode, setMode] = useState<Mode>(startOnFactor && factor ? 'factor' : 'fire');
+  // The legend and the tools stand over the map; labels keep clear of them.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const legendRef = useRef<HTMLDivElement | null>(null);
+  const toolsRef = useRef<HTMLDivElement | null>(null);
+  const [overlays, setOverlays] = useState<Array<{ left: number; top: number; width: number; height: number }>>([]);
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const measure = () => {
+      const r = root.getBoundingClientRect();
+      setOverlays(
+        [legendRef.current, toolsRef.current].flatMap((el) => {
+          if (!el) return [];
+          const b = el.getBoundingClientRect();
+          return [{ left: b.left - r.left, top: b.top - r.top, width: b.width, height: b.height }];
+        }),
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(root);
+    if (legendRef.current) ro.observe(legendRef.current);
+    if (toolsRef.current) ro.observe(toolsRef.current);
+    return () => ro.disconnect();
+  }, []);
   const fac = useFactor(factor, mode === 'factor');
   const [drawing, setDrawing] = useState(startDrawing);
   const [box, setBox] = useState<Box | null>(startBox);
@@ -160,7 +187,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
     });
     const onScreen = items.filter((m) => m.x > -20 && m.y > -20 && m.x < p.w + 20 && m.y < p.h + 20);
     const at = open ? cardAt(p) : null;
-    const placed = placeLabels(onScreen, p.w, p.h, { avoid: at ? [at.rect] : [] });
+    const placed = placeLabels(onScreen, p.w, p.h, { avoid: at ? [at.rect, ...overlays] : overlays });
     return (
       <>
         <svg className="world-leaders" width={p.w} height={p.h} aria-hidden="true">
@@ -297,7 +324,10 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
     const ticks = [1, 10, 100, 1000, 10000, 100000].filter((v) => v <= max);
     return (
       <>
-        <div className="world-legend__line">{W.fireLegend(since)}</div>
+        <div className="world-legend__line">
+          <span className="world-legend__long">{W.fireLegend(since)}</span>
+          <span className="world-legend__short">{W.fireLegendShort(since)}</span>
+        </div>
         <div className="world-ramp" style={{ background: ramp(FIRE_RAMP) }} />
         <div className="world-ticks">
           {ticks.map((v) => (
@@ -309,7 +339,8 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
         <div className="world-legend__fine">
           <span className="world-swatch world-swatch--hatch" aria-hidden="true" />
           <span>
-            {W.hatch(complete, since, idx.countries_loaded)} {W.halo}
+            <span className="world-legend__long">{W.hatch(complete, since, idx.countries_loaded)}</span>
+            <span className="world-legend__short">{W.hatchShort(complete)}</span> <span className="world-legend__more">{W.halo}</span>
           </span>
         </div>
       </>
@@ -317,10 +348,11 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
   };
 
   return (
-    <div className="world-earth">
+    <div className="world-earth" ref={rootRef}>
       <WorldCanvas
         label={W.label}
         layers={grid}
+        focus={focus}
         hatchLand
         drawing={drawing}
         onBox={(b) => {
@@ -345,7 +377,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
           </>
         )}
       </WorldCanvas>
-      <div className="world-earth__tools" data-world-ui>
+      <div className="world-earth__tools" data-world-ui ref={toolsRef}>
         {drawing ? (
           <>
             <span className="world-hint">{W.drawing}</span>
@@ -361,7 +393,7 @@ export function ChooseOnEarth({ layers, layer = 'rows_modis', factor = null, pla
           </button>
         )}
       </div>
-      <div className="world-legend" data-world-ui>
+      <div className="world-legend" data-world-ui ref={legendRef} tabIndex={0}>
         {factor && (
           <div className="world-legend__choice iso-choice" role="radiogroup">
             <button type="button" role="radio" aria-checked={mode === 'fire'} className="iso-choice__opt" data-active={mode === 'fire'} onClick={() => setMode('fire')}>

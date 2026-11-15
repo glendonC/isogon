@@ -55,6 +55,7 @@ function Earth() {
       lines={[said ?? `Brighter means more fire detected since 2000. ${featured.length} places have a fire you can follow pass by pass; or draw an area anywhere to read its fire record.`]}
       actions={['Show the fire of August 2012', 'Draw an area', 'Back']}
     >
+      <div style={Q.get('w') ? { position: 'absolute', left: 40, top: 160, width: Number(Q.get('w')), height: Number(Q.get('h') ?? 600) } : { position: 'absolute', inset: 0 }}>
       <ChooseOnEarth
         layers={Q.get('layers') ?? `${SAMPLE}/cube-layers/layers.json`}
         factor={Q.get('factor') ?? `${SAMPLE}/world-factor.json`}
@@ -65,10 +66,12 @@ function Earth() {
         startOpen={Q.get('open')}
         startOnFactor={Q.get('onfactor') === '1'}
         startDrawing={Q.get('draw') === '1'}
+        focus={boxParam(Q.get('focus')) ?? undefined}
         onFire={(p, f) => setSaid(`Chosen: ${f.label}, ${p.name}.`)}
         onPlace={(p) => setSaid(`Chosen: the fire record of ${p.name}.`)}
         onBox={(b) => setSaid(`Chosen: the area ${b.map((v) => v.toFixed(2)).join(', ')}.`)}
       />
+      </div>
     </Frame>
   );
 }

@@ -38,6 +38,8 @@ export const EARTH_WORDS = {
           typeof loaded === 'number' ? ` The files of ${count(loaded)} countries are loaded.` : Array.isArray(loaded) && loaded.length ? ` Loaded: ${listAnd(loaded)}.` : ''
         }`,
   halo: 'The soft glow round the squares is drawing only.',
+  fireLegendShort: (since: string | null) => `Coarse detections per 28 km square${since ? ` since ${since}` : ''}.`,
+  hatchShort: (complete: boolean) => (complete ? 'Hatched: no detection there.' : 'Hatched: nothing loaded there yet, not no fire.'),
   factorLegend: (years: string | null, step: number) =>
     `Detections of the sharp satellite (VIIRS) for each one of the coarse satellite (MODIS)${years ? `, ${years}` : ''}, in squares of ${step} degrees.`,
   factorTick: (f: number, low: number, high: number) => (f <= low ? `${f}× or less` : f >= high ? `${f}× or more` : `${f}×`),
