@@ -293,7 +293,14 @@ rows, are transparent. Their scales and digests are in the `maps.json` written b
   Big Island, whose yearly ratio of Suomi NPP to MODIS rows runs from 5 to more than 4,000 across the eruptions of
   2018 and 2022, Piton de la Fournaise on Reunion and Fogo in Cape Verde. VIIRS sees hot lava far more often than
   MODIS, so no ratio holds there, and no correction does better there than any method. The Record of such a place
-  reads lava as fire.
+  reads lava as fire, and its call flags it from the place's own rows: where the harmonized value misses Suomi
+  NPP's count by more than ten times in two held-out years or more (years of 50 rows or more), the answer's
+  `ratio_stability` says "not stable" and gives a sentence for the page. Over the world's 2 degree places it flags
+  45 of 3,859 tested: 17 are lava or lean on lava next to them (the Galapagos, Iceland, Hawaii, Kamchatka, Erta
+  Ale, Fogo, Reunion, La Palma, Tonga, Karangetang in the Sangihe islands), 24 are gas and oil flares or industrial heat
+  (Libya, Algeria, Yamal, the Caspian, the Cooper Basin and others), 4 are not known (2 in Quebec are ordinary
+  fire). None of the Record's 14 regions is flagged. It reads no list of volcanoes; Etna and Nyiragongo are not
+  flagged, because their held-out values stay within ten times.
 - The factors and interval tables are fitted on every place's Suomi NPP counts of every year. They must not be used
   to test a model that predicts Suomi NPP.
 - The fit reads the monthly Suomi NPP counts of every loaded place, the places of the estimate's fresh test
