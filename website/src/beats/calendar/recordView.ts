@@ -28,11 +28,18 @@ export interface RecordMonthView {
 }
 
 export interface RecordView {
-  state: 'closed' | 'loading' | 'ready' | 'failed' | 'not recorded';
+  /** `not loaded`: a drawn area none of whose squares has a detection, so it has no record (not a failure). */
+  state: 'closed' | 'loading' | 'ready' | 'failed' | 'not recorded' | 'not loaded';
   /** Why, when the record did not load. */
   failure: string | null;
   /** "Feather River & Plumas, CA", or a box's corners in words. */
   place: string;
+  /**
+   * A drawn area as the fire cube reads it: the box on every whole square it touches, in words (its rates are over
+   * that box), how many squares and how many have any detection in the files, and whether every country is loaded.
+   * Null for a region of the registry.
+   */
+  grid: { box: string; cells: number; loaded: number; complete: boolean } | null;
   firstYear: number | null;
   lastYear: number | null;
   /** The unit of every rate, in plain words. */
@@ -87,6 +94,7 @@ export const RECORD_CLOSED: RecordView = {
   state: 'closed',
   failure: null,
   place: '',
+  grid: null,
   firstYear: null,
   lastYear: null,
   unit: null,

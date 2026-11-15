@@ -1,30 +1,57 @@
-import { getJson, type Query } from '../../lib/api.ts';
+import { getJson, HttpError, type Query } from '../../lib/api.ts';
 import type { Box } from '../../app/places';
 
 /**
- * The Record's data: the fire record of a place (`GET /api/calendar?source=firms&region_id=`) or of any box
- * (`&box=w,s,e,n`), and this month so far against its median (`GET /api/calendar/current`). Every figure the screen
- * shows comes from these answers; nothing is computed here but sums and positions. This month so far is asked for only
- * when the visitor asks.
+ * The Record's data: the fire record of a place (`GET /api/calendar?source=firms&region_id=`) or of any box drawn on
+ * the Earth (`GET /api/cube/record?box=w,s,e,n`, the fire cube's answer in the calendar's shape), and this month so far
+ * against its median (`GET /api/calendar/current`). Every figure the screen shows comes from these answers; nothing is
+ * computed here but sums and positions. This month so far is asked for only when the visitor asks.
  */
 
 /**
- * A place whose record is read: a region of the registry, or any box. A box may carry the route its record is read
- * from, as the registry names it (`box_calendar.route`, with `<west>,<south>,<east>,<north>` in it): the route of the
- * calendar today, the cube's route of any box on Earth once the registry names that one.
+ * A place whose record is read: a region of the registry, or any box. A box may carry the route the registry names for
+ * a box (`box_calendar.route`, with `<west>,<south>,<east>,<north>` in it); it is used where it is the cube's.
  */
 export type RecordPlace = { kind: 'region'; regionId: string; name: string } | { kind: 'box'; box: Box; name: string; route?: string | null };
 
-/** The route of a box's record: the registry's template filled with the box, or the calendar's route for a box. */
+/**
+ * The route of a box's record: the fire cube's, which answers any box on Earth on whole squares of its grid and says
+ * how many of them hold rows. A template the registry names is filled with the box where it is a route of the cube.
+ */
 export function boxRoute(box: Box, template?: string | null): { path: string; query: Query } {
   const corners = box.map((n) => String(Math.round(n * 10000) / 10000)).join(',');
-  if (template && template.includes('<west>')) {
+  if (template && template.startsWith('/api/cube/') && template.includes('<west>')) {
     const [path, q] = template.replace('<west>,<south>,<east>,<north>', corners).split('?');
     const query: Query = {};
     if (q) new URLSearchParams(q).forEach((v, k) => (query[k] = v));
     return { path, query };
   }
-  return { path: '/api/calendar', query: { source: 'firms', box: corners } };
+  return { path: '/api/cube/record', query: { box: corners } };
+}
+
+/**
+ * A box as the cube reads it: the box drawn, the box on whole squares of the grid (every square it touches), how many
+ * squares that is and how many hold a row of a loaded country's files. A square with none is not loaded; in a whole
+ * world (`complete`) that means no detection there in the files.
+ */
+export interface BoxGrid {
+  asked: Box;
+  box: Box;
+  /** The side of a square, in degrees. */
+  step: number;
+  cells: number;
+  loaded: number;
+  complete: boolean;
+}
+
+/** A box in which no square holds a row: not a record of zeros, and said so. */
+export class NotLoaded extends Error {
+  readonly grid: BoxGrid;
+  constructor(grid: BoxGrid) {
+    super('not loaded');
+    this.name = 'NotLoaded';
+    this.grid = grid;
+  }
 }
 
 export interface RecordMonth {
@@ -89,11 +116,26 @@ export interface FireRecord {
   runRule: string | null;
   /** The current month's route for this place, as the record names it. */
   currentRoute: string | null;
+  /** A box read on the cube's grid; null for a region, or where the answer carries no grid. */
+  grid: BoxGrid | null;
 }
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const box4 = (v: unknown): Box | null => (Array.isArray(v) && v.length === 4 && v.every((x) => num(x) !== null) ? (v as Box) : null);
+
+/**
+ * The grid of a box from the cube's answer: its `cube` block, or the body of its answer for a box with no loaded square
+ * (`state: "not_loaded"`, which gives the squares but no count of loaded ones, since that is none).
+ */
+export function gridOf(c: Obj | null, asked: Box | null): BoxGrid | null {
+  const box = box4(c?.grid_box);
+  const cells = num(c?.cells);
+  const loaded = num(c?.cells_loaded) ?? (c?.state === 'not_loaded' ? 0 : null);
+  if (!c || !box || cells === null || loaded === null) return null;
+  return { asked: box4(c.box_asked) ?? asked ?? box, box, step: num(c.grid_step_deg) ?? 0.25, cells, loaded, complete: c.world_complete === true };
+}
 const PLATFORMS = ['Terra', 'Aqua', 'Suomi NPP', 'NOAA-20', 'NOAA-21'];
 
 function unitWords(u: unknown): string {
@@ -176,13 +218,21 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
       : [],
     runRule: typeof starts?.rule === 'string' ? starts.rule : null,
     currentRoute: typeof cur?.route === 'string' ? cur.route : null,
+    grid: place.kind === 'box' ? gridOf(obj(b.cube), place.box) : null,
   };
 }
 
 export async function fetchRecord(place: RecordPlace, signal?: AbortSignal): Promise<FireRecord | null> {
   if (place.kind === 'region') return parseRecord(await getJson<unknown>('/api/calendar', { source: 'firms', region_id: place.regionId }, { signal }), place);
   const { path, query } = boxRoute(place.box, place.route);
-  return parseRecord(await getJson<unknown>(path, query, { signal }), place);
+  try {
+    return parseRecord(await getJson<unknown>(path, query, { signal }), place);
+  } catch (e) {
+    // The cube answers a box with no loaded square with 404 and its squares: that box has no record, not a failure
+    const body = e instanceof HttpError && e.status === 404 ? obj(e.body) : null;
+    const grid = body?.state === 'not_loaded' ? gridOf(body, place.box) : null;
+    throw grid ? new NotLoaded(grid) : e;
+  }
 }
 
 export interface CurrentMonth {

@@ -261,6 +261,19 @@
   flex-basis: 100%;
 }
 
+/* A drawn area's box on the cube's squares, first in the foot, in the legend's ink */
+.rec__gridline {
+  margin: 0;
+  color: var(--sys-ink-2);
+}
+
+/* The corners of an area with no record, under the sentence that says so */
+.rec__status-box {
+  display: block;
+  margin-top: var(--sys-s2);
+  color: var(--sys-ink-2);
+}
+
 .rec__legend {
   display: inline-flex;
   align-items: center;

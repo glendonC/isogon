@@ -359,7 +359,10 @@ function RecordHarness() {
         ]
       : view.state === 'loading'
         ? [`Loading the fire record of ${view.place}.`]
-        : ['The record did not load.'];
+        : view.state === 'not loaded'
+          ? // The guide's own state for a drawn area, whose first line names a first year this area does not have
+            ["A fire can be shown pass by pass and tested only where the satellites' passes are stored."]
+          : ['The record did not load.'];
   return (
     <StandIn
       objective={box ? 'Read the fire record of the area you drew' : `Read the fire record of ${view.place || place?.name || ''}`}

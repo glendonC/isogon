@@ -7,14 +7,17 @@ import {
   logClass,
   monthWords,
   MONTH_NAMES,
+  NotLoaded,
   rampBounds,
+  type BoxGrid,
   type CurrentMonth,
   type FireRecord,
   type RecordMonth,
   type RecordPlace,
 } from './record';
+import { boxWords } from './placeWords';
 import { publishRecordView, RECORD_CLOSED, type RecordMonthView } from './recordView';
-import { monthLine, RECORD_WORDS as W } from './recordWords';
+import { gridLine, monthLine, notLoadedLine, RECORD_WORDS as W } from './recordWords';
 import '../../styles/calendar-screen.css';
 
 /**
@@ -29,6 +32,7 @@ const NAMES_W = 40;
 const HEAD_H = 84;
 const AXIS_H = 24;
 const SPANS_H = 56;
+/** The least room kept for the foot; it keeps the room it is measured to take, which wraps on a narrow grid. */
 const FOOT_H = 66;
 const LABEL_W = 320;
 
@@ -89,8 +93,10 @@ export interface TheRecordProps {
  */
 export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, guideSpeaks = false }: TheRecordProps) {
   const [rec, setRec] = useState<FireRecord | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'failed' | 'not recorded'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'failed' | 'not recorded' | 'not loaded'>('loading');
   const [failure, setFailure] = useState<string | null>(null);
+  // A drawn area none of whose squares has a detection: its squares, which the Record says instead of a grid
+  const [empty, setEmpty] = useState<BoxGrid | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [asCounted, setAsCounted] = useState(false);
@@ -108,6 +114,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
     const controller = new AbortController();
     setState('loading');
     setRec(null);
+    setEmpty(null);
     setPicked(null);
     setHover(null);
     setAsCounted(false);
@@ -124,6 +131,12 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
+        if (e instanceof NotLoaded) {
+          setState('not loaded');
+          setEmpty(e.grid);
+          setFailure(null);
+          return;
+        }
         setState(e instanceof NotRecorded ? 'not recorded' : 'failed');
         setFailure(e instanceof Error ? e.message : String(e));
       });
@@ -195,10 +208,12 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
         csvPath: `/api/calendar/rows.csv?${where}&start=${m.ym}-01&end=${end}`,
       };
     };
+    const grid = rec?.grid ?? empty;
     publishRecordView({
       state,
       failure,
       place: rec?.label ?? place.name,
+      grid: grid ? { box: boxWords(grid.box), cells: grid.cells, loaded: grid.loaded, complete: grid.complete } : null,
       firstYear: rec?.firstYear ?? null,
       lastYear: rec?.lastYear ?? null,
       unit: rec?.unit ?? null,
@@ -229,7 +244,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
       browse: () => setBrowsing(true),
       showAsCounted: setAsCounted,
     });
-  }, [state, failure, rec, marked, picked, asCounted, openable, place.name, now]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, failure, rec, empty, marked, picked, asCounted, openable, place.name, now]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => publishRecordView(RECORD_CLOSED), []);
 
   // The Record's keys, while the focus is on it or on nothing: arrows move over the months, Enter shows the fire of a
@@ -269,11 +284,29 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
     return () => window.removeEventListener('keydown', onKey, true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The foot as it stands once drawn: the grid gives up height to it. A smaller grid only makes the foot narrower and
+  // taller, never shorter, so the two settle in a step or two.
+  const footRef = useRef<HTMLDivElement | null>(null);
+  const [footSeen, setFootSeen] = useState(FOOT_H);
+  useLayoutEffect(() => {
+    const el = footRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      // What the foot always holds; a sentence that comes and goes with an action (the years as counted, why this
+      // month cannot be counted) runs below it rather than moving the grid
+      const passing = [...el.querySelectorAll<HTMLElement>(':scope > .rec__holds')].reduce((s, p) => s + p.offsetHeight + 8, 0);
+      const h = Math.ceil(el.offsetHeight - passing) + 12;
+      setFootSeen((was) => (Math.abs(was - h) > 1 ? h : was));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [rec, rough]);
   const bounds = useMemo(() => (rec ? rampBounds(rec) : { lo: 1, hi: 1 }), [rec]);
   const years = rec ? Array.from({ length: rec.lastYear - rec.firstYear + 1 }, (_, i) => rec.firstYear + i) : [];
+  const footH = Math.max(FOOT_H, footSeen);
   const cell = years.length
     ? // One column more than the record's years is kept free on the right: this month's square stands there
-      Math.max(8, Math.floor(Math.min((size.w - NAMES_W) / (years.length + 1), (size.h - HEAD_H - AXIS_H - SPANS_H - FOOT_H) / 12)))
+      Math.max(8, Math.floor(Math.min((size.w - NAMES_W) / (years.length + 1), (size.h - HEAD_H - AXIS_H - SPANS_H - footH) / 12)))
     : 0;
   const gap = cell >= 24 ? 3 : 1;
   const gridW = cell * years.length;
@@ -304,6 +337,8 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   // The way to this month so far stands at the right end of the years, above the older satellites' line, where no
   // year label is written
   const afterYears = rec ? xOf(rec.lastYear + 1) + cell : 0;
+  // On a grid too narrow for it to stand beside the older satellites' label, the way goes to the foot
+  const afterFits = afterYears <= size.w + 24 && gridW >= 360;
   // The label hangs on the side of its leader with room for it, and is never wider than that room.
   const labelRight = fx + 12 + LABEL_W <= size.w || size.w - fx >= fx;
   const labelRoom = Math.max(120, Math.min(LABEL_W, (labelRight ? size.w - fx : fx) - 12));
@@ -314,6 +349,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const sharp = spanLine(rec?.spans.sharp ?? null);
   const spansY = y0 + gridH + AXIS_H;
   const footY = spansY + SPANS_H;
+  // Under a narrow grid the foot takes the plot's width from the month names, so its words wrap less
+  const narrowFoot = gridW < 480;
+  const footX = narrowFoot ? Math.max(0, x0 - NAMES_W) : x0;
+  const footW = narrowFoot ? Math.max(gridW, size.w - footX) : gridW;
   /** Room for the prompt before the sharp satellite's line begins; on a narrow screen it goes to the foot. */
   const atJunction = sharpX !== null && sharpX - x0 >= 372;
   const correctionPrompt = (
@@ -325,18 +364,26 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   return (
     <section className="rec" aria-label={W.name} ref={rootRef} data-as-counted={asCounted ? 'true' : 'false'}>
       <div className="rec__plot" ref={plotRef}>
-        {state !== 'ready' && !guideSpeaks && (
+        {state !== 'ready' && state !== 'not loaded' && !guideSpeaks && (
           <p className="rec__status sys-body" role="status">
             {state === 'loading' && W.loading(place.name)}
             {state === 'not recorded' && NOT_RECORDED_LINE}
             {state === 'failed' && `${W.failed(place.name)} ${failure ?? ''}`}
           </p>
         )}
+        {/* An area with no detection in any of its squares has no record: the Record says so in place of a grid,
+            where the guide speaks too, since it is a fact of the area and not the guide's step */}
+        {state === 'not loaded' && empty && (
+          <p className="rec__status sys-body" role="status">
+            {notLoadedLine(empty.cells, empty.step, empty.complete)}
+            <span className="rec__status-box sys-label">{boxWords(empty.box)}</span>
+          </p>
+        )}
 
         {rec && cell > 0 && (
           <>
             {/* A soft dark ground under the grid and its labels, with no edge: the land shows around it. */}
-            <div className="rec__ground" style={{ left: x0 - NAMES_W, top: y0, width: gridW + NAMES_W, height: footY + 24 - y0 }} />
+            <div className="rec__ground" style={{ left: Math.min(x0 - NAMES_W, footX), top: y0, width: Math.max(gridW + NAMES_W, footW), height: footY + footH - 12 - y0 }} />
             <svg
               className="rec__grid"
               width={size.w}
@@ -500,7 +547,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
 
             {/* The way to this month so far stands after the last year: the month is the record's next square. Where
                 the guide speaks it offers the way, and the Record says only that the month is being counted. */}
-            {rec.currentRoute && !thisMonth && afterYears <= size.w + 24 && (now.state === 'loading' || !guideSpeaks) && (
+            {rec.currentRoute && !thisMonth && afterFits && (now.state === 'loading' || !guideSpeaks) && (
               <div className="rec__after" style={{ right: size.w - afterYears, top: spansY + 2 }}>
                 {now.state === 'loading' ? (
                   <span className="sys-fine">{W.counting}</span>
@@ -521,7 +568,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
 
             {rough && thisMonth ? (
               // How rough this month's figure is, as the route says it, where the satellites' lines and the legend stand
-              <div className="rec__foot rec__foot--rough" style={{ top: spansY + 10, left: x0, width: gridW }}>
+              <div className="rec__foot rec__foot--rough" style={{ top: spansY + 10, left: footX, width: footW }}>
                 <ul className="sys-fine rec__caveats rec__wide">
                   {thisMonth.caveats.map((c) => (
                     <li key={c}>{c}</li>
@@ -532,7 +579,13 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                 </button>
               </div>
             ) : (
-            <div className="rec__foot" style={{ top: footY, left: x0, width: gridW }}>
+            <div className="rec__foot" ref={footRef} style={{ top: footY, left: footX, width: footW }}>
+              {/* A drawn area: the box its rates are over, on whole squares of the cube, and how many hold detections */}
+              {rec.grid && (
+                <p className="sys-fine rec__wide rec__gridline">
+                  {gridLine(boxWords(rec.grid.box), rec.grid.step, rec.grid.cells, rec.grid.loaded, rec.grid.complete)}
+                </p>
+              )}
               <span className="rec__legend sys-fine">
                 {W.noFireLegend}
                 <i className="rec__swatch rec__swatch--none" />
@@ -559,11 +612,14 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                 </button>
               )}
               {sharpX !== null && !atJunction && !guideSpeaks && <div className="rec__wide">{correctionPrompt}</div>}
-              {rec.currentRoute && !thisMonth && afterYears > size.w + 24 && now.state !== 'loading' && !guideSpeaks && (
-                <button type="button" className="rec__act rec__wide" onClick={askNow}>
-                  {W.thisMonth}
-                </button>
-              )}
+              {rec.currentRoute && !thisMonth && !afterFits && (now.state === 'loading' || !guideSpeaks) &&
+                (now.state === 'loading' ? (
+                  <span className="sys-fine rec__wide">{W.counting}</span>
+                ) : (
+                  <button type="button" className="rec__act rec__wide" onClick={askNow}>
+                    {W.thisMonth}
+                  </button>
+                ))}
               {notNow && nowOn && <p className="sys-label rec__wide rec__holds">{notNow}</p>}
               {asCounted && rec.spans.sharp && (
                 <p className="sys-label rec__holds rec__wide">

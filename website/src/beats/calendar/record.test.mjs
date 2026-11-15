@@ -2,9 +2,9 @@
 // ratio, the years as counted from the rates each satellite has, and no figure of the correction that was typed.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { boxRoute, logClass, parseRecord, rampBounds } from './record.ts';
+import { boxRoute, gridOf, logClass, parseRecord, rampBounds } from './record.ts';
 import { publishRecordView, readRecordView, RECORD_CLOSED } from './recordView.ts';
-import { monthLine, percent, rate, RECORD_WORDS, times } from './recordWords.ts';
+import { gridLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times } from './recordWords.ts';
 
 const month = (ym, harmonized, modis, viirs, extra = {}) => ({
   year_month: ym,
@@ -145,16 +145,47 @@ test('the view the guide reads is closed until The Record says otherwise', () =>
   assert.equal(readRecordView().marked, null);
 });
 
-test('a box is read from the route the registry names, with its corners filled in', () => {
+test('a drawn box is read from the fire cube, with a template of the cube the registry names filled in', () => {
   const box = [-121.55, 39.31, -120.55, 40.31];
-  assert.deepEqual(boxRoute(box, '/api/calendar?source=firms&box=<west>,<south>,<east>,<north>'), {
-    path: '/api/calendar',
-    query: { source: 'firms', box: '-121.55,39.31,-120.55,40.31' },
-  });
-  assert.deepEqual(boxRoute(box, '/api/cube/record?box=<west>,<south>,<east>,<north>'), {
+  const cube = { path: '/api/cube/record', query: { box: '-121.55,39.31,-120.55,40.31' } };
+  assert.deepEqual(boxRoute(box, null), cube);
+  // The calendar's route for a box counts a dozen countries; the cube answers any box on Earth
+  assert.deepEqual(boxRoute(box, '/api/calendar?source=firms&box=<west>,<south>,<east>,<north>'), cube);
+  assert.deepEqual(boxRoute(box, '/api/cube/record?snap=inner&box=<west>,<south>,<east>,<north>'), {
     path: '/api/cube/record',
-    query: { box: '-121.55,39.31,-120.55,40.31' },
+    query: { snap: 'inner', box: '-121.55,39.31,-120.55,40.31' },
   });
-  // With no route named, the calendar's route for a box
-  assert.deepEqual(boxRoute(box, null), { path: '/api/calendar', query: { source: 'firms', box: '-121.55,39.31,-120.55,40.31' } });
+});
+
+const cubeBlock = { grid_step_deg: 0.25, box_asked: [-9.6, 38.3, -8.1, 39.1], grid_box: [-9.75, 38.25, -8, 39.25], cells: 28, cells_loaded: 23, world_complete: true };
+
+test("a box's grid is the cube's own: the box on whole squares, how many and how many hold rows", () => {
+  const place = { kind: 'box', box: [-9.6, 38.3, -8.1, 39.1], name: 'a box' };
+  const boxRec = parseRecord({ ...body, cube: cubeBlock }, place);
+  assert.deepEqual(boxRec.grid, { asked: [-9.6, 38.3, -8.1, 39.1], box: [-9.75, 38.25, -8, 39.25], step: 0.25, cells: 28, loaded: 23, complete: true });
+  // A region has no grid, and an answer with no cube block gives none
+  assert.equal(rec.grid, null);
+  assert.equal(parseRecord(body, place).grid, null);
+  // The cube's answer for a box with no loaded square gives its squares, none of them loaded
+  assert.deepEqual(gridOf({ state: 'not_loaded', grid_box: [-30, -30, -29, -29], cells: 16, world_complete: true }, [-30, -30, -29, -29]), {
+    asked: [-30, -30, -29, -29],
+    box: [-30, -30, -29, -29],
+    step: 0.25,
+    cells: 16,
+    loaded: 0,
+    complete: true,
+  });
+  assert.equal(gridOf({ grid_box: [-30, -30, -29, -29], cells: 16 }, null), null);
+});
+
+test('a drawn area says the box it is read on, the share of its squares with detections and the ones without', () => {
+  const where = '38.25 N to 39.25 N, 9.75 W to 8.00 W';
+  assert.equal(
+    gridLine(where, 0.25, 28, 23, true),
+    `Read on whole squares of a quarter degree (about 28 km): ${where}. 23 of its 28 squares (82 percent) have detections; the other 5 have none and count as no fire.`,
+  );
+  assert.match(gridLine(where, 0.25, 9, 9, true), /All 9 squares have detections\.$/);
+  assert.match(gridLine(where, 0.25, 6400, 6399, false), /6,399 of its 6,400 squares \(over 99 percent\).*the other 1 has none in the countries loaded so far/);
+  assert.equal(notLoadedLine(16, 0.25, true), "No fire record here: none of its 16 squares of a quarter degree (about 28 km) has a detection in NASA's files.");
+  assert.match(notLoadedLine(1, 0.25, false), /^No fire record here yet: its one square .* has no detection in the countries loaded so far\.$/);
 });

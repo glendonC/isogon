@@ -20,6 +20,31 @@ export const rate = (v: number): string => (v === 0 ? '0' : v >= 10 ? v.toFixed(
 /** The unit of every rate on the Record, in words. */
 export const RATE_UNIT = 'detections per 1,000 square kilometres a day';
 
+const count = (n: number) => n.toLocaleString('en-US');
+/** The side of the cube's square: "a quarter degree, about 28 km". */
+const squareWords = (step: number) => (step === 0.25 ? 'a quarter degree (about 28 km)' : step === 0.5 ? 'half a degree' : step === 1 ? 'a degree' : `${step} degree`);
+
+/**
+ * A drawn area as the fire cube reads it: on every whole square of its grid the area touches, which is the box its
+ * rates are over, and how many of those squares have any detection in NASA's files. A square with none counts in the
+ * area as no fire; where not every country is loaded, it may be in a country not loaded yet.
+ */
+export function gridLine(box: string, step: number, cells: number, loaded: number, complete: boolean): string {
+  const read = `Read on whole squares of ${squareWords(step)}: ${box}.`;
+  if (loaded >= cells) return `${read} ${cells === 1 ? 'Its square has' : `All ${count(cells)} squares have`} detections.`;
+  const share = Math.round((loaded / cells) * 100);
+  const shareWords = share >= 100 ? 'over 99' : share < 1 && loaded > 0 ? 'under 1' : String(share);
+  const none = cells - loaded;
+  const where = complete ? '' : ' in the countries loaded so far';
+  return `${read} ${count(loaded)} of its ${count(cells)} squares (${shareWords} percent) have detections; the other ${count(none)} ${none === 1 ? 'has' : 'have'} none${where} and count as no fire.`;
+}
+
+/** A drawn area none of whose squares has a detection: there is no record of it, not a record of zeros. */
+export function notLoadedLine(cells: number, step: number, complete: boolean): string {
+  const squares = cells === 1 ? `its one square of ${squareWords(step)} has no detection` : `none of its ${count(cells)} squares of ${squareWords(step)} has a detection`;
+  return complete ? `No fire record here: ${squares} in NASA's files.` : `No fire record here yet: ${squares} in the countries loaded so far.`;
+}
+
 /** From this ratio up a month is said by its rate and the usual rate: "2,349 times" reads oddly. */
 const TOO_MANY_TIMES = 100;
 
