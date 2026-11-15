@@ -363,8 +363,6 @@ const LANDING_TOUR_HOLD_SECONDS = 6;
 /** The scale bar shows from this camera distance (the block views), starts this far along the near edge, and ticks the two pixel sizes. */
 const SCALE_BAR_FROM_DISTANCE = 9.5;
 const SCALE_BAR_INSET = 0.08;
-const SCALE_VIIRS_KM = 0.375;
-const SCALE_MODIS_KM = 1.0;
 
 /**
  * How much brighter the moonlit ground is drawn in the workspace than on the landing: in a close
@@ -3697,8 +3695,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       }
 
       // The scale bar: a round number of kilometres from the run's own ground size, along the
-      // block's near edge, with the two instruments' pixel sizes ticked at its start when they are
-      // wide enough on screen to tell apart. Only in the views that show the block's edge.
+      // box's near edge, with its length as a short label at its right end. Only in the views
+      // that show the whole box.
       const scaleGroup = scaleGroupRef.current;
       if (scaleGroup) {
         let shown = false;
@@ -3729,7 +3727,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             return [best[0] + (best[2] - best[0]) * f, best[1] + (best[3] - best[1]) * f];
           };
           // One height for the whole bar, a little under the rim's lowest point along it, so the
-          // bar is a straight line on the block's side
+          // bar is a straight line on the block's side; where the land around the box is drawn
+          // there is no side, and the bar lies on the ground
+          const drop = 0.07 * (1.0 - contextMix);
           let rim = Infinity;
           for (let k = 0; k <= 8; k++) {
             const [u, v] = at((barKm * k) / 8);
@@ -3737,15 +3737,13 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           }
           const project = (km: number): [number, number] | null => {
             const [u, v] = at(km);
-            projVec.set(worldX(u), rim - 0.07, worldZ(v)).project(camera);
+            projVec.set(worldX(u), rim - drop, worldZ(v)).project(camera);
             if (projVec.z <= -1 || projVec.z >= 1) return null;
             return [(projVec.x * 0.5 + 0.5) * viewportW, (-projVec.y * 0.5 + 0.5) * viewportH];
           };
           const a = project(0);
           const b = project(barKm);
-          const cellV = project(SCALE_VIIRS_KM);
-          const cellM = project(SCALE_MODIS_KM);
-          if (a && b && cellV && cellM) {
+          if (a && b) {
             const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
             if (len > 40) {
               // Ticks stand on the bar, toward the top of the screen
@@ -3757,19 +3755,16 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
               }
               const seg = (q: [number, number], h: number) =>
                 `M${q[0].toFixed(1)},${q[1].toFixed(1)} L${(q[0] + tx * h).toFixed(1)},${(q[1] + ty * h).toFixed(1)}`;
-              const cellsFit = Math.hypot(cellM[0] - cellV[0], cellM[1] - cellV[1]) >= 7;
-              const barPath =
-                `${seg(a, 7)} M${a[0].toFixed(1)},${a[1].toFixed(1)} L${b[0].toFixed(1)},${b[1].toFixed(1)} ${seg(b, 7)}` +
-                (cellsFit ? ` ${seg(cellV, 4)} ${seg(cellM, 4)}` : '');
+              const barPath = `${seg(a, 7)} M${a[0].toFixed(1)},${a[1].toFixed(1)} L${b[0].toFixed(1)},${b[1].toFixed(1)} ${seg(b, 7)}`;
               // (written only when it changes: a still camera then costs the page no layout)
               if (barPath !== scaleBarPath) {
                 scaleBarPath = barPath;
                 scaleBarRef.current?.setAttribute('d', barPath);
               }
               const text = scaleTextRef.current;
-              const barLabel =
-                (cellsFit ? `${barKm} km, ticks at 375 m and 1 km` : `${barKm} km`) +
-                `|${(b[0] + 8).toFixed(1)}|${(b[1] + 4).toFixed(1)}`;
+              // The label stands past the bar's right end on screen, whichever end that is
+              const end = b[0] >= a[0] ? b : a;
+              const barLabel = `${barKm} km|${(end[0] + 8).toFixed(1)}|${(end[1] + 4).toFixed(1)}`;
               if (text && barLabel !== scaleBarLabel) {
                 scaleBarLabel = barLabel;
                 const [words, x, y] = barLabel.split('|');
@@ -4338,8 +4333,10 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             <path ref={scaleBarRef} fill="none" stroke="rgba(243, 244, 246, 0.72)" strokeWidth="1" />
             <text
               ref={scaleTextRef}
-              fill="rgba(243, 244, 246, 0.86)"
-              style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontSize: '12px' }}
+              fill="rgba(243, 244, 246, 0.92)"
+              stroke="rgba(8, 11, 17, 0.72)"
+              strokeWidth="3"
+              style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontSize: '12px', paintOrder: 'stroke' }}
             />
           </g>
         </svg>
