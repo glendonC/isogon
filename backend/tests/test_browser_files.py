@@ -124,5 +124,24 @@ class RoundFileListTests(unittest.TestCase):
         self.assertTrue(any(p.endswith(".json") and "next_look_reference" in p for p in doc["listed"]))
 
 
+@unittest.skipUnless(FIRES, "no cached rows of plumas_ca or ventura_ca here")
+class PackListTests(unittest.TestCase):
+    def test_the_pack_list_names_paths_inside_the_tree_and_never_a_key_or_the_world_store(self) -> None:
+        from backend import browser as B
+
+        region, start = FIRES[0]
+        doc = B.pack_list({region: start})
+        self.assertEqual(doc["version"], B.PACK_LIST_VERSION)
+        place = doc["places"][region]
+        self.assertEqual(place["start"], start)
+        self.assertIn("backend/browser.py", place["modules"])
+        for p in place["modules"] + place["files"]:
+            parts = Path(p).parts
+            self.assertFalse(Path(p).is_absolute() or ".." in parts, p)
+            self.assertFalse(any(x.startswith(".env") or x == ".git" for x in parts), p)
+            self.assertNotIn("isogon-world", p)
+            self.assertTrue(str((_REPO_ROOT / p).resolve()).startswith(str(_REPO_ROOT.resolve())), p)
+        self.assertTrue(set(B.files_for_a_run(region, start)) <= set(place["files"]))
+
 if __name__ == "__main__":
     unittest.main()

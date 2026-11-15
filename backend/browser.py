@@ -348,13 +348,51 @@ def files_for_a_round(region_id: str, start: str, tiles: Any = None, budget: int
     extra.add(str((reference_dir() / f"{key}.json").resolve().relative_to(root)))
     return sorted(set(files_for_a_run(region_id, start)) | extra)
 
+PACK_LIST_VERSION: int = 1
+
+
+def prepare(region_id: str, start: str) -> list[str]:
+    """At build time, natively: write the two files a place needs here that the cache does not hold, its file of the
+    calendar's monthly counts and the reference players of its round from `start` with the default tiles and
+    budget. A window the closed rule closes is refused, as on the server, and nothing is written for it."""
+    from pathlib import Path
+
+    from backend.model.calendar_ratio import write_ratio_inputs
+
+    root = Path(__file__).resolve().parent.parent
+    made = [write_ratio_inputs(region_id), write_round_reference(region_id, start=start)]
+    return [str(Path(p).resolve().relative_to(root)) for p in made]
+
+
+def pack_list(places: dict[str, str]) -> dict[str, Any]:
+    """The list the data lane's build packs (its shape: isogon-notes/fire-cube/BROWSER-PACK-shape.md): for each
+    place and its start, the Python files a page may import and every data file a held-out run and a round read
+    there, relative to the repository. Files under backend/ and files every place names go in the shared pack."""
+    py = python_files()
+    return {"version": PACK_LIST_VERSION,
+            "places": {r: {"start": s, "modules": py, "files": files_for_a_round(r, s)} for r, s in places.items()}}
+
+
 if __name__ == "__main__":
     import json
     import sys
 
-    # python3 -m backend.browser files <region> <start>: the data files of a held-out run, and the Python files
+    usage = ("usage: python3 -m backend.browser files <region> <start>\n"
+             "       python3 -m backend.browser prepare <region>=<start> ...\n"
+             "       python3 -m backend.browser pack-list <out.json> <region>=<start> ...")
     if len(sys.argv) == 4 and sys.argv[1] == "files":
+        # the data files of a held-out run, and the Python files
         print(json.dumps({"region_id": sys.argv[2], "start": sys.argv[3], "data": files_for_a_run(sys.argv[2], sys.argv[3]),
                           "python": python_files()}, indent=1))
+    elif len(sys.argv) >= 3 and sys.argv[1] == "prepare":
+        for arg in sys.argv[2:]:
+            region, start = arg.split("=", 1)
+            print(json.dumps({"region_id": region, "start": start, "written": prepare(region, start)}))
+    elif len(sys.argv) >= 4 and sys.argv[1] == "pack-list":
+        doc = pack_list(dict(arg.split("=", 1) for arg in sys.argv[3:]))
+        from pathlib import Path
+
+        Path(sys.argv[2]).write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
+        print(f"wrote {sys.argv[2]}: {len(doc['places'])} places")
     else:
-        raise SystemExit("usage: python3 -m backend.browser files <region> <start>")
+        raise SystemExit(usage)
