@@ -1568,9 +1568,11 @@ export function App() {
   })();
   // The root says when the landing's fire is in (its real run loaded and a pass of it drawn), for the film's driver.
   const fireIn = !inWorkspace && runIsReal && !isExecuting && stageTelemetry?.realPass != null;
+  // A fire that did not load is said as such (`failed`), so the film's dark start does not hide the failure's words.
+  const landingFailed = !inWorkspace && Boolean(realFailed) && !runIsReal;
   useEffect(() => {
-    document.documentElement.setAttribute('data-fire', fireIn ? 'in' : inWorkspace ? 'workspace' : 'loading');
-  }, [fireIn, inWorkspace]);
+    document.documentElement.setAttribute('data-fire', fireIn ? 'in' : inWorkspace ? 'workspace' : landingFailed ? 'failed' : 'loading');
+  }, [fireIn, inWorkspace, landingFailed]);
 
   return (
     <WorkspaceProvider value={store}>

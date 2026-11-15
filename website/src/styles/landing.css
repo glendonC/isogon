@@ -403,3 +403,22 @@
     display: none;
   }
 }
+
+/* The film presentation: until the landing's fire is in (`data-fire` on the root), the page stays dark with nothing
+   but the mark: no words, no stand-in ground; then the picture and the caption come in together. */
+:root.iso-film .iso-stage-clip > * {
+  transition: opacity 400ms ease;
+}
+
+:root.iso-film[data-fire='loading'] .iso-stage-clip > * {
+  opacity: 0;
+}
+
+/* The landing's words wait with their entrance held (its fade would set them shown); it plays when the fire is in. */
+:root.iso-film[data-fire='loading'] .iso-land > .iso-land__hero,
+:root.iso-film[data-fire='loading'] .iso-land > .iso-land__legend,
+:root.iso-film[data-fire='loading'] .iso-land > .iso-land__credit,
+:root.iso-film[data-fire='loading'] .iso-land > .iso-land__more {
+  animation: none;
+  opacity: 0;
+}
