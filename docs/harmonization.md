@@ -1,17 +1,29 @@
 # Harmonization of MODIS and VIIRS fire detections
 
-This document explains how the Record puts the coarse satellites (MODIS on Terra and Aqua, 1 km at nadir, from
-2000) and the sharp ones (VIIRS on Suomi NPP and NOAA-20, 375 m, from 2012) on one scale, which methods were tried,
-how each was measured, which one won and by what rule, and what the stated interval means. Code:
-`backend/model/harmonize.py` (methods, interval, the Record's call), `harmonize_fitted.py` (the fitted tables and
+This document explains how the record puts MODIS (on Terra and Aqua, 1 km at nadir, from 2000) and VIIRS (on Suomi
+NPP and NOAA-20, 375 m, from 2012) on one scale, which methods were tried, how each was measured, which one won and
+by what rule, and what the stated interval means. It is the first result of Isogon's scientific world model
+([method.md](method.md)). Code:
+`backend/model/harmonize.py` (methods, interval, the record's call), `harmonize_fitted.py` (the fitted tables and
 which method is served), `harmonize_cells.py` (counts per cell from the country files or the fire cube),
 `harmonize_eval.py` (the measurement), `harmonize_maps.py` (world maps), `harmonize_dataset.py` (the harmonized
 record per quarter degree cell), `harmonize_years.py` (the record year by year and its totals), `harmonize_places.py`
 (regions, bands and continents).
 
-## The method the Record serves
+## What was found
 
-The Record predicts what Suomi NPP would have counted in a place and month from what MODIS counted there. Since the
+With each overlap year from 2012 to 2025 left out in turn, over 5,227 places of two degrees in all 238 countries, the
+disagreement between the two satellites' monthly detection counts is cut from 77.7 percent to 14.1. The measure is the
+sum of absolute differences between the predicted and VIIRS's own monthly counts, over VIIRS's own total. With no
+correction MODIS's counts differ from VIIRS's by 77.7 percent; with one ratio per place, the method used before, by
+18.3. The stated 80 percent range held on 79 percent of the years that did not set it. VIIRS makes about 4.4 times as
+many detections as MODIS over the whole Earth (4.41 summed over 2012 to 2025), because its smaller squares see small
+and cool fires that MODIS never detects. Fire radiative power is the exception: no method passed, so it keeps one ratio
+per place. The tables below give every figure and the rule that chose the method.
+
+## The method the record serves
+
+The record predicts what Suomi NPP would have counted in a place and month from what MODIS counted there. Since the
 measurement on the whole world (below), it serves `pooled_month_size_v1`:
 
 - harmonized = MODIS rows (Terra plus Aqua) x the place's ratio for that month of the year x a factor for the size
@@ -31,12 +43,12 @@ measurement on the whole world (below), it serves `pooled_month_size_v1`:
 
 The method used before, `overlap_ratio_v1`, is one ratio per place (its Suomi NPP rows over its MODIS rows over the
 clean overlap months). It still serves fire radiative power (FRP), for which no candidate won. Which method is served
-is the field `serve` of `harmonize_fitted.py`. The Record also gives the ratio over the whole overlap, the one
+is the field `serve` of `harmonize_fitted.py`. The record also gives the ratio over the whole overlap, the one
 number it speaks.
 
 ## The interval
 
-The Record states an 80 percent interval around every month and every year. It is built from held-out errors:
+The record states an 80 percent interval around every month and every year. It is built from held-out errors:
 
 1. Each overlap year from 2012 to 2025 is left out in turn, over every place of the fit at once. The method is
    fitted on the other years and predicts the year left out.
@@ -60,7 +72,7 @@ the first tables are listed under Limits.
 
 - Target: Suomi NPP rows of a place in a month, counted by the box rule (FIRMS type 0 only). Input: MODIS rows of
   the same place and month. FRP the same way, scored on its own.
-- Places: every 2 degree cell of the grid with a counted row (the Record's places are about that size). Smaller
+- Places: every 2 degree cell of the grid with a counted row (the record's places are about that size). Smaller
   cells are reported beside and do not decide.
 - Each overlap year left out in turn, everywhere at once.
 - A place whose box touches the context box of `plumas_ca`, `lytton_bc` or `evia_greece` is not scored in 2021,
@@ -193,7 +205,7 @@ Every month over-covers because counts are whole numbers: near zero any interval
 is not (0.72 of months, 0.70 of years). For FRP 25 of 30 are; North America north of 49 N and west of 100 W, and
 the bands 40 to 60 S and 70 to 80 N are not.
 
-The Record's three regions, each overlap year but 2021 held out, with the Record's own monthly counts and the served
+The record's three regions, each overlap year but 2021 held out, with the record's own monthly counts and the served
 method (its surroundings from the cube):
 
 | Region | median annual error | used before | without correction | interval, months | interval, years | interval used before, months (2021 included) |
@@ -321,14 +333,14 @@ rows, are transparent. Their scales and digests are in the `maps.json` written b
 - Lava is counted as fire where FIRMS marks it type 0. The worst places of the measurement are volcanoes: Hawaii's
   Big Island, whose yearly ratio of Suomi NPP to MODIS rows runs from 5 to more than 4,000 across the eruptions of
   2018 and 2022, Piton de la Fournaise on Reunion and Fogo in Cape Verde. VIIRS sees hot lava far more often than
-  MODIS, so no ratio holds there, and no correction does better there than any method. The Record of such a place
+  MODIS, so no ratio holds there, and no correction does better there than any method. The record of such a place
   reads lava as fire, and its call flags it from the place's own rows: where the harmonized value misses Suomi
   NPP's count by more than ten times in two held-out years or more (years of 50 rows or more), the answer's
   `ratio_stability` says "not stable" and gives a sentence for the page. Over the world's 2 degree places it flags
   45 of 3,859 tested: 17 are lava or lean on lava next to them (the Galapagos, Iceland, Hawaii, Kamchatka, Erta
   Ale, Fogo, Reunion, La Palma, Tonga, Karangetang in the Sangihe islands), 24 are gas and oil flares or industrial heat
   (Libya, Algeria, Yamal, the Caspian, the Cooper Basin and others), 4 are not known (2 in Quebec are ordinary
-  fire). None of the Record's 14 regions is flagged. It reads no list of volcanoes; Etna and Nyiragongo are not
+  fire). None of the record's 14 regions is flagged. It reads no list of volcanoes; Etna and Nyiragongo are not
   flagged, because their held-out values stay within ten times.
 - The factors and interval tables are fitted on every place's Suomi NPP counts of every year. They must not be used
   to test a model that predicts Suomi NPP.
