@@ -35,6 +35,7 @@ import { RevealSweep } from './identity/RevealSweep';
 import { Arrival } from './identity/Arrival';
 import { formatCoord } from './identity/where';
 import { boxMiddle, setDescent } from './world/descent';
+import { setDestinations } from './world/destinations';
 import { stageReady } from './stage/stageReady';
 import type { StageThing, StageThingBox } from './stage/earthCutawayTypes';
 import { setPageLinks, setPageUnder } from './ui/pageLinks';
@@ -1874,6 +1875,19 @@ export function App() {
         lon: box.length === 4 ? (box[0] + box[2]) / 2 : null,
       };
     }), [placesState.places]);
+  // The same places as the Earth's destinations: marked on the globe, and opened by a click as the search opens them.
+  const openPlaceRef = useRef<(id: string) => void>(() => {});
+  openPlaceRef.current = (id: string) => {
+    void handlePaletteExecute({ theaterId: id, regionId: id, holdoutViirs, cloudOverride, enterWorkspace: true });
+  };
+  useEffect(() => {
+    setDestinations({
+      places: placesState.places.places
+        .filter((p) => p.featured_fires.some((f) => f.default_start))
+        .map((p) => ({ id: p.id, name: p.name, box: p.box })),
+      open: (id) => openPlaceRef.current(id),
+    });
+  }, [placesState.places]);
 
   // The landing's words: the script's start step for the fire on show (its place, its month, its name where an agency
   // list names it), loading and failure as the script says them. They follow the pass on show: on a pass the model

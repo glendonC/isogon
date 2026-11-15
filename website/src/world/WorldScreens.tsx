@@ -13,6 +13,7 @@ import { useWorldKeys } from './keys';
 import { parseLive } from './live';
 import { useRead } from './read';
 import { boxMiddle, boxRings, useDescent } from './descent';
+import { useDestinations } from './destinations';
 import { formatCoord } from '../identity/where';
 import { backOfWorldScreen, backWorldScreen, closeWorldScreen, openWorldScreen, useWorldScreen, type WorldScreen } from './screens';
 import { SealedTonight } from './SealedTonight';
@@ -204,6 +205,8 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
     ...(st?.oneScaleReady ? [{ label: oneScale ? S.years.toCounted : S.years.toOneScale, command: 'record:as_counted', key: 'Y' }] : []),
   ];
   const onward = useOnward('years', tested);
+  // The places with a fire, marked on the globe; a click on one opens it as the search does.
+  const destinations = useDestinations();
   // A place chosen over the Earth: the globe flies into its box and frames it by name and where it is.
   const descending = useDescent();
   const descent = useMemo(() => {
@@ -233,6 +236,8 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
         control={control}
         onState={setSt}
         descent={descent}
+        places={destinations.places}
+        onPlace={destinations.open ?? undefined}
       />
       <Frame
         film={film}
