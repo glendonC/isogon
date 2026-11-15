@@ -6,7 +6,8 @@ how each was measured, which one won and by what rule, and what the stated inter
 `backend/model/harmonize.py` (methods, interval, the Record's call), `harmonize_fitted.py` (the fitted tables and
 which method is served), `harmonize_cells.py` (counts per cell from the country files or the fire cube),
 `harmonize_eval.py` (the measurement), `harmonize_maps.py` (world maps), `harmonize_dataset.py` (the harmonized
-record per quarter degree cell), `harmonize_places.py` (regions and bands).
+record per quarter degree cell), `harmonize_years.py` (the record year by year and its totals), `harmonize_places.py`
+(regions, bands and continents).
 
 ## The method the Record serves
 
@@ -226,6 +227,45 @@ The interval holds 0.80 of held-out months and years (predictions of one row or 
 harmonized rows are within 3 percent of Suomi NPP's own rows in every year 2013 to 2023 (6 percent above in 2024, 5
 below in 2025), and stay level across Aqua's arrival: 24.0, 22.6 and 22.4 million rows in 2001, 2002 and 2003, with
 Terra alone in 2001. At a quarter degree the FRP correction barely beats leaving MODIS FRP as it is.
+
+### Year by year
+
+`harmonize_years.py` sums the dataset's harmonized rows over each year, 2000 (November and December only) to 2025,
+into one layer per year on the fire cube's grid, beside the cube's own yearly layers of what MODIS and Suomi NPP
+detected; and it writes yearly totals for the world and each continent, as each satellite detected them and
+harmonized. A cell's continent is that of the country files with a row in it (the United Nations' grouping, the
+Americas cut at Panama's border with Colombia, the Russian Federation at 60 E). In 2021 the cells that meet a test
+fire region's context box are left out of every layer and total.
+
+Each total's held-out error is measured as the cells' was: every overlap year left out in turn over every cell at
+once, the method fitted on the other years, the year's total predicted over its clean months and compared with
+Suomi NPP's. No interval is given on a total: fourteen held-out years are too few to set an 80 percent interval and
+measure its coverage on years that did not set it.
+
+| Yearly total, 2012 to 2025 held out | median error | largest | one own ratio per cell, median and largest | MODIS as it is |
+| --- | --- | --- | --- | --- |
+| World | 2.0 percent | 9.0 (2017) | 2.4, 47.7 | 78 percent low |
+| Africa | 2.7 | 10.5 | 3.7, 82.6 | 78 low |
+| Asia | 5.2 | 13.5 | 2.5, 11.1 | 79 low |
+| Europe | 14.8 | 89.3 (2021) | 4.3, 37.0 | 71 low |
+| North America | 6.0 | 16.0 | 4.7, 17.8 | 76 low |
+| South America | 3.5 | 11.2 | 1.8, 7.5 | 75 low |
+| Oceania | 1.9 | 5.1 | 1.3, 4.1 | 79 low |
+
+The largest misses are lava. In 2017 the lava flow of Erta Ale in Ethiopia gave MODIS 2,480 rows in one cell whose
+ratio in the other years was above 3,000 (a lava lake that Suomi NPP sees far more often than MODIS): the world's
+held-out total is 9 percent high with the method and 48 with one ratio per cell. In 2021 the eruptions of
+Fagradalsfjall in Iceland and La Palma put Europe's held-out total 89 percent high with the method and 37 with one
+ratio per cell.
+
+Away from lava, one ratio per cell gives the smaller median error on the totals of five of the six continents. The
+method wins on the monthly value of a cell (above), but its world curve for small counts and its value for months
+MODIS saw nothing add rows where fires are small: over the overlap years, summed in sample, the harmonized record
+runs above Suomi NPP's own count in Europe by a median 13 percent, in North America 5, in Asia 4, and level in Africa,
+which holds more than half the world's rows. The world's total is within 3 percent in 2013 to 2023. Antarctica's few
+rows are seen by Suomi NPP only (35 to 108 a year), so its harmonized value is the mean of such months and says
+nothing about any one year. Four cell-years before 2012 go above the largest cell-year Suomi NPP ever counted, all
+volcanic eruptions.
 
 ## World maps
 
