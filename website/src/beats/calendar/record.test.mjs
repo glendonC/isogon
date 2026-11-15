@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { boxRoute, gridOf, logClass, parseRecord, rampBounds } from './record.ts';
 import { publishRecordView, readRecordView, RECORD_CLOSED } from './recordView.ts';
-import { EARTH_HELD_OUT, gridLine, methodLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times, unstableLine } from './recordWords.ts';
+import { EARTH_HELD_OUT, exactRate, READOUT_WORDS, gridLine, methodLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times, unstableLine } from './recordWords.ts';
 import { CSV_COLUMNS, recordCsv, recordFileName } from './recordCsv.ts';
 
 const month = (ym, harmonized, modis, viirs, extra = {}) => ({
@@ -294,4 +294,17 @@ test("the record as a file: one row a month with the answer's own figures, and w
   const areaCsv = recordCsv(area, 'https://example.org/');
   assert.ok(areaCsv.includes('# Area drawn: west, south, east, north = -9.6, 38.3, -8.1, 39.1'));
   assert.ok(areaCsv.includes('# Read on whole squares of 0.25 degree: -9.75, 38.25, -8, 39.25 (28 squares)'));
+});
+
+test("the pointed month's readout: each instrument on its satellite, and the figures as exactly as they came", () => {
+  assert.equal(exactRate(10.8305), '10.83');
+  assert.equal(exactRate(9.3773), '9.38');
+  assert.equal(exactRate(0.3878), '0.388');
+  assert.equal(exactRate(0.0035), '0.0035');
+  assert.equal(exactRate(0), '0');
+  // Every satellite the record counts has its instrument named, in the order the file's columns take
+  assert.deepEqual(READOUT_WORDS.instruments.map(([p]) => p), ['Terra', 'Aqua', 'Suomi NPP', 'NOAA-20', 'NOAA-21']);
+  assert.ok(READOUT_WORDS.instruments.every(([p, name]) => name.endsWith(p) && /^(MODIS|VIIRS) on /.test(name)));
+  assert.equal(READOUT_WORDS.count(15639), '15,639');
+  assert.equal(READOUT_WORDS.range(0.8), '80 percent range');
 });

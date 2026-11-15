@@ -19,6 +19,7 @@ import { boxWords } from './placeWords';
 import { publishRecordView, RECORD_CLOSED, type RecordMonthView } from './recordView';
 import { BAND_UNIT, gridLine, methodLine, monthLine, notLoadedLine, RECORD_WORDS as W, unstableLine } from './recordWords';
 import { recordCsv, recordFileName } from './recordCsv';
+import { RecordReadout } from './RecordReadout';
 import { IntervalBand } from '../../world/IntervalBand';
 import '../../styles/calendar-screen.css';
 
@@ -410,6 +411,15 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const accuracyLine = rec
     ? W.accuracy(rec.heldOut ? { year: rec.heldOut.harmonized, uncorrected: rec.heldOut.raw, monthsHeld: rec.method.monthsHeld } : null, rec.method.level, guideSpeaks && rec.heldOut !== null)
     : '';
+  // The pointed month's readout stands right of the grid, in one place, where the plot has room for it; not in the film,
+  // where nothing points, nor on a phone, where the label says the month
+  const readoutX = x0 + gridW + 32;
+  const readoutW = Math.min(244, size.w - readoutX - 4);
+  const readoutOn = !inFilm && !narrowFoot && fm !== null && readoutW >= 196;
+  // Its cross hairs: along the month's row to the readout and down its column to the year, clear of the square itself
+  const hair = hover !== null && fm !== null && cell > 0
+    ? { x: xOf(fm.year), y: yOf(fm.month), s: cell - gap, right: readoutOn ? readoutX : x0 + gridW + 6 }
+    : null;
   const footX = narrowFoot ? Math.max(0, x0 - NAMES_W) : x0;
   // Never narrower than a line of the legend's width: a narrower grid would make the foot's words wrap taller, which
   // would make the grid narrower still
@@ -514,6 +524,13 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                 />
               )}
               {(fm || nowLabel) && <line className="rec__leader" x1={fx - gap / 2} y1={y0 - headH + 12} x2={fx - gap / 2} y2={fy - 7} />}
+              {hair && (
+                <g>
+                  <line className="rec__hair" x1={x0 - 4} y1={hair.y + hair.s / 2} x2={hair.x - 3} y2={hair.y + hair.s / 2} />
+                  <line className="rec__hair" x1={hair.x + hair.s + 3} y1={hair.y + hair.s / 2} x2={hair.right} y2={hair.y + hair.s / 2} />
+                  <line className="rec__hair" x1={hair.x + hair.s / 2} y1={hair.y + hair.s + 3} x2={hair.x + hair.s / 2} y2={y0 + gridH + 3} />
+                </g>
+              )}
 
               {/* This month so far, once asked for: a square on the same ramp, its edge dashed because the month is not over. */}
               {thisMonth && nowAt && (
@@ -590,6 +607,12 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                     {W.show}
                   </button>
                 )}
+              </div>
+            )}
+
+            {readoutOn && fm && (
+              <div style={{ position: 'absolute', left: readoutX, top: y0, width: readoutW }}>
+                <RecordReadout month={fm} level={rec.method.level} asCounted={asCounted} />
               </div>
             )}
 

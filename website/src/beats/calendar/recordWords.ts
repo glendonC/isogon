@@ -113,6 +113,28 @@ export function monthLine(ym: string, value: number | null, timesUsual: number |
  */
 export const EARTH_HELD_OUT = { monthly: 0.141, oneRatio: 0.183, uncorrected: 0.777, monthsHeld: 0.817 };
 
+/** A rate as exactly as a reader of the record would copy it: "10.83", "0.388", "0.0035". Its unit is said beside it. */
+export const exactRate = (v: number): string => (v === 0 ? '0' : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : v.toPrecision(2));
+
+/** The pointed month's readout beside the grid: each instrument on its satellite, as the answer names the satellites. */
+export const READOUT_WORDS = {
+  counted: 'Detections counted',
+  instruments: [
+    ['Terra', 'MODIS on Terra'],
+    ['Aqua', 'MODIS on Aqua'],
+    ['Suomi NPP', 'VIIRS on Suomi NPP'],
+    ['NOAA-20', 'VIIRS on NOAA-20'],
+    ['NOAA-21', 'VIIRS on NOAA-21'],
+  ] as Array<[string, string]>,
+  /** A satellite the answer gives no count for that month: not yet flying, or no file of it. */
+  noCount: 'no count',
+  oneScale: 'On one scale',
+  asCounted: 'As counted',
+  range: (level: number | null) => (level !== null ? `${percent(level)} percent range` : 'Range'),
+  noValue: 'no value',
+  count: (n: number) => n.toLocaleString('en-US'),
+};
+
 /** A place's own held-out check, from its answer: a typical hidden year's error, with and without the correction. */
 export type HeldOutHere = { year: number; uncorrected: number; monthsHeld: { held: number; of: number } | null };
 
