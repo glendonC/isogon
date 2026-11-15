@@ -87,6 +87,18 @@ def years_in(n_months: int) -> list[dict[str, Any]]:
     return out
 
 
+def closed_masks(closed: list[dict[str, Any]]) -> dict[int, np.ndarray]:
+    """Per year, the cells the closed rule closes in it (a flat mask over the grid), from `closed_cells`."""
+    out: dict[int, np.ndarray] = {}
+    for c in closed:
+        if not c["months"]:
+            continue
+        for y in sorted({int(year_of_month(m)) for m in range(c["months"][0], c["months"][1] + 1)}):
+            mask = out.setdefault(y, np.zeros(C.N_CELLS, dtype=bool))
+            mask[np.array(c["cells"], dtype=np.int64)] = True
+    return out
+
+
 def palette() -> tuple[list[int], bytes]:
     """(RGB palette of 256 entries, alpha per entry): the special indices, then the ramp from low to high."""
     n = 256 - INDEX_RAMP0
@@ -157,13 +169,7 @@ def write(root: Path | None = None, out: Path | None = None, public: bool = True
         ms = [m for m in range(n_months) if int(year_of_month(m)) == y["year"]]
         y["platform_months"] = {C.PLATFORMS[p]: int(delivering[p, ms].sum()) for p in range(len(C.PLATFORMS))}
     closed = closed_cells(n_months)
-    closed_by_year: dict[int, np.ndarray] = {}
-    for c in closed:
-        if not c["months"]:
-            continue
-        for y in sorted({int(year_of_month(m)) for m in range(c["months"][0], c["months"][1] + 1)}):
-            mask = closed_by_year.setdefault(y, np.zeros(C.N_CELLS, dtype=bool))
-            mask[np.array(c["cells"], dtype=np.int64)] = True
+    closed_by_year = closed_masks(closed)
     yidx = {y["year"]: i for i, y in enumerate(years)}   # the years are consecutive
     yi = year_of_month(month) - years[0]["year"]
     keep = (yi >= 0) & (yi < len(years))

@@ -190,6 +190,11 @@ array (NaN where not loaded or closed) and an 8 bit indexed PNG: index 0 not loa
 fire row (grey), 2 closed (slate), 3 to 255 the ramp. Cells the closed rule closes hold no value in their closed
 years. `GET /api/cube/years` lists them; `GET /api/cube/years/<family>_<year>.png` or `.npy` serves one.
 
+`backend/firms/cube_figure.py write` draws the README's picture, `docs/earth-2011-2012.png`, from these layers: 2011
+and 2012 as the satellites counted them (`modis_on_snpp_2011`, `viirs_2012`) and on one scale (`harmonized_2011`,
+`harmonized_2012`, read from `<world>/harmonize/years/` with the closed rule applied), all four on the Suomi NPP
+scale and the world layers' ramp, from 84 N to 60 S, each pixel the largest cell-year under it.
+
 ## The public cube
 
 A static page has no backend, so it cannot ask the routes for a drawn box. `backend/firms/cube_public.py write`
