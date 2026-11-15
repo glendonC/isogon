@@ -17,7 +17,8 @@ import {
 } from './record';
 import { boxWords } from './placeWords';
 import { publishRecordView, RECORD_CLOSED, type RecordMonthView } from './recordView';
-import { gridLine, monthLine, notLoadedLine, RECORD_WORDS as W } from './recordWords';
+import { BAND_UNIT, gridLine, methodLine, monthLine, notLoadedLine, RECORD_WORDS as W } from './recordWords';
+import { IntervalBand } from '../../world/IntervalBand';
 import '../../styles/calendar-screen.css';
 
 /**
@@ -30,6 +31,8 @@ const RAMP = Array.from({ length: STEPS }, (_, i) => LIPARI_32[Math.round(3 + (i
 /** The bands around the grid, in pixels: month names, the label over a month, the years, who was flying, the foot. */
 const NAMES_W = 40;
 const HEAD_H = 84;
+/** More room over the grid where a month's label carries the band of its range. */
+const BAND_H = 36;
 const AXIS_H = 24;
 const SPANS_H = 56;
 /** The least room kept for the foot; it keeps the room it is measured to take, which wraps on a narrow grid. */
@@ -304,15 +307,21 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const bounds = useMemo(() => (rec ? rampBounds(rec) : { lo: 1, hi: 1 }), [rec]);
   const years = rec ? Array.from({ length: rec.lastYear - rec.firstYear + 1 }, (_, i) => rec.firstYear + i) : [];
   const footH = Math.max(FOOT_H, footSeen);
+  // A month's label carries the band of its range where the record gives ranges and the plot is wide enough for the
+  // band's words on one line; on a phone the label would rise into the trail. Where the guide speaks the label has
+  // no action of its own, and the band takes most of the action's room.
+  const hasRanges = useMemo(() => (rec ? [...rec.months.values()].some((m) => m.p10 !== null && m.p90 !== null) : false), [rec]);
+  const banded = hasRanges && size.w >= 600;
+  const headH = HEAD_H + (banded ? (guideSpeaks ? 16 : BAND_H) : 0);
   const cell = years.length
     ? // One column more than the record's years is kept free on the right: this month's square stands there
-      Math.max(8, Math.floor(Math.min((size.w - NAMES_W) / (years.length + 1), (size.h - HEAD_H - AXIS_H - SPANS_H - footH) / 12)))
+      Math.max(8, Math.floor(Math.min((size.w - NAMES_W) / (years.length + 1), (size.h - headH - AXIS_H - SPANS_H - footH) / 12)))
     : 0;
   const gap = cell >= 24 ? 3 : 1;
   const gridW = cell * years.length;
   const gridH = cell * 12;
   const x0 = Math.max(NAMES_W, Math.round((size.w - gridW + NAMES_W) / 2));
-  const y0 = HEAD_H;
+  const y0 = headH;
   const xOf = (year: number) => x0 + (year - (rec?.firstYear ?? 0)) * cell;
   const yOf = (month: number) => y0 + (month - 1) * cell;
   const yearEvery = cell >= 34 ? 1 : cell >= 18 ? 2 : 5;
@@ -451,7 +460,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   d={brackets(xOf(rec.months.get(shown)!.year), yOf(rec.months.get(shown)!.month), cell - gap, gap, Math.max(4, Math.round(cell * 0.26)))}
                 />
               )}
-              {(fm || nowLabel) && <line className="rec__leader" x1={fx - gap / 2} y1={y0 - HEAD_H + 12} x2={fx - gap / 2} y2={fy - 7} />}
+              {(fm || nowLabel) && <line className="rec__leader" x1={fx - gap / 2} y1={y0 - headH + 12} x2={fx - gap / 2} y2={fy - 7} />}
 
               {/* This month so far, once asked for: a square on the same ramp, its edge dashed because the month is not over. */}
               {thisMonth && nowAt && (
@@ -512,6 +521,14 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               >
                 <span className="sys-title">{monthWords(fm.ym)}</span>
                 <span className="sys-label">{monthLine(fm.ym, fm.value, fm.timesUsual, fm.median)}</span>
+                {/* The month's range, on the world-view lane's band: the figure as a tick within it. What the band is
+                    and how often it held is said once, under the grid. As counted, the figure is not the one the range
+                    is about, so no band is drawn. */}
+                {banded && !asCounted && fm.value !== null && fm.value > 0 && fm.p10 !== null && fm.p90 !== null && (
+                  <div className="rec__band">
+                    <IntervalBand value={fm.value} low={fm.p10} high={fm.p90} unit={BAND_UNIT} level={rec.method.level} compact />
+                  </div>
+                )}
                 {/* The prompt beside the month. Where the guide speaks it offers the same action in its strip, and a
                     click on the month's square still shows its fire, so the Record draws no prompt of its own. */}
                 {openable.has(fm.ym) && !guideSpeaks && (
@@ -610,6 +627,11 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   <span className="rec__key">Esc</span>
                   {W.close}
                 </button>
+              )}
+              {/* The method every year is put on one scale by, in the product lane's words, and what a month's band is.
+                  Where the guide speaks, its sentence on the step names the method, and the Record leaves it to it. */}
+              {!guideSpeaks && methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld) && (
+                <p className="sys-fine rec__wide rec__method">{methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld)}</p>
               )}
               {sharpX !== null && !atJunction && !guideSpeaks && <div className="rec__wide">{correctionPrompt}</div>}
               {rec.currentRoute && !thisMonth && !afterFits && (now.state === 'loading' || !guideSpeaks) &&

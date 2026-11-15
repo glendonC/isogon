@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { boxRoute, gridOf, logClass, parseRecord, rampBounds } from './record.ts';
 import { publishRecordView, readRecordView, RECORD_CLOSED } from './recordView.ts';
-import { gridLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times } from './recordWords.ts';
+import { gridLine, methodLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times } from './recordWords.ts';
 
 const month = (ym, harmonized, modis, viirs, extra = {}) => ({
   year_month: ym,
@@ -176,6 +176,28 @@ test("a box's grid is the cube's own: the box on whole squares, how many and how
     complete: true,
   });
   assert.equal(gridOf({ grid_box: [-30, -30, -29, -29], cells: 16 }, null), null);
+});
+
+test("the method is named in the product lane's words, with how often a month's band held, all from the answer", () => {
+  const served = {
+    ...body,
+    harmonization_method: {
+      ...body.harmonization_method,
+      id: 'pooled_month_size_v1',
+      interval: { level: 0.8 },
+      validation: { ...body.harmonization_method.validation, monthly_interval_coverage: 0.8125, months_tested: 144 },
+    },
+  };
+  const r = parseRecord(served, { kind: 'region', regionId: 'x', name: 'Somewhere' });
+  assert.deepEqual(r.method, { id: 'pooled_month_size_v1', level: 0.8, monthsHeld: { held: 117, of: 144 } });
+  assert.equal(
+    methodLine(r.method.id, r.method.level, r.method.monthsHeld),
+    "Every year is on the newer satellite's scale by a factor for each month of the year and for how much fire it has, leaning on nearby places. A month's band is its range: with each year hidden in turn, it held the newer satellite's own count in 117 of 144 months, meant for 80 percent.",
+  );
+  // Without the check, the method alone; a method with no words is not named, rather than shown as an id
+  assert.equal(methodLine('overlap_ratio_v1', null, null), "Every year is on the newer satellite's scale by one ratio per place.");
+  assert.equal(methodLine('a_new_method_v2', 0.8, { held: 1, of: 2 }), null);
+  assert.equal(rec.method.monthsHeld, null);
 });
 
 test('a drawn area says the box it is read on, the share of its squares with detections and the ones without', () => {

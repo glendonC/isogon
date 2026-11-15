@@ -118,6 +118,12 @@ export interface FireRecord {
   currentRoute: string | null;
   /** A box read on the cube's grid; null for a region, or where the answer carries no grid. */
   grid: BoxGrid | null;
+  /**
+   * The method the months are put on one scale by (`harmonization_method.id`), its interval's level (0.8 for the
+   * 10th to 90th percentile), and how often a month's interval held the newer satellite's own count over the months
+   * of the years hidden in turn, as the answer's check measured it.
+   */
+  method: { id: string | null; level: number | null; monthsHeld: { held: number; of: number } | null };
 }
 
 type Obj = Record<string, unknown>;
@@ -219,8 +225,16 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
     runRule: typeof starts?.rule === 'string' ? starts.rule : null,
     currentRoute: typeof cur?.route === 'string' ? cur.route : null,
     grid: place.kind === 'box' ? gridOf(obj(b.cube), place.box) : null,
+    method: {
+      id: typeof hm.id === 'string' ? hm.id : typeof b.model_version === 'string' ? b.model_version : null,
+      level: num(obj(hm.interval)?.level),
+      monthsHeld: heldOf(num(val?.monthly_interval_coverage), num(val?.months_tested)),
+    },
   };
 }
+
+/** A share held of a count tested, as whole months: 0.8125 of 144 is 117 of 144. */
+const heldOf = (share: number | null, of: number | null) => (share !== null && of !== null && of > 0 ? { held: Math.round(share * of), of } : null);
 
 export async function fetchRecord(place: RecordPlace, signal?: AbortSignal): Promise<FireRecord | null> {
   if (place.kind === 'region') return parseRecord(await getJson<unknown>('/api/calendar', { source: 'firms', region_id: place.regionId }, { signal }), place);

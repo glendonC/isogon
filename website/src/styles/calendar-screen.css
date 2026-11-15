@@ -267,6 +267,22 @@
   color: var(--sys-ink-2);
 }
 
+/* The method under the grid, after the legend, in the legend's ink */
+.rec__method {
+  margin: 0;
+  color: var(--sys-ink-2);
+}
+
+/* A month's band of its range, in its label, as wide as a short line */
+.rec__band {
+  width: min(260px, 100%);
+  margin-top: var(--sys-s1);
+}
+
+.rec__label[data-side='left'] .rec__band {
+  justify-self: end;
+}
+
 /* The corners of an area with no record, under the sentence that says so */
 .rec__status-box {
   display: block;

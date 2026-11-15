@@ -39,6 +39,30 @@ export function gridLine(box: string, step: number, cells: number, loaded: numbe
   return `${read} ${count(loaded)} of its ${count(cells)} squares (${shareWords} percent) have detections; the other ${count(none)} ${none === 1 ? 'has' : 'have'} none${where} and count as no fire.`;
 }
 
+/**
+ * The product lane's words for each method the Record may serve, by `harmonization_method.id`. A method with no
+ * words here is not named: the Record says nothing rather than an id.
+ */
+export const METHOD_PLAIN: Record<string, string> = {
+  pooled_month_size_v1: 'a factor for each month of the year and for how much fire it has, leaning on nearby places',
+  overlap_ratio_v1: 'one ratio per place',
+};
+
+/** The unit of a month's band, in the short words that fit a month's label. */
+export const BAND_UNIT = 'detections per 1,000 km² a day';
+
+/**
+ * Under the grid: the method that puts every year on one scale, and what the band on a month is, with how often a
+ * month's band held over the months of the years hidden in turn. Null for a method with no words.
+ */
+export function methodLine(id: string | null, level: number | null, monthsHeld: { held: number; of: number } | null): string | null {
+  const plain = id ? METHOD_PLAIN[id] : undefined;
+  if (!plain) return null;
+  const scale = `Every year is on the newer satellite's scale by ${plain}.`;
+  if (level === null || !monthsHeld) return scale;
+  return `${scale} A month's band is its range: with each year hidden in turn, it held the newer satellite's own count in ${count(monthsHeld.held)} of ${count(monthsHeld.of)} months, meant for ${percent(level)} percent.`;
+}
+
 /** A drawn area none of whose squares has a detection: there is no record of it, not a record of zeros. */
 export function notLoadedLine(cells: number, step: number, complete: boolean): string {
   const squares = cells === 1 ? `its one square of ${squareWords(step)} has no detection` : `none of its ${count(cells)} squares of ${squareWords(step)} has a detection`;
