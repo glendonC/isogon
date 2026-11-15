@@ -292,7 +292,6 @@ interface CachedTheaterBundle {
   /** Real runs: hours a burning cell stays lit in the run's model, from the payload. Absent: 12. */
   residenceHours?: number;
   /** Real runs: where the run's fire is in the region (u east, v north). Worked out once. */
-  fireCentre?: [number, number] | null;
 }
 
 /**
@@ -414,6 +413,14 @@ const FILM_ESTIMATE_SECONDS = 9;
 const FILM_PUSH_FROM = 1.22;
 const FILM_PUSH_TO = 0.94;
 const FILM_PLAY_SECONDS = 5;
+// The close views aim at the fire's centre; when that lies farther than this from every detection
+// (patches far apart), at its heaviest patch, the patches grouped on a grid of this cell
+const FIRE_CENTRE_EMPTY_KM = 5;
+const FIRE_PATCH_CELL_KM = 2;
+// The fire of the day around the pass on show (detections given within a day of it), and how near
+// its centre a detection counts as at the centre
+const FIRE_DAY_MS = 24 * 3600 * 1000;
+const FIRE_DAY_REACH_KM = 5;
 // The landing in the film presentation: its picture stays dark until the run's own ground is complete
 // (terrain pack and land around in, or failed) and frames have run smoothly for a while, then fades in
 // and the record move starts from there, so the shot holds no stand-in, no change of ground and no cut
@@ -1818,27 +1825,90 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     // missed, Ridge on the strongest front. Both anchors come from the solver field of the active
     // region, so every region gets a meaningful close oblique.
     /** Where a real run's fire is in the region (u east, v north): null for a simulated run or a run that shows no detection. */
-    const realFireCentre = (bundle: CachedTheaterBundle): [number, number] | null => {
-      if (bundle.fireCentre !== undefined) return bundle.fireCentre;
-      bundle.fireCentre = null;
+    /**
+     * Where the close views aim on a real run, for the pass on show (frame index). The centre of every
+     * detection given to the model, weighted by radiative power; but when that centre holds under a
+     * tenth of the day's fire around the pass on show within 5 km and the day's own centre holds three
+     * tenths or more (a fire that moved), the day's centre; and when the centre chosen lies farther
+     * than FIRE_CENTRE_EMPTY_KM from every detection (patches far apart), the heaviest patch.
+     */
+    const fireCentreCache = new WeakMap<CachedTheaterBundle, Map<number, [number, number] | null>>();
+    const realFireCentre = (bundle: CachedTheaterBundle, frameIdx: number): [number, number] | null => {
+      let cache = fireCentreCache.get(bundle);
+      if (!cache) fireCentreCache.set(bundle, (cache = new Map()));
+      const known = cache.get(frameIdx);
+      if (known !== undefined) return known;
+      cache.set(frameIdx, null);
       if (bundle.observerDataset.dataSource !== 'firms') return null;
       const [lonMin, latMin, lonMax, latMax] = bundle.bbox;
-      let sumU = 0;
-      let sumV = 0;
-      let sumW = 0;
+      const shownMs = Date.parse(bundle.observerDataset.frames[frameIdx]?.[0]?.timeUtc ?? '');
+      const all: number[] = [];
+      const day: number[] = [];
       for (const passes of bundle.observerDataset.frames) {
         for (const sp of passes) {
           if (sp.hidden || sp.revealed) continue;
+          const t = Date.parse(sp.timeUtc ?? '');
+          const near = Number.isFinite(shownMs) && Number.isFinite(t) && Math.abs(t - shownMs) <= FIRE_DAY_MS;
           for (const fp of sp.footprints) {
+            const u = (fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin);
+            const v = (fp.lat - latMin) / Math.max(1e-9, latMax - latMin);
             const w = Math.max(1, fp.frpMw);
-            sumU += w * ((fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin));
-            sumV += w * ((fp.lat - latMin) / Math.max(1e-9, latMax - latMin));
-            sumW += w;
+            all.push(u, v, w);
+            if (near) day.push(u, v, w);
           }
         }
       }
-      if (sumW > 0) bundle.fireCentre = [sumU / sumW, sumV / sumW];
-      return bundle.fireCentre;
+      const centreOf = (pts: number[]): [number, number] | null => {
+        let su = 0;
+        let sv = 0;
+        let sw = 0;
+        for (let i = 0; i < pts.length; i += 3) {
+          su += pts[i] * pts[i + 2];
+          sv += pts[i + 1] * pts[i + 2];
+          sw += pts[i + 2];
+        }
+        return sw > 0 ? [su / sw, sv / sw] : null;
+      };
+      const kmTo = (pts: number[], i: number, c: [number, number]) =>
+        Math.hypot((pts[i] - c[0]) * bundle.widthKm, (pts[i + 1] - c[1]) * bundle.depthKm);
+      const shareWithin = (pts: number[], c: [number, number]) => {
+        let inside = 0;
+        let total = 0;
+        for (let i = 0; i < pts.length; i += 3) {
+          total += pts[i + 2];
+          if (kmTo(pts, i, c) < FIRE_DAY_REACH_KM) inside += pts[i + 2];
+        }
+        return total > 0 ? inside / total : 0;
+      };
+      let centre = centreOf(all);
+      if (!centre) return null;
+      let pts = all;
+      const dayCentre = centreOf(day);
+      if (dayCentre && shareWithin(day, centre) < 0.1 && shareWithin(day, dayCentre) >= 0.3) {
+        centre = dayCentre;
+        pts = day;
+      }
+      let nearKm = Infinity;
+      for (let i = 0; i < pts.length; i += 3) nearKm = Math.min(nearKm, kmTo(pts, i, centre));
+      if (nearKm > FIRE_CENTRE_EMPTY_KM) {
+        const nx = Math.max(1, Math.ceil(bundle.widthKm / FIRE_PATCH_CELL_KM));
+        const ny = Math.max(1, Math.ceil(bundle.depthKm / FIRE_PATCH_CELL_KM));
+        const grouped = firePatches(new Float32Array(pts), nx, ny);
+        const power = new Float64Array(grouped.sizes.length);
+        const sum = new Float64Array(grouped.sizes.length * 2);
+        for (let k = 0; k < grouped.patchOf.length; k++) {
+          const at = grouped.patchOf[k];
+          const w = pts[k * 3 + 2];
+          power[at] += w;
+          sum[at * 2] += w * pts[k * 3];
+          sum[at * 2 + 1] += w * pts[k * 3 + 1];
+        }
+        let best = 0;
+        for (let at = 1; at < power.length; at++) if (power[at] > power[best]) best = at;
+        if (power[best] > 0) centre = [sum[best * 2] / power[best], sum[best * 2 + 1] / power[best]];
+      }
+      cache.set(frameIdx, centre);
+      return centre;
     };
 
     const resolveLivePreset = (
@@ -1853,7 +1923,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       const anchor = nextBundle.findings.find((f) => f.kind === wantedKind);
       // A real run looks at its fire: the centre of every detection the run shows, weighted by
       // radiative power (the anchors above are read off a simulated run's field)
-      const fire = realFireCentre(nextBundle);
+      const framesNow = nextBundle.observerDataset.frames.length;
+      const frameNow = Math.min(framesNow - 1, Math.max(0, Math.round(THREE.MathUtils.clamp(propsRef.current.timeProgress, 0, 1) * (framesNow - 1))));
+      const fire = realFireCentre(nextBundle, frameNow);
       if (!anchor && !fire) return dest;
       const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
       // Keep the anchor away from the cut faces of the slab (a real run's close views have the
