@@ -426,6 +426,14 @@
   }
 }
 
+/* A phone's foot holds how well the correction holds under the legend, so the Record keeps the guide's measured room
+   there too (App.tsx, --guide-room), not the fixed room a phone kept while its foot held the legend alone. */
+@media (max-width: 600px) {
+  .iso-ws[data-guide='true'] .rec:has(.rec__heldout) {
+    --rec-guide: var(--guide-room, 230px);
+  }
+}
+
 /* The workspace dock steps aside while The Record is open. */
 .iso-ws__dock[hidden] {
   display: none;

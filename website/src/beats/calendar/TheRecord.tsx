@@ -348,11 +348,11 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   // A month's label carries the band of its range where the record gives ranges. Where the guide speaks the label has
   // no action of its own, and the band takes most of the action's room.
   const hasRanges = useMemo(() => (rec ? [...rec.months.values()].some((m) => m.p10 !== null && m.p90 !== null) : false), [rec]);
-  // On a narrow plot the label is narrower and its words take two lines each: it keeps more room above the grid,
-  // which a phone has where the guide speaks, since there the grid is set by the width. With the label's own action
-  // as well (no guide), a phone keeps the grid and leaves the band out.
+  // On a narrow plot the label is narrower and its words take two lines each. A phone has no height for the month's
+  // band above the grid as well as how well the correction holds under it, and the record's check comes first: a
+  // phone leaves the band out (the month's range is in the file, key G).
   const narrowLabel = size.w < 600;
-  const banded = hasRanges && (!narrowLabel || guideSpeaks);
+  const banded = hasRanges && !narrowLabel;
   const inFilm = useMemo(() => typeof document !== 'undefined' && document.documentElement.classList.contains('iso-film'), []);
   const headH = HEAD_H + (banded ? (narrowLabel ? 56 : guideSpeaks ? 16 : BAND_H) : 0);
   const cell = years.length
@@ -407,10 +407,10 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   // the plot's width, not the grid's, so that the grid's size does not move the foot's width back and forth.
   const narrowFoot = size.w < 700;
   // How well the correction holds, in the words' one place: the answer's own check where it has one, the Earth's beside.
-  // Where the guide speaks it says the place's own check, and the line leaves it out rather than say it twice.
-  const accuracyLine = rec
-    ? W.accuracy(rec.heldOut ? { year: rec.heldOut.harmonized, uncorrected: rec.heldOut.raw, monthsHeld: rec.method.monthsHeld } : null, rec.method.level, guideSpeaks && rec.heldOut !== null)
-    : '';
+  // The page says it here and nowhere else.
+  // A phone's narrow foot says it in two lines, the place's error and the Earth's.
+  const heldHere = rec?.heldOut ? { year: rec.heldOut.harmonized, uncorrected: rec.heldOut.raw, monthsHeld: rec.method.monthsHeld } : null;
+  const accuracyLine = rec ? (narrowFoot && !inFilm ? W.accuracyShort(heldHere) : W.accuracy(heldHere, rec.method.level)) : '';
   // The pointed month's readout stands right of the grid, in one place, where the plot has room for it; not in the film,
   // where nothing points, nor on a phone, where the label says the month
   const readoutX = x0 + gridW + 32;
@@ -720,9 +720,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                 </button>
               )}
               {/* Under the years, how well the correction holds: here from the answer, and over the whole Earth, on the
-                  page and in the film. An answer with no check of its own (a drawn area) has the Earth's alone. A
-                  phone's narrow foot leaves it to the guide's answer. */}
-              {(inFilm || !narrowFoot) && <p className="sys-label rec__wide rec__heldout">{accuracyLine}</p>}
+                  page, on a phone and in the film, and nowhere else on the page. An answer with no check of its own
+                  (a drawn area) has the Earth's alone. */}
+              <p className="sys-label rec__wide rec__heldout">{accuracyLine}</p>
               {/* The method every year is put on one scale by, in plain words, and what a month's band is.
                   Where the guide speaks, its sentence on the step names the method, and the Record leaves it to it. */}
               {!guideSpeaks && !narrowFoot && methodLine(rec.method.id, rec.method.level, rec.method.monthsHeld) && (
@@ -742,7 +742,6 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               {asCounted && rec.spans.sharp && !guideSpeaks && (
                 <p className="sys-label rec__holds rec__wide">
                   {W.asCounted(rec.sharpRatio, Number(rec.spans.sharp[0].slice(0, 4)))}
-                  {narrowFoot && ` ${accuracyLine}`}
                 </p>
               )}
             </div>
