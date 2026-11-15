@@ -35,7 +35,7 @@ folder above it and open `http://127.0.0.1:5589/isogon/`:
 python3 -m http.server 5589 --bind 127.0.0.1 --directory dist/public
 ```
 
-The command prints the size of the recording and of the whole page. It stops when the recording's index names a
+The command prints the size of the recording and of the whole page. It gives the page the commit it was built from and the time its answers were recorded (`VITE_BUILD_COMMIT`, `VITE_RECORDED_UTC`), and writes both to `recorded/build.json`. It stops when the recording's index names a
 file the folder does not hold. The recording itself is made against a running backend (see `docs/architecture.md`).
 
 ## The backend

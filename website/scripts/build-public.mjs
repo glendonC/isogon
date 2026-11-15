@@ -12,7 +12,7 @@
 // (`website/src/world/publicAnswer.ts`). The yearly layers are recorded answers (`GET /api/cube/years`).
 
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -52,7 +52,12 @@ const base = `/${arg('base', '/isogon/').replace(/^\/+|\/+$/g, '')}/`.replace(/^
 const out = path.resolve(site, arg('out', 'dist/public'));
 const target = path.join(out, ...base.split('/').filter(Boolean));
 
-const env = { ...process.env, VITE_TRANSPORT: 'recorded' };
+// The commit the page is built from and when its answers were recorded, so the page can say both
+// (`import.meta.env.VITE_BUILD_COMMIT`, `VITE_RECORDED_UTC`), and `recorded/build.json` for anyone reading the folder.
+const git = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: site, encoding: 'utf8' });
+const commit = git.status === 0 ? git.stdout.trim() : '';
+const recordedUtc = typeof index.recorded_utc === 'string' ? index.recorded_utc : '';
+const env = { ...process.env, VITE_TRANSPORT: 'recorded', VITE_BUILD_COMMIT: commit, VITE_RECORDED_UTC: recordedUtc };
 for (const [cmd, args] of [
   ['npx', ['tsc', '-b']],
   ['npx', ['vite', 'build', '--base', base, '--outDir', target, '--emptyOutDir']],
@@ -66,6 +71,12 @@ rmSync(recordedDir, { recursive: true, force: true });
 mkdirSync(path.join(recordedDir, 'files'), { recursive: true });
 cpSync(indexFile, path.join(recordedDir, 'index.json'));
 for (const f of named) cpSync(path.join(recordingDir, f), path.join(recordedDir, f));
+writeFileSync(path.join(recordedDir, 'build.json'), `${JSON.stringify({
+  site_commit: commit || null,
+  recorded_utc: recordedUtc || null,
+  base,
+  what: 'the commit the page was built from and the time its answers were recorded',
+}, null, 1)}\n`);
 
 const cube = arg('cube', null);
 let cubeLine = 'no public cube (give --cube <folder>)';
@@ -83,5 +94,6 @@ if (cube) {
 
 const mb = (n) => `${(n / 1e6).toFixed(1)} MB`;
 console.log(`build-public: the page is in ${target}`);
+console.log(`build-public: commit ${commit ? commit.slice(0, 7) : 'unknown'}; answers recorded ${recordedUtc || 'at an unknown time'}`);
 console.log(`build-public: base ${base}; ${named.length} recorded files; recorded ${mb(bytesOf(recordedDir))}; ${cubeLine}; page in all ${mb(bytesOf(target))}`);
 console.log(`build-public: try it with  python3 -m http.server 5589 --directory ${out}  and open http://127.0.0.1:5589${base}`);
