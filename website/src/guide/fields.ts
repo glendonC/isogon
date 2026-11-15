@@ -51,7 +51,8 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
 
   const fields: Fields = {
     place: ws.place.title || null,
-    run_days: localDayRange(str(win?.first_overpass_utc), str(win?.last_overpass_utc), lon),
+    // The days only of a run of the place on show: while another place's run is on its way, no days are said.
+    run_days: ws.run.active?.region.id === ws.place.regionId ? localDayRange(str(win?.first_overpass_utc), str(win?.last_overpass_utc), lon) : null,
     sharp_square_m: cellKm === null ? null : String(Math.round(cellKm * 1000)),
     coarse_passes: count(num(win?.modis_overpasses)),
     hidden_passes: count(num(win?.hidden_passes) ?? (hiddenFromFrames || null)),
