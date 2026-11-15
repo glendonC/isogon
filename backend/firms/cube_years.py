@@ -42,6 +42,12 @@ FAMILIES: dict[str, dict[str, Any]] = {
     "viirs": {"platforms": (2,), "scale": "suomi_npp",
               "what": "fire rows (FIRMS type 0, day and night) of Suomi NPP alone"},
 }
+# A family drawn again on another family's scale: same arrays, its own PNGs.
+ALSO_DRAWN: dict[str, dict[str, Any]] = {
+    "modis_on_snpp": {"from": "modis", "scale": "suomi_npp",
+                      "what": ("the modis family's arrays (Terra and Aqua fire rows) drawn on the Suomi NPP scale, so one "
+                               "view can go from MODIS to Suomi NPP and show the step between the instruments in 2012")},
+}
 HARMONIZED: dict[str, Any] = {"scale": "suomi_npp",
                               "what": "the harmonize lane's harmonized fire rows on the Suomi NPP scale"}
 INDEX_NOT_LOADED, INDEX_NO_ROWS, INDEX_CLOSED, INDEX_RAMP0 = 0, 1, 2, 3
@@ -213,6 +219,17 @@ def write(root: Path | None = None, out: Path | None = None, public: bool = True
                             "npy": f"{name}.npy", "npy_sha256": _sha(out / f"{name}.npy"),
                             "png": f"{name}.png", "png_sha256": _sha(out / f"{name}.png"),
                             "png_bytes": (out / f"{name}.png").stat().st_size}
+            for also, aspec in ALSO_DRAWN.items():
+                if aspec["from"] != fam:
+                    continue
+                aname = f"{also}_{y['year']}"
+                aidx, aclipped = to_index(arr.reshape(C.N_ROWS, C.N_COLS), cmask.reshape(C.N_ROWS, C.N_COLS),
+                                          scales[aspec["scale"]]["vmax"])
+                _write_png(out / f"{aname}.png", aidx)
+                layers[aname] = {**layers[name], "family": also, "scale": aspec["scale"], "clipped_cells": aclipped,
+                                 "png": f"{aname}.png", "png_sha256": _sha(out / f"{aname}.png"),
+                                 "png_bytes": (out / f"{aname}.png").stat().st_size,
+                                 "npy_note": f"the same array as {name}"}
     harmonized_state = "not written yet"
     if hman is not None:
         harmonized_state = "drawn from the harmonize lane's folder"
@@ -251,6 +268,9 @@ def write(root: Path | None = None, out: Path | None = None, public: bool = True
                      "not_whole": "a year not whole at the end of the archive (2026 holds no month of the archive)"},
         "families": {**{fam: {"what": spec["what"], "scale": spec["scale"], "platforms": [C.PLATFORMS[p] for p in spec["platforms"]],
                               "first_year": starts[fam]} for fam, spec in FAMILIES.items()},
+                     **{also: {"what": a["what"], "scale": a["scale"], "arrays_of": a["from"],
+                               "platforms": [C.PLATFORMS[p] for p in FAMILIES[a["from"]]["platforms"]],
+                               "first_year": starts[a["from"]]} for also, a in ALSO_DRAWN.items()},
                      "harmonized": {**HARMONIZED, "state": harmonized_state,
                                     "folder": "<world>/harmonize/years/ (harmonized_<year>.npy, harmonized.json)",
                                     "source": hman}},

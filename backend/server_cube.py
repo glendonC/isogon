@@ -295,7 +295,7 @@ def cube_route(route: str, qs: dict[str, list[str]], cube: C.Cube | None = None)
                 return _json(HTTPStatus.NOT_FOUND, {"error": f"no yearly layer '{name}'", "layers": sorted(info["layers"])})
             from backend.firms.cube_years import years_dir
 
-            body = (years_dir(cube.root) / f"{stem}.{ext}").read_bytes()
+            body = (years_dir(cube.root) / info["layers"][stem][ext]).read_bytes()
             return HTTPStatus.OK, body, "image/png" if ext == "png" else "application/octet-stream"
         return _json(HTTPStatus.NOT_FOUND, {"error": f"unknown cube route '{route}'",
                                             "routes": [f"{PREFIX}/record?box=", f"{PREFIX}/tables?box=",

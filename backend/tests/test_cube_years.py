@@ -80,6 +80,13 @@ class YearlyLayers(unittest.TestCase):
             st, body, ctype = cube_route("/api/cube/years/viirs_2020.png", {}, cube=cube)
             self.assertEqual((st, ctype, body[:4]), (200, "image/png", b"\x89PNG"))
             self.assertEqual(cube_route("/api/cube/years/viirs_2026.png", {}, cube=cube)[0], 404)
+            # MODIS drawn again on the Suomi NPP scale: the same array, a dimmer index where Suomi NPP's vmax is larger
+            on = info["layers"]["modis_on_snpp_2020"]
+            self.assertEqual((on["scale"], on["npy"], on["rows"]), ("suomi_npp", "modis_2020.npy", 4))
+            a = np.array(Image.open(out / "modis_on_snpp_2020.png"))
+            self.assertLessEqual(int(a[r, c]), int(png[r, c]))
+            st, body, _ = cube_route("/api/cube/years/modis_on_snpp_2020.npy", {}, cube=cube)
+            self.assertEqual(body, (out / "modis_2020.npy").read_bytes())
 
     def test_a_year_not_whole_at_the_end_is_left_out(self) -> None:
         with tempfile.TemporaryDirectory() as d:

@@ -178,7 +178,9 @@ loaded cell without the layer's rows is grey.
 - `viirs_<year>`: fire rows of Suomi NPP alone, from its first year (2012); NOAA-20 is left out so that a brighter
   year is more fire, not a second satellite;
 - `harmonized_<year>`: drawn from the harmonize lane's arrays in `<world>/harmonize/years/` when they are there, on
-  the Suomi NPP scale.
+  the Suomi NPP scale;
+- `modis_on_snpp_<year>`: the `modis` arrays drawn again on the Suomi NPP scale (PNGs only, the arrays are
+  `modis_<year>.npy`), so one view can go from MODIS to Suomi NPP and show the step between the instruments in 2012.
 
 The years are those of the archive: the first, 2000, holds November and December only and says so; a year not whole
 at the end of the archive, and every month after it (from 2026 on, the area API's near real time rows, not in the
