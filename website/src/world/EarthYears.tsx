@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { tOfValue } from './cells';
 import { FIRE_RAMP } from './layers';
+import { useWorldKeys } from './keys';
 import { useRead } from './read';
 import { Ticks } from './Ticks';
 import { WorldCanvas, type GridLayer } from './WorldCanvas';
@@ -35,12 +36,43 @@ export interface EarthYearsProps {
   onYear?: (year: number, mode: YearsMode) => void;
   /** The box first in view: the land where fire is detected, without the poles, so the Earth takes the width. */
   focus?: Box;
+  /** A pass that plays stops at this year (the film's: 2010 to 2012); the last year when left out. */
+  until?: number;
+  /** In place of the line under the year (the film's caption stands there). */
+  captionLine?: string | null;
+  /** The label on the 2012 bar; the film leaves it to the caption. */
+  stepLabel?: boolean;
+  /** The screen's own Play button; a host whose guide offers Play passes false. */
+  ownPlay?: boolean;
+  /** What a host's guide drives: play or stop, switch the view. */
+  control?: MutableRefObject<YearsControl | null>;
+  /** The state a host's guide says: the year, the view, whether it plays, and the figures of its sentences. */
+  onState?: (s: YearsState) => void;
+}
+
+export interface YearsControl {
+  play: () => void;
+  flip: () => void;
+}
+
+export interface YearsState {
+  year: number;
+  mode: YearsMode;
+  playing: boolean;
+  first: number;
+  last: number;
+  ratio: number | null;
+  ratioLow: number | null;
+  ratioHigh: number | null;
+  oneScaleReady: boolean;
 }
 
 const YEARS_VIEW: Box = [-170, -44, 180, 74];
 
 // A pass through the years lasts about six seconds: the coarse years quickly, 2012 long enough to read its sentence.
 const beat = (year: number) => (year < SHARP_FROM ? 170 : year === SHARP_FROM ? 1500 : 190);
+// A short pass (the film's 2010 to 2012) gives each year time to be seen before the last.
+const SHORT_BEAT = 650;
 
 /** The years named under the strip: the one on show first, then 2012, the ends and every fifth, none closer than 44 px. */
 function axisYears(years: number[], shown: number, width: number): number[] {
@@ -67,7 +99,21 @@ const ramp = (stops: Array<[number, [number, number, number]]>) =>
  * detected as bars, the harmonized record as a line, the year on show marked. Enter and Space play and stop, the
  * arrows step a year, Y switches the view (the script's keys).
  */
-export function EarthYears({ source = '/api/cube/years', mode: startMode = 'detected', year: startYear, autoplay, caption = true, onYear, focus = YEARS_VIEW }: EarthYearsProps) {
+export function EarthYears({
+  source = '/api/cube/years',
+  mode: startMode = 'detected',
+  year: startYear,
+  autoplay,
+  caption = true,
+  onYear,
+  focus = YEARS_VIEW,
+  until,
+  captionLine = null,
+  stepLabel = true,
+  ownPlay = true,
+  control,
+  onState,
+}: EarthYearsProps) {
   const read = useRead<YearsIndex>(source);
   const idx = read.state === 'ready' ? read.value : null;
   const years = useMemo(() => (idx ? idx.years.map((y) => y.year) : []), [idx]);
@@ -139,11 +185,14 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
     [frame],
   );
 
-  // Playing: one year a beat, waiting for a year still being read; it stops at the last year.
+  // Playing: one year a beat, waiting for a year still being read; it stops at the last year of the pass.
+  const lastOfPass = until !== undefined && years.includes(until) ? until : years[years.length - 1];
+  const firstOfPass = startYear !== undefined && years.includes(startYear) ? startYear : years[0];
+  const short = until !== undefined && years.indexOf(lastOfPass) - years.indexOf(firstOfPass) <= 4;
   useEffect(() => {
     if (!playing || shown === null || !years.length) return;
     const at = years.indexOf(shown);
-    if (at >= years.length - 1) {
+    if (at >= years.indexOf(lastOfPass) || at >= years.length - 1) {
       setPlaying(false);
       return;
     }
@@ -153,27 +202,27 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
         return;
       }
       setYear(years[at + 1]);
-    }, beat(shown));
+    }, short ? SHORT_BEAT : beat(shown));
     return () => window.clearTimeout(t);
-  }, [playing, shown, years, have, ready]);
+  }, [playing, shown, years, have, ready, lastOfPass, short]);
 
   // In the film presentation (or when asked) it plays once by itself as soon as every year of the record is in.
   const played = useRef(false);
   useEffect(() => {
     if (played.current || !idx || inCount < years.length || !(autoplay ?? isFilm())) return;
     played.current = true;
-    setYear(years[0]);
+    setYear(firstOfPass);
     setPlaying(true);
-  }, [idx, inCount, years, autoplay]);
+  }, [idx, inCount, years, autoplay, firstOfPass]);
 
   const play = useCallback(() => {
     if (!years.length) return;
     setPlaying((p) => {
       if (p) return false;
-      if (shown === years[years.length - 1]) setYear(years[0]);
+      if (shown === lastOfPass || shown === years[years.length - 1]) setYear(firstOfPass);
       return true;
     });
-  }, [years, shown]);
+  }, [years, shown, lastOfPass, firstOfPass]);
   const step = useCallback(
     (d: number) => {
       if (shown === null) return;
@@ -186,24 +235,40 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
   );
   const flip = useCallback(() => harmonizedReady && setMode((m) => (m === 'detected' ? 'harmonized' : 'detected')), [harmonizedReady]);
 
-  // Taken in the capture phase, so these keys reach the years before a screen that mounts them.
+  // The script's keys for the years (EARTH-YEARS.md): Enter and Space play, Y switches the view, the arrows step.
+  // Heard before any screen under the years (keys.ts).
+  useWorldKeys((e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return false;
+    if (e.key === ' ' || e.key === 'Enter') play();
+    else if (e.key === 'ArrowRight') step(1);
+    else if (e.key === 'ArrowLeft') step(-1);
+    else if (e.key === 'y' || e.key === 'Y') flip();
+    else return false;
+    return true;
+  });
+  if (control) control.current = { play, flip };
+  const ratioRange = useMemo(() => {
+    if (!idx) return [null, null] as const;
+    const r = idx.years
+      .filter((y) => !y.partial && idx.layers[`viirs_${y.year}`] && idx.layers[`modis_${y.year}`])
+      .map((y) => idx.layers[`viirs_${y.year}`].rows / idx.layers[`modis_${y.year}`].rows);
+    return r.length ? ([Math.min(...r), Math.max(...r)] as const) : ([null, null] as const);
+  }, [idx]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // The script's keys for the years (EARTH-YEARS.md): Enter and Space play, Y switches the view, the arrows step.
-      if (e.key === ' ' || e.key === 'Enter') play();
-      else if (e.key === 'ArrowRight') step(1);
-      else if (e.key === 'ArrowLeft') step(-1);
-      else if (e.key === 'y' || e.key === 'Y') flip();
-      else return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [play, step, flip]);
+    if (!idx || shown === null) return;
+    onState?.({
+      year: shown,
+      mode,
+      playing,
+      first: idx.years[0].year,
+      last: idx.years[idx.years.length - 1].year,
+      ratio: sharpRatio(idx),
+      ratioLow: ratioRange[0],
+      ratioHigh: ratioRange[1],
+      oneScaleReady: harmonizedReady,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, shown, mode, playing, harmonizedReady, ratioRange]);
 
   // The strip of totals is measured so the Earth fits above it.
   const stripRef = useRef<HTMLDivElement | null>(null);
@@ -260,15 +325,17 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
       {caption && (
         <div className="world-years__caption" aria-live="polite">
           <div className="world-years__year">{shown}</div>
-          <div className="world-years__what">{what}</div>
+          <div className="world-years__what" data-caption={captionLine ? 'true' : 'false'}>{captionLine ?? what}</div>
           {note && <div className="world-years__note">{note}</div>}
         </div>
       )}
       <div className="world-years__controls" data-world-ui>
-        <button type="button" className="world-act" onClick={play}>
-          <kbd>Space</kbd>
-          <span>{playing ? Y.pause : Y.play}</span>
-        </button>
+        {ownPlay && (
+          <button type="button" className="world-act" onClick={play}>
+            <kbd>Space</kbd>
+            <span>{playing ? Y.pause : Y.play}</span>
+          </button>
+        )}
         <button type="button" className="world-act" onClick={() => step(-1)} aria-label="The year before">
           <kbd>&larr;</kbd>
         </button>
@@ -322,9 +389,11 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
             {line && <span className="world-years__key world-years__key--line">{Y.lineHarmonized}</span>}
           </div>
           {/* The label on the 2012 bar: its room is always kept, so the Earth does not move when it is said. */}
-          <div className="world-years__step" data-on={shown >= SHARP_FROM && sharpAt >= 0} aria-hidden={shown < SHARP_FROM}>
-            {mode === 'harmonized' ? Y.stepHarmonized : Y.stepDetected(ratio)}
-          </div>
+          {stepLabel && (
+            <div className="world-years__step" data-on={shown >= SHARP_FROM && sharpAt >= 0} aria-hidden={shown < SHARP_FROM}>
+              {mode === 'harmonized' ? Y.stepHarmonized : Y.stepDetected(ratio)}
+            </div>
+          )}
         </div>
         <div className="world-years__plot">
           {[10e6, 20e6].filter((v) => v < top).map((v) => (

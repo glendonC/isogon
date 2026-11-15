@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { count } from '../guide/formats';
 import { countryAt } from './countryAt';
 import { parseFresh, type FreshFire, type FreshLook, type Group } from './freshTest';
@@ -20,6 +20,8 @@ export const TEST_WORDS = {
   loading: 'Loading the test across the world.',
   failed: 'The test across the world did not load.',
   noLook: 'No look of the test across the world has been taken yet. Its plan of fires is written before any score.',
+  // The product lane's names of the two looks (WORDS-wider.json, world_pictures.panel.look_names), in place of the served ones.
+  lookNames: { test_a: 'Test A: fires it had never seen', test_b: 'Test B: fires that nothing had touched' } as Record<string, string>,
   title: (fires: number, groups: number) => `${count(fires)} fires in ${count(groups)} continents. Each square is one fire.`,
   held: (stated: number, held: number, looks: number) =>
     `Its stated ${Math.round(stated * 100)} percent interval held on ${Math.round(held * 100)} percent of the ${count(looks)} looks.`,
@@ -65,7 +67,12 @@ function cls(c: { ahead: number; tied: number; behind: number } | null) {
   ];
 }
 
-export function WorldTest({ source }: { source: string }) {
+/** What a host's guide drives: "Show a fire's scores" opens the next fire's card. */
+export interface WorldTestControl {
+  nextFire: () => void;
+}
+
+export function WorldTest({ source, control }: { source: string; control?: MutableRefObject<WorldTestControl | null> }) {
   const read = useRead<unknown>(source);
   const ans = useMemo(() => (read.state === 'ready' ? parseFresh(read.value) : null), [read]);
   const [lookId, setLookId] = useState<'test_a' | 'test_b' | null>(null);
@@ -107,6 +114,16 @@ export function WorldTest({ source }: { source: string }) {
   const groupName = (g: string) => (by === 'zone' ? TEST_WORDS.zones[g] ?? g : g);
   const tally = Array.from({ length: judged + 1 }, (_, k) => fires.filter((f) => f.ahead === k).length);
   const most = Math.max(1, ...tally);
+  if (control) {
+    control.current = {
+      nextFire: () => {
+        const order = [...fires].sort((a, b) => a.key.localeCompare(b.key));
+        if (!order.length) return;
+        const at = order.findIndex((f) => f.key === open);
+        setOpen(order[(at + 1) % order.length].key);
+      },
+    };
+  }
 
   return (
     <div className="world-earth" ref={root}>
@@ -160,12 +177,12 @@ export function WorldTest({ source }: { source: string }) {
               <div className="iso-choice" role="radiogroup">
                 {ans.looks.map((l) => (
                   <button key={l.id} type="button" role="radio" aria-checked={l.id === look.id} className="iso-choice__opt" data-active={l.id === look.id} onClick={() => setLookId(l.id)}>
-                    {l.name ?? l.id}
+                    {TEST_WORDS.lookNames[l.id] ?? l.name ?? l.id}
                   </button>
                 ))}
               </div>
             )}
-            {ans.looks.length === 1 && look.name && <div className="world-tests__look">{look.name[0].toUpperCase() + look.name.slice(1)}</div>}
+            {ans.looks.length === 1 && <div className="world-tests__look">{TEST_WORDS.lookNames[look.id] ?? look.name}</div>}
             <div className="world-legend__line">{TEST_WORDS.title(fires.length, new Set(fires.map((f) => f.continent)).size)}</div>
             <div className="world-tests__row world-tests__row--head">
               <span />

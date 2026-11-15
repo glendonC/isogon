@@ -184,3 +184,14 @@
   background: rgba(8, 11, 17, 0.55);
 }
 
+
+/* The film's caption under the year on the Earth's years, the shot's one line: as large as the objective's. */
+.iso-film .world-years__what[data-caption='true'] {
+  max-width: min(60vw, 1100px);
+  font-size: clamp(26px, 2vw, 40px);
+  line-height: 1.2;
+}
+
+.iso-film .world-screen[data-name='sealed'] .world-screen__sealed {
+  bottom: clamp(20px, 2vw, 40px);
+}

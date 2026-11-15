@@ -165,3 +165,47 @@ export const YEAR_WORDS = {
   partialBar: 'two months',
   clipped: (n: number) => `${n} ${n === 1 ? 'square lies' : 'squares lie'} above the scale and ${n === 1 ? 'is' : 'are'} drawn at its top`,
 };
+
+/**
+ * The guide's words on the pictures of the world, as the product lane writes them: the Earth's years from the
+ * script's state `earth_years` (GUIDE-script.json version 16, EARTH-YEARS.md), the test across the world and the
+ * sealed predictions from WORDS-wider.json version 4 (`world_pictures`). Every figure is a field filled from an answer.
+ */
+export const SCREEN_WORDS = {
+  years: {
+    objective: (first: number) => `Watch the Earth's fire year by year since ${first}`,
+    context: (first: number, last: number) => `${first} to ${last}`,
+    counted: (ratio: string) =>
+      `Each year as the satellites counted it: the older satellites' detections before 2012, the newer one's from then, about ${ratio} times as many for the same fires.`,
+    oneScale: "Each year on one scale: the older satellites' detections are put on the newer one's scale, so the years can be set side by side and 2012 shows no jump.",
+    play: 'Play the years',
+    stop: 'Stop',
+    toOneScale: 'See the years on one scale',
+    toCounted: 'See the years as the satellites counted them',
+    back: 'Back',
+    filmCounted: (ratio: string) => `2012: a sharper satellite begins. Same fires, ${ratio} times the detections.`,
+    filmOneScale: (first: number) => `On one scale, the years since ${first} show no jump.`,
+  },
+  test: {
+    objective: 'See where the estimate was tested',
+    strictBehind: (fires: number, continents: number, ahead: number, of: number, behind: number) =>
+      `On ${fires} fires it had never seen, across ${continents} continents, the experimental model was ahead of the simple methods on ${ahead} of ${of} scores and behind on ${behind}: it does not place fire square for square better than painting the coarse satellite's detections.`,
+    notStrictBehind: (fires: number, continents: number, ahead: number, of: number, level: number, behind: number) =>
+      `On ${fires} fires it had never seen, across ${continents} continents, the experimental model was ahead of the simple methods on ${ahead} of ${of} scores, level on ${level} and behind on ${behind}.`,
+    squares: (of: number) =>
+      `Each square is one fire, filled by how many of the ${of} scores the estimate won there against both simple methods: full is all, empty is none.`,
+    fireScores: "Show a fire's scores",
+    back: 'Back to the test',
+    filmA: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} unseen fires: ahead on ${ahead} of ${of} scores, behind on ${behind}.`,
+    filmB: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} untouched fires: ahead on ${ahead} of ${of}, behind on ${behind}.`,
+  },
+  sealed: {
+    objective: 'See predictions written before the pass',
+    marks: 'Each mark is a fire burning now, where a prediction was written down with its fingerprint before NASA published what the sharp satellite saw.',
+    soFar: (scored: number, ahead: number, level: number, behind: number) =>
+      `So far ${scored} are scored: ahead of both simple methods on ${ahead} scores, level on ${level} and behind on ${behind}.`,
+    back: 'Back to the fire',
+    film: (ahead: number, behind: number) => `Sealed before NASA published the pass: ahead on ${ahead}, behind on ${behind}.`,
+  },
+};
+

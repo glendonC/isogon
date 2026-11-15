@@ -30,6 +30,8 @@ export interface Group {
   classes: Classes | null;
   /** How often the estimate's stated interval held over the group's looks. */
   interval: { stated: number; held: number; looks: number } | null;
+  /** Each score's class where the answer names them ("csi_strict_375m": "behind"). */
+  scores: Record<string, string> | null;
 }
 
 export interface FreshLook {
@@ -108,6 +110,14 @@ function classesOf(g: Obj): Classes | null {
   };
 }
 
+function scoreWords(v: unknown): Record<string, string> | null {
+  const c = (v ?? null) as Obj | null;
+  if (!c) return null;
+  const out: Record<string, string> = {};
+  for (const [k, w] of Object.entries(c)) if (typeof w === 'string') out[k] = w;
+  return Object.keys(out).length ? out : null;
+}
+
 function group(name: string, v: unknown): Group {
   const g = (v ?? {}) as Obj;
   const i = (g.interval ?? null) as Obj | null;
@@ -119,6 +129,7 @@ function group(name: string, v: unknown): Group {
     fires: num(g.episodes),
     classes: classesOf(g),
     interval: stated !== null && held !== null && looks !== null ? { stated, held, looks } : null,
+    scores: scoreWords(g.classes),
   };
 }
 

@@ -1296,3 +1296,32 @@
   color: var(--sys-ink);
 }
 
+
+/* The host of the pictures of the world (WorldScreens.tsx): one picture over the whole page, the trail and the guide
+   of its own on it. Above the stage and the page's sheets; under the loader. */
+.world-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 72;
+  background: var(--sys-night);
+}
+
+.world-screen__test {
+  position: absolute;
+  inset: 0;
+}
+
+.world-screen__sealed {
+  position: absolute;
+  inset: var(--film-room-top, 96px) 0 var(--film-room-bottom, 150px) 0;
+}
+
+/* On the page the year stands under the trail, which holds the objective; the controls keep the top right. */
+.world-screen[data-name='years'][data-film='false'] {
+  --years-caption-top: 104px;
+}
+
+/* In the film the guide's sentence is left out, so the strip of totals goes down into its room. */
+.world-screen[data-film='true'] {
+  --years-bottom: clamp(20px, 2vw, 40px);
+}
