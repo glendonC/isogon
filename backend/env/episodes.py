@@ -208,7 +208,7 @@ def top_tile_share(episodes: list[EnvEpisode], splits: tuple[int, ...] = (2, 3, 
             v = np.clip((vi.lat[op.index] - s) / (nn - s), 0.0, 0.999999)
             for n in splits:
                 t = (np.floor(v * n) * n + np.floor(u * n)).astype(np.int64)
-                shares[n].append(float(np.bincount(t, minlength=n * n).max()) / op.n)
+                shares[n].append(float(np.bincount(t.astype(np.intp, copy=False), minlength=n * n).max()) / op.n)
     return {
         "overpasses": len(next(iter(shares.values()))) if shares else 0,
         "by_split": {

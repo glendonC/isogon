@@ -746,7 +746,7 @@ class NextLookEnv:
 
     def hidden_pixels_per_tile(self) -> NDArray[np.int64]:
         """Hidden pixels of the current look in each tile. Not part of the observation."""
-        return np.bincount(self._pixel_tile[min(self._k, self.n_looks - 1)], minlength=self.n_tiles)
+        return np.bincount(self._pixel_tile[min(self._k, self.n_looks - 1)].astype(np.intp, copy=False), minlength=self.n_tiles)
 
     def describe(self) -> dict[str, Any]:
         return {

@@ -115,7 +115,7 @@ def _n_tiles(obs: Observation) -> int:
 
 
 def _tile_sums(obs: Observation, field: NDArray[np.float64]) -> NDArray[np.float64]:
-    return np.bincount(obs.tile_of_cell.ravel(), weights=field.ravel(), minlength=_n_tiles(obs))
+    return np.bincount(obs.tile_of_cell.ravel().astype(np.intp, copy=False), weights=field.ravel(), minlength=_n_tiles(obs))
 
 
 def centre_tiles(tiles_shape: tuple[int, int]) -> list[int]:
@@ -251,7 +251,7 @@ class LatestModisAgent:
         if not ok.any():
             return np.zeros(n)
         age_h = (obs.time_s - obs.modis[ok, 5]) / 3600.0
-        return np.bincount(obs.modis_tile[ok], weights=obs.modis[ok, 4] * 0.5 ** (age_h / 6.0), minlength=n)
+        return np.bincount(obs.modis_tile[ok].astype(np.intp, copy=False), weights=obs.modis[ok, 4] * 0.5 ** (age_h / 6.0), minlength=n)
 
     def choose(self, obs: Observation, env: NextLookEnv | None = None) -> int:
         return int(np.argmax(self.scores(obs)))

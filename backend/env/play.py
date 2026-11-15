@@ -113,13 +113,13 @@ def tile_view(obs: Observation, revealed_before: list[int] | None = None) -> dic
     p = np.clip(np.nan_to_num(obs.p_burning), 0.0, 1.0)
 
     def per_tile(v: np.ndarray, digits: int) -> list[float]:
-        s = np.bincount(tile, weights=np.nan_to_num(np.asarray(v, dtype=np.float64)).ravel(), minlength=n)
+        s = np.bincount(tile.astype(np.intp, copy=False), weights=np.nan_to_num(np.asarray(v, dtype=np.float64)).ravel(), minlength=n)
         return [round(float(x), digits) for x in s]
 
     inside = obs.modis_tile >= 0
     age_h = (obs.time_s - obs.modis[inside, 5]) / 3600.0
-    recent = np.bincount(obs.modis_tile[inside], weights=obs.modis[inside, 4] * 0.5 ** (age_h / 6.0), minlength=n)
-    looked = np.bincount(np.array([t for _, t in obs.revealed_tiles], dtype=np.int64), minlength=n)
+    recent = np.bincount(obs.modis_tile[inside].astype(np.intp, copy=False), weights=obs.modis[inside, 4] * 0.5 ** (age_h / 6.0), minlength=n)
+    looked = np.bincount(np.array([t for _, t in obs.revealed_tiles], dtype=np.intp), minlength=n)
     shown = revealed_before if revealed_before is not None else [0] * n
     return {
         "expected_burning_cells": per_tile(p, 3),
@@ -127,7 +127,7 @@ def tile_view(obs: Observation, revealed_before: list[int] | None = None) -> dic
         "frp_mw": per_tile(obs.frp_mw, 1),
         "sigma_mw": per_tile(obs.sigma_mw, 1),
         "covered": [bool(x) for x in np.asarray(obs.tile_covered).ravel()],
-        "modis_pixels": [int(x) for x in np.bincount(obs.modis_tile[inside], minlength=n)],
+        "modis_pixels": [int(x) for x in np.bincount(obs.modis_tile[inside].astype(np.intp, copy=False), minlength=n)],
         "modis_recent_frp_mw": [round(float(x), 1) for x in recent],
         "looks_before": [int(x) for x in looked],
         "revealed_pixels_before": [int(x) for x in shown],

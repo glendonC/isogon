@@ -256,7 +256,7 @@ def observation_json(obs: Any, env: Any) -> dict[str, Any]:
     p = np.clip(np.nan_to_num(np.asarray(obs.p_burning, dtype=np.float64)), 0.0, 1.0)
 
     def per_tile(v: np.ndarray, digits: int) -> list[float]:
-        s = np.bincount(tile, weights=np.nan_to_num(np.asarray(v, dtype=np.float64)).ravel(), minlength=n)
+        s = np.bincount(tile.astype(np.intp, copy=False), weights=np.nan_to_num(np.asarray(v, dtype=np.float64)).ravel(), minlength=n)
         return [round(float(x), digits) for x in s]
 
     return {

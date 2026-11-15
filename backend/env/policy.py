@@ -52,7 +52,7 @@ FEATURE_NAMES: tuple[str, ...] = tuple(n for n, _ in FEATURES)
 
 def _per_tile(obs: Observation, field: NDArray[np.float64]) -> NDArray[np.float64]:
     n = obs.tiles_shape[0] * obs.tiles_shape[1]
-    return np.bincount(obs.tile_of_cell.ravel(), weights=field.ravel(), minlength=n)
+    return np.bincount(obs.tile_of_cell.ravel().astype(np.intp, copy=False), weights=field.ravel(), minlength=n)
 
 
 def _unit(v: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -79,9 +79,9 @@ def tile_features(obs: Observation, env: NextLookEnv | None = None) -> NDArray[n
             tile = obs.modis_tile[ok]
             age_h = (obs.time_s - obs.modis[ok, 5]) / 3600.0
             w = 0.5 ** (age_h / 6.0)
-            recent_frp = np.bincount(tile, weights=obs.modis[ok, 4] * w, minlength=n)
-            recent_n = np.bincount(tile, weights=w, minlength=n)
-            all_n = np.bincount(tile, minlength=n).astype(np.float64)
+            recent_frp = np.bincount(tile.astype(np.intp, copy=False), weights=obs.modis[ok, 4] * w, minlength=n)
+            recent_n = np.bincount(tile.astype(np.intp, copy=False), weights=w, minlength=n)
+            all_n = np.bincount(tile.astype(np.intp, copy=False), minlength=n).astype(np.float64)
         hours_since_modis = float(min(12.0, (obs.time_s - float(obs.modis[:, 5].max())) / 3600.0))
     seen = np.zeros(n)
     for k, tile in obs.revealed_tiles:
@@ -94,8 +94,8 @@ def tile_features(obs: Observation, env: NextLookEnv | None = None) -> NDArray[n
     unsure_neigh = (neigh / np.maximum(count, 1.0)).ravel()
     relief = np.zeros(n)
     if obs.terrain_m is not None:
-        mean = _per_tile(obs, obs.terrain_m) / np.maximum(np.bincount(obs.tile_of_cell.ravel(), minlength=n), 1)
-        var = _per_tile(obs, (obs.terrain_m - mean[obs.tile_of_cell]) ** 2) / np.maximum(np.bincount(obs.tile_of_cell.ravel(), minlength=n), 1)
+        mean = _per_tile(obs, obs.terrain_m) / np.maximum(np.bincount(obs.tile_of_cell.ravel().astype(np.intp, copy=False), minlength=n), 1)
+        var = _per_tile(obs, (obs.terrain_m - mean[obs.tile_of_cell]) ** 2) / np.maximum(np.bincount(obs.tile_of_cell.ravel().astype(np.intp, copy=False), minlength=n), 1)
         relief = _unit(np.sqrt(var))
     day = 1.0 if obs.is_day else 0.0
     to_come = obs.looks_left / max(obs.decision + obs.looks_left, 1)
@@ -163,8 +163,8 @@ def look_features(obs: Observation) -> NDArray[np.float64]:
         ok = obs.modis_tile >= 0
         if ok.any():
             w = 0.5 ** ((obs.time_s - obs.modis[ok, 5]) / 3600.0 / 6.0)
-            recent_frp = np.bincount(obs.modis_tile[ok], weights=obs.modis[ok, 4] * w, minlength=n)
-            recent_n = np.bincount(obs.modis_tile[ok], weights=w, minlength=n)
+            recent_frp = np.bincount(obs.modis_tile[ok].astype(np.intp, copy=False), weights=obs.modis[ok, 4] * w, minlength=n)
+            recent_n = np.bincount(obs.modis_tile[ok].astype(np.intp, copy=False), weights=w, minlength=n)
             last_pass = float((obs.modis[ok, 5] >= newest - 1800.0).sum())
     k, t = int(obs.decision), obs.look_times_s
     before = float(min(12.0, (t[k] - t[k - 1]) / 3600.0)) if k > 0 else 12.0
