@@ -137,10 +137,16 @@ function bitmapTexture(bitmap: ImageBitmap): THREE.Texture {
   return tex;
 }
 
-/** The median brightness of a decoded picture, read on a 256 by 256 sample; null where no canvas can read it. */
-function pictureMedianLuma(bitmap: ImageBitmap): number | null {
+/**
+ * The median brightness of a decoded picture, read on a 256 by 256 sample; null where no canvas can read it.
+ * (the sample is made by the browser off the page's thread where it can: drawing an 8192 picture down on
+ * the page's thread stalls a slow machine for a large part of a second)
+ */
+async function pictureMedianLuma(bitmap: ImageBitmap): Promise<number | null> {
+  let small: ImageBitmap | null = null;
   try {
     const n = 256;
+    small = await createImageBitmap(bitmap, { resizeWidth: n, resizeHeight: n, resizeQuality: 'medium' }).catch(() => null);
     const canvas =
       typeof OffscreenCanvas !== 'undefined'
         ? new OffscreenCanvas(n, n)
@@ -149,10 +155,12 @@ function pictureMedianLuma(bitmap: ImageBitmap): number | null {
     if (!ctx) return null;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bitmap, 0, 0, n, n);
+    ctx.drawImage(small ?? bitmap, 0, 0, n, n);
     return medianLumaOf(ctx.getImageData(0, 0, n, n).data);
   } catch {
     return null;
+  } finally {
+    small?.close();
   }
 }
 
@@ -258,7 +266,13 @@ export async function loadTerrainPack(
     smoothDemForDisplay(demRaw, manifest.dem.size);
     const demPack = createDemR32FTexture(demRaw, true);
 
-    const medianLuma = pictureMedianLuma(ortho.bitmap);
+    const medianLuma = await pictureMedianLuma(ortho.bitmap);
+    if (opts.isCancelled?.()) {
+      demPack.texture.dispose();
+      ortho.bitmap.close();
+      auxBitmap.close();
+      return null;
+    }
     const orthoTexture = bitmapTexture(ortho.bitmap);
     orthoTexture.colorSpace = THREE.SRGBColorSpace;
     orthoTexture.anisotropy = opts.maxAnisotropy;

@@ -55,6 +55,13 @@ export interface LandingStandpointCheck {
 
 export interface EarthStageTelemetry {
   fps: number;
+  /**
+   * The share of the device's pixel ratio the stage draws at: 1, or less while frames run slow on this
+   * machine. Shown nowhere on the page.
+   */
+  renderScale?: number;
+  /** True where the stage measured a slow page thread and took the smaller ground pictures. */
+  slowDevice?: boolean;
   vertexCount: number;
   orthoResolution: string;
   demResolution: string;

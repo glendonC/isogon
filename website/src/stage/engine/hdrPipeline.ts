@@ -47,6 +47,7 @@ export const HDR_DEFAULTS: Required<HdrPipelineOptions> = {
 };
 
 export const MAX_STAGE_PIXEL_RATIO = 2;
+export const MIN_STAGE_PIXEL_RATIO = 0.5;
 
 export function resolveStagePixelRatio(): number {
   const raw = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
@@ -136,7 +137,8 @@ export class HdrPipeline {
   public setSize(cssWidth: number, cssHeight: number, pixelRatio: number): boolean {
     const w = Math.max(1, Math.floor(cssWidth));
     const h = Math.max(1, Math.floor(cssHeight));
-    const pr = Math.min(MAX_STAGE_PIXEL_RATIO, Math.max(1, pixelRatio));
+    // (below 1 only when the stage draws at a smaller render scale on a slow machine)
+    const pr = Math.min(MAX_STAGE_PIXEL_RATIO, Math.max(MIN_STAGE_PIXEL_RATIO, pixelRatio));
     if (w === this.cssWidth && h === this.cssHeight && Math.abs(pr - this.pixelRatio) < 1e-3) {
       return false;
     }

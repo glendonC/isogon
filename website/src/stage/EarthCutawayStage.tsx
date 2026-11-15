@@ -92,6 +92,9 @@ import {
 } from './engine/scanGeometry';
 import { SunShadowBaker } from './engine/shadowBake';
 import { firePatches, type FirePatches } from './engine/firePatches';
+import { flatGridArrays } from './engine/flatGrid';
+import { isSlowMainThread, mainThreadBenchMs } from './engine/deviceSpeed';
+import { RenderScaleGovernor } from './engine/renderScale';
 import { levelIsWholeMetres } from './engine/levelGround';
 import { SpacecraftFleet, buildOrbitEnvironment, type FleetPass } from './engine/spacecraft';
 import { SmokePass, buildSmokeHeightTexture } from './engine/smokeVolume';
@@ -832,6 +835,9 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     } catch (err) {
       throw new StageWebGLError('failed', err);
     }
+    // How fast this machine's page thread is, measured once (see deviceSpeed): a slow one takes the
+    // smaller ground pictures
+    const slowMainThread = isSlowMainThread(mainThreadBenchMs());
     let dpr = resolveStagePixelRatio();
     renderer.setPixelRatio(dpr);
     renderer.setClearColor(new THREE.Color('#080b11'), 1.0);
@@ -1358,14 +1364,19 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
     // 3d. Terrain surface mesh. The plane is unit-parameterised; the shader sizes it from the
     // map frame. 512 x 512 vertices by default, 1024 x 1024 once a terrain pack is active.
-    const buildTerrainGeometry = (segments: number): THREE.PlaneGeometry => {
-      const geom = new THREE.PlaneGeometry(1, 1, segments, segments);
-      geom.rotateX(-Math.PI / 2);
+    const buildTerrainGeometry = (segments: number): THREE.BufferGeometry => {
+      // (the plane of three.js turned flat, filled straight into typed arrays: see flatGridArrays)
+      const grid = flatGridArrays(segments);
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.BufferAttribute(grid.position, 3));
+      geom.setAttribute('normal', new THREE.BufferAttribute(grid.normal, 3));
+      geom.setAttribute('uv', new THREE.BufferAttribute(grid.uv, 2));
+      geom.setIndex(new THREE.BufferAttribute(grid.index, 1));
       geom.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.0, 0), 15.0);
       return geom;
     };
     const terrainGeom = buildTerrainGeometry(SLAB_SEGMENTS);
-    let hiResTerrainGeom: THREE.PlaneGeometry | null = null;
+    let hiResTerrainGeom: THREE.BufferGeometry | null = null;
     let hiResSkirtGeom: THREE.BufferGeometry | null = null;
 
     const terrainUniforms = {
@@ -1663,9 +1674,12 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     // browser HTTP cache makes that a decode, not a download).
     // ---------------------------------------------------------------------------------------
     const packBundles = new Map<string, CachedTheaterBundle>();
+    // (the full-size pictures where the device can take them: a texture limit of 8192, 8 GB or more,
+    // and a page thread fast enough that their upload does not stall the picture, see deviceSpeed)
     const fullResPack =
       renderer.capabilities.maxTextureSize >= 8192 &&
-      ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) >= 8;
+      ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) >= 8 &&
+      !slowMainThread;
 
     const ensureHiResGeometry = () => {
       if (hiResTerrainGeom) return;
@@ -3057,15 +3071,28 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     // 6. Pointer & Wheel Interaction Handlers (Damped Orbit/Pan/Zoom)
     let viewportW = Math.max(1, host.clientWidth);
     let viewportH = Math.max(1, host.clientHeight);
+    // The share of the device's pixel ratio the stage draws at: 1, or less while frames run slow (see
+    // steadyRenderScale). Nothing on screen says so; the picture stays steady instead of stuttering.
+    let renderScale = 1;
     const updateSize = () => {
       if (!host) return;
       viewportW = Math.max(1, host.clientWidth);
       viewportH = Math.max(1, host.clientHeight);
       dpr = resolveStagePixelRatio();
-      pipeline.setSize(viewportW, viewportH, dpr);
+      pipeline.setSize(viewportW, viewportH, dpr * renderScale);
       camera.aspect = viewportW / viewportH;
     };
     updateSize();
+
+    // A steady picture on a slow machine (see RenderScaleGovernor): the stage draws at a smaller render
+    // scale while its frames run slow, and climbs back once they run at the display's pace
+    const scaleGovernor = new RenderScaleGovernor();
+    const steadyRenderScale = (gapMs: number) => {
+      const next = scaleGovernor.feed(gapMs, document.hidden);
+      if (next === null) return;
+      renderScale = next;
+      pipeline.setSize(viewportW, viewportH, dpr * renderScale);
+    };
 
     const resizeObs = new ResizeObserver(updateSize);
     resizeObs.observe(host);
@@ -3341,6 +3368,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       const dtSec = Math.min(0.065, Math.max(0.001, frameGapMs * 0.001));
       prevTimeMs = nowMs;
       elapsedSec += dtSec;
+      steadyRenderScale(frameGapMs);
 
       const p = propsRef.current;
       const dampFast = 1.0 - Math.exp(-dtSec * 8.5);
@@ -5012,6 +5040,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           lastTelemetryEmitSec = elapsedSec;
           const telemetry: EarthStageTelemetry = {
             fps: Math.round(smoothedFps),
+            renderScale: +renderScale.toFixed(2),
+            slowDevice: slowMainThread,
             vertexCount:
               terrainMesh.geometry.getAttribute('position').count +
               skirtMesh.geometry.getAttribute('position').count,
