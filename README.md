@@ -14,6 +14,21 @@ things with them, and the site walks through them as four steps, Record, Estimat
 3. **A game of where to look.** The hidden satellite is the answer key: a person, simple rules and a learned player
    choose where a sharp look should go, and each look is scored by how much it improves the estimate.
 
+![Detections each year, the whole Earth, 2000 to 2025: as the satellites counted and on one scale](docs/detections-each-year.png)
+
+*Fire detections each year over the whole Earth. Bars: as the satellites counted, MODIS on Terra and Aqua to 2011,
+VIIRS on Suomi NPP from 2012. Line: on one scale, the harmonized record. Figures: every country's NASA FIRMS yearly
+files, summed by `backend/model/harmonize_years.py` (its yearly totals) and drawn by
+`backend/model/harmonize_figure.py`.*
+
+![Fire across the Earth in 2011 and 2012, as the satellites counted them and on one scale](docs/earth-2011-2012.png)
+
+*Fire across the Earth in 2011 and 2012. Top, as the satellites counted: the older satellites (MODIS) in 2011, and in
+2012 the newer, sharper one (VIIRS), which makes about 4.4 times as many detections of the same fires, so the Earth
+brightens with no more fire. Bottom, on one scale: the older satellites' detections put on the newer one's scale, and
+2012 shows no jump. Source: NASA FIRMS country yearly files (MODIS Collection 6.1, VIIRS 375 m Suomi NPP), summed per
+square of a quarter degree in the fire cube; drawn by `backend/firms/cube_figure.py`.*
+
 ## What is measured
 
 Every figure is served by the backend (`GET /api/evidence`, `GET /api/calendar`, `GET /api/cube/years`) from tracked
