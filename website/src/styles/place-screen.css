@@ -152,6 +152,11 @@
   color: var(--sys-ink-3);
 }
 
+.place__opens {
+  margin: var(--sys-s1) 0;
+  color: var(--sys-ink-2);
+}
+
 .place__card .place__act--next {
   margin-top: var(--sys-s2);
 }

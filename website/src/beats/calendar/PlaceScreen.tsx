@@ -68,6 +68,13 @@ export const PLACE_WORDS = {
     'validated on': 'The model was checked on it',
     'recorded test fire': 'A recorded test fire',
   } as Record<string, string>,
+  /** What showing the fire will do, by how the registry opens it: said to someone who does not know the model. */
+  opens: {
+    recorded:
+      'The model was tested on this fire once, with the sharp satellite hidden, and that result is on record. Here it opens with both satellites shown.',
+    held: 'It opens with the sharp satellite hidden, so you can see the estimate and then test it.',
+    heldTuned: 'It opens with the sharp satellite hidden. The model was tuned on fires of these years here, so its test is not a fair one.',
+  },
   among: (name: string) => `Fires here in this period, among them the ${name}`,
   show: 'Show this fire',
   find: 'Find a place, a fire, or latitude, longitude',
@@ -88,6 +95,14 @@ export const standingOf = (f: FeaturedFire): string | null => {
   const word = f.to_the_world_model ?? (f.blind_test_fire ? 'recorded test fire' : null);
   return word ? PLACE_WORDS.standing[word] ?? `${word[0].toUpperCase()}${word.slice(1)}` : null;
 };
+
+/** What showing a fire will do for the visitor, from how the registry opens it and what the fire is to the model. */
+export const opensOf = (f: FeaturedFire): string =>
+  f.blind_test_fire || f.opens?.holdout_viirs === false
+    ? PLACE_WORDS.opens.recorded
+    : f.to_the_world_model === 'fitted on'
+      ? PLACE_WORDS.opens.heldTuned
+      : PLACE_WORDS.opens.held;
 
 /** One more sentence on a fire: the fires an agency list names in its box and period. */
 const aboutOf = (f: FeaturedFire): string | null => (f.name ? PLACE_WORDS.among(f.name) : null);
@@ -323,7 +338,7 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
   const firstNamed = (id: string) => (id === activePlace ? 0 : id === currentPlace ? 1 : 2);
   // The card at the open fire's mark: on the side of the mark with room, inside the region the map is read in
   const CARD_W = 320;
-  const CARD_H = 330;
+  const CARD_H = 380;
   const anchor = activeHit ? marks.find((m) => m.p.id === activeHit.place.id) ?? null : null;
   const cardAt = (() => {
     if (!activeHit) return null;
@@ -465,6 +480,7 @@ export function PlaceScreen({ places, currentFire, onFire, onBox, onClose }: Pla
           <span className="place__cardperiod">{activeHit.fire.label}</span>
           <span className="sys-label">{activeHit.place.name}</span>
           {standingOf(activeHit.fire) && <span className="sys-label place__standing">{standingOf(activeHit.fire)}</span>}
+          <span className="sys-label place__opens">{opensOf(activeHit.fire)}</span>
           {aboutOf(activeHit.fire) && <span className="sys-fine">{aboutOf(activeHit.fire)}</span>}
           <button type="button" className="place__act place__act--next" onClick={() => onFire(activeHit.place, activeHit.fire)}>
             <span className="place__key">Enter</span>
