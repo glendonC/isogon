@@ -18,7 +18,8 @@ assets of each run and its readings (`GET /api/sensor-model` for the run, `GET /
 with the page's default filter), its pass list as a held-out window shows it (`hidden=VIIRS`)
 and in full for the reveal, the play of each player the page shows, step by step (the one that reads the hidden rows
 with `ceiling`), one round of next look played with the looks of the reference player `least_sure`, taken from
-its play, and NASA's picture of the box for each day of its window as the stage asks for it. Rounds and plays are asked with the page's own bodies (`{region_id, start}`, the environment's own tiles
+its play, with the round's first step for every square and for letting the pass go (the visitor's first look), and
+NASA's picture of the box for each day of its window as the stage asks for it. Rounds and plays are asked with the page's own bodies (`{region_id, start}`, the environment's own tiles
 and budget), so the page finds them under the same keys. A
 recorded test fire gets its run with every satellite shown on its recorded window and its full pass list; nothing of
 it is held out, revealed or played. Run bodies are built as the page builds them (`page_run_body`). Only the files
@@ -312,10 +313,15 @@ class Recorder:
         rec_id = "nl-rec-" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:8]
         self.round_ids[live_id] = rec_id
         obs = self._store(key, status, ctype, raw, headers)["observation"]
+        first_obs = obs
+        first_action: int | None = None
         steps = 0
         while True:
+            action = policy(obs)
+            if first_action is None:
+                first_action = int(action)
             step = self.fetch("POST", "/api/env/next_look/step",
-                              body={"round_id": rec_id, "decision": obs["decision"], "action": policy(obs)})
+                              body={"round_id": rec_id, "decision": obs["decision"], "action": action})
             steps += 1
             if not isinstance(step, dict) or step.get("done") or step.get("observation") is None:
                 break
@@ -330,8 +336,38 @@ class Recorder:
             time.sleep(5)
             self.entries.pop(state_key, None)
             self.parsed.pop(state_key, None)
+        first_looks = self.record_first_looks(reset_body, rec_id, first_obs, first_action)
         self.rounds.append({"episode_from": reset_body, "round_id": rec_id, "player": policy_name,
-                            "actions_from": actions_from, "steps": steps})
+                            "actions_from": actions_from, "steps": steps, "first_looks": first_looks})
+
+    def record_first_looks(self, reset_body: dict[str, Any], rec_id: str, obs: dict[str, Any],
+                           taken: int | None) -> list[int]:
+        """The visitor's first look, whatever it is: the round's first step for every square and for letting the
+        pass go, each played on a round of its own on the live server and kept under the recorded round's one id,
+        so the page's own request (`{round_id, decision, action}`) finds its answer. Only the first step is kept for
+        each; the round's later steps are those of the recorded line."""
+        squares = len(obs.get("tile_covered") or ((obs.get("estimate") or {}).get("per_tile") or {}).get("unsure") or [])
+        decision = int(obs["decision"])
+        done = [] if taken is None else [taken]
+        for action in [-1, *range(squares)]:
+            if action in done:
+                continue
+            body = {"round_id": rec_id, "decision": decision, "action": action}
+            key = request_key("POST", "/api/env/next_look/step", body=body)
+            if key in self.entries:
+                done.append(action)
+                continue
+            status, ctype, raw, _ = self._http("POST", "/api/env/next_look/reset", None, reset_body)
+            if status != 200:
+                break
+            live_id = json.loads(raw)["round_id"]
+            self.round_ids[live_id] = rec_id
+            status, ctype, raw, headers = self._http("POST", "/api/env/next_look/step", None, {**body, "round_id": live_id})
+            self.plan_run.append({"method": "POST", "path": "/api/env/next_look/step", "body": body, "status": status,
+                                  "first_look": True})
+            self._store(key, status, ctype, raw, headers)
+            done.append(action)
+        return sorted(done)
 
     def record_plays(self, episode: dict[str, Any]) -> None:
         """The play of each player the page shows on one episode, step by step (`POST /api/env/next_look/play`), with
@@ -348,7 +384,7 @@ class Recorder:
 
     # ---- the default plan ----------------------------------------------------------------------------------------
 
-    def record_default(self, current: bool = False) -> None:
+    def record_default(self, current: bool = False, also_periods: tuple[str, ...] = ()) -> None:
         self.fetch("GET", "/api/health")
         regions = self.fetch("GET", "/api/regions")
         self.fetch("GET", "/api/evidence")
@@ -378,7 +414,7 @@ class Recorder:
                     self.record_passes(rid, shown, hidden=False)
                     continue
                 open_periods += 1
-                if self.busiest_period_only and open_periods > 1:
+                if self.busiest_period_only and open_periods > 1 and str(fire.get("id")) not in also_periods:
                     self.periods_left_out.append(str(fire.get("id") or f"{rid}:{start}"))
                     continue
                 held = self.run_with_assets(page_run_body(rid, start, holdout=True))
@@ -457,6 +493,8 @@ def _main(argv: list[str] | None = None) -> int:
                          "no longer scores its closed window)")
     ap.add_argument("--busiest-period-only", action="store_true",
                     help="record only each region's first open featured period, its busiest, and list the others")
+    ap.add_argument("--also-period", action="append", default=[],
+                    help="a featured period recorded even with --busiest-period-only (its id, such as okefenokee_ga:2017-05)")
     args = ap.parse_args(argv)
     rec = Recorder(args.base, args.out, recorded_windows=args.recorded_windows,
                    busiest_period_only=args.busiest_period_only)
@@ -464,7 +502,7 @@ def _main(argv: list[str] | None = None) -> int:
     if args.plan is not None:
         rec.record_plan(json.loads(args.plan.read_text(encoding="utf-8")))
     else:
-        rec.record_default(current=args.current)
+        rec.record_default(current=args.current, also_periods=tuple(args.also_period))
     index = rec.write_index()
     from backend.firms.archive import _map_key
 

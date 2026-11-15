@@ -142,6 +142,13 @@ class BusiestPeriodTests(unittest.TestCase):
             starts = {(b or {}).get("start") for _, path, b in backend.seen if path == "/api/reconstruct"}
             self.assertEqual(starts, {"2012-08-10"})
             self.assertEqual(index["periods_left_out"]["periods"], ["plumas_ca:2020-09"])
+        with tempfile.TemporaryDirectory() as tmp:
+            backend = TwoPeriods()
+            rec = Recorder("http://stand.in", Path(tmp), opener=backend, busiest_period_only=True)
+            rec.record_default(also_periods=("plumas_ca:2020-09",))
+            starts = {(b or {}).get("start") for _, path, b in backend.seen if path == "/api/reconstruct"}
+            self.assertEqual(starts, {"2012-08-10", "2020-09-25"})
+            self.assertEqual(rec.periods_left_out, [])
 
 
 class PublishableImageryTests(unittest.TestCase):
@@ -224,6 +231,11 @@ class RecorderTests(unittest.TestCase):
                              ("least_sure", "POST /api/env/next_look/play, "))
             self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": -1, "decision": 0, "round_id": rid}), entries)
             self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": 2, "decision": 1, "round_id": rid}), entries)
+            # the visitor's first look, whatever it is: the first step for every square and for letting the pass go,
+            # under the round's one recorded id
+            self.assertEqual(index["rounds"][0]["first_looks"], [-1, 0, 1, 2, 3])
+            for a in range(4):
+                self.assertIn(request_key("POST", "/api/env/next_look/step", body={"action": a, "decision": 0, "round_id": rid}), entries)
             # the pass list as a held-out window shows it, and in full for the reveal
             passes = [k for k in entries if k.startswith("GET /api/passes?")]
             self.assertEqual(len(passes), 2)
