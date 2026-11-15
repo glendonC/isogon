@@ -19,6 +19,9 @@ export interface Guide {
   besideFire: ScriptAction | null;
 }
 
+/** How many of a state's lines stand together in the guide. */
+const STANDING = 2;
+
 const NONE: Guide = {
   step: null,
   stateId: null,
@@ -69,7 +72,8 @@ export function useGuide(ws: WorkspaceBase, open: { scores: boolean; sideBySide:
 
   const state = stateOf(step, id);
   const actions = (state?.actions ?? []).slice(0, 3);
-  // A file that did not load is said first, while the run it belongs to is on show.
+  // A file that did not load is said first, while the run it belongs to is on show. Then the state's standing
+  // sentences: its first two lines, shown together.
   const missing = id === 'loading' || id === 'failed' ? null : missingLine(ws.model.missingFiles);
   return {
     step,
@@ -77,7 +81,7 @@ export function useGuide(ws: WorkspaceBase, open: { scores: boolean; sideBySide:
     state,
     objective: objectiveOf(step, state, fields),
     context: contextOf(step, fields),
-    lines: [...(missing ? [missing] : []), ...says(state, fields, conds)],
+    lines: [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)],
     actions,
     fireLabel: labelOn(state, 'fire', fields, conds),
     besideFire: promptBeside(state, 'fire'),

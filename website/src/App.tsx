@@ -1237,7 +1237,7 @@ export function App() {
             {guide.step && (
               <>
                 <div className="guide-scrim" aria-hidden="true" />
-                <GuideStrip stateKey={`${guide.step}:${guide.stateId}:${realStart}`} lines={guide.lines} actions={guide.actions} onAction={runCommand} />
+                <GuideStrip lines={guide.lines} actions={guide.actions} onAction={runCommand} />
               </>
             )}
             <div className="iso-ws__dock" hidden={step === 'record' || step === 'agent'}>

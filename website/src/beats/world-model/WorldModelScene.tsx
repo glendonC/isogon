@@ -3,6 +3,7 @@ import { useWorkspace } from '../../app/store';
 import { ThreeWaysPlane } from '../../compare/ThreeWaysPlane';
 import type { StageFireAnchor } from '../../stage/earthCutawayTypes';
 import { fireAt, onScreen, runBox, type ScreenBox } from './fire';
+import { labelPoint } from '../../guide/anchor';
 import '../../styles/world-model.css';
 import '../../styles/guide.css';
 
@@ -18,7 +19,7 @@ function useFireAnchor(subscribe: (fn: (a: StageFireAnchor | null) => void) => (
       frame = window.requestAnimationFrame(() => {
         frame = 0;
         setAnchor((was) =>
-          was && latest && Math.abs(was.x - latest.x) < 0.5 && Math.abs(was.y - latest.y) < 0.5 && was.right === latest.right && was.visible === latest.visible
+          was && latest && samePoint(labelPoint(was), labelPoint(latest)) && Math.abs(was.x - latest.x) < 0.5 && was.right === latest.right && was.visible === latest.visible
             ? was
             : latest,
         );
@@ -31,6 +32,9 @@ function useFireAnchor(subscribe: (fn: (a: StageFireAnchor | null) => void) => (
   }, [subscribe]);
   return anchor;
 }
+
+const samePoint = (a: { x: number; y: number } | null, b: { x: number; y: number } | null) =>
+  a === b || Boolean(a && b && Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5);
 
 /** The stage's box of the fire on show, with a margin for the glow, held inside the screen; null when off screen. */
 function anchorBox(a: StageFireAnchor | null): ScreenBox | null {
@@ -59,7 +63,8 @@ export function WorldModelScene() {
   const box = runBox(run.active);
   const fire = fireAt(run.active, time.pass);
   const anchor = useFireAnchor(model.subscribeAnchor);
-  const at = anchor?.visible ? { x: anchor.x, y: anchor.y } : fire && box ? onScreen(fire.lon, fire.lat, box, model.grid) : null;
+  // The label hangs on the larger patch of the fire (`labelPoint`); the prompt stands beside the whole fire's extent.
+  const at = labelPoint(anchor) ?? (fire && box ? onScreen(fire.lon, fire.lat, box, model.grid) : null);
   const extent = anchorBox(anchor) ?? (at ? { left: at.x - 40, top: at.y - 30, right: at.x + 40, bottom: at.y + 30 } : null);
   // A fire that fills much of the screen has no side to stand beside: nearness and the prompt go by its anchor then.
   const compact = Boolean(extent && extent.right - extent.left < window.innerWidth * 0.5 && extent.bottom - extent.top < window.innerHeight * 0.5);

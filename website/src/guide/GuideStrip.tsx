@@ -1,41 +1,16 @@
-import { useEffect, useState } from 'react';
 import type { ScriptAction } from './script';
 import '../styles/guide.css';
 
-/** How long a line stays before the next of the same state, ms. The last line stays. */
-const LINE_MS = 7000;
-
 /**
- * The guide at the bottom: the state's lines, said in turn with the last one staying, and at most three actions, the
- * next step first and the only strong one. An action is text; its key is a small quiet mark before the verb.
+ * The guide at the bottom: the state's standing sentences, shown together and left in place (there is no voice, so
+ * the reader sets the pace), and at most three actions, the next step first and the only strong one. An action is
+ * text; its key is a small quiet mark before the verb.
  */
-export function GuideStrip({
-  stateKey,
-  lines,
-  actions,
-  onAction,
-}: {
-  stateKey: string;
-  lines: string[];
-  actions: ScriptAction[];
-  onAction: (command: string) => void;
-}) {
-  const [shown, setShown] = useState({ key: stateKey, i: 0 });
-  const i = shown.key === stateKey ? shown.i : 0;
-  useEffect(() => {
-    if (shown.key !== stateKey) setShown({ key: stateKey, i: 0 });
-  }, [stateKey, shown.key]);
-  useEffect(() => {
-    if (i >= lines.length - 1) return;
-    const t = window.setTimeout(() => setShown({ key: stateKey, i: i + 1 }), LINE_MS);
-    return () => window.clearTimeout(t);
-  }, [i, lines.length, stateKey]);
-
-  const line = lines[Math.min(i, lines.length - 1)] ?? null;
+export function GuideStrip({ lines, actions, onAction }: { lines: string[]; actions: ScriptAction[]; onAction: (command: string) => void }) {
   return (
     <div className="guide-strip" role="region" aria-label="Guide">
       <p className="guide-strip__line" aria-live="polite">
-        {line}
+        {lines.join(' ')}
       </p>
       {actions.length > 0 && (
         <div className="guide-strip__acts">
