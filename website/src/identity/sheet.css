@@ -1,0 +1,310 @@
+/*
+ * The sheets (the scores, every test, method, sources) in the page's language: a reading view over the scene, not a
+ * panel. The scene dims and blurs behind; the list of documents stands as plain words at the left, the chosen one white
+ * with the signal mark; the document is one column of text; Close is a word at the top right. It styles the shared
+ * viewer's own classes (`components/BlindScoreTable.tsx`), so the sheets change without a change to their markup.
+ * Import it after `styles/sheets.css`.
+ */
+@import './identity.css';
+
+.iso-viewer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  font-family: var(--id-font);
+}
+
+.iso-viewer-scrim {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(5, 7, 12, 0.8);
+  -webkit-backdrop-filter: blur(18px) saturate(0.8);
+  backdrop-filter: blur(18px) saturate(0.8);
+  cursor: default;
+  animation: id-sheet-in 360ms var(--id-move) both;
+}
+
+.iso-viewer-leader {
+  display: none;
+}
+
+.iso-viewer,
+.iso-viewer--single {
+  position: absolute;
+  left: max(40px, 8vw);
+  right: max(40px, 8vw);
+  top: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 760px);
+  column-gap: 72px;
+  width: auto;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  transform: none;
+  outline: none;
+  animation: id-sheet-in 420ms var(--id-move) both;
+}
+
+.iso-viewer--single {
+  grid-template-columns: minmax(0, 760px);
+}
+
+.iso-viewer__top {
+  display: contents;
+}
+
+.iso-viewer__trail {
+  grid-column: 1;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 140px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.iso-viewer__trail-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 0 8px 18px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--id-font);
+  font-size: 17px;
+  font-weight: 300;
+  color: var(--id-ink-3);
+  transition: color 300ms var(--id-move);
+}
+
+.iso-viewer__trail-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18px;
+  width: 4px;
+  height: 4px;
+  background: var(--id-signal);
+  opacity: 0;
+  transition:
+    opacity 300ms var(--id-move),
+    transform 450ms var(--id-move);
+  transform: translateX(-6px);
+}
+
+.iso-viewer__trail-btn:hover {
+  color: var(--id-ink);
+}
+
+.iso-viewer__trail-btn[data-active='true'] {
+  color: var(--id-ink);
+}
+
+.iso-viewer__trail-btn[data-active='true']::before,
+.iso-viewer__trail-btn:focus-visible::before {
+  opacity: 1;
+  transform: none;
+}
+
+.iso-viewer__trail-btn:focus-visible {
+  outline: none;
+  color: var(--id-ink);
+}
+
+.iso-viewer__trail-meta {
+  font-family: var(--id-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--id-signal);
+}
+
+.iso-viewer__close {
+  position: fixed;
+  right: 40px;
+  top: 36px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--id-font);
+  font-size: 17px;
+  font-weight: 300;
+  color: var(--id-ink-2);
+  transition: color 300ms var(--id-move);
+}
+
+.iso-viewer__close:hover,
+.iso-viewer__close:focus-visible {
+  color: var(--id-ink);
+  outline: none;
+}
+
+/* no key letter is printed in the sheets either; Esc still closes */
+.iso-viewer .iso-plain-action__key,
+.iso-viewer kbd {
+  display: none;
+}
+
+.iso-viewer__scroll {
+  grid-column: 2;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  padding: 128px 0 96px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243, 244, 246, 0.2) transparent;
+}
+
+.iso-viewer--single .iso-viewer__scroll {
+  grid-column: 1;
+}
+
+.iso-viewer__title {
+  margin: 0 0 28px;
+  font-size: 34px;
+  font-weight: 300;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--id-ink);
+}
+
+/* the documents inside: text in one column, tables as hairlines, figures in tabular digits */
+.iso-viewer .iso-doc-section__title {
+  margin: 40px 0 10px;
+  font-size: 19px;
+  font-weight: 400;
+  color: var(--id-ink);
+}
+
+.iso-viewer .iso-doc-section__p,
+.iso-viewer .iso-doc-lead__p {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--id-ink-2);
+}
+
+.iso-viewer .iso-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.iso-viewer .iso-doc-table th,
+.iso-viewer .iso-doc-table td {
+  padding: 11px 18px 11px 0;
+  border: 0;
+  border-bottom: 1px solid var(--id-line);
+  background: none;
+  text-align: left;
+  font-size: 15px;
+  color: var(--id-ink);
+}
+
+.iso-viewer .iso-doc-table th {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--id-ink-3);
+}
+
+/* the old frame's corner marks, active underline and loose spacing do not come through */
+.iso-viewer::before,
+.iso-viewer::after,
+.iso-viewer__trail-btn::after,
+.iso-viewer__trail-btn[data-active='true']::after {
+  content: none;
+  display: none;
+}
+
+.iso-viewer__trail-btn[data-active='true'] {
+  font-weight: 300;
+}
+
+.iso-viewer .iso-doc-lead,
+.iso-viewer .iso-doc-section,
+.iso-viewer .iso-doc-table-wrap {
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.iso-viewer .iso-doc-lead__p {
+  max-width: 62ch;
+  margin: 0 0 12px;
+  font: 300 16px / 1.6 var(--id-font);
+}
+
+.iso-viewer .iso-doc-table {
+  margin-top: 8px;
+}
+
+.iso-viewer .iso-doc-table thead th,
+.iso-viewer .iso-doc-table thead th:not(:first-child) {
+  padding: 0 18px 10px 0;
+  font: 400 13px / 1.4 var(--id-font);
+  color: var(--id-ink-3);
+  text-align: left;
+}
+
+.iso-viewer .iso-doc-table th:last-child,
+.iso-viewer .iso-doc-table thead th:last-child:not(:first-child),
+.iso-viewer .iso-doc-table td:last-child,
+.iso-viewer .iso-doc-table thead th.is-num,
+.iso-viewer .iso-doc-table td.is-num {
+  padding-right: 0;
+  text-align: right;
+}
+
+@keyframes id-sheet-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 860px) {
+  .iso-viewer,
+  .iso-viewer--single {
+    left: 16px;
+    right: 16px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .iso-viewer__trail {
+    grid-column: 1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    margin-top: 84px;
+  }
+  .iso-viewer__scroll {
+    grid-column: 1;
+    padding-top: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iso-viewer-scrim,
+  .iso-viewer {
+    animation: none;
+  }
+}

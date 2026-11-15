@@ -482,6 +482,11 @@ button.id-story__part:focus-visible {
   opacity: 1;
 }
 
+.id-scene__frame--still {
+  cursor: default;
+  pointer-events: none;
+}
+
 .id-scene__frame:focus-visible .id-scene__corner {
   border-color: var(--id-ink);
 }

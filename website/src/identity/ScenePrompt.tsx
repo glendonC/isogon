@@ -10,7 +10,8 @@ export interface ScenePromptProps {
   label: string;
   /** The instrument's readout under it: what the thing is now, in exact small type. */
   readout?: string;
-  onSelect: () => void;
+  /** What pressing does. Absent, the prompt only names the thing and takes no click (a month with no fire to open). */
+  onSelect?: () => void;
   /** The keyboard shortcut, announced to readers; not printed. */
   shortcut?: string;
   /** Show the reticle closed even without the pointer near, for the next step a visitor should see first. */
@@ -58,24 +59,34 @@ export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = 
 
   return (
     <div className="id-scene" data-near={closed ? 'true' : 'false'} data-hang={spot.hang} style={style}>
-      <button
-        type="button"
-        className="id-scene__frame"
-        aria-label={readout ? `${label}. ${readout}` : label}
-        aria-keyshortcuts={shortcut}
-        onFocus={() => setFocus(true)}
-        onBlur={() => setFocus(false)}
-        onClick={() => {
-          controlSound('press');
-          onSelect();
-        }}
-      >
-        <i className="id-scene__corner" />
-        <i className="id-scene__corner" />
-        <i className="id-scene__corner" />
-        <i className="id-scene__corner" />
-        <i className="id-scene__centre" />
-      </button>
+      {onSelect ? (
+        <button
+          type="button"
+          className="id-scene__frame"
+          aria-label={readout ? `${label}. ${readout}` : label}
+          aria-keyshortcuts={shortcut}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+          onClick={() => {
+            controlSound('press');
+            onSelect();
+          }}
+        >
+          <i className="id-scene__corner" />
+          <i className="id-scene__corner" />
+          <i className="id-scene__corner" />
+          <i className="id-scene__corner" />
+          <i className="id-scene__centre" />
+        </button>
+      ) : (
+        <div className="id-scene__frame id-scene__frame--still" role="img" aria-label={readout ? `${label}. ${readout}` : label}>
+          <i className="id-scene__corner" />
+          <i className="id-scene__corner" />
+          <i className="id-scene__corner" />
+          <i className="id-scene__corner" />
+          <i className="id-scene__centre" />
+        </div>
+      )}
       <div className="id-scene__prompt" aria-hidden="true">
         <span className="id-scene__label">{label}</span>
         {readout && <span className="id-scene__readout">{readout}</span>}
