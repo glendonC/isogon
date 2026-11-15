@@ -53,6 +53,8 @@ interface LandingCompositionProps {
   onOpenPart: (id: PartId) => void;
   /** The pass the picture shows, for the facts line (stage telemetry). */
   realPass: EarthStageTelemetry['realPass'] | null;
+  /** The script's words for the fire on show (its start step), in plain words before any satellite's name. */
+  lines?: string[];
   onOpenSearch: () => void;
   onOpenSensor: () => void;
   onOpenMethod: () => void;
@@ -64,6 +66,7 @@ export function LandingComposition({
   parts,
   onOpenPart,
   realPass,
+  lines,
   onOpenSearch,
   onOpenSensor,
   onOpenMethod,
@@ -135,7 +138,11 @@ export function LandingComposition({
               <span className="iso-land__legend-item iso-land__legend-item--detection">Satellite detection</span>
               <span className="iso-land__legend-item iso-land__legend-item--estimate">Model estimate</span>
             </div>
-            {realPass && <p className="iso-land__facts">{passFacts(realPass)}</p>}
+            {lines && lines.length > 0 ? (
+              <p className="iso-land__facts">{lines.join(' ')}</p>
+            ) : (
+              realPass && <p className="iso-land__facts">{passFacts(realPass)}</p>
+            )}
           </div>
 
           <p className="iso-land__credit">Imagery: {imageryCredit}</p>

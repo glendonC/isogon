@@ -15,7 +15,7 @@ import { GuideStrip } from './guide/GuideStrip';
 import { PassStrip } from './guide/PassStrip';
 import { AskField } from './guide/AskField';
 import { useGuide, type Guide } from './guide/useGuide';
-import { keyMatches } from './guide/script';
+import { keyMatches, says, stateOf } from './guide/script';
 import { BEATS, type BeatId } from './app/names';
 import { WorkspaceProvider, type WorkspaceBase, type WorkspaceStore } from './app/store';
 import { CalendarBeat } from './beats/calendar/CalendarBeat';
@@ -516,9 +516,12 @@ export function App() {
         : null;
     if (opening) {
       if (isRealRun(activeRun) && activeRun?.region.id === regionAsk.id && realStart === opening) return;
+      // On the landing, the fire is shown as the model saw it: the sharp satellite hidden wherever its window can be
+      // (from 2012, not a recorded test fire), so what lights up is what the model was given.
+      const hideable = !inWorkspace && Number(opening.slice(0, 4)) >= 2012 && !hideRefused(regionAsk.id, opening);
       void executeWorldModel({
         regionId: regionAsk.id,
-        holdoutViirs: false,
+        holdoutViirs: hideable,
         cloudOverride: null,
         enterWorkspace: false,
         source: 'firms',
@@ -529,7 +532,7 @@ export function App() {
       // nothing new.
       void executeWorldModel({ regionId: regionAsk.id, holdoutViirs: false, cloudOverride, enterWorkspace: false });
     }
-  }, [regionAsk, calendar, placesState, activeRun, realStart, cloudOverride, executeWorldModel]);
+  }, [regionAsk, calendar, placesState, activeRun, realStart, cloudOverride, executeWorldModel, inWorkspace, hideRefused]);
 
   /** Selecting a month that has a real run requests it; the stage replays whatever comes back. */
   const handleSelectMonth = useCallback(
@@ -1378,6 +1381,16 @@ export function App() {
   /** World model on a real run: in place on the terrain (beats/world-model/WorldModelScene.tsx), no column. */
   const modelScene = inWorkspace && (step === 'fire' || step === 'test') && runIsReal && !round && !debriefOpen;
 
+  // The landing's words: the script's start step for the fire on show (its place, its month, its name where an agency
+  // list names it), loading and failure as the script says them.
+  const landingLines = (() => {
+    const fire = activeRun && realStart ? fireOfStart(placesState.places, activeRun.region.id, realStart) : null;
+    const id = realFailed && !runIsReal ? 'failed' : runIsReal && fire ? 'ready' : 'loading';
+    const st = stateOf('start', id);
+    const fields = { place: regionTitle || null, fire_month: fire?.label ?? null, fire_name: fire?.name ?? null };
+    return says(st, fields, { fire_is_named: fire ? Boolean(fire.name) : null }).slice(0, 2);
+  })();
+
   return (
     <WorkspaceProvider value={store}>
     <div className="iso-app" data-workspace={inWorkspace ? 'true' : 'false'} data-sel={selStyle}>
@@ -1387,6 +1400,7 @@ export function App() {
           parts={landingParts}
           onOpenPart={openPart}
           realPass={stageTelemetry?.realPass ?? null}
+          lines={landingLines}
           onOpenSearch={() => setAskOpen(true)}
           onOpenSensor={() => setReading('sensors')}
           onOpenMethod={() => setReading('method')}
@@ -1546,6 +1560,7 @@ export function App() {
           onCinemaStepTheater={handleCinemaStepTheater}
           onTelemetry={handleTelemetry}
           landingView="world"
+          landingTour
           landingSubjectFrame={narrowViewport ? LANDING_CALM_BAND_NARROW : LANDING_CALM_BAND}
           workspaceSubjectFrame={round ? roundFrame(viewportWidth) : modelScene ? modelFrame(viewportWidth) : workspaceFrame(viewportWidth)}
           regionGridDivisions={modelScene || step === 'look' ? 16 : undefined}
