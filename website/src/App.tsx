@@ -1,14 +1,23 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  CommandAskPalette,
-  type ReconstructRequestParams,
-} from './components/CommandAskPalette';
-import { ReadingSheet, type ReadingSection } from './components/ReadingSheet';
-import { EvidenceSheet } from './components/EvidenceSheet';
+import type { ReconstructRequestParams } from './components/CommandAskPalette';
+import type { ReadingSection } from './components/ReadingSheet';
 import type { EvidenceDoc, EvidenceState } from './content/evidence';
-import { AreaSheet } from './components/AreaSheet';
 import { PassTrack } from './components/PassTrack';
-import { Debrief } from './components/Debrief';
+const CommandAskPalette = lazy(() =>
+  import('./components/CommandAskPalette').then((m) => ({ default: m.CommandAskPalette })),
+);
+const ReadingSheet = lazy(() =>
+  import('./components/ReadingSheet').then((m) => ({ default: m.ReadingSheet })),
+);
+const EvidenceSheet = lazy(() =>
+  import('./components/EvidenceSheet').then((m) => ({ default: m.EvidenceSheet })),
+);
+const AreaSheet = lazy(() =>
+  import('./components/AreaSheet').then((m) => ({ default: m.AreaSheet })),
+);
+const Debrief = lazy(() =>
+  import('./components/Debrief').then((m) => ({ default: m.Debrief })),
+);
 import { type Step } from './components/WorkspaceBar';
 import { Trail, type TrailWord } from './guide/Trail';
 import { GuideStrip } from './guide/GuideStrip';
@@ -224,6 +233,7 @@ export function App() {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   /** Any area's record. A month picked there opens its region and month here. */
   const [areaOpen, setAreaOpen] = useState(false);
+  const openedSheetsRef = useRef({ ask: false, area: false, evidence: false, reading: false });
   const [monthAsk, setMonthAsk] = useState<{ region: string; ym: string } | null>(null);
   /** The place screen over the Calendar, and a box drawn on it (its record replaces the place's). */
   const [placesOpen, setPlacesOpen] = useState(false);
@@ -1522,17 +1532,19 @@ export function App() {
                 one never covers the board or dims the stage. */}
             <div className="iso-ws__dock" hidden={step === 'record' || step === 'agent' || !((debriefOpen && blindTest) || (!round && !guide.step))}>
               {debriefOpen && blindTest ? (
-                <Debrief
-                  score={blindTest}
-                  model={blindModel}
-                  place={regionTitle}
-                  onBack={() => setDebriefOpen(false)}
-                  onNext={stepBlocked.look ? null : () => goStep('look')}
-                  onEvidence={() => setEvidenceOpen(true)}
-                  terra={null}
-                  terraOpen={terraOpen}
-                  onToggleTerra={() => setTerraOpen((o) => !o)}
-                />
+                <Suspense fallback={null}>
+                  <Debrief
+                    score={blindTest}
+                    model={blindModel}
+                    place={regionTitle}
+                    onBack={() => setDebriefOpen(false)}
+                    onNext={stepBlocked.look ? null : () => goStep('look')}
+                    onEvidence={() => setEvidenceOpen(true)}
+                    terra={null}
+                    terraOpen={terraOpen}
+                    onToggleTerra={() => setTerraOpen((o) => !o)}
+                  />
+                </Suspense>
               ) : null}
 
               {!round && !guide.step && (
@@ -1607,63 +1619,79 @@ export function App() {
         </StageBoundary>
       </div>
 
-      <CommandAskPalette
-        open={askOpen}
-        onClose={() => setAskOpen(false)}
-        activeTheaterId={activeTheaterId}
-        activeRun={activeRun}
-        holdoutViirs={holdoutViirs}
-        onToggleHoldoutViirs={toggleHoldoutLive}
-        cloudOverride={cloudOverride}
-        onToggleCloudOverride={toggleCloudLive}
-        isExecuting={isExecuting}
-        errorMessage={execError}
-        onExecute={handlePaletteExecute}
-        places={palettePlaces}
-      />
+      {(openedSheetsRef.current.ask ||= askOpen) && (
+        <Suspense fallback={null}>
+          <CommandAskPalette
+            open={askOpen}
+            onClose={() => setAskOpen(false)}
+            activeTheaterId={activeTheaterId}
+            activeRun={activeRun}
+            holdoutViirs={holdoutViirs}
+            onToggleHoldoutViirs={toggleHoldoutLive}
+            cloudOverride={cloudOverride}
+            onToggleCloudOverride={toggleCloudLive}
+            isExecuting={isExecuting}
+            errorMessage={execError}
+            onExecute={handlePaletteExecute}
+            places={palettePlaces}
+          />
+        </Suspense>
+      )}
 
-      <AreaSheet
-        open={areaOpen}
-        onClose={() => setAreaOpen(false)}
-        apiBase={API_BASE}
-        centre={{ lat: calendarArea.lat, lon: calendarArea.lon }}
-        onOpenMonth={openAreaMonth}
-      />
+      {(openedSheetsRef.current.area ||= areaOpen) && (
+        <Suspense fallback={null}>
+          <AreaSheet
+            open={areaOpen}
+            onClose={() => setAreaOpen(false)}
+            apiBase={API_BASE}
+            centre={{ lat: calendarArea.lat, lon: calendarArea.lon }}
+            onOpenMonth={openAreaMonth}
+          />
+        </Suspense>
+      )}
 
-      <EvidenceSheet
-        open={evidenceOpen}
-        onClose={() => {
-          setEvidenceOpen(false);
-          setEvidenceFocus(null);
-        }}
-        focus={evidenceFocus}
-        doc={evidenceLive}
-        state={evidenceState}
-      />
+      {(openedSheetsRef.current.evidence ||= evidenceOpen) && (
+        <Suspense fallback={null}>
+          <EvidenceSheet
+            open={evidenceOpen}
+            onClose={() => {
+              setEvidenceOpen(false);
+              setEvidenceFocus(null);
+            }}
+            focus={evidenceFocus}
+            doc={evidenceLive}
+            state={evidenceState}
+          />
+        </Suspense>
+      )}
 
-      <ReadingSheet
-        section={reading}
-        onSection={setReading}
-        onClose={() => setReading(null)}
-        imageryCredit={credit}
-        verticalExaggeration={stageTelemetry?.verticalExaggeration ?? null}
-        apiBase={API_BASE}
-        regionId={calendarRegionId}
-        regionName={regionTitle}
-        sensorModel={sensorModel}
-        overlap={calendar.cal?.overlap ?? null}
-        overlapPlace={calendar.cal && !calendar.cal.simulated ? calendar.cal.regionName.split(',')[0] : null}
-        evidence={{
-          real: runIsReal,
-          model: runModel,
-          overlap: calendar.cal?.overlap ?? null,
-          overlapPlace: calendar.cal && !calendar.cal.simulated ? calendar.cal.regionName.split(',')[0] : null,
-          interval:
-            blindInterval && blindInterval.intervalCovered !== null && blindInterval.intervalN !== null
-              ? { covered: blindInterval.intervalCovered, n: blindInterval.intervalN, level: blindInterval.intervalLevel }
-              : null,
-        }}
-      />
+      {(openedSheetsRef.current.reading ||= reading !== null) && (
+        <Suspense fallback={null}>
+          <ReadingSheet
+            section={reading}
+            onSection={setReading}
+            onClose={() => setReading(null)}
+            imageryCredit={credit}
+            verticalExaggeration={stageTelemetry?.verticalExaggeration ?? null}
+            apiBase={API_BASE}
+            regionId={calendarRegionId}
+            regionName={regionTitle}
+            sensorModel={sensorModel}
+            overlap={calendar.cal?.overlap ?? null}
+            overlapPlace={calendar.cal && !calendar.cal.simulated ? calendar.cal.regionName.split(',')[0] : null}
+            evidence={{
+              real: runIsReal,
+              model: runModel,
+              overlap: calendar.cal?.overlap ?? null,
+              overlapPlace: calendar.cal && !calendar.cal.simulated ? calendar.cal.regionName.split(',')[0] : null,
+              interval:
+                blindInterval && blindInterval.intervalCovered !== null && blindInterval.intervalN !== null
+                  ? { covered: blindInterval.intervalCovered, n: blindInterval.intervalN, level: blindInterval.intervalLevel }
+                  : null,
+            }}
+          />
+        </Suspense>
+      )}
     </div>
     </WorkspaceProvider>
   );
