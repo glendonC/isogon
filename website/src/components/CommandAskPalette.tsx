@@ -6,6 +6,7 @@ import type { DynamicRegionRun } from '../stage/types';
 import { Locator } from '../ui/Locator';
 import { plainText } from '../ui/plainText';
 import { useDialogFocus } from '../ui/useDialogFocus';
+import '../styles/finder.css';
 
 const API_BASE: string = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8788';
 
@@ -255,10 +256,10 @@ export function CommandAskPalette({
 
   return (
     <>
-      <div className="iso-backdrop iso-backdrop--soft" onClick={onClose} role="presentation" />
+      <div className="iso-backdrop iso-backdrop--soft iso-backdrop--read" onClick={onClose} role="presentation" />
       <div
         ref={sheetRef}
-        className="iso-glass iso-finder"
+        className="iso-glass iso-finder iso-finder--read"
         role="dialog"
         aria-modal="true"
         aria-label="Choose a place with a real fire record"
@@ -326,7 +327,6 @@ export function CommandAskPalette({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => void run(o)}
                 >
-                  <span className="iso-finder__num" aria-hidden="true" />
                   <span className="iso-finder__main">
                     <span className="iso-finder__name">{placeOf(o.id)?.title ?? o.id}</span>
                     <span className="iso-finder__sub">{placeOf(o.id)?.sub ?? ''}</span>
@@ -351,7 +351,6 @@ export function CommandAskPalette({
             onMouseDown={(e) => e.preventDefault()}
             onClick={anywhere}
           >
-            <span className="iso-finder__num" aria-hidden="true" />
             <span className="iso-finder__main">
               <span className="iso-finder__name">{ANYWHERE.title}</span>
               <span className="iso-finder__sub">{ANYWHERE.sub}</span>
@@ -404,10 +403,6 @@ export function CommandAskPalette({
         </div>
 
         <div className="iso-finder__legend">
-          <span className="iso-finder__legend-lead" style={{ marginRight: 'auto' }}>
-            Choose <kbd>&uarr;</kbd>
-            <kbd>&darr;</kbd>
-          </span>
           <button
             type="button"
             className="iso-finder__action"
@@ -415,7 +410,7 @@ export function CommandAskPalette({
             onClick={submit}
             disabled={isExecuting || (!focused && !onAnywhere)}
           >
-            {isExecuting ? 'Opening' : 'Open'} <kbd>&crarr;</kbd>
+            {isExecuting ? 'Opening' : 'Open'}
           </button>
           <button
             type="button"
@@ -423,7 +418,7 @@ export function CommandAskPalette({
             onMouseDown={(e) => e.preventDefault()}
             onClick={onClose}
           >
-            Close <kbd>Esc</kbd>
+            Close
           </button>
         </div>
       </div>
