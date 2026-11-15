@@ -148,7 +148,9 @@ def _now_utc() -> str:
 
 def _write_atomic(dest: Path, payload: bytes) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_name(f".{dest.name}.{threading.get_ident()}.tmp")
+    # The process id as well as the thread: two processes may fetch the same file, and thread ids repeat across
+    # processes.
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_bytes(payload)
     tmp.replace(dest)
 
