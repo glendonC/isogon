@@ -1522,3 +1522,28 @@
   max-width: 30ch;
   font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
 }
+
+/* The sealed board's one proof in the film: one fingerprint, and how long before the pass it was sealed. */
+.world-proof {
+  display: grid;
+  gap: var(--sys-s2);
+  padding: var(--sys-s4) var(--sys-gutter) var(--sys-s4);
+}
+
+.world-proof__label {
+  font: var(--sys-weight) clamp(14px, 0.95vw, 19px) / 1.3 var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-proof__sha {
+  font-size: clamp(28px, 2.4vw, 46px);
+  line-height: 1.1;
+  color: var(--sys-ink);
+  letter-spacing: 0.02em;
+}
+
+.world-proof__line {
+  max-width: 60ch;
+  font: var(--sys-weight) clamp(16px, 1.15vw, 22px) / 1.4 var(--sys-font);
+  color: var(--sys-ink-2);
+}

@@ -75,7 +75,12 @@ export const SEAL_WORDS = {
   title: (platform: string | null, day: string | null, point: string) => [platform ? `Predicted pass of ${platform}` : null, day, point].filter(Boolean).join(', '),
   // The judge's two readings of the board, as the product lane asked for them, from the answer's own figures.
   listed: (followed: number, sealed: number, scored: number) =>
-    `Of the ${followed} fires followed tonight, the ${sealed} with a pass sealed are listed here; ${scored} of them are scored.`,
+    `${scored} of the ${followed} fires followed tonight are scored; the ${sealed} with a pass sealed are listed here.`,
+  // The film's one proof (the fresh judge, JUDGE-1 item 4): one scored prediction's fingerprint and how long before the
+  // pass it was sealed.
+  proofLabel: 'The fingerprint of one sealed prediction',
+  proofLine: (minutes: number, where: string) =>
+    `Written down and sealed ${Math.round(minutes)} minutes before the sharp satellite passed over ${where}, then scored.`,
   close: (k: number, n: number, where: string) => `${k} of the ${n} fires scored lie close together in ${where}, so they are not ${n} separate tests.`,
   rest: (items: string[], any: boolean) => `${any ? 'Also followed' : 'Followed tonight'}, no pass sealed yet: ${items.join(', ')}`,
   restAbout: 'Each was chosen from the coarse satellite alone, by its detections in the last 48 hours.',
@@ -196,6 +201,11 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
     return `${at > 2 / 3 ? 'northern ' : at < 1 / 3 ? 'southern ' : ''}${shape.name}`;
   })();
 
+  // In the film, once a score stands: the caption and one proof, the latest scored seal; the rows are the page's.
+  const proof = latest(live.seals.filter((x) => x.state === 'scored' && x.minutesBefore !== null && x.sha256));
+  const proofFire = proof ? fires.find((f) => f.id === proof.fireId) ?? null : null;
+  const filmProof = film && filmLine !== null && proof !== null && proofFire !== null;
+
   return (
     <div
       className="world-sealed"
@@ -212,7 +222,8 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
               const [mx, my] = p.at(f.centre[0], f.centre[1]);
               return { id: f.id, x: mx, y: my, text: String(i + 1), rank: i };
             });
-            const placed = placeLabels(items, p.w, p.h, { mark: 5 });
+            // In the film's proof the marks stand without their numbers: the rows that name them are the page's.
+            const placed = placeLabels(filmProof ? [] : items, p.w, p.h, { mark: 5 });
             return (
               <>
                 <svg className="world-leaders" width={p.w} height={p.h} aria-hidden="true">
@@ -225,11 +236,11 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
                       <span
                         className="world-seal-mark"
                         data-sealed={s ? 'true' : 'false'}
-                        data-over={over === m.id ? 'true' : 'false'}
+                        data-over={over === m.id || (filmProof && proofFire?.id === m.id) ? 'true' : 'false'}
                         style={{ left: m.x, top: m.y }}
                         aria-hidden="true"
                       />
-                      {placed[i].shown && (
+                      {placed[i]?.shown && (
                         <span className="world-label world-label--num" style={{ left: placed[i].left, top: placed[i].top }} data-over={over === m.id ? 'true' : 'false'}>
                           {m.text}
                         </span>
@@ -242,6 +253,13 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
           }}
         </WorldCanvas>
       </div>
+      {filmProof && proof && proofFire ? (
+        <div className="world-proof">
+          <div className="world-proof__label">{SEAL_WORDS.proofLabel}</div>
+          <div className="world-proof__sha world-mono">{proof.sha256.slice(0, 12)}</div>
+          <div className="world-proof__line">{SEAL_WORDS.proofLine(proof.minutesBefore!, whereOf(proofFire))}</div>
+        </div>
+      ) : (
       <div className="world-board">
         {live.protocol?.sha256 && <div className="world-board__rule">{SEAL_WORDS.protocol(live.protocol.sha256, null)}</div>}
         {live.example && <div className="world-board__rule world-legend__caution">{live.example}</div>}
@@ -360,6 +378,7 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
         )}
         {live.rowsNote && <div className="world-board__rule">{SEAL_WORDS.nrt(live.rowsNote)}</div>}
       </div>
+      )}
     </div>
   );
 }
