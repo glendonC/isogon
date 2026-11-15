@@ -675,6 +675,10 @@ export class SmokePass extends Pass {
   private readonly marchMaterial: THREE.ShaderMaterial;
   private readonly compositeMaterial: THREE.ShaderMaterial;
   private readonly densityUniforms: Record<string, THREE.IUniform>;
+  private lastSourceRenderer: THREE.WebGLRenderer | null = null;
+  private readonly lastSourceSig = new Float64Array(6).fill(Number.NaN);
+  private lastPlumeRenderer: THREE.WebGLRenderer | null = null;
+  private readonly lastPlumeSig = new Float64Array(15).fill(Number.NaN);
 
   constructor() {
     super('SmokePass');
@@ -921,13 +925,96 @@ export class SmokePass extends Pass {
     const scene = this.scene;
     const camera = this.camera;
 
-    this.fullscreenMaterial = this.sourceMaterial;
-    renderer.setRenderTarget(this.sourceTarget);
-    renderer.render(scene, camera);
+    const s = this.sourceMaterial.uniforms;
+    const real = (s.uRealSource.value as number) > 0.5 ? 1 : 0;
+    const src0 = (real ? s.uDetection0.value : s.uField0.value) as THREE.Texture | null;
+    const src1 = (real ? s.uDetection1.value : s.uField1.value) as THREE.Texture | null;
+    const s0Id = src0 ? src0.id : -1;
+    const s0Ver = src0 ? src0.version : -1;
+    const s1Id = src1 ? src1.id : -1;
+    const s1Ver = src1 ? src1.version : -1;
+    const frameMix = s.uFrameMix.value as number;
+    const sSig = this.lastSourceSig;
+    const needSource =
+      this.lastSourceRenderer !== renderer ||
+      sSig[0] !== real ||
+      sSig[1] !== s0Id ||
+      sSig[2] !== s0Ver ||
+      sSig[3] !== s1Id ||
+      sSig[4] !== s1Ver ||
+      sSig[5] !== frameMix;
+    if (needSource) {
+      this.fullscreenMaterial = this.sourceMaterial;
+      renderer.setRenderTarget(this.sourceTarget);
+      renderer.render(scene, camera);
+      this.lastSourceRenderer = renderer;
+      sSig[0] = real;
+      sSig[1] = s0Id;
+      sSig[2] = s0Ver;
+      sSig[3] = s1Id;
+      sSig[4] = s1Ver;
+      sSig[5] = frameMix;
+    }
 
-    this.fullscreenMaterial = this.plumeMaterial;
-    renderer.setRenderTarget(this.plumeTarget);
-    renderer.render(scene, camera);
+    const u = this.densityUniforms;
+    const morphRaw = u.uMorph.value as number;
+    const morphEff = morphRaw < 0.999 ? morphRaw : 1.0;
+    const hPrev = morphRaw < 0.999 ? (u.uHeightPrev.value as THREE.Texture | null) : null;
+    const hNext = u.uHeightNext.value as THREE.Texture | null;
+    const hpId = hPrev ? hPrev.id : -1;
+    const hpVer = hPrev ? hPrev.version : -1;
+    const hnId = hNext ? hNext.id : -1;
+    const hnVer = hNext ? hNext.version : -1;
+    const wind = u.uWindUv.value as THREE.Vector2;
+    const smokeTop = u.uSmokeTop.value as number;
+    const slab = u.uSlabSize.value as THREE.Vector2;
+    const lidRaw = u.uLidAmount.value as number;
+    const lidEff = lidRaw > 0.0 ? lidRaw : 0.0;
+    const lid = u.uLid.value as THREE.Vector4;
+    const lidX = lidEff > 0.0 ? lid.x : 0.0;
+    const lidY = lidEff > 0.0 ? lid.y : 0.0;
+    const lidZ = lidEff > 0.0 ? lid.z : 0.0;
+    const lidW = lidEff > 0.0 ? lid.w : 0.0;
+    const pSig = this.lastPlumeSig;
+    const needPlume =
+      needSource ||
+      this.lastPlumeRenderer !== renderer ||
+      pSig[0] !== hpId ||
+      pSig[1] !== hpVer ||
+      pSig[2] !== hnId ||
+      pSig[3] !== hnVer ||
+      pSig[4] !== morphEff ||
+      pSig[5] !== wind.x ||
+      pSig[6] !== wind.y ||
+      pSig[7] !== smokeTop ||
+      pSig[8] !== slab.x ||
+      pSig[9] !== slab.y ||
+      pSig[10] !== lidEff ||
+      pSig[11] !== lidX ||
+      pSig[12] !== lidY ||
+      pSig[13] !== lidZ ||
+      pSig[14] !== lidW;
+    if (needPlume) {
+      this.fullscreenMaterial = this.plumeMaterial;
+      renderer.setRenderTarget(this.plumeTarget);
+      renderer.render(scene, camera);
+      this.lastPlumeRenderer = renderer;
+      pSig[0] = hpId;
+      pSig[1] = hpVer;
+      pSig[2] = hnId;
+      pSig[3] = hnVer;
+      pSig[4] = morphEff;
+      pSig[5] = wind.x;
+      pSig[6] = wind.y;
+      pSig[7] = smokeTop;
+      pSig[8] = slab.x;
+      pSig[9] = slab.y;
+      pSig[10] = lidEff;
+      pSig[11] = lidX;
+      pSig[12] = lidY;
+      pSig[13] = lidZ;
+      pSig[14] = lidW;
+    }
 
     this.fullscreenMaterial = this.shadowMaterial;
     renderer.setRenderTarget(this.shadowTarget);
@@ -951,6 +1038,10 @@ export class SmokePass extends Pass {
   }
 
   public override dispose(): void {
+    this.lastSourceRenderer = null;
+    this.lastSourceSig.fill(Number.NaN);
+    this.lastPlumeRenderer = null;
+    this.lastPlumeSig.fill(Number.NaN);
     this.sourceTarget.dispose();
     this.plumeTarget.dispose();
     this.shadowTarget.dispose();
