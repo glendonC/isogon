@@ -30,7 +30,8 @@ Round ids are random on a live server; each round is renamed `nl-rec-<8 hex>` in
 recorded round replays with one id. The run bodies name no imagery, as the page's do; the server chooses the terrain
 pack's imagery by coverage and says which in the answer. Only imagery whose licence allows a copy is stored (USGS NAIP,
 public domain; EOxCloudless 2016, CC BY-NC-SA 4.0, with its credit); the rest (Esri World Imagery, published for viewing only, and
-what is derived from it) is listed as withheld. For imagery outside the United States, record against a server
+what is derived from it) is listed as withheld; a run's overview picture, which is Esri, answers a one
+pixel stand-in of plain ground, so the page asks for nothing the recording does not hold. For imagery outside the United States, record against a server
 started with `--imagery-elsewhere eox_s2cloudless_2016`. The tool ends with exit 1 when a stored file holds the FIRMS
 key, `MAP_KEY=` or a local path.
 """
@@ -55,6 +56,23 @@ if str(_REPO_ROOT) not in sys.path:
 
 ESRI_WITHHELD: str = "Esri World Imagery is published for viewing, not for export (docs/sources.md); not stored"
 OTHER_WITHHELD: str = "imagery under a licence that does not allow this copy (docs/sources.md); not stored"
+# A run's overview picture (`assets.satellite_url`) is Esri World Imagery and is never stored. So that the published page
+# asks for nothing it does not hold, its address answers one pixel of the plain ground the stage draws when a run's
+# picture is missing (`plainGroundTexture` in the stage: sRGB 104, 106, 102); the terrain pack's own imagery covers it.
+OVERVIEW_STAND_IN: str = ("one pixel of plain ground in place of the run's overview picture, which is Esri World "
+                          "Imagery and is not stored; the stage draws the same plain ground when it has no picture")
+PLAIN_GROUND_RGB: tuple[int, int, int] = (104, 106, 102)
+
+
+def one_pixel_jpeg(rgb: tuple[int, int, int] = PLAIN_GROUND_RGB) -> bytes:
+    """A one pixel JPEG of ``rgb``."""
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (1, 1), rgb).save(buf, format="JPEG", quality=95)
+    return buf.getvalue()
 # The imagery whose licence allows a copy: the same set as backend.terrain.terrain_pack.PUBLISHABLE_IMAGERY.
 PUBLISHABLE_IMAGERY: tuple[str, ...] = ("usgs_naip", "eox_s2cloudless_2016")
 # The players the page shows, in its order, and the one asked with `ceiling` (website/src/compare/blocks.ts, PLAYERS
@@ -190,6 +208,16 @@ class Recorder:
         self.parsed[key] = parsed
         return parsed
 
+    def stand_in(self, method: str, path: str) -> None:
+        """The run's overview picture: not fetched, not stored; its address answers a one pixel stand-in, and the
+        withheld list still says the picture was not stored."""
+        key = request_key(method, path)
+        if key in self.entries:
+            return
+        self._store(key, 200, "image/jpeg", one_pixel_jpeg(), {})
+        self.entries[key]["stand_in"] = OVERVIEW_STAND_IN
+        self.withheld.append({"key": key, "why": ESRI_WITHHELD, "answered_by": "a one pixel stand-in"})
+
     def withhold(self, method: str, path: str, why: str) -> None:
         key = request_key(method, path)
         if key not in self.entries:
@@ -226,7 +254,9 @@ class Recorder:
                 source = context_imagery if "context" in name else pack_imagery
             else:
                 source = None                                  # elevation, the run's fields, exports
-            if source is not None and source not in PUBLISHABLE_IMAGERY:
+            if name.startswith("satellite."):
+                self.stand_in("GET", path)
+            elif source is not None and source not in PUBLISHABLE_IMAGERY:
                 self.withhold("GET", path, ESRI_WITHHELD if source == "esri_world_imagery" else OTHER_WITHHELD)
             else:
                 self.fetch("GET", path, query or None)

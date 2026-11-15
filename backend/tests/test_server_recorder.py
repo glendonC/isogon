@@ -158,8 +158,9 @@ class PublishableImageryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             rec = Recorder("http://stand-in", Path(tmp), opener=_PackStandIn(pack_source, context_source))
             rec.run_with_assets({"region_id": "x", "source": "firms", "start": "2012-08-10"})
-            return {k.split("/terrain/")[-1].split("/")[-1]: "file" in e for k, e in rec.entries.items()
-                    if k.startswith("GET /api/runs/")}
+            # True where the source's own file is stored; the overview's one pixel stand-in is not its file
+            return {k.split("/terrain/")[-1].split("/")[-1]: "file" in e and "stand_in" not in e
+                    for k, e in rec.entries.items() if k.startswith("GET /api/runs/")}
 
     def test_the_set_is_the_pack_modules(self) -> None:
         from backend.server_recorder import PUBLISHABLE_IMAGERY
@@ -230,7 +231,14 @@ class RecorderTests(unittest.TestCase):
             self.assertEqual([path for path, _ in closed], ["/api/reconstruct"])
             self.assertEqual((closed[0][1]["holdout_viirs"], "holdout" in closed[0][1], "reveal" in closed[0][1]), (False, False, False))
             # imagery for viewing only is withheld, elevation is stored
-            self.assertIn("withheld", entries["GET /api/runs/run_2012-08-10/satellite.jpg"])
+            # the overview picture (Esri) is not stored: its address answers a one pixel stand-in of plain ground, so
+            # the page asks for nothing the recording does not hold, and the withheld list still names it
+            over = entries["GET /api/runs/run_2012-08-10/satellite.jpg"]
+            self.assertIn("stand_in", over)
+            self.assertEqual(over["content_type"], "image/jpeg")
+            self.assertLess(over["bytes"], 1200)
+            self.assertIn("GET /api/runs/run_2012-08-10/satellite.jpg", [w["key"] for w in index["withheld"]])
+            self.assertFalse(any(path.endswith("satellite.jpg") for _, path, _ in backend.seen))
             self.assertIn("withheld", entries["GET /api/runs/run_2012-08-10/terrain/ortho_8192.jpg"])
             self.assertIn("file", entries["GET /api/runs/run_2012-08-10/terrain/dem_1024_f32.bin"])
             # the round's id is renamed everywhere, in keys and in stored answers, and the round takes the looks of the
