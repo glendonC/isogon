@@ -1,3 +1,5 @@
+import { SCRIPT } from '../guide/script';
+
 /**
  * Every name and one-line description the product shows for its parts, in one place, so a change of name is one
  * edit. The words follow the product's vocabulary: pass, look, detection, estimate.
@@ -43,8 +45,10 @@ export const BEATS: readonly BeatName[] = [
 
 export const beatOf = (id: BeatId): BeatName => BEATS.find((b) => b.id === id) ?? BEATS[0];
 
-/** The landing's one entry. */
-export const ENTRY = 'Choose a place';
+/** The landing's one entry, in the script's words: the start step's action that opens the Record (Enter). */
+export const ENTRY =
+  SCRIPT.steps.find((s) => s.id === 'start')?.states.find((x) => x.id === 'ready')?.actions.find((a) => a.command === 'go:record')?.label ??
+  'See the fire record here';
 
 /** The bar's reading entry: the evidence first, then method, sensors, sources. */
 export const READING = 'Method';

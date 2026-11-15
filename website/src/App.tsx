@@ -258,6 +258,16 @@ export function App() {
     }
   }, []);
 
+  /**
+   * The way in from the landing, by Enter or its entry: the Record of the fire on show, the trail's first step. Choose a
+   * Place opens only when asked for (P, or the place beside the trail).
+   */
+  const enterRecord = useCallback(() => {
+    enterWorkspace('cutaway');
+    setStep('record');
+    setPlacesOpen(false);
+  }, [enterWorkspace]);
+
   const exitToOverview = useCallback(() => {
     setPlaying(false);
     setCinemaActive(false);
@@ -872,9 +882,7 @@ export function App() {
       const onControl = Boolean(target?.closest('button, a, [role="slider"], [role="option"]'));
       if (!inWorkspace && e.key === 'Enter' && !onControl) {
         e.preventDefault();
-        enterWorkspace('cutaway');
-        setStep('record');
-        setPlacesOpen(true);
+        enterRecord();
         return;
       }
 
@@ -1274,11 +1282,7 @@ export function App() {
           onOpenSearch={() => setAskOpen(true)}
           onOpenSensor={() => setReading('sensors')}
           onOpenMethod={() => setReading('method')}
-          onEnter={() => {
-            enterWorkspace('cutaway');
-            setStep('record');
-            setPlacesOpen(true);
-          }}
+          onEnter={enterRecord}
         />
       )}
 
