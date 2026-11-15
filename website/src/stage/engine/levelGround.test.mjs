@@ -43,3 +43,22 @@ test('the sea at 0 m is left to the sea mask', () => {
   const dem = new Float32Array(N * N);
   assert.equal(levelGround(dem, N).reduce((a, b) => a + b, 0), 0);
 });
+
+test('level ground at whole metres (terraces) is told from a lake at any height', async () => {
+  const { levelIsWholeMetres } = await import('./levelGround.ts');
+  const M = 40;
+  // Terraces: a gentle slope given in whole metres, so each step is a level band at a whole metre
+  const terraces = new Float32Array(M * M);
+  // A lake at 1371.4 m in a valley of finer grain
+  const lake = new Float32Array(M * M);
+  for (let r = 0; r < M; r++) {
+    for (let c = 0; c < M; c++) {
+      terraces[r * M + c] = 260 + Math.floor(c / 6);
+      const inLake = r > 10 && r < 30 && c > 10 && c < 30;
+      lake[r * M + c] = inLake ? 1371.4 : 1380 + 0.73 * Math.hypot(r - 20, c - 20);
+    }
+  }
+  assert.equal(levelIsWholeMetres(terraces, M), true);
+  assert.equal(levelIsWholeMetres(lake, M), false);
+  assert.equal(levelIsWholeMetres(new Float32Array(M * M), M), false);
+});

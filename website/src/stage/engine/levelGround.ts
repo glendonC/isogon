@@ -49,3 +49,34 @@ export function levelGround(dem: Float32Array, n: number): Uint8Array {
   }
   return out;
 }
+
+/**
+ * Elevation from a source given in whole metres (some are, and resampling keeps it so wherever the
+ * ground is flat): flat ground is then a series of exactly level terraces, each at a whole metre, and
+ * level ground no longer means a lake. True when most level posts (as levelGround finds them, sea left
+ * out) lie at a whole metre; a lake in elevation of finer grain lies at any height. Every second row
+ * and column is read.
+ */
+export function levelIsWholeMetres(dem: Float32Array, n: number): boolean {
+  let level = 0;
+  let whole = 0;
+  for (let r = 1; r < n - 1; r += 2) {
+    for (let c = 1; c < n - 1; c += 2) {
+      const h = dem[r * n + c];
+      if (h === 0 || !Number.isFinite(h)) continue;
+      let flat = true;
+      for (let dr = -1; dr <= 1 && flat; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (Math.abs(dem[(r + dr) * n + c + dc] - h) > LEVEL_M) {
+            flat = false;
+            break;
+          }
+        }
+      }
+      if (!flat) continue;
+      level++;
+      if (Math.abs(h - Math.round(h)) < 0.02) whole++;
+    }
+  }
+  return level >= 20 && whole / level > 0.5;
+}

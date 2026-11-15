@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { COMMON_HEIGHTFIELD_GLSL, createDemR32FTexture } from '../earthCutawayShaders';
 import { ATMOSPHERE_GLSL, NIGHT_GLSL, SKY_VIEW_MAPPING_GLSL } from './atmosphere';
-import { levelGround } from './levelGround';
+import { levelGround, levelIsWholeMetres } from './levelGround';
 import { loadPackImage } from './terrainPack';
 import { TERRAIN_LOOK_GLSL } from './terrainShader';
 
@@ -67,7 +67,9 @@ export interface TerrainContextLoadOptions {
 /** Normals, the sea mask and the lakes of the context grid, computed once when it is loaded. */
 function buildShadeTexture(dem: Float32Array, n: number, extentKm: [number, number]): THREE.DataTexture {
   const out = new Uint8Array(n * n * 4);
-  const lakes = levelGround(dem, n);
+  // (elevation from a source in whole metres is level in terraces, not only on lakes: no lake is
+  // taken from it)
+  const lakes = levelIsWholeMetres(dem, n) ? new Uint8Array(n * n) : levelGround(dem, n);
   const dx = (extentKm[0] * 1000) / (n - 1);
   const dz = (extentKm[1] * 1000) / (n - 1);
   for (let r = 0; r < n; r++) {

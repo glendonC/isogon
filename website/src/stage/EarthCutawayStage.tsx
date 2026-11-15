@@ -92,6 +92,7 @@ import {
 } from './engine/scanGeometry';
 import { SunShadowBaker } from './engine/shadowBake';
 import { firePatches, type FirePatches } from './engine/firePatches';
+import { levelIsWholeMetres } from './engine/levelGround';
 import { SpacecraftFleet, buildOrbitEnvironment, type FleetPass } from './engine/spacecraft';
 import { SmokePass, buildSmokeHeightTexture } from './engine/smokeVolume';
 import {
@@ -229,6 +230,8 @@ interface CachedTheaterBundle {
   noRealGround?: boolean;
   /** The picture on the ground is not from a file of the place (drawn, or one tone). A real run never borrows it. */
   noRealPicture?: boolean;
+  /** Level ground in this bundle's elevation is a lake (false for elevation in whole metres). Found once. */
+  levelIsWater?: boolean;
   demTex: THREE.DataTexture;
   alignedDem: Float32Array;
   demGridRes: number;
@@ -322,6 +325,16 @@ function plainGroundTexture(): THREE.Texture {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   return tex;
+}
+
+/**
+ * Whether level ground in the bundle's elevation may be drawn as a lake: only in elevation that is the
+ * place's own, and not from a source in whole metres (where flat ground is level in terraces).
+ */
+function lakesFromLevel(bundle: CachedTheaterBundle): boolean {
+  if (bundle.noRealGround) return false;
+  if (bundle.levelIsWater === undefined) bundle.levelIsWater = !levelIsWholeMetres(bundle.alignedDem, bundle.demGridRes);
+  return bundle.levelIsWater;
 }
 
 /** The page address's `film` parameter, when it names a film move (see the prop `filmMove`). */
@@ -1283,7 +1296,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uHasSeaCoast: { value: nextBundle.hasSeaCoast ? 1.0 : 0.0 },
       // (level ground is a lake only in elevation that is the place's own: a drawn stand-in and
       // the flat ground of a missing file are level without being water)
-      uLakeMix: { value: nextBundle.noRealGround ? 0.0 : 1.0 },
+      uLakeMix: { value: lakesFromLevel(nextBundle) ? 1.0 : 0.0 },
       uFireHist: { value: ensureFireHistory(nextBundle).texture },
       uFireTime: { value: 0.0 },
       uWindDirUv: { value: uWindDirUv },
@@ -1498,7 +1511,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       terrainUniforms.uSatNext.value = nextBundle.satTex;
       uExtentKm.set(nextBundle.widthKm, nextBundle.depthKm);
       terrainUniforms.uHasSeaCoast.value = nextBundle.hasSeaCoast ? 1.0 : 0.0;
-      terrainUniforms.uLakeMix.value = nextBundle.noRealGround ? 0.0 : 1.0;
+      terrainUniforms.uLakeMix.value = lakesFromLevel(nextBundle) ? 1.0 : 0.0;
       uWindDirUv.set(nextBundle.windDirUv[0], nextBundle.windDirUv[1]);
       terrainUniforms.uFireHist.value = ensureFireHistory(nextBundle).texture;
 
@@ -1561,6 +1574,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         key: `pack-${lite.key}`,
         demTex: pack.demTexture,
         alignedDem: pack.alignedDem,
+        // (found again from the pack's own elevation)
+        levelIsWater: undefined,
         demGridRes: pack.demGridRes,
         minElevM: pack.minElevM,
         maxElevM: pack.maxElevM,
