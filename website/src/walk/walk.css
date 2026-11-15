@@ -1,30 +1,48 @@
-/* The agents' walk: its one line, plain text and one class, so the identity reskins it in a line. */
+/* The agent's walk. Plain words in one class (`walk`), no box, no panel; the frame on the agent's square is the
+   identity's reticle (`walk-frame` holds it). Words are white. */
 .walk {
   position: fixed;
-  left: 50%;
-  bottom: 9vh;
-  transform: translateX(-50%);
-  width: min(880px, calc(100vw - 32px));
   z-index: 40;
-  text-align: center;
   pointer-events: none;
-  color: #f2f0ea;
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.85);
+  color: #ffffff;
+  text-shadow: 0 1px 10px rgba(5, 7, 12, 0.9);
 }
 
 .walk p {
   margin: 0;
-  font-size: clamp(20px, 2.2vw, 30px);
   line-height: 1.25;
 }
 
-/* While it plays, no figure is on the path: the players' points and bars wait, and the guide steps aside. All of
-   them come back the moment the walk hands over. */
-:root[data-walk='on'] .agent-label__gain,
-:root[data-walk='on'] .agent-label__points,
-:root[data-walk='on'] .agent-bar,
+.walk[data-place='foot'] {
+  left: 50%;
+  bottom: 9vh;
+  transform: translateX(-50%);
+  width: min(880px, calc(100vw - 32px));
+  text-align: center;
+}
+
+.walk[data-place='foot'] p {
+  font-size: clamp(20px, 2.2vw, 30px);
+}
+
+/* The agent's frame is the identity's reticle; this only keeps it above the stage and out of the visitor's way. */
+.walk-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  pointer-events: none;
+}
+
+.walk-frame .id-scene__frame {
+  pointer-events: auto;
+}
+
+/* While it plays the guide steps aside (its strip, its field, and the visitor's prompt and pass label on the board,
+   which are not the visitor's yet), and comes back the moment the walk hands over. */
 :root[data-walk='on'] .guide-strip,
-:root[data-walk='on'] .guide-ask {
+:root[data-walk='on'] .guide-ask,
+:root[data-walk='on'] .guide-prompt,
+:root[data-walk='on'] .tw-pin {
   opacity: 0;
   pointer-events: none;
   transition: opacity 240ms ease;

@@ -1,50 +1,75 @@
 import type { WorkspaceStore } from '../app/store';
+import { postJson } from '../lib/api.ts';
+import { readPlay, type PlaySummary } from '../compare/blocks.ts';
 
 /**
- * The agents' part of Play, after the reveal: the players take their looks at the hidden satellite in time, on the
- * fire in view, and then the visitor's own round begins on the same fire, where the walk ends and hands over.
+ * The agent's part of Play, after the reveal: a round opens on the fire in view, the learned player takes its looks
+ * on the board in time, a frame of corner brackets moving to each square it chooses, and then the round is the
+ * visitor's. The walk ends there and hands over.
  *
- * It drives the page only through the commands the guide's actions run (`play:players`, `play:watch`, `go:play`), so
- * every board, look and score is the page's, from the round's routes. Its lines carry no figure; the players' points
- * are hidden while it plays (`data-walk="on"` on the root, `walk.css`) and are one press away once it hands over.
+ * It drives the page only through the commands the guide's actions run (`go:test`, `go:play`), and the looks are the
+ * learned player's own play of this fire from the play route (`POST /api/env/next_look/play`). Only where it looked
+ * and at which pass is shown: not what its looks found, which is the hidden satellite's and stays the visitor's to
+ * find. No line carries a figure; while it plays the root has `data-walk="on"` so the guide steps aside.
  *
  * Two calls: `startAgentWalk(page)` on the scene in view, and `stopAgentWalk()`. `agentWalkDone()` says when it has
  * reached the visitor's turn, for a caller that waits on it.
  */
 
 /** What the walk reads and drives: the shell's store, read fresh at every step. */
-export type WalkPage = Pick<WorkspaceStore, 'step' | 'guide' | 'runCommand' | 'round' | 'test'>;
+export type WalkPage = Pick<WorkspaceStore, 'step' | 'guide' | 'runCommand' | 'round' | 'test' | 'place' | 'run'>;
 
-export type AgentBeatId = 'reveal' | 'players' | 'watch' | 'yours';
+export type AgentBeatId = 'reveal' | 'board' | 'agent' | 'yours';
 
-export const AGENT_WALK_WORDS: Record<AgentBeatId, string> & { stopped: string } = {
-  reveal: 'VIIRS revealed. Now the agents take their turn.',
-  players: 'Each agent chooses where to spend its looks at the hidden satellite.',
-  watch: 'Watch where each one looks, and what it finds.',
+export const AGENT_WALK_WORDS = {
+  reveal: 'VIIRS revealed. Now the agent takes its turn.',
+  board: 'The fire as a board. VIIRS is hidden again.',
+  agent: 'The agent spends its looks at the hidden satellite.',
   yours: 'Your turn: pick the square where a look would teach the model most.',
+  /** Beside the frame while it is on a square the agent chose. */
+  beside: 'The agent looks here',
+  noPlay: 'The agent has no recorded play on this fire. Your turn.',
   stopped: 'The walk stopped here. The page is yours.',
-};
+} as const;
 
 /** Reading time of each beat once its scene is up, ms. */
-export const AGENT_BEAT_HOLD: Record<AgentBeatId, number> = {
-  reveal: 1800,
-  players: 2400,
-  watch: 7000,
-  yours: 4500,
+export const AGENT_BEAT_HOLD: Record<AgentBeatId, number> & { look: number } = {
+  reveal: 1600,
+  board: 1800,
+  agent: 900,
+  /** Each of the agent's looks: the frame moves, locks and holds. */
+  look: 1900,
+  yours: 4000,
 };
+
+/** The player whose looks the walk plays. */
+export const AGENT_PLAYER = 'learned';
 
 /** How long the walk waits for a scene before it hands over, ms. */
 const WAIT_MS = 25000;
 const POLL_MS = 150;
 
-interface WalkState {
+export interface AgentLookOnShow {
+  /** The square on the board, by the round's own numbering (row by row from the north-west). */
+  tile: number;
+  /** 1 based, of `of`. */
+  index: number;
+  of: number;
+  /** The pass the look was spent on, as the route gives it. */
+  timeUtc: string | null;
+}
+
+export interface WalkState {
   on: boolean;
   beat: AgentBeatId | null;
   line: string | null;
   done: boolean;
+  /** The agent's look the frame is on, and the board's width in squares. */
+  look: AgentLookOnShow | null;
+  cols: number;
 }
 
-let state: WalkState = { on: false, beat: null, line: null, done: false };
+let state: WalkState = { on: false, beat: null, line: null, done: false, look: null, cols: 0 };
 const listeners = new Set<() => void>();
 let runId = 0;
 let fade = 0;
@@ -100,17 +125,29 @@ export function stopAgentWalk(): void {
   runId += 1;
   unlisten?.();
   window.clearTimeout(fade);
-  if (state.on || state.line) set({ on: false, beat: null, line: null, done: true });
+  if (state.on || state.line || state.look) set({ on: false, beat: null, line: null, done: true, look: null });
+}
+
+/** The learned player's play of the fire in view, from the play route. */
+export async function fetchAgentPlay(regionId: string, start: string): Promise<PlaySummary | null> {
+  const answer = await postJson<unknown>('/api/env/next_look/play', { region_id: regionId, start, player: AGENT_PLAYER });
+  return readPlay(answer);
+}
+
+export interface AgentWalkOptions {
+  /** Where the agent's play comes from; the play route by default. */
+  fetchPlay?: (regionId: string, start: string) => Promise<PlaySummary | null>;
 }
 
 /**
- * Start the agents' part on the scene in view. On the estimate with VIIRS still hidden it reveals first; on the
- * reveal it goes straight to the players. Calling it again restarts it.
+ * Start the agent's part on the scene in view. On the estimate with VIIRS still hidden it reveals first. Calling it
+ * again restarts it.
  */
-export function startAgentWalk(page: () => WalkPage): void {
+export function startAgentWalk(page: () => WalkPage, options: AgentWalkOptions = {}): void {
   const id = ++runId;
+  const fetchPlay = options.fetchPlay ?? fetchAgentPlay;
   window.clearTimeout(fade);
-  set({ on: true, beat: null, line: null, done: false });
+  set({ on: true, beat: null, line: null, done: false, look: null, cols: 0 });
   listenForTakeover();
 
   const alive = () => {
@@ -134,37 +171,47 @@ export function startAgentWalk(page: () => WalkPage): void {
       await sleep(POLL_MS);
     }
   };
-  const has = (command: string) => {
-    const g = page().guide;
-    return [...g.actions, ...g.also].some((a) => a.command === command);
-  };
-  const beat = async (b: AgentBeatId, scene: () => Promise<void>) => {
-    await scene();
+  const say = async (b: AgentBeatId, line: string = AGENT_WALK_WORDS[b]) => {
     alive();
-    set({ beat: b, line: AGENT_WALK_WORDS[b] });
+    set({ beat: b, line });
     await sleep(AGENT_BEAT_HOLD[b]);
   };
 
   const run = async () => {
-    await beat('reveal', async () => {
-      const p = page();
-      if ((p.step === 'fire' || p.step === 'test') && !p.test.revealed) {
-        p.runCommand('go:test');
-        await until(() => page().test.revealed);
+    // The reveal, if the scene in view still holds VIIRS back.
+    const p0 = page();
+    if ((p0.step === 'fire' || p0.step === 'test') && !p0.test.revealed) {
+      p0.runCommand('go:test');
+      await until(() => page().test.revealed);
+    }
+    await say('reveal');
+
+    // The round's board on the same fire, VIIRS hidden again; the agent's play asked for while it opens.
+    const regionId = page().place.regionId;
+    const start = page().run.realStart;
+    const asked = start ? fetchPlay(regionId, start).catch(() => null) : Promise.resolve(null);
+    page().runCommand('go:play');
+    await until(() => page().step === 'look' && page().round.ready && page().round.start !== null);
+    const cols = page().round.start?.episode.tiles[1] ?? 0;
+    set({ cols });
+    await say('board');
+
+    const play = await asked;
+    alive();
+    const looks = play?.looks ?? [];
+    if (looks.length === 0 || cols < 1) {
+      await say('yours', AGENT_WALK_WORDS.noPlay);
+    } else {
+      await say('agent');
+      for (let i = 0; i < looks.length; i += 1) {
+        alive();
+        set({ look: { tile: looks[i].tile, index: i + 1, of: looks.length, timeUtc: looks[i].timeUtc } });
+        await sleep(AGENT_BEAT_HOLD.look);
       }
-    });
-    await beat('players', async () => {
-      page().runCommand('play:players');
-      await until(() => page().step === 'agent' && has('play:watch'));
-    });
-    await beat('watch', async () => {
-      page().runCommand('play:watch');
-    });
-    // The visitor's own round on the same fire: a new round starts from the players' picture.
-    await beat('yours', async () => {
-      page().runCommand('go:play');
-      await until(() => page().step === 'look' && page().round.ready && page().round.canPick);
-    });
+      set({ look: null });
+      await say('yours');
+    }
+
     alive();
     unlisten?.();
     set({ on: false, done: true });
@@ -174,7 +221,7 @@ export function startAgentWalk(page: () => WalkPage): void {
   run().catch((e) => {
     if (e instanceof Stopped) return;
     unlisten?.();
-    set({ on: false, beat: null, line: AGENT_WALK_WORDS.stopped, done: true });
+    set({ on: false, beat: null, line: AGENT_WALK_WORDS.stopped, done: true, look: null });
     fade = window.setTimeout(() => set({ line: null }), 2500);
   });
 }
