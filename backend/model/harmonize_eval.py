@@ -32,7 +32,7 @@ LAST_MONTH: int = C.N_MONTHS - 1   # December 2025
 PRE_DRIFT_LAST_YEAR: int = 2019
 MIN_YEAR_ROWS: float = 50.0
 MIN_GROUP_PLACE_YEARS: int = 30
-INTERVAL_FOR: tuple[str, ...] = ("in_use", "pooled_size", "scan_fit")
+INTERVAL_FOR: tuple[str, ...] = ("in_use", "pooled_month_size", "pooled_size", "scan_fit")
 RULE_SHA256: str = "b487f2445a6d7c35405f35e1afac522efc14fccae0f54bc54b80cc0196e5b796"
 
 
