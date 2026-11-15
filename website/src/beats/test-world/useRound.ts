@@ -2,12 +2,38 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DynamicRegionRun } from '../../stage/types';
 import type { StageTileAnchor, StageTileBoard } from '../../stage/earthCutawayTypes';
 import type { NextLookEnd, NextLookStart } from '../../content/demo/nextLook';
-import { NEW_ROUND, type RoundState } from './round';
+import { NEW_ROUND, type RoundPick, type RoundState } from './round';
 import { frameNearest, tileOf, withLooks } from '../../content/nextLook';
 import { fireAt } from '../world-model/fire';
 import { isRealRun, withReveal } from '../../content/realRuns';
-import { HttpError, NotRecorded } from '../../lib/api';
+import { HttpError, NotRecorded, postJson, recordedRound, TRANSPORT } from '../../lib/api';
+import { PLAYERS, SEES_THE_ANSWER } from '../../compare/blocks';
 import { openRound, runWithEndReveal, type NextLookEnv } from './env';
+
+/**
+ * The one look a page of recorded answers scores (the recording's `one_look`): the passes before it go by on their
+ * own, the visitor looks or lets the pass go there, and the round ends with that answer beside the best one at that
+ * pass and each player's pick there, all from the recording.
+ */
+export interface OneLook {
+  decision: number;
+  /** The visitor's answer: the square (null when the pass was let go) and its gain; null until taken. */
+  taken: { tile: number | null; reward: number | null } | null;
+  /** The answer that gains most at that pass among the recorded ones (null tile: letting it go); null until read. */
+  best: { tile: number | null; reward: number } | null;
+  /** Each player's pick there (null tile: it let the pass go) and its gain, from the recorded plays; null until read. */
+  players: { key: string; name: string; tile: number | null; reward: number | null }[] | null;
+}
+
+/** A recorded play's step at a decision: the square it looked at, if it spent a look there, and the step's gain. */
+function playStep(play: unknown, decision: number): { tile: number | null; reward: number | null } | null {
+  const p = (play && typeof play === 'object' && 'play' in play ? (play as { play: unknown }).play : play) as { steps?: unknown } | null;
+  const steps = Array.isArray(p?.steps) ? (p!.steps as Record<string, unknown>[]) : [];
+  const st = steps.find((x) => x?.decision === decision);
+  if (!st) return null;
+  const looked = st.spent === true || st.spending_look === true;
+  return { tile: looked && typeof st.chosen_tile === 'number' ? st.chosen_tile : null, reward: typeof st.reward === 'number' ? st.reward : null };
+}
 
 /** The fire a round is played on: the place and the start of the run that was open when the round began. */
 export interface RoundFire {
@@ -34,6 +60,9 @@ export interface RoundApi {
   end: NextLookEnd | null;
   /** Why the round could not start, in the server's own words where it gave some. */
   error: string | null;
+  /** On a page of recorded answers: the one look it scores, or `noLook` when it holds none on this fire. */
+  oneLook: OneLook | null;
+  noLook: boolean;
   fire: RoundFire | null;
   /** The round's held-out run, once it is on the terrain; and what the terrain draws for it. */
   run: DynamicRegionRun | null;
@@ -81,6 +110,8 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
   const [end, setEnd] = useState<NextLookEnd | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fire, setFire] = useState<RoundFire | null>(null);
+  const [oneLook, setOneLook] = useState<OneLook | null>(null);
+  const [noLook, setNoLook] = useState(false);
   const [focus, setFocus] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const seqRef = useRef(0);
@@ -90,13 +121,53 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
     const seq = ++seqRef.current;
     setEnv(null);
     setError(null);
-    openRound(f.regionId, f.start)
-      .then((e) => {
+    setOneLook(null);
+    setNoLook(false);
+    const open = async () => {
+      if (TRANSPORT !== 'recorded') {
+        const e = await openRound(f.regionId, f.start);
         if (seq === seqRef.current) setEnv(e);
-      })
-      .catch((err) => {
-        if (seq === seqRef.current) setError(words(err));
-      });
+        return;
+      }
+      // A page of recorded answers scores one look, where the recording holds every answer: none here, it says so.
+      const rec = await recordedRound(f.regionId, f.start);
+      if (!rec?.oneLook) {
+        if (seq === seqRef.current) setNoLook(true);
+        return;
+      }
+      const e = await openRound(f.regionId, f.start);
+      // The passes before the look go by on their own, each let go, as the recording took them.
+      const letGo: RoundPick[] = [];
+      let at = 0;
+      while (at < rec.oneLook.decision) {
+        const res = await e.look(at, -1);
+        letGo.push({ decision: at, tile: null, pixels: res.pixels, revealed: res.revealed, reward: res.reward, score: res.score });
+        if (res.done || res.next_decision === null) throw new Error('the recorded round ended before its look');
+        at = res.next_decision;
+      }
+      if (seq !== seqRef.current) return;
+      setOneLook({ decision: at, taken: null, best: null, players: null });
+      setState((r) => (r ? { ...r, decision: at, next: at, picks: letGo } : r));
+      setEnv(e);
+      // What every answer at that pass gains, and each player's pick there, for the round's end.
+      const gains = await Promise.all(rec.oneLook.actions.map((a) => e.gainOf(at, a).then((g) => ({ a, g }), () => ({ a, g: null }))));
+      let best: OneLook['best'] = null;
+      for (const { a, g } of gains) if (g !== null && (best === null || g > best.reward)) best = { tile: a >= 0 ? a : null, reward: g };
+      const players: NonNullable<OneLook['players']> = [];
+      for (const p of PLAYERS) {
+        try {
+          const body = { region_id: f.regionId, start: f.start, player: p.key, ...(p.key === SEES_THE_ANSWER ? { ceiling: true } : {}) };
+          const s = playStep(await postJson<unknown>('/api/env/next_look/play', body), at);
+          if (s) players.push({ key: p.key, name: p.name, ...s });
+        } catch {
+          // A play the recording does not hold leaves that player out
+        }
+      }
+      if (seq === seqRef.current) setOneLook((o) => (o ? { ...o, best, players } : o));
+    };
+    open().catch((err) => {
+      if (seq === seqRef.current) setError(words(err));
+    });
   }, []);
 
   const begin = useCallback(
@@ -121,6 +192,8 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
       setError(null);
       setFire(null);
       setFocus(null);
+      setOneLook(null);
+      setNoLook(false);
       if (f && !keepRun) restoreRun(f);
     },
     [fire, restoreRun],
@@ -135,6 +208,22 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
       env
         .look(decision, tile)
         .then((res) => {
+          // The one look a recorded page scores: the round ends with it.
+          if (oneLook && decision === oneLook.decision) {
+            setState((r) =>
+              r && r.decision === decision
+                ? {
+                    ...r,
+                    picks: [...r.picks, { decision, tile: res.tile >= 0 ? res.tile : null, pixels: res.pixels, revealed: res.revealed, reward: res.reward, score: res.score }],
+                    awaitingNext: false,
+                    next: null,
+                    done: true,
+                  }
+                : r,
+            );
+            setOneLook((o) => (o ? { ...o, taken: { tile: res.tile >= 0 ? res.tile : null, reward: res.reward } } : o));
+            return;
+          }
           setState((r) =>
             r && r.decision === decision
               ? {
@@ -157,7 +246,7 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
           busyRef.current = false;
         });
     },
-    [state, env],
+    [state, env, oneLook],
   );
 
   const spent = state ? state.picks.filter((p) => p.tile !== null).length : 0;
@@ -287,7 +376,8 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
   /** What the terrain draws: the looks' detections laid on as they come, and everything after the end. */
   const stageRun = useMemo(() => {
     if (!state || !run) return null;
-    if (state.done) return end ? withReveal(runWithEndReveal(run, end)) : run;
+    // After the one look a recorded page scores, the look's detections stay; there is no end's reveal.
+    if (state.done && !oneLook) return end ? withReveal(runWithEndReveal(run, end)) : run;
     const looked = state.picks.filter((p) => p.tile !== null);
     const layers = looked.flatMap((p) =>
       p.revealed.map((o) => ({
@@ -297,7 +387,7 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
       })),
     );
     return withLooks(run, layers, `looks_${looked.map((p) => `${p.decision}-${p.tile}`).join('_')}`);
-  }, [state, run, end]);
+  }, [state, run, end, oneLook]);
 
   const board = useMemo<StageTileBoard | null>(() => {
     if (!state || !start || !run || rows < 1 || cols < 1) return null;
@@ -331,6 +421,8 @@ export function useRound({ activeRun, activeStart, requestBlindRun, restoreRun, 
     start,
     end,
     error,
+    oneLook,
+    noLook,
     fire,
     run,
     stageRun,

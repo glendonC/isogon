@@ -1300,6 +1300,8 @@ export function App() {
       start: rnd.start,
       end: rnd.end,
       error: rnd.error,
+      oneLook: rnd.oneLook,
+      noLook: rnd.noLook,
       runError: realFailed && rnd.fire && realFailed.start === rnd.fire.start ? realFailed.message : null,
       next: nextLook,
       focus: rnd.focus,
@@ -1423,7 +1425,11 @@ export function App() {
     } else if (command === 'play:next') {
       if (round?.awaitingNext) nextLook();
     } else if (command === 'play:end') rnd.finish();
-    else if (command === 'play:players') goStep('agent');
+    else if (command === 'play:players') {
+      // After the one look a recorded page scores, the players' picture shows their recorded plays of this fire.
+      if (rnd.oneLook?.taken) rnd.leave(true);
+      goStep('agent');
+    }
     else if (command === 'play:again') {
       setFinishOpen(false);
       if (step === 'agent') setStep('look');

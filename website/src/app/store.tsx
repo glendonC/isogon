@@ -4,6 +4,7 @@ import type { CalendarState } from '../ui/useCalendar';
 import type { CalendarArea } from '../components/BurningCalendar';
 import type { BlindTest, IntensityLegend, ModelStatus } from '../content/realRuns';
 import type { RoundState } from '../beats/test-world/round';
+import type { OneLook } from '../beats/test-world/useRound';
 import type { NextLookEnd, NextLookStart } from '../content/demo/nextLook';
 import type { Step } from '../components/WorkspaceBar';
 import type { Box, FeaturedFire, Place, Places } from './places';
@@ -120,6 +121,9 @@ export interface WorkspaceStore {
     end: NextLookEnd | null;
     /** Why the round could not start, in the server's words where it gave some. */
     error: string | null;
+    /** On a page of recorded answers: the one look it scores, or `noLook` when it holds none on this fire. */
+    oneLook: OneLook | null;
+    noLook: boolean;
     /** Why the round's held-out run did not load. */
     runError: string | null;
     next: () => void;

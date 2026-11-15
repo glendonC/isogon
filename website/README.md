@@ -52,10 +52,14 @@ To use another address, set `VITE_API_BASE`:
 VITE_API_BASE=http://127.0.0.1:8790 npm run dev
 ```
 
-A build for a public static page reads recorded answers instead of a backend: set `VITE_TRANSPORT=recorded` and,
-if the folder is not `recorded/` beside the page, `VITE_RECORDED_BASE`. The folder holds `index.json`, which maps
-each request's key (its method, its path with the query sorted, and for a POST its body as JSON with sorted keys)
-to a stored answer. A request with no recorded answer says so on the page in one line.
+A build for a public static page reads recorded answers instead of a backend: set `VITE_TRANSPORT=recorded` and, if
+the folder is not `recorded/` beside the page, `VITE_RECORDED_BASE`. The folder holds `index.json`, which maps each
+request's key (its method, its path with the query sorted, and for a POST its body as JSON with sorted keys) to a
+stored answer. A request with no recorded answer says so on the page in one line. There Play scores one look, where
+the index's `rounds[].one_look` names it: the passes before it go by on their own, the visitor looks or lets that
+pass go, and the round ends there beside the best square and each player's pick at that pass, all from the
+recording; the players' picture then shows their recorded plays. A fire whose recorded round names no such look
+says the page scores none there.
 
 The backend accepts browser requests only from pages served on `localhost`, `127.0.0.1` or `[::1]`. Its routes are described in [`../docs/api.md`](../docs/api.md).
 

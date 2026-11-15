@@ -14,6 +14,7 @@ import type { EarthStageTelemetry } from '../stage/earthCutawayTypes';
 import { countWord, dayWords } from './formats';
 import { resultRows, type ResultRow } from './Results';
 import { roundFields } from './roundFields';
+import { ONE_LOOK_WORDS, oneLookRows } from './oneLook';
 import {
   contextOf,
   fill,
@@ -262,8 +263,32 @@ export function useGuide(
     const step = open.finish ? 'finish' : 'play';
     let id = open.finish ? 'ready' : playStateId(ws);
     if (id === 'players_open') id = playersStateId(players);
+    const one = ws.round.oneLook;
+    // A page of recorded answers, in the page's words until the script carries them: its one look's end (with the
+    // round's end's actions) and a fire on which it scores none (with the actions of a fire that cannot be played).
+    if (step === 'play' && ((id === 'one_look_end' && one?.taken) || id === 'no_look_here')) {
+      const end = id === 'one_look_end' && one;
+      const like = stateOf('play', end ? 'round_end' : 'no_sharp_satellite');
+      return {
+        ...NONE,
+        step,
+        stateId: id,
+        state: null,
+        objective: end ? ONE_LOOK_WORDS.endObjective : ONE_LOOK_WORDS.noneObjective,
+        context: contextOf(step, f),
+        lines: end ? [ONE_LOOK_WORDS.end(one), ONE_LOOK_WORDS.whole] : [ONE_LOOK_WORDS.none, ONE_LOOK_WORDS.noneWhole],
+        fields: f,
+        conds: c,
+        actions: actionsOf(like?.actions, f, on),
+        also: actionsOf(stepOf(step)?.also, f, on, 9),
+        results: end ? { line: ONE_LOOK_WORDS.resultsLine, rows: oneLookRows(one) } : null,
+      };
+    }
     const state = stateOf(step, id);
     const missing = step === 'play' && id !== 'loading' && id !== 'failed' ? missingLine(ws.model.missingFiles) : null;
+    // While the one look is chosen, the page says it scores one look in place of the looks left.
+    const said = says(state, f, c).slice(0, STANDING);
+    const standing = one && id === 'choose' ? [ONE_LOOK_WORDS.choose, ...said.slice(1)] : said;
     return {
       ...NONE,
       step,
@@ -271,7 +296,7 @@ export function useGuide(
       state,
       objective: objectiveOf(step, state, f),
       context: contextOf(step, f),
-      lines: [...(missing ? [missing] : []), ...says(state, f, c).slice(0, STANDING)],
+      lines: [...(missing ? [missing] : []), ...standing],
       more: moreOf(state, f, c),
       film: filmOf(state, f, c),
       fields: f,

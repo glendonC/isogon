@@ -99,6 +99,16 @@ interface RecordedIndex {
   entries: Record<string, RecordedEntry>;
   /** The featured periods the recorder did not record (`periods_left_out.periods`: featured fire ids). */
   periods_left_out?: { why?: string; periods?: unknown };
+  /** The recorded rounds: each one's fire, its recorded line and the decision of the visitor's one look. */
+  rounds?: unknown;
+}
+
+/** A recorded round of a fire, as the index lists it. */
+export interface RecordedRound {
+  /** The recorded line's steps: a page is on it while every step it took equals the line's at that decision. */
+  line: { decision: number; action: number }[];
+  /** The one look this page scores: its decision and the actions recorded there; null when the round has none. */
+  oneLook: { decision: number; actions: number[] } | null;
 }
 
 let indexPromise: Promise<RecordedIndex> | null = null;
@@ -109,7 +119,7 @@ function recordedIndex(): Promise<RecordedIndex> {
   if (!indexPromise) {
     indexPromise = fetch(`${RECORDED_BASE}index.json`)
       .then((r) => (r.ok ? (r.json() as Promise<RecordedIndex>) : ({ version: 1, entries: {} } as RecordedIndex)))
-      .then((idx): RecordedIndex => ({ version: idx.version, entries: idx.entries ?? {}, periods_left_out: idx.periods_left_out }))
+      .then((idx): RecordedIndex => ({ version: idx.version, entries: idx.entries ?? {}, periods_left_out: idx.periods_left_out, rounds: idx.rounds }))
       .catch((): RecordedIndex => ({ version: 1, entries: {} }))
       .then((idx) => (indexLoaded = idx));
   }
@@ -141,6 +151,27 @@ export async function recordedPeriodsLeftOut(): Promise<string[]> {
   if (TRANSPORT !== 'recorded') return [];
   const periods = (await recordedIndex()).periods_left_out?.periods;
   return Array.isArray(periods) ? periods.filter((p): p is string => typeof p === 'string') : [];
+}
+
+/** The recorded round of a fire (its place and start), or null: none recorded, or the live transport. */
+export async function recordedRound(regionId: string, start: string): Promise<RecordedRound | null> {
+  if (TRANSPORT !== 'recorded') return null;
+  const rounds = (await recordedIndex()).rounds;
+  if (!Array.isArray(rounds)) return null;
+  type Raw = { episode_from?: { region_id?: string; start?: string }; line?: unknown; one_look?: { decision?: unknown; actions?: unknown } | null };
+  const r = (rounds as Raw[]).find((x) => x?.episode_from?.region_id === regionId && x.episode_from.start === start);
+  if (!r) return null;
+  const line = Array.isArray(r.line)
+    ? (r.line as { decision?: unknown; action?: unknown }[])
+        .filter((x) => typeof x?.decision === 'number' && typeof x.action === 'number')
+        .map((x) => ({ decision: x.decision as number, action: x.action as number }))
+    : [];
+  const ol = r.one_look;
+  const oneLook =
+    ol && typeof ol.decision === 'number' && Array.isArray(ol.actions)
+      ? { decision: ol.decision, actions: (ol.actions as unknown[]).filter((a): a is number => typeof a === 'number') }
+      : null;
+  return { line, oneLook };
 }
 
 interface InflightGet {

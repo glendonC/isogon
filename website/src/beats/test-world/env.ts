@@ -21,6 +21,11 @@ import { getJson, postJson } from '../../lib/api';
 export interface NextLookEnv {
   start: NextLookStart;
   look(decision: number, tile: number): Promise<NextLookLook>;
+  /**
+   * What one action at a decision gains, from its step's answer, without taking it in this round: the recorded answers
+   * of a page's one look, each from the same round state.
+   */
+  gainOf(decision: number, action: number): Promise<number | null>;
   state(): Promise<NextLookState>;
   end(): Promise<NextLookEnd>;
 }
@@ -127,6 +132,10 @@ export async function openRound(regionId: string, startDate: string, signal?: Ab
         next_decision: res.done ? null : next,
         done: Boolean(res.done),
       };
+    },
+    async gainOf(decision, action) {
+      const res = await step(decision, action);
+      return typeof res.reward === 'number' ? res.reward : null;
     },
     async state() {
       const st = await roundState(id);
