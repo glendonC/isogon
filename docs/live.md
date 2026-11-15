@@ -91,3 +91,11 @@ The key `FIRMS_MAP_KEY` is read as `backend/firms/area_api.py` reads it and neve
 per live folder. Stopped and started again, it reads its logs, checks their chains, seals no pass twice and adds to
 the second record any digest missing there. The answer is served read only by
 `python3 backend/server_live.py --live-dir <live folder> --port 9388` at `GET /api/live`.
+
+## Rehearsing the scoring path
+
+`python3 -m backend.live.rehearse --env-file <folder>/.env --live-dir <live folder> --dir <rehearsal folder> --from
+<UTC> --to <UTC>` follows the live test's latest fires again in a folder of its own, from a stretch already past: the
+sealer runs with its clock set back over that stretch, then the scorer runs with the real clock on the same real
+replies the runner would read. Nothing it makes is a seal (its MODIS rows were fetched after the time it seals at and
+its digests were written after the passes). The live folder is only read, and its lock is not taken.
