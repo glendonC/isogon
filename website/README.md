@@ -98,9 +98,10 @@ the camera tour, `N` goes to the next region, `1` opens Estimate, `2` and `3` Pl
 arrows mark a square.
 
 The Earth's years (`src/world/EarthYears.tsx`, `GET /api/cube/years`) are a screen of their own under the Record's
-step: `W` opens them from Choose a Place and from the Record's view of the years as counted, the address `?years`
-opens them at once (with `film`, they play once by themselves), and Esc goes back to where they were opened from.
-Their own keys are Space, the arrows and `H`.
+step (the script's step `years`): `O` opens them from Choose a Place and from the Record's view of the years as
+counted, the address `?years` opens them at once (with `film`, they play once by themselves), and Esc goes back to
+where they were opened from. The trail carries the step's objective and the guide its sentence and Back; the screen's
+own keys are Enter and Space (play), the arrows (a year) and `Y` (the view).
 
 A real run and a simulated run are kept apart. When the site asks for a real run and the answer is not one, it is refused, so modelled numbers are never shown as observations.
 
