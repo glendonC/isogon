@@ -1,0 +1,165 @@
+{
+ "version": 1,
+ "what": "the archives a browser unpacks into one folder to run a fire: the core first, then the place's",
+ "commit": "b277eca152d9388e17c884f729c6d2d4b38945d9",
+ "unpack": {
+  "format": "zip",
+  "paths": "relative to the repository root",
+  "order": [
+   "core",
+   "place"
+  ]
+ },
+ "core": {
+  "file": "core.zip",
+  "bytes": 1382394,
+  "sha256": "0765467b92a757ca1107d02e85c614bf51a8373cd0d7a8942cd795ea8ad882cd",
+  "files": 144,
+  "content_bytes": 5730664,
+  "modules": 133
+ },
+ "places": {
+  "evros_greece": {
+   "file": "places/evros_greece.zip",
+   "start": "2023-08-20",
+   "bytes": 11234948,
+   "sha256": "f4f83b5b543bb63064253de1456ef09fe85f793cc7c95e75a7a55fc904a8b3cb",
+   "files": 85,
+   "content_bytes": 15682350
+  },
+  "fort_mcmurray_ab": {
+   "file": "places/fort_mcmurray_ab.zip",
+   "start": "2016-05-17",
+   "bytes": 10227208,
+   "sha256": "99085e29abe7d188fb18c4f20626b1477c91b4a1dbdd6feecb32a945bca0c69e",
+   "files": 81,
+   "content_bytes": 14168737
+  },
+  "jur_river_ss": {
+   "file": "places/jur_river_ss.zip",
+   "start": "2016-12-11",
+   "bytes": 14027747,
+   "sha256": "ad5f046483fc48cb9f56629dd3c0f0069b9fa4ec5df6bb6690a3226838f69d8c",
+   "files": 70,
+   "content_bytes": 31237764
+  },
+  "kakisa_nt": {
+   "file": "places/kakisa_nt.zip",
+   "start": "2023-08-24",
+   "bytes": 14353946,
+   "sha256": "b6992e1ba008c07535e3177d89a56fc8fa4c8e092ead4fd875cfda3f3d8343d1",
+   "files": 89,
+   "content_bytes": 28648191
+  },
+  "manavgat_tr": {
+   "file": "places/manavgat_tr.zip",
+   "start": "2021-07-28",
+   "bytes": 10484781,
+   "sha256": "145a361bb903e37c58f8876e11b1aa5758c08789e3664f3ba7911b1326512b80",
+   "files": 79,
+   "content_bytes": 15079492
+  },
+  "maule_cl": {
+   "file": "places/maule_cl.zip",
+   "start": "2017-01-22",
+   "bytes": 9254405,
+   "sha256": "eca3f3288f7e70e5d78143e3ab2c268e860a9c60c76b2e424262f1dc5fa06fee",
+   "files": 73,
+   "content_bytes": 15282008
+  },
+  "okefenokee_ga": {
+   "file": "places/okefenokee_ga.zip",
+   "start": "2012-04-04",
+   "bytes": 10107405,
+   "sha256": "dba26337d42073bf39c81cf4b884883febb17005981f0057175eb7376e7fbeb4",
+   "files": 73,
+   "content_bytes": 13268288
+  },
+  "plumas_ca": {
+   "file": "places/plumas_ca.zip",
+   "start": "2012-08-10",
+   "bytes": 13241099,
+   "sha256": "47a6b6cc46baeb6c5053916ead43f45bfa00631bf43a4cf41f1e6b8e9821be03",
+   "files": 84,
+   "content_bytes": 16204870
+  },
+  "serra_acor_pt": {
+   "file": "places/serra_acor_pt.zip",
+   "start": "2025-08-15",
+   "bytes": 12833166,
+   "sha256": "ef92f3952560dd2e34fd3c7eeaa8b233de3aba429b9944bd9e5d6f9804db5e07",
+   "files": 85,
+   "content_bytes": 16686732
+  },
+  "ventura_ca": {
+   "file": "places/ventura_ca.zip",
+   "start": "2017-12-05",
+   "bytes": 11219775,
+   "sha256": "2e4ef28b406b83b92195efb55f468f15832798e2ca2c6fc7cda168c7b80ceb06",
+   "files": 84,
+   "content_bytes": 16910042
+  },
+  "wollemi_au": {
+   "file": "places/wollemi_au.zip",
+   "start": "2019-12-05",
+   "bytes": 14960167,
+   "sha256": "a35226479188ca39e41d81d146149e64457051b79c4ce0c05d671434a0f5e216",
+   "files": 82,
+   "content_bytes": 30011460
+  }
+ },
+ "replay_only": {
+  "evia_greece": "its fire on the page is the closed test fire (northern Evia, 2021): the recorded look is replayed",
+  "ljusdal_se": "not in the lists: the page replays it",
+  "lytton_bc": "its fire on the page is the closed test fire (Lytton Creek, 2021): the recorded look is replayed"
+ },
+ "closed": {
+  "rule": "no FIRMS row inside a closed window is packed: a window of a test fire's region (its context box, touching counts) in a year of its fire, whatever the satellite",
+  "source": "backend.model.training: closed_for, over EXCLUSIONS and closed_years; the context boxes from backend.firms.region_box",
+  "windows": [
+   {
+    "region_id": "plumas_ca",
+    "years": [
+     2021
+    ],
+    "context_box": [
+     -122.48,
+     39.1,
+     -119.88,
+     41.0
+    ]
+   },
+   {
+    "region_id": "lytton_bc",
+    "years": [
+     2021
+    ],
+    "context_box": [
+     -122.93,
+     49.28,
+     -120.23,
+     51.18
+    ]
+   },
+   {
+    "region_id": "evia_greece",
+    "years": [
+     2021
+    ],
+    "context_box": [
+     22.05,
+     37.96,
+     24.55,
+     39.76
+    ]
+   }
+  ]
+ },
+ "lists": [
+  {
+   "file": "pack-list-D58.json",
+   "sha256": "d385bddb31752665dec313f608b998474c7ed41138493b3f6f520bf74db50b4c"
+  }
+ ],
+ "refused": "a path outside the tree, the key's file (.env and any name beginning .env), the world store and .git are never packed, nor a missing file, nor a FIRMS row inside a closed window; one in a list stops the pack before any archive is written"
+}
