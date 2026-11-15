@@ -59,8 +59,8 @@ const ramp = (stops: Array<[number, [number, number, number]]>) =>
  * The Earth plays the years 2000 to 2025, one frame a year from the fire cube's yearly layers. As detected, the
  * coarse instrument to 2011 and the sharper one from 2012 on one scale, so the Earth brightens in 2012 with no more
  * fire; the harmonized record holds one scale through every year. Under it, the world's total of each year: as
- * detected as bars, the harmonized record as a line, the year on show marked. Space plays and stops, the arrows step
- * a year, H switches the record.
+ * detected as bars, the harmonized record as a line, the year on show marked. Enter and Space play and stop, the
+ * arrows step a year, Y switches the view (the script's keys).
  */
 export function EarthYears({ source = '/api/cube/years', mode: startMode = 'detected', year: startYear, autoplay, caption = true, onYear }: EarthYearsProps) {
   const read = useRead<YearsIndex>(source);
@@ -187,10 +187,11 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === ' ') play();
+      // The script's keys for the years (EARTH-YEARS.md): Enter and Space play, Y switches the view, the arrows step.
+      if (e.key === ' ' || e.key === 'Enter') play();
       else if (e.key === 'ArrowRight') step(1);
       else if (e.key === 'ArrowLeft') step(-1);
-      else if (e.key === 'h' || e.key === 'H') flip();
+      else if (e.key === 'y' || e.key === 'Y') flip();
       else return;
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -230,7 +231,7 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
   const at = years.indexOf(shown);
   const vmax = idx.scales.suomi_npp?.vmax ?? idx.scales[idx.families[familyOf(idx, mode, shown)]?.scale ?? 'suomi_npp']?.vmax ?? 1;
   const meta = layerOf(idx, mode, shown);
-  const what = mode === 'harmonized' ? Y.onScale : shown >= SHARP_FROM ? `${Y.detected}: ${Y.sharp}` : `${Y.detected}: ${Y.modis}`;
+  const what = mode === 'harmonized' ? Y.onScale : shown >= SHARP_FROM ? Y.sharp : Y.modis;
   const note = info.partial
     ? Y.partialYear(info.months)
     : (info.platform_months.Aqua ?? 0) === 0 && shown < SHARP_FROM
@@ -282,7 +283,7 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
             onClick={() => setMode('harmonized')}
           >
             {harmonizedReady ? Y.harmonized : Y.harmonizedMissing}
-            <kbd className="world-legend__key">H</kbd>
+            <kbd className="world-legend__key">Y</kbd>
           </button>
         </div>
       </div>
@@ -336,7 +337,7 @@ export function EarthYears({ source = '/api/cube/years', mode: startMode = 'dete
                 setPlaying(false);
                 setYear(t.year);
               }}
-              aria-label={`${t.year}: ${t.detected === null ? 'no layer' : millions(t.detected)} as detected${t.harmonized === null ? '' : `, ${millions(t.harmonized)} harmonized`}`}
+              aria-label={`${t.year}: ${t.detected === null ? 'no layer' : millions(t.detected)} as the satellites counted${t.harmonized === null ? '' : `, ${millions(t.harmonized)} on one scale`}`}
             >
               <span className="world-years__fill" style={{ height: `${((t.detected ?? 0) / top) * 100}%` }} />
             </button>

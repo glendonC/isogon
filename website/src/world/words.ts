@@ -130,33 +130,38 @@ export function millions(v: number): string {
   return roughly(v);
 }
 
-/** The Earth's years. The sentences at 2012 are this lane's until the product lane writes them. */
+/** "4.4": a factor to one decimal, as the product lane writes the Earth's (EARTH-YEARS.md). */
+export const oneDecimal = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
+
+/** The Earth's years, in the product lane's words (isogon-notes/product/EARTH-YEARS.md, script version 15). */
 export const YEAR_WORDS = {
-  label: 'The Earth year by year, 2000 to 2025: fire detected in each square of a quarter degree',
+  label: 'The Earth year by year, 2000 to 2025: detections in each square of a quarter degree',
   loading: 'Loading the years',
   failed: 'The yearly layers could not be read.',
-  detected: 'As detected',
-  harmonized: 'Harmonized record',
-  harmonizedMissing: 'Harmonized record: not written yet',
-  play: 'Play',
+  detected: 'As the satellites counted',
+  harmonized: 'On one scale',
+  harmonizedMissing: 'On one scale: not written yet',
+  play: 'Play the years',
   pause: 'Stop',
   step: 'A year',
-  modis: 'MODIS, the coarse instrument',
-  sharp: 'VIIRS on Suomi NPP, the sharper instrument',
-  onScale: "Harmonized: every year on the sharper instrument's scale",
+  modis: 'Counted by the older satellites (MODIS)',
+  sharp: 'Counted by the newer, sharper satellite (VIIRS)',
+  onScale: "On the newer satellite's scale",
   partialYear: (months: number) => `${months === 2 ? 'November and December' : `${months} months`} only: the archive begins in November 2000`,
   terraAlone: 'Terra alone: Aqua joins in July 2002',
   aquaJoins: 'Aqua joins in July',
   stepDetected: (ratio: number | null) =>
-    `2012: the sharper instrument begins.${ratio ? ` It flags about ${Math.round(ratio * 2) / 2} times as many fires as MODIS,` : ''} so the Earth brightens with no more fire.`,
-  stepHarmonized: "2012: the sharper instrument begins. The harmonized record puts the MODIS years on its scale, so there is no step.",
+    ratio
+      ? `2012: the newer, sharper satellite begins and makes about ${oneDecimal(ratio)} times as many detections of the same fires as the older ones, so the Earth brightens with no more fire.`
+      : '2012: the newer, sharper satellite begins and makes more detections of the same fires than the older ones, so the Earth brightens with no more fire.',
+  stepHarmonized: "2012: the newer, sharper satellite begins, and on one scale there is no step, because the older satellites' detections are put on its scale.",
   legend: 'Fire detected in a square of a quarter degree, about 28 km, in the year',
-  closed: 'Squares kept as the model\'s test, in 2021',
+  closed: "Squares kept as the model's test, in 2021",
   hatch: 'Hatched land: no detection there.',
-  totals: 'Fire detected a year, the whole Earth',
-  barsModis: 'MODIS',
-  barsSharp: 'VIIRS (Suomi NPP)',
-  lineHarmonized: 'Harmonized record',
+  totals: 'Detections each year, the whole Earth',
+  barsModis: 'Older satellites (MODIS)',
+  barsSharp: 'Newer satellite (VIIRS)',
+  lineHarmonized: 'On one scale',
   partialBar: 'two months',
   clipped: (n: number) => `${n} ${n === 1 ? 'square lies' : 'squares lie'} above the scale and ${n === 1 ? 'is' : 'are'} drawn at its top`,
 };
