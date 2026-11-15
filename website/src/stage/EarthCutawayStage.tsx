@@ -36,6 +36,7 @@ import type {
   StageBurnedArea,
 } from './earthCutawayTypes';
 import { burnedBounds, burnedClasses, slabToPicture } from './engine/burnedArea';
+import { markStageLoading, markStageReady } from './stageReady';
 import {
   CinemaDirector,
   LANDING_HERO_POSE,
@@ -475,8 +476,14 @@ const FIRE_DAY_REACH_KM = 5;
 // and the record move starts from there, so the shot holds no stand-in, no change of ground and no cut
 const FILM_SETTLE_SECONDS = 0.25;
 const FILM_SLOW_FRAME_MS = 50;
-const FILM_HOLD_MAX_SECONDS = 15;
 const FILM_FADE_SECONDS = 0.4;
+// The cover over the stage until its first picture is whole (see filmHolding): it lifts after this long
+// whatever has come (a slow network), and its line's share at each step of loading (waiting for the run,
+// the run in, the ground's files coming, the land around coming, all in), creeping toward the next step
+// with this time constant
+const COVER_HOLD_MAX_SECONDS = 60;
+const COVER_STEP_SHARES = [0.04, 0.22, 0.34, 0.86, 0.96, 1.0];
+const COVER_CREEP_SECONDS = 6;
 const FIRE_PATCH_GRID_KM = 0.375;
 
 /**
@@ -777,6 +784,9 @@ function findingsOf(
 
 export function EarthCutawayStage(props: EarthCutawayStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // The cover until the stage's first picture is whole, and its line (see filmHolding)
+  const coverRef = useRef<HTMLDivElement | null>(null);
+  const coverLineRef = useRef<HTMLDivElement | null>(null);
   const svgLinesRef = useRef<(SVGPolylineElement | null)[]>([null, null, null]);
   const pinCrossRefs = useRef<(HTMLDivElement | null)[]>([null, null, null]);
   const calloutCardRefs = useRef<(HTMLButtonElement | null)[]>([null, null, null]);
@@ -2941,12 +2951,20 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     // What the close view last framed (see the framing watcher in the frame loop)
     let closeFrameKey = '';
     let filmAskedLast: StageFilmMove | 'auto' | null = null;
-    let filmHolding = Boolean(propsRef.current.filmMove ?? filmAddress) && !propsRef.current.inWorkspace;
+    // The stage shows nothing of itself until its first picture is whole (the ground's shape, its imagery,
+    // the land around and the fire's light in, and frames running smoothly): until then its cover holds
+    // the page's night ground with one thin line that fills as its files arrive, then lifts in one move.
+    // While it holds, every change of ground is done at once, since no one sees it (see stageReady).
+    let filmHolding = true;
     let filmSettledSec = 0;
-    // When the held landing began to fade in (seconds of the stage's clock), for telemetry.picture
+    // When the cover began to lift (seconds of the stage's clock), for telemetry.picture
     let filmFadeStartSec = -1;
     let pictureSent: 'holding' | 'fading' | 'shown' | null = null;
-    if (filmHolding) renderer.domElement.style.opacity = '0';
+    // The cover's line: the share shown, the stage of loading it stands at and since when
+    let coverShown = 0;
+    let coverStep = -1;
+    let coverStepSec = 0;
+    markStageLoading();
     let filmCancelled = false;
     let filmStartSec = 0;
     let filmSeconds = 0;
@@ -3643,7 +3661,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           tourSince = 0;
           tourRested = false;
         }
-        tourSince += dtSec;
+        // (the tour waits under the cover: the first picture shows the landing's own pass)
+        if (!filmHolding) tourSince += dtSec;
         if (tourList.length > 1 && tourSince > (tourRested ? LANDING_TOUR_HOLD_SECONDS : LANDING_TOUR_REST_SECONDS)) {
           tourAt = (tourAt + 1) % tourList.length;
           tourSince = 0;
@@ -3803,23 +3822,6 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           filmCancelled = false;
         }
         if (filmMoveNow && (cameraTouched || pointerDown)) filmCancelled = true;
-        if (filmHolding) {
-          // The landing in the film presentation waits for its whole ground (see FILM_SETTLE_SECONDS)
-          const groundDone =
-            nextBundle.observerDataset.dataSource === 'firms' &&
-            nextBundle.runId !== null &&
-            !morphActive &&
-            (nextBundle.pack
-              ? nextBundle.contextState !== 'loading'
-              : nextBundle.packManifest === null || nextBundle.packState === 'failed');
-          filmSettledSec = groundDone && frameGapMs < FILM_SLOW_FRAME_MS ? filmSettledSec + dtSec : 0;
-          if (filmSettledSec > FILM_SETTLE_SECONDS || elapsedSec > FILM_HOLD_MAX_SECONDS || !filmAsked || p.inWorkspace) {
-            filmHolding = false;
-            filmFadeStartSec = elapsedSec;
-            renderer.domElement.style.transition = `opacity ${FILM_FADE_SECONDS}s ease-out`;
-            renderer.domElement.style.opacity = '1';
-          }
-        }
         let filmWanted: StageFilmMove | null = null;
         // (a new run of the same place, such as the reveal's, does not stop a move: only a change of
         // ground to another place does)
@@ -5096,6 +5098,54 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
         }
       }
 
+      // G2. The cover over the stage until its first picture is whole (see filmHolding)
+      if (filmHolding) {
+        const realOnShow = nextBundle.observerDataset.dataSource === 'firms' && nextBundle.runId !== null;
+        const groundDone =
+          realOnShow &&
+          !morphActive &&
+          (nextBundle.pack
+            ? nextBundle.contextState !== 'loading'
+            : nextBundle.packManifest === null || nextBundle.packState === 'failed');
+        filmSettledSec = groundDone && frameGapMs < FILM_SLOW_FRAME_MS ? filmSettledSec + dtSec : 0;
+        // (the line: each step of loading has its share; within a step it creeps toward the next, so it
+        // keeps moving while a large file comes)
+        const step = !realOnShow
+          ? 0
+          : nextBundle.pack
+            ? nextBundle.contextState === 'loading'
+              ? 3
+              : 4
+            : nextBundle.packManifest && nextBundle.packState !== 'failed'
+              ? 2
+              : groundDone
+                ? 4
+                : 1;
+        if (step !== coverStep) {
+          coverStep = step;
+          coverStepSec = elapsedSec;
+        }
+        const from = COVER_STEP_SHARES[step];
+        const to = COVER_STEP_SHARES[Math.min(COVER_STEP_SHARES.length - 1, step + 1)];
+        const target = from + (to - from) * (1 - Math.exp(-(elapsedSec - coverStepSec) / COVER_CREEP_SECONDS));
+        coverShown = Math.max(coverShown, THREE.MathUtils.lerp(coverShown, target, dampMed));
+        if (coverLineRef.current) coverLineRef.current.style.transform = `scaleX(${coverShown.toFixed(4)})`;
+        if (filmSettledSec > FILM_SETTLE_SECONDS || elapsedSec > COVER_HOLD_MAX_SECONDS) {
+          filmHolding = false;
+          filmFadeStartSec = elapsedSec;
+          if (coverLineRef.current) coverLineRef.current.style.transform = 'scaleX(1)';
+          const cover = coverRef.current;
+          if (cover) {
+            cover.style.transition = `opacity ${FILM_FADE_SECONDS}s ease-out`;
+            cover.style.opacity = '0';
+          }
+          markStageReady();
+          p.onPictureReady?.();
+        }
+      } else if (filmFadeStartSec >= 0 && elapsedSec - filmFadeStartSec > FILM_FADE_SECONDS + 0.1 && coverRef.current && coverRef.current.style.display !== 'none') {
+        coverRef.current.style.display = 'none';
+      }
+
       // H. Emit Live Telemetry every ~320ms
       fpsFrames += 1;
       fpsAccumSec += dtSec;
@@ -5681,6 +5731,42 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             </div>
           );
         })}
+      </div>
+      {/* The cover until the first picture is whole: the page's night ground, one thin line filling */}
+      <div
+        ref={coverRef}
+        aria-hidden="true"
+        data-stage-cover=""
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 5,
+          backgroundColor: 'var(--sys-night, #080b11)',
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            width: '240px',
+            height: '1px',
+            marginLeft: '-120px',
+            background: 'rgba(255, 255, 255, 0.10)',
+          }}
+        >
+          <div
+            ref={coverLineRef}
+            style={{
+              width: '100%',
+              height: '100%',
+              background: 'rgba(255, 255, 255, 0.86)',
+              transform: 'scaleX(0)',
+              transformOrigin: 'left center',
+            }}
+          />
+        </div>
       </div>
     </div>
   );

@@ -93,9 +93,9 @@ export interface EarthStageTelemetry {
     insteadOfHidden: boolean;
   };
   /**
-   * The stage's picture as the film sees it: `holding` while the film presentation's landing is held
-   * dark (its ground still coming in), `fading` while it fades in (FILM_FADE_SECONDS), `shown` once it
-   * is fully in; always `shown` outside the film presentation. A film's first shot starts on `shown`.
+   * The stage's picture: `holding` while its cover holds (its first picture not yet whole), `fading` while
+   * the cover lifts (FILM_FADE_SECONDS), `shown` once the picture is fully in. The same on the page and in
+   * the film presentation. A film's first shot starts on `shown`.
    */
   picture?: 'holding' | 'fading' | 'shown';
   /** The film's camera move running, and how far through it is (0 to 1; 1 holds the last pose). */
@@ -299,6 +299,12 @@ export interface EarthCutawayStageProps {
   onEnterWorkspace?: () => void;
   onCinemaStepTheater?: (nextTheaterId: TheaterId) => void;
   onTelemetry?: (telemetry: EarthStageTelemetry) => void;
+  /**
+   * Once, when the stage's first picture is whole (the ground's shape, its imagery, the land around and the
+   * fire's light in) and its cover starts to lift. The same moment is on `stageReady()`, the window event
+   * `isogon:stage-ready` and the root's `data-stage="ready"` (see ./stageReady).
+   */
+  onPictureReady?: () => void;
   /**
    * Landing page view. `world` (the default): the camera stands inside the landscape and the terrain
    * runs to a haze horizon under the sky, with no slab edge, block side, floor, grid or ring on
