@@ -55,6 +55,8 @@ interface LandingCompositionProps {
   realPass: EarthStageTelemetry['realPass'] | null;
   /** The script's words for the fire on show (its start step), in plain words before any satellite's name. */
   lines?: string[];
+  /** The pass on show is hidden from the model: the legend shows the white frame of its estimate, not a light. */
+  passHidden?: boolean;
   onOpenSearch: () => void;
   onOpenSensor: () => void;
   onOpenMethod: () => void;
@@ -67,6 +69,7 @@ export function LandingComposition({
   onOpenPart,
   realPass,
   lines,
+  passHidden = false,
   onOpenSearch,
   onOpenSensor,
   onOpenMethod,
@@ -135,8 +138,12 @@ export function LandingComposition({
 
           <div className="iso-land__legend">
             <div className="iso-land__keys" aria-label="What the picture shows">
-              <span className="iso-land__legend-item iso-land__legend-item--detection">Satellite detection</span>
-              <span className="iso-land__legend-item iso-land__legend-item--estimate">Model estimate</span>
+              {/* What the pass on show draws: lights on a pass the model was given, white frames on a hidden one. */}
+              {passHidden ? (
+                <span className="iso-land__legend-item iso-land__legend-item--frame">Model estimate, sharp satellite hidden</span>
+              ) : (
+                <span className="iso-land__legend-item iso-land__legend-item--detection">Satellite detection</span>
+              )}
             </div>
             {lines && lines.length > 0 ? (
               <p className="iso-land__facts">{lines.join(' ')}</p>

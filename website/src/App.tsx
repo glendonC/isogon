@@ -1397,13 +1397,19 @@ export function App() {
     });
 
   // The landing's words: the script's start step for the fire on show (its place, its month, its name where an agency
-  // list names it), loading and failure as the script says them.
+  // list names it), loading and failure as the script says them. They follow the pass on show: on a pass the model
+  // was given, the sentence about the lights; on a hidden pass, the white frames named as the model's estimate while
+  // the sharp satellite is hidden (Estimate's own words for them).
+  const landingHidden = !inWorkspace && runIsReal && stageTelemetry?.passOnShow?.hidden === true;
   const landingLines = (() => {
     const fire = activeRun && realStart ? fireOfStart(placesState.places, activeRun.region.id, realStart) : null;
     const id = realFailed && !runIsReal ? 'failed' : runIsReal && fire ? 'ready' : 'loading';
     const st = stateOf('start', id);
     const fields = { place: regionTitle || null, fire_month: fire?.label ?? null, fire_name: fire?.name ?? null };
-    return says(st, fields, { fire_is_named: fire ? Boolean(fire.name) : null }).slice(0, 2);
+    const lines = says(st, fields, { fire_is_named: fire ? Boolean(fire.name) : null }).slice(0, 2);
+    if (id !== 'ready' || !landingHidden) return lines;
+    const frames = says(stateOf('estimate', 'hidden'), {}, {})[0];
+    return frames ? [lines[0], frames] : lines;
   })();
 
   return (
@@ -1416,6 +1422,7 @@ export function App() {
           onOpenPart={openPart}
           realPass={stageTelemetry?.realPass ?? null}
           lines={landingLines}
+          passHidden={landingHidden}
           onOpenSearch={() => setAskOpen(true)}
           onOpenSensor={() => setReading('sensors')}
           onOpenMethod={() => setReading('method')}

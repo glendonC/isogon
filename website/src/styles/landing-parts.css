@@ -42,11 +42,12 @@
   height: 12px;
 }
 
-.iso-land__legend-item--estimate::before {
-  background: radial-gradient(closest-side, rgba(255, 128, 64, 0.55) 0, rgba(200, 70, 40, 0.28) 55%, rgba(160, 50, 30, 0) 100%);
-  box-shadow: none;
-  width: 14px;
-  height: 14px;
+/* The model's estimate on a hidden pass: a white frame, as the stage draws it. */
+.iso-land__legend-item--frame::before {
+  width: 10px;
+  height: 10px;
+  background: none;
+  box-shadow: inset 0 0 0 1.5px rgba(243, 244, 246, 0.92);
 }
 
 /* The script's words for the fire on show: plain sentences, wrapped at the right so they never reach the credit. */
