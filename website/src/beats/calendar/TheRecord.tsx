@@ -37,6 +37,8 @@ const HEAD_H = 84;
 const BAND_H = 36;
 const AXIS_H = 24;
 const SPANS_H = 56;
+/** The room above the grid on a short phone, where the month's label gives way. */
+const HEAD_SHORT = 24;
 /** The least room kept for the foot; it keeps the room it is measured to take, which wraps on a narrow grid. */
 const FOOT_H = 66;
 /** The foot's least width, on a screen wide enough for it. */
@@ -354,10 +356,22 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const narrowLabel = size.w < 600;
   const banded = hasRanges && !narrowLabel;
   const inFilm = useMemo(() => typeof document !== 'undefined' && document.documentElement.classList.contains('iso-film'), []);
-  const headH = HEAD_H + (banded ? (narrowLabel ? 56 : guideSpeaks ? 16 : BAND_H) : 0);
+  // A short phone (the guide's sentence and actions take most of its height) cannot hold the month's label, the grid at
+  // its smallest, the satellites' lines and the foot at once, and what does not fit would stand under the guide. There
+  // the label gives way first (the grid's bracket and the guide's action name the month), then the satellites' lines,
+  // then the legend; a phone's squares may be as small as 6 px. The grid and how well the correction holds always
+  // stay. This month so far keeps its label.
+  const minCell = narrowLabel ? 6 : 8;
+  const fits = (head: number, spans: number, foot = footH) => head + 12 * minCell + AXIS_H + spans + foot <= size.h;
+  const shortPhone = narrowLabel && !inFilm && !nowOn;
+  const labelOff = shortPhone && !fits(HEAD_H, SPANS_H);
+  const spansOff = labelOff && !fits(HEAD_SHORT, SPANS_H);
+  const legendOff = spansOff && !fits(HEAD_SHORT, 0);
+  const spansH = spansOff ? 0 : SPANS_H;
+  const headH = labelOff ? HEAD_SHORT : HEAD_H + (banded ? (narrowLabel ? 56 : guideSpeaks ? 16 : BAND_H) : 0);
   const cell = years.length
     ? // One column more than the record's years is kept free on the right: this month's square stands there
-      Math.max(8, Math.floor(Math.min((size.w - NAMES_W) / (years.length + 1), (size.h - headH - AXIS_H - SPANS_H - footH) / 12)))
+      Math.max(minCell, Math.floor(Math.min((size.w - NAMES_W) / (years.length + 1), (size.h - headH - AXIS_H - spansH - footH) / 12)))
     : 0;
   const gap = cell >= 24 ? 3 : 1;
   const gridW = cell * years.length;
@@ -366,8 +380,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const y0 = headH;
   const xOf = (year: number) => x0 + (year - (rec?.firstYear ?? 0)) * cell;
   const yOf = (month: number) => y0 + (month - 1) * cell;
-  // In the film presentation the years are written a step larger and need wider squares to stand apart
-  const yearEvery = cell >= (inFilm ? 48 : 34) ? 1 : cell >= 18 ? 2 : 5;
+  // In the film presentation the years are written a step larger and need wider squares to stand apart; on a short
+  // phone's smallest squares five years are narrower than a year's figures, so every tenth is written
+  const yearEvery = cell >= (inFilm ? 48 : 34) ? 1 : cell >= 18 ? 2 : cell >= 8 ? 5 : 10;
 
   const monthAt = (e: { clientX: number; clientY: number; currentTarget: Element }): string | null => {
     if (!rec || !cell) return null;
@@ -402,7 +417,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const coarse = spanLine(rec?.spans.coarse ?? null);
   const sharp = spanLine(rec?.spans.sharp ?? null);
   const spansY = y0 + gridH + AXIS_H;
-  const footY = spansY + SPANS_H;
+  const footY = spansY + spansH;
   // On a narrow screen the foot takes the plot's width from the month names, so its words wrap less. It is decided by
   // the plot's width, not the grid's, so that the grid's size does not move the foot's width back and forth.
   const narrowFoot = size.w < 700;
@@ -523,7 +538,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   d={brackets(xOf(rec.months.get(shown)!.year), yOf(rec.months.get(shown)!.month), cell - gap, gap, Math.max(4, Math.round(cell * 0.26)))}
                 />
               )}
-              {(fm || nowLabel) && <line className="rec__leader" x1={fx - gap / 2} y1={y0 - headH + 12} x2={fx - gap / 2} y2={fy - 7} />}
+              {((fm && !labelOff) || nowLabel) && <line className="rec__leader" x1={fx - gap / 2} y1={y0 - headH + 12} x2={fx - gap / 2} y2={fy - 7} />}
               {hair && (
                 <g>
                   <line className="rec__hair" x1={x0 - 4} y1={hair.y + hair.s / 2} x2={hair.x - 3} y2={hair.y + hair.s / 2} />
@@ -554,7 +569,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               )}
 
               {/* Which satellite was flying, from the first and last month each has a rate in the record. */}
-              {!rough && coarse && (
+              {!rough && !spansOff && coarse && (
                 <g className="rec__span rec__span--coarse">
                   <line x1={coarse.from} y1={spansY + 24} x2={coarse.to} y2={spansY + 24} />
                   <text x={coarse.from} y={spansY + 17}>
@@ -562,7 +577,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   </text>
                 </g>
               )}
-              {!rough && sharp && (
+              {!rough && !spansOff && sharp && (
                 <g className="rec__span rec__span--sharp">
                   <line x1={sharp.from} y1={spansY + 48} x2={sharp.to} y2={spansY + 48} />
                   {sharp.to - sharp.from >= 280 ? (
@@ -578,7 +593,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
               )}
             </svg>
 
-            {fm && (
+            {fm && !labelOff && (
               <div
                 className="rec__label"
                 data-side={labelRight ? 'right' : 'left'}
@@ -686,6 +701,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   {gridLine(boxWords(rec.grid.box), rec.grid.step, rec.grid.cells, rec.grid.loaded, rec.grid.complete)}
                 </p>
               )}
+              {!legendOff && (
               <span className="rec__legend sys-fine">
                 {W.noFireLegend}
                 <i className="rec__swatch rec__swatch--none" />
@@ -705,6 +721,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   </>
                 )}
               </span>
+              )}
               {/* The record as a file: quiet, the Record's own, where the guide speaks too. A phone's narrow foot under
                   the guide has no row for it (the guide's sentence stands over it there); key G still takes it. */}
               {!(narrowFoot && guideSpeaks) && (
