@@ -591,6 +591,8 @@ vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
 const float TILE_BRACKET_ARM = 0.25;    // arm length, as a share of the tile's side
 const float TILE_BRACKET_DAY = 1.1;     // ink strength of the brackets by day
 const float TILE_BRACKET_NIGHT = 1.6;   // and by night, where the board's ink is dimmed
+const float TILE_EDGE_INK = 0.55;       // coverage of every tile's edge line
+const float TILE_OUTER_INSET = 0.007;   // the board's outer line, as a share of the box's side inside its edge
 vec3 tileMarks(vec2 uv) {
   vec2 tg = vec2(uv.x, 1.0 - uv.y) * uTileGrid;
   vec2 id = min(floor(tg), uTileGrid - 1.0);
@@ -600,12 +602,19 @@ vec3 tileMarks(vec2 uv) {
   // Tiles per pixel across each family of edges (measured along its own direction, so an edge
   // that runs away from the camera keeps its width)
   vec2 px = max(vec2(length(vec2(dFdx(tg.x), dFdy(tg.x))), length(vec2(dFdx(tg.y), dFdy(tg.y)))), vec2(1e-6));
-  vec2 edgePx = min(tf, 1.0 - tf) / px;          // distance to the tile's edges, pixels
+  // The land around overlaps the box's last strip (see the context terrain's discard), so the board's
+  // outer line is set just inside it, where nothing covers it and it stays one unbroken line
+  vec2 inset = TILE_OUTER_INSET * uTileGrid;
+  vec2 lo = tf - inset * (1.0 - step(0.5, id));
+  vec2 hi = (1.0 - tf) - inset * step(uTileGrid - 1.5, id);
+  vec2 edgePx = min(lo, hi) / px;                 // distance to the tile's edges, pixels
   float d = min(edgePx.x, edgePx.y);
   float hover = 1.0 - step(0.5, abs(index - uTileHover));
 
-  float hair = 1.0 - smoothstep(0.35, 1.05, d);
-  float ink = hair * mix(0.30, 0.12, state.a);
+  // Every edge: a line about one and a half pixels wide, firm enough to read from the block's
+  // distance on entry, when nothing else is marked yet; thin, so a light under it still shows
+  float hair = 1.0 - smoothstep(0.7, 1.6, abs(d));
+  float ink = hair * mix(TILE_EDGE_INK, 0.12, state.a);
   float strength = 0.8;
   // Every mark of a tile is a thin line set inside the tile, so where two marked tiles meet there
   // are two fine lines with ground between them and never one heavy band.
@@ -630,6 +639,8 @@ vec3 tileMarks(vec2 uv) {
   strength = mix(strength, mix(TILE_BRACKET_DAY, TILE_BRACKET_NIGHT, uNight), bracket);
   float edge = smoothstep(0.6, 1.4, d) * (1.0 - smoothstep(4.6, 6.0, d));
   edge *= max(max(state.g, state.b), hover);
+  // (every edge line gets a faint dark edge of its own, so it stands on bright ground by day)
+  edge = max(edge, (1.0 - smoothstep(1.6, 3.2, abs(d))) * 0.45 * (1.0 - state.a));
   // (the brackets get a wider dark edge of their own, so they stand on bright ground too)
   edge = max(edge, (1.0 - smoothstep(7.0, 9.0, d)) * inCorner * state.b);
   return vec3(ink, edge, strength);
