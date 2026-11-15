@@ -428,6 +428,8 @@ export function App() {
     if (placesRef.current.state !== 'ready' || withFires.length === 0) return;
     const ids = withFires.map((p) => p.id);
     const idx = ids.indexOf(activeTheaterId);
+    // On Estimate the next place opens on its hidden pass too, once its held-out run is in.
+    if (stepRef.current === 'test') openingDueRef.current = true;
     slewToTheater(ids[(idx + 1) % ids.length] as TheaterId);
   }, [activeTheaterId, slewToTheater]);
 
@@ -528,9 +530,10 @@ export function App() {
         : null;
     if (opening) {
       if (isRealRun(activeRun) && activeRun?.region.id === regionAsk.id && realStart === opening) return;
-      // On the landing, the fire is shown as the model saw it: the sharp satellite hidden wherever its window can be
-      // (from 2012, not a recorded test fire), so what lights up is what the model was given.
-      const hideable = !inWorkspace && Number(opening.slice(0, 4)) >= 2012 && !hideRefused(regionAsk.id, opening);
+      // On the landing, and on Estimate (a place stepped to with N while Estimate is on screen), the fire is shown as the
+      // model saw it: the sharp satellite hidden wherever its window can be (from 2012, not a recorded test fire), so
+      // what lights up is what the model was given, and Estimate has its held-out run to show.
+      const hideable = (!inWorkspace || step === 'test') && Number(opening.slice(0, 4)) >= 2012 && !hideRefused(regionAsk.id, opening);
       void executeWorldModel({
         regionId: regionAsk.id,
         holdoutViirs: hideable,
@@ -541,7 +544,7 @@ export function App() {
       });
     }
     // A place with no real rows, or without a start from the registry, opens nothing new: never a simulated run.
-  }, [regionAsk, calendar, placesState, activeRun, realStart, executeWorldModel, inWorkspace, hideRefused]);
+  }, [regionAsk, calendar, placesState, activeRun, realStart, executeWorldModel, inWorkspace, hideRefused, step]);
 
   /** Selecting a month that has a real run requests it; the stage replays whatever comes back. */
   const handleSelectMonth = useCallback(
