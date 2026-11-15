@@ -35,7 +35,7 @@ class RecordTest(unittest.TestCase):
         rec = records()
         out = H.record_series(rec, area_km2=40000.0, center_lat=40.5)
         self.assertEqual(len(out["months"]), len(rec))
-        self.assertEqual(out["method"]["id"], "overlap_ratio_v1")
+        self.assertEqual(out["method"]["id"], FITTED["serve"]["rows"])
         self.assertEqual(out["method"]["interval"]["level"], 0.8)
         for row in out["months"]:
             if row["harmonized_count"] is None:
