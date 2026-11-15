@@ -4,17 +4,24 @@ archive's size and sha256.
 
 Every path in a list is relative to the tree (the checkout). A path outside the tree, the key's file (`.env` and any
 name beginning `.env`), the world store (`ISOGON_WORLD_DIR`, and the default `data/cache/world`), `.git`, or a missing
-file stops the pack before any archive is written. The archives are zip, deflated, with sorted entries and fixed
-times and modes, so the same files give the same bytes.
+file stops the pack before any archive is written. So does a FIRMS row inside a closed window: the closed rule is the
+server's own (`backend.model.training.closed_for` over the test fires' regions and years), and no row of a closed
+window goes into a public archive, whichever satellite it is from. A place whose fire on the page is a closed test
+fire (`REPLAY_ONLY`), or whose start in the list lies in a closed window, is not packed: the page replays its recorded
+look. The manifest says which places are packed and which replay only. The archives are zip, deflated, with sorted
+entries and fixed times and modes, so the same files give the same bytes.
 
-The standard library only. Usage:
-  python3 backend/browser_pack.py pack --list <list.json> [--list <list.json> ...] --out <folder> [--root <checkout>]
-  python3 backend/browser_pack.py check --out <folder>
+The standard library, and the backend's closed rule (so numpy and Pillow). Usage:
+  uv run --no-project --python 3.12 --with numpy --with pillow python3 backend/browser_pack.py pack \
+      --list <list.json> [--list <list.json> ...] --out <folder> [--root <checkout>]
+  ... backend/browser_pack.py check --out <folder>
 """
 
 from __future__ import annotations
 
 import argparse
+import calendar
+import csv
 import hashlib
 import json
 import os
@@ -37,7 +44,17 @@ ZIP_LEVEL: int = 9
 WORLD_DEFAULT: Path = Path("data") / "cache" / "world"
 REGION_ID = re.compile(r"[a-z0-9_]+")
 REFUSED: str = ("a path outside the tree, the key's file (.env and any name beginning .env), the world store and .git "
-                "are never packed, nor a missing file; one in a list stops the pack before any archive is written")
+                "are never packed, nor a missing file, nor a FIRMS row inside a closed window; one in a list stops the "
+                "pack before any archive is written")
+# The places whose fire on the page is a closed test fire: the page replays their recorded look and never computes
+# them in a browser, so nothing of theirs is packed. Each is a test fire's region (backend.model.training.EXCLUSIONS).
+REPLAY_ONLY: dict[str, str] = {
+    "lytton_bc": "its fire on the page is the closed test fire (Lytton Creek, 2021): the recorded look is replayed",
+    "evia_greece": "its fire on the page is the closed test fire (northern Evia, 2021): the recorded look is replayed",
+}
+ROW_COLUMNS: tuple[str, str, str] = ("latitude", "longitude", "acq_date")
+CLOSED_SOURCE: str = ("backend.model.training: closed_for, over EXCLUSIONS and closed_years; the context boxes from "
+                      "backend.firms.region_box")
 
 
 class Refused(ValueError):
@@ -104,6 +121,65 @@ def check_path(rel: str, root: Path, worlds: list[Path]) -> tuple[str, Path]:
     if not real.is_file():
         raise Refused(f"{rel}: missing, or not a file")
     return name.as_posix(), real
+
+
+def _day_s(day: str) -> float:
+    y, m, d = (int(v) for v in day[:10].split("-"))
+    return float(calendar.timegm((y, m, d, 0, 0, 0, 0, 0, 0)))
+
+
+def closed_rule() -> tuple[Callable[..., Any], Callable[[str], Any], list[dict[str, Any]]]:
+    """(closed_for, region_box, the closed windows): the server's closed rule, from where the backend keeps it."""
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+    from backend.firms import region_box
+    from backend.model.training import EXCLUSIONS, closed_for, closed_years
+
+    stray = sorted(set(REPLAY_ONLY) - set(EXCLUSIONS))
+    if stray:
+        raise ValueError(f"{', '.join(stray)}: REPLAY_ONLY names a place that holds no test fire")
+    windows = [{"region_id": r, "years": list(closed_years(r)), "context_box": list(region_box(r))} for r in EXCLUSIONS]
+    return closed_for, region_box, windows
+
+
+def closed_rows(path: Path, closed_for: Callable[..., Any], years: set[int]) -> tuple[int, dict[str, Any] | None]:
+    """(the rows of a FIRMS row file inside a closed window, the first window met); (0, None) for a file that is
+    not a row file (no latitude, longitude and acq_date columns). A row of a closed year whose position or date
+    cannot be read counts as inside: the rule errs toward closing."""
+    with path.open(newline="", encoding="utf-8", errors="replace") as fh:
+        rd = csv.reader(fh)
+        header = next(rd, None)
+        cols = {h.strip().lower(): i for i, h in enumerate(header or [])}
+        if not all(c in cols for c in ROW_COLUMNS):
+            return 0, None
+        ila, ilo, idt = (cols[c] for c in ROW_COLUMNS)
+        n, first = 0, None
+        for row in rd:
+            try:
+                day = row[idt].strip()
+                year = int(day[:4])
+            except (IndexError, ValueError):
+                continue
+            if year not in years:
+                continue
+            try:
+                lat, lon, t = float(row[ila]), float(row[ilo]), _day_s(day)
+                c = closed_for((lon, lat, lon, lat), t, t + 1.0)
+            except (IndexError, ValueError):
+                c = {"region_id": "a row that cannot be placed", "years": [year]}
+            if c:
+                n += 1
+                first = first or c
+    return n, first
+
+
+def registry_places() -> list[str]:
+    """Every region of the backend's place registry (backend/firms/places.json)."""
+    try:
+        doc = json.loads((_REPO_ROOT / "backend" / "firms" / "places.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return sorted(doc.get("regions") or {})
 
 
 def read_list(path: Path) -> dict[str, Any]:
@@ -180,7 +256,30 @@ def pack(lists: list[Path], out: Path, root: Path | None = None, log: Callable[[
     given = (root or _REPO_ROOT).absolute()
     root = given.resolve()
     worlds = world_dirs(root)
+    closed_for, region_box, windows = closed_rule()
+    closed_years = {y for w in windows for y in w["years"]}
     merged = merge(read_list(p) for p in lists)
+    # The places replayed only: their fire on the page is a closed test fire, or their start lies in a closed window.
+    replay: dict[str, str] = {}
+    for r in list(merged["places"]):
+        why = REPLAY_ONLY.get(r)
+        start = merged["places"][r].get("start")
+        if why is None and start:
+            try:
+                box = region_box(r)
+            except (KeyError, ValueError):
+                box = None
+            if box is not None:
+                t = _day_s(str(start))
+                c = closed_for(tuple(box), t, t + 1.0)
+                if c:
+                    why = (f"its start in the list, {start}, lies in a closed window ({c['region_id']}, "
+                           f"{' and '.join(str(y) for y in c['years'])}): the page replays the recorded look")
+        if why:
+            replay[r] = why
+            del merged["places"][r]
+    if not merged["places"]:
+        raise ValueError("every place in the lists replays only: nothing to pack")
     core, places = split(merged)
     # Every path is checked before anything is written.
     checked: dict[str, tuple[str, Path]] = {}
@@ -192,6 +291,17 @@ def pack(lists: list[Path], out: Path, root: Path | None = None, log: Callable[[
             problems.append(str(exc))
     if problems:
         raise Refused(f"{len(problems)} of the listed paths may not be packed: " + "; ".join(problems[:12]))
+    # No row of a closed window, in any archive, before anything is written.
+    for archive, paths in [("core", core), *places.items()]:
+        for rel in paths:
+            name, real = checked[rel]
+            if real.suffix.lower() == ".csv":
+                n, c = closed_rows(real, closed_for, closed_years)
+                if n:
+                    problems.append(f"{archive}: {name} holds {n} rows inside the closed window of {c['region_id']} "
+                                    f"in {' and '.join(str(y) for y in c['years'])}")
+    if problems:
+        raise Refused(f"{len(problems)} files hold rows of a closed window: " + "; ".join(problems[:12]))
     out = out.resolve()
     for w in worlds:
         if _within(out, w):
@@ -217,6 +327,10 @@ def pack(lists: list[Path], out: Path, root: Path | None = None, log: Callable[[
                  "files": len(core_files), "content_bytes": sum(f["bytes"] for f in core_files),
                  "modules": sum(1 for f in core_files if f["path"].endswith(".py"))},
         "places": {},
+        "replay_only": {},
+        "closed": {"rule": ("no FIRMS row inside a closed window is packed: a window of a test fire's region (its "
+                            "context box, touching counts) in a year of its fire, whatever the satellite"),
+                   "source": CLOSED_SOURCE, "windows": windows},
         "lists": [{"file": p.name, "sha256": _sha(p)} for p in lists],
         "refused": REFUSED,
     }
@@ -232,10 +346,14 @@ def pack(lists: list[Path], out: Path, root: Path | None = None, log: Callable[[
     for old in (out / PLACES).glob("*.zip"):
         if old.name not in keep:
             old.unlink()
+    for r in sorted(set(registry_places()) | set(replay) | set(REPLAY_ONLY)):
+        if r not in manifest["places"]:
+            manifest["replay_only"][r] = replay.get(r) or REPLAY_ONLY.get(r) or "not in the lists: the page replays it"
     (out / FILES).write_text(json.dumps({"version": VERSION, "archives": files}, indent=1) + "\n", encoding="utf-8")
     (out / MANIFEST).write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
     log(f"packed: core {manifest['core']['files']} files, {manifest['core']['bytes']} bytes; "
-        f"{len(places)} places, {sum(p['bytes'] for p in manifest['places'].values())} bytes")
+        f"{len(places)} places, {sum(p['bytes'] for p in manifest['places'].values())} bytes; "
+        f"{len(manifest['replay_only'])} replay only")
     return manifest
 
 
@@ -263,6 +381,9 @@ def check(out: Path) -> dict[str, Any]:
                 data = z.read(n)
                 if len(data) != want[n]["bytes"] or hashlib.sha256(data).hexdigest() != want[n]["sha256"]:
                     problems.append(f"{spec['file']}: {n} is not its listed file")
+    for r in man.get("replay_only") or {}:
+        if (out / PLACES / f"{r}.zip").exists():
+            problems.append(f"{PLACES}/{r}.zip: an archive of a place that replays only")
     return {"ok": not problems, "archives": len(specs), "problems": problems}
 
 
@@ -279,10 +400,11 @@ def _main(argv: list[str] | None = None) -> int:
     if args.cmd == "pack":
         try:
             man = pack(args.list, args.out, args.root)
-        except Refused as exc:
+        except ValueError as exc:
             print(f"refused: {exc}", file=sys.stderr)
             return 2
-        print(json.dumps({"core": man["core"], "places": man["places"], "commit": man["commit"]}, indent=1))
+        print(json.dumps({"core": man["core"], "places": man["places"], "replay_only": man["replay_only"],
+                          "commit": man["commit"]}, indent=1))
         return 0
     res = check(args.out)
     print(json.dumps(res, indent=1))

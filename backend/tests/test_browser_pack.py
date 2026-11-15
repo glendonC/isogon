@@ -176,5 +176,91 @@ class BrowserPack(unittest.TestCase):
             self.assertIn("data/cache/firms/extract/a_place/a_2012.csv", z.namelist())
 
 
+VIIRS_HEADER = "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight,type"
+MODIS_HEADER = "latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_t31,frp,daynight,type"
+DIXIE = "39.87,-121.39"          # inside the Plumas context box, a closed region in 2021
+
+
+def _rows(root: Path, rel: str, header: str, rows: list[str]) -> str:
+    (root / rel).parent.mkdir(parents=True, exist_ok=True)
+    (root / rel).write_text(header + "\n" + "".join(r + "\n" for r in rows))
+    return rel
+
+
+class ClosedWindows(unittest.TestCase):
+    """No FIRMS row of a closed window goes into an archive, and the test fires' places replay only."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.d = Path(self.tmp.name)
+        self.root, _ = _tree(self.d)
+        self.env = mock.patch.dict(os.environ, {"ISOGON_WORLD_DIR": str(self.root / "store")})
+        self.env.start()
+
+    def tearDown(self) -> None:
+        self.env.stop()
+        self.tmp.cleanup()
+
+    def _pack(self, places: dict, core: list[str] | None = None, out: str = "out") -> dict:
+        spec = {"version": 1, "places": {r: {"start": st, "modules": ["backend/model/solver.py"], "files": files}
+                                         for r, (st, files) in places.items()}}
+        if core is not None:
+            spec["core"] = core
+        lst = self.d / f"list-{out}.json"
+        lst.write_text(json.dumps(spec))
+        return P.pack([lst], self.d / out, self.root, log=lambda s: None)
+
+    def test_a_row_inside_a_closed_window_stops_the_pack(self) -> None:
+        cases = {
+            "the hidden satellite's": _rows(self.root, "data/cache/firms/extract/plumas_ca/viirs-snpp_2021.csv",
+                                            VIIRS_HEADER, [f"{DIXIE},330,0.4,0.4,2021-08-01,1000,N,VIIRS,h,2,290,3.0,D,0"]),
+            "the older satellites'": _rows(self.root, "data/cache/firms/extract/plumas_ca/modis_2021.csv", MODIS_HEADER,
+                                           ["40.5,-120.0,320,1,1,2021-12-31,1030,Terra,MODIS,85,6.03,290,10.5,D,0"]),
+            "a row that cannot be placed": _rows(self.root, "data/cache/firms/extract/plumas_ca/viirs-jpss1_2021.csv",
+                                                 VIIRS_HEADER, ["north,-121.39,330,0.4,0.4,2021-08-01,1000,1,VIIRS,h,2,290,3.0,D,0"]),
+        }
+        for why, rel in cases.items():
+            for where in ("in the place's archive", "in the core"):
+                with self.subTest(f"{why}, {where}"):
+                    out = f"out-{abs(hash((why, where)))}"
+                    places = {"plumas_ca": ("2012-08-10", A_FILES + ([rel] if where.endswith("archive") else []))}
+                    with self.assertRaises(P.Refused) as cm:
+                        self._pack(places, core=[rel] if where.endswith("core") else None, out=out)
+                    self.assertIn("closed window", str(cm.exception))
+                    self.assertFalse((self.d / out).exists())
+
+    def test_rows_outside_a_closed_window_are_packed(self) -> None:
+        a = _rows(self.root, "data/cache/firms/extract/plumas_ca/viirs-snpp_2020.csv", VIIRS_HEADER,
+                  [f"{DIXIE},330,0.4,0.4,2020-08-01,1000,N,VIIRS,h,2,290,3.0,D,0"])          # the place, another year
+        b = _rows(self.root, "data/cache/firms/extract/plumas_ca/viirs-snpp_2021.csv", VIIRS_HEADER,
+                  ["35.0,-110.0,330,0.4,0.4,2021-08-01,1000,N,VIIRS,h,2,290,3.0,D,0"])        # 2021, far from every test fire
+        man = self._pack({"plumas_ca": ("2012-08-10", A_FILES + [a, b])})
+        self.assertEqual(sorted(man["places"]), ["plumas_ca"])
+        self.assertEqual(sorted(w["region_id"] for w in man["closed"]["windows"]), ["evia_greece", "lytton_bc", "plumas_ca"])
+        self.assertEqual(man["closed"]["windows"][0]["years"], [2021])
+
+    def test_the_test_fires_places_replay_only(self) -> None:
+        lyt = _rows(self.root, "data/cache/firms/extract/lytton_bc/modis_2017.csv", MODIS_HEADER,
+                    ["50.6,-121.3,320,1,1,2017-07-08,1030,Terra,MODIS,85,6.03,290,10.5,D,0"])
+        man = self._pack({"lytton_bc": ("2017-07-06", A_FILES + [lyt]), "evia_greece": ("2018-07-23", A_FILES),
+                          "a_place": ("2012-08-10", A_FILES)})
+        self.assertEqual(sorted(man["places"]), ["a_place"])
+        self.assertEqual(man["replay_only"]["lytton_bc"], P.REPLAY_ONLY["lytton_bc"])
+        self.assertEqual(man["replay_only"]["evia_greece"], P.REPLAY_ONLY["evia_greece"])
+        self.assertIn("not in the lists", man["replay_only"]["ventura_ca"])     # every place of the registry is said
+        self.assertFalse((self.d / "out" / "places" / "lytton_bc.zip").exists())
+        self.assertEqual(P.check(self.d / "out")["problems"], [])
+        from backend.model.training import EXCLUSIONS
+
+        self.assertTrue(set(P.REPLAY_ONLY) <= set(EXCLUSIONS))
+
+    def test_a_start_in_a_closed_window_replays_only(self) -> None:
+        man = self._pack({"plumas_ca": ("2021-08-01", A_FILES), "a_place": ("2012-08-10", A_FILES)})
+        self.assertNotIn("plumas_ca", man["places"])
+        self.assertIn("closed window (plumas_ca, 2021)", man["replay_only"]["plumas_ca"])
+        with self.assertRaises(ValueError):
+            self._pack({"lytton_bc": ("2017-07-06", A_FILES)}, out="out-none")
+
+
 if __name__ == "__main__":
     unittest.main()
