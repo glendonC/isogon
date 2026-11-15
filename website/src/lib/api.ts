@@ -147,7 +147,14 @@ function abortError(signal: AbortSignal): unknown {
 }
 
 async function performGetJson<T>(path: string, query?: Query, signal?: AbortSignal): Promise<T> {
-  if (TRANSPORT === 'recorded') return recorded<T>(requestKey('GET', path, query), signal);
+  // A recorded page answers a drawn box it does not hold from the public fire cube, summed in the browser with the
+  // route's figures (world/publicAnswer.ts, fetched only when a box is asked for); every other request it does not
+  // hold stays not recorded.
+  if (TRANSPORT === 'recorded') return recorded<T>(requestKey('GET', path, query), signal).catch(async (err) => {
+    const own = err instanceof NotRecorded && (await import('../world/publicAnswer.ts'));
+    if (!own || !own.isBoxRecordRequest(path, query)) throw err;
+    return own.publicBoxAnswer(path, query) as Promise<T>;
+  });
   const q = sortedQuery(query);
   const resp = await fetch(`${API_BASE}${path}${q ? `?${q}` : ''}`, { signal });
   const body = await readBody(resp);
