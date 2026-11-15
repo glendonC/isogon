@@ -959,3 +959,318 @@
   }
 }
 
+
+/* The Earth's years (EarthYears.tsx): the year large in the caption's place, the switch and the keys top right, the
+   world's yearly totals in a strip along the bottom above the guide, the legend above the strip. */
+.world-years {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  container-type: size;
+  color: var(--sys-ink);
+  background: var(--sys-night);
+}
+
+.world-years__earth {
+  position: absolute;
+  inset: 0;
+}
+
+.world-years__state {
+  position: absolute;
+  left: var(--sys-gutter);
+  top: var(--years-top, 96px);
+  margin: 0;
+  font: var(--sys-weight) var(--sys-size-body) / var(--sys-lh-body) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.world-years__caption {
+  position: absolute;
+  top: var(--years-caption-top, clamp(22px, 2.2vw, 44px));
+  left: var(--years-caption-left, clamp(24px, 2.4vw, 48px));
+  display: grid;
+  gap: var(--sys-s1);
+  max-width: min(46vw, 640px);
+  pointer-events: none;
+  text-shadow: 0 1px 12px rgba(8, 11, 17, 0.8);
+}
+
+.world-years__year {
+  font: var(--sys-weight-light) clamp(56px, 5.6vw, 112px) / 1 var(--sys-font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.world-years__what {
+  font: var(--sys-weight) clamp(15px, 1vw, 20px) / 1.35 var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.world-years__note {
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-years__controls {
+  position: absolute;
+  top: var(--years-controls-top, var(--sys-s4));
+  right: var(--sys-gutter);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--sys-s2);
+  max-width: calc(100% - 2 * var(--sys-gutter));
+}
+
+.world-years__switch {
+  display: flex;
+  gap: var(--sys-s1);
+}
+
+.world-years__switch .iso-choice__opt[disabled] {
+  color: var(--sys-ink-off);
+  cursor: default;
+}
+
+.world-years__legend {
+  left: var(--sys-gutter);
+  width: min(300px, calc(100% - 32px));
+}
+
+.world-swatch--closed {
+  background: rgb(96, 116, 146);
+}
+
+.world-years__strip {
+  position: absolute;
+  left: var(--sys-gutter);
+  right: var(--sys-gutter);
+  bottom: var(--years-bottom, var(--film-room-bottom, 150px));
+  display: grid;
+  grid-template-rows: auto clamp(64px, 11cqh, 132px) 18px;
+  gap: var(--sys-s1);
+  padding: var(--sys-s2) var(--sys-s3) var(--sys-s1);
+  background: rgba(8, 11, 17, 0.72);
+  -webkit-backdrop-filter: var(--sys-plate-blur);
+  backdrop-filter: var(--sys-plate-blur);
+}
+
+.world-years__strip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sys-s2) var(--sys-s4);
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink-3);
+}
+
+.world-years__strip-title {
+  color: var(--sys-ink-2);
+}
+
+.world-years__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.world-years__key::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: var(--sys-modis);
+}
+
+.world-years__key--sharp::before {
+  background: var(--sys-detection);
+}
+
+.world-years__key--line::before {
+  height: 2px;
+  width: 16px;
+  background: var(--sys-ink);
+}
+
+.world-years__plot,
+.world-years__axis {
+  margin-right: 84px;
+}
+
+.world-years__plot {
+  position: relative;
+  border-bottom: 1px solid var(--sys-rule);
+}
+
+.world-years__grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed rgba(124, 131, 146, 0.35);
+  pointer-events: none;
+}
+
+.world-years__grid span {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: -8px;
+  white-space: nowrap;
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  color: var(--sys-ink-off);
+}
+
+.world-years__bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.world-years__fill {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: 0;
+  background: var(--sys-modis);
+  opacity: 0.85;
+  transition: opacity var(--sys-fast) var(--sys-ease);
+}
+
+.world-years__bar[data-sharp='true'] .world-years__fill {
+  background: var(--sys-detection);
+}
+
+.world-years__bar[data-partial='true'] .world-years__fill {
+  background: repeating-linear-gradient(135deg, var(--sys-modis) 0 2px, transparent 2px 4px);
+}
+
+.world-years__bar[data-current='true'] .world-years__fill {
+  opacity: 1;
+  outline: 1.5px solid var(--sys-ink);
+  outline-offset: 2px;
+}
+
+.world-years__bar:focus-visible {
+  outline: 1.5px solid var(--sys-focus);
+}
+
+.world-years[data-mode='harmonized'] .world-years__fill {
+  opacity: 0.32;
+}
+
+.world-years[data-mode='harmonized'] .world-years__bar[data-current='true'] .world-years__fill {
+  opacity: 0.5;
+}
+
+.world-years__line {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.world-years__line polyline {
+  fill: none;
+  stroke: var(--sys-ink);
+  stroke-width: 2px;
+  stroke-opacity: 0.55;
+}
+
+.world-years[data-mode='harmonized'] .world-years__line polyline {
+  stroke-opacity: 1;
+  stroke-width: 2.5px;
+}
+
+.world-years__dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: 0 0 -4px -4px;
+  background: var(--sys-ink);
+  pointer-events: none;
+}
+
+.world-years__dot[data-partial='true'] {
+  background: none;
+  border: 1.5px solid var(--sys-ink);
+}
+
+/* The sentence at 2012: above the strip, starting over the step itself (`--at`, its place along the plot). */
+.world-years__step {
+  position: absolute;
+  bottom: calc(100% + var(--sys-s2));
+  left: calc(var(--sys-s3) + (100% - 2 * var(--sys-s3) - 84px) * var(--at, 0.46));
+  max-width: min(560px, 52cqw);
+  padding-left: var(--sys-s3);
+  border-left: 1.5px solid var(--sys-ink);
+  font: var(--sys-weight) clamp(14px, 0.95vw, 19px) / 1.4 var(--sys-font);
+  color: var(--sys-ink);
+  text-shadow: 0 1px 10px rgba(8, 11, 17, 0.9);
+  pointer-events: none;
+}
+
+.world-years__axis {
+  position: relative;
+  font: var(--sys-weight) var(--sys-size-fine) / 18px var(--sys-mono);
+  color: var(--sys-ink-3);
+}
+
+.world-years__axis span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.world-years__axis span[data-current='true'] {
+  color: var(--sys-ink);
+  font-weight: var(--sys-weight-strong);
+}
+
+@container (max-width: 720px) {
+  .world-years__strip {
+    left: var(--sys-s2);
+    right: var(--sys-s2);
+    bottom: var(--years-bottom, var(--film-room-bottom, 150px));
+  }
+
+  .world-years__step {
+    left: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .world-years__caption {
+    top: calc(var(--sys-s4) + 40px);
+  }
+
+  .world-years__controls {
+    left: var(--sys-s2);
+    right: var(--sys-s2);
+    justify-content: flex-start;
+  }
+
+  .world-years__legend {
+    display: none;
+  }
+
+  .world-years__controls .world-act span {
+    display: none;
+  }
+
+  .world-years__year {
+    font-size: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-years__fill {
+    transition: none;
+  }
+}

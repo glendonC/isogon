@@ -9,6 +9,7 @@
  *   ?use=sealed   Tonight's sealed predictions (seals=<address>, now=<iso>)
  *   ?use=test     The test across the world (test=<address>)
  *   ?use=band     The band of the Record's interval on a month and on a year (record=<address>, month=YYYY-MM)
+ *   ?use=years    The Earth plays the years (years=<index>, mode=detected|harmonized, year=YYYY, play=1)
  *   ?use=cube     A drawn box's Record summed here from the public cube (cube=<folder>) against the cube route's answer
  *                 (route=<origin>), for boxes=w,s,e,n;w,s,e,n: times and the largest difference
  */
@@ -24,6 +25,7 @@ import { ChooseOnEarth } from '../ChooseOnEarth';
 import { IntervalBand } from '../IntervalBand';
 import { SealedTonight } from '../SealedTonight';
 import { WorldTest } from '../WorldTest';
+import { EarthYears } from '../EarthYears';
 import type { Box } from '../projection';
 import { useRead } from '../read';
 import { loadPublicCube } from '../publicCube';
@@ -206,7 +208,23 @@ function Cube() {
   );
 }
 
+function Years() {
+  const mode = Q.get('mode') === 'harmonized' ? 'harmonized' : 'detected';
+  const y = Number(Q.get('year'));
+  return (
+    <div style={{ position: 'fixed', inset: 0 }}>
+      <EarthYears
+        source={Q.get('years') ?? 'http://127.0.0.1:8788/api/cube/years'}
+        mode={mode}
+        year={Number.isFinite(y) && y > 0 ? y : undefined}
+        autoplay={Q.has('play') ? Q.get('play') !== '0' : undefined}
+      />
+    </div>
+  );
+}
+
 function App() {
+  if (USE === 'years') return <Years />;
   if (USE === 'cube') return <Cube />;
   if (USE === 'earth') return <Earth />;
   if (USE === 'sealed') return <Sealed />;

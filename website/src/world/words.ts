@@ -120,3 +120,43 @@ export function dayAt(iso: string | null | undefined, lon: number): string | nul
 }
 
 export { MONTHS };
+
+/** "18 million" from 18,236,000; "250,000" under a million. */
+export function millions(v: number): string {
+  if (v >= 1e6) {
+    const m = v / 1e6;
+    return `${m >= 10 ? Math.round(m) : Math.round(m * 10) / 10} million`;
+  }
+  return roughly(v);
+}
+
+/** The Earth's years. The sentences at 2012 are this lane's until the product lane writes them. */
+export const YEAR_WORDS = {
+  label: 'The Earth year by year, 2000 to 2025: fire detected in each square of a quarter degree',
+  loading: 'Loading the years',
+  failed: 'The yearly layers could not be read.',
+  detected: 'As detected',
+  harmonized: 'Harmonized record',
+  harmonizedMissing: 'Harmonized record: not written yet',
+  play: 'Play',
+  pause: 'Stop',
+  step: 'A year',
+  modis: 'MODIS, the coarse instrument',
+  sharp: 'VIIRS on Suomi NPP, the sharper instrument',
+  onScale: "Harmonized: every year on the sharper instrument's scale",
+  partialYear: (months: number) => `${months === 2 ? 'November and December' : `${months} months`} only: the archive begins in November 2000`,
+  terraAlone: 'Terra alone: Aqua joins in July 2002',
+  aquaJoins: 'Aqua joins in July',
+  stepDetected: (ratio: number | null) =>
+    `2012: the sharper instrument begins.${ratio ? ` It flags about ${Math.round(ratio * 2) / 2} times as many fires as MODIS,` : ''} so the Earth brightens with no more fire.`,
+  stepHarmonized: "2012: the sharper instrument begins. The harmonized record puts the MODIS years on its scale, so there is no step.",
+  legend: 'Fire detected in a square of a quarter degree, about 28 km, in the year',
+  closed: 'Squares kept as the model\'s test, in 2021',
+  hatch: 'Hatched land: no detection there.',
+  totals: 'Fire detected a year, the whole Earth',
+  barsModis: 'MODIS',
+  barsSharp: 'VIIRS (Suomi NPP)',
+  lineHarmonized: 'Harmonized record',
+  partialBar: 'two months',
+  clipped: (n: number) => `${n} ${n === 1 ? 'square lies' : 'squares lie'} above the scale and ${n === 1 ? 'is' : 'are'} drawn at its top`,
+};
