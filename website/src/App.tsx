@@ -120,6 +120,9 @@ function isKnownTheaterId(value: string | undefined): value is TheaterId {
   return THEATER_CATALOG.some((t) => t.id === value);
 }
 
+/** How long a pass holds while the passes play, ms. */
+const PASS_HOLD_MS = 1500;
+
 export function App() {
   const [inWorkspace, setInWorkspace] = useState(false);
   /** Month chosen in the burning calendar ("2021-08"); null until the user picks one. */
@@ -741,23 +744,18 @@ export function App() {
   }, [revealed]);
 
 
-  // Continuous 60fps time evolution when playback is active
+  // Playing the passes: each pass holds about a second and a half, then the next one; after the run's last, its first.
+  const passCount = Math.max(1, (activeRun as unknown as { observer_passes?: { frames?: unknown[] } } | null)?.observer_passes?.frames?.length ?? 24);
   useEffect(() => {
     if (!inWorkspace || !playing) return;
-    let raf = 0;
-    let last = performance.now();
-    const step = (now: number) => {
-      raf = window.requestAnimationFrame(step);
-      const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
-      last = now;
+    const id = window.setInterval(() => {
       setTimeProgress((prev) => {
-        const next = prev + dt * 1.25;
-        return next > 23 ? 0 : next;
+        const next = Math.round(prev) + 1;
+        return next >= passCount ? 0 : next;
       });
-    };
-    raf = window.requestAnimationFrame(step);
-    return () => window.cancelAnimationFrame(raf);
-  }, [inWorkspace, playing]);
+    }, PASS_HOLD_MS);
+    return () => window.clearInterval(id);
+  }, [inWorkspace, playing, passCount]);
 
   // Query live Python backend (:8788) for real-time forward sensor diagnostics
   const activeEpoch = Math.min(23, Math.max(0, Math.round(timeProgress)));
@@ -1203,14 +1201,33 @@ export function App() {
   /** The commands the guide's actions name (script.json, "commands"). */
   const runCommand = (command: string) => {
     if (command === 'go:test') {
-      if (holdoutViirs && !revealed) toggleHoldoutLive();
+      if (holdoutViirs && !revealed) {
+        const fs = (activeRun as unknown as { observer_passes?: { frames?: Array<{ sensor?: string }> } } | null)?.observer_passes?.frames ?? [];
+        const sharp = (k: number) => typeof fs[k]?.sensor === 'string' && fs[k].sensor!.startsWith('VIIRS');
+        if (fs.length > 0 && !sharp(activeEpoch)) {
+          // The next pass of the sharp satellite, else the one before.
+          let k = fs.findIndex((_, i) => i > activeEpoch && sharp(i));
+          if (k < 0) for (let i = activeEpoch - 1; i >= 0 && k < 0; i -= 1) if (sharp(i)) k = i;
+          if (k >= 0) {
+            setPlaying(false);
+            setTimeProgress(k);
+          }
+        }
+        toggleHoldoutLive();
+      }
       else if (step !== 'fire' && step !== 'test') openModel();
     } else if (command === 'go:estimate') {
       // On the Record: the fire of the month picked there when it has one, else of the month it marks (the script's
-      // "Show the fire of {default_fire_month}" on a month with no fire to show).
+      // "Show the fire of {default_fire_month}" on a month with no fire to show). After a reveal: the sharp satellite
+      // hidden again, on the same run.
       if (step === 'record' && recordView.state === 'ready') {
         const picked = recordView.picked;
         recordView.show(picked && picked.opens ? picked.ym : recordView.marked?.ym);
+      } else if ((step === 'fire' || step === 'test') && revealed) {
+        setDebriefOpen(false);
+        setThreeWays(false);
+        setRevealed(false);
+        setHoldoutViirs(true);
       } else openModel();
     } else if (command === 'record:pick') recordView.browse();
     else if (command === 'record:default_fire') recordView.pick(null);
@@ -1345,7 +1362,7 @@ export function App() {
               context={guide.context}
               onWord={(w) => {
                 if (w === 'Record') goStep('record');
-                else if (w === 'Estimate') openModel();
+                else if (w === 'Estimate') runCommand('go:estimate');
                 else if (w === 'Test') runCommand('go:test');
                 else goStep('look');
               }}
