@@ -394,6 +394,7 @@ def apply_interval(pred: np.ndarray, table: dict[str, Any]) -> tuple[np.ndarray,
 # the rule's decision; the interval comes from the held-out errors of the method served and covers what it states.
 INTERVAL_ID: str = "heldout_log_error_quantiles_v1"
 FIRST_FIT_MONTH: str = "2012-02"     # Suomi NPP rows begin on 20 January 2012: that month is partial
+BUSY_MODIS_ROWS: int = 10            # the calendar's own threshold for a month with fire, chosen by MODIS alone
 TERRA_ONLY: Spec = Spec("terra_only", "Terra alone, as the Record harmonizes the months before Aqua", inputs="terra")
 # Each method the Record can serve, with the candidate it is and that candidate on Terra alone (before Aqua).
 SERVED: dict[str, tuple[Spec, Spec]] = {
@@ -475,6 +476,19 @@ def served_predict(V: np.ndarray, M: np.ndarray, month_of_year: np.ndarray, fit:
                           params["empty_pseudo_months"]))
     pred = np.where(b == 0, alpha, pred)
     return np.where(np.isfinite(M), pred, np.nan)
+
+
+def closed_years_for_box(box: tuple[float, float, float, float], years: tuple[int, ...] = tuple(range(2012, 2026))
+                         ) -> tuple[int, ...]:
+    """The overlap years in which the box meets a recorded test fire's region, by the project's one closed rule
+    (`backend.model.training.closed_for`): the years whose held-out check is neither computed nor published."""
+    import calendar as _c
+
+    from backend.model.training import closed_for
+
+    return tuple(y for y in years
+                 if closed_for(tuple(float(v) for v in box), float(_c.timegm((y, 1, 1, 0, 0, 0))),
+                               float(_c.timegm((y + 1, 1, 1, 0, 0, 0)))) is not None)
 
 
 def surround_from_cube(box: tuple[float, float, float, float], grow_deg: float = 2.0) -> dict[str, Any] | None:
@@ -635,6 +649,7 @@ def record_check(S: np.ndarray, M: np.ndarray, year: np.ndarray, fit: np.ndarray
     their figures are not given."""
     rows = []
     inside_m = []
+    inside_busy = []
     for y in sorted(set(year[fit].tolist())):
         if y in closed_years:
             continue
@@ -649,7 +664,9 @@ def record_check(S: np.ndarray, M: np.ndarray, year: np.ndarray, fit: np.ndarray
             if not np.isfinite(p).all():
                 continue
         lo, hi = apply_interval(p, tab_m)
-        inside_m.extend(((S[te] >= lo - 1e-9) & (S[te] <= hi + 1e-9)).tolist())
+        ins = (S[te] >= lo - 1e-9) & (S[te] <= hi + 1e-9)
+        inside_m.extend(ins.tolist())
+        inside_busy.extend(ins[M[te] >= BUSY_MODIS_ROWS].tolist())
         vo, vp = float(S[te].sum()), float(p.sum())
         ylo, yhi = apply_interval(np.array([vp]), tab_y)
         rows.append({"year": int(y), "months": int(te.sum()), "suomi_npp_observed": vo, "predicted": round(vp, 1),
@@ -659,13 +676,24 @@ def record_check(S: np.ndarray, M: np.ndarray, year: np.ndarray, fit: np.ndarray
     errs = [abs(r["relative_error"]) for r in rows if r["relative_error"] is not None]
     naive = [abs(r["relative_error_without_harmonization"]) for r in rows if r["relative_error_without_harmonization"] is not None]
     return {
+        "held_out_years": [r["year"] for r in rows],
         "per_year": rows,
         "years_not_held_out": sorted(int(y) for y in closed_years if y in set(year[fit].tolist())),
+        "mean_abs_relative_error_annual": round(float(np.mean(errs)), 4) if errs else None,
         "median_abs_relative_error_annual": round(float(np.median(errs)), 4) if errs else None,
         "median_abs_relative_error_without_harmonization": round(float(np.median(naive)), 4) if naive else None,
         "annual_interval_coverage": round(float(np.mean([r["inside_interval"] for r in rows])), 4) if rows else None,
         "monthly_interval_coverage": round(float(np.mean(inside_m)), 4) if inside_m else None,
         "months_tested": len(inside_m),
+        f"monthly_interval_coverage_modis_rows_ge_{BUSY_MODIS_ROWS}": (round(float(np.mean(inside_busy)), 4)
+                                                                        if inside_busy else None),
+        f"months_tested_modis_rows_ge_{BUSY_MODIS_ROWS}": len(inside_busy),
+        "nominal_interval": "80 percent: the 10th to 90th percentile of held-out errors of predictions of about the "
+                            "same size, per latitude band",
+        "definition": "for each overlap year but a closed one: the method is fitted on the other overlap years and "
+                      "predicts that year's Suomi NPP count of every clean month from its MODIS count; relative "
+                      "error = (predicted - observed) / observed over the year; coverage = share of held-out years "
+                      "(annual) or months (monthly) whose observed Suomi NPP count lies inside the interval",
         "interval_note": "the interval checked here is the one in use, whose table holds held-out errors of every "
                          "year in other places, and the world factors of the pooled method are fitted on every "
                          "year; the coverage measured on years that did not set the table is in "

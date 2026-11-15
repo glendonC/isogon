@@ -55,6 +55,12 @@ class RecordTest(unittest.TestCase):
         b = [m["harmonized_count"] for m in rows["months"] if m["harmonized_count"]]
         self.assertGreater(sum(a), 10 * sum(b))
 
+    def test_closed_years_of_a_box_follow_the_closed_rule(self) -> None:
+        from backend.firms import region_box
+
+        self.assertEqual(H.closed_years_for_box(region_box("plumas_ca")), (2021,))
+        self.assertEqual(H.closed_years_for_box((10.0, -5.0, 12.0, -3.0)), ())
+
     def test_a_closed_year_is_not_held_out_or_published(self) -> None:
         out = H.record_series(records(), center_lat=40.5, closed_years=(2021,), fitted=FITTED)
         self.assertNotIn(2021, [r["year"] for r in out["check"]["per_year"]])
