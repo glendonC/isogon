@@ -41,3 +41,31 @@ const overlap = overlapFromEvidence(evidence, 'test_b');
 It reads `fresh_test.test_b.all.scores` and `beside_the_headline.challenger_blend.against_the_baselines.scores`
 from `GET /api/evidence`. It replaces the panel's table of ahead, level and behind on the main screen; the detail
 sheet keeps its seven rows. Words in `words` (title, line, the two bar names).
+
+## The years (world-view lane, the Earth's years, `world/EarthYears.tsx`)
+
+```tsx
+import { YearBars } from '../dataviz/YearBars';
+import { seriesFromCube, seriesFromCountry } from '../dataviz/yearSeries';
+
+const series = countryKey ? seriesFromCountry(countriesAnswer, countryKey) : seriesFromCube(yearsAnswer);
+{series ? <YearBars series={series} upTo={playingYear} current={currentYear} oneScale={onOneScale} /> : null}
+```
+
+Orange bars where MODIS counted, light blue from VIIRS's first year; `oneScale` adds each year's estimate as a white
+outline. `upTo` draws the years only up to the one playing, on the scale of every year, so bars never rescale.
+It replaces the strip's bars, line and key.
+
+## The live table (world-view lane, the sealed board, `world/SealedTonight.tsx`)
+
+```tsx
+import { LiveTable } from '../dataviz/LiveTable';
+import { rowsFromLive } from '../dataviz/liveRows';
+
+const table = rowsFromLive(liveAnswer, (f) => (f.centre ? countryAt(f.centre[0], f.centre[1]) : null) ?? partWords(f));
+{table ? <LiveTable table={table} /> : null}
+```
+
+One row a fire with a sealed prediction (its latest seal), newest first: the fire, when the prediction was locked,
+whether VIIRS's data has arrived and been checked, and the seal's fingerprint. `partWords` is exported from
+`liveRows`. Column heads in `heads`.
