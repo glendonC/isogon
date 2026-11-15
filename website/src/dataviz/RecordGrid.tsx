@@ -2,17 +2,24 @@ import { useState } from 'react';
 import { CSS, MARK, estimateStep } from './tokens';
 import { Frame } from './Frame';
 import { grow } from './frameGeometry';
-import { MONTHS_SHORT, cellFields, cellReadout, heldOutText } from './recordCells';
-import type { HeldOut, RecordCells } from './recordCells';
+import { MONTHS_SHORT, cellLines, cellName, cellReadout, heldOutText } from './recordCells';
+import type { HeldOut, RecordCell, RecordCells } from './recordCells';
 
 export interface RecordGridProps {
   record: RecordCells;
   /** The picked month, "YYYY-MM": the frame rests on it. */
   selected?: string | null;
   onPick?: (ym: string) => void;
-  /** The action beside the frame on the picked month, two to four words (the product lane's). */
-  action?: string;
-  /** The line under the grid; by default the place's own held-out error. */
+  /**
+   * The prompt for a month where pressing it does something (the product lane's words, for example "Open the August
+   * 2012 fire"); null where nothing happens, and the prompt is then the month's name.
+   */
+  actionFor?: (cell: RecordCell) => string | null;
+  /** Draw the frame here; false when the screen mounts the identity's scene prompt on the box `onPoint` gives. */
+  frame?: boolean;
+  /** The month under the pointer (or the picked month when the pointer leaves) and its box on screen. */
+  onPoint?: (cell: RecordCell | null, box: DOMRect | null) => void;
+  /** A line under the grid, only when given (the held-out check lives in the Method sheet). */
   heldOut?: HeldOut | null;
   line?: string;
   /** Words of the legend and the satellite lines; the product lane's. */
@@ -26,11 +33,11 @@ const DEFAULT_WORDS = { noFire: 'No fire', fewer: 'Fewer', more: 'More', modis: 
  * fire is an empty outlined cell. The frame rests on the picked month and follows the pointer, with the month's
  * exact readout beside it. Under the grid, each satellite's span and a legend in words.
  */
-export function RecordGrid({ record, selected, onPick, action, heldOut, line, words = DEFAULT_WORDS }: RecordGridProps) {
+export function RecordGrid({ record, selected, onPick, actionFor, frame = true, onPoint, heldOut, line, words = DEFAULT_WORDS }: RecordGridProps) {
   const [hover, setHover] = useState<string | null>(null);
   const pitch = MARK.cell + MARK.gap;
   const left = 44;
-  const head = 124;
+  const head = 82;
   const top = head;
   const years = record.lastYear - record.firstYear + 1;
   const gridW = years * pitch - MARK.gap;
@@ -55,7 +62,10 @@ export function RecordGrid({ record, selected, onPick, action, heldOut, line, wo
   return (
     <div className="dv-figure">
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="The fire record, one cell a month" className="dv-svg"
-        onPointerLeave={() => setHover(null)}>
+        onPointerLeave={() => {
+          setHover(null);
+          onPoint?.(record.cells.find((c) => c.ym === selected) ?? null, null);
+        }}>
         {MONTHS_SHORT.map((m, i) => (
           <text key={m} x={left - 10} y={y(i + 1) + MARK.cell - 4} textAnchor="end" className="dv-label">
             {m}
@@ -64,7 +74,10 @@ export function RecordGrid({ record, selected, onPick, action, heldOut, line, wo
         {record.cells.map((cell) => {
           const common = {
             className: 'dv-cell',
-            onPointerEnter: () => setHover(cell.ym),
+            onPointerEnter: (e: { currentTarget: Element }) => {
+              setHover(cell.ym);
+              onPoint?.(cell, e.currentTarget.getBoundingClientRect());
+            },
             onClick: onPick ? () => onPick(cell.ym) : undefined,
             'aria-label': cellReadout(cell),
           };
@@ -106,15 +119,16 @@ export function RecordGrid({ record, selected, onPick, action, heldOut, line, wo
         <text x={left + 188 + record.steps * (legendCell + 2) + 8} y={legendY} className="dv-label">
           {words.more}
         </text>
-        {framed ? (
+        {frame && framed ? (
           <Frame
             key={framed.ym}
             box={grow({ x: x(framed.year), y: y(framed.month), w: MARK.cell, h: MARK.cell }, 5)}
             bounds={{ w: width, h: height }}
-            action={framed.ym === selected ? action : undefined}
-            readout={cellFields(framed)}
-            maxChars={26}
-            above={{ bottom: head - 22 }}
+            action={actionFor?.(framed) ?? cellName(framed)}
+            readout={cellLines(framed)}
+            maxChars={0}
+            above={{ bottom: head - 14 }}
+            leader={false}
           />
         ) : null}
       </svg>

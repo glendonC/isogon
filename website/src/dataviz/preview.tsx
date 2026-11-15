@@ -15,7 +15,7 @@ import { YearBars } from './YearBars';
 import { rowsFromLive } from './liveRows';
 import { seriesFromCube } from './yearSeries';
 import { overlapFromEvidence } from './overlapRows';
-import { cellsFromCalendar, heldOutFromCalendar } from './recordCells';
+import { cellsFromCalendar } from './recordCells';
 
 function useJson(path: string): unknown {
   const [data, setData] = useState<unknown>(null);
@@ -47,7 +47,7 @@ function Preview() {
   return (
     <main style={{ color: 'var(--dv-ink)', fontFamily: 'var(--dv-font)', background: 'var(--dv-ground)' }}>
       <Screen>
-        <div style={{ marginLeft: 260 }}>{record ? <RecordGrid record={record} selected={picked} onPick={setPicked} action="Show this fire" heldOut={heldOutFromCalendar(calendar)} /> : null}</div>
+        <div style={{ marginLeft: 260 }}>{record ? <RecordGrid record={record} selected={picked} onPick={setPicked} actionFor={(c) => (c.ym === '2012-08' ? 'Open the August 2012 fire' : null)} /> : null}</div>
       </Screen>
       <Screen>{overlap ? <OverlapBars overlap={overlap} /> : null}</Screen>
       <Screen>

@@ -16,6 +16,9 @@ export interface RecordCell {
   value: number | null;
   low: number | null;
   high: number | null;
+  /** Each instrument's own rate that month, as counted (VIIRS from its first month). */
+  modis: number | null;
+  viirs: number | null;
   /** The ramp step, or null for no fire (a value of zero) or no value. */
   step: number | null;
 }
@@ -57,6 +60,8 @@ export function cellsFromCalendar(calendar: unknown, steps = 8): RecordCells | n
       value,
       low: num(r.harmonized_p10),
       high: num(r.harmonized_p90),
+      modis: num(r.modis_raw_rate),
+      viirs: num(r.viirs_raw_rate),
       step: value !== null && value > 0 ? classOf(value, breaks) : null,
     };
   });
@@ -77,6 +82,24 @@ export function cellsFromCalendar(calendar: unknown, steps = 8): RecordCells | n
 /** A rate: two decimals under 10, one from 10. */
 export function rateText(v: number): string {
   return v < 10 ? v.toFixed(2) : v.toFixed(1);
+}
+
+/** The month's name, as the prompt says it when no action is offered. */
+export function cellName(cell: RecordCell): string {
+  return `${MONTHS_LONG[cell.month - 1]} ${cell.year}`;
+}
+
+/**
+ * The readout's two short lines for one month: each instrument's count as counted, then the value on one scale with
+ * its range. Per 1,000 km2 a day.
+ */
+export function cellLines(cell: RecordCell): string[] {
+  if (cell.value === null) return ['no value'];
+  const counted = [cell.modis !== null ? `MODIS ${rateText(cell.modis)}` : null, cell.viirs !== null ? `VIIRS ${rateText(cell.viirs)}` : null]
+    .filter(Boolean)
+    .join('   ');
+  const one = cell.value === 0 ? 'no fire on one scale' : `one scale ${rateText(cell.value)}` + (cell.low !== null && cell.high !== null ? `, ${rateText(cell.low)} to ${rateText(cell.high)}` : '');
+  return [counted ? `${counted} a day per 1,000 km²` : 'as counted: none', one].map((l) => l.toUpperCase());
 }
 
 /** The readout's fields for one month: its name, its value, its range. */

@@ -12,7 +12,7 @@
   --dv-viirs: var(--id-viirs, #8fd6f5);
   --dv-estimate: var(--id-estimate, #f4f6f9);
   --dv-reference: #8a8f99;
-  --dv-ui: var(--id-ui, #9fe3ff);
+  --dv-ui: var(--id-signal, #9fe3ff);
   --dv-move: cubic-bezier(0.35, 0, 0, 1);
   --dv-font: var(--sys-font, 'Geist', -apple-system, sans-serif);
   --dv-mono: var(--sys-mono, 'IBM Plex Mono', ui-monospace, Menlo, monospace);
@@ -73,10 +73,18 @@
 }
 .dv-readout {
   font-family: var(--dv-mono);
-  font-size: 16px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   fill: var(--dv-ui);
   white-space: pre;
+}
+/* A halo of the ground behind the frame's words, so they read over data; a stroke, not a box. */
+.dv-action,
+.dv-readout {
+  paint-order: stroke;
+  stroke: var(--dv-ground);
+  stroke-width: 4px;
+  stroke-linejoin: round;
 }
 .dv-svg {
   display: block;

@@ -50,8 +50,8 @@ export function readoutLines(fields: readonly string[], maxChars = 34): string[]
   return lines;
 }
 
-/** Widths of the two kinds of text, close enough to place them: the action at 22 px, the readout at 16 px mono. */
-export const TEXT = { actionChar: 11, actionLine: 30, readoutChar: 11.8, readoutLine: 22 } as const;
+/** Widths of the two kinds of text, close enough to place them: the action at 22 px, the readout at 11 px mono. */
+export const TEXT = { actionChar: 11, actionLine: 28, readoutChar: 8.2, readoutLine: 16 } as const;
 
 /**
  * Where the words go: to the right of the frame, top aligned, unless they would leave the bounds, then to its

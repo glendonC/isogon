@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cellReadout, cellsFromCalendar, heldOutFromCalendar, heldOutText } from './recordCells.ts';
+import { cellLines, cellName, cellReadout, cellsFromCalendar, heldOutFromCalendar, heldOutText } from './recordCells.ts';
 import { estimateStep } from './tokens.ts';
 
 // The shape of GET /api/calendar?region_id=plumas_ca&source=firms, with made-up months and the route's own
@@ -12,7 +12,7 @@ function calendar(n) {
     const month = ((i + 10) % 12) + 1;
     records.push({
       year, month, harmonized_mean: i === 3 ? 0 : (i + 1) / 10, harmonized_p10: i / 10, harmonized_p90: (i + 2) / 10,
-      viirs_raw_rate: year >= 2012 ? 1 : null,
+      modis_raw_rate: 0.25, viirs_raw_rate: year >= 2012 ? 1 : null,
     });
   }
   return {
@@ -61,4 +61,15 @@ test('the ramp is grey only, dim to full white', () => {
   const [r7] = g(estimateStep(7));
   assert.ok(Math.max(r0, g0, b0) - Math.min(r0, g0, b0) <= 4, 'no hue');
   assert.ok(r7 > 230 && r0 < 70);
+});
+
+test('the prompt names the month; the readout gives each instrument as counted, then one scale with its range', () => {
+  const r = cellsFromCalendar(calendar(302));
+  const aug = r.cells.find((c) => c.ym === '2012-08');
+  assert.equal(cellName(aug), 'August 2012');
+  const [counted, one] = cellLines(aug);
+  assert.equal(counted, 'MODIS 0.25   VIIRS 1.00 A DAY PER 1,000 KM²');
+  assert.match(one, /^ONE SCALE \d+\.\d+, \d+\.\d+ TO \d+\.\d+$/);
+  const nov2000 = r.cells[0];
+  assert.equal(cellLines(nov2000)[0], 'MODIS 0.25 A DAY PER 1,000 KM²');
 });

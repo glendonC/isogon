@@ -22,7 +22,7 @@ test('the colours are the identity agreed: ground, ink, MODIS orange, VIIRS blue
   for (const k of ['modis', 'viirs', 'estimate']) assert.notEqual(COLOR[k], COLOR.ui, `${k} is not the interface colour`);
   for (const k of ['modis', 'viirs', 'ink']) assert.ok(contrast(rgb(COLOR[k]), rgb(COLOR.ground)) >= 4.5, `${k} reads on the ground`);
   const css = readFileSync(new URL('./dataviz.css', import.meta.url), 'utf8');
-  for (const name of ['--id-modis', '--id-viirs', '--id-estimate', '--id-ground', '--id-ink', '--id-line']) assert.ok(css.includes(name), `reads ${name}`);
+  for (const name of ['--id-modis', '--id-viirs', '--id-estimate', '--id-ground', '--id-ink', '--id-line', '--id-signal']) assert.ok(css.includes(name), `reads ${name}`);
   assert.ok(css.includes(COLOR.modis) && css.includes(COLOR.viirs), 'the same fallbacks');
 });
 
@@ -37,9 +37,10 @@ test('share breaks put an equal share of the values with fire in each step', () 
 });
 
 test('nothing a visitor reads is under 16 px, no rounded corner, nothing fades', () => {
-  assert.ok(TYPE.min >= 16 && TYPE.label >= 16 && TYPE.title >= 16 && TYPE.readout >= 16 && TYPE.action >= 16);
+  assert.ok(TYPE.min >= 16 && TYPE.label >= 16 && TYPE.title >= 16 && TYPE.action >= 16);
+  assert.equal(TYPE.readout, 11, 'the readout is the instrument\'s small type');
   const css = readFileSync(new URL('./dataviz.css', import.meta.url), 'utf8');
-  for (const m of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) assert.ok(Number(m[1]) >= 16, `font-size ${m[1]}px`);
+  for (const m of css.replace(/\.dv-readout \{[^}]*\}/, '').matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) assert.ok(Number(m[1]) >= 16, `font-size ${m[1]}px`);
   for (const m of css.matchAll(/border-radius:\s*([^;]+);/g)) assert.equal(m[1].trim(), '0');
   assert.doesNotMatch(css, /opacity\s*:/);
   assert.doesNotMatch(css, /\.dv-readout[^}]*(background|border)\s*:/, 'the readout has no box');

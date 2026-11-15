@@ -4,7 +4,7 @@ Built to the ux lane's in-scene look. No box anywhere: pointing at a month, a ye
 cyan corner brackets (`#9fe3ff`, the interface's one colour) and sets its exact readout beside or above it in mono
 capitals, with the action in white where pressing does something. Data keeps its colours: orange MODIS `#ff7a45`,
 light blue VIIRS `#8fd6f5`, the estimate white. Every component reads the identity's CSS variables first (`--id-*`,
-the cyan as `--id-ui`). A live page of every component: run the dev server and open `/src/dataviz/preview.html`
+the cyan as `--id-signal`). A live page of every component: run the dev server and open `/src/dataviz/preview.html`
 (add `?still` for a headless capture: the frame's close-in motion off).
 
 ## Once, in `main.tsx` (after the identity's stylesheet)
@@ -13,26 +13,32 @@ the cyan as `--id-ui`). A live page of every component: run the dev server and o
 import './dataviz/dataviz.css';
 ```
 
-## The Record's grid and its held-out line (compare-view lane, `beats/calendar/TheRecord.tsx`)
+## The Record's grid (compare-view lane, `beats/calendar/TheRecord.tsx`)
 
 The route's answer the screen already holds (`GET /api/calendar` or `GET /api/cube/record`) goes in whole:
 
 ```tsx
 import { RecordGrid } from '../../dataviz/RecordGrid';
-import { cellsFromCalendar, heldOutFromCalendar } from '../../dataviz/recordCells';
+import { cellsFromCalendar } from '../../dataviz/recordCells';
 
 const record = cellsFromCalendar(calendarAnswer);
 {record ? (
-  <RecordGrid record={record} selected={pickedYm} onPick={setPickedYm} heldOut={heldOutFromCalendar(calendarAnswer)} />
+  <RecordGrid
+    record={record}
+    selected={pickedYm}
+    onPick={setPickedYm}
+    actionFor={(cell) => (cell.ym === fireYm ? words.openFire(cell) : null)}
+  />
 ) : null}
 ```
 
-It replaces the grid's SVG, its legend, the two satellite lines, the month label with its range bar and the grey
-method line: the frame rests on `selected` ("YYYY-MM") and follows the pointer, with the month's readout above the
-grid and a leader down to it. Pass `action` (two to four words, for example the product lane's words for showing
-the month's fire) and it is set over the readout while the frame is on the picked month; click picks a month.
-The product lane's words go in `words` (legend and satellite names) and `line` (the line under the grid).
-A drawn area (`/api/cube/record`) has no validation block, so its line is left out unless `line` is given.
+It replaces the grid's SVG, its legend, the two satellite lines and the month label with its range bar. The reticle
+rests on `selected` ("YYYY-MM") and follows the pointer; over the grid, in the pointed month's column, its prompt
+(`actionFor`'s words where pressing opens something, else the month's name) and two readout lines (each satellite as
+counted, then the value on one scale with its range). Click picks a month. To mount the identity's `ScenePrompt`
+instead, pass `frame={false}` and `onPoint={(cell, box) => ...}`: it gives the pointed month and its box on screen.
+No line under the grid: the held-out check goes to the Method sheet's Record section (`heldOutFromCalendar` and
+`heldOutText` in `recordCells` give it from the route; `line` or `heldOut` still draw it under the grid if wanted).
 
 ## The 57 fires' result (world-view lane, the test's panel, `world/WorldTest.tsx`)
 

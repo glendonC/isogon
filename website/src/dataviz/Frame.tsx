@@ -17,13 +17,15 @@ export interface FrameProps {
    * frame would cover other data (a dense grid, a row of bars).
    */
   above?: { bottom: number };
+  /** Draw the leader from the words above down to the frame (default true). */
+  leader?: boolean;
 }
 
 /**
  * The page's frame, drawn inside an SVG: four pale cyan corner brackets that close in on the thing, and beside them
  * the action in white and one readout in mono capitals. The interface's own colour; data keeps its colours.
  */
-export function Frame({ box, bounds, action, readout = [], maxChars = 34, above }: FrameProps) {
+export function Frame({ box, bounds, action, readout = [], maxChars = 34, above, leader = true }: FrameProps) {
   const lines = readoutLines(readout, maxChars);
   const textW = Math.max(action ? action.length * TEXT.actionChar : 0, ...lines.map((l) => l.length * TEXT.readoutChar));
   const textH = (action ? TEXT.actionLine : 0) + lines.length * TEXT.readoutLine;
@@ -43,14 +45,14 @@ export function Frame({ box, bounds, action, readout = [], maxChars = 34, above 
           <path key={d} d={d} fill="none" stroke={CSS.ui} strokeWidth={1.5} />
         ))}
       </g>
-      {above ? <line x1={leaderX} x2={leaderX} y1={above.bottom + 8} y2={box.y - 4} stroke={CSS.ui} strokeWidth={1} /> : null}
+      {above && leader ? <line x1={leaderX} x2={leaderX} y1={above.bottom + 8} y2={box.y - 4} stroke={CSS.ui} strokeWidth={1} /> : null}
       {action ? (
         <text x={at.x} y={at.y + 22} textAnchor={at.anchor} className="dv-action">
           {action}
         </text>
       ) : null}
       {lines.map((l, i) => (
-        <text key={i} x={at.x} y={at.y + (action ? TEXT.actionLine : 0) + 16 + i * TEXT.readoutLine} textAnchor={at.anchor} className="dv-readout">
+        <text key={i} x={at.x} y={at.y + (action ? TEXT.actionLine : 0) + 12 + i * TEXT.readoutLine} textAnchor={at.anchor} className="dv-readout">
           {l}
         </text>
       ))}
