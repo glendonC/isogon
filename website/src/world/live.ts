@@ -44,6 +44,9 @@ export interface Live {
   fires: LiveFire[];
   seals: LiveSeal[];
   notSealed: Array<{ fireId: string; platform: string | null; predictedUtc: string | null; reason: string | null }>;
+  /** Over the fires scored, judged with an interval: how many scores were ahead, tied and behind. Null until two. */
+  overFires: { fires: number | null; ahead: number | null; tied: number | null; behind: number | null } | null;
+  firesScored: number | null;
   /** Said in the caution colour when the answer is an example written for a frame. */
   example: string | null;
 }
@@ -119,5 +122,26 @@ export function parseLive(body: unknown): Live {
       return { fireId: str(x.fire_id) ?? '', platform: str(x.platform), predictedUtc: str(x.predicted_time_utc), reason: str(x.reason) };
     }),
     example: str(o.example),
+    ...runningCount(o.running_count),
   };
+}
+
+function runningCount(v: unknown): Pick<Live, 'overFires' | 'firesScored'> {
+  const r = (v ?? null) as Obj | null;
+  if (!r) return { overFires: null, firesScored: null };
+  const over = (r.over_fires ?? null) as Obj | null;
+  const cls = (over?.classes ?? null) as Obj | null;
+  return {
+    firesScored: num(r.fires_scored),
+    overFires: cls ? { fires: num(r.fires_scored), ahead: num(cls.ahead), tied: num(cls.tie ?? cls.tied), behind: num(cls.behind) } : null,
+  };
+}
+
+/** A platform as the page says it: "VIIRS_NOAA20" is "NOAA-20". */
+export function platformWords(p: string | null): string | null {
+  if (!p) return null;
+  const m = /NOAA[-_]?(\d+)/i.exec(p);
+  if (m) return `NOAA-${m[1]}`;
+  if (/SNPP|SUOMI/i.test(p)) return 'Suomi NPP';
+  return p;
 }

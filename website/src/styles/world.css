@@ -371,6 +371,12 @@
   color: var(--sys-ink-3);
 }
 
+.world-board__rule--strong {
+  font-size: var(--sys-size-label);
+  line-height: var(--sys-lh-label);
+  color: var(--sys-ink);
+}
+
 .world-board__head,
 .world-board__row {
   display: grid;

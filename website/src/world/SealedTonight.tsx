@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { countryAt, pointWords } from './countryAt';
 import { placeLabels } from './labels';
-import { parseLive, type Live, type LiveFire, type LiveSeal } from './live';
+import { parseLive, platformWords, type Live, type LiveFire, type LiveSeal } from './live';
 import { type Box } from './projection';
 import { useRead } from './read';
 import { clockAt, clockOnly, dayAt, partAt } from './words';
@@ -65,6 +65,10 @@ export const SEAL_WORDS = {
   copy: 'Copy',
   copied: 'Copied',
   nrt: (note: string) => `Scored on ${note}.`,
+  missed: (n: number, why: string | null) =>
+    `${n === 1 ? 'One pass was' : `${n} passes were`} not sealed in time and will not be scored${why ? `: ${why}` : ''}.`,
+  over: (fires: number, a: number, t: number, b: number) =>
+    `Over the ${fires} fires scored, judged with an interval: ahead on ${a}, tied on ${t}, behind on ${b} of the seven scores.`,
 };
 
 function latest(seals: LiveSeal[]): LiveSeal | null {
@@ -208,7 +212,7 @@ export function SealedTonight({ source, now = null, before = 6, after = 9 }: Sea
                 <span className="world-board__where" title={point}>
                   {whereOf(f)}
                 </span>
-                <span className="world-board__words" title={s ? SEAL_WORDS.title(s.platform, dayAt(s.sealedUtc, f.centre[0]), point) : point}>
+                <span className="world-board__words" title={s ? SEAL_WORDS.title(platformWords(s.platform), dayAt(s.sealedUtc, f.centre[0]), point) : point}>
                   {words(f, s)}
                 </span>
                 <span className="world-board__track" aria-hidden="true">
@@ -269,6 +273,14 @@ export function SealedTonight({ source, now = null, before = 6, after = 9 }: Sea
             </li>
           )}
         </ol>
+        {live.overFires && live.overFires.fires !== null && live.overFires.ahead !== null && live.overFires.tied !== null && live.overFires.behind !== null && (
+          <div className="world-board__rule world-board__rule--strong">
+            {SEAL_WORDS.over(live.overFires.fires, live.overFires.ahead, live.overFires.tied, live.overFires.behind)}
+          </div>
+        )}
+        {live.notSealed.length > 0 && (
+          <div className="world-board__rule">{SEAL_WORDS.missed(live.notSealed.length, live.notSealed.length === 1 ? live.notSealed[0].reason : null)}</div>
+        )}
         {live.rowsNote && <div className="world-board__rule">{SEAL_WORDS.nrt(live.rowsNote)}</div>}
       </div>
     </div>
