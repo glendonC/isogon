@@ -42,8 +42,16 @@ export interface Beside {
   behind: number;
 }
 
+/** Overlap with VIIRS fire pixels (critical success index), exact and within one pixel, as fractions. */
+export interface Overlap {
+  exact: number;
+  within: number;
+}
+
 export interface FreshLook {
   id: 'test_a' | 'test_b';
+  /** The overlap of the model in use, of MODIS alone, and of the new model (the challenger the runs answer with). */
+  overlap: { first: Overlap | null; modis: Overlap | null; second: Overlap | null };
   /** The challengers scored beside the headline (`beside_the_headline`, the keys that begin `challenger_`). */
   challengers: Beside[];
   /** The estimate with the other values, scored beside it. */
@@ -177,8 +185,17 @@ function look(id: 'test_a' | 'test_b', v: unknown, names: Obj, grid: typeof FRES
     const b = num(g?.behind);
     return a !== null && t !== null && b !== null ? [{ key, ahead: a, tied: t, behind: b }] : [];
   });
+  const csi = (scores: unknown, key: 'value' | 'painted_modis'): Overlap | null => {
+    const sc = (scores ?? {}) as Obj;
+    const e = num(((sc.csi_strict_375m ?? {}) as Obj)[key]);
+    const w = num(((sc.csi_one_cell_tolerance ?? {}) as Obj)[key]);
+    return e !== null && w !== null ? { exact: e, within: w } : null;
+  };
+  const allScores = ((o.all ?? {}) as Obj).scores;
+  const blend = ((((o.beside_the_headline ?? {}) as Obj).challenger_blend ?? {}) as Obj).against_the_baselines as Obj | undefined;
   return {
     id,
+    overlap: { first: csi(allScores, 'value'), modis: csi(allScores, 'painted_modis'), second: blend ? csi(blend.scores, 'value') : null },
     challengers: beside.filter((x) => x.key.startsWith('challenger_')),
     refit: beside.find((x) => x.key === 'refit') ?? null,
     name: str(o.look_name) ?? str(names[id]),

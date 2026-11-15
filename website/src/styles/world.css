@@ -1604,3 +1604,8 @@
     animation: none;
   }
 }
+
+/* A sealed row opens its result. */
+.world-board__row[data-opens='true'] {
+  cursor: pointer;
+}

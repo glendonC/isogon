@@ -3,14 +3,13 @@ import { GuideStrip } from '../guide/GuideStrip';
 import type { ScriptAction } from '../guide/script';
 import { Trail, type TrailWord } from '../guide/Trail';
 import { EarthYears, type YearsControl, type YearsState } from './EarthYears';
-import { challengersSaid, parseFresh, secondModel } from './freshTest';
-import { countWord } from '../guide/formats';
+import { parseFresh } from './freshTest';
 import { useWorldKeys } from './keys';
 import { parseLive } from './live';
 import { useRead } from './read';
 import { closeWorldScreen, useWorldScreen, type WorldScreen } from './screens';
 import { SealedTonight } from './SealedTonight';
-import { oneDecimal, SCREEN_WORDS as S } from './words';
+import { oneDecimal, percent1, SCREEN_WORDS as S } from './words';
 import { WorldTest, type WorldTestControl } from './WorldTest';
 import '../styles/world.css';
 
@@ -195,31 +194,18 @@ function Test({ film, toWord }: Part) {
   // the film's caption takes test B's line by itself then (the panel shows test B's look too).
   const testA = ans?.looks.find((l) => l.id === 'test_a') ?? null;
   const testB = ans?.looks.find((l) => l.id === 'test_b') ?? null;
-  const facts = (l: typeof testA) => {
-    const c = l?.all?.classes ?? null;
-    if (!l || !c) return null;
-    return {
-      c,
-      fires: l.fires.length,
-      of: l.fires.length ? Math.max(...l.fires.map((f) => f.judged)) : 7,
-      continents: new Set(l.fires.map((f) => f.continent).filter(Boolean)).size,
-      strictBehind: l.all?.scores?.csi_strict_375m === 'behind',
-    };
-  };
-  const a = facts(testA);
-  const b = facts(testB);
-  const others = challengersSaid(testB);
-  const lines = a
-    ? [
-        ...(b ? [S.test.testB(b.fires, b.c.ahead, b.of, b.c.tied, b.c.behind, others ? { n: countWord(others.n) ?? String(others.n), ahead: others.ahead } : null)] : []),
-        a.strictBehind
-          ? S.test.strictBehind(a.fires, a.continents, a.c.ahead, a.of, a.c.behind)
-          : S.test.notStrictBehind(a.fires, a.continents, a.c.ahead, a.of, a.c.tied, a.c.behind),
-        // What a square's fill means is the panel's own foot too; with test B's sentence it is left to the panel.
-        ...(b ? [] : [S.test.squares(a.of)]),
-      ]
-    : [];
-  const caption = b ? S.test.filmB(b.c.ahead, b.of, b.c.behind, others?.ahead ?? null, secondModel(testB)) : a ? S.test.filmA(a.fires, a.c.ahead, a.of, a.c.behind) : null;
+  // The overlap with VIIRS fire pixels, exact, as plain percentages (words version 16): test B's first, then test A's.
+  const ob = testB?.overlap;
+  const oa = testA?.overlap;
+  const lineB = testB && ob?.second && ob.modis && ob.first ? S.test.overlapB(testB.fires.length, percent1(ob.second.exact), percent1(ob.modis.exact), percent1(ob.first.exact)) : null;
+  const lineA = testA && oa?.first && oa.modis ? S.test.overlapA(testA.fires.length, percent1(oa.first.exact), percent1(oa.modis.exact)) : null;
+  const lines = [lineB, lineA].filter((l): l is string => l !== null);
+  const caption =
+    ob?.second && ob.modis && ob.first
+      ? S.test.filmOverlapB(percent1(ob.second.exact), percent1(ob.modis.exact), percent1(ob.first.exact))
+      : oa?.first && oa.modis
+        ? S.test.filmOverlapA(percent1(oa.first.exact), percent1(oa.modis.exact))
+        : null;
   return (
     <>
       <div className="world-screen__test">
@@ -262,8 +248,8 @@ function Sealed({ film, toWord }: Part) {
   const o = live?.overFires ?? null;
   const counted = o && o.ahead !== null && o.tied !== null && o.behind !== null;
   // "So far N are scored" counts fires, as the marks and the board do (the won, tied and lost are over those fires).
-  const lines = live ? [S.sealed.marks, ...(scored > 0 && counted ? [S.sealed.soFar(o!.fires ?? scored, o!.ahead!, o!.tied!, o!.behind!)] : [])] : [];
-  const caption = scored > 0 && counted ? S.sealed.film(o!.ahead!, o!.tied!, o!.behind!) : null;
+  const lines = live ? [S.sealed.marks, ...(scored > 0 && counted ? [S.sealed.soFar(o!.fires ?? scored)] : [])] : [];
+  const caption = scored > 0 && counted ? S.sealed.film : null;
   useWorldKeys((e) => {
     if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey) return false;
     closeWorldScreen();

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { count, countWord } from '../guide/formats';
-import { listAnd } from './words';
+import { count } from '../guide/formats';
+import { listAnd, percent1 } from './words';
 import { countryAt } from './countryAt';
-import { challengersSaid, parseFresh, secondModel, type FreshFire, type FreshLook, type Group } from './freshTest';
+import { parseFresh, type FreshFire, type FreshLook, type Group } from './freshTest';
 import { CountTo } from './CountTo';
 import { useRead } from './read';
 import { inFilm, useGuideRoom, WorldCaption } from './WorldCaption';
@@ -26,21 +26,16 @@ export const TEST_WORDS = {
   noLook: 'No look of the test across the world has been taken yet. Its plan of fires is written before any score.',
   // The product lane's words (WORDS-wider.json version 14, world_pictures): the objective, the film's captions and the
   // names of the two looks, shown in place of the served ones.
-  objective: 'See where the estimate was tested',
-  filmA: (fires: number, ahead: number, of: number, behind: number) => `On ${fires} unseen fires: won ${ahead} of ${of} scores, lost ${behind}.`,
-  filmB: (ahead: number, of: number, behind: number, others: string | null, second: { ahead: number; behind: number } | null) =>
-    second
-      ? `Untouched fires: second model won ${second.ahead}, lost ${second.behind}. First: won ${ahead}, lost ${behind}.`
-      : `Untouched fires: won ${ahead} of ${of}, lost ${behind}.${others ? ` Other models: won ${others}.` : ''}`,
-  /** The challengers beside the headline, in one plain line under it (the product lane's words, in the identity). */
-  beside: (n: string, ahead: string, of: number, behind: string) =>
-    `Beside it, ${n} other models, looked at once on these fires: each won ${ahead} of ${of} scores and lost ${behind === '0' ? 'none' : behind}.`,
+  objective: 'See the fires it had never seen',
+  // Words version 16: the overlap with VIIRS fire pixels, exact, as plain percentages.
+  filmA: (first: string, modis: string) => `Unseen fires, overlap with VIIRS: model ${first}%, MODIS ${modis}%.`,
+  filmB: (second: string, modis: string, first: string) => `New fires, overlap with VIIRS: new model ${second}%, MODIS ${modis}%, first model ${first}%.`,
+  /** The film's three figures: each method's overlap, exact. */
+  figSecond: 'new model',
+  figModis: 'MODIS alone',
+  figFirst: 'first model',
+  figUnder: 'overlap with VIIRS fire pixels, exact',
   lookNames: { test_a: 'Test A: fires it had never seen', test_b: 'Test B: fires that nothing had touched' } as Record<string, string>,
-  // The film's panel: the scores over every fire, three figures a viewer reads at once.
-  filmAhead: 'won',
-  filmLevel: 'tied',
-  filmBehind: 'lost',
-  filmOver: (of: number, fires: number) => `of the ${of} scores, over all ${fires} fires`,
   // The panel in the product lane's words (WORDS-wider.json version 6, world_pictures, test_across_world.panel; WORDS-2).
   title: (fires: number, groups: number) =>
     `${count(fires)} fires on ${count(groups)} continents, chosen by a rule before any was looked at. Each square is one fire.`,
@@ -65,10 +60,8 @@ export const TEST_WORDS = {
   kept: (xs: string[]) => `The three fires kept as the first test stand as recorded and are never scored again: ${listAnd(xs)}.`,
   keptFire: (name: string, a: number, of: number) => `${name} ${a} of ${of}`,
   ahead: (a: number, of: number) => `Won ${a} of ${of} scores against both simple guesses`,
-  fireLine: (year: string | null, continent: string | null, won: number, of: number, passes: number | null) =>
-    `A fire of ${year ?? 'the test'}${continent ? ` in ${continent}` : ''}: it won ${won} of ${of} scores against both simple guesses${
-      passes !== null ? `, over ${passes} hidden passes` : ''
-    }.`,
+  fireLine: (year: string | null, continent: string | null, _won: number, _of: number, passes: number | null) =>
+    `A fire of ${year ?? 'the test'}${continent ? ` in ${continent}` : ''}${passes !== null ? `, over ${passes} hidden passes` : ''}.`,
   zones: { tropical: 'Tropics', subtropical: 'Subtropics', temperate: 'Middle latitudes', boreal: 'High latitudes' } as Record<string, string>,
 };
 
@@ -202,10 +195,20 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
       },
     };
   }
-  const c = look?.all?.classes ?? null;
-  const others = challengersSaid(look);
-  const filmLine = look && c ? (look.id === 'test_b' ? TEST_WORDS.filmB(c.ahead, judged, c.behind, others?.ahead ?? null, secondModel(look)) : TEST_WORDS.filmA(look.fires.length, c.ahead, judged, c.behind)) : null;
-  const besideLine = others ? TEST_WORDS.beside(countWord(others.n) ?? String(others.n), others.ahead, judged, others.behind) : null;
+  // The overlap with VIIRS fire pixels, exact (words version 16): the new model's, MODIS alone's and the first model's.
+  const ov = look?.overlap ?? null;
+  const filmLine = ov?.first && ov.modis
+    ? ov.second
+      ? TEST_WORDS.filmB(percent1(ov.second.exact), percent1(ov.modis.exact), percent1(ov.first.exact))
+      : TEST_WORDS.filmA(percent1(ov.first.exact), percent1(ov.modis.exact))
+    : null;
+  const figures = ov?.first && ov.modis
+    ? [
+        ...(ov.second ? [{ key: 'second', v: ov.second.exact, label: TEST_WORDS.figSecond }] : []),
+        { key: 'modis', v: ov.modis.exact, label: TEST_WORDS.figModis },
+        { key: 'first', v: ov.first.exact, label: TEST_WORDS.figFirst },
+      ]
+    : null;
   const captionLine = caption ? (film ? filmLine ?? TEST_WORDS.objective : TEST_WORDS.objective) : null;
   // With its own caption, the panel stands under it and above the guide's room, or under the Earth on a narrow screen.
   // Without its own caption but keeping the guide's room (the host), the panel keeps its place and ends above the room.
@@ -266,32 +269,21 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
         {ans.example && <div className="world-legend__fine world-legend__caution">{ans.example}</div>}
         {!look ? (
           <div className="world-legend__line">{TEST_WORDS.noLook}</div>
-        ) : film && c ? (
-          // The film's panel: the scores over every fire, read at once; the rest of the panel is the page's.
+        ) : film && figures ? (
+          // The film's panel: each method's overlap with VIIRS fire pixels, read at once; the rest is the page's.
           <div className="world-tests__film">
             <div className="world-tests__look">{TEST_WORDS.lookNames[look.id] ?? look.name}</div>
             <div className="world-tests__figures">
-              <span className="world-tests__figure">
-                <span className="world-tests__big">
-                  <CountTo value={c.ahead} ms={700} />
+              {figures.map((f) => (
+                <span key={f.key} className="world-tests__figure">
+                  <span className="world-tests__big">
+                    <CountTo value={f.v * 100} ms={700} format={(v) => `${(Math.round(v * 10) / 10).toFixed(1)}%`} />
+                  </span>
+                  <span>{f.label}</span>
                 </span>
-                <span>{TEST_WORDS.filmAhead}</span>
-              </span>
-              <span className="world-tests__figure">
-                <span className="world-tests__big">
-                  <CountTo value={c.tied} ms={700} />
-                </span>
-                <span>{TEST_WORDS.filmLevel}</span>
-              </span>
-              <span className="world-tests__figure" data-behind="true">
-                <span className="world-tests__big">
-                  <CountTo value={c.behind} ms={700} />
-                </span>
-                <span>{TEST_WORDS.filmBehind}</span>
-              </span>
+              ))}
             </div>
-            <div className="world-tests__over">{TEST_WORDS.filmOver(judged, look.fires.length)}</div>
-            {besideLine && <div className="world-tests__beside">{besideLine}</div>}
+            <div className="world-tests__over">{TEST_WORDS.figUnder}</div>
           </div>
         ) : (
           <>
@@ -328,7 +320,6 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
               </span>
               {cls(look.all?.classes ?? null)}
             </div>
-            {besideLine && <div className="world-legend__fine world-tests__beside">{besideLine}</div>}
             <div className="iso-choice" role="radiogroup">
               <button type="button" role="radio" aria-checked={by === 'continent'} className="iso-choice__opt" data-active={by === 'continent'} onClick={() => setBy('continent')}>
                 {TEST_WORDS.byContinent}

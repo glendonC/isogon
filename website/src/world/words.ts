@@ -146,6 +146,9 @@ export const wholeMillions = (v: number) => `${Math.round(v / 1e6)} million`;
 /** A country's grid line, a round value: "1.5 million", "40,000". */
 export const gridWords = (v: number) => (v >= 1e6 ? `${Math.round(v / 1e5) / 10} million` : v.toLocaleString('en-US'));
 
+/** "20.4": a fraction said as a percentage with one decimal (words version 16's `percent1`). */
+export const percent1 = (v: number) => (Math.round(v * 1000) / 10).toFixed(1);
+
 /** "4.4": a factor to one decimal, as the product lane writes the Earth's (EARTH-YEARS.md). */
 export const oneDecimal = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
 
@@ -223,7 +226,7 @@ export const SCREEN_WORDS = {
     filmOneScale: (_first: number) => 'On one scale, no jump.',
   },
   test: {
-    objective: 'See where the estimate was tested',
+    objective: 'See the fires it had never seen',
     strictBehind: (fires: number, _continents: number, ahead: number, _of: number, behind: number) =>
       `On ${fires} fires it never saw, it won ${ahead} scores and lost ${behind}, and pixel for pixel MODIS alone does better.`,
     notStrictBehind: (fires: number, _continents: number, ahead: number, of: number, level: number, behind: number) =>
@@ -239,17 +242,21 @@ export const SCREEN_WORDS = {
       second
         ? `Untouched fires: second model won ${second.ahead}, lost ${second.behind}. First: won ${ahead}, lost ${behind}.`
         : `Untouched fires: won ${ahead} of ${of}, lost ${behind}.${others ? ` Other models: won ${others}.` : ''}`,
-    // GUIDE-script.json version 27, step test, `test_b_by_estimate` (the world's test has no run): said before test A's.
-    testB: (fires: number, ahead: number, of: number, _level: number, behind: number, others: { n: string; ahead: string } | null) =>
-      `On ${fires} untouched fires the first model won ${ahead} of ${of} scores and lost ${behind}${others ? `, and ${others.n} others each won ${others.ahead}` : ''}.`,
+    // WORDS-wider.json version 16, world_pictures, test_across_world: the overlap with VIIRS fire pixels, exact, as plain
+    // percentages (one decimal), test B's first and then test A's.
+    overlapB: (fires: number, second: string, modis: string, first: string) =>
+      `Overlap with VIIRS fire pixels on ${fires} new fires: new model ${second} percent, MODIS alone ${modis}, first model ${first}.`,
+    overlapA: (fires: number, first: string, modis: string) => `Overlap with VIIRS fire pixels on ${fires} unseen fires: the model ${first} percent, MODIS alone ${modis}.`,
+    filmOverlapB: (second: string, modis: string, first: string) => `New fires, overlap with VIIRS: new model ${second}%, MODIS ${modis}%, first model ${first}%.`,
+    filmOverlapA: (first: string, modis: string) => `Unseen fires, overlap with VIIRS: model ${first}%, MODIS ${modis}%.`,
   },
   sealed: {
     objective: 'See predictions written before the pass',
-    marks: 'Each mark is a fire burning now, where a prediction was written down with its fingerprint before NASA published what VIIRS saw.',
-    soFar: (scored: number, ahead: number, level: number, behind: number) =>
-      `So far ${scored} are scored: they won ${ahead}, tied ${level} and lost ${behind} against both simple guesses.`,
+    // WORDS-wider.json version 16, world_pictures, sealed_open.
+    marks: 'Predictions locked before NASA publishes the data, each with its fingerprint.',
+    soFar: (fires: number) => `So far ${fires} fires are scored, and each row opens its result.`,
     back: 'Back to the fire',
-    film: (ahead: number, level: number, behind: number) => `Sealed before the pass. Scores: won ${ahead}, tied ${level}, lost ${behind}.`,
+    film: 'Live: predictions locked before NASA publishes the data.',
   },
 };
 

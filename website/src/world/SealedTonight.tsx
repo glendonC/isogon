@@ -4,7 +4,7 @@ import { placeLabels } from './labels';
 import { closeGroup, parseLive, platformWords, type Live, type LiveFire, type LiveSeal } from './live';
 import { type Box } from './projection';
 import { useRead } from './read';
-import { clockAt, clockOnly, dayAt, partAt } from './words';
+import { clockAt, clockOnly, dayAt, partAt, percent1 } from './words';
 import { inFilm, useGuideRoom, WorldCaption } from './WorldCaption';
 import { WorldCanvas } from './WorldCanvas';
 import '../styles/world.css';
@@ -48,12 +48,12 @@ const PARTS: Record<string, string> = {
 };
 
 /** The board's notes, in the order they give way when the board runs short of room: the least needed first. */
-const DROP = ['nrt', 'protocol', 'missed', 'listed', 'over'] as const;
+const DROP = ['nrt', 'protocol', 'missed', 'listed'] as const;
 
 export const SEAL_WORDS = {
   // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open; version 14 for the film's caption).
   objective: 'See predictions written before the pass',
-  film: (ahead: number, level: number, behind: number) => `Sealed before the pass. Scores: won ${ahead}, tied ${level}, lost ${behind}.`,
+  film: 'Live: predictions locked before NASA publishes the data.',
   label: 'The Earth, with the fires whose predictions are sealed tonight',
   loading: "Loading tonight's sealed predictions.",
   failed: "Tonight's sealed predictions did not load.",
@@ -71,9 +71,10 @@ export const SEAL_WORDS = {
     `Sealed${at ? ` at ${at}` : ''}${mins !== null ? `, ${Math.round(mins)} minutes before the pass` : ''}${pass ? ` at about ${pass}` : ''}${part ? ` ${part}` : ''}`,
   waitingPass: (pass: string | null) => `Pass due${pass ? ` at ${pass}` : ''}; not yet listed by NASA`,
   waitingRows: (pass: string | null, by: string | null) => `Passed${pass ? ` at ${pass}` : ''}; detections ${by ? `expected by ${by}` : 'not all published yet'}`,
-  scored: (a: number | null, of: number | null, none: boolean) =>
-    (a !== null && of !== null ? `Won ${a} of ${of} scores against both simple guesses` : 'Scored') +
-    (none ? '; no fire in the pass' : ''),
+  // Words version 16: no count of scores; each row opens its result, the overlap with VIIRS fire pixels.
+  scored: (_a: number | null, _of: number | null, none: boolean) => (none ? 'Scored; VIIRS saw no fire in the box' : 'Scored'),
+  result: (model: string, modis: string) => `Overlap with VIIRS fire pixels: the model ${model} percent, MODIS alone ${modis}.`,
+  resultWithin: (model: string, modis: string) => `Within one pixel: the model ${model} percent, MODIS alone ${modis}.`,
   notScored: (why: string | null) => `Not scored${why ? `: ${why}` : ''}`,
   title: (platform: string | null, day: string | null, point: string) => [platform ? `Predicted pass of ${platform}` : null, day, point].filter(Boolean).join(', '),
   // The judge's two readings of the board, from the answer's own figures (the first in the product lane's words).
@@ -96,13 +97,6 @@ export const SEAL_WORDS = {
   nrt: (note: string) => `Scored on ${note}.`,
   missed: (n: number, why: string | null) =>
     `${n === 1 ? 'One pass was' : `${n} passes were`} not sealed in time and will not be scored${why ? `: ${why}` : ''}.`,
-  // Ahead and behind as the product lane says them for a judgement against luck (WORDS-wider.json): level where the gap
-  // could be luck; the scores that could be judged counted, since a score with nothing to measure is not.
-  over: (fires: number, a: number, t: number, b: number, of: number | null) => {
-    const judged = a + t + b;
-    const counted = of !== null && judged < of ? `of the ${judged} scores that could be judged` : `of the ${of ?? judged} scores`;
-    return `Over the ${fires} fires scored, won or lost only where the gap is too large to be luck: won ${a}, tied ${t}, lost ${b} ${counted}.`;
-  },
 };
 
 function latest(seals: LiveSeal[]): LiveSeal | null {
@@ -233,7 +227,7 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
   // The film's caption once a score exists and the count over the fires stands; before that, the objective.
   const scored = live.seals.filter((s) => s.state === 'scored').length;
   const o = live.overFires;
-  const filmLine = scored > 0 && o && o.ahead !== null && o.tied !== null && o.behind !== null ? SEAL_WORDS.film(o.ahead, o.tied, o.behind) : null;
+  const filmLine = scored > 0 && o && o.ahead !== null && o.tied !== null && o.behind !== null ? SEAL_WORDS.film : null;
   const captionLine = caption ? (film ? filmLine ?? SEAL_WORDS.objective : SEAL_WORDS.objective) : null;
   // The fires scored, and whether most of them lie close together (one weather, one day: not separate tests).
   const scoredFires = fires.filter((f) => (byFire.get(f.id) ?? []).some((x) => x.state === 'scored'));
@@ -342,7 +336,15 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
             const s = telling(seals);
             const point = pointWords(f.centre[0], f.centre[1]);
             return (
-              <li key={f.id} className="world-board__row" data-over={over === f.id ? 'true' : 'false'} onPointerEnter={() => setOver(f.id)} onPointerLeave={() => setOver(null)}>
+              <li
+                key={f.id}
+                className="world-board__row"
+                data-over={over === f.id ? 'true' : 'false'}
+                data-opens={s ? 'true' : 'false'}
+                onPointerEnter={() => setOver(f.id)}
+                onPointerLeave={() => setOver(null)}
+                onClick={() => s && setOpen((o) => (o === s.sha256 ? null : s.sha256))}
+              >
                 <span className="world-board__num">{i + 1}</span>
                 <span className="world-board__where" title={point}>
                   {whereOf(f)}
@@ -373,11 +375,17 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
                 </span>
                 <span className="world-board__digest">
                   {s && (
-                    <button type="button" className="world-act" aria-expanded={open === s.sha256} aria-label={`${SEAL_WORDS.digest} ${s.sha256}`} onClick={() => setOpen((o) => (o === s.sha256 ? null : s.sha256))}>
+                    <button type="button" className="world-act" aria-expanded={open === s.sha256} aria-label={`${SEAL_WORDS.digest} ${s.sha256}`}>
                       <span className="world-mono">{s.sha256.slice(0, 10)}</span>
                     </button>
                   )}
                 </span>
+                {s && open === s.sha256 && s.overlap && (
+                  <span className="world-board__whole">
+                    <span>{SEAL_WORDS.result(percent1(s.overlap.model.exact), percent1(s.overlap.modis.exact))}</span>
+                    <span className="world-board__sub">{SEAL_WORDS.resultWithin(percent1(s.overlap.model.within), percent1(s.overlap.modis.within))}</span>
+                  </span>
+                )}
                 {s && open === s.sha256 && (
                   <span className="world-board__whole">
                     <span className="world-board__sub">{SEAL_WORDS.whole}</span>
@@ -385,7 +393,8 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
                     <button
                       type="button"
                       className="world-act world-act--quiet"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         void navigator.clipboard?.writeText(s.sha256);
                         setCopied(s.sha256);
                       }}
@@ -420,11 +429,6 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
           <div className="world-board__rule">
             {SEAL_WORDS.listed(fires.length, sealedAll.length, scoredFires.length)}
             {group && groupWhere ? ` ${SEAL_WORDS.close(group.length, scoredFires.length, groupWhere)}` : ''}
-          </div>
-        )}
-        {note('over') && live.overFires && live.overFires.fires !== null && live.overFires.ahead !== null && live.overFires.tied !== null && live.overFires.behind !== null && (
-          <div className="world-board__rule world-board__rule--strong">
-            {SEAL_WORDS.over(live.overFires.fires, live.overFires.ahead, live.overFires.tied, live.overFires.behind, live.overFires.scores)}
           </div>
         )}
         {note('missed') && live.notSealed.length > 0 && (

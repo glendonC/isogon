@@ -35,6 +35,8 @@ export interface LiveSeal {
   judged: number | null;
   /** The sharp satellite's fire pixels in the box at the pass, as scored (0: it saw no fire there). */
   hiddenPixels: number | null;
+  /** Overlap with VIIRS fire pixels at the pass, exact and within one pixel: the model's and MODIS alone's. */
+  overlap: { model: { exact: number; within: number }; modis: { exact: number; within: number } } | null;
 }
 
 export interface Live {
@@ -109,6 +111,7 @@ export function parseLive(body: unknown): Live {
         aheadOfBothOn: sc ? num(sc.ahead_of_both_on) : null,
         judged: sc ? num(sc.judged) : null,
         hiddenPixels: sc ? num(sc.hidden_pixels_in_box) : null,
+        overlap: overlapOf(sc),
       },
     ];
   });
@@ -177,4 +180,19 @@ export function closeGroup<T extends { centre: [number, number] }>(fires: T[], k
     if (g.length > best.length) best = g;
   }
   return best.length >= 3 && best.length * 2 > fires.length ? best : null;
+}
+
+/** A scored seal's overlap with VIIRS fire pixels, from its scores by score (the model is `reconstruction`). */
+function overlapOf(sc: Record<string, unknown> | null): LiveSeal['overlap'] {
+  const by = (sc?.by_score ?? null) as Record<string, Record<string, unknown>> | null;
+  if (!by) return null;
+  const v = (score: string, who: string) => {
+    const x = by[score]?.[who];
+    return typeof x === 'number' && Number.isFinite(x) ? x : null;
+  };
+  const me = v('csi_strict_375m', 'reconstruction');
+  const mw = v('csi_one_cell_tolerance', 'reconstruction');
+  const pe = v('csi_strict_375m', 'painted_modis');
+  const pw = v('csi_one_cell_tolerance', 'painted_modis');
+  return me !== null && mw !== null && pe !== null && pw !== null ? { model: { exact: me, within: mw }, modis: { exact: pe, within: pw } } : null;
 }
