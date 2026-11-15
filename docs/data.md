@@ -223,7 +223,7 @@ The NOAA-20 figures can be read from the pass timeline with `box=context`, `plat
 | `terrarium` | `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`; elevation in metres is `R * 256 + G + B / 256 - 32768` | Every elevation grid |
 | `esri_world_imagery` | Esri World Imagery tile service | Default imagery of a run and of a terrain pack |
 | `usgs_naip` | USGS The National Map, imagery only | Optional pack imagery for the conterminous United States, public domain (`"imagery_source": "usgs_naip"`) |
-| `eox_s2cloudless_2016` | EOX Sentinel-2 cloudless 2016 | Pack imagery outside the conterminous United States on a server started with `--imagery-elsewhere eox_s2cloudless_2016`, licensed CC BY 4.0 ([sources.md](sources.md)) |
+| `eox_s2cloudless_2016` | EOX Sentinel-2 cloudless 2016 | Pack imagery outside the conterminous United States on a server started with `--imagery-elsewhere eox_s2cloudless_2016`, under CC BY-NC-SA 4.0 with its credit ([sources.md](sources.md)) |
 | `eox_s2cloudless_2020` | EOX Sentinel-2 cloudless 2020 | Fallback when the default imagery cannot be fetched, and the tracked Feather River image |
 
 Two modules turn tiles into what a run serves:

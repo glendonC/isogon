@@ -150,8 +150,9 @@ IMAGERY_SOURCES: dict[str, TileSource] = {
 _IMAGERY_COVERAGE: dict[str, tuple[float, float, float, float]] = {"usgs_naip": (-125.0, 24.4, -66.9, 49.4)}
 # The public-domain source a run takes where it covers the box and the request names no imagery.
 PUBLIC_DOMAIN_IMAGERY: str = "usgs_naip"
-# The sources whose licence allows a copy to be published: USGS NAIP is public domain, the 2016 Sentinel-2
-# cloudless layer is CC BY 4.0. Esri World Imagery may be viewed, not exported (docs/sources.md).
+# The sources whose licence allows a copy to be published: USGS NAIP is public domain, the 2016 EOxCloudless layer
+# may be redistributed for non-commercial use with its credit (CC BY-NC-SA 4.0). Esri World Imagery may be viewed, not
+# exported (docs/sources.md).
 PUBLISHABLE_IMAGERY: tuple[str, ...] = ("usgs_naip", "eox_s2cloudless_2016")
 # What a run may take where the public-domain source does not cover its box: the default, or a source of global
 # coverage that may be published (a server started for a recording).

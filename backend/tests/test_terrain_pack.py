@@ -449,7 +449,7 @@ class ImageryChoiceTests(unittest.TestCase):
         src = SOURCES_BY_KEY["eox_s2cloudless_2016"]
         self.assertIn("/s2cloudless_3857/", src.url_template)
         self.assertEqual(src.attribution, "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH "
-                                          "(Contains modified Copernicus Sentinel data 2016 & 2017)")
+                                          "(Contains modified Copernicus Sentinel data 2016)")
         self.assertIs(tp.IMAGERY_SOURCES["eox_s2cloudless_2016"], src)
         self.assertTrue(tp.imagery_covers("eox_s2cloudless_2016", PRESET_BY_ID["evia_greece"].bbox))
         self.assertEqual(set(tp.PUBLISHABLE_IMAGERY), {"usgs_naip", "eox_s2cloudless_2016"})

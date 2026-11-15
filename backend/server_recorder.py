@@ -25,7 +25,7 @@ the index names are kept.
 Round ids are random on a live server; each round is renamed `nl-rec-<8 hex>` in every stored answer and key, so the
 recorded round replays with one id. The run bodies name no imagery, as the page's do; the server chooses the terrain
 pack's imagery by coverage and says which in the answer. Only imagery whose licence allows a copy is stored (USGS NAIP,
-public domain; Sentinel-2 cloudless 2016, CC BY 4.0); the rest (Esri World Imagery, published for viewing only, and
+public domain; EOxCloudless 2016, CC BY-NC-SA 4.0, with its credit); the rest (Esri World Imagery, published for viewing only, and
 what is derived from it) is listed as withheld. For imagery outside the United States, record against a server
 started with `--imagery-elsewhere eox_s2cloudless_2016`. The tool ends with exit 1 when a stored file holds the FIRMS
 key, `MAP_KEY=` or a local path.

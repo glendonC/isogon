@@ -65,12 +65,13 @@ EOX_S2_CLOUDLESS_2020 = TileSource(
 
 EOX_S2_CLOUDLESS_2016 = TileSource(
     key="eox_s2cloudless_2016",
-    # Sentinel-2 cloudless 2016, the one EOX layer under CC BY 4.0 International by EOX's licence page
-    # (https://cloudless.eox.at/license-non-commercial). Global, 10 m data; tiles answer to zoom 16, finer than the data.
+    # Sentinel-2 cloudless 2016. Taken under EOX's licence page (https://cloudless.eox.at/documentation/license):
+    # Creative Commons Attribution-NonCommercial-ShareAlike 4.0, free for non-commercial use, the credit visible wherever
+    # the imagery is shown (docs/sources.md). Global, 10 m data; tiles answer to zoom 16, finer than the data.
     url_template="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg",
     ext="jpg",
-    # Credit as the same page asks for it for the 2016 layer.
-    attribution="EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016 & 2017)",
+    # Credit in the words the same page asks for the 2016 layer.
+    attribution="EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016)",
 )
 
 USGS_NAIP = TileSource(

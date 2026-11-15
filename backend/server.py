@@ -390,7 +390,7 @@ def strict_json_bytes(payload: Any) -> bytes:
 IMAGERY_NAMES: dict[str, str] = {
     "esri_world_imagery": "Esri World Imagery (Maxar)",
     "usgs_naip": "USGS NAIP (public domain)",
-    "eox_s2cloudless_2016": "Sentinel-2 cloudless 2016 by EOX (CC BY 4.0)",
+    "eox_s2cloudless_2016": "EOxCloudless 2016 by EOX IT Services GmbH (CC BY-NC-SA 4.0)",
 }
 OVERVIEW_IMAGERY: dict[str, str] = {"aws_terrarium_esri_world_imagery": "esri_world_imagery"}
 
@@ -900,7 +900,7 @@ class IsogonDataStore:
         body_text(body, "start")
         body_text(body, "source")
         # Optional terrain pack imagery: "esri_world_imagery", "usgs_naip" (public domain, conterminous United States)
-        # or "eox_s2cloudless_2016" (CC BY 4.0, global). Where the body names none, the server chooses by coverage
+        # or "eox_s2cloudless_2016" (CC BY-NC-SA 4.0, global). Where the body names none, the server chooses by coverage
         # (`choose_imagery`); the answer's `imagery` says which and how.
         imagery = body_text(body, "imagery_source")
         if imagery is not None and imagery not in IMAGERY_SOURCES:

@@ -509,7 +509,7 @@ Builds a run, or returns it from the run store, and answers with its description
 | `holdout_viirs` | boolean | Hide every VIIRS detection from the estimate. `"holdout": "viirs"` means the same. |
 | `reveal` | boolean | Real runs with `holdout_viirs`: also return what the scorer wrote (below). |
 | `cloud_override` | number | Simulated runs only: a cloud fraction from 0 to 1 for every frame. |
-| `imagery_source` | string | Imagery of the terrain pack: `esri_world_imagery`, `usgs_naip` (public domain, conterminous United States) or `eox_s2cloudless_2016` (CC BY 4.0, global). Left out (the page leaves it out), the server chooses by coverage: `usgs_naip` where it covers the run's box, elsewhere `esri_world_imagery`, or the source given with `--imagery-elsewhere`. A named source that does not cover the box is replaced the same way. `imagery.chosen` says which. |
+| `imagery_source` | string | Imagery of the terrain pack: `esri_world_imagery`, `usgs_naip` (public domain, conterminous United States) or `eox_s2cloudless_2016` (CC BY-NC-SA 4.0, global, with its credit). Left out (the page leaves it out), the server chooses by coverage: `usgs_naip` where it covers the run's box, elsewhere `esri_world_imagery`, or the source given with `--imagery-elsewhere`. A named source that does not cover the box is replaced the same way. `imagery.chosen` says which. |
 
 ### Answer of a simulated run
 
