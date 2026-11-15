@@ -87,8 +87,19 @@ interface RegionsRouteSlice {
     id?: string;
     name?: string;
     rows?: string;
+    record_only?: unknown;
     box?: [number, number, number, number];
   }>;
+}
+
+interface FreshTestALandingSlice {
+  episodes_scored?: number;
+  all?: {
+    ahead?: number;
+    tied?: number;
+    behind?: number;
+  };
+  by_continent?: Record<string, unknown>;
 }
 
 interface NextLookOnValidationSlice {
@@ -1980,13 +1991,21 @@ export function LandingBelow({
         ? regionsSlice.places
         : store?.places.places ?? null;
     const firmsPlaces =
-      rawPlaces?.filter((p) => p.rows === 'firms' && typeof p.name === 'string') ?? null;
+      rawPlaces?.filter(
+        (p) =>
+          p.rows === 'firms' &&
+          !(p as { record_only?: unknown }).record_only &&
+          typeof p.name === 'string',
+      ) ?? null;
 
     const testFires = evidenceDoc?.test_fires?.fires ?? null;
     const scoresJudgedNum = testFires && testFires[0] ? testFires[0].new.scores_judged : null;
 
     const val = evidenceDoc?.validation;
     const onVal = (evidenceDoc?.next_look as { on_validation?: NextLookOnValidationSlice } | undefined)?.on_validation;
+    const freshTestA =
+      (evidenceDoc as unknown as { fresh_test?: { test_a?: FreshTestALandingSlice | null } } | null)?.fresh_test
+        ?.test_a ?? null;
 
     const errPctNum =
       typeof sm?.held_out_median_abs_relative_error === 'number' &&
@@ -2029,6 +2048,12 @@ export function LandingBelow({
       other_ahead: formatSheetCount(val?.classes?.ahead),
       other_level: formatSheetCount(val?.classes?.tied),
       other_behind: formatCountNone(val?.classes?.behind),
+      test_a_fires_n: formatSheetCount(freshTestA?.episodes_scored),
+      test_a_continents_n:
+        freshTestA?.by_continent ? formatCountWord(Object.keys(freshTestA.by_continent).length) : null,
+      test_a_ahead: formatSheetCount(freshTestA?.all?.ahead),
+      test_a_level: formatSheetCount(freshTestA?.all?.tied),
+      test_a_behind: formatCountNone(freshTestA?.all?.behind),
       round_looks: formatCountWord(onVal?.budget),
       rounds_n: formatSheetCount(onVal?.episodes),
       rule_ahead_rounds: formatSheetCount(onVal?.differences?.least_sure_minus_random?.episodes_a_ahead),
@@ -2055,6 +2080,14 @@ export function LandingBelow({
     const valScoresTotal =
       valAhead !== null && valLevel !== null && valBehind !== null ? valAhead + valLevel + valBehind : null;
 
+    const worldAhead = typeof freshTestA?.all?.ahead === 'number' ? freshTestA.all.ahead : null;
+    const worldLevel = typeof freshTestA?.all?.tied === 'number' ? freshTestA.all.tied : null;
+    const worldBehind = typeof freshTestA?.all?.behind === 'number' ? freshTestA.all.behind : null;
+    const worldScoresTotal =
+      worldAhead !== null && worldLevel !== null && worldBehind !== null
+        ? worldAhead + worldLevel + worldBehind
+        : null;
+
     return {
       fields: f,
       conditions: {
@@ -2072,10 +2105,12 @@ export function LandingBelow({
               }))
             : null,
         scoresJudgedNum,
-        valAhead,
-        valLevel,
-        valBehind,
-        valScoresTotal,
+        valAhead: worldAhead ?? valAhead,
+        valLevel: worldLevel ?? valLevel,
+        valBehind: worldBehind ?? valBehind,
+        valScoresTotal: worldScoresTotal ?? valScoresTotal,
+        valLevelText: worldAhead !== null ? f.test_a_level : f.other_level,
+        valBehindText: worldAhead !== null ? f.test_a_behind : f.other_behind,
         ruleAheadNum: typeof ruleAheadNum === 'number' ? ruleAheadNum : null,
         roundsTotalNum: typeof roundsTotalNum === 'number' ? roundsTotalNum : null,
         errPctNum,
@@ -2165,6 +2200,10 @@ export function LandingBelow({
       '{test_fires_n} fires were never used to tune the model and are kept as its test: {test_fire_names}. On them the estimate beat the simple methods on {test_fire_scores} of {test_scores_n} scores.',
       fields,
     );
+    const testALine = fillTemplate(
+      'On {test_a_fires_n} fires across {test_a_continents_n} continents, chosen by a rule before any was looked at, the estimate was ahead of the simple methods on {test_a_ahead} scores, level on {test_a_level} and behind on {test_a_behind}.',
+      fields,
+    );
     const valLine = fillTemplate(
       'On {other_fires_n} fires of other years, counting a score only when the gap is too large to be luck, it was ahead on {other_ahead}, level on {other_level} and behind on {other_behind}.',
       fields,
@@ -2181,7 +2220,7 @@ export function LandingBelow({
       'For the record itself: hide one year and predict it from the others, and in a typical year the prediction is off by {record_error} percent around {place}. Without the correction it is off by {record_error_raw} percent.',
       fields,
     );
-    return { closedLine, valLine, honestLine, gameLine, recordLine };
+    return { closedLine, testALine, valLine, honestLine, gameLine, recordLine };
   }, [fields, conditions.no_part_switched_on]);
 
   const methodLines = useMemo(() => {
@@ -2192,7 +2231,7 @@ export function LandingBelow({
     );
     if (m1) out.push(m1);
     const m2 = fillTemplate(
-      'Fires can be shown pass by pass in {places_n} places: {places_with_fires}. Where country fire files are stored here, you can also draw a box and read its fire record.',
+      'Fires can be shown pass by pass in {places_n} places: {places_with_fires}. For any other area you can draw a box and read its fire record.',
       fields,
     );
     if (m2) out.push(m2);
@@ -2484,7 +2523,7 @@ export function LandingBelow({
                 </div>
               )}
 
-              {(proofItems.valLine || proofItems.honestLine) && (
+              {(proofItems.testALine || proofItems.valLine || proofItems.honestLine) && (
                 <div className="iso-lb-stat">
                   {telemetry.valAhead !== null && telemetry.valScoresTotal !== null && (
                     <>
@@ -2493,7 +2532,7 @@ export function LandingBelow({
                           {telemetry.valAhead} of {telemetry.valScoresTotal}
                         </span>
                         <span className="iso-lb-stat__unit">
-                          scores ahead ({fields.other_level} level, {fields.other_behind} behind)
+                          scores ahead ({telemetry.valLevelText} level, {telemetry.valBehindText} behind)
                         </span>
                       </div>
                       <div className="iso-lb-stat__rounds" aria-hidden="true">
@@ -2507,6 +2546,7 @@ export function LandingBelow({
                     </>
                   )}
                   <div className="iso-lb-stat__copy">
+                    {proofItems.testALine && <p className="iso-lb-section__line">{proofItems.testALine}</p>}
                     {proofItems.valLine && <p className="iso-lb-section__line">{proofItems.valLine}</p>}
                     {proofItems.honestLine && (
                       <p className="iso-lb-section__line iso-lb-section__line--honest">{proofItems.honestLine}</p>

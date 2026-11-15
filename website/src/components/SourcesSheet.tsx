@@ -205,15 +205,34 @@ export function Credits({ imageryCredit }: { imageryCredit: string }) {
             </tr>
             <tr>
               <th scope="row">
-                <span className="iso-doc-table__row-name">Basemap</span>
+                <span className="iso-doc-table__row-name">Ground imagery (United States)</span>
+              </th>
+              <td>USDA NAIP, USGS The National Map: Orthoimagery</td>
+              <td>
+                <ExternalLink url="https://www.usgs.gov/centers/eros/science/usgs-eros-archive-aerial-photography-national-agriculture-imagery-program-naip" />
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <span className="iso-doc-table__row-name">Ground imagery (outside the US)</span>
               </th>
               <td>
-                Powered by{' '}
-                <a className="iso-sources__link" href="https://www.esri.com" target="_blank" rel="noreferrer">
-                  Esri
+                EOxCloudless{' '}
+                <a className="iso-sources__link" href="https://cloudless.eox.at" target="_blank" rel="noreferrer">
+                  https://cloudless.eox.at
+                </a>{' '}
+                by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016)
+              </td>
+              <td>
+                <a
+                  className="iso-sources__link"
+                  href="https://creativecommons.org/licenses/by-nc-sa/4.0/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  CC BY-NC-SA 4.0
                 </a>
               </td>
-              <td>World Imagery</td>
             </tr>
             {imagery !== '' && (
               <tr>
@@ -226,6 +245,11 @@ export function Credits({ imageryCredit }: { imageryCredit: string }) {
           </tbody>
         </table>
       </div>
+      <p className="iso-doc-section__p">
+        Pictures of the ground made from EOxCloudless are under the same licence
+        (Creative Commons Attribution-NonCommercial-ShareAlike 4.0) and are not covered by any other licence the
+        repository may take. Endorsement by the European Commission or ESA is not implied.
+      </p>
     </DocSection>
   );
 }
@@ -521,7 +545,11 @@ function CalendarSourcesSection({
                       <td className="is-num">
                         {days === undefined ? 'Not checked' : `${formatCount(days)} ${days === 1 ? 'day' : 'days'}`}
                       </td>
-                      <td>{cal.platformsInFit.includes(p) ? 'In the overlap ratio fit' : 'Not in the fit'}</td>
+                      <td>
+                        {cal.platformsInFit.includes(p)
+                          ? 'Used to put both eras on one scale'
+                          : 'Counted, not used to set the scale'}
+                      </td>
                     </tr>
                   );
                 })}

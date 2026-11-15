@@ -208,8 +208,11 @@ export function MethodDocument({
     };
   }, [store?.model.evidence]);
 
+  const isPassByPassPlace = (p: { rows?: string; record_only?: unknown }) =>
+    p.rows === 'firms' && !p.record_only;
+
   const storePlaceNames =
-    store?.places.places.filter((p) => p.rows === 'firms').map((p) => p.name) ?? [];
+    store?.places.places.filter((p) => isPassByPassPlace(p as { rows?: string; record_only?: unknown })).map((p) => p.name) ?? [];
   useEffect(() => {
     if (storePlaceNames.length > 0) return;
     let cancelled = false;
@@ -217,7 +220,11 @@ export function MethodDocument({
       .then((raw) => {
         if (cancelled) return;
         const parsed = parsePlaces(raw);
-        setFallbackPlaces(parsed.places.filter((p) => p.rows === 'firms').map((p) => p.name));
+        setFallbackPlaces(
+          parsed.places
+            .filter((p) => isPassByPassPlace(p as { rows?: string; record_only?: unknown }))
+            .map((p) => p.name),
+        );
       })
       .catch(() => {});
     return () => {
@@ -433,8 +440,8 @@ export function MethodDocument({
               zone.
             </p>
             <p className="iso-doc-section__p">
-              In Every Test on Record, the archived dates of the three closed test fires follow Greenwich time, as
-              NASA&apos;s archive lists them.
+              Days in this viewer are local at the fire too, so they match the rest of the page; only an instant given
+              to the minute, such as when a prediction was sealed, is in UTC, as NASA&apos;s record lists it.
             </p>
           </div>
         </section>

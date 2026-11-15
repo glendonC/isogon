@@ -83,6 +83,47 @@
   color: var(--sys-ink);
 }
 
+.iso-ev-val-stat__num[data-behind='true'] {
+  color: var(--sys-fail);
+}
+
+.iso-seal-fp-btn {
+  padding: 2px 6px;
+  border: 1px solid var(--sys-rule);
+  border-radius: 0;
+  background: transparent;
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
+  color: var(--sys-ink-2);
+  cursor: pointer;
+  transition:
+    border-color var(--sys-fast) var(--sys-ease),
+    color var(--sys-fast) var(--sys-ease);
+}
+
+.iso-seal-fp-btn:hover,
+.iso-seal-fp-btn[aria-expanded='true'] {
+  border-color: var(--sys-edge);
+  color: var(--sys-ink);
+}
+
+.iso-seal-fp-full {
+  margin-top: var(--sys-s2);
+  padding: var(--sys-s2) var(--sys-s3);
+  border-left: 2px solid var(--sys-edge);
+  background: var(--sys-plate);
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+.iso-seal-fp-hash {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--sys-mono);
+  color: var(--sys-ink);
+  word-break: break-all;
+  user-select: all;
+}
+
 .iso-ev-val-stat__label {
   font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
   color: var(--sys-ink-3);

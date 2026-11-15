@@ -20,7 +20,7 @@ import {
 } from '../content/realRuns';
 import type { StageFireAnchor } from '../stage/earthCutawayTypes';
 
-export type ViewerDocId = 'fire' | 'scores' | 'tests' | 'method' | 'sensors' | 'sources';
+export type ViewerDocId = 'fire' | 'scores' | 'tests' | 'sealed' | 'method' | 'sensors' | 'sources';
 
 export interface ViewerNavItem {
   id: ViewerDocId;
