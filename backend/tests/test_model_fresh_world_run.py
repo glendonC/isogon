@@ -363,5 +363,38 @@ class ClearLooksTests(unittest.TestCase):
         self.assertEqual(f.box, (1.0, 2.0, 3.0, 4.0))
 
 
+class ChallengerBesideTests(unittest.TestCase):
+    def test_a_named_challenger_runs_beside_the_headline_and_is_judged_both_ways(self) -> None:
+        import types
+
+        from backend.eval.baselines import painted_modis_factory
+
+        def factory():
+            def make(visible, grid):
+                m = painted_modis_factory(visible, grid)
+                m.name = "challenger_fake"
+                return m
+            return make
+
+        fake = types.ModuleType("backend.model.challenger.methods")
+        fake.challenger_fake_factory = factory
+        pkg = types.ModuleType("backend.model.challenger")
+        pkg.methods = fake
+        keys = [f"{PID}:2099:22", f"{PID}:2099:23"]
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.dict(sys.modules, {"backend.model.challenger": pkg, "backend.model.challenger.methods": fake}):
+            work = _fixture_work(Path(tmp), keys)
+            with mock.patch.object(R, "pass_reader", lambda _w, _k: fx.fixture_pass_reader()):
+                results = [R._look_job((_ep(key=k), load_params().as_dict(), str(work), (), None, ("fake",))) for k in keys]
+            plan = {"plan_sha256": "p", "episodes": {"test_b": [_ep(key=k) for k in keys]}}
+            doc = R.record_look(plan, "test_b", results, {"which": "values in use"}, work)
+        self.assertIn("challenger_fake", results[0][1]["methods"])
+        self.assertIn("challenger_fake", doc["beside_the_headline"])
+        self.assertEqual(doc["beside_the_headline"]["challenger_fake"]["against_the_baselines"]["episodes"], 2)
+
+    def test_no_challenger_named_loads_nothing(self) -> None:
+        self.assertEqual(R.challenger_factories(()), [])
+
+
 if __name__ == "__main__":
     unittest.main()

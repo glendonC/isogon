@@ -410,8 +410,20 @@ def episode_rows(work: Path, key: str) -> list[dict[str, str]]:
     return rows
 
 
+def challenger_factories(variants: Iterable[str]) -> list[Any]:
+    """The factories of the challengers named (`backend/model/challenger`, a variant such as "gbdt" for
+    `challenger_gbdt`), loaded only when one is named, so the runner stands without them."""
+    variants = list(variants)
+    if not variants:
+        return []
+    from backend.model.challenger import methods as CM
+
+    return [getattr(CM, f"challenger_{v}_factory")() for v in variants]
+
+
 def run_episode(ep: dict[str, Any], params: dict[str, Any], work: Path,
-                beside: tuple[tuple[str, dict[str, Any]], ...] = (), target_filter: Any = None) -> dict[str, Any]:
+                beside: tuple[tuple[str, dict[str, Any]], ...] = (), target_filter: Any = None,
+                challengers: tuple[str, ...] = ()) -> dict[str, Any]:
     """The blind test of one episode, under protocol version 3, with the estimate's values given and the two
     baselines as they are. `beside` adds, by name, the estimate with other values in the same run, on the same
     looks (test B's other methods)."""
@@ -437,7 +449,8 @@ def run_episode(ep: dict[str, Any], params: dict[str, Any], work: Path,
     report = run_blind_test(
         det, tuple(ep["box"]),
         [painted_modis_factory, overlap_ratio_factory(load_ratio_fit(), ratio), reconstruction_factory(OccupancyParams(**params))]
-        + [reconstruction_factory(OccupancyParams(**p), name=name) for name, p in beside],
+        + [reconstruction_factory(OccupancyParams(**p), name=name) for name, p in beside]
+        + challenger_factories(challengers),
         window=(float(ep["start_s"]), float(ep["end_s"])), schedule=S.SOURCE_CMR, read_passes=pass_reader(work, ep["key"]),
         target_filter=target_filter,
     )
@@ -493,8 +506,9 @@ def _look_job(job: tuple[Any, ...]) -> tuple[str, dict[str, Any] | None, str | N
     ep, params, work_s = job[:3]
     beside = job[3] if len(job) > 3 else ()
     target_filter = job[4] if len(job) > 4 else None
+    challengers = job[5] if len(job) > 5 else ()
     try:
-        return ep["key"], run_episode(ep, params, Path(work_s), beside, target_filter), None
+        return ep["key"], run_episode(ep, params, Path(work_s), beside, target_filter, challengers), None
     except Exception as exc:  # noqa: BLE001  (an episode that cannot be scored is listed with its reason)
         return ep["key"], None, f"{type(exc).__name__}: {exc}"
 
@@ -603,7 +617,8 @@ def record_look(plan: dict[str, Any], role: str, results: list[tuple[str, dict[s
 
 
 def clear_table(plan: dict[str, Any], role: str, params: dict[str, Any], work: Path, workers: int,
-                beside: tuple[tuple[str, dict[str, Any]], ...] = (), root: Path | None = None) -> dict[str, Any] | str:
+                beside: tuple[tuple[str, dict[str, Any]], ...] = (), root: Path | None = None,
+                challengers: tuple[str, ...] = ()) -> dict[str, Any] | str:
     """The second table: the same episodes scored on their clear looks, where the masks are on hand; or the reason
     there is none."""
     eps = plan["episodes"][role]
@@ -611,7 +626,7 @@ def clear_table(plan: dict[str, Any], role: str, params: dict[str, Any], work: P
     with_clear = [ep for ep in eps if masks[ep["key"]]["clear"] > 0]
     if not any(m["with_a_mask"] for m in masks.values()):
         return "no table: no cloud mask of a hidden pass of these episodes was on hand at this look"
-    jobs = [(ep, params, str(work), beside, ClearLooks(tuple(ep["box"]), root)) for ep in with_clear]
+    jobs = [(ep, params, str(work), beside, ClearLooks(tuple(ep["box"]), root), challengers) for ep in with_clear]
     if workers <= 1:
         results = [_look_job(j) for j in jobs]
     else:
@@ -634,8 +649,8 @@ def clear_table(plan: dict[str, Any], role: str, params: dict[str, Any], work: P
 
 def look(plan: dict[str, Any], role: str, params: dict[str, Any], values: dict[str, Any], work: Path, workers: int,
          log: Callable[[str], None] = print, beside: tuple[tuple[str, dict[str, Any]], ...] = (),
-         clear: bool = False, mask_root: Path | None = None) -> dict[str, Any]:
-    jobs = [(ep, params, str(work), beside) for ep in plan["episodes"][role]]
+         clear: bool = False, mask_root: Path | None = None, challengers: tuple[str, ...] = ()) -> dict[str, Any]:
+    jobs = [(ep, params, str(work), beside, None, challengers) for ep in plan["episodes"][role]]
     t0 = time.time()
     if workers <= 1:
         results = [_look_job(j) for j in jobs]
@@ -644,7 +659,9 @@ def look(plan: dict[str, Any], role: str, params: dict[str, Any], values: dict[s
             results = list(pool.map(_look_job, jobs, chunksize=1))
     doc = record_look(plan, role, results, values, work)
     doc["beside_values"] = {name: "the estimate with these values, in the same run" for name, _ in beside}
-    doc["clear_looks"] = (clear_table(plan, role, params, work, workers, beside, mask_root) if clear else
+    doc["challengers"] = {f"challenger_{v}": "a challenger checked against the test's rules before the look, in the same run"
+                          for v in challengers}
+    doc["clear_looks"] = (clear_table(plan, role, params, work, workers, beside, mask_root, challengers) if clear else
                           "no table: the hidden passes' cloud masks were not on hand at this look")
     doc["seconds"] = round(time.time() - t0, 1)
     log(f"look at {role}: {doc['episodes_scored']} of {doc['episodes_in_plan']} scored in {doc['seconds']} s")
@@ -824,6 +841,8 @@ def main(argv: list[str] | None = None) -> int:
     lk.add_argument("--work", default=str(W.WORK_DEFAULT))
     lk.add_argument("--workers", type=int, default=16)
     lk.add_argument("--out", default=None)
+    lk.add_argument("--challengers", default="",
+                    help="test B only: the challenger variants checked against the test's rules, comma separated")
     rf = sub.add_parser("refit")
     rf.add_argument("--work", default=str(W.WORK_DEFAULT))
     rf.add_argument("--workers", type=int, default=16)
@@ -849,7 +868,9 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit("test B waits for the refit and its decision to be on record")
             params, values = test_b_values(json.loads(REFIT_FILE.read_text(encoding="utf-8")), plan)
         beside = tuple(values.pop("beside", {}).items()) if args.role == "test_b" else ()
-        doc = look(plan, args.role, params, values, work, args.workers, beside=beside, clear=args.role == "test_b")
+        challengers = tuple(v for v in args.challengers.split(",") if v) if args.role == "test_b" else ()
+        doc = look(plan, args.role, params, values, work, args.workers, beside=beside, clear=args.role == "test_b",
+                   challengers=challengers)
         out.write_text(json.dumps(doc, indent=1, default=str) + "\n", encoding="utf-8")
         print(json.dumps({k: doc["judged"]["all"].get(k) for k in ("episodes", "ahead", "tied", "behind", "interval")}, indent=1))
     elif args.cmd == "refit":
