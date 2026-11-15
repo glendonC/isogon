@@ -293,7 +293,19 @@ interface CachedTheaterBundle {
   residenceHours?: number;
   /** The run's declared cells by frame (the estimate's frames on a hidden pass), on their own grid over the box. */
   declared?: DeclaredCells | null;
+  /**
+   * Real runs: the hidden passes were answered by another model than the one whose belief the run
+   * carries between passes (a challenger, `held_out_passes_answered_by`): a hidden pass then shows that
+   * model's frames alone, not the dotted line of the other's belief.
+   */
+  answeredByOther?: boolean;
   /** Real runs: where the run's fire is in the region (u east, v north). Worked out once. */
+}
+
+/** Whether a run's hidden passes were answered by another model than the estimate in use (its belief). */
+function answeredByOther(run: unknown): boolean {
+  const answered = (run as { held_out_passes_answered_by?: { method?: unknown } } | null)?.held_out_passes_answered_by;
+  return typeof answered?.method === 'string' && answered.method !== 'reconstruction';
 }
 
 /**
@@ -1105,6 +1117,8 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const beliefStore = beliefStoreRef.current;
     const uBeliefMix = { value: 0.0 };
     const uHeldOut = { value: 0.0 };
+    // 1 on a run whose hidden passes another model answered (see answeredByOther)
+    const uHeldOutOther = { value: 0.0 };
     const uDeclaredGiven = { value: 0.0 };
     // The hidden pass on show, or the last one shown, of the run named: its declared cells stay
     // flagged while the open frames fade out on the pass after it
@@ -1432,6 +1446,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uPixelOutline: { value: 0.0 },
       uBeliefMix,
       uHeldOut,
+      uHeldOutOther,
       uDeclaredGiven,
       uChanceSquares,
       uDayJoin,
@@ -4180,6 +4195,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           ? 1.0
           : 0.0;
       uHeldOut.value = THREE.MathUtils.lerp(uHeldOut.value, heldOutTarget, 1.0 - Math.exp(-dtSec * 6.0));
+      uHeldOutOther.value = realRun && nextBundle.answeredByOther ? 1.0 : 0.0;
       smokeFireLight = THREE.MathUtils.lerp(
         smokeFireLight,
         (!realRun || footprintList.length > 0 ? 1.0 : 0.5 * uAfterglow.value) * uLightGain.value,
@@ -5313,6 +5329,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           fieldScale: parseFieldIntensityScale(run.encoding),
           residenceHours: parseResidenceHours(run.model) ?? undefined,
           declared: parseDeclaredCells(run.declared_cells),
+          answeredByOther: answeredByOther(run),
           fireHistory: null,
           ...liteShadingFields(
             Math.max(18.0, run.region.width_km || 60.0),

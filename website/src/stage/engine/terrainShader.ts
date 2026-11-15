@@ -200,6 +200,7 @@ uniform vec2 uBeliefGrid;    // cells east-west and north-south; (0, 0) when the
 uniform float uBeliefMix;    // position between the two steps
 uniform vec4 uBeliefBox;     // the part of the region that holds any belief: (u west, v south, u east, v north)
 uniform float uHeldOut;      // 1 on a pass whose detections were kept from the estimate
+uniform float uHeldOutOther; // 1 on a run whose hidden passes another model answered than the one whose belief it carries
 uniform vec4 uRevealArrive;  // detections laid on after scoring arrive: xy the pass's direction of travel (east, north), z the front along it (km from the box's centre), w the front's soft width (km)
 uniform float uDayJoin;       // share of the box's side over which a day's photograph blends into the land around (0: none)
 uniform float uDayFalse;      // 1 while the day's photograph on the box is the false-colour one (bands 7, 2, 1)
@@ -518,12 +519,15 @@ vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   // the model and not its own answer.
   float listed = mod(floor(cellBytes.g * 255.0 + 0.5), 2.0);
   float declaredCell = mix(step(BELIEF_DECLARED, p), listed, uDeclaredGiven) * heldOut;
+  // (where another model answered the hidden pass, that pass shows its frames alone: the belief the
+  // run carries, its chance squares and its dotted line, is the other model's)
+  float ownBelief = 1.0 - uHeldOutOther * heldOut;
   // (an open frame needs about seven pixels to read as open; a smaller declared cell is drawn as
   // a square no smaller than BELIEF_DECLARED_FAR stands for, whatever its probability, so the
   // model's answer is still the shape seen from far, as a field of squares and not a fill)
   float framed = smoothstep(5.5, 8.0, cellPx);
   // (the squares sized by chance only when asked for; a declared cell keeps its mark)
-  p = max(p * uChanceSquares, BELIEF_DECLARED_FAR * declaredCell * (1.0 - framed));
+  p = max(p * uChanceSquares * ownBelief, BELIEF_DECLARED_FAR * declaredCell * (1.0 - framed));
   float some = step(0.004, p);
 
   // The cell's square: its area grows with the probability. Even a certain cell leaves ground
@@ -561,7 +565,7 @@ vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   float resolved = smoothstep(2.0, 3.6, cellPx);
   vec4 near = texture2D(uLipariTex, uv);
   float tone = BELIEF_CELL_FILL * BELIEF_CELL_FILL
-             * max(mix(near.r, near.b, uBeliefMix) * uChanceSquares, BELIEF_DECLARED_FAR * declaredCell);
+             * max(mix(near.r, near.b, uBeliefMix) * uChanceSquares * ownBelief, BELIEF_DECLARED_FAR * declaredCell);
   float cells = mix(tone * 0.8, mark, resolved);
 
   // The dotted line around the ground that may burn
@@ -576,11 +580,12 @@ vec4 beliefMarks(vec2 uv, vec2 pKm, float kmPerPx, float heldOut) {
   float dotKm = exp2(floor(log2(max(kmPerPx, 1e-4) * 5.0)));
   vec2 q = pKm / dotKm;
   float dots = step(0.0, sin(3.14159265 * (q.x + q.y)) * sin(3.14159265 * (q.x - q.y)));
-  line *= dots;
-  lineEdge *= dots;
+  line *= dots * ownBelief;
+  lineEdge *= dots * ownBelief;
 
-  float strength = mix(0.70, 1.0, heatOf(be.y)) * mix(1.0, BELIEF_INK_FAR, tiny);
-  float within = smoothstep(-1.0, 1.0, (ps - BELIEF_MAY_BURN) / grad) * reach;
+  // (the ink's strength follows the belief's intensity; on a pass another model answered, an even one)
+  float strength = mix(0.70, 1.0, mix(0.5, heatOf(be.y), ownBelief)) * mix(1.0, BELIEF_INK_FAR, tiny);
+  float within = smoothstep(-1.0, 1.0, (ps - BELIEF_MAY_BURN) / grad) * reach * ownBelief;
   return vec4(max(cells, line * 0.9), lineEdge * 0.7, mix(strength, mix(1.0, BELIEF_INK_FAR, tiny), line), within);
 }
 
