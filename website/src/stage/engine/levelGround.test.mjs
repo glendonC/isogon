@@ -77,3 +77,21 @@ test('specks of noise just off a coast are sea, a straight low beach stays land'
   assert.equal(sea[12 * M + 3], 0);
   for (let r = 1; r < M - 1; r++) assert.equal(sea[r * M + 10], 0, `the beach at row ${r}`);
 });
+
+test('a low strip off a coast may be sea, a low plain joined to the land may not', async () => {
+  const { seaPosts, lowPatchesAtSea } = await import('./levelGround.ts');
+  const M = 30;
+  const dem = new Float32Array(M * M);
+  // land in the east half: a low plain (2 m) along its shore, rising inland
+  for (let r = 0; r < M; r++) for (let c = 15; c < M; c++) dem[r * M + c] = c < 19 ? 2.0 : 20 + (c - 19) * 10;
+  // offshore: a strip two posts thick at 3 m, and a barrier island at 4 m with sea on both sides
+  for (let c = 2; c < 10; c++) for (let r = 4; r < 6; r++) dem[r * M + c] = 3.0;
+  for (let r = 12; r < 26; r++) dem[r * M + 11] = 4.0;
+  const sea = seaPosts(dem, M);
+  const maybe = lowPatchesAtSea(dem, M, sea);
+  assert.equal(maybe[4 * M + 5], 1, 'the strip');
+  assert.equal(maybe[5 * M + 8], 1, 'the strip');
+  assert.equal(maybe[18 * M + 11], 1, 'the barrier island: low and ringed by sea, the picture decides');
+  for (let r = 1; r < M - 1; r++) assert.equal(maybe[r * M + 16], 0, `the plain at row ${r}`);
+  for (let i = 0; i < M * M; i++) if (sea[i]) assert.equal(maybe[i], 0, 'a sea post is not a patch');
+});

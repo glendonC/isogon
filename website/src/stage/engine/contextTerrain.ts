@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { COMMON_HEIGHTFIELD_GLSL, createDemR32FTexture } from '../earthCutawayShaders';
 import { ATMOSPHERE_GLSL, NIGHT_GLSL, SKY_VIEW_MAPPING_GLSL } from './atmosphere';
-import { levelGround, levelIsWholeMetres, seaPosts } from './levelGround';
+import { levelGround, levelIsWholeMetres, lowPatchesAtSea, seaPosts } from './levelGround';
 import { loadPackImage } from './terrainPack';
 import { TERRAIN_LOOK_GLSL } from './terrainShader';
 
@@ -51,7 +51,8 @@ export interface LoadedTerrainContext {
   /** Elevation in metres, row 0 south (the same order as the pack grid the stage keeps). */
   alignedDem: Float32Array;
   gridRes: number;
-  /** r, g: true-scale unit normal x (east) and z (south) as n * 0.5 + 0.5. b: sea. a: a lake (level ground). */
+  /** r, g: true-scale unit normal x (east) and z (south) as n * 0.5 + 0.5. b: sea (1), a low patch that
+   *  may be sea (0.5, see lowPatchesAtSea). a: a lake (level ground). */
   shadeTexture: THREE.DataTexture;
   orthoTexture: THREE.Texture;
   dispose: () => void;
@@ -71,6 +72,7 @@ function buildShadeTexture(dem: Float32Array, n: number, extentKm: [number, numb
   // taken from it)
   const lakes = levelIsWholeMetres(dem, n) ? new Uint8Array(n * n) : levelGround(dem, n);
   const sea = seaPosts(dem, n);
+  const maybeSea = lowPatchesAtSea(dem, n, sea);
   const dx = (extentKm[0] * 1000) / (n - 1);
   const dz = (extentKm[1] * 1000) / (n - 1);
   for (let r = 0; r < n; r++) {
@@ -86,7 +88,7 @@ function buildShadeTexture(dem: Float32Array, n: number, extentKm: [number, numb
       const o = (r * n + c) * 4;
       out[o] = Math.round((-dhdx * inv * 0.5 + 0.5) * 255);
       out[o + 1] = Math.round((-dhdz * inv * 0.5 + 0.5) * 255);
-      out[o + 2] = sea[r * n + c] ? 255 : 0;
+      out[o + 2] = sea[r * n + c] ? 255 : maybeSea[r * n + c] ? 128 : 0;
       out[o + 3] = lakes[r * n + c] ? 255 : 0;
     }
   }
@@ -227,17 +229,23 @@ void main() {
   vec2 nxz = shade.rg * 2.0 - 1.0;
   vec3 nTrue = vec3(nxz.x, sqrt(max(1e-4, 1.0 - dot(nxz, nxz))), nxz.y);
   vec3 N = normalize(nTrue / uUnitsPerMetre);
-  float sea = smoothstep(0.55, 0.95, shade.b);
-
   vec3 picture = texture2D(uContextOrtho, vCuv).rgb;
   vec3 albedo = pictureToScene(picture);
+  // (a slightly blurred sample, so a patch passes or fails a test on the picture as one piece)
+  vec3 broad = texture2D(uContextOrtho, vCuv, 2.0).rgb;
+  // The sea: posts at sea level in the elevation; a low patch with sea around most of it, where the
+  // picture there looks like water or has none (imagery has no data over open sea: pure black); and
+  // any ground within a few metres of the sea that has no picture at all. A barrier island or a sand
+  // bar is as low, and its picture shows sand or houses: it stays land.
+  float noPicture = 1.0 - smoothstep(0.02, 0.05, max(broad.r, max(broad.g, broad.b)));
+  float sea = max(smoothstep(0.55, 0.95, shade.b), smoothstep(0.30, 0.45, shade.b) * max(waterLook(broad), noPicture));
+  sea = max(sea, noPicture * (1.0 - smoothstep(3.0, 8.0, vElevM)));
   // A lake: level ground in the elevation where the picture looks like water
   // (a gentler edge than the sea's: a lake is a few posts wide out here, and its shore would step)
   float lake = smoothstep(0.30, 0.70, shade.a) * waterLook(picture);
   // Water by the picture alone, as in the pack: dark, bluer than it is green or red, on flat ground
   // (a reservoir where the elevation gives no level surface would otherwise be a dark stain)
-  // (on a slightly blurred sample, so a reservoir passes or fails as one piece and not pixel by pixel)
-  vec3 broad = texture2D(uContextOrtho, vCuv, 2.0).rgb;
+  // (on the blurred sample, so a reservoir passes or fails as one piece and not pixel by pixel)
   float pictureLuma = dot(broad, vec3(0.2126, 0.7152, 0.0722));
   float pictureWater = smoothstep(0.90, 0.98, broad.b / max(broad.g, 1e-3)) * smoothstep(1.30, 1.50, broad.b / max(broad.r, 1e-3))
                      * (1.0 - smoothstep(0.022, 0.042, pictureLuma)) * (1.0 - smoothstep(0.03, 0.08, length(nxz)));

@@ -107,3 +107,65 @@ export function seaPosts(dem: Float32Array, n: number): Uint8Array {
   }
   return sea;
 }
+
+/** A patch of posts under this height whose border is mostly sea may be sea (see lowPatchesAtSea). */
+const LOW_PATCH_M = 5.0;
+/** At most this share of such a patch's border may be land. */
+const LOW_PATCH_LAND_SHARE = 0.25;
+
+/**
+ * Patches that may be sea: connected posts (eight neighbours) less than LOW_PATCH_M above the sea,
+ * not sea themselves, whose border is mostly sea (under LOW_PATCH_LAND_SHARE of it land). Elevation
+ * smoothed over a coast leaves such strips and blobs offshore; a low plain or a delta borders the land
+ * along much of its edge and is not one. A barrier island or a sand bar is one too, so the elevation
+ * alone does not decide: the shader takes a patch for sea only where its picture looks like water or
+ * has no data.
+ */
+export function lowPatchesAtSea(dem: Float32Array, n: number, sea: Uint8Array): Uint8Array {
+  const out = new Uint8Array(n * n);
+  const seen = new Uint8Array(n * n);
+  // border posts are counted once per patch: marked with the patch's number
+  const borderMark = new Int32Array(n * n);
+  const stack: number[] = [];
+  const patch: number[] = [];
+  let patchNo = 0;
+  const isLow = (i: number) => sea[i] === 0 && dem[i] < LOW_PATCH_M;
+  for (let start = 0; start < n * n; start++) {
+    if (seen[start] || !isLow(start)) continue;
+    patchNo++;
+    let seaBorder = 0;
+    let landBorder = 0;
+    patch.length = 0;
+    stack.push(start);
+    seen[start] = 1;
+    while (stack.length > 0) {
+      const i = stack.pop()!;
+      patch.push(i);
+      const r = Math.floor(i / n);
+      const c = i - r * n;
+      for (let dr = -1; dr <= 1; dr++) {
+        const rr = r + dr;
+        if (rr < 0 || rr >= n) continue;
+        for (let dc = -1; dc <= 1; dc++) {
+          const cc = c + dc;
+          if (cc < 0 || cc >= n || (dr === 0 && dc === 0)) continue;
+          const j = rr * n + cc;
+          if (isLow(j)) {
+            if (!seen[j]) {
+              seen[j] = 1;
+              stack.push(j);
+            }
+          } else if (borderMark[j] !== patchNo) {
+            borderMark[j] = patchNo;
+            if (sea[j]) seaBorder++;
+            else landBorder++;
+          }
+        }
+      }
+    }
+    if (seaBorder > 0 && landBorder < LOW_PATCH_LAND_SHARE * (seaBorder + landBorder)) {
+      for (const i of patch) out[i] = 1;
+    }
+  }
+  return out;
+}
