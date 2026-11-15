@@ -1,0 +1,2171 @@
+{
+ "what": "the tree player, once on test C's episodes, beside least sure, the learned player in use, random and the player that sees the answer",
+ "protocol_sha256": "ce29cb82d1d7c7720ef20109c52ab315f559b6af134d778c3f85e8e0427928c1",
+ "written_protocol_sha256": "ec027f69ee1d3d47f96866f54c3fa77565ce638187d1fe2a36f36022e56c9726",
+ "plan_sha256": "768e5487f75c906fdbedfb14325a7d277bbf6062b27398f08b104ba60da30449",
+ "test_c_plan_sha256": "aead44299aec7d3fb619c11cd344819f2efc1358f9ca5fe54d5daedbc259ccf2",
+ "round_values": {
+  "which": "values in use",
+  "files_sha256": {
+   "occupancy_params.json": "b45e689835b4a9e175ed63877757ebe71226628d3466cb983c411fd837570eb9",
+   "overlap_ratio.json": "881d5654e1fa8638271f5ff7bc87bd3c26699e538dd1c88a098f3b00c34c1811"
+  },
+  "refit_sha256": "669230d63080b095de43f55f4dd3a1441e9fb12cfaa3a379f0d6e8b9fda391dc"
+ },
+ "tree_player": {
+  "form": "all_inputs",
+  "n_trees": 200,
+  "inputs": [
+   "unsure",
+   "burning",
+   "power",
+   "spread",
+   "modis_recent_frp",
+   "modis_recent_pixels",
+   "modis_all_pixels",
+   "seen_before",
+   "unsure_neighbours",
+   "relief",
+   "unsure_by_day",
+   "unsure_by_night",
+   "modis_recent_frp_by_day",
+   "unsure_when_modis_is_old",
+   "burning_early",
+   "expected_flags",
+   "unsure_flags",
+   "peak",
+   "unsure_mean",
+   "pixel_area_km2",
+   "day",
+   "looks_to_come"
+  ]
+ },
+ "setting": {
+  "tiles": "4x4",
+  "budget": 4,
+  "reward": "the score after the look minus the score before it, on one fixed set: every real hidden detection of the episode. The rewards of a round add up to the score at the end minus the score at the start. A look that hands over no hidden pixel earns nothing.",
+  "random_seeds": [
+   0,
+   1,
+   2
+  ],
+  "terrain": "none",
+  "hidden_platforms": [
+   "VIIRS_SNPP",
+   "VIIRS_NOAA20"
+  ],
+  "bootstrap": {
+   "resamples": 2000,
+   "seed": 20261114
+  }
+ },
+ "episodes": 199,
+ "left_out": {},
+ "mean_gain": {
+  "tree": {
+   "mean_gain": 0.04181628623871973
+  },
+  "least_sure": {
+   "mean_gain": 0.041085333884491544
+  },
+  "learned_in_use": {
+   "mean_gain": 0.04132676568243229
+  },
+  "oracle": {
+   "mean_gain": 0.053229090645577036
+  },
+  "random": {
+   "mean_gain": 0.006856319354457978
+  }
+ },
+ "differences": {
+  "tree_minus_least_sure": {
+   "mean_difference": 0.0007309523542281833,
+   "p05": -0.0001030658841660091,
+   "p95": 0.001549731933886898,
+   "episodes": 199,
+   "episodes_a_ahead": 65,
+   "episodes_b_ahead": 50
+  },
+  "tree_minus_learned_in_use": {
+   "mean_difference": 0.0004895205562874369,
+   "p05": -0.0017050863436595873,
+   "p95": 0.002629121059619264,
+   "episodes": 199,
+   "episodes_a_ahead": 108,
+   "episodes_b_ahead": 88
+  },
+  "learned_in_use_minus_least_sure": {
+   "mean_difference": 0.00024143179794074645,
+   "p05": -0.0018082745461828413,
+   "p95": 0.002349035392080827,
+   "episodes": 199,
+   "episodes_a_ahead": 91,
+   "episodes_b_ahead": 108
+  },
+  "least_sure_minus_random": {
+   "mean_difference": 0.03422901453003357,
+   "p05": 0.030850811287019265,
+   "p95": 0.037937829018336526,
+   "episodes": 199,
+   "episodes_a_ahead": 197,
+   "episodes_b_ahead": 2
+  },
+  "oracle_minus_tree": {
+   "mean_difference": 0.011412804406857305,
+   "p05": 0.01008991681797638,
+   "p95": 0.012819636619171458,
+   "episodes": 199,
+   "episodes_a_ahead": 163,
+   "episodes_b_ahead": 13
+  }
+ },
+ "bar": {
+  "rule": "the tree player beats least sure only if the whole 90 percent interval of the mean difference lies above zero",
+  "verdict": "level"
+ },
+ "tree_minus_least_sure_by_continent": {
+  "Africa": {
+   "mean_difference": 0.001165038593305954,
+   "p05": -0.0003380099998506387,
+   "p95": 0.002767640229266314,
+   "episodes": 40,
+   "episodes_a_ahead": 15,
+   "episodes_b_ahead": 13
+  },
+  "Asia": {
+   "mean_difference": 0.0012668757984760175,
+   "p05": -0.0004088602550890894,
+   "p95": 0.002976890967964071,
+   "episodes": 40,
+   "episodes_a_ahead": 20,
+   "episodes_b_ahead": 9
+  },
+  "Europe": {
+   "mean_difference": 0.0,
+   "p05": 0.0,
+   "p95": 0.0,
+   "episodes": 4,
+   "episodes_a_ahead": 0,
+   "episodes_b_ahead": 0
+  },
+  "North America": {
+   "mean_difference": 0.0006457494557122932,
+   "p05": -0.0014085422388397059,
+   "p95": 0.002514386530885274,
+   "episodes": 40,
+   "episodes_a_ahead": 10,
+   "episodes_b_ahead": 8
+  },
+  "Oceania": {
+   "mean_difference": 0.0012129826527854653,
+   "p05": -0.0010205482641940065,
+   "p95": 0.0036520559890307665,
+   "episodes": 35,
+   "episodes_a_ahead": 8,
+   "episodes_b_ahead": 10
+  },
+  "South America": {
+   "mean_difference": -0.0005025357063963346,
+   "p05": -0.002454612140233676,
+   "p95": 0.0014221098477191405,
+   "episodes": 40,
+   "episodes_a_ahead": 12,
+   "episodes_b_ahead": 10
+  }
+ },
+ "per_episode": [
+  {
+   "episode": "p+22.5-22.5:2023:21",
+   "continent": "Africa",
+   "score_start": 0.11803006984728306,
+   "tree": 0.003926999345665733,
+   "least_sure": 0.004928623716597816,
+   "learned_in_use": 0.031202681704784407,
+   "oracle": 0.04412882896942788,
+   "random": -0.0010149746364785616
+  },
+  {
+   "episode": "p+20.0-25.0:2023:44",
+   "continent": "Africa",
+   "score_start": 0.098256735340729,
+   "tree": 0.03533769459834847,
+   "least_sure": 0.03687057947408583,
+   "learned_in_use": 0.03116173672312504,
+   "oracle": 0.047741252875968795,
+   "random": 0.013436596288691113
+  },
+  {
+   "episode": "p+30.0-12.5:2025:22",
+   "continent": "Africa",
+   "score_start": 0.030032467532467532,
+   "tree": 0.012334559867946928,
+   "least_sure": 0.014716180805275477,
+   "learned_in_use": 0.006119002551046939,
+   "oracle": 0.025188416001669014,
+   "random": 0.010050973002687246
+  },
+  {
+   "episode": "p+20.0-25.0:2025:22",
+   "continent": "Africa",
+   "score_start": 0.0957411687025421,
+   "tree": 0.026389698032641185,
+   "least_sure": 0.030292237742539724,
+   "learned_in_use": 0.025555450328479168,
+   "oracle": 0.05491279545053396,
+   "random": 0.0016146874237002405
+  },
+  {
+   "episode": "p+30.0-12.5:2024:33",
+   "continent": "Africa",
+   "score_start": 0.05809691869146193,
+   "tree": 0.04927487618033294,
+   "least_sure": 0.03628059134869871,
+   "learned_in_use": 0.021728718142756842,
+   "oracle": 0.06817790685872595,
+   "random": 0.01885817994667871
+  },
+  {
+   "episode": "p+25.0-32.5:2024:30",
+   "continent": "Africa",
+   "score_start": 0.12994480220791169,
+   "tree": 0.031146538242859373,
+   "least_sure": 0.031146538242859373,
+   "learned_in_use": 0.08611774221284169,
+   "oracle": 0.031146538242859373,
+   "random": 0.0045093723677213276
+  },
+  {
+   "episode": "p+10.0+5.0:2023:31",
+   "continent": "Africa",
+   "score_start": 0.1644500078235018,
+   "tree": 0.03668908090551498,
+   "least_sure": 0.03300617334603442,
+   "learned_in_use": 0.043356743096351014,
+   "oracle": 0.03367861240522238,
+   "random": 0.01311198821163658
+  },
+  {
+   "episode": "p+20.0-27.5:2023:44",
+   "continent": "Africa",
+   "score_start": 0.09808314662683594,
+   "tree": 0.07073434086328785,
+   "least_sure": 0.0744855637325721,
+   "learned_in_use": 0.06759440035634902,
+   "oracle": 0.0744855637325721,
+   "random": 0.02089838106123731
+  },
+  {
+   "episode": "p-2.5+5.0:2023:44",
+   "continent": "Africa",
+   "score_start": 0.08703322552190532,
+   "tree": 0.017088583152348763,
+   "least_sure": 0.017088583152348763,
+   "learned_in_use": 0.015295114979355248,
+   "oracle": 0.019712624942538115,
+   "random": 0.006141464556109172
+  },
+  {
+   "episode": "p+27.5-27.5:2023:24",
+   "continent": "Africa",
+   "score_start": 0.15158568519057317,
+   "tree": 0.0766788331041566,
+   "least_sure": 0.0766788331041566,
+   "learned_in_use": 0.07198293038046591,
+   "oracle": 0.07861392846042489,
+   "random": 0.006087156768553629
+  },
+  {
+   "episode": "p+17.5+7.5:2023:40",
+   "continent": "Africa",
+   "score_start": 0.08826241601896984,
+   "tree": 0.049749441143583595,
+   "least_sure": 0.0341669780035144,
+   "learned_in_use": 0.02259443625664674,
+   "oracle": 0.049749441143583595,
+   "random": 0.009373562529887964
+  },
+  {
+   "episode": "p+27.5-32.5:2024:44",
+   "continent": "Africa",
+   "score_start": 0.06026252983293556,
+   "tree": 0.0045828619413064015,
+   "least_sure": -0.0024504930704096206,
+   "learned_in_use": 0.015136642254586608,
+   "oracle": 0.021787233200239786,
+   "random": 0.0008340654300203315
+  },
+  {
+   "episode": "p+5.0+10.0:2023:11",
+   "continent": "Africa",
+   "score_start": 0.07092391304347827,
+   "tree": 0.02371157526463727,
+   "least_sure": 0.0267628205128205,
+   "learned_in_use": 0.010978512685603223,
+   "oracle": 0.03066425782180103,
+   "random": 0.006518863740775399
+  },
+  {
+   "episode": "p+27.5-27.5:2024:33",
+   "continent": "Africa",
+   "score_start": 0.10638297872340426,
+   "tree": 0.06119776472571213,
+   "least_sure": 0.06119776472571213,
+   "learned_in_use": 0.04992252749329203,
+   "oracle": 0.07773254474229972,
+   "random": 0.008395908603361734
+  },
+  {
+   "episode": "p+37.5-15.0:2024:00",
+   "continent": "Africa",
+   "score_start": 0.06549789621318373,
+   "tree": 0.003895821829182952,
+   "least_sure": 0.00832469841264695,
+   "learned_in_use": 0.021186034548708044,
+   "oracle": 0.013827351242553063,
+   "random": -0.0003937927688484934
+  },
+  {
+   "episode": "p+25.0-30.0:2023:31",
+   "continent": "Africa",
+   "score_start": 0.10429141716566866,
+   "tree": 0.03621295751266383,
+   "least_sure": 0.027423458867389186,
+   "learned_in_use": 0.010154157605440195,
+   "oracle": 0.06865981460909253,
+   "random": 0.0027195235836249784
+  },
+  {
+   "episode": "p+20.0-22.5:2023:40",
+   "continent": "Africa",
+   "score_start": 0.05742343541944075,
+   "tree": 0.04208495583331396,
+   "least_sure": 0.04208495583331396,
+   "learned_in_use": 0.0556797817387362,
+   "oracle": 0.04387003006014937,
+   "random": 0.006296886452835421
+  },
+  {
+   "episode": "p+27.5-25.0:2025:32",
+   "continent": "Africa",
+   "score_start": 0.03856981981981982,
+   "tree": 0.03324551218359995,
+   "least_sure": 0.03324551218359995,
+   "learned_in_use": 0.01693704550299642,
+   "oracle": 0.0495734841324122,
+   "random": 0.01392315704411793
+  },
+  {
+   "episode": "p+5.0+10.0:2025:11",
+   "continent": "Africa",
+   "score_start": 0.0927267458707621,
+   "tree": 0.0036218273111955496,
+   "least_sure": 0.008655050464473707,
+   "learned_in_use": 0.015736929030568114,
+   "oracle": 0.01615661429314834,
+   "random": 0.003983406478084109
+  },
+  {
+   "episode": "p+27.5-32.5:2023:12",
+   "continent": "Africa",
+   "score_start": 0.14554317548746518,
+   "tree": 0.07956826582011284,
+   "least_sure": 0.07576829992237089,
+   "learned_in_use": 0.030223466247762953,
+   "oracle": 0.09351172374811509,
+   "random": 0.018334706911144926
+  },
+  {
+   "episode": "p+37.5-15.0:2023:00",
+   "continent": "Africa",
+   "score_start": 0.04980996199239848,
+   "tree": 0.018641202699060444,
+   "least_sure": 0.022698207942242046,
+   "learned_in_use": 0.025322106096038216,
+   "oracle": 0.0247656241029936,
+   "random": -0.00047644642920692537
+  },
+  {
+   "episode": "p+27.5-25.0:2023:01",
+   "continent": "Africa",
+   "score_start": 0.128839590443686,
+   "tree": 0.07561103542557684,
+   "least_sure": 0.07561103542557684,
+   "learned_in_use": 0.06600149661296992,
+   "oracle": 0.07054011713274289,
+   "random": 0.0019790704587524985
+  },
+  {
+   "episode": "p+35.0-12.5:2025:30",
+   "continent": "Africa",
+   "score_start": 0.07667820069204152,
+   "tree": 0.0468422003663069,
+   "least_sure": 0.03929678509533767,
+   "learned_in_use": 0.016048823003342677,
+   "oracle": 0.05601863063492678,
+   "random": 0.003666762588351788
+  },
+  {
+   "episode": "p+20.0-35.0:2024:43",
+   "continent": "Africa",
+   "score_start": 0.1473384030418251,
+   "tree": 0.07094613727661353,
+   "least_sure": 0.07094613727661353,
+   "learned_in_use": 0.04853788561796871,
+   "oracle": 0.07094613727661353,
+   "random": 0.0
+  },
+  {
+   "episode": "p+35.0+10.0:2025:21",
+   "continent": "Africa",
+   "score_start": 0.10862178806540666,
+   "tree": 0.027274833055237327,
+   "least_sure": 0.025172783515221328,
+   "learned_in_use": 0.02354364047434275,
+   "oracle": 0.032764766556442074,
+   "random": 0.009824739530493778
+  },
+  {
+   "episode": "p+27.5-30.0:2024:22",
+   "continent": "Africa",
+   "score_start": 0.041743970315398886,
+   "tree": 0.02661930313769493,
+   "least_sure": 0.02488954534844994,
+   "learned_in_use": 0.008834064366682041,
+   "oracle": 0.036725867840559916,
+   "random": 0.0038325553266134924
+  },
+  {
+   "episode": "p-5.0+7.5:2024:22",
+   "continent": "Africa",
+   "score_start": 0.05414207205373499,
+   "tree": 0.017506460075191313,
+   "least_sure": 0.03545924319492921,
+   "learned_in_use": 0.018897241456542396,
+   "oracle": 0.03527064893793337,
+   "random": 0.004135550303647359
+  },
+  {
+   "episode": "p+20.0-35.0:2023:22",
+   "continent": "Africa",
+   "score_start": 0.18509984639016897,
+   "tree": 0.04716827519985442,
+   "least_sure": 0.04716827519985442,
+   "learned_in_use": 0.05207424948872086,
+   "oracle": 0.04708406165580806,
+   "random": 0.0004294660009052653
+  },
+  {
+   "episode": "p-10.0+7.5:2023:22",
+   "continent": "Africa",
+   "score_start": 0.03748395378690629,
+   "tree": 0.0011957780336197543,
+   "least_sure": 0.0023526141395492778,
+   "learned_in_use": 0.018918485237483955,
+   "oracle": 0.007925227849820256,
+   "random": 0.00048253005370472074
+  },
+  {
+   "episode": "p-2.5+5.0:2025:34",
+   "continent": "Africa",
+   "score_start": 0.06408058294042006,
+   "tree": 0.008990553960504077,
+   "least_sure": 0.016701729984750016,
+   "learned_in_use": 0.022170484523286182,
+   "oracle": 0.030997951090993556,
+   "random": 0.0007378429318695053
+  },
+  {
+   "episode": "p+17.5+7.5:2024:40",
+   "continent": "Africa",
+   "score_start": 0.06542553191489361,
+   "tree": 0.06491857653140462,
+   "least_sure": 0.06491857653140462,
+   "learned_in_use": 0.02281732890321804,
+   "oracle": 0.06932440330148368,
+   "random": 0.005184356909069668
+  },
+  {
+   "episode": "p-2.5+7.5:2024:23",
+   "continent": "Africa",
+   "score_start": 0.06095316015545101,
+   "tree": 0.0175830240550753,
+   "least_sure": 0.011589899621651321,
+   "learned_in_use": 0.008912328702208087,
+   "oracle": 0.036877293842138385,
+   "random": 0.0009066931496159609
+  },
+  {
+   "episode": "p+17.5+2.5:2024:34",
+   "continent": "Africa",
+   "score_start": 0.04356768885564697,
+   "tree": 0.015575114812704141,
+   "least_sure": 0.010048511722945123,
+   "learned_in_use": 0.0010147039208767347,
+   "oracle": 0.027993304841053064,
+   "random": 0.008198337561102923
+  },
+  {
+   "episode": "p-2.5+7.5:2023:23",
+   "continent": "Africa",
+   "score_start": 0.03839479392624729,
+   "tree": 0.032598237432637726,
+   "least_sure": 0.023116629623840583,
+   "learned_in_use": 0.016962348930895564,
+   "oracle": 0.048995967621817633,
+   "random": 0.012482151113185227
+  },
+  {
+   "episode": "p+30.0+10.0:2023:00",
+   "continent": "Africa",
+   "score_start": 0.051351351351351354,
+   "tree": 0.022827941577941574,
+   "least_sure": 0.015632775632775625,
+   "learned_in_use": 0.015870540379761072,
+   "oracle": 0.034321586419994526,
+   "random": -0.0003800999069772544
+  },
+  {
+   "episode": "p+0.0+15.0:2024:30",
+   "continent": "Africa",
+   "score_start": 0.07084639498432602,
+   "tree": 0.016872903261288014,
+   "least_sure": 0.02074622292408136,
+   "learned_in_use": 0.016872903261288014,
+   "oracle": 0.06827836007772492,
+   "random": 0.0014629049111807753
+  },
+  {
+   "episode": "p+32.5-20.0:2023:33",
+   "continent": "Africa",
+   "score_start": 0.044456347080878415,
+   "tree": 0.022613471500759853,
+   "least_sure": 0.022613471500759853,
+   "learned_in_use": 0.02051462333659463,
+   "oracle": 0.04707164081624716,
+   "random": 0.006774863527423916
+  },
+  {
+   "episode": "p+10.0+7.5:2025:21",
+   "continent": "Africa",
+   "score_start": 0.05689918533604888,
+   "tree": 0.013186284749421205,
+   "least_sure": 0.010459707102715758,
+   "learned_in_use": 0.011285590200711036,
+   "oracle": 0.020982434601645818,
+   "random": 0.0030807958915304947
+  },
+  {
+   "episode": "p+32.5-12.5:2025:14",
+   "continent": "Africa",
+   "score_start": 0.037182448036951504,
+   "tree": 0.01470001293641856,
+   "least_sure": 0.01470001293641856,
+   "learned_in_use": 0.01615407432611953,
+   "oracle": 0.018246902258368808,
+   "random": 0.003839851723927918
+  },
+  {
+   "episode": "p+32.5-20.0:2025:24",
+   "continent": "Africa",
+   "score_start": 0.049855072463768114,
+   "tree": 0.030153154603282488,
+   "least_sure": 0.017900029577048206,
+   "learned_in_use": 0.010750988142292493,
+   "oracle": 0.03705678288860501,
+   "random": 0.005062309559132824
+  },
+  {
+   "episode": "p+100.0+17.5:2023:31",
+   "continent": "Asia",
+   "score_start": 0.14553582515832608,
+   "tree": 0.015734016111515176,
+   "least_sure": 0.013989806058200327,
+   "learned_in_use": 0.010774232497023056,
+   "oracle": 0.015734016111515176,
+   "random": 0.0032718849325822827
+  },
+  {
+   "episode": "p+77.5+22.5:2023:10",
+   "continent": "Asia",
+   "score_start": 0.042520589925301666,
+   "tree": 0.013099452636122208,
+   "least_sure": 0.0027075431689402157,
+   "learned_in_use": 0.012988861434772098,
+   "oracle": 0.0251533447530662,
+   "random": 0.0008464965259003763
+  },
+  {
+   "episode": "p+127.5+35.0:2025:22",
+   "continent": "Asia",
+   "score_start": 0.13756848807937214,
+   "tree": 0.0486017246865853,
+   "least_sure": 0.05032136434722151,
+   "learned_in_use": 0.038458213415331094,
+   "oracle": 0.05032136434722151,
+   "random": 0.009688673372529414
+  },
+  {
+   "episode": "p+135.0+60.0:2023:22",
+   "continent": "Asia",
+   "score_start": 0.33447098976109213,
+   "tree": 0.1445662773196532,
+   "least_sure": 0.13885322364520064,
+   "learned_in_use": 0.1374717346971122,
+   "oracle": 0.1445662773196532,
+   "random": 0.041908571442996645
+  },
+  {
+   "episode": "p+102.5+17.5:2023:03",
+   "continent": "Asia",
+   "score_start": 0.03642868759147829,
+   "tree": 0.022748681941930908,
+   "least_sure": 0.022748681941930908,
+   "learned_in_use": 0.007258222883451376,
+   "oracle": 0.03896364374649291,
+   "random": 0.010954312376437623
+  },
+  {
+   "episode": "p+77.5+22.5:2025:02",
+   "continent": "Asia",
+   "score_start": 0.03925739702185264,
+   "tree": 0.01774616570081753,
+   "least_sure": 0.017012399885171774,
+   "learned_in_use": 0.0074198181680207795,
+   "oracle": 0.02988784272797363,
+   "random": 0.007884127806337267
+  },
+  {
+   "episode": "p+27.5+35.0:2023:02",
+   "continent": "Asia",
+   "score_start": 0.19662921348314608,
+   "tree": 0.044276202846684154,
+   "least_sure": 0.044276202846684154,
+   "learned_in_use": 0.07201913200199131,
+   "oracle": 0.04608394369473462,
+   "random": 0.00356471635829117
+  },
+  {
+   "episode": "p+132.5+60.0:2023:42",
+   "continent": "Asia",
+   "score_start": 0.25101404056162246,
+   "tree": 0.052921473900207794,
+   "least_sure": 0.04655391365869227,
+   "learned_in_use": 0.057721374134057146,
+   "oracle": 0.06389249402856767,
+   "random": 0.02084588049745308
+  },
+  {
+   "episode": "p+102.5+17.5:2024:04",
+   "continent": "Asia",
+   "score_start": 0.06138160632542655,
+   "tree": 0.016435368150605825,
+   "least_sure": 0.02864469349249779,
+   "learned_in_use": 0.00810852525352082,
+   "oracle": 0.050247242945237955,
+   "random": 0.009214725927856196
+  },
+  {
+   "episode": "p+80.0+27.5:2024:22",
+   "continent": "Asia",
+   "score_start": 0.07300409916064805,
+   "tree": 0.020067061888041082,
+   "least_sure": 0.020067061888041082,
+   "learned_in_use": 0.012863179477714926,
+   "oracle": 0.020067061888041082,
+   "random": 0.0011569309153218789
+  },
+  {
+   "episode": "p+135.0+47.5:2024:13",
+   "continent": "Asia",
+   "score_start": 0.08168256297383224,
+   "tree": 0.03354766134730118,
+   "least_sure": 0.03354766134730118,
+   "learned_in_use": 0.027799584105855632,
+   "oracle": 0.045422013739471065,
+   "random": 0.010326719639886295
+  },
+  {
+   "episode": "p+120.0+57.5:2024:23",
+   "continent": "Asia",
+   "score_start": 0.1586194235358913,
+   "tree": 0.027731354399045033,
+   "least_sure": 0.0487126234734053,
+   "learned_in_use": 0.04540696793763263,
+   "oracle": 0.05028831771543424,
+   "random": 0.0032276533503666402
+  },
+  {
+   "episode": "p+100.0+17.5:2024:42",
+   "continent": "Asia",
+   "score_start": 0.138764373416488,
+   "tree": 0.0038609055447617335,
+   "least_sure": 0.0031538849527870116,
+   "learned_in_use": 0.008456753899239222,
+   "oracle": 0.013058698908676364,
+   "random": 0.0024902706149583878
+  },
+  {
+   "episode": "p+82.5+27.5:2024:01",
+   "continent": "Asia",
+   "score_start": 0.12120425642356605,
+   "tree": 0.018852651575169327,
+   "least_sure": 0.018852651575169327,
+   "learned_in_use": 0.025300302846950673,
+   "oracle": 0.028752652510648263,
+   "random": 0.00811675233120295
+  },
+  {
+   "episode": "p+132.5+47.5:2024:21",
+   "continent": "Asia",
+   "score_start": 0.03889585947302384,
+   "tree": 0.047718313755322615,
+   "least_sure": 0.04191468740197616,
+   "learned_in_use": 0.04103811836239233,
+   "oracle": 0.047718313755322615,
+   "random": 0.0011194760854303838
+  },
+  {
+   "episode": "p+125.0+50.0:2025:43",
+   "continent": "Asia",
+   "score_start": 0.06842031621659438,
+   "tree": 0.033408445213164564,
+   "least_sure": 0.03508065627576461,
+   "learned_in_use": 0.036974566986965135,
+   "oracle": 0.06167520376188,
+   "random": 0.007824324811921251
+  },
+  {
+   "episode": "p+92.5+17.5:2023:34",
+   "continent": "Asia",
+   "score_start": 0.07994579945799458,
+   "tree": 0.025881706369511245,
+   "least_sure": 0.025146039649189794,
+   "learned_in_use": 0.013929926961316993,
+   "oracle": 0.04148443040037551,
+   "random": 0.008093752457951691
+  },
+  {
+   "episode": "p+75.0+30.0:2025:13",
+   "continent": "Asia",
+   "score_start": 0.07329105003523609,
+   "tree": 0.026563177370011723,
+   "least_sure": 0.026563177370011723,
+   "learned_in_use": 0.051427206914425816,
+   "oracle": 0.03320056192683539,
+   "random": 0.010691740956088542
+  },
+  {
+   "episode": "p+127.5+47.5:2025:44",
+   "continent": "Asia",
+   "score_start": 0.06386595434677028,
+   "tree": 0.014463672537341404,
+   "least_sure": 0.016193348840776042,
+   "learned_in_use": 0.04710875716808363,
+   "oracle": 0.06427417010586858,
+   "random": 0.004780301165609809
+  },
+  {
+   "episode": "p+80.0+55.0:2023:10",
+   "continent": "Asia",
+   "score_start": 0.08458208458208458,
+   "tree": 0.023966083667576216,
+   "least_sure": 0.0219096516591831,
+   "learned_in_use": 0.038409060055501515,
+   "oracle": 0.03126345469887415,
+   "random": 0.004585570632190575
+  },
+  {
+   "episode": "p+97.5+17.5:2025:01",
+   "continent": "Asia",
+   "score_start": 0.05650747356908494,
+   "tree": 0.010962405948987348,
+   "least_sure": 0.014873223481853402,
+   "learned_in_use": 0.02666048601958545,
+   "oracle": 0.0219004526352198,
+   "random": 0.004601024969505829
+  },
+  {
+   "episode": "p+77.5+27.5:2024:43",
+   "continent": "Asia",
+   "score_start": 0.08392341987936008,
+   "tree": 0.008330480066847556,
+   "least_sure": 0.005577892456597927,
+   "learned_in_use": 0.011544275395471162,
+   "oracle": 0.016470798254674082,
+   "random": 0.0026389506153675405
+  },
+  {
+   "episode": "p+130.0+47.5:2024:03",
+   "continent": "Asia",
+   "score_start": 0.05202601300650325,
+   "tree": 0.016367248245696894,
+   "least_sure": 0.016367248245696894,
+   "learned_in_use": 0.012770412018322963,
+   "oracle": 0.025583706805051426,
+   "random": 0.010491078260771588
+  },
+  {
+   "episode": "p+127.5+55.0:2024:10",
+   "continent": "Asia",
+   "score_start": 0.27574906367041196,
+   "tree": 0.07920809667230527,
+   "least_sure": 0.07782063035581438,
+   "learned_in_use": 0.0685290628385209,
+   "oracle": 0.08633272071620512,
+   "random": 0.0189549101621736
+  },
+  {
+   "episode": "p+97.5+15.0:2024:12",
+   "continent": "Asia",
+   "score_start": 0.03504928806133625,
+   "tree": 0.03259239383994346,
+   "least_sure": 0.03259239383994346,
+   "learned_in_use": 0.03448476211787521,
+   "oracle": 0.07585367184874242,
+   "random": -0.0021481254234810864
+  },
+  {
+   "episode": "p+47.5+30.0:2023:23",
+   "continent": "Asia",
+   "score_start": 0.019291338582677165,
+   "tree": 0.014284713197258107,
+   "least_sure": 0.011946146399301208,
+   "learned_in_use": 0.0025887262471445543,
+   "oracle": 0.024039482818980707,
+   "random": 0.008119897083528381
+  },
+  {
+   "episode": "p+130.0+47.5:2023:41",
+   "continent": "Asia",
+   "score_start": 0.02626970227670753,
+   "tree": 0.03000177538652271,
+   "least_sure": 0.03000177538652271,
+   "learned_in_use": 0.043502597702402564,
+   "oracle": 0.03000177538652271,
+   "random": 0.00732032550484838
+  },
+  {
+   "episode": "p+127.5+55.0:2023:30",
+   "continent": "Asia",
+   "score_start": 0.28843641114982577,
+   "tree": 0.0248626818454753,
+   "least_sure": 0.02400248075674677,
+   "learned_in_use": 0.02160100905708595,
+   "oracle": 0.03209324523012608,
+   "random": 0.00384050941988201
+  },
+  {
+   "episode": "p+97.5+12.5:2023:14",
+   "continent": "Asia",
+   "score_start": 0.14703925482368596,
+   "tree": 0.03921029046551011,
+   "least_sure": 0.037904646732593444,
+   "learned_in_use": 0.035967281124026446,
+   "oracle": 0.03893422738147803,
+   "random": 0.002669930313266511
+  },
+  {
+   "episode": "p+75.0+30.0:2024:23",
+   "continent": "Asia",
+   "score_start": 0.048822026681805276,
+   "tree": 0.025762172902394305,
+   "least_sure": 0.02069112093600258,
+   "learned_in_use": 0.019269141409362818,
+   "oracle": 0.02940154132223207,
+   "random": 0.0019157240373568498
+  },
+  {
+   "episode": "p+130.0+42.5:2025:33",
+   "continent": "Asia",
+   "score_start": 0.05077421678069859,
+   "tree": 0.04375133066455688,
+   "least_sure": 0.04490365540253007,
+   "learned_in_use": 0.021439859465635723,
+   "oracle": 0.053697923981764754,
+   "random": 0.002678357756802583
+  },
+  {
+   "episode": "p+127.5+52.5:2024:41",
+   "continent": "Asia",
+   "score_start": 0.12807339449541286,
+   "tree": 0.037110357922382126,
+   "least_sure": 0.037492093262068676,
+   "learned_in_use": 0.037110357922382126,
+   "oracle": 0.0954787290567107,
+   "random": 0.009960927609421957
+  },
+  {
+   "episode": "p+95.0+17.5:2025:34",
+   "continent": "Asia",
+   "score_start": 0.06955380577427822,
+   "tree": 0.037268456344213705,
+   "least_sure": 0.010159584283939427,
+   "learned_in_use": 0.03806951261137201,
+   "oracle": 0.050446194225721774,
+   "random": -0.005207129564581185
+  },
+  {
+   "episode": "p+47.5+30.0:2025:03",
+   "continent": "Asia",
+   "score_start": 0.18745874587458747,
+   "tree": 0.1166348213768745,
+   "least_sure": 0.1166348213768745,
+   "learned_in_use": 0.11980726397762928,
+   "oracle": 0.1166348213768745,
+   "random": 0.0
+  },
+  {
+   "episode": "p+122.5+47.5:2023:43",
+   "continent": "Asia",
+   "score_start": 0.01524390243902439,
+   "tree": 0.02650903061825649,
+   "least_sure": 0.019974880912096205,
+   "learned_in_use": 0.014345875637640036,
+   "oracle": 0.03252242058503059,
+   "random": 0.005768396608385868
+  },
+  {
+   "episode": "p+60.0+55.0:2023:24",
+   "continent": "Asia",
+   "score_start": 0.17959806664970746,
+   "tree": 0.04489430313210613,
+   "least_sure": 0.03799101598865495,
+   "learned_in_use": 0.031535848178409515,
+   "oracle": 0.06220625355359624,
+   "random": 0.01873924553094809
+  },
+  {
+   "episode": "p+97.5+17.5:2024:03",
+   "continent": "Asia",
+   "score_start": 0.060490353697749195,
+   "tree": 0.014893639834991305,
+   "least_sure": 0.01807374886635337,
+   "learned_in_use": 0.00742068681059075,
+   "oracle": 0.022560155385900234,
+   "random": 0.006241798456357271
+  },
+  {
+   "episode": "p+42.5+30.0:2024:43",
+   "continent": "Asia",
+   "score_start": 0.04383116883116883,
+   "tree": 0.020032588486553357,
+   "least_sure": 0.019795554392585138,
+   "learned_in_use": 0.006573311567088791,
+   "oracle": 0.03344858387362251,
+   "random": 0.007375034544415193
+  },
+  {
+   "episode": "p+127.5+47.5:2024:44",
+   "continent": "Asia",
+   "score_start": 0.06564478507164279,
+   "tree": 0.005385855596880887,
+   "least_sure": 0.005385855596880887,
+   "learned_in_use": 0.02846894954757903,
+   "oracle": 0.026833636629960175,
+   "random": 6.719114173263836e-05
+  },
+  {
+   "episode": "p+142.5+67.5:2024:23",
+   "continent": "Asia",
+   "score_start": 0.0767603505590813,
+   "tree": 0.050358293508715304,
+   "least_sure": 0.041498258927598355,
+   "learned_in_use": 0.050358293508715304,
+   "oracle": 0.053105635401352644,
+   "random": 0.0033940825109889106
+  },
+  {
+   "episode": "p+17.5+40.0:2025:40",
+   "continent": "Europe",
+   "score_start": 0.1583535108958838,
+   "tree": 0.05980753993221444,
+   "least_sure": 0.05980753993221444,
+   "learned_in_use": 0.10777083541440091,
+   "oracle": 0.08091380450194105,
+   "random": 0.009001122638985448
+  },
+  {
+   "episode": "p+20.0+40.0:2024:43",
+   "continent": "Europe",
+   "score_start": 0.11433597185576078,
+   "tree": 0.04961625398571587,
+   "least_sure": 0.04961625398571587,
+   "learned_in_use": 0.05377682640888132,
+   "oracle": 0.03835017329032783,
+   "random": -0.0017141773156052198
+  },
+  {
+   "episode": "p+57.5+42.5:2023:22",
+   "continent": "Europe",
+   "score_start": 0.2578456318914334,
+   "tree": 0.08192270787690636,
+   "least_sure": 0.08192270787690636,
+   "learned_in_use": 0.13290686130892926,
+   "oracle": 0.08192270787690636,
+   "random": 0.0035603197386009553
+  },
+  {
+   "episode": "p+20.0+40.0:2025:03",
+   "continent": "Europe",
+   "score_start": 0.20870767104353835,
+   "tree": 0.09062343263539144,
+   "least_sure": 0.09062343263539144,
+   "learned_in_use": 0.09053155127260706,
+   "oracle": 0.08356286035742785,
+   "random": 0.0
+  },
+  {
+   "episode": "p-92.5+17.5:2023:01",
+   "continent": "North America",
+   "score_start": 0.09356894553881807,
+   "tree": 0.04122541051041638,
+   "least_sure": 0.04122541051041638,
+   "learned_in_use": 0.03611141975798558,
+   "oracle": 0.054681514866338474,
+   "random": 0.006358739169608403
+  },
+  {
+   "episode": "p-110.0+27.5:2025:34",
+   "continent": "North America",
+   "score_start": 0.17263025737602009,
+   "tree": 0.0975982787573956,
+   "least_sure": 0.13058949879778423,
+   "learned_in_use": 0.1295859951424487,
+   "oracle": 0.13058949879778423,
+   "random": 0.0030435168165974893
+  },
+  {
+   "episode": "p-77.5+47.5:2023:23",
+   "continent": "North America",
+   "score_start": 0.2384948096885813,
+   "tree": 0.03166897275888472,
+   "least_sure": 0.02757014441154984,
+   "learned_in_use": 0.01656698363248102,
+   "oracle": 0.03789222633119424,
+   "random": 0.006690255601382857
+  },
+  {
+   "episode": "p-122.5+62.5:2024:44",
+   "continent": "North America",
+   "score_start": 0.28399778516057583,
+   "tree": 0.05174447776213614,
+   "least_sure": 0.05005251265544003,
+   "learned_in_use": 0.04307585294509075,
+   "oracle": 0.05334297477986427,
+   "random": 0.022173411087962374
+  },
+  {
+   "episode": "p-107.5+20.0:2023:40",
+   "continent": "North America",
+   "score_start": 0.20657925005751093,
+   "tree": 0.011624342756860334,
+   "least_sure": 0.011624342756860334,
+   "learned_in_use": 0.013011176786801915,
+   "oracle": 0.0292443323007249,
+   "random": 0.0020166372751274273
+  },
+  {
+   "episode": "p-110.0+27.5:2023:24",
+   "continent": "North America",
+   "score_start": 0.3111413043478261,
+   "tree": 0.07920281480985236,
+   "least_sure": 0.06869576286194984,
+   "learned_in_use": 0.058176877470355715,
+   "oracle": 0.07489565663780018,
+   "random": -9.784590384844434e-05
+  },
+  {
+   "episode": "p-122.5+45.0:2025:34",
+   "continent": "North America",
+   "score_start": 0.21946624803767661,
+   "tree": 0.03817154723791394,
+   "least_sure": 0.03817154723791394,
+   "learned_in_use": 0.034027656214479174,
+   "oracle": 0.03817154723791394,
+   "random": 0.0011661087440187161
+  },
+  {
+   "episode": "p-115.0+57.5:2024:02",
+   "continent": "North America",
+   "score_start": 0.21184543156374142,
+   "tree": 0.02268176759705584,
+   "least_sure": 0.022899508312276218,
+   "learned_in_use": 0.03327642986030688,
+   "oracle": 0.04771620421148659,
+   "random": 0.0028583108524156873
+  },
+  {
+   "episode": "p-90.0+17.5:2023:04",
+   "continent": "North America",
+   "score_start": 0.08058217962371317,
+   "tree": 0.040183652482325125,
+   "least_sure": 0.023906150717399932,
+   "learned_in_use": 0.058575278939822756,
+   "oracle": 0.0719662769448439,
+   "random": 0.009155440744775764
+  },
+  {
+   "episode": "p-102.5+27.5:2023:04",
+   "continent": "North America",
+   "score_start": 0.13891891891891892,
+   "tree": 0.045731975483850856,
+   "least_sure": 0.023566827945391222,
+   "learned_in_use": 0.027654272331782137,
+   "oracle": 0.058068334847013875,
+   "random": 0.01997272290585971
+  },
+  {
+   "episode": "p-122.5+42.5:2025:34",
+   "continent": "North America",
+   "score_start": 0.1862378459237098,
+   "tree": 0.08848960699997704,
+   "least_sure": 0.08848960699997704,
+   "learned_in_use": 0.1013284475353356,
+   "oracle": 0.08848960699997704,
+   "random": 0.013132176739751747
+  },
+  {
+   "episode": "p-115.0+57.5:2023:14",
+   "continent": "North America",
+   "score_start": 0.3728144388042865,
+   "tree": 0.03297904352808956,
+   "least_sure": 0.03306314277679545,
+   "learned_in_use": 0.03570073551224223,
+   "oracle": 0.04694562651824352,
+   "random": 0.015374188941468359
+  },
+  {
+   "episode": "p-92.5+17.5:2024:30",
+   "continent": "North America",
+   "score_start": 0.07882950134368469,
+   "tree": 0.0077943125528564805,
+   "least_sure": 0.00748822133767435,
+   "learned_in_use": 0.005741580802420196,
+   "oracle": 0.017065106499452573,
+   "random": -0.0010320967374557455
+  },
+  {
+   "episode": "p-107.5+27.5:2025:01",
+   "continent": "North America",
+   "score_start": 0.19325153374233128,
+   "tree": 0.07373583847655024,
+   "least_sure": 0.07373583847655024,
+   "learned_in_use": 0.095502265649766,
+   "oracle": 0.07373583847655024,
+   "random": 0.026681014877023273
+  },
+  {
+   "episode": "p-125.0+40.0:2023:23",
+   "continent": "North America",
+   "score_start": 0.18836240562353554,
+   "tree": 0.03086295549112636,
+   "least_sure": 0.03086295549112636,
+   "learned_in_use": 0.03619247080484608,
+   "oracle": 0.03600476389832588,
+   "random": 0.012279867586766857
+  },
+  {
+   "episode": "p-122.5+60.0:2024:41",
+   "continent": "North America",
+   "score_start": 0.2544549977385798,
+   "tree": 0.04236156707032285,
+   "least_sure": 0.050972785150104616,
+   "learned_in_use": 0.034316033717162686,
+   "oracle": 0.05309010887705712,
+   "random": 0.023466211593396475
+  },
+  {
+   "episode": "p-102.5+20.0:2024:43",
+   "continent": "North America",
+   "score_start": 0.2704554615074567,
+   "tree": 0.0969237942328442,
+   "least_sure": 0.0969237942328442,
+   "learned_in_use": 0.06578002771310715,
+   "oracle": 0.11799390558115092,
+   "random": 0.0008304661319749792
+  },
+  {
+   "episode": "p-110.0+25.0:2023:42",
+   "continent": "North America",
+   "score_start": 0.1945645460160593,
+   "tree": 0.031511240753369085,
+   "least_sure": 0.031511240753369085,
+   "learned_in_use": 0.04543545398394069,
+   "oracle": 0.05984351443734123,
+   "random": -0.0030268261913742136
+  },
+  {
+   "episode": "p-110.0+42.5:2025:42",
+   "continent": "North America",
+   "score_start": 0.1495539950654773,
+   "tree": 0.05489133933580423,
+   "least_sure": 0.05489133933580423,
+   "learned_in_use": 0.036350991192865834,
+   "oracle": 0.07158453996636982,
+   "random": 0.01846135533794287
+  },
+  {
+   "episode": "p-122.5+60.0:2023:40",
+   "continent": "North America",
+   "score_start": 0.16194223374765268,
+   "tree": 0.015406813717636303,
+   "least_sure": 0.019368897122931744,
+   "learned_in_use": 0.019503132150460872,
+   "oracle": 0.019368897122931744,
+   "random": 0.003464021572649273
+  },
+  {
+   "episode": "p-105.0+20.0:2023:01",
+   "continent": "North America",
+   "score_start": 0.24492007586020048,
+   "tree": 0.02732032878127527,
+   "least_sure": 0.024980066793151845,
+   "learned_in_use": 0.01632000642014042,
+   "oracle": 0.027677585959018203,
+   "random": 0.0032263508265514365
+  },
+  {
+   "episode": "p-97.5+47.5:2025:44",
+   "continent": "North America",
+   "score_start": 0.12238219895287958,
+   "tree": 0.038581330988588236,
+   "least_sure": 0.04564131981690786,
+   "learned_in_use": 0.06212703763737193,
+   "oracle": 0.0498676878737388,
+   "random": 0.0072999053135791485
+  },
+  {
+   "episode": "p-112.5+60.0:2023:02",
+   "continent": "North America",
+   "score_start": 0.38084341288002616,
+   "tree": 0.07103529509624279,
+   "least_sure": 0.07103529509624279,
+   "learned_in_use": 0.055709384695135644,
+   "oracle": 0.07523599158647509,
+   "random": 0.018757462912926886
+  },
+  {
+   "episode": "p-107.5+20.0:2025:44",
+   "continent": "North America",
+   "score_start": 0.14559686888454013,
+   "tree": 0.031017016620941,
+   "least_sure": 0.03211524593183809,
+   "learned_in_use": 0.0291184825092565,
+   "oracle": 0.04203031874264751,
+   "random": 0.0028891176480637937
+  },
+  {
+   "episode": "p-122.5+42.5:2024:22",
+   "continent": "North America",
+   "score_start": 0.27964796479647963,
+   "tree": 0.13855203520352039,
+   "least_sure": 0.13855203520352039,
+   "learned_in_use": 0.11606771193185533,
+   "oracle": 0.1490666933146092,
+   "random": 0.008197702210697266
+  },
+  {
+   "episode": "p-70.0+55.0:2023:22",
+   "continent": "North America",
+   "score_start": 0.21809781742870799,
+   "tree": 0.03587800954330217,
+   "least_sure": 0.03587800954330217,
+   "learned_in_use": 0.03374991363701563,
+   "oracle": 0.03691810613817098,
+   "random": 0.012577394326654992
+  },
+  {
+   "episode": "p-102.5+17.5:2024:01",
+   "continent": "North America",
+   "score_start": 0.09040247678018576,
+   "tree": 0.01722359948057685,
+   "least_sure": 0.018539588710998117,
+   "learned_in_use": 0.0534246837136414,
+   "oracle": 0.03170146811649552,
+   "random": 0.006882406528220447
+  },
+  {
+   "episode": "p-80.0+47.5:2023:03",
+   "continent": "North America",
+   "score_start": 0.1811529933481153,
+   "tree": 0.022629512562050175,
+   "least_sure": 0.022629512562050175,
+   "learned_in_use": 0.059501212259361336,
+   "oracle": 0.04859761358192222,
+   "random": 0.0008161684798766352
+  },
+  {
+   "episode": "p-102.5+55.0:2025:20",
+   "continent": "North America",
+   "score_start": 0.18602273410717507,
+   "tree": 0.05452915551490051,
+   "least_sure": 0.05452915551490051,
+   "learned_in_use": 0.044118627459040105,
+   "oracle": 0.07322559912782406,
+   "random": 0.00991593361235063
+  },
+  {
+   "episode": "p-105.0+20.0:2024:13",
+   "continent": "North America",
+   "score_start": 0.24927675988428158,
+   "tree": 0.01769156590757362,
+   "least_sure": 0.017322327799448783,
+   "learned_in_use": 0.03782899150718408,
+   "oracle": 0.017124830572974897,
+   "random": 0.004229880832464117
+  },
+  {
+   "episode": "p-122.5+45.0:2023:41",
+   "continent": "North America",
+   "score_start": 0.1485053037608486,
+   "tree": 0.07539098215365733,
+   "least_sure": 0.0611664223245732,
+   "learned_in_use": 0.054129577042162674,
+   "oracle": 0.07539098215365733,
+   "random": 0.011839806558190261
+  },
+  {
+   "episode": "p-125.0+60.0:2024:34",
+   "continent": "North America",
+   "score_start": 0.3448834196891192,
+   "tree": 0.04197496251025429,
+   "least_sure": 0.04197496251025429,
+   "learned_in_use": 0.03730095889283597,
+   "oracle": 0.046542638057021746,
+   "random": 0.0014738956563095467
+  },
+  {
+   "episode": "p-90.0+17.5:2024:22",
+   "continent": "North America",
+   "score_start": 0.0715372907153729,
+   "tree": 0.027712083763359374,
+   "least_sure": 0.018522182521670427,
+   "learned_in_use": 0.018605927481762735,
+   "oracle": 0.047794451528063844,
+   "random": 0.0032392408652903715
+  },
+  {
+   "episode": "p-72.5+47.5:2023:03",
+   "continent": "North America",
+   "score_start": 0.13017066820943013,
+   "tree": 0.015029817817301339,
+   "least_sure": 0.015029817817301339,
+   "learned_in_use": 0.03644587314395334,
+   "oracle": 0.05042634671594301,
+   "random": 0.010158908274839404
+  },
+  {
+   "episode": "p-120.0+55.0:2023:12",
+   "continent": "North America",
+   "score_start": 0.2816179526250173,
+   "tree": 0.04028576428624314,
+   "least_sure": 0.04028576428624314,
+   "learned_in_use": 0.03737795768382485,
+   "oracle": 0.05863211388203243,
+   "random": 0.002438828789745273
+  },
+  {
+   "episode": "p-105.0+17.5:2024:13",
+   "continent": "North America",
+   "score_start": 0.15045537340619308,
+   "tree": 0.02819803133749474,
+   "least_sure": 0.02819803133749474,
+   "learned_in_use": 0.032514366213792834,
+   "oracle": 0.03316044580284647,
+   "random": 0.008154371996227807
+  },
+  {
+   "episode": "p-125.0+40.0:2025:32",
+   "continent": "North America",
+   "score_start": 0.19201995012468828,
+   "tree": 0.11409251931296452,
+   "least_sure": 0.11409251931296452,
+   "learned_in_use": 0.11593349313428361,
+   "oracle": 0.11409251931296452,
+   "random": 0.021714787121296403
+  },
+  {
+   "episode": "p-102.5+52.5:2025:04",
+   "continent": "North America",
+   "score_start": 0.15132215414382458,
+   "tree": 0.012653505085384348,
+   "least_sure": 0.012653505085384348,
+   "learned_in_use": 0.048677845856175433,
+   "oracle": 0.013934151795963856,
+   "random": 0.0070790924093867
+  },
+  {
+   "episode": "p-102.5+15.0:2024:44",
+   "continent": "North America",
+   "score_start": 0.17188229799159271,
+   "tree": 0.023769875921450773,
+   "least_sure": 0.023769875921450773,
+   "learned_in_use": 0.036346502811217124,
+   "oracle": 0.02988067948147291,
+   "random": 0.003040807447069129
+  },
+  {
+   "episode": "p-110.0+42.5:2024:44",
+   "continent": "North America",
+   "score_start": 0.2351865398683248,
+   "tree": 0.033537585084629645,
+   "least_sure": 0.033537585084629645,
+   "learned_in_use": 0.07307824665733129,
+   "oracle": 0.04842446361869571,
+   "random": 0.0007665863330160819
+  },
+  {
+   "episode": "p+140.0-22.5:2024:12",
+   "continent": "Oceania",
+   "score_start": 0.19646433858747714,
+   "tree": 0.0180943673053324,
+   "least_sure": 0.0180943673053324,
+   "learned_in_use": 0.013819998331685485,
+   "oracle": 0.022508650949799064,
+   "random": 0.0034338995638253287
+  },
+  {
+   "episode": "p+150.0-30.0:2023:12",
+   "continent": "Oceania",
+   "score_start": 0.4033722438391699,
+   "tree": 0.13369787675037903,
+   "least_sure": 0.13369787675037903,
+   "learned_in_use": 0.10348312988926878,
+   "oracle": 0.13369787675037903,
+   "random": 0.011692478949301144
+  },
+  {
+   "episode": "p+140.0-37.5:2025:40",
+   "continent": "Oceania",
+   "score_start": 0.32115085536547433,
+   "tree": 0.035607287748144534,
+   "least_sure": 0.03809410387948492,
+   "learned_in_use": 0.04332535171139512,
+   "oracle": 0.050099565935503076,
+   "random": 0.005336527771029942
+  },
+  {
+   "episode": "p+132.5-22.5:2023:12",
+   "continent": "Oceania",
+   "score_start": 0.14741434154321548,
+   "tree": 0.05059347822963875,
+   "least_sure": 0.022806349396350595,
+   "learned_in_use": 0.04766314250418652,
+   "oracle": 0.06851798788604646,
+   "random": 0.009565705817980052
+  },
+  {
+   "episode": "p+130.0-25.0:2023:22",
+   "continent": "Oceania",
+   "score_start": 0.12537829658452226,
+   "tree": 0.04123999078848209,
+   "least_sure": 0.022726829014432293,
+   "learned_in_use": 0.061939487672037497,
+   "oracle": 0.04375307455689914,
+   "random": 0.005752980712479168
+  },
+  {
+   "episode": "p+142.5-42.5:2025:42",
+   "continent": "Oceania",
+   "score_start": 0.2232926568186684,
+   "tree": 0.1378796657904105,
+   "least_sure": 0.1378796657904105,
+   "learned_in_use": 0.13657503888144185,
+   "oracle": 0.13765803176418367,
+   "random": 0.0051636466905385274
+  },
+  {
+   "episode": "p+135.0-22.5:2023:43",
+   "continent": "Oceania",
+   "score_start": 0.14696006287061514,
+   "tree": 0.03218644590258149,
+   "least_sure": 0.025876754783275696,
+   "learned_in_use": 0.007348844862950121,
+   "oracle": 0.041227913420663426,
+   "random": 0.011531394311405938
+  },
+  {
+   "episode": "p+130.0-27.5:2023:20",
+   "continent": "Oceania",
+   "score_start": 0.0723793677204659,
+   "tree": 0.023218387998135748,
+   "least_sure": 0.023218387998135748,
+   "learned_in_use": 0.014968768014766612,
+   "oracle": 0.04457724514895352,
+   "random": 0.014916210502164165
+  },
+  {
+   "episode": "p+140.0-37.5:2024:40",
+   "continent": "Oceania",
+   "score_start": 0.21769748928352725,
+   "tree": 0.14123716540832779,
+   "least_sure": 0.14123716540832779,
+   "learned_in_use": 0.12065309083563239,
+   "oracle": 0.14834944762595156,
+   "random": 0.002522957656378786
+  },
+  {
+   "episode": "p+130.0-22.5:2023:43",
+   "continent": "Oceania",
+   "score_start": 0.06846380433812371,
+   "tree": 0.03790556420797882,
+   "least_sure": 0.04360516117911767,
+   "learned_in_use": 0.030815474941155566,
+   "oracle": 0.058758417884098496,
+   "random": 0.01743253649374429
+  },
+  {
+   "episode": "p+145.0-30.0:2023:40",
+   "continent": "Oceania",
+   "score_start": 0.2520048602673147,
+   "tree": 0.05657254559042585,
+   "least_sure": 0.05657254559042585,
+   "learned_in_use": 0.041812206671877905,
+   "oracle": 0.05596709506896158,
+   "random": 0.0012350565080483562
+  },
+  {
+   "episode": "p+145.0-42.5:2025:01",
+   "continent": "Oceania",
+   "score_start": 0.17458396369137671,
+   "tree": 0.04791067314588959,
+   "least_sure": 0.04791067314588959,
+   "learned_in_use": 0.022868265607986354,
+   "oracle": 0.04791067314588959,
+   "random": 0.0
+  },
+  {
+   "episode": "p+140.0-20.0:2023:43",
+   "continent": "Oceania",
+   "score_start": 0.162792628258343,
+   "tree": 0.037172670605194774,
+   "least_sure": 0.024283384961347382,
+   "learned_in_use": 0.02482312180204832,
+   "oracle": 0.037346296808948826,
+   "random": 0.005644732204576175
+  },
+  {
+   "episode": "p+150.0-30.0:2024:12",
+   "continent": "Oceania",
+   "score_start": 0.37098482174373454,
+   "tree": 0.10961547108203412,
+   "least_sure": 0.11434087618038857,
+   "learned_in_use": 0.10589481115425348,
+   "oracle": 0.1367295664873383,
+   "random": 0.006559522973218712
+  },
+  {
+   "episode": "p+137.5-22.5:2023:34",
+   "continent": "Oceania",
+   "score_start": 0.17156225630361321,
+   "tree": 0.03282985905556127,
+   "least_sure": 0.03282985905556127,
+   "learned_in_use": 0.028758899858570636,
+   "oracle": 0.04422721738059732,
+   "random": 0.005542396371958941
+  },
+  {
+   "episode": "p+140.0-30.0:2024:34",
+   "continent": "Oceania",
+   "score_start": 0.1394112837285364,
+   "tree": 0.04567869056452273,
+   "least_sure": 0.04567869056452273,
+   "learned_in_use": 0.05050770817065353,
+   "oracle": 0.052016098710082004,
+   "random": 0.0027719963329121133
+  },
+  {
+   "episode": "p+137.5-22.5:2024:24",
+   "continent": "Oceania",
+   "score_start": 0.14828634604754007,
+   "tree": 0.03758780015214022,
+   "least_sure": 0.03758780015214022,
+   "learned_in_use": 0.04344895231974791,
+   "oracle": 0.05055969954773154,
+   "random": 0.008537733625593883
+  },
+  {
+   "episode": "p+137.5-25.0:2023:41",
+   "continent": "Oceania",
+   "score_start": 0.1229012760241773,
+   "tree": 0.025446149033470672,
+   "least_sure": 0.025446149033470672,
+   "learned_in_use": 0.013671976902392413,
+   "oracle": 0.031714964242786,
+   "random": 0.0023066892768341626
+  },
+  {
+   "episode": "p+130.0-22.5:2025:01",
+   "continent": "Oceania",
+   "score_start": 0.09611298587676541,
+   "tree": 0.020520929277552016,
+   "least_sure": 0.018726952240573635,
+   "learned_in_use": -0.0006525448910325998,
+   "oracle": 0.04371649037171206,
+   "random": -0.005095666249035037
+  },
+  {
+   "episode": "p+145.0-32.5:2023:33",
+   "continent": "Oceania",
+   "score_start": 0.17312894499549145,
+   "tree": 0.042926100876068185,
+   "least_sure": 0.057022283737967916,
+   "learned_in_use": 0.06460111635420179,
+   "oracle": 0.05800313047620667,
+   "random": -0.004113283610981057
+  },
+  {
+   "episode": "p+132.5-22.5:2025:04",
+   "continent": "Oceania",
+   "score_start": 0.05026406847568749,
+   "tree": 0.045930810613928445,
+   "least_sure": 0.021504514460965747,
+   "learned_in_use": 0.02770264643024594,
+   "oracle": 0.05004042731510599,
+   "random": 0.008432186394003054
+  },
+  {
+   "episode": "p+147.5-30.0:2025:00",
+   "continent": "Oceania",
+   "score_start": 0.3424725822532403,
+   "tree": 0.11865815979622968,
+   "least_sure": 0.11865815979622968,
+   "learned_in_use": 0.11724044202932044,
+   "oracle": 0.11865815979622968,
+   "random": 0.028597851896382254
+  },
+  {
+   "episode": "p+135.0-22.5:2024:03",
+   "continent": "Oceania",
+   "score_start": 0.11345974510413429,
+   "tree": 0.022619177539147883,
+   "least_sure": 0.026144526252649625,
+   "learned_in_use": 0.027902354396751233,
+   "oracle": 0.028704784142034007,
+   "random": 0.002904998330791229
+  },
+  {
+   "episode": "p+120.0-32.5:2024:13",
+   "continent": "Oceania",
+   "score_start": 0.09538228614685844,
+   "tree": 0.04135089936681487,
+   "least_sure": 0.04135089936681487,
+   "learned_in_use": 0.060306336607632585,
+   "oracle": 0.04135089936681487,
+   "random": 0.0
+  },
+  {
+   "episode": "p+140.0-17.5:2024:41",
+   "continent": "Oceania",
+   "score_start": 0.05175237471339666,
+   "tree": 0.009190386229364286,
+   "least_sure": 0.00958714783302244,
+   "learned_in_use": 0.0341062111451892,
+   "oracle": 0.01726954219860858,
+   "random": 0.0
+  },
+  {
+   "episode": "p+140.0-22.5:2023:03",
+   "continent": "Oceania",
+   "score_start": 0.17659176029962548,
+   "tree": 0.041231952648892456,
+   "least_sure": 0.041231952648892456,
+   "learned_in_use": 0.03302028370732299,
+   "oracle": 0.042991090221811384,
+   "random": 0.007324796878572404
+  },
+  {
+   "episode": "p+140.0-20.0:2024:41",
+   "continent": "Oceania",
+   "score_start": 0.12638420799229658,
+   "tree": 0.06236981727399027,
+   "least_sure": 0.07376259895656567,
+   "learned_in_use": 0.06431693571730063,
+   "oracle": 0.07376259895656567,
+   "random": 0.01771935635079047
+  },
+  {
+   "episode": "p+147.5-22.5:2024:13",
+   "continent": "Oceania",
+   "score_start": 0.16623711340206185,
+   "tree": 0.082776044492675,
+   "least_sure": 0.07307912591417748,
+   "learned_in_use": 0.07915155589965092,
+   "oracle": 0.1285067322399874,
+   "random": 0.01098638963796709
+  },
+  {
+   "episode": "p+140.0-15.0:2023:43",
+   "continent": "Oceania",
+   "score_start": 0.13162492719860222,
+   "tree": 0.016359833178377914,
+   "least_sure": 0.02967189116627897,
+   "learned_in_use": 0.036226042649678936,
+   "oracle": 0.04313049194584437,
+   "random": 0.013526212995823303
+  },
+  {
+   "episode": "p+140.0-17.5:2025:32",
+   "continent": "Oceania",
+   "score_start": 0.05271858927259368,
+   "tree": 0.021382929808547488,
+   "least_sure": 0.021382929808547488,
+   "learned_in_use": 0.03140377052347333,
+   "oracle": 0.038142008166951125,
+   "random": 0.013279982927122727
+  },
+  {
+   "episode": "p+140.0-15.0:2025:42",
+   "continent": "Oceania",
+   "score_start": 0.0664196877480815,
+   "tree": 0.022658546179106717,
+   "least_sure": 0.02500301384411162,
+   "learned_in_use": 0.022712446731981042,
+   "oracle": 0.053680814764481305,
+   "random": 0.013240915839588738
+  },
+  {
+   "episode": "p+140.0-12.5:2024:42",
+   "continent": "Oceania",
+   "score_start": 0.1261406333870102,
+   "tree": 0.1097786014695254,
+   "least_sure": 0.1097786014695254,
+   "learned_in_use": 0.03172574592333463,
+   "oracle": 0.12488606065816432,
+   "random": -0.00024623470885334897
+  },
+  {
+   "episode": "p+140.0-12.5:2023:40",
+   "continent": "Oceania",
+   "score_start": 0.16117418997507615,
+   "tree": 0.024899199218798462,
+   "least_sure": 0.02879446206254141,
+   "learned_in_use": 0.020260409181041994,
+   "oracle": 0.03439334521510054,
+   "random": 0.006897333617239053
+  },
+  {
+   "episode": "p+150.0-22.5:2023:00",
+   "continent": "Oceania",
+   "score_start": 0.14592484138604198,
+   "tree": 0.060029282576866766,
+   "least_sure": 0.060029282576866766,
+   "learned_in_use": 0.043611190203296624,
+   "oracle": 0.07004869358560264,
+   "random": 0.00799260322415779
+  },
+  {
+   "episode": "p+147.5-22.5:2025:30",
+   "continent": "Oceania",
+   "score_start": 0.11786203746002741,
+   "tree": 0.0364940231460332,
+   "least_sure": 0.033581407878354036,
+   "learned_in_use": 0.041519860994718716,
+   "oracle": 0.08618290636019732,
+   "random": 0.010196089332890929
+  },
+  {
+   "episode": "p-60.0-17.5:2024:11",
+   "continent": "South America",
+   "score_start": 0.26914781693845347,
+   "tree": 0.001448591233213281,
+   "least_sure": -0.00042366316299013995,
+   "learned_in_use": 0.03300762673681401,
+   "oracle": 0.016443667904668446,
+   "random": -0.0022676916833025786
+  },
+  {
+   "episode": "p-60.0-27.5:2024:34",
+   "continent": "South America",
+   "score_start": 0.13588929219600726,
+   "tree": 0.02770741163336743,
+   "least_sure": 0.057780109914192024,
+   "learned_in_use": 0.04420549453385056,
+   "oracle": 0.05681310233078862,
+   "random": 0.00723522716081441
+  },
+  {
+   "episode": "p-72.5-40.0:2023:04",
+   "continent": "South America",
+   "score_start": 0.2668545188895846,
+   "tree": 0.023110288618147068,
+   "least_sure": 0.036678207595027434,
+   "learned_in_use": 0.03396532555018833,
+   "oracle": 0.04203581206434143,
+   "random": 0.011370810705702209
+  },
+  {
+   "episode": "p-60.0-20.0:2024:34",
+   "continent": "South America",
+   "score_start": 0.3376594905073004,
+   "tree": 0.030203907040860734,
+   "least_sure": 0.027232114962995546,
+   "learned_in_use": 0.026411283094662674,
+   "oracle": 0.034153293285923536,
+   "random": 0.010966807342725463
+  },
+  {
+   "episode": "p-60.0-25.0:2024:40",
+   "continent": "South America",
+   "score_start": 0.19745801180208805,
+   "tree": 0.038800425999262006,
+   "least_sure": 0.04690108565350484,
+   "learned_in_use": 0.03961095371515333,
+   "oracle": 0.051466976253334795,
+   "random": 0.0004668118954988069
+  },
+  {
+   "episode": "p-72.5-40.0:2025:20",
+   "continent": "South America",
+   "score_start": 0.2589804258980426,
+   "tree": 0.07925800447090603,
+   "least_sure": 0.07925800447090603,
+   "learned_in_use": 0.0839896240187627,
+   "oracle": 0.0896434273129666,
+   "random": 0.007296565221019291
+  },
+  {
+   "episode": "p-57.5-20.0:2023:10",
+   "continent": "South America",
+   "score_start": 0.18891117293135795,
+   "tree": 0.01696151970478474,
+   "least_sure": 0.0176419070162174,
+   "learned_in_use": 0.018863096997608103,
+   "oracle": 0.039645346538996235,
+   "random": 0.011206271170375212
+  },
+  {
+   "episode": "p-65.0-32.5:2024:13",
+   "continent": "South America",
+   "score_start": 0.2150482968988307,
+   "tree": 0.07764744666396489,
+   "least_sure": 0.07730788907437652,
+   "learned_in_use": 0.09262400479167643,
+   "oracle": 0.11416222941695875,
+   "random": 0.03356829554970639
+  },
+  {
+   "episode": "p-72.5-42.5:2025:12",
+   "continent": "South America",
+   "score_start": 0.16248077908764735,
+   "tree": 0.04465789850158611,
+   "least_sure": 0.0425134137114235,
+   "learned_in_use": 0.07393929333863303,
+   "oracle": 0.041408109801241544,
+   "random": 0.0063786159532147986
+  },
+  {
+   "episode": "p-57.5-20.0:2024:20",
+   "continent": "South America",
+   "score_start": 0.23160669264267705,
+   "tree": 0.01583387650533613,
+   "least_sure": 0.015494213143972702,
+   "learned_in_use": 0.015492090261370495,
+   "oracle": 0.03007609491122107,
+   "random": -0.0005957608820369997
+  },
+  {
+   "episode": "p-62.5-25.0:2024:30",
+   "continent": "South America",
+   "score_start": 0.3518811255137528,
+   "tree": 0.0972992023550997,
+   "least_sure": 0.08300259541647975,
+   "learned_in_use": 0.08529504028935603,
+   "oracle": 0.09836517990496646,
+   "random": 0.00805174052360604
+  },
+  {
+   "episode": "p-72.5-45.0:2024:14",
+   "continent": "South America",
+   "score_start": 0.13171759747102213,
+   "tree": 0.032960206824920596,
+   "least_sure": 0.032960206824920596,
+   "learned_in_use": 0.05994079379014966,
+   "oracle": 0.032960206824920596,
+   "random": 0.0
+  },
+  {
+   "episode": "p-55.0-10.0:2024:03",
+   "continent": "South America",
+   "score_start": 0.2434346736406233,
+   "tree": 0.02077539767988676,
+   "least_sure": 0.02077539767988676,
+   "learned_in_use": 0.030530408164581496,
+   "oracle": 0.027860415451075954,
+   "random": 0.011143800904906187
+  },
+  {
+   "episode": "p-60.0-25.0:2023:32",
+   "continent": "South America",
+   "score_start": 0.10751359367276322,
+   "tree": 0.0390873404216841,
+   "least_sure": 0.0390873404216841,
+   "learned_in_use": 0.06854996347741618,
+   "oracle": 0.05229331689634248,
+   "random": 0.006563839321713255
+  },
+  {
+   "episode": "p-62.5+2.5:2024:10",
+   "continent": "South America",
+   "score_start": 0.24785980461275053,
+   "tree": 0.015239188163727213,
+   "least_sure": 0.009748556899699501,
+   "learned_in_use": 0.03449663692250682,
+   "oracle": 0.021393575751740945,
+   "random": 0.0019558526116743857
+  },
+  {
+   "episode": "p-60.0-30.0:2023:43",
+   "continent": "South America",
+   "score_start": 0.2663115845539281,
+   "tree": 0.06973946117453694,
+   "least_sure": 0.06973946117453694,
+   "learned_in_use": 0.06417274593040234,
+   "oracle": 0.06667596731329178,
+   "random": 0.0004126947734146939
+  },
+  {
+   "episode": "p-62.5+0.0:2024:14",
+   "continent": "South America",
+   "score_start": 0.24911550468262228,
+   "tree": 0.02944849115504683,
+   "least_sure": 0.02944849115504683,
+   "learned_in_use": 0.024888479381122763,
+   "oracle": 0.035448253706639454,
+   "random": 0.003921450207273598
+  },
+  {
+   "episode": "p-62.5-25.0:2023:41",
+   "continent": "South America",
+   "score_start": 0.2476159158171654,
+   "tree": 0.01765632853874427,
+   "least_sure": 0.017909428258027604,
+   "learned_in_use": 0.015595124236688518,
+   "oracle": 0.023925450471883658,
+   "random": 0.0014086710616146487
+  },
+  {
+   "episode": "p-60.0-15.0:2024:10",
+   "continent": "South America",
+   "score_start": 0.25003531572255966,
+   "tree": 0.03365957580998058,
+   "least_sure": 0.049857244041071835,
+   "learned_in_use": 0.05570149776303035,
+   "oracle": 0.04905475417062244,
+   "random": 0.007791355724210654
+  },
+  {
+   "episode": "p-60.0-27.5:2023:14",
+   "continent": "South America",
+   "score_start": 0.13318181818181818,
+   "tree": 0.026045057105802627,
+   "least_sure": 0.026045057105802627,
+   "learned_in_use": -0.008698584373825535,
+   "oracle": 0.04492578849721707,
+   "random": -0.00011094126152474033
+  },
+  {
+   "episode": "p-57.5-22.5:2024:14",
+   "continent": "South America",
+   "score_start": 0.24242424242424243,
+   "tree": 0.1840805796575667,
+   "least_sure": 0.1840805796575667,
+   "learned_in_use": 0.13953821751776885,
+   "oracle": 0.1840805796575667,
+   "random": 0.0004724137550136398
+  },
+  {
+   "episode": "p-62.5-30.0:2023:32",
+   "continent": "South America",
+   "score_start": 0.04734982332155477,
+   "tree": 0.019248885478988897,
+   "least_sure": 0.023039347575230337,
+   "learned_in_use": 0.05591466701821872,
+   "oracle": 0.03404552551565454,
+   "random": 0.0034005413948497245
+  },
+  {
+   "episode": "p-57.5-10.0:2024:44",
+   "continent": "South America",
+   "score_start": 0.2626878999851168,
+   "tree": 0.021366233583579863,
+   "least_sure": 0.021366233583579863,
+   "learned_in_use": 0.024146183336119953,
+   "oracle": 0.03146449221807279,
+   "random": 0.003429146126682936
+  },
+  {
+   "episode": "p-65.0-30.0:2025:43",
+   "continent": "South America",
+   "score_start": 0.23522853957636566,
+   "tree": 0.042549238201412126,
+   "least_sure": 0.03317463143156188,
+   "learned_in_use": 0.013218665392578433,
+   "oracle": 0.0690138846660586,
+   "random": 0.0005840644765805666
+  },
+  {
+   "episode": "p-52.5-10.0:2024:11",
+   "continent": "South America",
+   "score_start": 0.17301212938005392,
+   "tree": 0.053029184537995516,
+   "least_sure": 0.053029184537995516,
+   "learned_in_use": 0.0336937739550629,
+   "oracle": 0.06354883382157403,
+   "random": 0.0013547401875814897
+  },
+  {
+   "episode": "p-67.5-30.0:2024:00",
+   "continent": "South America",
+   "score_start": 0.2358490566037736,
+   "tree": 0.09987547711215183,
+   "least_sure": 0.09987547711215183,
+   "learned_in_use": 0.1078567425475701,
+   "oracle": 0.09085548885077188,
+   "random": 0.005344405270793236
+  },
+  {
+   "episode": "p-67.5-10.0:2024:31",
+   "continent": "South America",
+   "score_start": 0.282009282009282,
+   "tree": 0.04074933868037317,
+   "least_sure": 0.042997580466699326,
+   "learned_in_use": 0.04261245114064921,
+   "oracle": 0.05204594267940238,
+   "random": 0.017780316101282428
+  },
+  {
+   "episode": "p-62.5-30.0:2024:31",
+   "continent": "South America",
+   "score_start": 0.12140240711669283,
+   "tree": 0.05105000049808882,
+   "least_sure": 0.05105000049808882,
+   "learned_in_use": 0.012737230046583711,
+   "oracle": 0.05188677610626523,
+   "random": 0.010229998912903224
+  },
+  {
+   "episode": "p-60.0-22.5:2024:43",
+   "continent": "South America",
+   "score_start": 0.11937019406810692,
+   "tree": 0.04325352027305357,
+   "least_sure": 0.037764410206878624,
+   "learned_in_use": 0.05942479810716694,
+   "oracle": 0.04847534215823604,
+   "random": 0.00604757058016181
+  },
+  {
+   "episode": "p-67.5-32.5:2024:42",
+   "continent": "South America",
+   "score_start": 0.20113960113960114,
+   "tree": 0.032027481154663195,
+   "least_sure": 0.032027481154663195,
+   "learned_in_use": 0.018674640346466986,
+   "oracle": 0.05750316454541807,
+   "random": 0.025865656572268737
+  },
+  {
+   "episode": "p-52.5-20.0:2024:14",
+   "continent": "South America",
+   "score_start": 0.12384937238493723,
+   "tree": 0.04477085534446665,
+   "least_sure": 0.04477085534446665,
+   "learned_in_use": 0.014924732298258359,
+   "oracle": 0.0558288663957571,
+   "random": 0.00846836574022127
+  },
+  {
+   "episode": "p-62.5-27.5:2024:23",
+   "continent": "South America",
+   "score_start": 0.21599169262720663,
+   "tree": 0.050452008599103315,
+   "least_sure": 0.050452008599103315,
+   "learned_in_use": 0.09378451467550242,
+   "oracle": 0.05572322942179114,
+   "random": 0.0
+  },
+  {
+   "episode": "p-65.0-10.0:2024:42",
+   "continent": "South America",
+   "score_start": 0.2217125382262997,
+   "tree": 0.03195428283283261,
+   "least_sure": 0.03195428283283261,
+   "learned_in_use": 0.028171056372489706,
+   "oracle": 0.04511695345435976,
+   "random": 0.013538097110798777
+  },
+  {
+   "episode": "p-65.0-32.5:2025:01",
+   "continent": "South America",
+   "score_start": 0.11650485436893204,
+   "tree": 0.1047717413757488,
+   "least_sure": 0.1047717413757488,
+   "learned_in_use": 0.08047573513502196,
+   "oracle": 0.11264670473186564,
+   "random": 0.0
+  },
+  {
+   "episode": "p-52.5-7.5:2024:01",
+   "continent": "South America",
+   "score_start": 0.16664661292263266,
+   "tree": 0.02994203249569402,
+   "least_sure": 0.012224334630252548,
+   "learned_in_use": 0.01494847910190722,
+   "oracle": 0.036835298424447216,
+   "random": 0.018422872799804858
+  },
+  {
+   "episode": "p-67.5-32.5:2025:04",
+   "continent": "South America",
+   "score_start": 0.11618942731277533,
+   "tree": 0.0807617921994198,
+   "least_sure": 0.07308502063675147,
+   "learned_in_use": 0.013419511234710704,
+   "oracle": 0.0807617921994198,
+   "random": 0.006716200285412917
+  },
+  {
+   "episode": "p-60.0-10.0:2024:41",
+   "continent": "South America",
+   "score_start": 0.27133556220306176,
+   "tree": 0.03939171052421098,
+   "least_sure": 0.04666222947894044,
+   "learned_in_use": 0.05627896599551463,
+   "oracle": 0.04666222947894044,
+   "random": 0.006238877675015186
+  },
+  {
+   "episode": "p-57.5-12.5:2024:11",
+   "continent": "South America",
+   "score_start": 0.2966278101582015,
+   "tree": 0.05239019311512094,
+   "least_sure": 0.05239019311512094,
+   "learned_in_use": 0.0606227823865087,
+   "oracle": 0.05239019311512094,
+   "random": 0.004390836152997957
+  },
+  {
+   "episode": "p-65.0+7.5:2024:42",
+   "continent": "South America",
+   "score_start": 0.20301117047110248,
+   "tree": 0.02664193159694289,
+   "least_sure": 0.026631078251214385,
+   "learned_in_use": 0.05470610038531673,
+   "oracle": 0.04642741995902361,
+   "random": -0.00010094503753982353
+  },
+  {
+   "episode": "p-65.0-10.0:2023:43",
+   "continent": "South America",
+   "score_start": 0.1399389079801451,
+   "tree": 0.008173386308335057,
+   "least_sure": 0.013817189580830502,
+   "learned_in_use": 0.026336981039003005,
+   "oracle": 0.0191649462062988,
+   "random": 0.002437028223603921
+  }
+ ],
+ "seconds": 265.1,
+ "generated_utc": "2026-11-15T23:34:14Z"
+}
