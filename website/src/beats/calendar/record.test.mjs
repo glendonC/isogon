@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { boxRoute, gridOf, logClass, parseRecord, rampBounds } from './record.ts';
 import { publishRecordView, readRecordView, RECORD_CLOSED } from './recordView.ts';
 import { gridLine, methodLine, monthLine, notLoadedLine, percent, rate, RECORD_WORDS, times, unstableLine } from './recordWords.ts';
+import { CSV_COLUMNS, recordCsv, recordFileName } from './recordCsv.ts';
 
 const month = (ym, harmonized, modis, viirs, extra = {}) => ({
   year_month: ym,
@@ -200,7 +201,7 @@ test("the method is named in the product lane's words, with how often a month's 
     },
   };
   const r = parseRecord(served, { kind: 'region', regionId: 'x', name: 'Somewhere' });
-  assert.deepEqual(r.method, { id: 'pooled_month_size_v1', level: 0.8, monthsHeld: { held: 117, of: 144 } });
+  assert.deepEqual(r.method, { id: 'pooled_month_size_v1', level: 0.8, monthsHeld: { held: 117, of: 144 }, what: null });
   assert.equal(
     methodLine(r.method.id, r.method.level, r.method.monthsHeld),
     "Every year is on the newer satellite's scale by a factor for each month of the year and for how much fire it has, leaning on nearby places. A month's band is its range: with each year hidden in turn, it held the newer satellite's own count in 117 of 144 months, meant for 80 percent.",
@@ -239,4 +240,43 @@ test('a drawn area says the box it is read on, the share of its squares with det
   assert.match(gridLine(where, 0.25, 6400, 6399, false), /6,399 of its 6,400 squares \(over 99 percent\).*the other 1 has none in the countries loaded so far/);
   assert.equal(notLoadedLine(16, 0.25, true), "No fire record here: none of its 16 squares of a quarter degree (about 28 km) has a detection in NASA's files.");
   assert.match(notLoadedLine(1, 0.25, false), /^No fire record here yet: its one square .* has no detection in the countries loaded so far\.$/);
+});
+
+test("the record as a file: one row a month with the answer's own figures, and what they are at the top", () => {
+  const served = {
+    ...body,
+    provenance: 'Real NASA FIRMS standard processing rows. Not simulated.',
+    bbox: [-121.44, 39.86, -120.92, 40.24],
+    harmonization_method: {
+      ...body.harmonization_method,
+      id: 'pooled_month_size_v1',
+      interval: { level: 0.8, what: 'the 10th to 90th percentile of held-out errors' },
+    },
+    records: [
+      month('2011-08', 4, 1, null, { harmonized_p10: 3.1, harmonized_p90: 5.2, raw_counts: { Terra: { total: 7 }, Aqua: { total: 5 } } }),
+      month('2012-08', 8, 2, 9, { harmonized_p10: 6.5, harmonized_p90: 9.9, raw_counts: { Terra: { total: 10 }, 'Suomi NPP': { total: 40 }, 'NOAA-20': { total: 38 } } }),
+    ],
+  };
+  const r = parseRecord(served, { kind: 'region', regionId: 'x', name: 'Somewhere' });
+  const csv = recordCsv(r, 'https://example.org/isogon/');
+  const lines = csv.trim().split('\n');
+  const comments = lines.filter((l) => l.startsWith('#'));
+  const table = lines.filter((l) => !l.startsWith('#'));
+  assert.equal(table[0], CSV_COLUMNS.join(','));
+  // One row a month, in order, every figure the answer's
+  assert.equal(table.length - 1, r.months.size);
+  assert.equal(table[1], '2011-08,7,5,,,,1,,4,3.1,5.2');
+  assert.equal(table[2], '2012-08,10,,40,38,,2,9,8,6.5,9.9');
+  // What the figures are, at the top
+  assert.ok(comments.some((l) => l.includes('Somewhere') && l.includes('-121.44, 39.86, -120.92, 40.24')));
+  assert.ok(comments.some((l) => l.startsWith('# Source: Real NASA FIRMS')));
+  assert.ok(comments.some((l) => l.includes('pooled_month_size_v1') && l.includes('a factor for each month of the year')));
+  assert.ok(comments.some((l) => l.includes('the middle 80 percent, the 10th to 90th percentile of held-out errors')));
+  assert.ok(comments.some((l) => l === '# Page: https://example.org/isogon/'));
+  assert.equal(recordFileName(r), 'fire-record-somewhere.csv');
+  // A drawn area says the box drawn and the squares it is read on
+  const area = parseRecord({ ...served, cube: { grid_step_deg: 0.25, box_asked: [-9.6, 38.3, -8.1, 39.1], grid_box: [-9.75, 38.25, -8, 39.25], cells: 28, cells_loaded: 23 } }, { kind: 'box', box: [-9.6, 38.3, -8.1, 39.1], name: 'a box' });
+  const areaCsv = recordCsv(area, 'https://example.org/');
+  assert.ok(areaCsv.includes('# Area drawn: west, south, east, north = -9.6, 38.3, -8.1, 39.1'));
+  assert.ok(areaCsv.includes('# Read on whole squares of 0.25 degree: -9.75, 38.25, -8, 39.25 (28 squares)'));
 });

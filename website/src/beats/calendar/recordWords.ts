@@ -111,6 +111,8 @@ export const RECORD_WORDS = {
   coarse: 'The older satellites (MODIS, 1 km)',
   sharp: 'The newer, sharper satellite (VIIRS, 375 m)',
   close: 'Close the Record',
+  /** The record on screen, taken away as a file. */
+  download: 'Download this record (CSV)',
   seeAsCounted: 'See the years as the satellites counted them',
   backToOneScale: 'Back to one scale',
   noFireLegend: 'No fire',

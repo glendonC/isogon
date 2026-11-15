@@ -18,6 +18,7 @@ import {
 import { boxWords } from './placeWords';
 import { publishRecordView, RECORD_CLOSED, type RecordMonthView } from './recordView';
 import { BAND_UNIT, gridLine, methodLine, monthLine, notLoadedLine, RECORD_WORDS as W, unstableLine } from './recordWords';
+import { recordCsv, recordFileName } from './recordCsv';
 import { IntervalBand } from '../../world/IntervalBand';
 import '../../styles/calendar-screen.css';
 
@@ -192,6 +193,19 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
     setRough(false);
     setPicked(ym && l.rec?.months.has(ym) && ym !== l.marked ? ym : null);
   };
+  // The record on screen as a file, made here from the answer, so it works on a page of recorded answers too
+  const download = () => {
+    const r = live.current.rec;
+    if (!r) return;
+    const url = URL.createObjectURL(new Blob([recordCsv(r, window.location.href)], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = recordFileName(r);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const askNow = () => {
     const route = live.current.rec?.currentRoute;
     setNowOn(true);
@@ -282,6 +296,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
           setBrowsing(true);
           pick(ymOf(year, month));
         }
+      } else if (e.key === 'g' || e.key === 'G') {
+        if (!l.rec) return;
+        download();
       } else if (e.key === 'Enter') {
         // Where the guide speaks, Enter is its first action's key and the Record lets it through
         if (l.guideSpeaks || t?.closest('button, a')) return;
@@ -660,6 +677,11 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   </>
                 )}
               </span>
+              {/* The record as a file: quiet, the Record's own, where the guide speaks too */}
+              <button type="button" className="rec__act rec__download" onClick={download}>
+                <span className="rec__key">G</span>
+                {W.download}
+              </button>
               {onClose && !guideSpeaks && (
                 <button type="button" className="rec__act rec__close" onClick={onClose}>
                   <span className="rec__key">Esc</span>

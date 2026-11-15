@@ -273,6 +273,20 @@
   color: var(--sys-ink);
 }
 
+/* The record as a file: quiet among the foot's actions, after the legend */
+.rec__download {
+  color: var(--sys-ink-3);
+}
+
+.rec__download:hover,
+.rec__download:focus-visible {
+  color: var(--sys-ink);
+}
+
+.iso-film .rec__download {
+  display: none;
+}
+
 /* The method under the grid, after the legend, in the legend's ink */
 .rec__method {
   margin: 0;

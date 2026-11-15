@@ -74,6 +74,9 @@ export interface RecordMonth {
    * else the coarse one's. Same unit as `value`.
    */
   asCounted: number | null;
+  /** Each kind of satellite's own rate as it counted, with no correction: the older (MODIS) and the sharper (VIIRS). */
+  modisRate: number | null;
+  viirsRate: number | null;
   counts: Array<{ platform: string; total: number }>;
 }
 
@@ -124,7 +127,10 @@ export interface FireRecord {
    * 10th to 90th percentile), and how often a month's interval held the newer satellite's own count over the months
    * of the years hidden in turn, as the answer's check measured it.
    */
-  method: { id: string | null; level: number | null; monthsHeld: { held: number; of: number } | null };
+  method: { id: string | null; level: number | null; monthsHeld: { held: number; of: number } | null; what: string | null };
+  /** The answer's own words on where its rows come from (`provenance`), and the box it counts (`bbox`). */
+  provenance: string | null;
+  box: Box | null;
   /**
    * Where the answer's check finds the two satellites' ratio does not hold from year to year
    * (`harmonization_method.validation.ratio_stability`, `stable: false`): how many years hidden in turn were tested,
@@ -180,6 +186,8 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
       rankOf: num(r.month_years),
       timesUsual: num(r.anomaly_ratio),
       asCounted: num(r.viirs_raw_rate) ?? num(r.modis_raw_rate),
+      modisRate: num(r.modis_raw_rate),
+      viirsRate: num(r.viirs_raw_rate),
       counts,
     });
   }
@@ -237,7 +245,10 @@ export function parseRecord(body: unknown, place: RecordPlace): FireRecord | nul
       id: typeof hm.id === 'string' ? hm.id : typeof b.model_version === 'string' ? b.model_version : null,
       level: num(obj(hm.interval)?.level),
       monthsHeld: heldOf(num(val?.monthly_interval_coverage), num(val?.months_tested)),
+      what: typeof obj(hm.interval)?.what === 'string' ? String(obj(hm.interval)!.what) : null,
     },
+    provenance: typeof b.provenance === 'string' ? b.provenance : null,
+    box: box4(b.bbox) ?? box4(placeObj?.box),
     unstable: unstableOf(obj(val?.ratio_stability)),
   };
 }
