@@ -14,12 +14,18 @@ import type { YearLayerMeta } from './yearsData.ts';
 
 export * from './yearsData.ts';
 
-/** A year's cells as palette indices (1440 by 720, row 0 the north band). */
-export async function readIndices(meta: YearLayerMeta, palette: number[][]): Promise<Uint8Array> {
+/**
+ * A year's cells as palette indices (1440 by 720, row 0 the north band). A lighter twin (`lite_<layer>`, 720 by 360,
+ * the fire cube's F16) is read at its own size, so no colour is smoothed between indices, and each of its pixels is
+ * written to the 2 by 2 cells it stands for.
+ */
+export async function readIndices(meta: YearLayerMeta & { grid?: number[] }, palette: number[][]): Promise<Uint8Array> {
   const src = await assetUrl(meta.png_route ?? meta.png);
   if (!src) throw new Error(`the layer ${meta.png} is not recorded`);
   const img = await loadImage(src);
-  const { cols, rows } = GRID;
+  const twin = Array.isArray(meta.grid) && meta.grid[1] === GRID.cols / 2;
+  const cols = twin ? GRID.cols / 2 : GRID.cols;
+  const rows = twin ? GRID.rows / 2 : GRID.rows;
   const c = document.createElement('canvas');
   c.width = cols;
   c.height = rows;
@@ -52,7 +58,24 @@ export async function readIndices(meta: YearLayerMeta, palette: number[][]): Pro
     else if (a < 250) out[i] = 2;
     else out[i] = key.get((px[p] << 16) | (px[p + 1] << 8) | px[p + 2]) ?? nearest(px[p], px[p + 1], px[p + 2]);
   }
-  return out;
+  if (!twin) return out;
+  const full = new Uint8Array(GRID.cols * GRID.rows);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const k = out[r * cols + c];
+      const a = 2 * r * GRID.cols + 2 * c;
+      full[a] = k;
+      full[a + 1] = k;
+      full[a + GRID.cols] = k;
+      full[a + GRID.cols + 1] = k;
+    }
+  }
+  return full;
+}
+
+/** A layer's lighter twin in the index, where the fire cube lists one. */
+export function liteOf(idx: { layers: Record<string, YearLayerMeta> }, meta: YearLayerMeta): YearLayerMeta | null {
+  return idx.layers[`lite_${meta.family}_${meta.year}`] ?? null;
 }
 
 /** The colour of each index in the site's fire ramp: the ramp's place of index i is its middle, (i - 3 + 0.5) / 253. */

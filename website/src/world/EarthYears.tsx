@@ -15,6 +15,7 @@ import { EARTH_WORDS, gridWords, millions, roughly, wholeMillions, YEAR_WORDS as
 import {
   familyOf,
   layerOf,
+  liteOf,
   modeReady,
   paintYear,
   readIndices,
@@ -271,6 +272,8 @@ export function EarthYears({
 
   // Every year of the record on show, read once and kept as palette indices (about 1 MB a year).
   const frames = useRef(new Map<string, Uint8Array>());
+  // The years whose frame is still the lighter twin.
+  const liteKeys = useRef(new Set<string>());
   const [ready, setReady] = useState(0);
   useEffect(() => {
     if (!idx) return;
@@ -282,17 +285,32 @@ export function EarthYears({
     const inPass = (y: number) => y >= lo && y <= hi;
     const near = (y: number) => (shown === null ? 0 : Math.abs(y - shown));
     const order = [...want].sort((a, b) => Number(inPass(b.year)) - Number(inPass(a.year)) || near(a.year) - near(b.year));
+    // Outside the film, every year's lighter twin first (the fire cube's F16: a quarter of the bytes), then the full
+    // layers in the same order, each taking its twin's place as it comes in. The film reads the full layers only.
+    const twins = isFilm() ? [] : order.flatMap((m) => {
+      const t = liteOf(idx, m);
+      return t ? [{ m, t }] : [];
+    });
+    const queue: Array<{ m: (typeof order)[number]; read: (typeof order)[number]; lite: boolean }> = [
+      ...twins.map(({ m, t }) => ({ m, read: t, lite: true })),
+      ...order.map((m) => ({ m, read: m, lite: false })),
+    ];
     let i = 0;
     const next = async (): Promise<void> => {
-      while (live && i < order.length) {
-        const m = order[i++];
-        const k = `${m.family}_${m.year}`;
-        if (frames.current.has(k)) continue;
+      while (live && i < queue.length) {
+        const q = queue[i++];
+        const k = `${q.m.family}_${q.m.year}`;
+        if (q.lite ? frames.current.has(k) : frames.current.has(k) && !liteKeys.current.has(k)) continue;
         try {
           const t0 = performance.now();
-          frames.current.set(k, await readIndices(m, idx.png.palette_rgb));
+          const ix = await readIndices(q.read, idx.png.palette_rgb);
+          // A full layer read while its twin was on its way stays: the twin never takes its place.
+          if (q.lite && frames.current.has(k)) continue;
+          frames.current.set(k, ix);
+          if (q.lite) liteKeys.current.add(k);
+          else liteKeys.current.delete(k);
           // Each year's load, measured where the page can read it (the fire cube's lane times them).
-          performance.measure(`iso-year ${k}`, { start: t0, end: performance.now() });
+          performance.measure(`iso-year ${q.lite ? 'lite_' : ''}${k}`, { start: t0, end: performance.now() });
         } catch {
           // a year that cannot be read keeps the last frame on show
         }
@@ -316,9 +334,10 @@ export function EarthYears({
   const frame = useMemo(() => {
     if (!flat) return null;
     if (shown === null) return last.current;
-    const k = keyOf(shown);
+    // A year's frame is painted again when its full layer takes the twin's place.
+    const k = keyOf(shown) + (liteKeys.current.has(keyOf(shown)) ? ':lite' : '');
     if (last.current?.key === k) return last.current;
-    const ix = frames.current.get(k);
+    const ix = frames.current.get(keyOf(shown));
     if (!ix) return last.current;
     last.current = { key: k, ...paintYear(ix, lut) };
     return last.current;
