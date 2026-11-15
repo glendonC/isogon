@@ -179,7 +179,6 @@ uniform vec2 uFootMix;      // (MODIS, VIIRS): 1 on a real run, where footprints
 uniform float uLightModis;  // 1 when the lights on show are MODIS detections (the raw side shows them too), 0 for VIIRS
 uniform float uLightTexels; // side of the light texture, texels
 uniform vec2 uRevealed;     // (MODIS, VIIRS): 1 when that family's footprints on show were revealed after scoring
-uniform float uRevealByLook; // 1 when what is laid on the pass came from looks alone: those marks are drawn to be found from far
 uniform float uPixelOutline; // 1 draws the outline of each detection's pixel around its light, on the estimate's side too
 // The run's intensity scale, from its payload: (0 linear or 1 log10, top MW/km2, bottom MW/km2)
 uniform vec3 uFieldScale;
@@ -406,13 +405,14 @@ vec4 detectionLight(vec2 uv) {
   return light;
 }
 
-// A detection revealed after scoring is drawn as the instrument's pixel: a cool centre here and an
-// outline where it is used. field: the footprint field of its family (minus depth inside).
-// few is 1 where the pixel is only a few screen pixels wide: its centre is then drawn larger (a
-// dot of about half the pixel), since the small centre of a close view would be under one pixel.
+// A detection laid on after scoring (the hidden instrument once it is revealed, or what a look
+// found) is drawn as a filled square in the middle of the instrument's pixel, about six tenths
+// of the pixel across, so that it can be told from the estimate's open frames and compared
+// with them cell by cell. field: the footprint field of its family (minus depth inside).
+// few is 1 where the pixel is only a few screen pixels wide: the square's edge is then soft.
 float revealCore(float field, float few) {
   float depth = clamp(-field, 0.0, 1.0);
-  return mix(smoothstep(0.80, 0.98, depth), smoothstep(0.30, 0.62, depth), few);
+  return mix(smoothstep(0.36, 0.46, depth), smoothstep(0.30, 0.62, depth), few);
 }
 
 // --- The model's belief (real runs) -----------------------------------------------------------
@@ -435,8 +435,9 @@ const float BELIEF_CELL_FILL = 0.58; // side of a certain cell's square, as a sh
 // extent, inside the detection's pixel). Neither says the ground is burned.
 const float BELIEF_DAY_SHADE = 0.30;
 // Detections laid on after a look or a reveal: how much the ground under their marks is darkened
-// by day, and how much their cool centre is lifted when the whole block is in view
+// by day, and how much their blue is lifted when the whole block is in view
 const float REVEAL_DAY_UNDER = 0.55;
+const float REVEAL_FILL = 0.9;        // how much of the ground the blue square covers
 const float REVEAL_FAR_LIFT = 0.6;
 // A declared cell too small on screen for an open frame is drawn as a square of at least this
 // probability's size (display choice: the list says declared or not, it gives no size)
@@ -900,32 +901,32 @@ void main() {
                         + scanHairline(abs(foot.b), footGradV, 1.2) * (1.0 - uRevealed.y);
         postRgb = mix(postRgb, vec3(1.05, 0.66, 0.42) * mix(1.0, 0.8, uNight), clamp(pixelHair, 0.0, 1.0) * 0.55 * uPixelOutline * scanned * hazeTrans.g);
       }
-      // 3. Detections revealed after scoring (the hidden instrument of a blind run, or what a look
-      // uncovered): the instrument's pixels in outline with a cool centre, so they are never taken
-      // for the detections the estimate was made from
+      // 3. Detections laid on after scoring (the hidden instrument of a blind run once it is
+      // revealed, or what a look found): a filled blue square in each detection's own pixel. One
+      // mark, the same for a look and for a reveal, never the warm light of a detection the
+      // estimate was made from, and filled where the estimate's frames are open.
       if (uRevealed.x + uRevealed.y > 0.5) {
-        // (a pixel's half width on screen is one over its field's gradient: small pixels get a
-        // larger centre and a firmer outline, or a look's detections cannot be found from far)
-        // Only for what a look found. At a reveal the same detections are also drawn as lights
-        // (the page un-marks their pass), and firmer cool marks over those lights turn the fire
-        // pale from far: a reveal's marks stay as they were.
-        float smallM = (1.0 - smoothstep(3.0, 9.0, 1.0 / footGradM)) * uRevealByLook;
-        float smallV = (1.0 - smoothstep(3.0, 9.0, 1.0 / footGradV)) * uRevealByLook;
+        // (a pixel's half width on screen is one over its field's gradient)
+        float smallM = 1.0 - smoothstep(3.0, 9.0, 1.0 / footGradM);
+        float smallV = 1.0 - smoothstep(3.0, 9.0, 1.0 / footGradV);
         float coreM = revealCore(foot.r, smallM) * uRevealed.x;
         float coreV = revealCore(foot.b, smallV) * uRevealed.y;
-        float hairM = scanHairline(abs(foot.r), footGradM, mix(1.0, 1.5, smallM)) * uRevealed.x;
-        float hairV = scanHairline(abs(foot.b), footGradV, mix(1.0, 1.5, smallV)) * uRevealed.y;
-        float hairR = clamp(hairM + hairV, 0.0, 1.0);
+        float core = clamp(coreM + coreV, 0.0, 1.0);
         float fewPx = max(smallM * uRevealed.x, smallV * uRevealed.y);
-        // By day the ground under the centre and the outline is drawn darker first, so the cool
-        // marks stand on sunlit ground (display choice; the pixel is not filled)
-        postRgb *= 1.0 - REVEAL_DAY_UNDER * uRevealByLook * clamp(max(coreM, coreV) + hairR, 0.0, 1.0) * (1.0 - uNight) * hazeTrans.g;
-        // (small marks run together: they are drawn in a deeper blue there, so the patch they make
-        // stays apart from the estimate's pale ink)
-        postRgb += mix(vec3(0.22, 0.72, 1.0), vec3(0.05, 0.42, 1.0), fewPx)
-                 * (coreM * mix(0.5, 1.5, heatOf(fieldNorm(foot.g))) + coreV * mix(0.5, 1.5, heatOf(fieldNorm(foot.a))))
-                 * (1.0 + REVEAL_FAR_LIFT * uFarView * uRevealByLook) * hazeTrans.g;
-        postRgb = mix(postRgb, mix(vec3(0.40, 0.82, 1.0), vec3(0.16, 0.62, 1.0), fewPx) * mix(1.0, 0.7, uNight), hairR * mix(0.5, 0.8, fewPx));
+        // By day the ground under the square is drawn darker first, so the blue stands on sunlit
+        // ground (display choice)
+        postRgb *= 1.0 - REVEAL_DAY_UNDER * core * (1.0 - uNight) * hazeTrans.g;
+        // Its strength follows the detection's fire power. Small squares run together: they are
+        // drawn in a deeper blue there, so the patch they make stays apart from the estimate's ink
+        float power = (coreM * mix(0.6, 1.2, heatOf(fieldNorm(foot.g))) + coreV * mix(0.6, 1.2, heatOf(fieldNorm(foot.a)))) / max(coreM + coreV, 1e-4);
+        vec3 blue = mix(vec3(0.20, 0.62, 1.0), vec3(0.05, 0.42, 1.0), fewPx) * power * (1.0 + REVEAL_FAR_LIFT * uFarView);
+        postRgb = mix(postRgb, blue, core * REVEAL_FILL * hazeTrans.g);
+        // The estimate's ink stays on top, so a frame the hidden satellite filled reads as a white
+        // frame with blue inside it: the two things the test compares, one over the other
+        if (uBeliefGrid.x > 0.5) {
+          vec3 inkOver = mix(vec3(1.30, 1.32, 1.36), vec3(0.62, 0.68, 0.78), uNight) * marks.z;
+          postRgb = mix(postRgb, inkOver, marks.x * 0.84 * core * hazeTrans.g);
+        }
       }
     } else {
       // Fuel from canopy cover (pack canopy index, or the imagery heuristic without a pack)

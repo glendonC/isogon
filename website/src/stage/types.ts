@@ -269,8 +269,9 @@ export interface NormalizedSatellitePass {
   /**
    * A pass laid onto the run after scoring: the hidden instrument of a blind run once it is
    * revealed (`revealed_after_scoring`), or what a look of the next-look round uncovered
-   * (`revealed_by_a_look`). The estimate was made without it, so the stage draws it as the
-   * instrument's pixels in outline and never as the warm light of an assimilated detection.
+   * (`revealed_by_a_look`). The frame's own pass of the same instrument then counts as hidden,
+   * so the detections are drawn once. The estimate was made without them, so the stage draws them
+   * as filled blue squares in their pixels and never as the warm light of an assimilated detection.
    */
   revealed?: boolean;
   /** Revealed by a look, before the blind run itself is revealed: it makes no smoke yet. */
@@ -843,6 +844,17 @@ export function normalizeObserverDataset(
       parsedPassCount += 1;
     });
   });
+
+  // A pass whose detections were laid on after scoring was kept from the model. The page un-marks
+  // its frame when it lays them on. Here the frame's own pass of that instrument stays a pass
+  // kept from the model: its detections are drawn once, through the pass laid on, and the
+  // estimate at that pass keeps the look it has on a hidden pass (the cells the model declared).
+  for (const passes of frames) {
+    const laidOn = passes.filter((sp) => sp.revealed && !sp.revealedByLook);
+    for (const sp of passes) {
+      if (!sp.revealed && laidOn.some((r) => r.sensorLabel === sp.sensorLabel)) sp.hidden = true;
+    }
+  }
 
   if (parsedPassCount === 0) return fallback;
 
