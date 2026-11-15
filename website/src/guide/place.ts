@@ -52,7 +52,8 @@ function candidate(at: { x: number; y: number }, size: { w: number; h: number },
 
 /**
  * The first placement, by leader length then direction, that lies inside the room and covers none of the boxes; when
- * none does, the one inside the room that covers the least of them.
+ * none does, the one inside the room that covers the least of them; when none lies inside the room, the plate moved
+ * into it.
  */
 export function placeClear(
   at: { x: number; y: number },
@@ -71,5 +72,12 @@ export function placeClear(
       if (!best || cost < best.cost) best = { p, cost };
     }
   }
-  return best?.p ?? candidate(at, size, [0, -1], LEADS[0]);
+  if (best) return best.p;
+  // Nothing fits the room (a small screen, a large plate): the plate above the point, moved inside the room, its leader
+  // meeting it at the edge nearest the point. Never off the screen's edge.
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, Math.max(lo, hi)));
+  const up = candidate(at, size, [0, -1], LEADS[0]);
+  const left = clamp(up.left, room.left, room.right - size.w);
+  const top = clamp(up.top, room.top, room.bottom - size.h);
+  return { left, top, end: { x: clamp(at.x, left, left + size.w), y: clamp(at.y, top, top + size.h) } };
 }

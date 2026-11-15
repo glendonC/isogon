@@ -35,14 +35,29 @@ export function ClearPin({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  // The sizes measured for these words, latest last: a size that flips back to the one before (a plate whose size
+  // still followed its place) is not taken again, so measuring and placing can never chase each other.
+  const seen = useRef<{ label: string; sizes: string[] }>({ label, sizes: [] });
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const w = el.offsetWidth;
     const h = el.offsetHeight;
-    if (Math.abs(w - size.w) > 1 || Math.abs(h - size.h) > 1) setSize({ w, h });
+    if (Math.abs(w - size.w) <= 1 && Math.abs(h - size.h) <= 1) return;
+    if (seen.current.label !== label) seen.current = { label, sizes: [] };
+    const k = `${w}x${h}`;
+    const sizes = seen.current.sizes;
+    if (sizes.length >= 2 && sizes[sizes.length - 2] === k) return;
+    seen.current.sizes = [...sizes.slice(-3), k];
+    setSize({ w, h });
   });
-  const room: Box = { left: ROOM_SIDE, top: ROOM_TOP, right: window.innerWidth - ROOM_SIDE, bottom: window.innerHeight - ROOM_BOTTOM };
+  // The room is under the trail and above the guide's words as they stand on this screen (on a phone the objective
+  // takes two lines and the guide's words half the height), never less than the fixed room of a wide screen.
+  const trail = document.querySelector('.guide-trail')?.getBoundingClientRect();
+  const strip = document.querySelector('.guide-strip')?.getBoundingClientRect();
+  const top = Math.max(ROOM_TOP, trail && trail.height > 0 ? trail.bottom + 12 : 0);
+  const below = Math.min(window.innerHeight - ROOM_BOTTOM, strip && strip.height > 0 ? strip.top - 12 : Infinity);
+  const room: Box = { left: ROOM_SIDE, top, right: window.innerWidth - ROOM_SIDE, bottom: Math.max(below, top + size.h) };
   const p = placeClear(at, size, avoid, room);
   return (
     <div className={`guide-clear${className ? ` ${className}` : ''}`}>

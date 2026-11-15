@@ -474,7 +474,10 @@
 
 .guide-clear__plate {
   position: absolute;
-  max-width: 440px;
+  /* Its own width wherever it stands: a placed box would otherwise narrow near the screen's edge, and its size would
+     follow its place. */
+  width: max-content;
+  max-width: min(440px, calc(100vw - 32px));
   padding: var(--sys-s2) var(--sys-s3);
   background: rgba(8, 11, 17, 0.58);
   box-shadow: 0 0 22px 14px rgba(8, 11, 17, 0.58);
@@ -623,7 +626,7 @@
 .guide-card .guide-card__plate {
   display: grid;
   gap: var(--sys-s1);
-  max-width: 380px;
+  max-width: min(380px, calc(100vw - 32px));
 }
 
 .guide-card__name {
