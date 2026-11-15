@@ -19,6 +19,7 @@ import ReactDOM from 'react-dom/client';
 import { assetUrl, getJson, postJson } from '../../lib/api';
 import '../../styles/tokens.css';
 import '../../styles/system.css';
+import '../../styles/film.css';
 import { WorkspaceProvider, type WorkspaceStore } from '../../app/store';
 import { AgentBeat } from '../../beats/agent/AgentBeat';
 import { openRound } from '../../beats/test-world/env';
@@ -35,6 +36,8 @@ import { fireBlock, groundOfRun, roundBlocks, threeWays } from '../blocks';
 import type { CompareBlock, DetectionRow } from '../types';
 
 const Q = new URLSearchParams(location.search);
+// The film presentation, as the page sets it (main.tsx): `film` in the address
+if (Q.has('film')) document.documentElement.classList.add('iso-film');
 const USE = Q.get('use') ?? 'ways';
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const day = (iso: string) => `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;

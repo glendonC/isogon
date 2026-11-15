@@ -172,3 +172,26 @@
 .agent-label__note {
   color: var(--sys-ink-2);
 }
+
+/* In the film presentation (styles/film.css) the players' labels are a step larger, sized by the window's width, so
+   the shot reads in three seconds at 1920 by 1080; the way back leaves the screen, as the film's other controls do,
+   and the guide's actions keep their words. */
+.iso-film .agent-label__name {
+  font-size: clamp(17px, 1.15vw, 22px);
+  line-height: 1.3;
+}
+
+.iso-film .agent-label__points,
+.iso-film .agent-label__gain .sys-label {
+  font-size: clamp(15px, 0.94vw, 18px);
+  line-height: 1.35;
+}
+
+.iso-film .agent-label__note {
+  font-size: clamp(13px, 0.8vw, 15px);
+  line-height: 1.35;
+}
+
+.iso-film .agent-picture__foot {
+  visibility: hidden;
+}
