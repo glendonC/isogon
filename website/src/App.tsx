@@ -27,6 +27,7 @@ import { StoryLine } from './identity/StoryLine';
 import { RevealSweep } from './identity/RevealSweep';
 import { Entry } from './identity/Entry';
 import { stageReady } from './stage/stageReady';
+import type { StageThingBox } from './stage/earthCutawayTypes';
 import { usePlay, type PlayShot } from './ui/usePlay';
 import { agentWalkDone, startAgentWalk, stopAgentWalk } from './walk/agentWalk';
 import { AgentWalkLine } from './walk/AgentWalkLine';
@@ -318,6 +319,18 @@ export function App() {
     return () => {
       anchorListeners.current.delete(fn);
     };
+  }, []);
+  /** The round's marked square as the stage boxes it (its things, G66), passed on to the round's scene the same way. */
+  const markedBoxListeners = useRef(new Set<(b: StageThingBox | null) => void>());
+  const subscribeMarkedBox = useCallback((fn: (b: StageThingBox | null) => void) => {
+    markedBoxListeners.current.add(fn);
+    return () => {
+      markedBoxListeners.current.delete(fn);
+    };
+  }, []);
+  const onThings = useCallback((boxes: Record<string, StageThingBox | null>) => {
+    const b = boxes.square ?? null;
+    markedBoxListeners.current.forEach((fn) => fn(b));
   }, []);
   /** The guide on show and its commands, for the key handler defined before them. */
   const guideRef = useRef<Guide | null>(null);
@@ -1275,6 +1288,9 @@ export function App() {
       slewToTheater(place.id);
     }
   };
+  // The things the stage boxes for the page (G66): the round's marked square, for the frame of the look on it.
+  const markedTile = round ? rnd.marked : null;
+  const stageThings = useMemo(() => (markedTile !== null ? { square: { kind: 'tile' as const, tile: markedTile } } : undefined), [markedTile]);
   const storeBase: WorkspaceBase = {
     places: placesState.places,
     currentFire: activeRun && realStart ? fireOfStart(placesState.places, activeRun.region.id, realStart)?.id ?? null : null,
@@ -1372,6 +1388,7 @@ export function App() {
       marked: rnd.marked,
       takenTile: rnd.takenTile,
       subscribeAnchors: rnd.subscribeAnchors,
+      subscribeMarkedBox,
     },
     step,
     goStep,
@@ -2040,6 +2057,8 @@ export function App() {
                   if (rnd.canPick) playCue('look');
                   rnd.pick(tile);
                 }}
+                things={stageThings}
+                onThings={stageThings ? onThings : undefined}
                 onTileHover={rnd.board ? rnd.onHover : undefined}
                 onTileAnchors={rnd.board ? rnd.onAnchors : undefined}
               />

@@ -1,8 +1,7 @@
 import { useWorkspace } from '../../app/store';
-import type { StageFireAnchor, StageTileAnchor } from '../../stage/earthCutawayTypes';
+import type { StageFireAnchor, StageThingBox, StageTileAnchor } from '../../stage/earthCutawayTypes';
 import { sameFireAnchor, sameTileAnchors, useStageValue, type Box } from '../../guide/StageWords';
 import { ScenePrompt } from '../../identity/ScenePrompt';
-import { labelPoint } from '../../guide/anchor';
 import { ClearPin, patchBoxes } from '../../guide/ClearPin';
 import '../../styles/test-world.css';
 
@@ -26,8 +25,18 @@ function tileBox(anchors: StageTileAnchor[], tile: number, cols: number): Box | 
 
 const centre = (b: Box) => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 });
 
+const sameBox = (a: StageThingBox | null, b: StageThingBox | null) =>
+  a === b ||
+  (a !== null &&
+    b !== null &&
+    a.visible === b.visible &&
+    Math.round(a.left) === Math.round(b.left) &&
+    Math.round(a.top) === Math.round(b.top) &&
+    Math.round(a.right) === Math.round(b.right) &&
+    Math.round(a.bottom) === Math.round(b.bottom));
+
 /**
- * Play on the stage: only what belongs to the scene. The label on the fire (the pass being decided), the label on the
+ * Play on the stage: only what belongs to the scene. The pass being decided is the look's readout; the label on the
  * square just looked at, and beside the marked square the prompt to look there, shown only while the pointer is on it
  * or the keyboard has marked it. The tiles and their marks are the stage's; every word is the script's.
  */
@@ -36,25 +45,20 @@ export function PlayScene() {
   const { guide, round } = ws;
   const fire = useStageValue<StageFireAnchor | null>(ws.model.subscribeAnchor, null, sameFireAnchor);
   const anchors = useStageValue<StageTileAnchor[]>(round.subscribeAnchors, [], sameTileAnchors);
-  // The fire's label hangs on its larger patch.
-  const fireAt = labelPoint(fire);
+  // The marked square as the stage boxes it (its things, G66): the ground of the square with its relief.
+  const markedBox = useStageValue<StageThingBox | null>(round.subscribeMarkedBox, null, sameBox);
   // The labels stand clear of the fire's patches.
   const avoid = patchBoxes(fire);
 
   const cols = round.start?.episode.tiles[1] ?? 0;
   const looked = round.takenTile !== null ? tileBox(anchors, round.takenTile, cols) : null;
-  const marked = round.marked !== null ? tileBox(anchors, round.marked, cols) : null;
+  const marked = round.marked !== null ? (markedBox?.visible ? markedBox : tileBox(anchors, round.marked, cols)) : null;
   // The keyboard marks a square with the arrows; the pointer marks the square it is over. The look stands on the marked
   // square itself (the identity's ScenePrompt), with the square's label as its readout.
   const act = guide.besideSquare;
 
   return (
     <div className="tw-scene" data-scene={guide.stateId ?? undefined}>
-      {fireAt && guide.fireLabel && !guide.squareLabel && (
-        <ClearPin at={fireAt} avoid={avoid} className="tw-pin" label={guide.fireLabel}>
-          <span className="guide-label">{guide.fireLabel}</span>
-        </ClearPin>
-      )}
       {looked && guide.squareLabel && (
         <ClearPin at={centre(looked)} avoid={[looked, ...avoid]} className="tw-pin tw-pin--square" label={guide.squareLabel} focusable>
           <span className="guide-label">{guide.squareLabel}</span>

@@ -329,7 +329,8 @@ export function useGuide(
       fireLabel: labelOn(state, 'fire', f, c, live.playing, Boolean(live.film)),
       squareLabel: labelOn(state, 'looked_square', f, c),
       fireReadout: readoutOn(state, 'fire', f, c),
-      squareReadout: readoutOn(state, 'marked_square', f, c) ?? readoutOn(state, 'looked_square', f, c),
+      // The look's readout: the marked square's own, else the round's (on the fire: the looks left).
+      squareReadout: readoutOn(state, 'marked_square', f, c) ?? readoutOn(state, 'fire', f, c),
       besideSquare: besideOf(state, 'marked_square', f, on),
       results: state?.results ? { line: state.results.line, rows: resultRows(state.results, f, r.gains, c) } : null,
     };

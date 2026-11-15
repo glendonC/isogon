@@ -9,7 +9,7 @@ import type { NextLookEnd, NextLookStart } from '../content/demo/nextLook';
 import type { Step } from '../components/WorkspaceBar';
 import type { Box, FeaturedFire, Place, Places } from './places';
 import type { FireRecord, RecordPlace } from '../beats/calendar/record';
-import type { EarthStageTelemetry, StageFireAnchor, StageMissingFile, StageTileAnchor } from '../stage/earthCutawayTypes';
+import type { EarthStageTelemetry, StageFireAnchor, StageMissingFile, StageTileAnchor, StageThingBox } from '../stage/earthCutawayTypes';
 import type { EvidenceDoc } from '../content/evidence';
 import type { Guide } from '../guide/useGuide';
 
@@ -141,6 +141,8 @@ export interface WorkspaceStore {
     takenTile: number | null;
     /** The stage's tile corners on screen, as a subscription, so the shell does not redraw for them. */
     subscribeAnchors: (fn: (anchors: StageTileAnchor[]) => void) => () => void;
+    /** The marked square's box on screen, from the stage's things (`onThings`, G66), as a subscription. */
+    subscribeMarkedBox: (fn: (box: StageThingBox | null) => void) => () => void;
   };
   step: Step;
   goStep: (s: Step) => void;
