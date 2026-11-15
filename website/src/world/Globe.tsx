@@ -557,7 +557,6 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, W, H);
     const list = props.current.outlines;
-    if (!list.length) return;
     const m = rotation(turn.current.lon, turn.current.lat);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.lineJoin = 'round';
@@ -589,6 +588,31 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
       g.strokeStyle = o.strong ? 'rgba(237, 239, 243, 1)' : 'rgba(237, 239, 243, 0.7)';
       g.lineWidth = o.strong ? 1.5 : 1;
       g.stroke();
+    }
+    // The cross hairs on the pointed spot, as the place finder draws them: hairs across the globe, a square at the spot.
+    const p = pointer.current;
+    if (p && !props.current.film && (p.x - cx) ** 2 + (p.y - cy) ** 2 < r * r) {
+      const x = Math.round(p.x) + 0.5;
+      const y = Math.round(p.y) + 0.5;
+      g.save();
+      g.beginPath();
+      g.arc(cx, cy, r, 0, Math.PI * 2);
+      g.clip();
+      g.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(cx - r, y);
+      g.lineTo(x - 12, y);
+      g.moveTo(x + 12, y);
+      g.lineTo(cx + r, y);
+      g.moveTo(x, cy - r);
+      g.lineTo(x, y - 12);
+      g.moveTo(x, y + 12);
+      g.lineTo(x, cy + r);
+      g.stroke();
+      g.restore();
+      g.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      g.strokeRect(x - 7, y - 7, 14, 14);
     }
   };
 
@@ -635,6 +659,7 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     }
     const at = geoAt(p.x, p.y);
     props.current.onPoint?.(at ? { ...at, ...p } : null);
+    dirty.current = true;
   };
   const onPointerUp = (e: React.PointerEvent) => {
     const d = drag.current;
@@ -660,6 +685,7 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
       onPointerCancel={() => (drag.current = null)}
       onPointerLeave={() => {
         pointer.current = null;
+        dirty.current = true;
         props.current.onPoint?.(null);
       }}
     >

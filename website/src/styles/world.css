@@ -1160,7 +1160,6 @@
   bottom: 0;
   background: var(--sys-modis);
   opacity: 0.85;
-  transition: opacity var(--sys-fast) var(--sys-ease);
 }
 
 .world-years__bar[data-sharp='true'] .world-years__fill {
@@ -1537,74 +1536,71 @@
   color: var(--sys-ink-2);
 }
 
-/* The pointed spot on the globe: a reticle at the pointer, and a side view of it at the right (the search's manner). */
-.world-reticle {
-  position: absolute;
-  z-index: 2;
-  width: 14px;
-  height: 14px;
-  translate: -50% -50%;
-  pointer-events: none;
-  box-shadow: 0 0 0 1px rgba(214, 241, 255, 0.9), 0 0 14px rgba(214, 241, 255, 0.45);
-}
-
-.world-reticle::before,
-.world-reticle::after {
-  content: '';
-  position: absolute;
-  background: rgba(214, 241, 255, 0.4);
-}
-
-.world-reticle::before {
-  left: -34px;
-  right: -34px;
-  top: 50%;
-  height: 1px;
-  -webkit-mask: linear-gradient(to right, #000 0 28px, transparent 28px calc(100% - 28px), #000 calc(100% - 28px));
-  mask: linear-gradient(to right, #000 0 28px, transparent 28px calc(100% - 28px), #000 calc(100% - 28px));
-}
-
-.world-reticle::after {
-  top: -34px;
-  bottom: -34px;
-  left: 50%;
-  width: 1px;
-  -webkit-mask: linear-gradient(to bottom, #000 0 28px, transparent 28px calc(100% - 28px), #000 calc(100% - 28px));
-  mask: linear-gradient(to bottom, #000 0 28px, transparent 28px calc(100% - 28px), #000 calc(100% - 28px));
-}
-
-.world-readout {
+/* The pointed spot on the globe (the design language's readout): beside the pointer, in mono, white on the night ground. */
+.world-pointer {
   position: absolute;
   z-index: 3;
-  top: 72px;
-  right: var(--sys-gutter);
-  width: min(300px, 26vw);
   display: grid;
-  gap: var(--sys-s1);
-  padding-bottom: var(--sys-s2);
+  gap: 2px;
+  padding: 10px 14px 12px;
   pointer-events: none;
-  /* The strip's own ground, so it reads over the globe drawn near. */
-  background: rgba(8, 11, 17, 0.72);
+  white-space: nowrap;
+  background: rgba(6, 8, 12, 0.78);
   -webkit-backdrop-filter: var(--sys-plate-blur);
   backdrop-filter: var(--sys-plate-blur);
 }
 
-.world-readout__place,
-.world-readout__count {
-  padding-inline: var(--sys-s2);
+.world-pointer__coords,
+.world-pointer__count {
+  font: 400 16px / 1.35 var(--sys-mono);
+  color: var(--sys-ink);
+  font-variant-numeric: tabular-nums;
 }
 
-.world-readout__place {
-  margin-top: var(--sys-s1);
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+.world-pointer__place {
+  font: 400 17px / 1.35 var(--sys-font);
   color: var(--sys-ink);
 }
 
-.world-readout__more {
-  color: var(--sys-ink-3);
+.world-pointer__more,
+.world-pointer__count {
+  color: var(--sys-ink-2);
 }
 
-.world-readout__count {
-  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
-  color: var(--sys-ink-2);
+/* A panel draws on by its outline, edge after edge, once; nothing fades in (the design language). */
+.world-drawn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--sys-ink), var(--sys-ink)) top left / 100% 1px no-repeat,
+    linear-gradient(var(--sys-ink), var(--sys-ink)) top right / 1px 100% no-repeat,
+    linear-gradient(var(--sys-ink), var(--sys-ink)) bottom right / 100% 1px no-repeat,
+    linear-gradient(var(--sys-ink), var(--sys-ink)) bottom left / 1px 100% no-repeat;
+  animation: world-draw-on 320ms linear both;
+}
+
+@keyframes world-draw-on {
+  0% {
+    background-size: 0 1px, 1px 0, 0 1px, 1px 0;
+  }
+  25% {
+    background-size: 100% 1px, 1px 0, 0 1px, 1px 0;
+  }
+  50% {
+    background-size: 100% 1px, 1px 100%, 0 1px, 1px 0;
+  }
+  75% {
+    background-size: 100% 1px, 1px 100%, 100% 1px, 1px 0;
+  }
+  100% {
+    background-size: 100% 1px, 1px 100%, 100% 1px, 1px 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-drawn::before {
+    animation: none;
+  }
 }

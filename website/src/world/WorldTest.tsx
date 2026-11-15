@@ -3,6 +3,7 @@ import { count, countWord } from '../guide/formats';
 import { listAnd } from './words';
 import { countryAt } from './countryAt';
 import { challengersSaid, parseFresh, secondModel, type FreshFire, type FreshLook, type Group } from './freshTest';
+import { CountTo } from './CountTo';
 import { useRead } from './read';
 import { inFilm, useGuideRoom, WorldCaption } from './WorldCaption';
 import { useWorldLayer } from './layers';
@@ -271,15 +272,21 @@ export function WorldTest({ source, control, caption = true, keepGuideRoom, onRe
             <div className="world-tests__look">{TEST_WORDS.lookNames[look.id] ?? look.name}</div>
             <div className="world-tests__figures">
               <span className="world-tests__figure">
-                <span className="world-tests__big">{c.ahead}</span>
+                <span className="world-tests__big">
+                  <CountTo value={c.ahead} ms={700} />
+                </span>
                 <span>{TEST_WORDS.filmAhead}</span>
               </span>
               <span className="world-tests__figure">
-                <span className="world-tests__big">{c.tied}</span>
+                <span className="world-tests__big">
+                  <CountTo value={c.tied} ms={700} />
+                </span>
                 <span>{TEST_WORDS.filmLevel}</span>
               </span>
               <span className="world-tests__figure" data-behind="true">
-                <span className="world-tests__big">{c.behind}</span>
+                <span className="world-tests__big">
+                  <CountTo value={c.behind} ms={700} />
+                </span>
                 <span>{TEST_WORDS.filmBehind}</span>
               </span>
             </div>

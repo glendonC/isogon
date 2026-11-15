@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { tOfValue, valueOfT } from './cells';
 import { countryShapeAt, type CountryShape } from './countryAt';
 import { Globe, globeWanted } from './Globe';
-import { Locator } from '../ui/Locator';
+import { CountTo } from './CountTo';
 import { useYearCells } from './yearCells';
 import { countryOf, countryRatio, countryTotals, drawnInside, gridLines, heldBy, type CountriesFile } from './countryYears';
 import { FIRE_RAMP } from './layers';
@@ -11,7 +11,7 @@ import { useRead } from './read';
 import { Ticks } from './Ticks';
 import { WorldCanvas, type GridLayer } from './WorldCanvas';
 import type { Box, Projector } from './projection';
-import { EARTH_WORDS, gridWords, millions, wholeMillions, YEAR_WORDS as Y } from './words';
+import { EARTH_WORDS, gridWords, millions, roughly, wholeMillions, YEAR_WORDS as Y } from './words';
 import {
   familyOf,
   layerOf,
@@ -110,24 +110,47 @@ function outlineOf(rings: number[][][], p: Projector): string {
   return d;
 }
 
-/**
- * What the square under the pointer holds in the year on show: its exact count from the year's cells where they are
- * read, else its band from the palette index ("About": one colour a band).
- */
-function squareWords(ix: Uint8Array | null, cells: Float32Array | null, oneScale: boolean, lon: number, lat: number, vmax: number, year: number): string {
+/** What the square under the pointer holds: its exact count from the year's cells where read, else its band. */
+type Square = { kind: 'exact' | 'oneScale' | 'about'; v: number } | { kind: 'none' } | { kind: 'closed' } | null;
+function squareOf(ix: Uint8Array | null, cells: Float32Array | null, oneScale: boolean, lon: number, lat: number, vmax: number): Square {
   const col = Math.min(Math.floor((lon + 180) / 0.25), 1439);
   const row = Math.min(Math.floor((90 - lat) / 0.25), 719);
   const k = ix ? ix[row * 1440 + col] : null;
-  if (k === 2) return Y.squareClosed(year);
+  if (k === 2) return { kind: 'closed' };
   if (cells && cells.length === 1440 * 720) {
     const v = cells[row * 1440 + col];
-    if (!Number.isFinite(v) || v <= 0) return Y.squareNone(year);
-    return oneScale ? Y.squareOneScale(v, year) : Y.squareExact(v, year);
+    if (!Number.isFinite(v) || v <= 0) return { kind: 'none' };
+    return { kind: oneScale ? 'oneScale' : 'exact', v };
   }
-  if (k === null) return '';
-  if (k < 3) return Y.squareNone(year);
-  return Y.squareAbout(valueOfT((k - 3 + 0.5) / 253, vmax), year);
+  if (k === null) return null;
+  if (k < 3) return { kind: 'none' };
+  return { kind: 'about', v: valueOfT((k - 3 + 0.5) / 253, vmax) };
 }
+
+/** The square's count in words, its figure counting to its value. */
+function SquareCount({ sq, year }: { sq: Square; year: number }) {
+  if (!sq) return null;
+  if (sq.kind === 'none') return <div className="world-pointer__count">{Y.squareNone(year)}</div>;
+  if (sq.kind === 'closed') return <div className="world-pointer__count">{Y.squareClosed(year)}</div>;
+  const whole = sq.kind === 'exact' ? Math.round(sq.v) : sq.v;
+  const fmt = (v: number) => (sq.kind === 'oneScale' && whole < 10 ? v.toFixed(1) : Math.round(v).toLocaleString('en-US'));
+  // The figure stands before the year in each sentence: cut at its first place, so a year with the same digits stays.
+  const text = sq.kind === 'exact' ? Y.squareExact(whole, year) : sq.kind === 'oneScale' ? Y.squareOneScale(whole, year) : Y.squareAbout(whole, year);
+  const fig = sq.kind === 'about' ? roughNumber(whole) : fmt(whole);
+  const at = text.indexOf(fig);
+  const before = at < 0 ? text : text.slice(0, at);
+  const after = at < 0 ? '' : text.slice(at + fig.length);
+  return (
+    <div className="world-pointer__count">
+      {before}
+      {at >= 0 && <CountTo value={sq.kind === 'about' ? Number(fig.replace(/,/g, '')) : whole} ms={260} format={fmt} />}
+      {after}
+    </div>
+  );
+}
+
+/** The figure the band's words give ("About 1,200 detections"). */
+const roughNumber = (v: number) => (v < 1.5 ? '1' : roughly(v));
 
 /** "40.05° N  121.18° W", as the search's side view writes a place. */
 const degreeWords = (lon: number, lat: number) =>
@@ -420,6 +443,9 @@ export function EarthYears({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, shown, mode, playing, harmonizedReady, ratioRange]);
 
+  // The screen's size, so the pointer's readout stays on it.
+  const [rootW, setRootW] = useState(1440);
+  const [rootH, setRootH] = useState(900);
   // The strip of totals is measured so the Earth fits above it. A country's strip may wrap its keys another way; the
   // Earth keeps its place for a strip no taller, and is fitted again when the screen itself changes size.
   const stripRef = useRef<HTMLDivElement | null>(null);
@@ -439,6 +465,8 @@ export function EarthYears({
       else setStripH(h);
       boxH = box.clientHeight;
       setStripW(el.clientWidth);
+      setRootW(box.clientWidth);
+      setRootH(box.clientHeight);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -497,20 +525,26 @@ export function EarthYears({
           className="world-years__earth"
         />
       )}
-      {/* The pointed spot, in the manner of the search's side view: a small Earth with cross hairs on it, the place's
-          coordinates, its country and what its square holds in the year on show, following the pointer. */}
+      {/* The pointed spot (the design language's readout): the cross hairs on the globe (Globe draws them), and beside
+          the pointer, in mono, the coordinates, the country and what the square holds in the year on show, its count
+          counting to its value. The box draws on by its outline when the pointer comes onto the globe. */}
       {!flat && pick && under && (
-        <>
-          <div className="world-reticle" style={{ left: under.x, top: under.y }} aria-hidden="true" />
-          <div className="world-readout" data-world-ui aria-hidden="true">
-            <Locator lat={under.lat} lon={under.lon} caption={degreeWords(under.lon, under.lat)} />
-            <div className="world-readout__place">
-              {pointed ? pointed.shape.name : Y.atSea}
-              {pointed && !hasFile(pointed.shape) && <span className="world-readout__more">{`: ${Y.noFile}`}</span>}
-            </div>
-            <div className="world-readout__count">{squareWords(ix, cells, mode === 'harmonized', under.lon, under.lat, vmax, shown)}</div>
+        <div
+          className="world-pointer world-drawn"
+          style={{
+            left: under.x > rootW - 380 ? under.x - 22 : under.x + 22,
+            top: under.y > rootH - stripH - 150 ? under.y - 22 : under.y + 22,
+            transform: `translate(${under.x > rootW - 380 ? '-100%' : '0'}, ${under.y > rootH - stripH - 150 ? '-100%' : '0'})`,
+          }}
+          aria-hidden="true"
+        >
+          <div className="world-pointer__coords">{degreeWords(under.lon, under.lat)}</div>
+          <div className="world-pointer__place">
+            {pointed ? pointed.shape.name : Y.atSea}
+            {pointed && !hasFile(pointed.shape) && <span className="world-pointer__more">{`: ${Y.noFile}`}</span>}
           </div>
-        </>
+          <SquareCount sq={squareOf(ix, cells, mode === 'harmonized', under.lon, under.lat, vmax)} year={shown} />
+        </div>
       )}
       {flat && (
       <WorldCanvas
