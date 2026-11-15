@@ -150,7 +150,7 @@ export const gridWords = (v: number) => (v >= 1e6 ? `${Math.round(v / 1e5) / 10}
 /** "4.4": a factor to one decimal, as the product lane writes the Earth's (EARTH-YEARS.md). */
 export const oneDecimal = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
 
-/** The Earth's years, in the product lane's words (isogon-notes/product/EARTH-YEARS.md, script version 15). */
+/** The Earth's years, in the product lane's words (isogon-notes/product/EARTH-YEARS.md, script version 15; the 2012 label as version 23). */
 export const YEAR_WORDS = {
   label: 'The Earth year by year, 2000 to 2025: detections in each square of a quarter degree',
   loading: 'Loading the years',
@@ -169,8 +169,8 @@ export const YEAR_WORDS = {
   aquaJoins: 'Aqua joins in July',
   stepDetected: (ratio: number | null) =>
     ratio
-      ? `2012: the newer, sharper satellite begins and makes about ${oneDecimal(ratio)} times as many detections of the same fires as the older ones, so the Earth brightens with no more fire.`
-      : '2012: the newer, sharper satellite begins and makes more detections of the same fires than the older ones, so the Earth brightens with no more fire.',
+      ? `2012: the newer, sharper satellite begins and makes about ${oneDecimal(ratio)} times as many detections, smaller fires among them, so the Earth brightens with no more fire.`
+      : '2012: the newer, sharper satellite begins and makes more detections, smaller fires among them, so the Earth brightens with no more fire.',
   stepHarmonized: "2012: the newer, sharper satellite begins, and on one scale there is no step, because the older satellites' detections are put on its scale.",
   legend: 'Fire detected in a square of a quarter degree, about 28 km, in the year',
   closed: "Squares kept as the model's test, in 2021",
@@ -201,7 +201,7 @@ export const YEAR_WORDS = {
 
 /**
  * The guide's words on the pictures of the world, as the product lane writes them: the Earth's years from the
- * script's state `earth_years` (GUIDE-script.json version 16, EARTH-YEARS.md), the test across the world and the
+ * script's state `earth_years` (GUIDE-script.json version 23, EARTH-YEARS.md), the test across the world and the
  * sealed predictions from WORDS-wider.json version 4 (`world_pictures`). Every figure is a field filled from an answer.
  */
 export const SCREEN_WORDS = {
@@ -209,14 +209,14 @@ export const SCREEN_WORDS = {
     objective: (first: number) => `Watch the Earth's fire year by year since ${first}`,
     context: (first: number, last: number) => `${first} to ${last}`,
     counted: (ratio: string) =>
-      `Each year as the satellites counted it: the older satellites' detections before 2012, the newer one's from then, about ${ratio} times as many for the same fires.`,
+      `Each year as the satellites counted it: the older satellites' detections before 2012, the newer one's from then, about ${ratio} times as many, since it also sees smaller fires.`,
     oneScale: "Each year on one scale: the older satellites' detections are put on the newer one's scale, so the years can be set side by side and 2012 shows no jump.",
     play: 'Play the years',
     stop: 'Stop',
     toOneScale: 'See the years on one scale',
     toCounted: 'See the years as the satellites counted them',
     back: 'Back',
-    filmCounted: (ratio: string) => `2012: a sharper satellite begins. Same fires, ${ratio} times the detections.`,
+    filmCounted: (ratio: string) => `2012: a sharper satellite begins, seeing smaller fires too: ${ratio} times the detections.`,
     filmOneScale: (first: number) => `On one scale, the years since ${first} show no jump.`,
   },
   test: {
