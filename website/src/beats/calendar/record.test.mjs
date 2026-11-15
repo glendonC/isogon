@@ -66,6 +66,7 @@ test('a month is set against a usual one in plain words', () => {
   assert.equal(monthLine('2014-07', 0.1, 0.2), 'Less fire than a usual July here');
   assert.equal(monthLine('2011-09', 0, 0), 'No fire detected in this month');
   assert.equal(monthLine('2011-09', null, null), 'No satellite counted fires in this month');
+  assert.doesNotMatch(monthLine('2012-08', 8, null, null), /No usual/);
   assert.equal(times(2349.4), '2,349');
 });
 
@@ -75,8 +76,9 @@ test('from a hundred times up a month is said by its rate and the usual rate, wi
     monthLine('2021-08', 4.698, 2349.4, 0.002),
     '4.70 detections per 1,000 square kilometres a day. A usual August here: 0.0020',
   );
-  // With no usual rate served there is nothing to say but the ratio
-  assert.equal(monthLine('2021-08', 4.698, 2349.4), '2,349 times the fire of a usual August here');
+  // With no usual rate served, the month is said by its own rate
+  assert.equal(monthLine('2021-08', 4.698, 2349.4), '4.70 detections per 1,000 square kilometres a day');
+  assert.equal(monthLine('2021-08', 4.698, null), '4.70 detections per 1,000 square kilometres a day');
   assert.equal(rate(25.6006), '25.6');
   assert.equal(rate(0.1952), '0.20');
   assert.equal(rate(0.0028), '0.0028');

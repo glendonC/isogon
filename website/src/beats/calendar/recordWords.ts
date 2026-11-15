@@ -32,7 +32,8 @@ export function monthLine(ym: string, value: number | null, timesUsual: number |
   const name = monthName(ym);
   if (value === null) return 'No satellite counted fires in this month';
   if (value === 0) return 'No fire detected in this month';
-  if (timesUsual === null) return `No usual ${name} to set it against`;
+  // With no usual month to set it against, the month is said by its own rate
+  if (timesUsual === null || (timesUsual >= TOO_MANY_TIMES && usual === null)) return `${rate(value)} ${RATE_UNIT}`;
   if (timesUsual >= TOO_MANY_TIMES && usual !== null) return `${rate(value)} ${RATE_UNIT}. A usual ${name} here: ${rate(usual)}`;
   if (timesUsual >= 1.5) return `${times(timesUsual)} times the fire of a usual ${name} here`;
   if (timesUsual > 1 / 1.5) return `About the fire of a usual ${name} here`;
