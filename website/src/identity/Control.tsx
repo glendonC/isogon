@@ -1,38 +1,30 @@
-import type { MouseEvent, ReactNode } from 'react';
-import {
-  controlAria,
-  controlClass,
-  controlSound,
-  defaultIcon,
-  type ControlIcon,
-  type ControlVariant,
-} from './controlState.ts';
+import { useState, type MouseEvent, type ReactNode } from 'react';
+import { badgeGlyph, controlAria, controlClass, controlSound, type ControlIcon, type ControlVariant } from './controlState.ts';
 import './identity.css';
 
-function Icon({ name }: { name: ControlIcon }) {
-  if (name === 'none') return null;
+function Glyph({ name }: { name: Exclude<ControlIcon, 'none'> }) {
   if (name === 'play')
     return (
-      <svg className="id-control__icon" width="12" height="14" viewBox="0 0 12 14" aria-hidden="true">
+      <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden="true">
         <path d="M1 1l10 6-10 6z" fill="currentColor" />
       </svg>
     );
   if (name === 'pause')
     return (
-      <svg className="id-control__icon" width="10" height="12" viewBox="0 0 10 12" aria-hidden="true">
+      <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true">
         <rect x="0" y="0" width="3" height="12" fill="currentColor" />
         <rect x="7" y="0" width="3" height="12" fill="currentColor" />
       </svg>
     );
   if (name === 'download')
     return (
-      <svg className="id-control__icon" width="12" height="14" viewBox="0 0 12 14" aria-hidden="true">
-        <path d="M6 0v10M1 6l5 5 5-5M0 13h12" stroke="currentColor" strokeWidth="1.5" fill="none" />
+      <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden="true">
+        <path d="M6 0v10M1 6l5 5 5-5M0 13h12" stroke="currentColor" strokeWidth="1.6" fill="none" />
       </svg>
     );
   return (
-    <svg className="id-control__icon id-control__icon--trail" width="16" height="12" viewBox="0 0 16 12" aria-hidden="true">
-      <path d="M0 6H14M9 1l5 5-5 5" stroke="currentColor" strokeWidth="1.6" fill="none" />
+    <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true">
+      <path d="M0 6H14M9 1l5 5-5 5" stroke="currentColor" strokeWidth="1.7" fill="none" />
     </svg>
   );
 }
@@ -40,7 +32,7 @@ function Icon({ name }: { name: ControlIcon }) {
 export interface ControlProps {
   children: ReactNode;
   variant?: ControlVariant;
-  /** Leading icons (play, pause, download) sit before the label; the arrow trails it. */
+  /** The glyph the badge carries when it arrives on hover: an arrow unless the action is play, pause or download. */
   icon?: ControlIcon;
   selected?: boolean;
   disabled?: boolean;
@@ -54,7 +46,7 @@ export interface ControlProps {
 export function Control({
   children,
   variant = 'secondary',
-  icon,
+  icon = 'arrow',
   selected,
   disabled,
   reason,
@@ -63,8 +55,7 @@ export function Control({
   shortcut,
 }: ControlProps) {
   const state = { variant, selected, disabled, reason };
-  const shown = icon ?? defaultIcon(variant);
-  const trailing = shown === 'arrow';
+  const [scan, setScan] = useState(0);
   return (
     <button
       type="button"
@@ -77,13 +68,18 @@ export function Control({
           e.preventDefault();
           return;
         }
+        setScan((n) => n + 1);
         controlSound('press', state);
         onClick?.(e);
       }}
     >
-      {!trailing && <Icon name={shown} />}
+      <span className="id-control__scan" key={scan} data-run={scan > 0 ? 'true' : 'false'} aria-hidden="true" />
+      <span className="id-control__mark" aria-hidden="true" />
       <span className="id-control__label">{children}</span>
-      {trailing && <Icon name="arrow" />}
+      <span className="id-control__badge" aria-hidden="true">
+        <Glyph name={badgeGlyph(icon)} />
+      </span>
+      <span className="id-control__ticks" aria-hidden="true" />
     </button>
   );
 }

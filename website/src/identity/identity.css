@@ -1,123 +1,319 @@
 /*
  * The page's identity: night ground, white controls, colour only for data.
- * Data colours are the design system's own tokens (system.css), referenced here, never redefined.
+ * This file is the source of the page's colours; canvas code mirrors these values.
  */
 :root {
-  --id-ground: var(--sys-night, #080b11);
-  --id-ink: var(--sys-ink, #f3f4f6);
-  --id-ink-2: var(--sys-ink-2, #c3c8d1);
-  --id-ink-3: var(--sys-ink-3, #9aa1ad);
+  --id-ground: #05070c;
+  --id-ink: #f3f4f6;
+  --id-ink-2: #c3c8d1;
+  --id-ink-3: #9aa1ad;
   --id-line: rgba(243, 244, 246, 0.18);
   --id-line-2: rgba(243, 244, 246, 0.36);
-  --id-focus: var(--sys-focus, #d6f1ff);
-  --id-ease: var(--sys-ease, cubic-bezier(0.22, 1, 0.36, 1));
-  --id-fast: var(--sys-fast, 160ms);
+  --id-focus: #d6f1ff;
+  --id-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --id-move: cubic-bezier(0.35, 0, 0, 1);
+  --id-fast: 160ms;
+  --id-slow: 380ms;
   --id-font: var(--sys-font, 'Geist', -apple-system, sans-serif);
   --id-mono: var(--sys-mono, ui-monospace, Menlo, monospace);
 
-  /* data marks */
-  --id-modis: var(--sys-modis, #b4c3d6);
-  --id-detection: var(--sys-detection, #f08a45);
-  --id-estimate: var(--sys-estimate, #f3f4f6);
-  --id-hatch: repeating-linear-gradient(45deg, rgba(243, 244, 246, 0.5) 0 1px, transparent 1px 5px);
+  /* data marks: colour means a sensor or the estimate, nothing else */
+  --id-modis: #ff7a45;
+  --id-viirs: #8fd6f5;
+  --id-estimate: #f3f4f6;
+  --id-hatch: repeating-linear-gradient(45deg, rgba(243, 244, 246, 0.42) 0 1px, transparent 1px 6px);
 
-  /* modules: one control is one coarse module high; 21 px is the same module at the finer sensor's scale */
+  /* modules: a control is one coarse module high; its mark is the finer sensor's pixel at the same scale (375/1000) */
   --id-module: 56px;
   --id-module-fine: 21px;
-  --id-control-h: 52px;
+  --id-mark: 7px;
+  --id-badge: 36px;
 }
 
+/*
+ * The control. A solid body with a lit top edge and a shadow under it. At rest a small square mark sits before the
+ * label: one pixel of the finer sensor. On hover three parts move on one easing: the mark leaves, the label shifts,
+ * a square badge with the action's glyph arrives. A press sweeps a scan line across the body, as a pass crosses the
+ * ground, and the body sinks. Focus draws four corner ticks, the place finder's cross hairs.
+ */
 .id-control {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 14px;
-  height: var(--id-control-h);
-  padding: 0 22px 0 24px;
-  border: 1px solid var(--id-line-2);
+  gap: 12px;
+  height: var(--id-module);
+  padding: 0 40px 0 22px;
+  border: 0;
   border-radius: 0;
-  background: rgba(8, 11, 17, 0.55);
-  color: var(--id-ink);
+  overflow: visible;
+  isolation: isolate;
   font-family: var(--id-font);
   font-size: 16px;
   font-weight: 500;
+  letter-spacing: 0.005em;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
+  color: var(--id-ink);
+  background: linear-gradient(to bottom, rgba(36, 44, 58, 0.9), rgba(16, 21, 30, 0.9));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 1px rgba(243, 244, 246, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 1px 0 rgba(0, 0, 0, 0.6),
+    0 10px 24px rgba(0, 0, 0, 0.45);
   transition:
-    background-color var(--id-fast) var(--id-ease),
-    border-color var(--id-fast) var(--id-ease),
-    color var(--id-fast) var(--id-ease),
-    box-shadow var(--id-fast) var(--id-ease),
-    transform 90ms var(--id-ease);
+    transform var(--id-slow) var(--id-move),
+    box-shadow var(--id-slow) var(--id-move),
+    background var(--id-slow) var(--id-move),
+    color var(--id-fast) var(--id-ease);
 }
 
-.id-control__icon {
-  flex: none;
-  transition: transform var(--id-fast) var(--id-ease);
-}
-
-/* primary: the one strong action of a screen */
 .id-control--primary {
-  background: var(--id-ink);
-  border-color: var(--id-ink);
   color: var(--id-ground);
+  background: linear-gradient(to bottom, #ffffff, #dfe4ea);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 1px 0 rgba(0, 0, 0, 0.6),
+    0 10px 28px rgba(0, 0, 0, 0.5),
+    0 0 0 rgba(255, 255, 255, 0);
 }
 
-.id-control:hover {
-  border-color: var(--id-ink);
-  background: rgba(243, 244, 246, 0.1);
+.id-control__mark {
+  flex: none;
+  width: var(--id-mark);
+  height: var(--id-mark);
+  background: currentColor;
+  transition:
+    transform var(--id-slow) var(--id-move),
+    opacity 280ms var(--id-move);
 }
 
-.id-control--primary:hover {
-  background: #ffffff;
-  box-shadow: 0 0 0 1px #ffffff, 0 10px 30px rgba(255, 255, 255, 0.12);
+.id-control__label {
+  position: relative;
+  transition: transform var(--id-slow) var(--id-move);
 }
 
-.id-control:hover .id-control__icon--trail {
-  transform: translateX(4px);
+.id-control__badge {
+  position: absolute;
+  right: 10px;
+  top: calc(50% - var(--id-badge) / 2);
+  width: var(--id-badge);
+  height: var(--id-badge);
+  display: grid;
+  place-items: center;
+  background: var(--id-ink);
+  color: var(--id-ground);
+  opacity: 0;
+  transform: translateX(-8px) scale(0.6);
+  transition:
+    transform var(--id-slow) var(--id-move),
+    opacity 280ms var(--id-move);
+}
+
+.id-control--primary .id-control__badge {
+  background: var(--id-ground);
+  color: var(--id-ink);
+}
+
+/* the press: a scan line crosses the body once */
+.id-control__scan {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.id-control__scan::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -45%;
+  width: 45%;
+  background:
+    linear-gradient(var(--id-viirs), var(--id-viirs)) right / 2px 100% no-repeat,
+    linear-gradient(to right, rgba(143, 214, 245, 0), rgba(143, 214, 245, 0.55));
+  opacity: 0;
+}
+
+.id-control__scan[data-run='true']::before {
+  animation: id-scan var(--id-slow) var(--id-move) both;
+}
+
+@keyframes id-scan {
+  0% {
+    left: -45%;
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+/* corner ticks for keyboard focus and for a selected option */
+.id-control__ticks {
+  position: absolute;
+  inset: -6px;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(1.04);
+  transition:
+    opacity var(--id-fast) var(--id-ease),
+    transform var(--id-slow) var(--id-move);
+  --t: var(--id-focus);
+  background:
+    linear-gradient(var(--t), var(--t)) top left / 12px 2px no-repeat,
+    linear-gradient(var(--t), var(--t)) top left / 2px 12px no-repeat,
+    linear-gradient(var(--t), var(--t)) top right / 12px 2px no-repeat,
+    linear-gradient(var(--t), var(--t)) top right / 2px 12px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom left / 12px 2px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom left / 2px 12px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom right / 12px 2px no-repeat,
+    linear-gradient(var(--t), var(--t)) bottom right / 2px 12px no-repeat;
+}
+
+/* hover and keyboard focus share one movement */
+.id-control:hover,
+.id-control:focus-visible {
+  transform: translateY(-1px);
+  background: linear-gradient(to bottom, rgba(52, 62, 80, 0.94), rgba(22, 28, 40, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 0 0 1px rgba(243, 244, 246, 0.42),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 2px 0 rgba(0, 0, 0, 0.5),
+    0 16px 34px rgba(0, 0, 0, 0.55);
+}
+
+.id-control--primary:hover,
+.id-control--primary:focus-visible {
+  background: linear-gradient(to bottom, #ffffff, #eef1f5);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+    0 2px 0 rgba(0, 0, 0, 0.5),
+    0 16px 36px rgba(0, 0, 0, 0.55),
+    0 0 28px rgba(255, 255, 255, 0.16);
+}
+
+.id-control:hover .id-control__mark,
+.id-control:focus-visible .id-control__mark {
+  transform: translateX(-8px) scale(0) rotate(45deg);
+  opacity: 0;
+}
+
+.id-control:hover .id-control__label,
+.id-control:focus-visible .id-control__label {
+  transform: translateX(-20px);
+}
+
+.id-control:hover .id-control__badge,
+.id-control:focus-visible .id-control__badge {
+  opacity: 1;
+  transform: translateX(0) scale(1);
 }
 
 .id-control:focus-visible {
-  outline: 2px solid var(--id-focus);
-  outline-offset: 3px;
+  outline: none;
 }
 
+.id-control:focus-visible .id-control__ticks {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* the press: the body sinks and its shadow tightens */
 .id-control:active {
-  transform: scale(0.98);
-  background: rgba(243, 244, 246, 0.18);
+  transform: translateY(1px);
+  transition-duration: 80ms;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 0 0 1px rgba(243, 244, 246, 0.42),
+    inset 0 2px 8px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(0, 0, 0, 0.6),
+    0 4px 10px rgba(0, 0, 0, 0.4);
 }
 
 .id-control--primary:active {
-  background: #d9dee5;
+  background: linear-gradient(to bottom, #e6eaef, #d3d9e0);
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, 0.18),
+    0 1px 0 rgba(0, 0, 0, 0.6),
+    0 4px 10px rgba(0, 0, 0, 0.4);
 }
 
-/* selected: an option that is on stays filled */
+/* selected: an option that is on is filled, its mark stays, its corners show */
 .id-control--selected,
 .id-control--selected:hover {
-  background: var(--id-ink);
-  border-color: var(--id-ink);
   color: var(--id-ground);
+  background: linear-gradient(to bottom, #ffffff, #dfe4ea);
 }
 
-/* disabled: dimmed, and its reason is on the control for every reader */
+.id-control--selected .id-control__ticks {
+  opacity: 1;
+  transform: scale(1);
+  --t: var(--id-ink);
+}
+
+.id-control--selected:hover .id-control__mark {
+  transform: none;
+  opacity: 1;
+}
+
+.id-control--selected:hover .id-control__label {
+  transform: none;
+}
+
+.id-control--selected:hover .id-control__badge {
+  opacity: 0;
+}
+
+/* disabled: the hatch the page uses for what is withheld, the label faint, the reason on the control */
 .id-control--disabled,
 .id-control--disabled:hover,
 .id-control--disabled:active {
-  opacity: 0.35;
   cursor: not-allowed;
   transform: none;
-  box-shadow: none;
+  color: rgba(243, 244, 246, 0.45);
+  background: var(--id-hatch), rgba(16, 21, 30, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(243, 244, 246, 0.14);
 }
 
-.id-control--disabled .id-control__icon--trail {
+.id-control--disabled:hover .id-control__mark {
   transform: none;
+  opacity: 1;
+}
+
+.id-control--disabled:hover .id-control__label {
+  transform: none;
+}
+
+.id-control--disabled:hover .id-control__badge {
+  opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .id-control,
-  .id-control__icon {
+  .id-control__mark,
+  .id-control__label,
+  .id-control__badge,
+  .id-control__ticks {
     transition: none;
   }
+  .id-control__scan[data-run='true']::before {
+    animation: none;
+  }
+  .id-control:hover,
+  .id-control:focus-visible,
   .id-control:active {
     transform: none;
   }
@@ -382,4 +578,19 @@ button.id-story__part:focus-visible {
   .id-entry__title {
     font-size: 28px;
   }
+}
+
+/* nothing of the first screen shows before the stage's first full frame */
+.id-entry .id-bar,
+.id-entry__say,
+.id-entry__acts {
+  transition: opacity 420ms var(--id-ease), visibility 0s linear 0s;
+}
+
+.id-entry[data-ready='false'] .id-bar,
+.id-entry[data-ready='false'] .id-entry__say,
+.id-entry[data-ready='false'] .id-entry__acts {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0s, visibility 0s;
 }

@@ -39,9 +39,9 @@ export function controlAria({ selected, disabled, reason }: ControlState) {
   return aria;
 }
 
-/** The icon a control shows by default for its variant: the primary leads on, the secondary carries none. */
-export function defaultIcon(variant: ControlVariant): ControlIcon {
-  return variant === 'primary' ? 'arrow' : 'none';
+/** The glyph the badge carries on hover. Every control leads on with an arrow unless its action has its own glyph. */
+export function badgeGlyph(icon: ControlIcon | undefined): Exclude<ControlIcon, 'none'> {
+  return icon && icon !== 'none' ? icon : 'arrow';
 }
 
 type SoundHook = (sound: ControlSound) => void;

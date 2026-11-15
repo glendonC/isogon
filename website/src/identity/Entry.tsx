@@ -13,13 +13,15 @@ export interface EntryProps {
   onPlay: () => void;
   onExplore: () => void;
   links?: { label: string; onClick: () => void }[];
+  /** False until the stage's cover says the first full frame is drawn; no word or control shows before. */
+  ready?: boolean;
 }
 
 /** The first screen: the Earth's fire map, one title and one line, Play or Explore. Enter plays. */
-export function Entry({ background, firstYear, lastYear, onPlay, onExplore, links }: EntryProps) {
+export function Entry({ background, firstYear, lastYear, onPlay, onExplore, links, ready = true }: EntryProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter' || e.defaultPrevented) return;
+      if (!ready || e.key !== 'Enter' || e.defaultPrevented) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.closest('button, a, input, textarea, select') || target.isContentEditable)) return;
       e.preventDefault();
@@ -27,10 +29,10 @@ export function Entry({ background, firstYear, lastYear, onPlay, onExplore, link
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onPlay]);
+  }, [onPlay, ready]);
 
   return (
-    <section className="id-entry" aria-label={WORDS.brand}>
+    <section className="id-entry" aria-label={WORDS.brand} data-ready={ready ? 'true' : 'false'} aria-busy={!ready}>
       <div className="id-entry__bg">{background}</div>
       <div className="id-entry__veil" aria-hidden="true" />
       <LocatorBar path={[WORDS.brand]} lat={null} lon={null} links={links} />
@@ -39,7 +41,9 @@ export function Entry({ background, firstYear, lastYear, onPlay, onExplore, link
         <p className="id-entry__line">{WORDS.entryLine}</p>
       </div>
       <div className="id-entry__acts">
-        <Control onClick={onExplore}>{WORDS.explore}</Control>
+        <Control onClick={onExplore} icon="arrow">
+          {WORDS.explore}
+        </Control>
         <Control variant="primary" icon="play" onClick={onPlay} shortcut="Enter">
           {WORDS.play}
         </Control>

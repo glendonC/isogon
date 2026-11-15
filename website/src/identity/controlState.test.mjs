@@ -5,7 +5,7 @@ import {
   controlAria,
   controlClass,
   controlSound,
-  defaultIcon,
+  badgeGlyph,
   setControlSound,
 } from './controlState.ts';
 
@@ -26,9 +26,11 @@ test('selected and disabled are states a reader is told', () => {
   assert.match(controlClass({ disabled: true }), /--disabled/);
 });
 
-test('the primary leads on with an arrow; the secondary carries no icon unless asked', () => {
-  assert.equal(defaultIcon('primary'), 'arrow');
-  assert.equal(defaultIcon('secondary'), 'none');
+test('the badge arrives with an arrow unless the action has its own glyph', () => {
+  assert.equal(badgeGlyph(undefined), 'arrow');
+  assert.equal(badgeGlyph('none'), 'arrow');
+  assert.equal(badgeGlyph('play'), 'play');
+  assert.equal(badgeGlyph('download'), 'download');
 });
 
 test('sounds go through one hook, silent until wired, and never from a disabled control', () => {
