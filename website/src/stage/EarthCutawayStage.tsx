@@ -122,6 +122,7 @@ import {
   type SubjectFrame,
   type ViewWindow,
 } from './engine/landingFrame';
+import { hasWebGL2, StageWebGLError } from './stageErrors';
 
 // The direction the shaders' curtain plane faces. No curtain is drawn (see NO_CURTAIN_PLANE);
 // the close presets still keep clear of this direction, which is the landing's own view axis.
@@ -747,13 +748,21 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
 
     // 1. WebGL2 renderer. The scene is drawn into a half-float HDR buffer owned by the composer
     // (MSAA there), so the default framebuffer needs no multisampling, depth or stencil.
-    const renderer = new THREE.WebGLRenderer({
-      antialias: false,
-      alpha: false,
-      depth: false,
-      powerPreference: 'high-performance',
-      stencil: false,
-    });
+    // Without WebGL2 the stage throws its named error, which the page's boundary around it catches
+    // (see ./stageErrors): nothing has been made yet, so nothing is left behind.
+    if (!hasWebGL2()) throw new StageWebGLError('unavailable');
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: false,
+        alpha: false,
+        depth: false,
+        powerPreference: 'high-performance',
+        stencil: false,
+      });
+    } catch (err) {
+      throw new StageWebGLError('failed', err);
+    }
     let dpr = resolveStagePixelRatio();
     renderer.setPixelRatio(dpr);
     renderer.setClearColor(new THREE.Color('#080b11'), 1.0);
