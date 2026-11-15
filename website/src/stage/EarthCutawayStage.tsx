@@ -367,6 +367,12 @@ const SCALE_BAR_FROM_DISTANCE = 9.5;
 const SCALE_BAR_INSET = 0.08;
 // The fire's anchor: how many of its patches are reported, and the grid detections are grouped on
 const FIRE_PATCH_LIMIT = 8;
+/**
+ * Detections laid on after scoring (the reveal, a look) arrive in this many seconds behind a front
+ * along the pass's ground track, then rest. Drawing: the satellite itself crosses a fire of
+ * twenty kilometres in about three seconds. Never under reduced motion.
+ */
+const REVEAL_ARRIVE_SECONDS = 1.0;
 const FIRE_PATCH_GRID_KM = 0.375;
 
 /**
@@ -1018,6 +1024,11 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
     const lightRange = new THREE.Vector2(0.02, 1.0);
     const uLightModis = { value: 0.0 };
     const uRevealed = new THREE.Vector2(0, 0);
+    // The front behind which detections laid on after scoring arrive (see uRevealArrive)
+    const uRevealArrive = new THREE.Vector4(0, 1, 1e4, 0.4);
+    let revealArriveFrom = 0;
+    let revealArriveTo = 0;
+    let revealArriveStartSec = -1e9;
     // 1 when the page asks for the estimate's squares sized by chance (eased in and out)
     const uChanceSquares = { value: 0.0 };
     // Real runs: 1 on a night overpass (see NIGHT_GLSL). Shared by every surface that is not emitted light.
@@ -1304,6 +1315,7 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       uHeldOut,
       uDeclaredGiven,
       uChanceSquares,
+      uRevealArrive: { value: uRevealArrive },
       uAfterglow,
       uLightGain,
       uFarView,
@@ -3211,6 +3223,36 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
             }
             for (const fp of sp.footprints) footprintList.push(fp);
           }
+          // Detections laid on after scoring arrive behind a front along their pass's ground track,
+          // in its direction of travel: from the first of them to the last, as the satellite took them
+          const laidOnPass = rawPasses.find((sp) => sp.revealed && !passIsHidden(sp, p.holdoutViirs));
+          if (revealedList.length > 0 && laidOnPass) {
+            const az = THREE.MathUtils.degToRad(laidOnPass.azimuthDeg);
+            let te = Math.cos(az);
+            let tn = -Math.sin(az);
+            if (laidOnPass.orbitNode && (laidOnPass.orbitNode === 'ascending') !== tn > 0) {
+              te = -te;
+              tn = -tn;
+            }
+            const [lonMin, latMin, lonMax, latMax] = nextBundle.bbox;
+            let lo = Infinity;
+            let hi = -Infinity;
+            let widest = 0;
+            for (const fp of revealedList) {
+              const xKm = ((fp.lon - lonMin) / Math.max(1e-9, lonMax - lonMin) - 0.5) * nextBundle.widthKm;
+              const yKm = ((fp.lat - latMin) / Math.max(1e-9, latMax - latMin) - 0.5) * nextBundle.depthKm;
+              const along = xKm * te + yKm * tn;
+              lo = Math.min(lo, along);
+              hi = Math.max(hi, along);
+              widest = Math.max(widest, fp.acrossTrackKm, fp.alongTrackKm);
+            }
+            uRevealArrive.x = te;
+            uRevealArrive.y = tn;
+            uRevealArrive.w = Math.max(0.2, widest);
+            revealArriveFrom = lo - widest;
+            revealArriveTo = hi + widest + uRevealArrive.w;
+            revealArriveStartSec = reducedMotion ? -1e9 : elapsedSec;
+          }
           // A pass that shows no detection of its own because its detections are hidden keeps a
           // trace of the fire: the last pass before it that the stage shows, as an afterglow that
           // fades with the hours since then, at the rate the run's own model lets a burning cell
@@ -3309,6 +3351,13 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
       terrainUniforms.uLipariTex.value = beliefField.grid.x > 0 ? beliefField.texture : lipariTex;
       uDeclaredGiven.value = beliefField.grid.x > 0 && beliefField.declaredGiven ? 1.0 : 0.0;
       uChanceSquares.value = THREE.MathUtils.lerp(uChanceSquares.value, p.chanceSquares ? 1.0 : 0.0, dampFast);
+      {
+        // The front of the detections laid on after scoring, eased out so they settle; at rest it
+        // stands past the last of them
+        const t = THREE.MathUtils.clamp((elapsedSec - revealArriveStartSec) / REVEAL_ARRIVE_SECONDS, 0, 1);
+        const eased = 1 - (1 - t) * (1 - t);
+        uRevealArrive.z = t >= 1 ? 1e4 : THREE.MathUtils.lerp(revealArriveFrom, revealArriveTo, eased);
+      }
       // A pass kept from the model: every pass of the frame is hidden, or was laid on after scoring
       const heldOutTarget =
         realRun && rawPasses.length > 0 && rawPasses.every((sp) => sp.revealed || passIsHidden(sp, p.holdoutViirs))

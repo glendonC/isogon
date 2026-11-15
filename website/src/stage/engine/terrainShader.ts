@@ -192,6 +192,7 @@ uniform vec2 uBeliefGrid;    // cells east-west and north-south; (0, 0) when the
 uniform float uBeliefMix;    // position between the two steps
 uniform vec4 uBeliefBox;     // the part of the region that holds any belief: (u west, v south, u east, v north)
 uniform float uHeldOut;      // 1 on a pass whose detections were kept from the estimate
+uniform vec4 uRevealArrive;  // detections laid on after scoring arrive: xy the pass's direction of travel (east, north), z the front along it (km from the box's centre), w the front's soft width (km)
 uniform float uChanceSquares; // 1 when the squares sized by chance are asked for (eased)
 uniform float uDeclaredGiven; // 1 when the run says which cells its model declares at the hidden pass on show (the low bit of a cell's intensity byte)
 // A hidden pass: above 0 the light texture holds the last visible pass, drawn as an afterglow at
@@ -914,6 +915,11 @@ void main() {
         float smallV = 1.0 - smoothstep(3.0, 9.0, 1.0 / footGradV);
         float coreM = revealCore(foot.r, smallM) * uRevealed.x;
         float coreV = revealCore(foot.b, smallV) * uRevealed.y;
+        // (they arrive behind a front that crosses the fire along the pass's own ground track: the
+        // order the satellite acquired them in; the timing is drawing)
+        float arrived = smoothstep(-uRevealArrive.w, 0.0, uRevealArrive.z - dot(pKm, uRevealArrive.xy));
+        coreM *= arrived;
+        coreV *= arrived;
         float core = clamp(coreM + coreV, 0.0, 1.0);
         float fewPx = max(smallM * uRevealed.x, smallV * uRevealed.y);
         // By day the ground under the square is drawn darker first, so the blue stands on sunlit
