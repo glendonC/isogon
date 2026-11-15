@@ -39,7 +39,16 @@ from backend.env.agents import (
     tile_scores,
 )
 from backend.env.next_look import NO_LOOK, REWARD, NextLookEnv, Observation
+from backend.env.policy import LinearPolicyAgent
 from backend.model.platforms import PLATFORMS
+
+_ARGMAX_CHOOSE = (
+    LeastSureAgent.choose,
+    LatestModisAgent.choose,
+    ExpectedNewAgent.choose,
+    OracleAgent.choose,
+    LinearPolicyAgent.choose,
+)
 
 ROW_COLUMNS: tuple[str, ...] = ("lon", "lat", "scan_km", "track_km", "frp_mw", "time_utc", "platform")
 # What a player is, in words a page can print: (label, what it does, what it reads).
@@ -193,6 +202,7 @@ def play_steps(env: NextLookEnv, agent: Any, seed: int = 0, ceiling: bool = Fals
     done = env.n_looks == 0
     ask = env if hidden_reader else None
     explain = getattr(agent, "explain", None)
+    argmax_choice = getattr(type(agent), "choose", None) in _ARGMAX_CHOOSE
     while not done:
         assert obs is not None
         k = int(obs.decision)
@@ -200,7 +210,12 @@ def play_steps(env: NextLookEnv, agent: Any, seed: int = 0, ceiling: bool = Fals
         when = _when(agent, obs, spending)
         scores = tile_scores(agent, obs, ask) if spending else None
         parts = explain(obs) if (spending and explain is not None) else None
-        act = int(agent.choose(obs, ask)) if spending else NO_LOOK
+        if not spending:
+            act = NO_LOOK
+        elif scores is not None and argmax_choice:
+            act = int(np.argmax(scores))
+        else:
+            act = int(agent.choose(obs, ask))
         step: dict[str, Any] = {
             "decision": k,
             "look": {"platform": str(obs.sensor), "time_utc": _iso(obs.time_s), "is_day": bool(obs.is_day),
