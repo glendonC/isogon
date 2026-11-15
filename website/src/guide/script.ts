@@ -46,6 +46,8 @@ export interface ScriptLabel extends When {
   line: string;
   /** The label while the passes play: readable in a second and a half. */
   short?: string;
+  /** The film presentation's form (eight words at most); null: no label there. Absent: the line, as on the page. */
+  film?: string | null;
 }
 
 export interface ScriptResultRow {
@@ -182,10 +184,19 @@ export function contextOf(step: string, fields: Fields): string | null {
   return t ? fill(t, fields) : null;
 }
 
-/** The label a state puts on one thing of the stage; its short form while the passes play, where it has one. */
-export function labelOn(state: ScriptState | null, thing: string, fields: Fields, conds: Conditions, short = false): string | null {
+/**
+ * The label a state puts on one thing of the stage; its short form while the passes play, where it has one; in the
+ * film presentation its film form where it has one (`film: null`: no label in the film).
+ */
+export function labelOn(state: ScriptState | null, thing: string, fields: Fields, conds: Conditions, short = false, film = false): string | null {
   for (const l of state?.labels ?? []) {
     if (l.on !== thing || !holds(l, conds)) continue;
+    if (film && l.film !== undefined) {
+      if (l.film === null) return null;
+      const said = fill(l.film, fields);
+      if (said) return said;
+      continue;
+    }
     const text = fill(short && l.short ? l.short : l.line, fields);
     if (text) return text;
   }

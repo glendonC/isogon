@@ -1,5 +1,5 @@
 {
-  "version": 17,
+  "version": 18,
   "what": "The words of the guide: for each step and each state inside it, the objective, what the guide says, the labels on things, the actions, and the questions a visitor can ask. Every sentence says which of the five places it sits in. Text in braces is a field: its value comes from an answer of the backend, named under fields. No figure is typed in a line.",
   "trail": [
     "Record",
@@ -70,7 +70,8 @@
     "exclusive": "Groups of conditions of which at most one is true at a time, read from the same answer; the check of what stands counts no case where two of a group hold.",
     "photo": "On Estimate and Test, a step's photo holds the sentences said while the day's photograph is on, each replacing the first standing sentence; the action photo:next is the one fourth action of the guide's row, quiet, at its end (the lead's decision of 00:05), and reads label, then label_when_true_color, then label_when_false_color.",
     "keys_shared": "One key runs one command, but for keys_shared: a key that does the same thing for the visitor on different screens (Space plays what the screen plays). An action's also_key is a second key for the same command.",
-    "film": "In the film presentation (any film= in the address) a state's film caption stands where the objective stands, one at a time, and the guide's sentences are off; thirteen words at most, every figure a field. A state with no film caption shows its objective, as now."
+    "film": "In the film presentation (any film= in the address) a state's film caption stands where the objective stands, one at a time, and the guide's sentences are off; thirteen words at most, every figure a field. A state with no film caption shows its objective, as now.",
+    "film_labels": "In the film presentation a label with `film` shows that form instead of its line, and a label whose `film` is null is not shown; a label with no `film` shows its line. Eight words at most."
   },
   "things": {
     "fire": "the fire on the land, in a round as well",
@@ -422,7 +423,8 @@
               "place": "label",
               "on": "fire_block",
               "if": "block_is_test_fire",
-              "line": "Kept as the model's test: its record can be read, and it is not tested again."
+              "line": "Kept as the model's test: its record can be read, and it is not tested again.",
+              "film": "Kept as the test, not tested again."
             }
           ],
           "actions": [
@@ -584,13 +586,15 @@
               "place": "label",
               "on": "fire_month",
               "if": "fire_month_stands_out",
-              "line": "{default_fire_month}: {fire_times_usual} times the fire of a usual {fire_month_name} here. The page opens on this fire."
+              "line": "{default_fire_month}: {fire_times_usual} times the fire of a usual {fire_month_name} here. The page opens on this fire.",
+              "film": "{default_fire_month}: {fire_times_usual} times a usual {fire_month_name}."
             },
             {
               "place": "label",
               "on": "fire_month",
               "unless": "fire_month_stands_out",
-              "line": "{default_fire_month}: {fire_month_rate} detections per 1,000 square kilometres a day, where {fire_month_usual} is usual. The page opens on this fire."
+              "line": "{default_fire_month}: {fire_month_rate} detections per 1,000 square kilometres a day, where {fire_month_usual} is usual. The page opens on this fire.",
+              "film": null
             }
           ],
           "film": [
@@ -1004,13 +1008,15 @@
               "place": "label",
               "on": "change_bar",
               "if": "years_change_as_counted",
-              "line": "{sharp_since}: the newer, sharper satellite begins and makes about {world_ratio} times as many detections of the same fires as the older ones, so the Earth brightens with no more fire."
+              "line": "{sharp_since}: the newer, sharper satellite begins and makes about {world_ratio} times as many detections of the same fires as the older ones, so the Earth brightens with no more fire.",
+              "film": null
             },
             {
               "place": "label",
               "on": "change_bar",
               "if": "years_change_one_scale",
-              "line": "{sharp_since}: the newer, sharper satellite begins, and on one scale there is no step, because the older satellites' detections are put on its scale."
+              "line": "{sharp_since}: the newer, sharper satellite begins, and on one scale there is no step, because the older satellites' detections are put on its scale.",
+              "film": null
             },
             {
               "place": "label",
@@ -1175,26 +1181,30 @@
               "on": "fire",
               "if": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Hidden.",
-              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: hidden."
+              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: hidden.",
+              "film": null
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
-              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
+              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections.",
+              "film": "Coarse satellite: {pass_detections} detections."
             },
             {
               "place": "label",
               "on": "frames",
               "if": "pass_is_sharp",
-              "line": "Each white frame is one square, {sharp_square_m} metres across, that the model says is burning at this pass. The dotted line is around all the ground where the model gives fire a chance."
+              "line": "Each white frame is one square, {sharp_square_m} metres across, that the model says is burning at this pass. The dotted line is around all the ground where the model gives fire a chance.",
+              "film": "White frames: the model's estimate."
             },
             {
               "place": "label",
               "on": "dotted_line",
               "unless": "pass_is_sharp",
-              "line": "The dotted line is around all the ground where the model gives fire a chance at this pass."
+              "line": "The dotted line is around all the ground where the model gives fire a chance at this pass.",
+              "film": null
             }
           ],
           "film": [
@@ -1687,14 +1697,16 @@
               "on": "fire",
               "if": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Its {sharp_detections_pass} detections are now shown as blue squares over the white frames of the estimate.",
-              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: {sharp_detections_pass} detections."
+              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: {sharp_detections_pass} detections.",
+              "film": "The sharp satellite's {sharp_detections_pass} detections, in blue."
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
-              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
+              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections.",
+              "film": "Coarse satellite: {pass_detections} detections."
             }
           ],
           "film": [
@@ -1786,14 +1798,16 @@
               "on": "fire",
               "if": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}: the sharp satellite, {pass_when}. Its {sharp_detections_pass} detections are now shown as blue squares over the white frames of the estimate.",
-              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: {sharp_detections_pass} detections."
+              "short": "Pass {pass_number} of {passes_total}. Sharp satellite: {sharp_detections_pass} detections.",
+              "film": "The sharp satellite's {sharp_detections_pass} detections, in blue."
             },
             {
               "place": "label",
               "on": "fire",
               "unless": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}: the coarse satellite, {pass_when}. {pass_detections} detections, given to the model.",
-              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections."
+              "short": "Pass {pass_number} of {passes_total}. Coarse satellite: {pass_detections} detections.",
+              "film": "Coarse satellite: {pass_detections} detections."
             }
           ]
         },
@@ -2229,7 +2243,8 @@
             {
               "place": "label",
               "on": "fire",
-              "line": "Everything the sharp satellite saw in this round, now shown: {round_sharp_detections} detections."
+              "line": "Everything the sharp satellite saw in this round, now shown: {round_sharp_detections} detections.",
+              "film": "All {round_sharp_detections} detections of the round, shown."
             }
           ],
           "results": {

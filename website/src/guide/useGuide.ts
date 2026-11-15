@@ -77,7 +77,7 @@ const WORLD_ENTRIES: ScriptAction[] = [
 export interface GuideLive {
   /** The passes are playing. */
   playing: boolean;
-  /** The film presentation: the labels on the stage take their short form. */
+  /** The film presentation: the labels on the stage take their film form (script version 18). */
   film?: boolean;
   /** The squares sized by chance are drawn. */
   chance: boolean;
@@ -305,7 +305,7 @@ export function useGuide(
       conds: c,
       actions: actionsOf(state?.actions, f, on).filter((a) => a.command !== 'play:players_reveal' || players.canReveal),
       also: actionsOf(stepOf(step)?.also, f, on, 9),
-      fireLabel: labelOn(state, 'fire', f, c, live.playing || Boolean(live.film)),
+      fireLabel: labelOn(state, 'fire', f, c, live.playing, Boolean(live.film)),
       squareLabel: labelOn(state, 'looked_square', f, c),
       besideSquare: promptBeside(state, 'marked_square'),
       results: state?.results ? { line: state.results.line, rows: resultRows(state.results, f, r.gains, c) } : null,
@@ -379,7 +379,15 @@ export function useGuide(
         : []),
     ],
     also: [...actionsOf(stepOf(step)?.also, fields, on, 9), ...world],
-    fireLabel: labelOn(state, 'fire', fields, conds, live.playing || Boolean(live.film)),
+    // In the film Estimate's other passes take the hidden state's film labels, as they take its caption.
+    fireLabel: labelOn(
+      live.film && step === 'estimate' && (id === 'on_a_hidden_pass' || id === 'on_a_coarse_pass') ? stateOf(step, 'hidden') : state,
+      'fire',
+      fields,
+      conds,
+      live.playing,
+      Boolean(live.film),
+    ),
     besideFire: promptBeside(state, 'fire'),
     marks: settled ? marksOnShow(ws, fields, conds, { chance: live.chance, revealed: step === 'test' }) : [],
   };
