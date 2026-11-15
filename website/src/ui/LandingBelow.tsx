@@ -10,7 +10,10 @@ import { EvidenceSheet } from '../components/EvidenceSheet';
 import { SoundControl } from '../audio';
 import type { EvidenceDoc, EvidenceState } from '../content/evidence';
 import type { PartId, PartStatus } from '../content/partsStatus';
+import { THEATER_DISPLAY } from '../content/theaters';
+import { localDayTime, midLon } from '../guide/formats';
 import { getJson, publicUrl } from '../lib/api';
+import { Loader } from './Loader';
 import '../styles/landing-below.css';
 
 type BlockVisualKind = 'record' | 'estimate' | 'test' | 'play';
@@ -84,6 +87,7 @@ interface RegionsRouteSlice {
     id?: string;
     name?: string;
     rows?: string;
+    box?: [number, number, number, number];
   }>;
 }
 
@@ -259,6 +263,15 @@ void main() {
           }
         } else if (fromBottom < 0.04) {
           col = mix(INK_NIGHT, INK_RULE, 0.55 * yearAppear);
+        }
+      }
+      // Era typical-year reference line: split across 2012 before flattening, one level line after flattening.
+      if (uMeta.z > 0.02 && revealProgress > 0.55) {
+        float eraRef = isSharpEra ? mix(uMeta.y, uMeta.z, flatten) : mix(uMeta.x, uMeta.z, flatten);
+        float dRefPx = abs(fromBottom - eraRef) * inner.y * 0.28;
+        if (dRefPx < 0.85 * uDpr) {
+          vec3 refInk = mix(isSharpEra ? INK_SHARP : INK_MODIS, INK_EST, flatten * 0.65);
+          col = mix(col, refInk, 0.72 * smoothstep(0.55, 0.95, revealProgress));
         }
       }
       if (abs(barAreaY - 1.0) * inner.y * 0.28 < 1.0 * uDpr) {
@@ -690,7 +703,7 @@ const STILL_TIMES: Record<BlockVisualKind, number> = {
 };
 
 const INITIAL_TIMES: Record<BlockVisualKind, number> = {
-  record: 2.6,
+  record: 5.4,
   estimate: 3.2,
   test: 3.0,
   play: 2.9,
@@ -1146,13 +1159,22 @@ function packDemRows(bytes: Uint8Array, texWidth: number, rowOffset: number, b64
   }
 }
 
+function medianOf(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid] : 0.5 * (sorted[mid - 1] + sorted[mid]);
+}
+
 function uploadRecordTexture(engine: SharedWebglEngine, data: RecordLandingData): void {
   const W = 32;
   const H = 16;
   const bytes = new Uint8Array(W * H * 4);
-  const maxRaw = Math.max(1e-6, data.max_raw);
   const maxOne = Math.max(1e-6, data.max_one_scale);
+  const monthDenom = Math.log1p(maxOne * 16);
+  const normMonth = (r: number) => (monthDenom > 0 ? Math.min(1, Math.log1p(Math.max(0, r) * 16) / monthDenom) : 0);
 
+  const yearMeans: Array<{ y: number; raw: number; one: number }> = [];
   for (let y = 0; y < 26; y += 1) {
     let sumRaw = 0;
     let sumOne = 0;
@@ -1162,8 +1184,8 @@ function uploadRecordTexture(engine: SharedWebglEngine, data: RecordLandingData)
       if (!cell) continue;
       const [raw, one, era] = cell;
       const idx = (m * W + y) * 4;
-      bytes[idx] = Math.round(Math.min(1, Math.sqrt(raw / maxRaw)) * 255);
-      bytes[idx + 1] = Math.round(Math.min(1, Math.sqrt(one / maxOne)) * 255);
+      bytes[idx] = Math.round(normMonth(raw) * 255);
+      bytes[idx + 1] = Math.round(normMonth(one) * 255);
       bytes[idx + 2] = era === 0 ? 0 : era === 1 ? 128 : 255;
       bytes[idx + 3] = 255;
       if (era > 0) {
@@ -1173,16 +1195,37 @@ function uploadRecordTexture(engine: SharedWebglEngine, data: RecordLandingData)
       }
     }
     if (count > 0) {
-      const annIdx = (12 * W + y) * 4;
-      const meanRaw = sumRaw / count;
-      const meanOne = sumOne / count;
-      bytes[annIdx] = Math.round(Math.min(1, Math.pow(meanRaw / (maxRaw * 0.42), 0.62)) * 255);
-      bytes[annIdx + 1] = Math.round(Math.min(1, Math.pow(meanOne / (maxRaw * 0.42), 0.62)) * 255);
-      bytes[annIdx + 2] = 255;
-      bytes[annIdx + 3] = 255;
+      yearMeans.push({ y, raw: sumRaw / count, one: sumOne / count });
     }
   }
-  engine.uploadTexture('record', W, H, bytes);
+
+  const maxYearOne = Math.max(1e-6, ...yearMeans.map((ym) => ym.one));
+  const yearDenom = Math.log1p(maxYearOne * 36);
+  const normYear = (m: number) => (yearDenom > 0 ? Math.min(1, Math.log1p(Math.max(0, m) * 36) / yearDenom) : 0);
+
+  const preRawHeights: number[] = [];
+  const postRawHeights: number[] = [];
+  const allOneHeights: number[] = [];
+
+  for (const ym of yearMeans) {
+    const annIdx = (12 * W + ym.y) * 4;
+    const hRaw = normYear(ym.raw);
+    const hOne = normYear(ym.one);
+    bytes[annIdx] = Math.round(hRaw * 255);
+    bytes[annIdx + 1] = Math.round(hOne * 255);
+    bytes[annIdx + 2] = 255;
+    bytes[annIdx + 3] = 255;
+    if (ym.y < 12) preRawHeights.push(hRaw);
+    else postRawHeights.push(hRaw);
+    allOneHeights.push(hOne);
+  }
+
+  engine.uploadTexture('record', W, H, bytes, [
+    medianOf(preRawHeights),
+    medianOf(postRawHeights),
+    medianOf(allOneHeights),
+    0,
+  ]);
 }
 
 function uploadEstimateAndTestTextures(engine: SharedWebglEngine, data: EstimateTestLandingData): void {
@@ -1298,6 +1341,56 @@ function uploadPlayTexture(engine: SharedWebglEngine, data: PlayLandingData): vo
 }
 
 let landingStaticLoaded = false;
+let estimateTestStaticPromise: Promise<EstimateTestLandingData | null> | null = null;
+
+function fetchEstimateTestStatic(): Promise<EstimateTestLandingData | null> {
+  if (estimateTestStaticPromise) return estimateTestStaticPromise;
+  if (typeof fetch === 'undefined') return Promise.resolve(null);
+  estimateTestStaticPromise = fetch(publicUrl('generated/landing/estimate-test.json'))
+    .then((r) => (r.ok ? (r.json() as Promise<EstimateTestLandingData>) : null))
+    .catch(() => {
+      estimateTestStaticPromise = null;
+      return null;
+    });
+  return estimateTestStaticPromise;
+}
+
+const calendarSliceCache = new Map<string, Promise<CalendarRouteSlice | null>>();
+function fetchCachedCalendar(regionId: string): Promise<CalendarRouteSlice | null> {
+  const hit = calendarSliceCache.get(regionId);
+  if (hit) return hit;
+  const req = getJson<CalendarRouteSlice>('/api/calendar', { source: 'firms', region_id: regionId }).catch(() => {
+    calendarSliceCache.delete(regionId);
+    return null;
+  });
+  calendarSliceCache.set(regionId, req);
+  return req;
+}
+
+let regionsSlicePromise: Promise<RegionsRouteSlice | null> | null = null;
+function fetchCachedRegions(): Promise<RegionsRouteSlice | null> {
+  if (regionsSlicePromise) return regionsSlicePromise;
+  regionsSlicePromise = getJson<RegionsRouteSlice>('/api/regions').catch(() => {
+    regionsSlicePromise = null;
+    return null;
+  });
+  return regionsSlicePromise;
+}
+
+let evidenceSlicePromise: Promise<EvidenceDoc | null> | null = null;
+function fetchCachedEvidence(): Promise<EvidenceDoc | null> {
+  if (evidenceSlicePromise) return evidenceSlicePromise;
+  evidenceSlicePromise = getJson<EvidenceDoc>('/api/evidence').catch(() => {
+    evidenceSlicePromise = null;
+    return null;
+  });
+  return evidenceSlicePromise;
+}
+
+function capitalizeLeading(value: string): string {
+  return value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
 function ensureStaticVisualTextures(engine: SharedWebglEngine): void {
   if (landingStaticLoaded || !engine.supported || typeof fetch === 'undefined') return;
   landingStaticLoaded = true;
@@ -1309,8 +1402,7 @@ function ensureStaticVisualTextures(engine: SharedWebglEngine): void {
     })
     .catch(() => undefined);
 
-  fetch(publicUrl('generated/landing/estimate-test.json'))
-    .then((r) => (r.ok ? (r.json() as Promise<EstimateTestLandingData>) : null))
+  fetchEstimateTestStatic()
     .then((d) => {
       if (d && d.grid) uploadEstimateAndTestTextures(engine, d);
     })
@@ -1398,6 +1490,7 @@ export function LandingBelow({
 
   const [calendarSlice, setCalendarSlice] = useState<CalendarRouteSlice | null>(null);
   const [regionsSlice, setRegionsSlice] = useState<RegionsRouteSlice | null>(null);
+  const [passTimesUtc, setPassTimesUtc] = useState<{ modis: string; viirs: string } | null>(null);
   const [localEvidence, setLocalEvidence] = useState<EvidenceDoc | null>(null);
   const [localEvidenceState, setLocalEvidenceState] = useState<EvidenceState>('loading');
   const [fallbackEvidenceOpen, setFallbackEvidenceOpen] = useState(false);
@@ -1431,46 +1524,53 @@ export function LandingBelow({
   }, []);
 
   useEffect(() => {
-    const ctrl = new AbortController();
-    getJson<CalendarRouteSlice>(
-      '/api/calendar',
-      { source: 'firms', region_id: activeRegionId },
-      { signal: ctrl.signal },
-    )
-      .then((d) => {
-        if (d && typeof d === 'object') setCalendarSlice(d);
-      })
-      .catch(() => undefined);
-    return () => ctrl.abort();
+    let cancelled = false;
+    fetchEstimateTestStatic().then((d) => {
+      if (!cancelled && d && typeof d.modis_time_utc === 'string' && typeof d.viirs_time_utc === 'string') {
+        setPassTimesUtc({ modis: d.modis_time_utc, viirs: d.viirs_time_utc });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCachedCalendar(activeRegionId).then((d) => {
+      if (!cancelled && d && typeof d === 'object') setCalendarSlice(d);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [activeRegionId]);
 
   useEffect(() => {
-    const ctrl = new AbortController();
-    getJson<RegionsRouteSlice>('/api/regions', undefined, { signal: ctrl.signal })
-      .then((d) => {
-        if (d && typeof d === 'object') setRegionsSlice(d);
-      })
-      .catch(() => undefined);
-    return () => ctrl.abort();
+    let cancelled = false;
+    fetchCachedRegions().then((d) => {
+      if (!cancelled && d && typeof d === 'object') setRegionsSlice(d);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (store?.model.evidence) return;
-    const ctrl = new AbortController();
+    let cancelled = false;
     setLocalEvidenceState('loading');
-    getJson<EvidenceDoc>('/api/evidence', undefined, { signal: ctrl.signal })
-      .then((d) => {
-        if (d && typeof d === 'object' && d.test_fires) {
-          setLocalEvidence(d);
-          setLocalEvidenceState('ready');
-        } else {
-          setLocalEvidenceState('failed');
-        }
-      })
-      .catch(() => {
-        if (!ctrl.signal.aborted) setLocalEvidenceState('failed');
-      });
-    return () => ctrl.abort();
+    fetchCachedEvidence().then((d) => {
+      if (cancelled) return;
+      if (d && typeof d === 'object' && d.test_fires) {
+        setLocalEvidence(d);
+        setLocalEvidenceState('ready');
+      } else {
+        setLocalEvidenceState('failed');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [store?.model.evidence]);
 
   const { fields, conditions, telemetry } = useMemo(() => {
@@ -1517,7 +1617,9 @@ export function LandingBelow({
           : null,
       test_fires_n: testFires && testFires.length > 0 ? formatCountWord(testFires.length) : null,
       test_fire_names:
-        testFires && testFires.length > 0 ? formatListAnd(testFires.map((tf) => tf.name)) : null,
+        testFires && testFires.length > 0
+          ? formatListAnd(testFires.map((tf) => capitalizeLeading(tf.name)))
+          : null,
       test_fire_scores:
         testFires && testFires.length > 0
           ? formatListAnd(testFires.map((tf) => String(tf.new.ahead_of_both_on)))
@@ -1547,6 +1649,11 @@ export function LandingBelow({
 
     const ruleAheadNum = onVal?.differences?.least_sure_minus_random?.episodes_a_ahead ?? null;
     const roundsTotalNum = onVal?.episodes ?? null;
+    const valAhead = typeof val?.classes?.ahead === 'number' ? val.classes.ahead : null;
+    const valLevel = typeof val?.classes?.tied === 'number' ? val.classes.tied : null;
+    const valBehind = typeof val?.classes?.behind === 'number' ? val.classes.behind : null;
+    const valScoresTotal =
+      valAhead !== null && valLevel !== null && valBehind !== null ? valAhead + valLevel + valBehind : null;
 
     return {
       fields: f,
@@ -1565,10 +1672,10 @@ export function LandingBelow({
               }))
             : null,
         scoresJudgedNum,
-        valAhead: typeof val?.classes?.ahead === 'number' ? val.classes.ahead : null,
-        valLevel: typeof val?.classes?.tied === 'number' ? val.classes.tied : null,
-        valBehind: typeof val?.classes?.behind === 'number' ? val.classes.behind : null,
-        valEpisodes: typeof val?.episodes === 'number' ? val.episodes : null,
+        valAhead,
+        valLevel,
+        valBehind,
+        valScoresTotal,
         ruleAheadNum: typeof ruleAheadNum === 'number' ? ruleAheadNum : null,
         roundsTotalNum: typeof roundsTotalNum === 'number' ? roundsTotalNum : null,
         errPctNum,
@@ -1576,6 +1683,22 @@ export function LandingBelow({
       },
     };
   }, [calendarSlice, regionsSlice, evidenceDoc]);
+
+  const plumasLon = useMemo(() => {
+    const fromSlice = regionsSlice?.places?.find((p) => p.id === 'plumas_ca')?.box;
+    const fromStore = store?.places.places.find((p) => p.id === 'plumas_ca')?.box;
+    return midLon(fromSlice ?? fromStore) ?? THEATER_DISPLAY.plumas_ca.centerLon;
+  }, [regionsSlice, store?.places.places]);
+
+  const coarsePassWhen = useMemo(
+    () => localDayTime(passTimesUtc?.modis ?? null, plumasLon),
+    [passTimesUtc?.modis, plumasLon],
+  );
+
+  const sharpPassWhen = useMemo(
+    () => localDayTime(passTimesUtc?.viirs ?? null, plumasLon),
+    [passTimesUtc?.viirs, plumasLon],
+  );
 
   const recordLines = useMemo(
     () =>
@@ -1618,6 +1741,7 @@ export function LandingBelow({
   }, [fields, conditions.not_always_ahead]);
 
   const playLines = useMemo(() => {
+    if (!evidenceDoc) return [];
     const out: string[] = [];
     const l1 = fillTemplate(
       'The hidden satellite also makes a game. You get {round_looks} looks through it, one square of the fire each, and you choose where.',
@@ -1634,7 +1758,7 @@ export function LandingBelow({
       );
     }
     return out;
-  }, [fields, conditions.learned_beats_rule]);
+  }, [evidenceDoc, fields, conditions.learned_beats_rule]);
 
   const proofItems = useMemo(() => {
     const closedLine = fillTemplate(
@@ -1650,7 +1774,7 @@ export function LandingBelow({
         ? 'That is not enough to switch the model on. It is experimental: shown and tested here, and nothing more is claimed for it.'
         : null;
     const gameLine = fillTemplate(
-      'In the game, a simple rule gained more than random looks on {rule_ahead_rounds} of {rounds_n} rounds.',
+      'In the game, across {rounds_n} four-day rounds on those fires, a simple rule gained more than random looks on {rule_ahead_rounds} of {rounds_n}.',
       fields,
     );
     const recordLine = fillTemplate(
@@ -1668,12 +1792,17 @@ export function LandingBelow({
     );
     if (m1) out.push(m1);
     const m2 = fillTemplate(
-      'Fires can be shown pass by pass in {places_n} places: {places_with_fires}. For any other area you can draw a box and read its fire record.',
+      'Fires can be shown pass by pass in {places_n} places: {places_with_fires}. Where country fire files are stored here, you can also draw a box and read its fire record.',
       fields,
     );
     if (m2) out.push(m2);
     return out;
   }, [fields]);
+
+  const enterRecordDirect = () => {
+    onEnter();
+    store?.calendar.closePlaces();
+  };
 
   const openEvidence = () => {
     if (store?.model.openEvidence) {
@@ -1697,7 +1826,7 @@ export function LandingBelow({
             <img
               className="iso-lb-figure__img"
               src={publicUrl('generated/landing/three-ways.jpg')}
-              alt="Feather River fire on 11 August 2012 shown three ways: what the coarse satellite saw at 1 km, the estimate made from coarse passes alone on a 375 m grid, and what the withheld sharp satellite actually saw at 375 m."
+              alt="Feather River fire in August 2012 shown three ways: what the coarse satellite saw at 1 km, the estimate made from coarse passes alone on a 375 m grid, and what the withheld sharp satellite actually saw at 375 m."
               loading="lazy"
               decoding="async"
             />
@@ -1707,7 +1836,9 @@ export function LandingBelow({
                   <span className="iso-lb-swatch iso-lb-swatch--modis" aria-hidden="true" />
                   What the coarse satellite saw
                 </span>
-                <span className="iso-lb-figure__col-meta">The coarse satellite, 1 km squares, 10 August, 10:24 at night</span>
+                <span className="iso-lb-figure__col-meta">
+                  The coarse satellite, 1 km squares{coarsePassWhen ? `, ${coarsePassWhen}` : ''}
+                </span>
               </div>
               <div className="iso-lb-figure__col">
                 <span className="iso-lb-figure__col-title">
@@ -1721,7 +1852,9 @@ export function LandingBelow({
                   <span className="iso-lb-swatch iso-lb-swatch--detection" aria-hidden="true" />
                   What the sharp satellite saw
                 </span>
-                <span className="iso-lb-figure__col-meta">The sharp satellite, 375 m squares, 11 August, 2:15 at night</span>
+                <span className="iso-lb-figure__col-meta">
+                  The sharp satellite, 375 m squares{sharpPassWhen ? `, ${sharpPassWhen}` : ''}
+                </span>
               </div>
             </figcaption>
           </figure>
@@ -1746,19 +1879,25 @@ export function LandingBelow({
                     Sharp era from 2012
                   </span>
                 </span>
-                <span>Feather River monthly rates, 2000 to 2025</span>
+                <span>
+                  Feather River monthly rates, 2000 to 2011 put on one scale with 2012 to 2025
+                </span>
               </figcaption>
             </figure>
             <div className="iso-lb-block__copy">
               <h2 className="iso-lb-block__title">Record</h2>
               <div className="iso-lb-block__lines">
-                {recordLines.map((line, i) => (
-                  <p key={i} className="iso-lb-block__line">
-                    {line}
-                  </p>
-                ))}
+                {recordLines.length > 0 ? (
+                  recordLines.map((line, i) => (
+                    <p key={i} className="iso-lb-block__line">
+                      {line}
+                    </p>
+                  ))
+                ) : (
+                  <Loader surface="inline" line="Loading the fire record" />
+                )}
               </div>
-              <button type="button" className="iso-lb-action" onClick={onEnter}>
+              <button type="button" className="iso-lb-action" onClick={enterRecordDirect}>
                 <span className="iso-lb-action__label">See the fire record</span>
                 <ActionArrow />
               </button>
@@ -1782,7 +1921,9 @@ export function LandingBelow({
                     375 m estimate frames
                   </span>
                 </span>
-                <span>Simplified canyon relief and pass slice, 11 August 2012</span>
+                <span>
+                  Simplified canyon relief and pass slice{coarsePassWhen ? `, ${coarsePassWhen}` : ''}
+                </span>
               </figcaption>
             </figure>
             <div className="iso-lb-block__copy">
@@ -1818,7 +1959,9 @@ export function LandingBelow({
                     Revealed sharp detection
                   </span>
                 </span>
-                <span>Withheld pass at 2:15 at night on the same canyon slice</span>
+                <span>
+                  Withheld pass{sharpPassWhen ? `, ${sharpPassWhen},` : ''} on the same canyon slice
+                </span>
               </figcaption>
             </figure>
             <div className="iso-lb-block__copy">
@@ -1860,11 +2003,15 @@ export function LandingBelow({
             <div className="iso-lb-block__copy">
               <h2 className="iso-lb-block__title">Play</h2>
               <div className="iso-lb-block__lines">
-                {playLines.map((line, i) => (
-                  <p key={i} className="iso-lb-block__line">
-                    {line}
-                  </p>
-                ))}
+                {playLines.length > 0 ? (
+                  playLines.map((line, i) => (
+                    <p key={i} className="iso-lb-block__line">
+                      {line}
+                    </p>
+                  ))
+                ) : (
+                  <Loader surface="inline" line="Loading the round record" />
+                )}
               </div>
               <button type="button" className="iso-lb-action" onClick={() => onOpenPart('environment')}>
                 <span className="iso-lb-action__label">Play a round</span>
@@ -1886,131 +2033,135 @@ export function LandingBelow({
             </button>
           </div>
 
-          <div className="iso-lb-proof-grid">
-            {proofItems.closedLine && (
-              <div className="iso-lb-stat">
-                {telemetry.testFires && telemetry.scoresJudgedNum !== null && (
-                  <>
-                    <div className="iso-lb-stat__hero">
-                      <span className="iso-lb-stat__figure">
-                        {telemetry.testFires.map((tf) => tf.won).join(', ')}
-                      </span>
-                      <span className="iso-lb-stat__unit">of {telemetry.scoresJudgedNum} scores won</span>
-                    </div>
-                    <div className="iso-lb-stat__fires" aria-hidden="true">
-                      {telemetry.testFires.map((tf) => {
-                        const low = tf.won * 2 < tf.of;
-                        return (
-                          <div key={tf.id} className="iso-lb-stat__fire-segs">
-                            {Array.from({ length: tf.of }).map((_, idx) => (
-                              <span
-                                key={idx}
-                                className="iso-lb-stat__seg"
-                                data-lit={idx < tf.won ? 'ink' : low ? 'fail' : 'none'}
-                              />
-                            ))}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-                <div className="iso-lb-stat__copy">
-                  <p className="iso-lb-section__line">{proofItems.closedLine}</p>
-                </div>
-              </div>
-            )}
-
-            {(proofItems.valLine || proofItems.honestLine) && (
-              <div className="iso-lb-stat">
-                {telemetry.valAhead !== null && telemetry.valEpisodes !== null && (
-                  <>
-                    <div className="iso-lb-stat__hero">
-                      <span className="iso-lb-stat__figure">
-                        {telemetry.valAhead} of {telemetry.valEpisodes}
-                      </span>
-                      <span className="iso-lb-stat__unit">
-                        fires ahead ({fields.other_level} level, {fields.other_behind} behind)
-                      </span>
-                    </div>
-                    <div className="iso-lb-stat__rounds" aria-hidden="true">
-                      {Array.from({ length: telemetry.valEpisodes }).map((_, idx) => {
-                        const ahead = telemetry.valAhead ?? 0;
-                        const level = telemetry.valLevel ?? 0;
-                        const lit = idx < ahead ? 'ink' : idx < ahead + level ? 'muted' : 'fail';
-                        return <span key={idx} className="iso-lb-stat__seg" data-lit={lit} />;
-                      })}
-                    </div>
-                  </>
-                )}
-                <div className="iso-lb-stat__copy">
-                  {proofItems.valLine && <p className="iso-lb-section__line">{proofItems.valLine}</p>}
-                  {proofItems.honestLine && (
-                    <p className="iso-lb-section__line iso-lb-section__line--honest">{proofItems.honestLine}</p>
+          {!evidenceDoc && localEvidenceState === 'loading' ? (
+            <Loader surface="inline" line="Loading every test on record" />
+          ) : (
+            <div className="iso-lb-proof-grid">
+              {proofItems.closedLine && (
+                <div className="iso-lb-stat">
+                  {telemetry.testFires && telemetry.scoresJudgedNum !== null && (
+                    <>
+                      <div className="iso-lb-stat__hero">
+                        <span className="iso-lb-stat__figure">
+                          {telemetry.testFires.map((tf) => tf.won).join(', ')}
+                        </span>
+                        <span className="iso-lb-stat__unit">of {telemetry.scoresJudgedNum} scores won</span>
+                      </div>
+                      <div className="iso-lb-stat__fires" aria-hidden="true">
+                        {telemetry.testFires.map((tf) => {
+                          const low = tf.won * 2 < tf.of;
+                          return (
+                            <div key={tf.id} className="iso-lb-stat__fire-segs">
+                              {Array.from({ length: tf.of }).map((_, idx) => (
+                                <span
+                                  key={idx}
+                                  className="iso-lb-stat__seg"
+                                  data-lit={idx < tf.won ? 'ink' : low ? 'fail' : 'none'}
+                                />
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
+                  <div className="iso-lb-stat__copy">
+                    <p className="iso-lb-section__line">{proofItems.closedLine}</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {proofItems.gameLine && (
-              <div className="iso-lb-stat">
-                {telemetry.ruleAheadNum !== null && telemetry.roundsTotalNum !== null && (
-                  <>
-                    <div className="iso-lb-stat__hero">
-                      <span className="iso-lb-stat__figure">
-                        {telemetry.ruleAheadNum} of {telemetry.roundsTotalNum}
-                      </span>
-                      <span className="iso-lb-stat__unit">rounds gained over random looks</span>
-                    </div>
-                    <div className="iso-lb-stat__rounds" aria-hidden="true">
-                      {Array.from({ length: telemetry.roundsTotalNum }).map((_, idx) => (
-                        <span
-                          key={idx}
-                          className="iso-lb-stat__seg"
-                          data-lit={idx < (telemetry.ruleAheadNum ?? 0) ? 'ink' : 'none'}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
-                <div className="iso-lb-stat__copy">
-                  <p className="iso-lb-section__line">{proofItems.gameLine}</p>
+              {(proofItems.valLine || proofItems.honestLine) && (
+                <div className="iso-lb-stat">
+                  {telemetry.valAhead !== null && telemetry.valScoresTotal !== null && (
+                    <>
+                      <div className="iso-lb-stat__hero">
+                        <span className="iso-lb-stat__figure">
+                          {telemetry.valAhead} of {telemetry.valScoresTotal}
+                        </span>
+                        <span className="iso-lb-stat__unit">
+                          scores ahead ({fields.other_level} level, {fields.other_behind} behind)
+                        </span>
+                      </div>
+                      <div className="iso-lb-stat__rounds" aria-hidden="true">
+                        {Array.from({ length: telemetry.valScoresTotal }).map((_, idx) => {
+                          const ahead = telemetry.valAhead ?? 0;
+                          const level = telemetry.valLevel ?? 0;
+                          const lit = idx < ahead ? 'ink' : idx < ahead + level ? 'muted' : 'fail';
+                          return <span key={idx} className="iso-lb-stat__seg" data-lit={lit} />;
+                        })}
+                      </div>
+                    </>
+                  )}
+                  <div className="iso-lb-stat__copy">
+                    {proofItems.valLine && <p className="iso-lb-section__line">{proofItems.valLine}</p>}
+                    {proofItems.honestLine && (
+                      <p className="iso-lb-section__line iso-lb-section__line--honest">{proofItems.honestLine}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {proofItems.recordLine && (
-              <div className="iso-lb-stat">
-                {telemetry.errPctNum !== null && telemetry.errRawPctNum !== null && (
-                  <>
-                    <div className="iso-lb-stat__hero">
-                      <span className="iso-lb-stat__figure">{telemetry.errPctNum}%</span>
-                      <span className="iso-lb-stat__unit">
-                        typical year miss, down from {telemetry.errRawPctNum}%
-                      </span>
-                    </div>
-                    <div className="iso-lb-stat__compare" aria-hidden="true">
-                      <div className="iso-lb-stat__track">
-                        <div
-                          className="iso-lb-stat__fill"
-                          style={{ width: `${Math.min(100, Math.max(4, telemetry.errPctNum))}%` }}
-                        />
+              {proofItems.gameLine && (
+                <div className="iso-lb-stat">
+                  {telemetry.ruleAheadNum !== null && telemetry.roundsTotalNum !== null && (
+                    <>
+                      <div className="iso-lb-stat__hero">
+                        <span className="iso-lb-stat__figure">
+                          {telemetry.ruleAheadNum} of {telemetry.roundsTotalNum}
+                        </span>
+                        <span className="iso-lb-stat__unit">rounds gained over random looks</span>
                       </div>
-                      <div className="iso-lb-stat__track">
-                        <div
-                          className="iso-lb-stat__fill iso-lb-stat__fill--raw"
-                          style={{ width: `${Math.min(100, Math.max(4, telemetry.errRawPctNum))}%` }}
-                        />
+                      <div className="iso-lb-stat__rounds" aria-hidden="true">
+                        {Array.from({ length: telemetry.roundsTotalNum }).map((_, idx) => (
+                          <span
+                            key={idx}
+                            className="iso-lb-stat__seg"
+                            data-lit={idx < (telemetry.ruleAheadNum ?? 0) ? 'ink' : 'none'}
+                          />
+                        ))}
                       </div>
-                    </div>
-                  </>
-                )}
-                <div className="iso-lb-stat__copy">
-                  <p className="iso-lb-section__line">{proofItems.recordLine}</p>
+                    </>
+                  )}
+                  <div className="iso-lb-stat__copy">
+                    <p className="iso-lb-section__line">{proofItems.gameLine}</p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+
+              {proofItems.recordLine && (
+                <div className="iso-lb-stat">
+                  {telemetry.errPctNum !== null && telemetry.errRawPctNum !== null && (
+                    <>
+                      <div className="iso-lb-stat__hero">
+                        <span className="iso-lb-stat__figure">{telemetry.errPctNum}%</span>
+                        <span className="iso-lb-stat__unit">
+                          typical year miss, down from {telemetry.errRawPctNum}%
+                        </span>
+                      </div>
+                      <div className="iso-lb-stat__compare" aria-hidden="true">
+                        <div className="iso-lb-stat__track">
+                          <div
+                            className="iso-lb-stat__fill"
+                            style={{ width: `${Math.min(100, Math.max(4, telemetry.errPctNum))}%` }}
+                          />
+                        </div>
+                        <div className="iso-lb-stat__track">
+                          <div
+                            className="iso-lb-stat__fill iso-lb-stat__fill--raw"
+                            style={{ width: `${Math.min(100, Math.max(4, telemetry.errRawPctNum))}%` }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  <div className="iso-lb-stat__copy">
+                    <p className="iso-lb-section__line">{proofItems.recordLine}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Act 4: Data and Method */}
@@ -2033,19 +2184,23 @@ export function LandingBelow({
           </div>
 
           <div className="iso-lb-method__right">
-            {methodLines.map((line, i) => (
-              <p key={i} className="iso-lb-section__line">
-                {line}
-              </p>
-            ))}
+            {methodLines.length > 0 ? (
+              methodLines.map((line, i) => (
+                <p key={i} className="iso-lb-section__line">
+                  {line}
+                </p>
+              ))
+            ) : (
+              <Loader surface="inline" line="Loading method and data" />
+            )}
           </div>
         </section>
 
         {/* Act 5: Final start horizon + visible sound control */}
         <footer className="iso-lb-start">
-          <button type="button" className="iso-lb-start__cta" onClick={onEnter}>
-            <kbd className="iso-lb-start__key">Enter</kbd>
+          <button type="button" className="iso-lb-start__cta" onClick={enterRecordDirect}>
             <span className="iso-lb-start__cta-label">Start with a real fire</span>
+            <kbd className="iso-lb-start__key">Enter</kbd>
             <ActionArrow />
           </button>
           <SoundControl />
