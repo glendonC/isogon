@@ -39,6 +39,8 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   const thisTest = testFires.find((t) => t.region_id === ws.run.active?.region.id) ?? null;
   const hiddenFromFrames = fs.filter((x) => x.held_out === true).length;
   const allSharp = num(obj(r?.blind_test)?.hidden_rows_in_test_box) ?? ws.model.revealedTotal?.detections ?? null;
+  // Within one square (the reveal's csi_one_cell_tolerance): the estimate's agreement and the coarse detections' as they are.
+  const oneSquare = obj(obj(obj(obj(r?.blind_test)?.verdict)?.scores)?.csi_one_cell_tolerance);
   const cal = ws.calendar.state.regionId === ws.place.regionId ? ws.calendar.state.cal : null;
   // The coarse satellite's last pass with a detection before the pass on show.
   let before: Obj | null = null;
@@ -99,6 +101,8 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_a_ahead: count(num(aAll?.ahead)),
     test_a_behind: countNone(num(aAll?.behind)),
     test_a_level: count(num(aAll?.tied)),
+    one_square_estimate: percent(num(oneSquare?.reconstruction)),
+    one_square_coarse: percent(num(oneSquare?.painted_modis)),
     test_b_fires_n: count(num(testB?.episodes_scored)),
     test_b_continents_n: bByContinent ? countWord(Object.values(bByContinent).filter((v) => (num(obj(v)?.episodes) ?? 0) > 0).length) : null,
     test_b_ahead: count(num(bAll?.ahead)),
