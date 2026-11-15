@@ -741,7 +741,9 @@ def verdict(report: dict[str, Any], method: str = "reconstruction", baselines: t
         if usable:
             judged += 1
             wins += int(beats)
-        rows[key] = {method: val, **others, "better_is": "higher" if higher else "lower",
+        # `value` is the judged method's own number again, under a key that does not change with the method: a run
+        # whose held-out passes a challenger answered judges the challenger, and its rows name it by its own id
+        rows[key] = {method: val, **others, "value": val, "better_is": "higher" if higher else "lower",
                      "beats_every_baseline": beats if usable else None}
     iv = ms[method]["interval"]
     return {

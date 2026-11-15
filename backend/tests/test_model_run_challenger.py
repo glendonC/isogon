@@ -170,6 +170,25 @@ class SwitchOnTests(unittest.TestCase):
         self.assertEqual(json.dumps(once.observer_passes, sort_keys=True), json.dumps(twice.observer_passes, sort_keys=True))
         self.assertEqual(once.reconstruction_u8_bytes, twice.reconstruction_u8_bytes)
 
+    def test_each_of_the_seven_scores_carries_the_answering_model_s_own_number_beside_the_simple_methods(self) -> None:
+        from backend.model.real_run import real_response
+
+        for run, method in ((self.on, self.name), (self.off, "reconstruction")):
+            v = real_response(run, {})["blind_test"]["verdict"]
+            self.assertEqual(v["method"], method)
+            self.assertEqual(len(v["scores"]), 7)
+            ms = run.extras["blind_test"]["methods"]
+            for k, row in v["scores"].items():
+                # the answering model's number, under one key whichever model answered, and under its own id
+                self.assertIsInstance(row["value"], float, (method, k))
+                self.assertEqual(row["value"], row[method], (method, k))
+                self.assertIsInstance(row["painted_modis"], float)
+                self.assertIsInstance(row["overlap_ratio"], float)
+            # the value is the answering model's, not the estimate in use's, when the challenger answered
+            self.assertEqual(v["scores"]["brier"]["value"], ms[method]["brier"])
+        on_rows = real_response(self.on, {})["blind_test"]["verdict"]["scores"]
+        self.assertNotEqual(on_rows["brier"]["value"], self.on.extras["blind_test"]["methods"]["reconstruction"]["brier"])
+
     def test_a_run_answered_by_the_challenger_has_an_id_of_its_own(self) -> None:
         self.assertNotEqual(self.on.run_id, self.off.run_id)
         self.assertTrue(self.on.run_id.endswith(self.name))
