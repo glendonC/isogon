@@ -4945,27 +4945,48 @@ export function EarthCutawayStage(props: EarthCutawayStageProps) {
           const edgeKm = best[4];
           let barKm = 1;
           for (const nice of [1, 2, 5, 10, 20, 50, 100]) if (nice <= edgeKm * 0.3) barKm = nice;
-          const at = (km: number): [number, number] => {
-            const f = SCALE_BAR_INSET + km / edgeKm;
-            return [best[0] + (best[2] - best[0]) * f, best[1] + (best[3] - best[1]) * f];
-          };
-          // One height for the whole bar, a little under the rim's lowest point along it, so the
-          // bar is a straight line on the block's side; where the land around the box is drawn
-          // there is no side, and the bar lies on the ground
-          const drop = 0.07 * (1.0 - contextMix);
-          let rim = Infinity;
-          for (let k = 0; k <= 8; k++) {
-            const [u, v] = at((barKm * k) / 8);
-            rim = Math.min(rim, sampleCpuTerrainY(u, v));
+          // Where along the edge it starts: the first place, from the inset on, where the bar and its
+          // label stand inside the page's frame (the room the page's words leave the stage), so it never
+          // lies under the page's title, path or actions; none: no bar
+          const room = workspaceFrame ?? { left: 0, top: 0, right: 1, bottom: 1 };
+          const inRoom = (q: [number, number], padX: number, padY: number) =>
+            q[0] - padX >= room.left * viewportW + 12 &&
+            q[0] + padX <= room.right * viewportW - 12 &&
+            q[1] - padY >= room.top * viewportH + 12 &&
+            q[1] + padY <= room.bottom * viewportH - 12;
+          let a: [number, number] | null = null;
+          let b: [number, number] | null = null;
+          for (let start = SCALE_BAR_INSET; start + barKm / edgeKm <= 1 - SCALE_BAR_INSET + 1e-6; start += 0.06) {
+            const at = (km: number): [number, number] => {
+              const f = start + km / edgeKm;
+              return [best[0] + (best[2] - best[0]) * f, best[1] + (best[3] - best[1]) * f];
+            };
+            // One height for the whole bar, a little under the rim's lowest point along it, so the
+            // bar is a straight line on the block's side; where the land around the box is drawn
+            // there is no side, and the bar lies on the ground
+            const drop = 0.07 * (1.0 - contextMix);
+            let rim = Infinity;
+            for (let k = 0; k <= 8; k++) {
+              const [u, v] = at((barKm * k) / 8);
+              rim = Math.min(rim, sampleCpuTerrainY(u, v));
+            }
+            const project = (km: number): [number, number] | null => {
+              const [u, v] = at(km);
+              projVec.set(worldX(u), rim - drop, worldZ(v)).project(camera);
+              if (projVec.z <= -1 || projVec.z >= 1) return null;
+              return [(projVec.x * 0.5 + 0.5) * viewportW, (-projVec.y * 0.5 + 0.5) * viewportH];
+            };
+            const qa = project(0);
+            const qb = project(barKm);
+            if (!qa || !qb) continue;
+            const right = qb[0] >= qa[0] ? qb : qa;
+            // (the label, about 56 by 16 px, past the bar's right end)
+            if (inRoom(qa, 2, 10) && inRoom(qb, 2, 10) && inRoom([right[0] + 36, right[1]], 30, 12)) {
+              a = qa;
+              b = qb;
+              break;
+            }
           }
-          const project = (km: number): [number, number] | null => {
-            const [u, v] = at(km);
-            projVec.set(worldX(u), rim - drop, worldZ(v)).project(camera);
-            if (projVec.z <= -1 || projVec.z >= 1) return null;
-            return [(projVec.x * 0.5 + 0.5) * viewportW, (-projVec.y * 0.5 + 0.5) * viewportH];
-          };
-          const a = project(0);
-          const b = project(barKm);
           if (a && b) {
             const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
             if (len > 40) {
