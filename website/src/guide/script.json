@@ -1,5 +1,5 @@
 {
-  "version": 22,
+  "version": 23,
   "what": "The words of the guide: for each step and each state inside it, the objective, what the guide says, the labels on things, the actions, and the questions a visitor can ask. Every sentence says which of the five places it sits in. Text in braces is a field: its value comes from an answer of the backend, named under fields. No figure is typed in a line.",
   "trail": [
     "Record",
@@ -121,7 +121,9 @@
     "ratio_of_yearly_sums": "the sum over the years of the first family's rows divided by the sum of the second's, over whole years holding both, one decimal place (about 4.4, never rounded to a half)",
     "yearly_ratio_low": "the lowest year's ratio, one decimal place, leaving out the first year that holds the newer satellite's rows",
     "yearly_ratio_high": "the highest year's ratio, one decimal place, leaving out the first year that holds the newer satellite's rows",
-    "last_year": "the largest of the years, in digits"
+    "last_year": "the largest of the years, in digits",
+    "count_keys_challenger": "the number of keys of an object that begin challenger_, written as count_word",
+    "challengers_ahead_span": "against_the_baselines.ahead of each challenger_ key: one whole number when all agree, else the least and the most as 5 to 6"
   },
   "conditions": {
     "model_is_experimental": {
@@ -188,14 +190,6 @@
       "true_when": "fresh_test.test_a is null",
       "route": "GET /api/evidence"
     },
-    "test_a_strict_behind": {
-      "true_when": "fresh_test.test_a.all.classes.csi_strict_375m is behind",
-      "route": "GET /api/evidence"
-    },
-    "test_a_strict_not_behind": {
-      "true_when": "fresh_test.test_a is not null and its csi_strict_375m is not behind",
-      "route": "GET /api/evidence"
-    },
     "test_a_taken": {
       "true_when": "fresh_test.test_a is not null",
       "route": "GET /api/evidence"
@@ -239,6 +233,22 @@
     "years_change_one_scale": {
       "true_when": "the view is on one scale and the year on show is the newer satellite's first",
       "route": "the page: the Earth's years, its view and the year on show"
+    },
+    "test_b_taken": {
+      "true_when": "fresh_test.test_b is not null and its episodes_scored is above 0",
+      "route": "GET /api/evidence"
+    },
+    "test_b_interval_short": {
+      "true_when": "fresh_test.test_b.all.interval.held is below its stated_level",
+      "route": "GET /api/evidence"
+    },
+    "test_a_last_strict_behind": {
+      "true_when": "fresh_test.test_b is null, and fresh_test.test_a.all.classes.csi_strict_375m is behind",
+      "route": "GET /api/evidence"
+    },
+    "test_a_last_strict_not_behind": {
+      "true_when": "fresh_test.test_b is null, and fresh_test.test_a is not null with fresh_test.test_a.all.classes.csi_strict_375m not behind",
+      "route": "GET /api/evidence"
     }
   },
   "state_when": {
@@ -519,16 +529,20 @@
             },
             {
               "place": "guide",
-              "line": "The newer satellite sees smaller fires too and makes about {sharp_to_coarse} times as many detections as the older ones, so that jump is taken out here and every year is on one scale.",
+              "line": "The newer satellite sees smaller fires too and makes about {sharp_to_coarse} times as many detections here as the older ones, so that jump is taken out here and every year is on one scale.",
               "unless": "method_replaced"
             },
             {
               "place": "guide",
               "if": "method_replaced",
-              "line": "The newer satellite sees smaller fires too and makes about {sharp_to_coarse} times as many detections as the older ones, more in some months than in others, so that jump is taken out month by month and every year is on one scale."
+              "line": "The newer satellite sees smaller fires too and makes about {sharp_to_coarse} times as many detections here as the older ones, more in some months than in others, so that jump is taken out month by month and every year is on one scale."
             }
           ],
           "more": [
+            {
+              "place": "guide",
+              "line": "Over the whole Earth it makes about {world_ratio} times as many; each place has its own figure."
+            },
             {
               "place": "guide",
               "line": "Left as counted, recent years would look worse than they were, only because the newer satellite makes more detections, smaller fires among them."
@@ -1608,16 +1622,21 @@
           "says": [
             {
               "place": "guide",
-              "line": "On this fire the estimate beat {simple_methods_n} simple methods on {ahead_on} of {scores_n} scores."
+              "line": "On this fire the estimate beat {simple_methods_n} simple methods on {ahead_on} of {scores_n} scores, by any margin."
             },
             {
               "place": "guide",
-              "if": "test_a_strict_behind",
+              "if": "test_b_taken",
+              "line": "On {test_b_fires_n} fires that nothing had touched, the estimate was ahead of the simple methods on {test_b_ahead} of {test_scores_n} scores, level on {test_b_level} and behind on {test_b_behind}, while {challengers_n} other models were each ahead on {challengers_ahead}."
+            },
+            {
+              "place": "guide",
+              "if": "test_a_last_strict_behind",
               "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores and behind on {test_a_behind}: it does not place fire square for square better than painting the coarse satellite's detections."
             },
             {
               "place": "guide",
-              "if": "test_a_strict_not_behind",
+              "if": "test_a_last_strict_not_behind",
               "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores, level on {test_a_level} and behind on {test_a_behind}."
             },
             {
@@ -1627,6 +1646,30 @@
             }
           ],
           "more": [
+            {
+              "place": "guide",
+              "line": "That is one fire chosen to show, not a test: the tests on many fires count a score only when the gap is too large to be luck."
+            },
+            {
+              "place": "guide",
+              "if": "test_b_taken",
+              "line": "On those fires it led on {test_b_ahead_names}, and lost on {test_b_behind_names}."
+            },
+            {
+              "place": "guide",
+              "if": "test_b_interval_short",
+              "line": "The range it states for the total heat held on {test_b_interval_held} percent of those passes, short of the {test_b_interval_stated} percent it claims."
+            },
+            {
+              "place": "guide",
+              "if": "test_b_taken",
+              "line": "The other models were fitted and chosen on the same fires as the estimate, so those fires were a fair test of them too."
+            },
+            {
+              "place": "guide",
+              "if": "test_b_taken",
+              "line": "Before that, on {test_a_fires_n} fires across {test_a_continents_n} continents, it was ahead on {test_a_ahead} of {test_scores_n} scores, level on {test_a_level} and behind on {test_a_behind}."
+            },
             {
               "place": "guide",
               "if": "test_a_taken",
@@ -1714,16 +1757,21 @@
           "says": [
             {
               "place": "guide",
-              "line": "On this fire the estimate beat {simple_methods_n} simple methods on {ahead_on} of {scores_n} scores."
+              "line": "On this fire the estimate beat {simple_methods_n} simple methods on {ahead_on} of {scores_n} scores, by any margin."
             },
             {
               "place": "guide",
-              "if": "test_a_strict_behind",
+              "if": "test_b_taken",
+              "line": "On {test_b_fires_n} fires that nothing had touched, the estimate was ahead of the simple methods on {test_b_ahead} of {test_scores_n} scores, level on {test_b_level} and behind on {test_b_behind}, while {challengers_n} other models were each ahead on {challengers_ahead}."
+            },
+            {
+              "place": "guide",
+              "if": "test_a_last_strict_behind",
               "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores and behind on {test_a_behind}: it does not place fire square for square better than painting the coarse satellite's detections."
             },
             {
               "place": "guide",
-              "if": "test_a_strict_not_behind",
+              "if": "test_a_last_strict_not_behind",
               "line": "On {test_a_fires_n} fires it had never seen, across {test_a_continents_n} continents, the experimental model was ahead of the simple methods on {test_a_ahead} of {test_scores_n} scores, level on {test_a_level} and behind on {test_a_behind}."
             },
             {
@@ -1733,6 +1781,30 @@
             }
           ],
           "more": [
+            {
+              "place": "guide",
+              "line": "That is one fire chosen to show, not a test: the tests on many fires count a score only when the gap is too large to be luck."
+            },
+            {
+              "place": "guide",
+              "if": "test_b_taken",
+              "line": "On those fires it led on {test_b_ahead_names}, and lost on {test_b_behind_names}."
+            },
+            {
+              "place": "guide",
+              "if": "test_b_interval_short",
+              "line": "The range it states for the total heat held on {test_b_interval_held} percent of those passes, short of the {test_b_interval_stated} percent it claims."
+            },
+            {
+              "place": "guide",
+              "if": "test_b_taken",
+              "line": "The other models were fitted and chosen on the same fires as the estimate, so those fires were a fair test of them too."
+            },
+            {
+              "place": "guide",
+              "if": "test_b_taken",
+              "line": "Before that, on {test_a_fires_n} fires across {test_a_continents_n} continents, it was ahead on {test_a_ahead} of {test_scores_n} scores, level on {test_a_level} and behind on {test_a_behind}."
+            },
             {
               "place": "guide",
               "if": "test_a_taken",
@@ -3951,6 +4023,66 @@
       "key": "blind_test.verdict.scores.csi_one_cell_tolerance.painted_modis",
       "format": "percent",
       "is": "the same for the coarse detections as they are"
+    },
+    "test_b_fires_n": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.episodes_scored",
+      "format": "count",
+      "is": "fires of test B that were scored"
+    },
+    "test_b_ahead": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.ahead",
+      "format": "count",
+      "is": "scores on which the estimate in use was ahead of both simple methods over test B, judged with an interval"
+    },
+    "test_b_level": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.tied",
+      "format": "count",
+      "is": "scores too close to call"
+    },
+    "test_b_behind": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.behind",
+      "format": "count_none",
+      "is": "scores on which it was behind"
+    },
+    "test_b_ahead_names": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.classes",
+      "format": "score_names_ahead",
+      "is": "the plain names of the scores it led"
+    },
+    "test_b_behind_names": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.classes",
+      "format": "score_names_behind",
+      "is": "the plain names of the scores it lost"
+    },
+    "test_b_interval_held": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.interval.held",
+      "format": "percent",
+      "is": "the share of passes on which the real total heat stayed inside the range the model stated"
+    },
+    "test_b_interval_stated": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.all.interval.stated_level",
+      "format": "percent",
+      "is": "the share the range claims"
+    },
+    "challengers_n": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.beside_the_headline",
+      "format": "count_keys_challenger",
+      "is": "the other models scored beside the estimate on test B: the keys that begin challenger_, as a word"
+    },
+    "challengers_ahead": {
+      "route": "GET /api/evidence",
+      "key": "fresh_test.test_b.beside_the_headline",
+      "format": "challengers_ahead_span",
+      "is": "on how many scores each of them was ahead of both simple methods (against_the_baselines.ahead): one number when all agree, else the least to the most, as 5 to 6"
     }
   },
   "marks": {
@@ -4061,8 +4193,9 @@
   "exclusive": [
     [
       "test_a_not_taken",
-      "test_a_strict_behind",
-      "test_a_strict_not_behind"
+      "test_a_last_strict_behind",
+      "test_a_last_strict_not_behind",
+      "test_b_taken"
     ],
     [
       "photo_day_pass",

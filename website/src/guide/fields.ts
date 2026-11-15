@@ -73,13 +73,32 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   const aInterval = obj(aAll?.interval);
   const aHeld = num(aInterval?.held);
   const aStated = num(aInterval?.stated_level);
-  const scoreNames = (which: string) =>
-    aClasses ? listAnd(Object.entries(aClasses).filter(([, v]) => v === which).map(([k]) => SCRIPT.score_names?.[k] ?? k)) : null;
+  const namesOf = (classes: Record<string, unknown> | null, which: string) =>
+    classes ? listAnd(Object.entries(classes).filter(([, v]) => v === which).map(([k]) => SCRIPT.score_names?.[k] ?? k)) : null;
+  const scoreNames = (which: string) => namesOf(aClasses, which);
   // Test B, the one look on fires nothing had touched (fresh_test.test_b), once it is on record.
   const testB = fresh ? obj(fresh.test_b) : null;
   const bAll = obj(testB?.all);
   const bClasses = obj(bAll?.classes);
   const bByContinent = obj(testB?.by_continent);
+  const bInterval = obj(bAll?.interval);
+  const bHeld = num(bInterval?.held);
+  const bStated = num(bInterval?.stated_level);
+  const bTaken = testB !== null && (num(testB.episodes_scored) ?? 0) > 0;
+  // The other models scored beside the estimate on test B (the keys that begin challenger_), and on how many scores
+  // each was ahead of both simple methods: one number when all agree, else the least to the most.
+  const beside = obj(testB?.beside_the_headline);
+  const challengerAheads = beside
+    ? Object.entries(beside)
+        .filter(([k]) => k.startsWith('challenger_'))
+        .map(([, v]) => num(obj(obj(v)?.against_the_baselines)?.ahead))
+        .filter((n): n is number => n !== null)
+    : [];
+  const aheadSpan = challengerAheads.length
+    ? Math.min(...challengerAheads) === Math.max(...challengerAheads)
+      ? String(Math.min(...challengerAheads))
+      : `${Math.min(...challengerAheads)} to ${Math.max(...challengerAheads)}`
+    : null;
   // The answering challenger's own figures on test B, beside the headline estimate's (`beside_the_headline`).
   const bChal = byChallenger ? obj(obj(obj(testB?.beside_the_headline)?.[headline])?.against_the_baselines) : null;
   const bChalClasses = obj(bChal?.classes);
@@ -120,13 +139,20 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     test_a_ahead: count(num(aAll?.ahead)),
     test_a_behind: countNone(num(aAll?.behind)),
     test_a_level: count(num(aAll?.tied)),
-    one_square_estimate: percent(num(oneSquare?.reconstruction)),
+    // The estimate shown: the answering challenger's figure when one answered the hidden passes.
+    one_square_estimate: percent(num(oneSquare?.[headline]) ?? num(oneSquare?.reconstruction)),
     one_square_coarse: percent(num(oneSquare?.painted_modis)),
     test_b_fires_n: count(num(testB?.episodes_scored)),
     test_b_continents_n: bByContinent ? countWord(Object.values(bByContinent).filter((v) => (num(obj(v)?.episodes) ?? 0) > 0).length) : null,
     test_b_ahead: count(num(bAll?.ahead)),
     test_b_behind: countNone(num(bAll?.behind)),
     test_b_level: count(num(bAll?.tied)),
+    test_b_ahead_names: namesOf(bClasses, 'ahead') || null,
+    test_b_behind_names: namesOf(bClasses, 'behind') || null,
+    test_b_interval_held: percent(bHeld),
+    test_b_interval_stated: percent(bStated),
+    challengers_n: beside ? countWord(Object.keys(beside).filter((k) => k.startsWith('challenger_')).length) : null,
+    challengers_ahead: aheadSpan,
     test_b_challenger_ahead: count(num(bChal?.ahead)),
     test_b_challenger_level: count(num(bChal?.tied)),
     test_b_challenger_behind: countNone(num(bChal?.behind)),
@@ -145,7 +171,11 @@ export function guideFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
     not_always_ahead: ev && testScoresN !== null && testFires.length > 0 ? Math.min(...testFires.map((t) => t.new.ahead_of_both_on)) < testScoresN : null,
     // Test A taken or not, and how it came out; all false where the route answered without it.
     test_a_taken: ev ? testA !== null : null,
-    test_b_taken: ev ? testB !== null && bAll !== null : null,
+    test_b_taken: ev ? bTaken : null,
+    test_b_interval_short: ev ? bTaken && bHeld !== null && bStated !== null && bHeld < bStated : null,
+    // Test A's sentence stands only while test B is not on record.
+    test_a_last_strict_behind: ev ? !testB && testA !== null && aClasses?.csi_strict_375m === 'behind' : null,
+    test_a_last_strict_not_behind: ev ? !testB && testA !== null && aClasses !== null && aClasses.csi_strict_375m !== 'behind' : null,
     test_b_strict_behind: ev ? testB !== null && bClasses?.csi_strict_375m === 'behind' : null,
     test_b_challenger_strict_behind: bChal ? bChalClasses?.csi_strict_375m === 'behind' : null,
     test_a_not_taken: ev ? testA === null : null,

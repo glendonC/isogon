@@ -80,25 +80,20 @@ function recordCheckLine(fields: Fields): string | null {
  * until the script carries them: which model answered, in the run's own words, and the fire's standing as its own.
  */
 /**
- * Test B on record (the one look on fires nothing had touched), in the page's words until the script carries them: on
- * Test it is said in place of test A's sentence, its loss as plainly.
+ * A challenger answering the hidden passes (the owner's choice), in the page's words until the script carries them: the
+ * test that counts for it is its own on test B, with the estimate shown before in one clause. Said in place of the
+ * script's test B sentence, which speaks for the estimate in use.
  */
-function testBLine(f: Fields, c: Conditions): string | null {
-  // A challenger answering: the test that counts for it is its own on test B, the estimate shown before in one clause.
-  if (c.answered_by_challenger && c.test_b_taken && f.test_b_fires_n && f.test_b_challenger_ahead && f.test_b_challenger_level && f.test_b_challenger_behind && f.test_scores_n) {
-    const loss = c.test_b_challenger_strict_behind ? ", though it does not place fire square for square better than painting the coarse satellite's detections" : '';
-    const before = f.test_b_ahead && f.test_b_behind ? `; the estimate shown before was ahead on ${f.test_b_ahead} and behind on ${f.test_b_behind} there` : '';
-    return `On ${f.test_b_fires_n} fires that nothing had touched, the challenger was ahead of the simple methods on ${f.test_b_challenger_ahead} of ${f.test_scores_n} scores, level on ${f.test_b_challenger_level} and behind on ${f.test_b_challenger_behind}${loss}${before}.`;
-  }
-  if (!c.test_b_taken || !f.test_b_fires_n || !f.test_b_ahead || !f.test_b_level || !f.test_b_behind || !f.test_scores_n) return null;
-  const across = f.test_b_continents_n ? `, across ${f.test_b_continents_n} continents` : '';
-  const head = `On ${f.test_b_fires_n} fires that nothing had touched${across}, the experimental model was ahead of the simple methods on ${f.test_b_ahead} of ${f.test_scores_n} scores, level on ${f.test_b_level} and behind on ${f.test_b_behind}`;
-  return c.test_b_strict_behind ? `${head}: it does not place fire square for square better than painting the coarse satellite's detections.` : `${head}.`;
+function challengerTestBLine(f: Fields, c: Conditions): string | null {
+  if (!c.answered_by_challenger || !c.test_b_taken || !f.test_b_fires_n || !f.test_b_challenger_ahead || !f.test_b_challenger_level || !f.test_b_challenger_behind || !f.test_scores_n) return null;
+  const loss = c.test_b_challenger_strict_behind ? ", though it does not place fire square for square better than painting the coarse satellite's detections" : '';
+  const before = f.test_b_ahead && f.test_b_behind ? `; the estimate shown before was ahead on ${f.test_b_ahead} and behind on ${f.test_b_behind} there` : '';
+  return `On ${f.test_b_fires_n} fires that nothing had touched, the challenger was ahead of the simple methods on ${f.test_b_challenger_ahead} of ${f.test_scores_n} scores, level on ${f.test_b_challenger_level} and behind on ${f.test_b_challenger_behind}${loss}${before}.`;
 }
 
 const CHALLENGER_WORDS = {
   named: (words: string) => `The hidden passes are answered by ${words}.`,
-  standing: (simple: string, ahead: string, of: string) => `On this fire the challenger beat ${simple} simple methods on ${ahead} of ${of} scores.`,
+  standing: (simple: string, ahead: string, of: string) => `On this fire the challenger beat ${simple} simple methods on ${ahead} of ${of} scores, by any margin.`,
 };
 
 /**
@@ -268,6 +263,8 @@ export function useGuide(
     // The Record speaks from what it publishes.
     entry.current = { key: '', pass: -1 };
     const r = recordFields(ws, record);
+    // The whole Earth's factor (GET /api/cube/years), for the Record's line on demand beside the place's own.
+    r.fields.world_ratio = live.worldYears?.ratio != null ? live.worldYears.ratio.toFixed(1) : null;
     const id = recordStateId(ws, record);
     if (!id) return NONE;
     const state = stateOf('record', id);
@@ -397,11 +394,11 @@ export function useGuide(
   // The day's photograph, in the step's own words (`photo`): its sentence takes the place of the first standing one.
   const photo = dayOffered && live.day?.asked ? photoLine(step, live.day, ws, fields) : null;
   let standing = [...(missing ? [missing] : []), ...says(state, fields, conds).slice(0, STANDING)];
-  // Test B on record: its sentence stands where test A's did.
-  const bLine = step === 'test' ? testBLine(fields, conds) : null;
-  if (bLine && fields.test_a_fires_n) {
-    const aOpens = `On ${fields.test_a_fires_n} fires it had never seen`;
-    standing = standing.map((l) => (l.startsWith(aOpens) ? bLine : l));
+  // A challenger answering: its own test B stands where the script's sentence for the estimate in use does.
+  const cLine = step === 'test' ? challengerTestBLine(fields, conds) : null;
+  if (cLine && fields.test_b_fires_n) {
+    const bOpens = `On ${fields.test_b_fires_n} fires that nothing had touched`;
+    standing = standing.map((l) => (l.startsWith(bOpens) ? cLine : l));
   }
   // A challenger answered the hidden passes: the guide names it, and the fire's standing is said as the challenger's
   // (the run's verdict is the answering estimate's).
