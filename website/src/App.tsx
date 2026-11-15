@@ -2147,7 +2147,7 @@ export function App() {
 
       {worldScreen && (
         <Suspense fallback={null}>
-          <WorldScreens onWord={onTrailWord} links={barLinks} />
+          <WorldScreens onWord={onTrailWord} />
         </Suspense>
       )}
     </div>

@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GuideStrip } from '../guide/GuideStrip';
 import { LocatorBar } from '../identity/LocatorBar';
+import { usePageLinks } from '../ui/pageLinks';
+import { useWorkspace } from '../app/store';
 import { StoryLine } from '../identity/StoryLine';
 import type { StoryPart } from '../identity/story';
 import { SHARP_FROM } from './yearsData';
@@ -29,23 +31,19 @@ import '../styles/world.css';
  *
  * Every answer is read through the page's client, so a page of recorded answers shows the pictures it recorded.
  */
-/** One of the top bar's few words at the right (Search, Method, Sources), as the page gives them. */
-export interface BarLink {
-  label: string;
-  onClick: () => void;
-}
-
-// The page's bar links, for the top bar on each picture of the world.
-const Links = createContext<BarLink[]>([]);
-
-export function WorldScreens({ onWord, links = [] }: { onWord?: (word: TrailWord) => void; links?: BarLink[] }) {
+export function WorldScreens({ onWord }: { onWord?: (word: TrailWord) => void }) {
   const screen = useWorldScreen();
   if (!screen) return null;
-  return (
-    <Links.Provider value={links}>
-      <Host key={screen.name} screen={screen} onWord={onWord} />
-    </Links.Provider>
-  );
+  return <Host key={screen.name} screen={screen} onWord={onWord} />;
+}
+
+/** The page's own way back to its first screen (the workspace store's), or none where the page gives no store. */
+function useFirstScreen(): (() => void) | null {
+  try {
+    return useWorkspace().toFirstScreen;
+  } catch {
+    return null;
+  }
 }
 
 const isFilm = () => typeof document !== 'undefined' && document.documentElement.classList.contains('iso-film');
@@ -98,7 +96,9 @@ function Frame({ objective, word, lines, actions, onAction, film, trail = true, 
   story: StoryPart;
   figures?: { jumpYear?: number | null; testedFires?: number | null };
 }) {
-  const pageLinks = useContext(Links);
+  // The page's Search, Method and Sources (ui/pageLinks.ts), as on every other top bar, and its way back to the start.
+  const pageLinks = usePageLinks();
+  const firstScreen = useFirstScreen();
   // The pictures keep clear of this guide: its height (from the bottom of the page) is the room they keep.
   useLayoutEffect(() => {
     const host = document.querySelector<HTMLElement>('.world-screen');
@@ -118,9 +118,12 @@ function Frame({ objective, word, lines, actions, onAction, film, trail = true, 
   if (film) return <>{trail && <Trail objective={objective} current={word} context={null} onWord={toWord} closed={{}} onPlace={() => {}} />}</>;
   // Search, Method and Sources open on the page, so the picture closes first.
   const barLinks = pageLinks.map((l) => ({ label: l.label, onClick: () => { closeWorldScreen(); l.onClick(); } }));
+  // The path's first part, the product's name, goes back to the first screen: the picture closes and the page leaves
+  // what it had open.
+  const onHome = firstScreen ? () => { closeWorldScreen(); firstScreen(); } : undefined;
   return (
     <>
-      <LocatorBar path={['World', where]} onTrail={() => closeWorldScreen()} links={barLinks} />
+      <LocatorBar path={['World', where]} onHome={onHome} onTrail={() => closeWorldScreen()} links={barLinks} />
       <StoryLine current={story} jumpYear={figures?.jumpYear ?? null} testedFires={figures?.testedFires ?? null} />
       <GuideStrip title={objective} lines={lines} actions={actions} onAction={onAction} />
     </>
