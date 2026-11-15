@@ -2,7 +2,7 @@
 
 This document lists every route the backend serves: its method, its parameters, the shape of its answer and its errors. It is for anyone who calls the backend from the site, from a script or from a test.
 
-The routes are in `backend/server.py` and, for the next-look rounds, `backend/server_next_look.py`. Field names below come from that code and from answers of a running backend. Sample answers are shortened: long arrays are cut to one or two entries and long sentences to `...`, and each sample says so.
+The routes are in `backend/server.py` and its route files: `server_cube.py` (the fire cube), `server_live.py` (the sealed predictions), `server_next_look.py` (the rounds of the game) and `server_gibs.py` (the day's picture and cloud share) and `server_burned.py` (the burned-area map). Field names below come from that code and from answers of a running backend. Sample answers are shortened: long arrays are cut to one or two entries and long sentences to `...`, and each sample says so.
 
 ## Conventions
 
@@ -24,7 +24,7 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 - **Origins.** Only pages served from this machine may call the API from a browser: `Access-Control-Allow-Origin` is sent when `Origin` is `http` or `https` on `localhost`, `127.0.0.1` or `[::1]`. A `POST` with any other `Origin` answers `403`. A request with no `Origin`, such as one from a script, is served.
 - **Caching.** Answers carry `Cache-Control: no-store`, except terrain pack files (below).
 - **Two kinds of run.** A simulated run models a fire and the passes over it and uses no FIRMS row. A real run (`"source": "firms"`) reconstructs from cached NASA FIRMS rows. The two are never mixed, and every answer says which it is.
-- **Regions with FIRMS data** are `plumas_ca`, `lytton_bc` and `evia_greece`. Routes that need real rows answer `404` for any other region.
+- **Regions with FIRMS data** are the 14 places of `GET /api/regions` (`backend/firms/places.json`): `plumas_ca`, `lytton_bc` and `evia_greece`, the first three, and eleven more. `ljusdal_se` has the record only and no run. Routes that need real rows answer `404` for any other region.
 
 ## Routes
 
@@ -37,8 +37,9 @@ uv run --no-project --python 3.12 --with numpy --with pillow python3 -m backend.
 | `GET /api/calendar/current` | This month so far against the same month's median |
 | `GET /api/calendar/rows.csv` | The FIRMS rows behind a calendar selection |
 | `GET /api/calendar/checks` | The held-out check of the calendar's harmonization, for every place in one answer |
-| `GET /api/cube/record`, `/api/cube/tables`, `/api/cube/countries`, `/api/cube/layers` | The Record of any box on Earth from the fire cube, its tables, the loaded countries and the world layers ([cube.md](cube.md)) |
-| `GET /api/live` | The predictions sealed before a pass on fires burning now, and their scores once the sharp satellite's rows arrive ([live.md](live.md)) |
+| `GET /api/cube/record`, `/api/cube/tables`, `/api/cube/countries`, `/api/cube/layers` | The record of any box on Earth from the fire cube, its tables, the loaded countries and the world layers ([cube.md](cube.md)) |
+| `GET /api/cube/years`, `/api/cube/years/<family>_<year>.png`, `/api/cube/years/countries` | The yearly layers of detections on the cube's grid, one layer a year as MODIS and as VIIRS detected them, and each country's yearly detections as counted and on one scale ([cube.md](cube.md)) |
+| `GET /api/live` | The predictions sealed before a pass on fires burning now, and their scores once VIIRS's rows arrive ([live.md](live.md)) |
 | `GET /api/gibs/day`, `/api/gibs/cloud`, `/api/gibs/live` | A box's satellite picture of one day and its cloud share, from NASA's keyless daily tiles held in the world store |
 | `GET /api/burned` | After the reveal, what burned: NASA's burned-area map from MODIS (MCD64A1 v061, never the VIIRS product) in a region's box from the window's first month to the end of the month holding its end, on the run's 375 m grid with each cell's day of burn, read from the world store (`backend/server_burned.py`); 404 "not fetched" where the store does not hold it, 409 for a closed window |
 | `GET /api/firms/countries` | Every country file the FIRMS listing publishes, its size and whether it is cached |
@@ -364,7 +365,7 @@ This month so far against the same calendar month's median. The country files en
 }
 ```
 
-An answer of 14 November 2026, shortened: `requests` has 12 entries and the caveats are cut.
+A sample answer, shortened: `requests` has 12 entries and the caveats are cut.
 
 - `harmonized_mean` is the MODIS rate over the days counted (rows per 1,000 km2 of the box per day) times the calendar's Terra and Aqua ratio, so it is on the calendar's scale; `month_median` is that calendar month's median from `month_climatology`. Today's UTC day is left out while its rows still arrive.
 - The caveats are always served: part of a month; near real time rows, not standard processing; no type column, so static sources, volcanoes and offshore rows are counted; Suomi NPP stopped delivering science data on 2 November 2026. When one MODIS platform has no row while the other has 20 or more, nothing is harmonized and a caveat says why.
@@ -390,7 +391,7 @@ The held-out check of every place's calendar side by side: each region with FIRM
 
 ```json
 {
-  "what": "the Record's held-out check of every place side by side, ...",
+  "what": "the record's held-out check of every place side by side, ...",
   "definition": "for each overlap year but a closed one: the method is fitted on the other overlap years and predicts that year's Suomi NPP count of every clean month from its MODIS count; ...",
   "nominal_interval": "80 percent: the 10th to 90th percentile of held-out errors of predictions of about the same size, per latitude band",
   "places": [
@@ -416,16 +417,16 @@ The held-out check of every place's calendar side by side: each region with FIRM
 
 Shortened: `overlap_years` cut to two of 14 years, the second entry cut to a few keys, and `places` to two of 15.
 
-- `method` and `interval` name the served method and its interval; `ratio` is the ratio over the overlap the Record speaks and `ratio_p10_p90` the spread of the per-year ratios; `median_abs_relative_error_annual` and `..._without_harmonization` are the median over held-out years of the yearly error with the method and with MODIS counts taken as they are; the coverages are how often the observed Suomi NPP count of a held-out year, or month, lay inside the stated interval; `fit_rows` are the rows the served method was fitted on.
+- `method` and `interval` name the served method and its interval; `ratio` is the ratio over the overlap the record speaks and `ratio_p10_p90` the spread of the per-year ratios; `median_abs_relative_error_annual` and `..._without_harmonization` are the median over held-out years of the yearly error with the method and with MODIS counts taken as they are; the coverages are how often the observed Suomi NPP count of a held-out year, or month, lay inside the stated interval; `fit_rows` are the rows the served method was fitted on.
 - A region's entry is kept while its rows are unchanged; the first answer after a start reads every calendar, about 30 seconds while the box index is built, then tens of milliseconds. A place whose calendar cannot be built carries `error` and the others still answer.
 
 ## The fire cube
 
-`GET /api/cube/record?box=w,s,e,n[&snap=outer|inner]` returns the Record of any box read from the fire cube ([cube.md](cube.md)), in the shape of `GET /api/calendar?source=firms&box=`, with fire radiative power per platform and month and a `cube` block. `GET /api/cube/tables`, `GET /api/cube/countries` and `GET /api/cube/layers` give the box's tables, the loaded countries and the world layers. A box with no loaded row answers 404, not zeros; before any build of the cube the routes answer 503. The server finds the cube through `ISOGON_WORLD_DIR`, or through `data/cache/world` in the checkout.
+`GET /api/cube/record?box=w,s,e,n[&snap=outer|inner]` returns the record of any box read from the fire cube ([cube.md](cube.md)), in the shape of `GET /api/calendar?source=firms&box=`, with fire radiative power per platform and month and a `cube` block. `GET /api/cube/tables`, `GET /api/cube/countries` and `GET /api/cube/layers` give the box's tables, the loaded countries and the world layers. `GET /api/cube/years` lists the yearly layers (`backend/firms/cube_years.py`): the years, the scales, the families (`modis`, Terra and Aqua together; `viirs`, Suomi NPP; `modis_on_snpp`, MODIS drawn on Suomi NPP's scale; and `harmonized`, the record on one scale) and every layer with its files; `GET /api/cube/years/<family>_<year>.png` or `.npy` is one layer, `GET /api/cube/years/lite_<family>_<year>.png` its lighter twin with half the grid each way, and `GET /api/cube/years/countries` each country's detections each year, as counted and on one scale (`backend/firms/cube_countries.py`). A box with no loaded row answers 404, not zeros; before any build of the cube the routes answer 503. The server finds the cube through `ISOGON_WORLD_DIR`, or through `data/cache/world` in the checkout.
 
 ## `GET /api/live`
 
-The live test's answer, `backend.live.answer.build` of the live folder ([live.md](live.md)): every prediction sealed before its pass, with its state, times, digest and scores, the fires, the passes not sealed and the running count against the two baselines. It is built from the folder's logs at each request; the server only reads them. The folder is `ISOGON_LIVE_DIR`, else `live` in the world store (`ISOGON_WORLD_DIR`, else `data/cache/world`). Without a folder holding `protocol.json` the route answers `503` with `"state": "not_running"`.
+The live test's answer, `backend.live.answer.build` of the live folder ([live.md](live.md)): every prediction sealed before its pass, with its state, times, digest and scores, the fires, the passes not sealed and the running count against the two baselines. The predictions are the occupancy filter's and the two baselines'; the learned layer is not sealed. It is built from the folder's logs at each request; the server only reads them. The folder is `ISOGON_LIVE_DIR`, else `live` in the world store (`ISOGON_WORLD_DIR`, else `data/cache/world`). Without a folder holding `protocol.json` the route answers `503` with `"state": "not_running"`.
 
 ## The day's picture and cloud share
 
@@ -613,6 +614,7 @@ Shortened: the keys shared with a simulated run (`region`, `assets`, `pipeline_s
 - **Frames.** The 24 frames are real passes at their real times: from the first MODIS overpass with a detection in the box at or after `start`, the first 24 passes whose swath held the whole region box, from NASA's pass list. `window.frames_from` is `cmr` then. Where no pass list is cached it reads `detections (...)` and the frames are overpasses of the visible rows.
 - **Tensor encoding.** A real run's `reconstruction_u8.bin` is on the log scale that `encoding` describes, not on the linear scale of a simulated run.
 - **Metrics.** `metrics.source` is `firms`. The names a simulated run uses that mean nothing here are `null` and listed in `metrics.simulated_names_not_used`; `metrics.definitions` explains every name. `metrics.from_hidden_rows` lists the metrics the scorer computed.
+- **Who answered.** `held_out_passes_answered_by` (held-out runs; null otherwise) names the model that answered the hidden passes: `reconstruction`, the occupancy filter, or a challenger, the learned layer (`backend/model/real_run.py`, `answering_estimate`). It is the filter in the code unless `ISOGON_RUN_ESTIMATE=challenger` is set, as it is for the model in the visitor's browser. When the learned layer answers, `standing_to_the_answering_estimate` says what the region and the run's days are to it: fitted on, validated on, a recorded test fire, or never seen. The MODIS passes, the spread, the belief frames and the exports are the filter's whichever answers, and `model` describes the filter.
 - **Nothing hidden.** Without `holdout_viirs` the answer has `fit_residuals` in place of `blind_test`: the same report with `"blind": false`, because the estimate has seen the VIIRS rows it is compared with. It is not a test.
 
 ### What a held-out run withholds, and the reveal
@@ -928,7 +930,7 @@ Errors: `400` without `region_id`, `start` or `end`, for a date that cannot be r
 
 ## `GET /api/evidence`
 
-One document with everything the project has measured about the model on real fires: the recorded looks at the three 2021 test fires, the validation that decides what is switched on, and the environment's reference table. It is built on each request by `backend.model.evidence.evidence()` from three tracked files and reads no FIRMS row. No parameters.
+One document with everything the project has measured about the model on real fires: the recorded looks at the three 2021 test fires, the validation that decides what is switched on, the tests across the world (test A, test B and the learned layer scored beside them), and the environment's reference table. It is built on each request by `backend.model.evidence.evidence()` from the tracked files and reads no FIRMS row. No parameters.
 
 | Key | Holds |
 | --- | --- |
@@ -941,6 +943,8 @@ One document with everything the project has measured about the model on real fi
 | `audit`, `audit_findings` | The ways the first protocol let hidden rows shape the test, and for each the change that answers it and the test that guards it (`id`, `found`, `answer`, `guarded_by`). |
 | `validation` | `protocol_version`, `episodes`, `years`, `regions`, `scored_overpasses`, `classes` (`ahead`, `tied`, `behind`), `fitted_values`, `decision`, `rule`, `parts`, `frp_interval`, `before`, `history`, `trained_on`, `validated_on`, `empty_looks`, `intervals`. |
 | `next_look` | `tiles_per_side`, `looks`, `score`, `reward`, `test_episodes`, `mean_start_score`, `agents`, `differences`, `holds_in_both`, `other_settings`, `made_with`, and the same table under earlier settings; `measured_under` (the reward the tables on record were measured under, what an empty look did then, why they are not measured again), `reward_in_use`, and `on_validation` (the reference players under the reward in use on the validation episodes: `agents`, `differences`, `plainly`, `not_a_test`). |
+| `fresh_test` | The tests across the world, fixed before any fire was read: `protocol_id`, `protocol_sha256`, `look_names`, `protocol`, `class_words`, `plan` (the fires found and the counts per set), `test_a` and `test_b` (each with `episodes_scored`, `all` for the headline, `by_continent`, `by_zone`, `per_fire`, `clear_looks` and `beside_the_headline`, which in test B holds the refit and the four learned variants scored in the same look), `refit`, `players`, `players_fit`, `state` and `files`. |
+| `count_kinds` | What a count of scores means, `plain comparison` (one fire or one run) or `judged with an interval` (a set of fires), so that the two are not set side by side. |
 | `limits` | Sentences: what the figures do not show. |
 | `additions` | The keys this document adds to the shape the page first asked for. |
 | `sources` | `tracked_files`, `reports_sha256`, `record_built_utc`. |
@@ -1195,7 +1199,7 @@ One reference player's play of one episode, step by step, from `backend.env.play
 }
 ```
 
-Shortened; the shape of `play` is the model's (`backend/env/play.py`), with one step shown. Values from the model lane's example on a 2024 episode.
+Shortened; the shape of `play` is the model's (`backend/env/play.py`), with one step shown. Values are from an example on a 2024 episode.
 
 - A play is a round of its own: it holds the hidden rows its own looks revealed and scores computed against the hidden rows (`play.computed_against_hidden_rows` names them). Ask for it apart from a person's round on the same episode, or after that round.
 - Plays are cached in memory and under `data/cache/next_look_reference/plays/`, keyed like the reference players plus the player, the seed, `ceiling` and `fields`. `play_cache.from` is `computed for this request` or `cache`.
