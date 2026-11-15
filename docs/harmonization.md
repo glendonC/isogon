@@ -168,3 +168,8 @@ rows, are transparent. Their scales and digests are in the `maps.json` written b
 - The regions on the cube are boxes of longitude and latitude, fixed before any score; they leave Central Asia
   south of 45 N and the Caucasus in a remainder region.
 - NOAA-21 and the months after the last country file are not in the fit or the measurement.
+- Lava is counted as fire where FIRMS marks it type 0. The worst places of the measurement are volcanoes: Hawaii's
+  Big Island, whose yearly ratio of Suomi NPP to MODIS rows runs from 5 to more than 4,000 across the eruptions of
+  2018 and 2022, Piton de la Fournaise on Reunion and Fogo in Cape Verde. VIIRS sees hot lava far more often than
+  MODIS, so no ratio holds there, and no correction does better there than any method. The Record of such a place
+  reads lava as fire.
