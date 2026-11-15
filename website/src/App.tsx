@@ -182,7 +182,8 @@ export function App() {
   /** Real runs: the start of the FIRMS run on the stage, the one being requested, and the last failure. */
   const [realStart, setRealStart] = useState<string | null>(null);
   const [pendingStart, setPendingStart] = useState<string | null>(null);
-  const [realFailed, setRealFailed] = useState<{ start: string; message: string } | null>(null);
+  /** The real run asked for last that did not load: its place and start, whether it was the reveal, and the request. */
+  const [realFailed, setRealFailed] = useState<{ start: string; regionId: string; reveal: boolean; message: string; params: ReconstructRequestParams } | null>(null);
   /**
    * The blind test: hiding VIIRS requests the blind run; the reveal keeps that run on the terrain with its hidden
    * detections laid on (`withReveal`) and its own score in the table. The reveal never swaps in another run.
@@ -422,7 +423,8 @@ export function App() {
         if (stale()) return false;
         const msg = err instanceof Error ? err.message : 'Backend unreachable';
         setExecError(msg);
-        if (realStartParam) setRealFailed({ start: realStartParam, message: msg.replace(/\.$/, '') });
+        if (realStartParam)
+          setRealFailed({ start: realStartParam, regionId: params.regionId, reveal: Boolean(params.reveal), message: msg.replace(/\.$/, ''), params });
         if (params.enterWorkspace && !inWorkspace) {
           setInWorkspace(true);
           setWorkspaceMode('cutaway');
@@ -1478,14 +1480,11 @@ export function App() {
     } else if (command === 'retry' && step === 'record') {
       setRecordTry((n) => n + 1);
     } else if (command === 'retry' && realFailed) {
-      void executeWorldModel({
-        regionId: activeRun?.region.id ?? calendarRegionId,
-        holdoutViirs: step === 'test',
-        cloudOverride: null,
-        enterWorkspace: false,
-        source: 'firms',
-        start: realFailed.start,
-      });
+      // The request that did not load, again: a place's run, or the reveal of the run on show.
+      if (realFailed.reveal) {
+        setRevealing(true);
+        void executeWorldModel({ ...realFailed.params, enterWorkspace: false }).finally(() => setRevealing(false));
+      } else void executeWorldModel({ ...realFailed.params, enterWorkspace: false, theaterId: undefined, queryText: undefined });
     }
   };
   runCommandRef.current = runCommand;

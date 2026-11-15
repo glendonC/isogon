@@ -54,7 +54,7 @@ export interface WorkspaceStore {
     /** The start of the real run on the terrain, the one being requested, and the last failure. */
     realStart: string | null;
     pendingStart: string | null;
-    failed: { start: string; message: string } | null;
+    failed: { start: string; regionId: string; reveal: boolean; message: string } | null;
     /** "10 to 13 August 2012". */
     span: string | null;
     /** No VIIRS flew before 2012: nothing to hide. */

@@ -310,10 +310,19 @@ export function useGuide(
     };
   }
 
-  const failed = Boolean(ws.run.failed && (ws.run.failed.start === ws.run.pendingStart || !ws.run.isReal));
+  // A run asked for that did not load: a place's run (Estimate's failed state) while no run is on show, or another
+  // place's or start's run is; the reveal of the run on show (Test's), while it is still hidden.
+  const f = ws.run.failed;
+  const onShow = ws.run.active?.region.id ?? null;
+  const failed = Boolean(f && !f.reveal && !ws.run.pendingStart && (!ws.run.isReal || f.start !== ws.run.realStart || f.regionId !== onShow));
+  const revealFailed = Boolean(f && f.reveal && ws.run.isReal && f.start === ws.run.realStart && f.regionId === onShow && !ws.test.revealed && !ws.test.revealing);
   let step: 'estimate' | 'test' = 'estimate';
   let id: string;
   if (failed) id = 'failed';
+  else if (revealFailed) {
+    step = 'test';
+    id = 'failed';
+  }
   else if (ws.run.pendingStart || !ws.run.isReal) id = 'loading';
   else if (ws.test.revealing) id = 'revealing';
   else if (ws.model.closed) id = 'recorded_test_fire';
