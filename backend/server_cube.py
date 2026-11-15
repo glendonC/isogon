@@ -12,6 +12,8 @@ world layers and the yearly layers.
   GET /api/cube/years                                   the yearly layers (backend/firms/cube_years.py): years,
                                                          scales, families, every layer with its files
   GET /api/cube/years/<family>_<year>.png | .npy        one yearly layer
+  GET /api/cube/years/countries                         each country's fire rows each year, as counted and on
+                                                         one scale (backend/firms/cube_countries.py)
 
 `cube_route(route, qs)` answers these and returns (status, body, content type), or None for any other route, so the
 main server mounts them in a few lines. Run alone for a look:
@@ -282,6 +284,14 @@ def cube_route(route: str, qs: dict[str, list[str]], cube: C.Cube | None = None)
             cube._open()
             path = C.current_build(cube.root) / "layers" / f"{stem}.{ext}"
             return HTTPStatus.OK, path.read_bytes(), "image/png" if ext == "png" else "application/octet-stream"
+        if route in (f"{PREFIX}/years/countries", f"{PREFIX}/years/countries.json"):
+            from backend.firms.cube_countries import countries_path
+
+            path = countries_path(cube.root)
+            if not path.is_file():
+                return _json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "the countries' years are not written yet",
+                                                              "state": "not_built"})
+            return HTTPStatus.OK, path.read_bytes(), JSON
         if route == f"{PREFIX}/years" or route.startswith(f"{PREFIX}/years/"):
             info = years_payload(cube)
             if info is None:
@@ -299,7 +309,8 @@ def cube_route(route: str, qs: dict[str, list[str]], cube: C.Cube | None = None)
             return HTTPStatus.OK, body, "image/png" if ext == "png" else "application/octet-stream"
         return _json(HTTPStatus.NOT_FOUND, {"error": f"unknown cube route '{route}'",
                                             "routes": [f"{PREFIX}/record?box=", f"{PREFIX}/tables?box=",
-                                                       f"{PREFIX}/countries", f"{PREFIX}/layers", f"{PREFIX}/years"]})
+                                                       f"{PREFIX}/countries", f"{PREFIX}/layers", f"{PREFIX}/years",
+                                                       f"{PREFIX}/years/countries"]})
     except ValueError as exc:
         return _json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
     except C.CubeMissing as exc:

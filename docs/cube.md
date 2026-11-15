@@ -132,6 +132,7 @@ the grid beside the box asked for.
 | `GET /api/cube/countries` | the countries loaded in the cube and not, and the download's progress |
 | `GET /api/cube/layers`, `GET /api/cube/layers/<name>.png`, `.npy` | the world layers |
 | `GET /api/cube/years`, `GET /api/cube/years/<family>_<year>.png`, `.npy` | the yearly layers (below) |
+| `GET /api/cube/years/countries` | each country's fire rows each year (below) |
 
 A box takes the same limits as the box calendar (at most 20 degrees each way). A box in which no loaded country file
 has a row answers 404 with `"state": "not_loaded"`, never a record of zeros. The outage days of a cube Record are
@@ -197,6 +198,20 @@ years. `GET /api/cube/years` lists them; `GET /api/cube/years/<family>_<year>.pn
 and 2012 as the satellites counted them (`modis_on_snpp_2011`, `viirs_2012`) and on one scale (`harmonized_2011`,
 `harmonized_2012`, read from `<world>/harmonize/years/` with the closed rule applied), all four on the Suomi NPP
 scale and the world layers' ramp, from 84 N to 60 S, each pixel the largest cell-year under it.
+
+`backend/firms/cube_countries.py write` sums, from the parts of the current build (each checked by its sha256
+against the build's manifest), each country file's fire rows each year into `<world>/cube/years/countries.json`,
+with a copy in `<world>/cube/public/years/`; `GET /api/cube/years/countries` serves it. Each of the 238 countries
+has one value per year from 2000 to 2025 in three series: `modis` (Terra and Aqua) and `viirs` (Suomi NPP) as
+counted, null before the series' first year, and `harmonized`, the harmonized total on the Suomi NPP scale,
+read from `<world>/harmonize/years/countries.json` when it is there. They count the rows the yearly layers draw, with
+the closed cells left out in their closed years, so the countries of a year add up to its yearly layer; `check` says
+whether they do. Each country carries the name of its shape on the page's map (world-atlas `countries-50m`,
+`properties.name`, listed in `backend/firms/atlas_countries_50m.json`) and `by_atlas` goes back from a shape to its
+file. Seven files have no shape of their own: five French overseas lands and Svalbard, drawn inside France and
+Norway, whose files do not hold their rows, and the United States Minor Outlying Islands. Of the atlas's shapes with
+no file, `unmatched.atlas` names the file that holds their rows: Somalia for Somaliland, Morocco for Western Sahara,
+Cyprus for northern Cyprus.
 
 ## The public cube
 
