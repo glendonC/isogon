@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { tOfValue, valueOfT } from './cells';
-import { countryShapeAt, pointWords, type CountryShape } from './countryAt';
+import { countryShapeAt, type CountryShape } from './countryAt';
 import { Globe, globeWanted } from './Globe';
+import { Locator } from '../ui/Locator';
+import { useYearCells } from './yearCells';
 import { countryOf, countryRatio, countryTotals, drawnInside, gridLines, heldBy, type CountriesFile } from './countryYears';
 import { FIRE_RAMP } from './layers';
 import { useWorldKeys } from './keys';
@@ -106,17 +108,28 @@ function outlineOf(rings: number[][][], p: Projector): string {
   return d;
 }
 
-/** What the square under the pointer holds in the year on show, from its palette index ("about": one colour a band). */
-function squareWords(ix: Uint8Array | null, lon: number, lat: number, vmax: number, year: number): string {
-  if (!ix) return '';
+/**
+ * What the square under the pointer holds in the year on show: its exact count from the year's cells where they are
+ * read, else its band from the palette index ("About": one colour a band).
+ */
+function squareWords(ix: Uint8Array | null, cells: Float32Array | null, oneScale: boolean, lon: number, lat: number, vmax: number, year: number): string {
   const col = Math.min(Math.floor((lon + 180) / 0.25), 1439);
   const row = Math.min(Math.floor((90 - lat) / 0.25), 719);
-  const k = ix[row * 1440 + col];
+  const k = ix ? ix[row * 1440 + col] : null;
   if (k === 2) return Y.squareClosed(year);
+  if (cells && cells.length === 1440 * 720) {
+    const v = cells[row * 1440 + col];
+    if (!Number.isFinite(v) || v <= 0) return Y.squareNone(year);
+    return oneScale ? Y.squareOneScale(v, year) : Y.squareExact(v, year);
+  }
+  if (k === null) return '';
   if (k < 3) return Y.squareNone(year);
-  const v = valueOfT((k - 3 + 0.5) / 253, vmax);
-  return Y.squareAbout(v, year);
+  return Y.squareAbout(valueOfT((k - 3 + 0.5) / 253, vmax), year);
 }
+
+/** "40.05° N  121.18° W", as the search's side view writes a place. */
+const degreeWords = (lon: number, lat: number) =>
+  `${Math.abs(lat).toFixed(2)}° ${lat < 0 ? 'S' : 'N'}  ${Math.abs(lon).toFixed(2)}° ${lon < 0 ? 'W' : 'E'}`;
 
 const ramp = (stops: Array<[number, [number, number, number]]>) =>
   `linear-gradient(to right, ${stops.map(([t, c]) => `rgb(${c.join(',')}) ${t * 100}%`).join(', ')})`;
@@ -198,6 +211,9 @@ export function EarthYears({
     },
     [onHover],
   );
+  // The year's exact counts, read while the pointer is on the globe and the years are at rest.
+  const shownMeta = idx && shown !== null ? layerOf(idx, mode, shown) : null;
+  const cells = useYearCells(shownMeta, !flat && under !== null && !playing);
   const onGlobePick = useCallback((p: { lon: number; lat: number } | null) => (p ? onClickMap(p) : setChosen(null)), [onClickMap]);
   // The outlines are kept per country and view, so the pointer's moves do not trace them again.
   const outlines = useRef(new Map<string, string>());
@@ -456,17 +472,20 @@ export function EarthYears({
           className="world-years__earth"
         />
       )}
+      {/* The pointed spot, in the manner of the search's side view: a small Earth with cross hairs on it, the place's
+          coordinates, its country and what its square holds in the year on show, following the pointer. */}
       {!flat && pick && under && (
-        <div className="world-country-name world-globe-tag" style={{ left: under.x + 16, top: under.y - 12 }} aria-hidden="true">
-          {pointed && (
-            <span className="world-globe-tag__name">
-              {pointed.shape.name}
-              {!hasFile(pointed.shape) && <span className="world-country-name__more">{`: ${Y.noFile}`}</span>}
-            </span>
-          )}
-          <span className="world-globe-tag__fine">{pointWords(under.lon, under.lat)}</span>
-          <span className="world-globe-tag__fine">{squareWords(ix, under.lon, under.lat, vmax, shown)}</span>
-        </div>
+        <>
+          <div className="world-reticle" style={{ left: under.x, top: under.y }} aria-hidden="true" />
+          <div className="world-readout" data-world-ui aria-hidden="true">
+            <Locator lat={under.lat} lon={under.lon} caption={degreeWords(under.lon, under.lat)} />
+            <div className="world-readout__place">
+              {pointed ? pointed.shape.name : Y.atSea}
+              {pointed && !hasFile(pointed.shape) && <span className="world-readout__more">{`: ${Y.noFile}`}</span>}
+            </div>
+            <div className="world-readout__count">{squareWords(ix, cells, mode === 'harmonized', under.lon, under.lat, vmax, shown)}</div>
+          </div>
+        </>
       )}
       {flat && (
       <WorldCanvas

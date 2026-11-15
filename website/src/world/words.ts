@@ -188,6 +188,10 @@ export const YEAR_WORDS = {
   /** The square under the pointer on the globe, for the year on show. */
   squareNone: (year: number) => `No detection in this square in ${year}`,
   squareClosed: (year: number) => `Kept as the model's test in ${year}`,
+  squareExact: (v: number, year: number) =>
+    `${Math.round(v).toLocaleString('en-US')} ${Math.round(v) === 1 ? 'detection' : 'detections'} in this square in ${year}`,
+  squareOneScale: (v: number, year: number) => `${v < 10 ? v.toFixed(1) : Math.round(v).toLocaleString('en-US')} on one scale in this square in ${year}`,
+  atSea: 'At sea',
   squareAbout: (v: number, year: number) =>
     v < 1.5 ? `About 1 detection in this square in ${year}` : `About ${roughly(v)} detections in this square in ${year}`,
   noFileStrip: (name: string, holder: string | null) =>

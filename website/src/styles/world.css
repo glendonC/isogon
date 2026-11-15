@@ -1501,17 +1501,6 @@
   pointer-events: none;
 }
 
-.world-globe-tag {
-  display: grid;
-  gap: 1px;
-  z-index: 2;
-}
-
-.world-globe-tag__fine {
-  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
-  color: var(--sys-ink-3);
-}
-
 /* The challengers beside the headline: one plain line under the figures. */
 .world-tests__beside {
   margin-top: var(--sys-s2);
@@ -1545,5 +1534,67 @@
 .world-proof__line {
   max-width: 60ch;
   font: var(--sys-weight) clamp(16px, 1.15vw, 22px) / 1.4 var(--sys-font);
+  color: var(--sys-ink-2);
+}
+
+/* The pointed spot on the globe: a reticle at the pointer, and a side view of it at the right (the search's manner). */
+.world-reticle {
+  position: absolute;
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  translate: -50% -50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(214, 241, 255, 0.9), 0 0 14px rgba(214, 241, 255, 0.45);
+}
+
+.world-reticle::before,
+.world-reticle::after {
+  content: '';
+  position: absolute;
+  background: rgba(214, 241, 255, 0.4);
+}
+
+.world-reticle::before {
+  left: -34px;
+  right: -34px;
+  top: 50%;
+  height: 1px;
+  -webkit-mask: linear-gradient(to right, #000 0 28px, transparent 28px calc(100% - 28px), #000 calc(100% - 28px));
+  mask: linear-gradient(to right, #000 0 28px, transparent 28px calc(100% - 28px), #000 calc(100% - 28px));
+}
+
+.world-reticle::after {
+  top: -34px;
+  bottom: -34px;
+  left: 50%;
+  width: 1px;
+  -webkit-mask: linear-gradient(to bottom, #000 0 28px, transparent 28px calc(100% - 28px), #000 calc(100% - 28px));
+  mask: linear-gradient(to bottom, #000 0 28px, transparent 28px calc(100% - 28px), #000 calc(100% - 28px));
+}
+
+.world-readout {
+  position: absolute;
+  z-index: 3;
+  top: 72px;
+  right: var(--sys-gutter);
+  width: min(300px, 26vw);
+  display: grid;
+  gap: var(--sys-s1);
+  pointer-events: none;
+}
+
+.world-readout__place {
+  margin-top: var(--sys-s1);
+  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
+  color: var(--sys-ink);
+}
+
+.world-readout__more {
+  color: var(--sys-ink-3);
+}
+
+.world-readout__count {
+  font: var(--sys-weight) var(--sys-size-fine) / var(--sys-lh-fine) var(--sys-mono);
   color: var(--sys-ink-2);
 }
