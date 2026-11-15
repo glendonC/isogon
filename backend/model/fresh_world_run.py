@@ -411,7 +411,7 @@ def episode_rows(work: Path, key: str) -> list[dict[str, str]]:
 
 
 def run_episode(ep: dict[str, Any], params: dict[str, Any], work: Path,
-                beside: tuple[tuple[str, dict[str, Any]], ...] = ()) -> dict[str, Any]:
+                beside: tuple[tuple[str, dict[str, Any]], ...] = (), target_filter: Any = None) -> dict[str, Any]:
     """The blind test of one episode, under protocol version 3, with the estimate's values given and the two
     baselines as they are. `beside` adds, by name, the estimate with other values in the same run, on the same
     looks (test B's other methods)."""
@@ -439,10 +439,49 @@ def run_episode(ep: dict[str, Any], params: dict[str, Any], work: Path,
         [painted_modis_factory, overlap_ratio_factory(load_ratio_fit(), ratio), reconstruction_factory(OccupancyParams(**params))]
         + [reconstruction_factory(OccupancyParams(**p), name=name) for name, p in beside],
         window=(float(ep["start_s"]), float(ep["end_s"])), schedule=S.SOURCE_CMR, read_passes=pass_reader(work, ep["key"]),
+        target_filter=target_filter,
     )
     report.pop("definitions", None)
     report["episode"] = ep["key"]
     return report
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# The table of clear looks (the protocol's clear_looks): scoring side only
+# ----------------------------------------------------------------------------------------------------------------
+
+
+def cloud_share(box: F.Box, slot: Any, root: Path | None = None) -> float | None:
+    """The share of the tile under cloud at a hidden pass, by that pass's own mask (`backend.firms.passmask`), or
+    None when no mask of the pass is on hand. Read for scoring only: no method is given it."""
+    from backend.firms import passmask as PM
+
+    got = PM.shares(tuple(box), float(slot.time_s), slot.platform, root=root, allow_sharp=True)
+    return None if isinstance(got, str) else float(got["cloud"])
+
+
+class ClearLooks:
+    """The blind test's target filter of the second table: a hidden pass whose own mask is on hand and put at
+    most `fresh_test.CLEAR_SHARE` of the tile under cloud. A plain object, so a worker process can carry it."""
+
+    def __init__(self, box: F.Box, root: Path | None = None) -> None:
+        self.box, self.root = tuple(box), root
+
+    def __call__(self, slot: Any) -> bool:
+        share = cloud_share(self.box, slot, self.root)
+        return share is not None and share <= F.CLEAR_SHARE
+
+
+def masks_of(ep: dict[str, Any], work: Path, root: Path | None = None) -> dict[str, int]:
+    """How many of an episode's hidden passes have a mask on hand, and how many of those are clear. Reads the pass
+    list and the masks, never a row."""
+    from backend.eval import schedule as S
+
+    slots, _ = S.pass_slots(hidden_platforms(ep), float(ep["start_s"]), float(ep["end_s"]), tuple(ep["box"]),
+                            pass_reader(work, ep["key"]))
+    shares = [cloud_share(tuple(ep["box"]), s, root) for s in slots]
+    return {"passes": len(slots), "with_a_mask": sum(1 for v in shares if v is not None),
+            "clear": sum(1 for v in shares if v is not None and v <= F.CLEAR_SHARE)}
 
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -453,8 +492,9 @@ def run_episode(ep: dict[str, Any], params: dict[str, Any], work: Path,
 def _look_job(job: tuple[Any, ...]) -> tuple[str, dict[str, Any] | None, str | None]:
     ep, params, work_s = job[:3]
     beside = job[3] if len(job) > 3 else ()
+    target_filter = job[4] if len(job) > 4 else None
     try:
-        return ep["key"], run_episode(ep, params, Path(work_s), beside), None
+        return ep["key"], run_episode(ep, params, Path(work_s), beside, target_filter), None
     except Exception as exc:  # noqa: BLE001  (an episode that cannot be scored is listed with its reason)
         return ep["key"], None, f"{type(exc).__name__}: {exc}"
 
@@ -562,8 +602,39 @@ def record_look(plan: dict[str, Any], role: str, results: list[tuple[str, dict[s
     }
 
 
+def clear_table(plan: dict[str, Any], role: str, params: dict[str, Any], work: Path, workers: int,
+                beside: tuple[tuple[str, dict[str, Any]], ...] = (), root: Path | None = None) -> dict[str, Any] | str:
+    """The second table: the same episodes scored on their clear looks, where the masks are on hand; or the reason
+    there is none."""
+    eps = plan["episodes"][role]
+    masks = {ep["key"]: masks_of(ep, work, root) for ep in eps}
+    with_clear = [ep for ep in eps if masks[ep["key"]]["clear"] > 0]
+    if not any(m["with_a_mask"] for m in masks.values()):
+        return "no table: no cloud mask of a hidden pass of these episodes was on hand at this look"
+    jobs = [(ep, params, str(work), beside, ClearLooks(tuple(ep["box"]), root)) for ep in with_clear]
+    if workers <= 1:
+        results = [_look_job(j) for j in jobs]
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(_look_job, jobs, chunksize=1))
+    sub = {"episodes": {role: with_clear}, "plan_sha256": plan["plan_sha256"]}
+    doc = record_look(sub, role, results, {}, work / "clear")
+    return {
+        "rule": F.PROTOCOL["clear_looks"], "cloud_share_at_most": F.CLEAR_SHARE,
+        "passes": sum(m["passes"] for m in masks.values()),
+        "passes_with_a_mask": sum(m["with_a_mask"] for m in masks.values()),
+        "clear_passes": sum(m["clear"] for m in masks.values()),
+        "episodes_with_a_mask": sum(1 for m in masks.values() if m["with_a_mask"]),
+        "episodes_with_a_clear_look": len(with_clear),
+        "masks_by_episode": masks,
+        "judged": doc["judged"], "per_episode": doc["per_episode"], "unscored": doc["unscored"],
+        "beside_the_headline": doc["beside_the_headline"],
+    }
+
+
 def look(plan: dict[str, Any], role: str, params: dict[str, Any], values: dict[str, Any], work: Path, workers: int,
-         log: Callable[[str], None] = print, beside: tuple[tuple[str, dict[str, Any]], ...] = ()) -> dict[str, Any]:
+         log: Callable[[str], None] = print, beside: tuple[tuple[str, dict[str, Any]], ...] = (),
+         clear: bool = False, mask_root: Path | None = None) -> dict[str, Any]:
     jobs = [(ep, params, str(work), beside) for ep in plan["episodes"][role]]
     t0 = time.time()
     if workers <= 1:
@@ -573,7 +644,8 @@ def look(plan: dict[str, Any], role: str, params: dict[str, Any], values: dict[s
             results = list(pool.map(_look_job, jobs, chunksize=1))
     doc = record_look(plan, role, results, values, work)
     doc["beside_values"] = {name: "the estimate with these values, in the same run" for name, _ in beside}
-    doc["clear_looks"] = "no table: the hidden passes' cloud masks were not on hand at this look"
+    doc["clear_looks"] = (clear_table(plan, role, params, work, workers, beside, mask_root) if clear else
+                          "no table: the hidden passes' cloud masks were not on hand at this look")
     doc["seconds"] = round(time.time() - t0, 1)
     log(f"look at {role}: {doc['episodes_scored']} of {doc['episodes_in_plan']} scored in {doc['seconds']} s")
     return doc
@@ -777,7 +849,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit("test B waits for the refit and its decision to be on record")
             params, values = test_b_values(json.loads(REFIT_FILE.read_text(encoding="utf-8")), plan)
         beside = tuple(values.pop("beside", {}).items()) if args.role == "test_b" else ()
-        doc = look(plan, args.role, params, values, work, args.workers, beside=beside)
+        doc = look(plan, args.role, params, values, work, args.workers, beside=beside, clear=args.role == "test_b")
         out.write_text(json.dumps(doc, indent=1, default=str) + "\n", encoding="utf-8")
         print(json.dumps({k: doc["judged"]["all"].get(k) for k in ("episodes", "ahead", "tied", "behind", "interval")}, indent=1))
     elif args.cmd == "refit":

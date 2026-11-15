@@ -317,5 +317,51 @@ class TestBTests(unittest.TestCase):
         self.assertEqual((str(r.work), r.key), ("/x", "k"))
 
 
+class ClearLooksTests(unittest.TestCase):
+    def _shares(self, by_index):
+        """A made-up cloud share per hidden pass, by the order of the passes' times (None: no mask on hand)."""
+        times: list[float] = []
+
+        def share(box, slot, root=None):
+            if slot.time_s not in times:
+                times.append(slot.time_s)
+                times.sort()
+            return by_index(times.index(slot.time_s))
+
+        return share
+
+    def test_the_second_table_scores_the_clear_looks_where_masks_are_on_hand(self) -> None:
+        keys = [f"{PID}:2099:22", f"{PID}:2099:23"]
+        plan = {"plan_sha256": "p", "episodes": {"test_b": [_ep(key=k) for k in keys]}}
+        share = self._shares(lambda i: None if i % 3 == 0 else (0.1 if i % 3 == 1 else 0.9))
+        with tempfile.TemporaryDirectory() as tmp:
+            work = _fixture_work(Path(tmp), keys)
+            with mock.patch.object(R, "pass_reader", lambda _w, _k: fx.fixture_pass_reader()), \
+                    mock.patch.object(R, "cloud_share", share):
+                doc = R.clear_table(plan, "test_b", load_params().as_dict(), work, workers=1)
+        self.assertGreater(doc["passes_with_a_mask"], 0)
+        self.assertLess(doc["passes_with_a_mask"], doc["passes"])
+        self.assertLess(doc["clear_passes"], doc["passes_with_a_mask"])
+        scored = sum(e["scored_looks"] for e in doc["per_episode"])
+        self.assertEqual(scored, doc["clear_passes"])                  # only the clear looks with a mask are scored
+        self.assertEqual(doc["cloud_share_at_most"], F.CLEAR_SHARE)
+
+    def test_without_any_mask_there_is_no_second_table_and_the_record_says_so(self) -> None:
+        keys = [f"{PID}:2099:22"]
+        plan = {"plan_sha256": "p", "episodes": {"test_b": [_ep(key=k) for k in keys]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = _fixture_work(Path(tmp), keys)
+            with mock.patch.object(R, "pass_reader", lambda _w, _k: fx.fixture_pass_reader()), \
+                    mock.patch.object(R, "cloud_share", lambda box, slot, root=None: None):
+                doc = R.clear_table(plan, "test_b", load_params().as_dict(), work, workers=1)
+        self.assertTrue(doc.startswith("no table"))
+
+    def test_the_clear_filter_can_be_handed_to_a_worker(self) -> None:
+        import pickle
+
+        f = pickle.loads(pickle.dumps(R.ClearLooks((1.0, 2.0, 3.0, 4.0))))
+        self.assertEqual(f.box, (1.0, 2.0, 3.0, 4.0))
+
+
 if __name__ == "__main__":
     unittest.main()
