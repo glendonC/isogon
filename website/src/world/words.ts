@@ -1,4 +1,4 @@
-import { count, localDayTime, monthName } from '../guide/formats';
+import { count, localDayTime, monthName } from '../guide/formats.ts';
 
 /**
  * Every sentence the pictures of the world put on screen, in one place. They are labels on things and prompts
@@ -121,14 +121,17 @@ export function dayAt(iso: string | null | undefined, lon: number): string | nul
 
 export { MONTHS };
 
-/** "18 million" from 18,236,000; "250,000" under a million. */
+/**
+ * A total in millions to one decimal at every size, as the film and the README's figure say them: "19.5 million" from
+ * 19,491,829, "4.6 million" from 4,573,073, "24.0 million" from 24,000,400. "250,000" under a million.
+ */
 export function millions(v: number): string {
-  if (v >= 1e6) {
-    const m = v / 1e6;
-    return `${m >= 10 ? Math.round(m) : Math.round(m * 10) / 10} million`;
-  }
+  if (v >= 1e6) return `${(Math.round(v / 1e5) / 10).toFixed(1)} million`;
   return roughly(v);
 }
+
+/** A grid line's whole millions: "10 million". */
+export const wholeMillions = (v: number) => `${Math.round(v / 1e6)} million`;
 
 /** "4.4": a factor to one decimal, as the product lane writes the Earth's (EARTH-YEARS.md). */
 export const oneDecimal = (v: number) => (Math.round(v * 10) / 10).toFixed(1);

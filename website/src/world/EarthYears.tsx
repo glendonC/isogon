@@ -6,7 +6,7 @@ import { useRead } from './read';
 import { Ticks } from './Ticks';
 import { WorldCanvas, type GridLayer } from './WorldCanvas';
 import type { Box } from './projection';
-import { EARTH_WORDS, millions, YEAR_WORDS as Y } from './words';
+import { EARTH_WORDS, millions, wholeMillions, YEAR_WORDS as Y } from './words';
 import {
   familyOf,
   layerOf,
@@ -406,7 +406,7 @@ export function EarthYears({
         <div className="world-years__plot">
           {[10e6, 20e6].filter((v) => v < top).map((v) => (
             <div key={v} className="world-years__grid" style={{ bottom: `${(v / top) * 100}%` }}>
-              <span>{millions(v)}</span>
+              <span>{wholeMillions(v)}</span>
             </div>
           ))}
           {totals.map((t, i) => (
