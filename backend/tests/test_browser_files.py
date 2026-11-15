@@ -134,6 +134,20 @@ class FileListTests(unittest.TestCase):
         self.assertFalse([p for p in B.python_files() if "/tests/" in p])
 
 
+class TerrainAsTheMethodSaysTests(unittest.TestCase):
+    """The method says the second model reads elevation tiles at the three first regions, where they are on hand,
+    and zero elsewhere: the run's list names the zoom 11 tiles exactly where every one of them is cached."""
+
+    def test_the_run_reads_elevation_tiles_where_they_are_on_hand_and_none_elsewhere(self) -> None:
+        from backend import browser as B
+
+        for region, start in FIRES:
+            tiles = [p for p in B.files_for_a_run(region, start) if "/terrarium/11/" in p]
+            if region == "plumas_ca" and (_REPO_ROOT / "data" / "cache" / "tiles" / "terrarium" / "11").is_dir():
+                self.assertTrue(12 <= len(tiles) <= 20, (region, len(tiles)))
+            if region == "ventura_ca":
+                self.assertEqual(tiles, [], region)
+
 @unittest.skipUnless(FIRES, "no cached rows of plumas_ca or ventura_ca here")
 class PackListTests(unittest.TestCase):
     def test_the_pack_list_names_paths_inside_the_tree_and_never_a_key_or_the_world_store(self) -> None:
