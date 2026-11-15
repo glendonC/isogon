@@ -37,7 +37,7 @@ files and the fire cube, and explained in [`docs/method.md`](docs/method.md) and
 
 | Question | Result |
 | --- | --- |
-| How many more detections does VIIRS make? | About 4.4 times over the whole Earth: Suomi NPP against Terra and Aqua together, summed over 2012 to 2025. Year by year it runs from 4.0 to 4.9, and each place has its own (4.1 around the Feather River). |
+| How many more detections does VIIRS make? | About 4.4 times over the whole Earth: Suomi NPP against Terra and Aqua together, summed over 2012 to 2025. Year by year, counting 2012 from February (Suomi NPP's rows begin on 20 January), it runs from 4.2 to 4.9, and each place has its own (4.1 around the Feather River). |
 | How well does the record put MODIS on the VIIRS scale? | Over 5,227 places of two degrees in all 238 countries, month by month, the method in use misses VIIRS's own count by 14.1 percent, against 18.3 percent for one ratio per place and 77.7 percent with no correction. Its 80 percent range held on 79 percent of the years that did not set it. |
 | And on the three places of the first test? | A year hidden and predicted from the others is off by 8 to 12 percent, against 72 to 73 percent with no correction; the range held in 12, 13 and 12 of 13 years. |
 | The estimate on the three fires kept as its first test (Dixie, Lytton Creek, northern Evia, 2021) | Ahead of both simple methods on 6, 7 and 3 of 7 scores. Those fires are closed and are not scored again. |
