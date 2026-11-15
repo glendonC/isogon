@@ -36,6 +36,8 @@ export interface EarthYearsProps {
   year?: number;
   /** Plays once by itself when every year is in, in about six seconds; on by default in the film presentation. */
   autoplay?: boolean;
+  /** On the globe, outside the film: the years play by themselves, round and round, until the visitor takes over. */
+  loop?: boolean;
   /** The year large in the caption's place, top left; a screen that says the year in its own objective passes false. */
   caption?: boolean;
   onYear?: (year: number, mode: YearsMode) => void;
@@ -150,6 +152,7 @@ export function EarthYears({
   mode: startMode = 'detected',
   year: startYear,
   autoplay,
+  loop = true,
   caption = true,
   onYear,
   focus = YEARS_VIEW,
@@ -263,7 +266,10 @@ export function EarthYears({
         const k = `${m.family}_${m.year}`;
         if (frames.current.has(k)) continue;
         try {
+          const t0 = performance.now();
           frames.current.set(k, await readIndices(m, idx.png.palette_rgb));
+          // Each year's load, measured where the page can read it (the fire cube's lane times them).
+          performance.measure(`iso-year ${k}`, { start: t0, end: performance.now() });
         } catch {
           // a year that cannot be read keeps the last frame on show
         }
@@ -342,8 +348,23 @@ export function EarthYears({
     setPlaying(true);
   }, [idx, inCount, years, autoplay, firstOfPass, short, passIn]);
 
+  // On the globe the years play by themselves, round and round, resting on the last year; the visitor's own step, play
+  // or click on a year takes over.
+  const [looping, setLooping] = useState(loop);
+  const loopOn = looping && !flat && !isFilm();
+  useEffect(() => {
+    if (!loopOn || playing || !idx || inCount < years.length || shown === null) return;
+    const atEnd = shown === years[years.length - 1];
+    const t = window.setTimeout(() => {
+      setYear(years[0]);
+      setPlaying(true);
+    }, atEnd ? 2600 : 600);
+    return () => window.clearTimeout(t);
+  }, [loopOn, playing, idx, inCount, years, shown]);
+
   const play = useCallback(() => {
     if (!years.length) return;
+    setLooping(false);
     setPlaying((p) => {
       if (p) return false;
       if (shown === lastOfPass || shown === years[years.length - 1]) setYear(firstOfPass);
@@ -355,6 +376,7 @@ export function EarthYears({
       if (shown === null) return;
       const at = years.indexOf(shown);
       const to = years[Math.min(Math.max(at + d, 0), years.length - 1)];
+      setLooping(false);
       setPlaying(false);
       setYear(to);
     },
@@ -623,6 +645,7 @@ export function EarthYears({
               data-current={t.year === shown}
               style={{ left: `${(i / n) * 100}%`, width: `${100 / n}%` }}
               onClick={() => {
+                setLooping(false);
                 setPlaying(false);
                 setYear(t.year);
               }}

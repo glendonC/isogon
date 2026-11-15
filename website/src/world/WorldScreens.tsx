@@ -156,6 +156,7 @@ function Years({ screen, film, toWord }: Part & { screen: WorldScreen }) {
         year={start.from}
         until={start.until}
         autoplay={(start.play ?? false) && quiet}
+        loop={start.play !== false}
         captionLine={caption}
         stepLabel={!film}
         ownPlay={false}
