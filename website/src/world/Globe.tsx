@@ -25,6 +25,11 @@ export interface GlobeProps {
   padLeft?: number;
   /** The film's turn: from the Americas through Africa to Asia while the years play, at rest when they stop. */
   film?: { playing: boolean; passMs: number } | null;
+  /**
+   * A place to fly to, as its outline's rings: the globe turns to it and draws near until it fills the view, with no
+   * cut; null flies back out to the whole globe.
+   */
+  fly?: { rings: number[][][] } | null;
   /** Outlines drawn on the globe (the country under the pointer, the one chosen), as rings of [lon, lat]. */
   outlines?: Array<{ rings: number[][][]; strong: boolean }>;
   /** The point under the pointer, or null off the globe; called again as the globe turns under a still pointer. */
@@ -187,21 +192,56 @@ function rotation(lon: number, lat: number): number[] {
 interface Turn {
   lon: number;
   lat: number;
+  /** How near the view is: 1 the whole globe, more nearer. */
+  zoom: number;
   vLon: number;
   vLat: number;
   dragAt: number;
+}
+
+/** A flight under way: from where the view was to where it goes, over `ms`. */
+interface Flight {
+  from: { lon: number; lat: number; zoom: number };
+  to: { lon: number; lat: number; zoom: number };
+  t0: number;
+  ms: number;
+  dip: number;
+}
+
+/** The middle and the size (degrees across, as seen) of a place's largest ring: its main land, not its far islands. */
+export function aimOf(rings: number[][][]): { lon: number; lat: number; across: number } | null {
+  let best: { w: number; s: number; e: number; n: number; area: number } | null = null;
+  for (const r of rings) {
+    let w = 180;
+    let s = 90;
+    let e = -180;
+    let n = -90;
+    for (const [x, y] of r) {
+      w = Math.min(w, x);
+      e = Math.max(e, x);
+      s = Math.min(s, y);
+      n = Math.max(n, y);
+    }
+    const area = (e - w) * (n - s) * Math.cos((((s + n) / 2) * Math.PI) / 180);
+    if (!best || area > best.area) best = { w, s, e, n, area };
+  }
+  if (!best) return null;
+  const lat = (best.s + best.n) / 2;
+  const across = Math.max((best.e - best.w) * Math.cos((lat * Math.PI) / 180), best.n - best.s);
+  return { lon: (best.w + best.e) / 2, lat, across };
 }
 
 const AUTO_DEG_S = 4;
 const FILM_FROM = -82;
 const FILM_TO = 52;
 
-export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, film = null, outlines = [], onPoint, onPick, onSlow, className }: GlobeProps) {
+export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, film = null, fly = null, outlines = [], onPoint, onPick, onSlow, className }: GlobeProps) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const over = useRef<HTMLCanvasElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const turn = useRef<Turn>({ lon: film ? FILM_FROM : 10, lat: film ? 12 : 16, vLon: 0, vLat: 0, dragAt: 0 });
+  const turn = useRef<Turn>({ lon: film ? FILM_FROM : 10, lat: film ? 12 : 16, zoom: 1, vLon: 0, vLat: 0, dragAt: 0 });
+  const flight = useRef<Flight | null>(null);
   const gl = useRef<{
     gl: WebGL2RenderingContext;
     prog: WebGLProgram;
@@ -232,8 +272,8 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     const top = props.current.padTop;
     const room = Math.max(h - top - props.current.padBottom, 80);
     const left = Math.min(props.current.padLeft, w * 0.5);
-    const r = Math.max(Math.min((w - left) * 0.5, room * 0.5) * 0.94, 40);
-    return { cx: left + (w - left) / 2, cy: top + room / 2, r };
+    const base = Math.max(Math.min((w - left) * 0.5, room * 0.5) * 0.94, 40);
+    return { cx: left + (w - left) / 2, cy: top + room / 2, r: base * turn.current.zoom, base, room };
   }, [size]);
 
   // The point under a CSS pixel, by the shader's own sums.
@@ -370,6 +410,35 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     dirty.current = true;
   }, [outlines, padTop, padBottom, padLeft]);
 
+  // A flight to a place, or back out: from the view as it is, eased, with a short rise on a long turn so it reads as
+  // travel; a drag ends it where it is.
+  useEffect(() => {
+    const t = turn.current;
+    const from = { lon: t.lon, lat: t.lat, zoom: t.zoom };
+    let to: { lon: number; lat: number; zoom: number };
+    if (fly) {
+      const aim = aimOf(fly.rings);
+      if (!aim) return;
+      const { base, room } = geom();
+      // Near enough that the place's main land takes about half the room, within 1 and 16 times the whole globe.
+      const zoom = Math.max(1, Math.min(16, (0.5 * Math.min(room, size.w)) / (base * Math.max(aim.across, 0.5) * D)));
+      to = { lon: aim.lon, lat: Math.max(-75, Math.min(75, aim.lat)), zoom };
+    } else {
+      if (t.zoom < 1.01 && !flight.current) return;
+      to = { lon: t.lon, lat: Math.max(-60, Math.min(60, t.lat)) * 0.4 + 16 * 0.6, zoom: 1 };
+    }
+    let dLon = to.lon - from.lon;
+    if (dLon > 180) dLon -= 360;
+    if (dLon < -180) dLon += 360;
+    const far = Math.hypot(dLon, to.lat - from.lat);
+    const ms = 900 + Math.min(far, 140) * 6 + Math.abs(Math.log(to.zoom / from.zoom)) * 180;
+    flight.current = { from, to: { ...to, lon: from.lon + dLon }, t0: performance.now(), ms, dip: Math.min(0.4, far / 300) };
+    t.vLon = 0;
+    t.vLat = 0;
+    dirty.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fly?.rings]);
+
   // The frame loop: the turn (the film's, a drag's glide, or the slow turn), the globe, the outlines.
   useEffect(() => {
     if (!size.w) return;
@@ -386,7 +455,22 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
       const t = turn.current;
       const f = props.current.film;
       let moved = false;
-      if (f) {
+      const fl = flight.current;
+      if (fl) {
+        const k = Math.min((now - fl.t0) / fl.ms, 1);
+        const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+        t.lon = fl.from.lon + (fl.to.lon - fl.from.lon) * e;
+        t.lat = fl.from.lat + (fl.to.lat - fl.from.lat) * e;
+        // The zoom eases in its logarithm, and rises a little mid-way on a long turn.
+        const z = Math.exp(Math.log(fl.from.zoom) + (Math.log(fl.to.zoom) - Math.log(fl.from.zoom)) * e);
+        t.zoom = Math.max(1, z * (1 - fl.dip * Math.sin(Math.PI * k)));
+        if (k >= 1) {
+          flight.current = null;
+          t.zoom = fl.to.zoom;
+          t.dragAt = now;
+        }
+        moved = true;
+      } else if (f) {
         if (f.playing && filmT0.current === null) filmT0.current = now;
         const k = filmT0.current === null ? 0 : Math.min((now - filmT0.current) / Math.max(f.passMs, 1), 1);
         const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
@@ -398,12 +482,13 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
       } else if (now - t.dragAt > 60 && (Math.abs(t.vLon) > 0.01 || Math.abs(t.vLat) > 0.01)) {
         // A drag's glide, slowing.
         t.lon += t.vLon * dt;
-        t.lat = Math.max(-60, Math.min(60, t.lat + t.vLat * dt));
+        const lim = t.zoom > 1.02 ? 80 : 60;
+        t.lat = Math.max(-lim, Math.min(lim, t.lat + t.vLat * dt));
         const damp = Math.exp(-dt * 3);
         t.vLon *= damp;
         t.vLat *= damp;
         moved = true;
-      } else if (!reduce && now - t.dragAt > 3500 && t.dragAt >= 0) {
+      } else if (!reduce && now - t.dragAt > 3500 && t.zoom < 1.02) {
         t.lon += AUTO_DEG_S * dt;
         moved = true;
       }
@@ -517,6 +602,7 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     if (props.current.film) return;
     const p = local(e);
     drag.current = { ...p, moved: false, t: performance.now() };
+    flight.current = null;
     turn.current.vLon = 0;
     turn.current.vLat = 0;
     (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -537,7 +623,7 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
       const dLon = -(dx / r) / D;
       const dLat = (dy / r) / D;
       t.lon += dLon;
-      t.lat = Math.max(-60, Math.min(60, t.lat + dLat));
+      t.lat = Math.max(t.zoom > 1.02 ? -80 : -60, Math.min(t.zoom > 1.02 ? 80 : 60, t.lat + dLat));
       t.vLon = dLon / dt;
       t.vLat = dLat / dt;
       t.dragAt = now;

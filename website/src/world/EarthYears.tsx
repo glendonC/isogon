@@ -202,6 +202,8 @@ export function EarthYears({
     ],
     [chosen, pointed],
   );
+  // The globe flies to the chosen country and back out when none is chosen (one object a choice, so it flies once).
+  const flyTo = useMemo(() => (chosen ? { rings: chosen.rings } : null), [chosen]);
   // On the globe the pointer says where it is and what the square holds, sea included.
   const [under, setUnder] = useState<{ lon: number; lat: number; x: number; y: number } | null>(null);
   const onGlobePoint = useCallback(
@@ -465,6 +467,7 @@ export function EarthYears({
           padBottom={stripH}
           padLeft={pick ? 0 : Math.round(stripW * 0.4)}
           film={pick ? null : { playing, passMs }}
+          fly={flyTo}
           outlines={globeOutlines}
           onPoint={pick ? onGlobePoint : undefined}
           onPick={pick ? onGlobePick : undefined}

@@ -1581,7 +1581,17 @@
   width: min(300px, 26vw);
   display: grid;
   gap: var(--sys-s1);
+  padding-bottom: var(--sys-s2);
   pointer-events: none;
+  /* The strip's own ground, so it reads over the globe drawn near. */
+  background: rgba(8, 11, 17, 0.72);
+  -webkit-backdrop-filter: var(--sys-plate-blur);
+  backdrop-filter: var(--sys-plate-blur);
+}
+
+.world-readout__place,
+.world-readout__count {
+  padding-inline: var(--sys-s2);
 }
 
 .world-readout__place {
