@@ -116,9 +116,12 @@ function workspaceFrame(width: number) {
   return { left: 0.0, top: 0.08, right: Math.max(0.5, right), bottom: 0.76 };
 }
 
-/** World model on a real run: no column, so the fire takes the width, low enough for its label to hang above it. */
+/**
+ * World model on a real run: no column, so the fire takes the width, low enough for its label to hang above it. On a
+ * narrow screen, the part the words leave free: under the objective and the trail, above the guide's sentence.
+ */
 function modelFrame(width: number) {
-  if (width < 960) return workspaceFrame(width);
+  if (width < 960) return { left: 0.03, top: 0.2, right: 0.97, bottom: 0.58 };
   return { left: 0.04, top: 0.2, right: 0.96, bottom: 0.78 };
 }
 
@@ -1601,7 +1604,9 @@ export function App() {
               holdoutViirs={round ? !round.done : holdoutViirs}
               sensitivityThreshold={sensitivityThreshold}
               cutawaySplit={cutawaySplit}
-              cameraPreset={cameraPreset}
+              // On a narrow screen the close view would crop the fire off the sides: Estimate and Test show the whole box,
+              // fitted into the part the words leave free (modelFrame).
+              cameraPreset={viewportWidth < 960 && modelScene && cameraPreset === 'canyon' ? 'region' : cameraPreset}
               cinemaActive={cinemaActive}
           dayPicture={modelScene ? dayPicture : null}
               cleanHud={cleanHud}
