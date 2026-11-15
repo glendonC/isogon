@@ -1,7 +1,7 @@
 {
  "version": 1,
- "recorded_utc": "2026-11-15T16:42:51Z",
- "commit": "b277eca152d9388e17c884f729c6d2d4b38945d9",
+ "recorded_utc": "2026-11-15T17:59:36Z",
+ "commit": "73a1cc52b991d7a897eaac857b9b28c1d65f9855",
  "backend": {
   "downloaded_firms_rows": 96744762
  },
@@ -3903,16 +3903,16 @@
   "GET /api/health": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/dde397b8ed3392b1c2a9564a50c743b7e68ce9f4eaa589658676e1bd21969fe6.json",
+   "file": "files/ba5fdcec9e41538ec9078e1762afd6dec671475a90e676ff7669658d14c3f290.json",
    "bytes": 3528,
-   "sha256": "dde397b8ed3392b1c2a9564a50c743b7e68ce9f4eaa589658676e1bd21969fe6"
+   "sha256": "ba5fdcec9e41538ec9078e1762afd6dec671475a90e676ff7669658d14c3f290"
   },
   "GET /api/live": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/55166a4d4e7a498e52cbc7edd7c08857e7cd62d9ba9fcea787a9ece941c602dc.json",
-   "bytes": 108396,
-   "sha256": "55166a4d4e7a498e52cbc7edd7c08857e7cd62d9ba9fcea787a9ece941c602dc"
+   "file": "files/2cdf1a91980846a20b4f944d4ddac5052c4cd50e8c37cc28b22919c111d3d37f.json",
+   "bytes": 120056,
+   "sha256": "2cdf1a91980846a20b4f944d4ddac5052c4cd50e8c37cc28b22919c111d3d37f"
   },
   "GET /api/observer?frame=0&min_frp=8.4&run_id=evia_greece_firms_20210805T2053_allsensors&sensor=all": {
    "status": 200,
@@ -9088,7 +9088,7 @@
    "sha256": "b399e5067e4368ff422bd373a57c206877029d56ed59b761591889e58cd8d0f3"
   },
   "GET /api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/evros_greece_firms_20230820T0057_allsensors/belief_u8.bin": {
    "status": 200,
@@ -9182,7 +9182,7 @@
    "sha256": "3b81551ceb8470ddedfe54d7f090e17739c17537e04b468702a3df115a3103ae"
   },
   "GET /api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -9276,7 +9276,7 @@
    "sha256": "3b81551ceb8470ddedfe54d7f090e17739c17537e04b468702a3df115a3103ae"
   },
   "GET /api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/belief_u8.bin": {
    "status": 200,
@@ -9370,7 +9370,7 @@
    "sha256": "ab47296334eb62cddbd458af8cf54f4dbaa8776daed8d7e5d26433ac4ee283b8"
   },
   "GET /api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -9464,7 +9464,7 @@
    "sha256": "ab47296334eb62cddbd458af8cf54f4dbaa8776daed8d7e5d26433ac4ee283b8"
   },
   "GET /api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/jur_river_ss_firms_20161211T0835_allsensors/belief_u8.bin": {
    "status": 200,
@@ -9558,7 +9558,7 @@
    "sha256": "2767fa40ee957e4af6c32fc32e8eb46c6f89548eec65ee47a8e4aedbcd425c8e"
   },
   "GET /api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -9652,7 +9652,7 @@
    "sha256": "2767fa40ee957e4af6c32fc32e8eb46c6f89548eec65ee47a8e4aedbcd425c8e"
   },
   "GET /api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/kakisa_nt_firms_20230824T0331_allsensors/belief_u8.bin": {
    "status": 200,
@@ -9746,7 +9746,7 @@
    "sha256": "940d1f7bd1a9bb0f6f5158674f79860b04e97fd6ffe06615392fa86854060983"
   },
   "GET /api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -9840,7 +9840,7 @@
    "sha256": "940d1f7bd1a9bb0f6f5158674f79860b04e97fd6ffe06615392fa86854060983"
   },
   "GET /api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/lytton_bc_firms_20210630T2152_allsensors/belief_u8.bin": {
    "status": 200,
@@ -9934,7 +9934,7 @@
    "sha256": "cc5f1d1b92a5410bb4b3b49b1a2fa47277502653fedf3a89368f1130e849fc40"
   },
   "GET /api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/lytton_bc_firms_20230818T0554_allsensors/belief_u8.bin": {
    "status": 200,
@@ -10028,7 +10028,7 @@
    "sha256": "cc5f1d1b92a5410bb4b3b49b1a2fa47277502653fedf3a89368f1130e849fc40"
   },
   "GET /api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -10122,7 +10122,7 @@
    "sha256": "cc5f1d1b92a5410bb4b3b49b1a2fa47277502653fedf3a89368f1130e849fc40"
   },
   "GET /api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/manavgat_tr_firms_20210728T0900_allsensors/belief_u8.bin": {
    "status": 200,
@@ -10216,7 +10216,7 @@
    "sha256": "5263d048bac46b5ce64e1d3057ef2acdff5ad8810b953392751fe1f1cf946038"
   },
   "GET /api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -10310,7 +10310,7 @@
    "sha256": "5263d048bac46b5ce64e1d3057ef2acdff5ad8810b953392751fe1f1cf946038"
   },
   "GET /api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/maule_cl_firms_20170122T0318_allsensors/belief_u8.bin": {
    "status": 200,
@@ -10404,7 +10404,7 @@
    "sha256": "34c29cdf3861d5a64ff624469a5e9ffed62ac3aaef0efa7bb5fa2b82d9c1e141"
   },
   "GET /api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -10498,7 +10498,7 @@
    "sha256": "34c29cdf3861d5a64ff624469a5e9ffed62ac3aaef0efa7bb5fa2b82d9c1e141"
   },
   "GET /api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/okefenokee_ga_firms_20120404T1642_allsensors/belief_u8.bin": {
    "status": 200,
@@ -10592,7 +10592,7 @@
    "sha256": "4f312a9c8c56d1414c03c253bb2290dd3d6c191344eaed712b14301c91b3dec0"
   },
   "GET /api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -10686,7 +10686,7 @@
    "sha256": "4f312a9c8c56d1414c03c253bb2290dd3d6c191344eaed712b14301c91b3dec0"
   },
   "GET /api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/okefenokee_ga_firms_20170502T1655_allsensors/belief_u8.bin": {
    "status": 200,
@@ -10780,7 +10780,7 @@
    "sha256": "4f312a9c8c56d1414c03c253bb2290dd3d6c191344eaed712b14301c91b3dec0"
   },
   "GET /api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -10874,7 +10874,7 @@
    "sha256": "4f312a9c8c56d1414c03c253bb2290dd3d6c191344eaed712b14301c91b3dec0"
   },
   "GET /api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/plumas_ca_firms_20120810T0619_allsensors/belief_u8.bin": {
    "status": 200,
@@ -10968,14 +10968,10 @@
    "sha256": "0c42056c6240c7027e1e151170125b82184095ba51fce8f8853da8cc10b73e7a"
   },
   "GET /api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_ortho_detail_0.jpg": {
-   "status": 200,
-   "content_type": "image/jpeg",
-   "file": "files/226c4dd3d5d65007c53dd19b5ed66574c5d7425261061d5b0c939dd9dddbba29.jpg",
-   "bytes": 25238624,
-   "sha256": "226c4dd3d5d65007c53dd19b5ed66574c5d7425261061d5b0c939dd9dddbba29"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -11069,14 +11065,10 @@
    "sha256": "0c42056c6240c7027e1e151170125b82184095ba51fce8f8853da8cc10b73e7a"
   },
   "GET /api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_detail_0.jpg": {
-   "status": 200,
-   "content_type": "image/jpeg",
-   "file": "files/226c4dd3d5d65007c53dd19b5ed66574c5d7425261061d5b0c939dd9dddbba29.jpg",
-   "bytes": 25238624,
-   "sha256": "226c4dd3d5d65007c53dd19b5ed66574c5d7425261061d5b0c939dd9dddbba29"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/plumas_ca_firms_20210722T2113_allsensors/belief_u8.bin": {
    "status": 200,
@@ -11170,14 +11162,10 @@
    "sha256": "0c42056c6240c7027e1e151170125b82184095ba51fce8f8853da8cc10b73e7a"
   },
   "GET /api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_ortho_detail_0.jpg": {
-   "status": 200,
-   "content_type": "image/jpeg",
-   "file": "files/226c4dd3d5d65007c53dd19b5ed66574c5d7425261061d5b0c939dd9dddbba29.jpg",
-   "bytes": 25238624,
-   "sha256": "226c4dd3d5d65007c53dd19b5ed66574c5d7425261061d5b0c939dd9dddbba29"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/serra_acor_pt_firms_20250815T0411_allsensors/belief_u8.bin": {
    "status": 200,
@@ -11271,7 +11259,7 @@
    "sha256": "66c32a7f2185d0435306a19f7772f58d9d7aaa1975eb6dfcdd2677dc93652251"
   },
   "GET /api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -11365,7 +11353,7 @@
    "sha256": "66c32a7f2185d0435306a19f7772f58d9d7aaa1975eb6dfcdd2677dc93652251"
   },
   "GET /api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/starts?region_id=evia_greece&source=firms": {
    "status": 200,
@@ -11557,7 +11545,7 @@
    "sha256": "c055f80ceb42e88524c9fdc65be223a9a08672fc0397c81f64d958d50c396f73"
   },
   "GET /api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -11651,7 +11639,7 @@
    "sha256": "c055f80ceb42e88524c9fdc65be223a9a08672fc0397c81f64d958d50c396f73"
   },
   "GET /api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/wollemi_au_firms_20191205T0353_allsensors/belief_u8.bin": {
    "status": 200,
@@ -11745,7 +11733,7 @@
    "sha256": "d8c631f1ef99b1cde533acff12e6c36d529354972adf30952f88f8d29b612cd9"
   },
   "GET /api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/belief_u8.bin": {
    "status": 200,
@@ -11839,7 +11827,7 @@
    "sha256": "d8c631f1ef99b1cde533acff12e6c36d529354972adf30952f88f8d29b612cd9"
   },
   "GET /api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
-   "withheld": "the 8192 picture is not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
+   "withheld": "the 8192 picture and the detail insets are not in this page: the stage draws the pack's 4096 picture (ortho_fallback)"
   },
   "GET /api/sensor-model": {
    "status": 200,
@@ -12050,6 +12038,1021 @@
    "file": "files/c2d1b732f01c8d9cf3790e8897134efb2280825898862c1cef5fc694c8012a2c.json",
    "bytes": 86674,
    "sha256": "c2d1b732f01c8d9cf3790e8897134efb2280825898862c1cef5fc694c8012a2c"
+  },
+  "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/b1f439e36a5144b72f484ab01a4711dc9fd42611ccf20464d38288c09bc56393.png",
+   "bytes": 406374,
+   "sha256": "b1f439e36a5144b72f484ab01a4711dc9fd42611ccf20464d38288c09bc56393"
+  },
+  "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/c5f26b03b43d57da349570907f3a806bbcb98b76f0d3dc41f4b90df7dfa51edd.bin",
+   "bytes": 262144,
+   "sha256": "c5f26b03b43d57da349570907f3a806bbcb98b76f0d3dc41f4b90df7dfa51edd"
+  },
+  "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/bb67cf070518705c12ca1d08cfa683eb0e0a71a6ee99817ccf455a15355ae99c.jpg",
+   "bytes": 227213,
+   "sha256": "bb67cf070518705c12ca1d08cfa683eb0e0a71a6ee99817ccf455a15355ae99c"
+  },
+  "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/bcbcc0f96001b6dfab9583882ebae6ab819cd4eb5bf510e32820fc0e43c6d7ba.bin",
+   "bytes": 262144,
+   "sha256": "bcbcc0f96001b6dfab9583882ebae6ab819cd4eb5bf510e32820fc0e43c6d7ba"
+  },
+  "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/9a27c68a9607b79bce779fcb1a191ef8f3c0c0a310dcaa8b2eac792fa331c4b4.jpg",
+   "bytes": 187674,
+   "sha256": "9a27c68a9607b79bce779fcb1a191ef8f3c0c0a310dcaa8b2eac792fa331c4b4"
+  },
+  "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/256456a9860e0c71c9aaeb4713d5bf598cde82481d298cbfcf334d13522cb4ad.png",
+   "bytes": 658774,
+   "sha256": "256456a9860e0c71c9aaeb4713d5bf598cde82481d298cbfcf334d13522cb4ad"
+  },
+  "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/a75a7d818b1731f0e7b0dd6ea62ef23ce965f340dee57817f0526a73bc750130.bin",
+   "bytes": 262144,
+   "sha256": "a75a7d818b1731f0e7b0dd6ea62ef23ce965f340dee57817f0526a73bc750130"
+  },
+  "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/010ec9259cec0f3465f8fea70e748b63ac5a6976ec537c610776861bdc2f7900.jpg",
+   "bytes": 246656,
+   "sha256": "010ec9259cec0f3465f8fea70e748b63ac5a6976ec537c610776861bdc2f7900"
+  },
+  "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/a62b28ba1a362267b7bc89baee9d14c885c92d1f1f4ebb5a2612bede719c3878.bin",
+   "bytes": 262144,
+   "sha256": "a62b28ba1a362267b7bc89baee9d14c885c92d1f1f4ebb5a2612bede719c3878"
+  },
+  "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/74bb6b0cc6854211f9dfbb19b06c5b77397d406d1cb315ad10702cd114f8ac88.jpg",
+   "bytes": 268129,
+   "sha256": "74bb6b0cc6854211f9dfbb19b06c5b77397d406d1cb315ad10702cd114f8ac88"
+  },
+  "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/256456a9860e0c71c9aaeb4713d5bf598cde82481d298cbfcf334d13522cb4ad.png",
+   "bytes": 658774,
+   "sha256": "256456a9860e0c71c9aaeb4713d5bf598cde82481d298cbfcf334d13522cb4ad"
+  },
+  "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/a75a7d818b1731f0e7b0dd6ea62ef23ce965f340dee57817f0526a73bc750130.bin",
+   "bytes": 262144,
+   "sha256": "a75a7d818b1731f0e7b0dd6ea62ef23ce965f340dee57817f0526a73bc750130"
+  },
+  "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/010ec9259cec0f3465f8fea70e748b63ac5a6976ec537c610776861bdc2f7900.jpg",
+   "bytes": 246656,
+   "sha256": "010ec9259cec0f3465f8fea70e748b63ac5a6976ec537c610776861bdc2f7900"
+  },
+  "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/a62b28ba1a362267b7bc89baee9d14c885c92d1f1f4ebb5a2612bede719c3878.bin",
+   "bytes": 262144,
+   "sha256": "a62b28ba1a362267b7bc89baee9d14c885c92d1f1f4ebb5a2612bede719c3878"
+  },
+  "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/74bb6b0cc6854211f9dfbb19b06c5b77397d406d1cb315ad10702cd114f8ac88.jpg",
+   "bytes": 268129,
+   "sha256": "74bb6b0cc6854211f9dfbb19b06c5b77397d406d1cb315ad10702cd114f8ac88"
+  },
+  "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/616a8be2df4413a4ccc1bb5798593beca354a718faaf72d25630ad851e1b8253.png",
+   "bytes": 389361,
+   "sha256": "616a8be2df4413a4ccc1bb5798593beca354a718faaf72d25630ad851e1b8253"
+  },
+  "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/1729f9cc98f1377798cbc28b000e2dccc6ee70199d3c7750f792b86e8c4175dd.bin",
+   "bytes": 262144,
+   "sha256": "1729f9cc98f1377798cbc28b000e2dccc6ee70199d3c7750f792b86e8c4175dd"
+  },
+  "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/d2d534d167a0b8130c598ececa4f0858377a1697bcaae9af2061e336d08b4fd5.jpg",
+   "bytes": 186857,
+   "sha256": "d2d534d167a0b8130c598ececa4f0858377a1697bcaae9af2061e336d08b4fd5"
+  },
+  "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/7f73fb7a53680b2dd6ce5c7b95fc77cd59d032a2d7a65600564aa2821c5f0408.bin",
+   "bytes": 262144,
+   "sha256": "7f73fb7a53680b2dd6ce5c7b95fc77cd59d032a2d7a65600564aa2821c5f0408"
+  },
+  "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/f28e15d2b06b933ab810deeb92497d36f60aed65b5945cb35426735d42fa00bf.jpg",
+   "bytes": 142519,
+   "sha256": "f28e15d2b06b933ab810deeb92497d36f60aed65b5945cb35426735d42fa00bf"
+  },
+  "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/616a8be2df4413a4ccc1bb5798593beca354a718faaf72d25630ad851e1b8253.png",
+   "bytes": 389361,
+   "sha256": "616a8be2df4413a4ccc1bb5798593beca354a718faaf72d25630ad851e1b8253"
+  },
+  "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/1729f9cc98f1377798cbc28b000e2dccc6ee70199d3c7750f792b86e8c4175dd.bin",
+   "bytes": 262144,
+   "sha256": "1729f9cc98f1377798cbc28b000e2dccc6ee70199d3c7750f792b86e8c4175dd"
+  },
+  "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/d2d534d167a0b8130c598ececa4f0858377a1697bcaae9af2061e336d08b4fd5.jpg",
+   "bytes": 186857,
+   "sha256": "d2d534d167a0b8130c598ececa4f0858377a1697bcaae9af2061e336d08b4fd5"
+  },
+  "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/7f73fb7a53680b2dd6ce5c7b95fc77cd59d032a2d7a65600564aa2821c5f0408.bin",
+   "bytes": 262144,
+   "sha256": "7f73fb7a53680b2dd6ce5c7b95fc77cd59d032a2d7a65600564aa2821c5f0408"
+  },
+  "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/f28e15d2b06b933ab810deeb92497d36f60aed65b5945cb35426735d42fa00bf.jpg",
+   "bytes": 142519,
+   "sha256": "f28e15d2b06b933ab810deeb92497d36f60aed65b5945cb35426735d42fa00bf"
+  },
+  "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/f7d7a78d12cfb5ab89194333f1fb520134ce5b6f8f8da5c414e117bfea42b635.png",
+   "bytes": 601700,
+   "sha256": "f7d7a78d12cfb5ab89194333f1fb520134ce5b6f8f8da5c414e117bfea42b635"
+  },
+  "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/2f168d24521503d4e64907eced827de7c8eabbf53d78f6595126f7fb32e1b951.bin",
+   "bytes": 262144,
+   "sha256": "2f168d24521503d4e64907eced827de7c8eabbf53d78f6595126f7fb32e1b951"
+  },
+  "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/fb90bea9d8ae7642ebff979b40863936c47c29f4916ada5d9f37b4d9c3be75ea.jpg",
+   "bytes": 118410,
+   "sha256": "fb90bea9d8ae7642ebff979b40863936c47c29f4916ada5d9f37b4d9c3be75ea"
+  },
+  "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/82e2320fafe793492da7e274164b91ede077f78d03e7ea2d58c44fe95d9fbeb2.bin",
+   "bytes": 262144,
+   "sha256": "82e2320fafe793492da7e274164b91ede077f78d03e7ea2d58c44fe95d9fbeb2"
+  },
+  "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/baca446652fce0bfe807271e6b59ca60553a1ded199dc20ca3f9a08088fe2bac.jpg",
+   "bytes": 117550,
+   "sha256": "baca446652fce0bfe807271e6b59ca60553a1ded199dc20ca3f9a08088fe2bac"
+  },
+  "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/f7d7a78d12cfb5ab89194333f1fb520134ce5b6f8f8da5c414e117bfea42b635.png",
+   "bytes": 601700,
+   "sha256": "f7d7a78d12cfb5ab89194333f1fb520134ce5b6f8f8da5c414e117bfea42b635"
+  },
+  "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/2f168d24521503d4e64907eced827de7c8eabbf53d78f6595126f7fb32e1b951.bin",
+   "bytes": 262144,
+   "sha256": "2f168d24521503d4e64907eced827de7c8eabbf53d78f6595126f7fb32e1b951"
+  },
+  "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/fb90bea9d8ae7642ebff979b40863936c47c29f4916ada5d9f37b4d9c3be75ea.jpg",
+   "bytes": 118410,
+   "sha256": "fb90bea9d8ae7642ebff979b40863936c47c29f4916ada5d9f37b4d9c3be75ea"
+  },
+  "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/82e2320fafe793492da7e274164b91ede077f78d03e7ea2d58c44fe95d9fbeb2.bin",
+   "bytes": 262144,
+   "sha256": "82e2320fafe793492da7e274164b91ede077f78d03e7ea2d58c44fe95d9fbeb2"
+  },
+  "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/baca446652fce0bfe807271e6b59ca60553a1ded199dc20ca3f9a08088fe2bac.jpg",
+   "bytes": 117550,
+   "sha256": "baca446652fce0bfe807271e6b59ca60553a1ded199dc20ca3f9a08088fe2bac"
+  },
+  "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/dbf98165b48b02d0234049765dd97ec88516d6f06bde5b3bde374d2a22ded538.png",
+   "bytes": 450895,
+   "sha256": "dbf98165b48b02d0234049765dd97ec88516d6f06bde5b3bde374d2a22ded538"
+  },
+  "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/58f5b680f36b72e348e78cf9b8ea600736d9dd6c41d6a2ad5ec8916f1c596cc3.bin",
+   "bytes": 262144,
+   "sha256": "58f5b680f36b72e348e78cf9b8ea600736d9dd6c41d6a2ad5ec8916f1c596cc3"
+  },
+  "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/1eb95bae6c11efcee6ed39cc064c65aa9ae784cb0062c115fb9ef6244cca7124.jpg",
+   "bytes": 160936,
+   "sha256": "1eb95bae6c11efcee6ed39cc064c65aa9ae784cb0062c115fb9ef6244cca7124"
+  },
+  "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/561355960832ce074f3df056d4f39cefd60ab72ef215bab0d82bdc2eafd6030a.bin",
+   "bytes": 262144,
+   "sha256": "561355960832ce074f3df056d4f39cefd60ab72ef215bab0d82bdc2eafd6030a"
+  },
+  "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/02dadaf535f3b52dadba387ed0a9f03db961ffaa2863a3cc00180e10659307d5.jpg",
+   "bytes": 138529,
+   "sha256": "02dadaf535f3b52dadba387ed0a9f03db961ffaa2863a3cc00180e10659307d5"
+  },
+  "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/dbf98165b48b02d0234049765dd97ec88516d6f06bde5b3bde374d2a22ded538.png",
+   "bytes": 450895,
+   "sha256": "dbf98165b48b02d0234049765dd97ec88516d6f06bde5b3bde374d2a22ded538"
+  },
+  "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/58f5b680f36b72e348e78cf9b8ea600736d9dd6c41d6a2ad5ec8916f1c596cc3.bin",
+   "bytes": 262144,
+   "sha256": "58f5b680f36b72e348e78cf9b8ea600736d9dd6c41d6a2ad5ec8916f1c596cc3"
+  },
+  "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/1eb95bae6c11efcee6ed39cc064c65aa9ae784cb0062c115fb9ef6244cca7124.jpg",
+   "bytes": 160936,
+   "sha256": "1eb95bae6c11efcee6ed39cc064c65aa9ae784cb0062c115fb9ef6244cca7124"
+  },
+  "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/561355960832ce074f3df056d4f39cefd60ab72ef215bab0d82bdc2eafd6030a.bin",
+   "bytes": 262144,
+   "sha256": "561355960832ce074f3df056d4f39cefd60ab72ef215bab0d82bdc2eafd6030a"
+  },
+  "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/02dadaf535f3b52dadba387ed0a9f03db961ffaa2863a3cc00180e10659307d5.jpg",
+   "bytes": 138529,
+   "sha256": "02dadaf535f3b52dadba387ed0a9f03db961ffaa2863a3cc00180e10659307d5"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/5b8353fa7a0d5ed5e6bbcfbeb93e481b8e687c8ea7f580af72fde7bf3ed26597.png",
+   "bytes": 774179,
+   "sha256": "5b8353fa7a0d5ed5e6bbcfbeb93e481b8e687c8ea7f580af72fde7bf3ed26597"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/accd5551f59d6239ef9705343a64ba65cd10d3416690623792d9b1010d81d14f.bin",
+   "bytes": 262144,
+   "sha256": "accd5551f59d6239ef9705343a64ba65cd10d3416690623792d9b1010d81d14f"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/919bacc9791110e97d9fc741901d06e3dbcf3302b715d785f3b3e33abc154909.jpg",
+   "bytes": 357417,
+   "sha256": "919bacc9791110e97d9fc741901d06e3dbcf3302b715d785f3b3e33abc154909"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/6a47a88c1d8a0f73761b1453bdfe88452b961982acabee24d7865898ff9359cf.bin",
+   "bytes": 262144,
+   "sha256": "6a47a88c1d8a0f73761b1453bdfe88452b961982acabee24d7865898ff9359cf"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/b2eaa04c94861e36ff2094901902deb52d539add22d24b5e50caaf28cc7ab606.jpg",
+   "bytes": 265691,
+   "sha256": "b2eaa04c94861e36ff2094901902deb52d539add22d24b5e50caaf28cc7ab606"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/5b8353fa7a0d5ed5e6bbcfbeb93e481b8e687c8ea7f580af72fde7bf3ed26597.png",
+   "bytes": 774179,
+   "sha256": "5b8353fa7a0d5ed5e6bbcfbeb93e481b8e687c8ea7f580af72fde7bf3ed26597"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/accd5551f59d6239ef9705343a64ba65cd10d3416690623792d9b1010d81d14f.bin",
+   "bytes": 262144,
+   "sha256": "accd5551f59d6239ef9705343a64ba65cd10d3416690623792d9b1010d81d14f"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/919bacc9791110e97d9fc741901d06e3dbcf3302b715d785f3b3e33abc154909.jpg",
+   "bytes": 357417,
+   "sha256": "919bacc9791110e97d9fc741901d06e3dbcf3302b715d785f3b3e33abc154909"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/6a47a88c1d8a0f73761b1453bdfe88452b961982acabee24d7865898ff9359cf.bin",
+   "bytes": 262144,
+   "sha256": "6a47a88c1d8a0f73761b1453bdfe88452b961982acabee24d7865898ff9359cf"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/b2eaa04c94861e36ff2094901902deb52d539add22d24b5e50caaf28cc7ab606.jpg",
+   "bytes": 265691,
+   "sha256": "b2eaa04c94861e36ff2094901902deb52d539add22d24b5e50caaf28cc7ab606"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/5b8353fa7a0d5ed5e6bbcfbeb93e481b8e687c8ea7f580af72fde7bf3ed26597.png",
+   "bytes": 774179,
+   "sha256": "5b8353fa7a0d5ed5e6bbcfbeb93e481b8e687c8ea7f580af72fde7bf3ed26597"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/accd5551f59d6239ef9705343a64ba65cd10d3416690623792d9b1010d81d14f.bin",
+   "bytes": 262144,
+   "sha256": "accd5551f59d6239ef9705343a64ba65cd10d3416690623792d9b1010d81d14f"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/919bacc9791110e97d9fc741901d06e3dbcf3302b715d785f3b3e33abc154909.jpg",
+   "bytes": 357417,
+   "sha256": "919bacc9791110e97d9fc741901d06e3dbcf3302b715d785f3b3e33abc154909"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/6a47a88c1d8a0f73761b1453bdfe88452b961982acabee24d7865898ff9359cf.bin",
+   "bytes": 262144,
+   "sha256": "6a47a88c1d8a0f73761b1453bdfe88452b961982acabee24d7865898ff9359cf"
+  },
+  "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/b2eaa04c94861e36ff2094901902deb52d539add22d24b5e50caaf28cc7ab606.jpg",
+   "bytes": 265691,
+   "sha256": "b2eaa04c94861e36ff2094901902deb52d539add22d24b5e50caaf28cc7ab606"
+  },
+  "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/e74b226245fa90d2978a1b1875076543816324f890438d8d4020d3b37876e201.png",
+   "bytes": 632625,
+   "sha256": "e74b226245fa90d2978a1b1875076543816324f890438d8d4020d3b37876e201"
+  },
+  "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/24f38897a8102689e74f152ef533d998f1fc9aebfa3116846a30915caf188fe0.bin",
+   "bytes": 262144,
+   "sha256": "24f38897a8102689e74f152ef533d998f1fc9aebfa3116846a30915caf188fe0"
+  },
+  "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/eb371e97e51931a3f5becda9821b9aacb69a553f32eb8f42a2a815d281b6b800.jpg",
+   "bytes": 284732,
+   "sha256": "eb371e97e51931a3f5becda9821b9aacb69a553f32eb8f42a2a815d281b6b800"
+  },
+  "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/bf8b185e8fe3f44dd64418d16ad9731e574f3f4d673f5e0e70cc07f8e98cd03f.bin",
+   "bytes": 262144,
+   "sha256": "bf8b185e8fe3f44dd64418d16ad9731e574f3f4d673f5e0e70cc07f8e98cd03f"
+  },
+  "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/06d2124ace365273d3252a45ae765439280254e0139e2bb5b7958d9cbb7fb39b.jpg",
+   "bytes": 334648,
+   "sha256": "06d2124ace365273d3252a45ae765439280254e0139e2bb5b7958d9cbb7fb39b"
+  },
+  "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/e74b226245fa90d2978a1b1875076543816324f890438d8d4020d3b37876e201.png",
+   "bytes": 632625,
+   "sha256": "e74b226245fa90d2978a1b1875076543816324f890438d8d4020d3b37876e201"
+  },
+  "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/24f38897a8102689e74f152ef533d998f1fc9aebfa3116846a30915caf188fe0.bin",
+   "bytes": 262144,
+   "sha256": "24f38897a8102689e74f152ef533d998f1fc9aebfa3116846a30915caf188fe0"
+  },
+  "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/eb371e97e51931a3f5becda9821b9aacb69a553f32eb8f42a2a815d281b6b800.jpg",
+   "bytes": 284732,
+   "sha256": "eb371e97e51931a3f5becda9821b9aacb69a553f32eb8f42a2a815d281b6b800"
+  },
+  "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/bf8b185e8fe3f44dd64418d16ad9731e574f3f4d673f5e0e70cc07f8e98cd03f.bin",
+   "bytes": 262144,
+   "sha256": "bf8b185e8fe3f44dd64418d16ad9731e574f3f4d673f5e0e70cc07f8e98cd03f"
+  },
+  "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/06d2124ace365273d3252a45ae765439280254e0139e2bb5b7958d9cbb7fb39b.jpg",
+   "bytes": 334648,
+   "sha256": "06d2124ace365273d3252a45ae765439280254e0139e2bb5b7958d9cbb7fb39b"
+  },
+  "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/4b89192f149ccab64f2b8add0719cc7796cf3791752f093a6e92320d55dad5a0.png",
+   "bytes": 717569,
+   "sha256": "4b89192f149ccab64f2b8add0719cc7796cf3791752f093a6e92320d55dad5a0"
+  },
+  "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/5e0475dd2412fd99cdff576c0c94b148055fbe82a08796643f36d54f5dcdcde4.bin",
+   "bytes": 262144,
+   "sha256": "5e0475dd2412fd99cdff576c0c94b148055fbe82a08796643f36d54f5dcdcde4"
+  },
+  "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/82480a9e20dd9d0890f13b92071a1f3f622655911baecc65c0c45f88f3b5fb18.jpg",
+   "bytes": 222503,
+   "sha256": "82480a9e20dd9d0890f13b92071a1f3f622655911baecc65c0c45f88f3b5fb18"
+  },
+  "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/0a23bb0a4442edc50c6fb3b433c21a4b6523c882816a3e0a8feb2b39591895d9.bin",
+   "bytes": 262144,
+   "sha256": "0a23bb0a4442edc50c6fb3b433c21a4b6523c882816a3e0a8feb2b39591895d9"
+  },
+  "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/ff733e48d8dc59e6bed2d40eb6ce0a43e99f28d7ca8b90b5700151296b7dc179.jpg",
+   "bytes": 282484,
+   "sha256": "ff733e48d8dc59e6bed2d40eb6ce0a43e99f28d7ca8b90b5700151296b7dc179"
+  },
+  "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/4b89192f149ccab64f2b8add0719cc7796cf3791752f093a6e92320d55dad5a0.png",
+   "bytes": 717569,
+   "sha256": "4b89192f149ccab64f2b8add0719cc7796cf3791752f093a6e92320d55dad5a0"
+  },
+  "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/5e0475dd2412fd99cdff576c0c94b148055fbe82a08796643f36d54f5dcdcde4.bin",
+   "bytes": 262144,
+   "sha256": "5e0475dd2412fd99cdff576c0c94b148055fbe82a08796643f36d54f5dcdcde4"
+  },
+  "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/82480a9e20dd9d0890f13b92071a1f3f622655911baecc65c0c45f88f3b5fb18.jpg",
+   "bytes": 222503,
+   "sha256": "82480a9e20dd9d0890f13b92071a1f3f622655911baecc65c0c45f88f3b5fb18"
+  },
+  "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/0a23bb0a4442edc50c6fb3b433c21a4b6523c882816a3e0a8feb2b39591895d9.bin",
+   "bytes": 262144,
+   "sha256": "0a23bb0a4442edc50c6fb3b433c21a4b6523c882816a3e0a8feb2b39591895d9"
+  },
+  "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/ff733e48d8dc59e6bed2d40eb6ce0a43e99f28d7ca8b90b5700151296b7dc179.jpg",
+   "bytes": 282484,
+   "sha256": "ff733e48d8dc59e6bed2d40eb6ce0a43e99f28d7ca8b90b5700151296b7dc179"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/a4b5d2b0a311da942c8359dcf4e4f5008dbaee3d493f0c235aa6b917f71a7dd8.png",
+   "bytes": 581039,
+   "sha256": "a4b5d2b0a311da942c8359dcf4e4f5008dbaee3d493f0c235aa6b917f71a7dd8"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/1a54b87b0a3d924ec61d7d07fa6de7c5d4b9d81c445a6c87f4e3cec07b9e523e.bin",
+   "bytes": 262144,
+   "sha256": "1a54b87b0a3d924ec61d7d07fa6de7c5d4b9d81c445a6c87f4e3cec07b9e523e"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/099644ff5b7657151fbe6b1f3f0998dac82e3447e70d6830211d7326100d29fd.jpg",
+   "bytes": 294924,
+   "sha256": "099644ff5b7657151fbe6b1f3f0998dac82e3447e70d6830211d7326100d29fd"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/39b975ccfccfa6c597e0ba0eba592bf4e532dd0a6413f636483d63f04af6706e.bin",
+   "bytes": 262144,
+   "sha256": "39b975ccfccfa6c597e0ba0eba592bf4e532dd0a6413f636483d63f04af6706e"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/58dacfe90fb8f47f96f6cfdfad3bd21ddbc9f2a46468df691621515d9a629e54.jpg",
+   "bytes": 243102,
+   "sha256": "58dacfe90fb8f47f96f6cfdfad3bd21ddbc9f2a46468df691621515d9a629e54"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/a4b5d2b0a311da942c8359dcf4e4f5008dbaee3d493f0c235aa6b917f71a7dd8.png",
+   "bytes": 581039,
+   "sha256": "a4b5d2b0a311da942c8359dcf4e4f5008dbaee3d493f0c235aa6b917f71a7dd8"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/1a54b87b0a3d924ec61d7d07fa6de7c5d4b9d81c445a6c87f4e3cec07b9e523e.bin",
+   "bytes": 262144,
+   "sha256": "1a54b87b0a3d924ec61d7d07fa6de7c5d4b9d81c445a6c87f4e3cec07b9e523e"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/099644ff5b7657151fbe6b1f3f0998dac82e3447e70d6830211d7326100d29fd.jpg",
+   "bytes": 294924,
+   "sha256": "099644ff5b7657151fbe6b1f3f0998dac82e3447e70d6830211d7326100d29fd"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/39b975ccfccfa6c597e0ba0eba592bf4e532dd0a6413f636483d63f04af6706e.bin",
+   "bytes": 262144,
+   "sha256": "39b975ccfccfa6c597e0ba0eba592bf4e532dd0a6413f636483d63f04af6706e"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/58dacfe90fb8f47f96f6cfdfad3bd21ddbc9f2a46468df691621515d9a629e54.jpg",
+   "bytes": 243102,
+   "sha256": "58dacfe90fb8f47f96f6cfdfad3bd21ddbc9f2a46468df691621515d9a629e54"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/a4b5d2b0a311da942c8359dcf4e4f5008dbaee3d493f0c235aa6b917f71a7dd8.png",
+   "bytes": 581039,
+   "sha256": "a4b5d2b0a311da942c8359dcf4e4f5008dbaee3d493f0c235aa6b917f71a7dd8"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/1a54b87b0a3d924ec61d7d07fa6de7c5d4b9d81c445a6c87f4e3cec07b9e523e.bin",
+   "bytes": 262144,
+   "sha256": "1a54b87b0a3d924ec61d7d07fa6de7c5d4b9d81c445a6c87f4e3cec07b9e523e"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/099644ff5b7657151fbe6b1f3f0998dac82e3447e70d6830211d7326100d29fd.jpg",
+   "bytes": 294924,
+   "sha256": "099644ff5b7657151fbe6b1f3f0998dac82e3447e70d6830211d7326100d29fd"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/39b975ccfccfa6c597e0ba0eba592bf4e532dd0a6413f636483d63f04af6706e.bin",
+   "bytes": 262144,
+   "sha256": "39b975ccfccfa6c597e0ba0eba592bf4e532dd0a6413f636483d63f04af6706e"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/58dacfe90fb8f47f96f6cfdfad3bd21ddbc9f2a46468df691621515d9a629e54.jpg",
+   "bytes": 243102,
+   "sha256": "58dacfe90fb8f47f96f6cfdfad3bd21ddbc9f2a46468df691621515d9a629e54"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/a4b5d2b0a311da942c8359dcf4e4f5008dbaee3d493f0c235aa6b917f71a7dd8.png",
+   "bytes": 581039,
+   "sha256": "a4b5d2b0a311da942c8359dcf4e4f5008dbaee3d493f0c235aa6b917f71a7dd8"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/1a54b87b0a3d924ec61d7d07fa6de7c5d4b9d81c445a6c87f4e3cec07b9e523e.bin",
+   "bytes": 262144,
+   "sha256": "1a54b87b0a3d924ec61d7d07fa6de7c5d4b9d81c445a6c87f4e3cec07b9e523e"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/099644ff5b7657151fbe6b1f3f0998dac82e3447e70d6830211d7326100d29fd.jpg",
+   "bytes": 294924,
+   "sha256": "099644ff5b7657151fbe6b1f3f0998dac82e3447e70d6830211d7326100d29fd"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/39b975ccfccfa6c597e0ba0eba592bf4e532dd0a6413f636483d63f04af6706e.bin",
+   "bytes": 262144,
+   "sha256": "39b975ccfccfa6c597e0ba0eba592bf4e532dd0a6413f636483d63f04af6706e"
+  },
+  "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/58dacfe90fb8f47f96f6cfdfad3bd21ddbc9f2a46468df691621515d9a629e54.jpg",
+   "bytes": 243102,
+   "sha256": "58dacfe90fb8f47f96f6cfdfad3bd21ddbc9f2a46468df691621515d9a629e54"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/b7d9ad45326affb0d6221134bf8b687f32799129c6c644452832efb7f6e8966d.png",
+   "bytes": 794568,
+   "sha256": "b7d9ad45326affb0d6221134bf8b687f32799129c6c644452832efb7f6e8966d"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/6e36214df2aeffb77055816adb765cb141c38ce02aad7a5c402207e1922beff6.bin",
+   "bytes": 262144,
+   "sha256": "6e36214df2aeffb77055816adb765cb141c38ce02aad7a5c402207e1922beff6"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/e53bc2fdcab874fbee76006950eeae1ead8f4006a5c55e815a76084bd830bc7b.jpg",
+   "bytes": 305010,
+   "sha256": "e53bc2fdcab874fbee76006950eeae1ead8f4006a5c55e815a76084bd830bc7b"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/b28512fe77a19d153f95ef3629557ed6c73d7f5dbe286aa10d02ad30d8cd34e6.bin",
+   "bytes": 262144,
+   "sha256": "b28512fe77a19d153f95ef3629557ed6c73d7f5dbe286aa10d02ad30d8cd34e6"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/2a36dd0d5192f82f426af0ebf61c4fde7710df7ab3603df82fd7d7431a0d5901.jpg",
+   "bytes": 283667,
+   "sha256": "2a36dd0d5192f82f426af0ebf61c4fde7710df7ab3603df82fd7d7431a0d5901"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/b7d9ad45326affb0d6221134bf8b687f32799129c6c644452832efb7f6e8966d.png",
+   "bytes": 794568,
+   "sha256": "b7d9ad45326affb0d6221134bf8b687f32799129c6c644452832efb7f6e8966d"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/6e36214df2aeffb77055816adb765cb141c38ce02aad7a5c402207e1922beff6.bin",
+   "bytes": 262144,
+   "sha256": "6e36214df2aeffb77055816adb765cb141c38ce02aad7a5c402207e1922beff6"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/e53bc2fdcab874fbee76006950eeae1ead8f4006a5c55e815a76084bd830bc7b.jpg",
+   "bytes": 305010,
+   "sha256": "e53bc2fdcab874fbee76006950eeae1ead8f4006a5c55e815a76084bd830bc7b"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/b28512fe77a19d153f95ef3629557ed6c73d7f5dbe286aa10d02ad30d8cd34e6.bin",
+   "bytes": 262144,
+   "sha256": "b28512fe77a19d153f95ef3629557ed6c73d7f5dbe286aa10d02ad30d8cd34e6"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/2a36dd0d5192f82f426af0ebf61c4fde7710df7ab3603df82fd7d7431a0d5901.jpg",
+   "bytes": 283667,
+   "sha256": "2a36dd0d5192f82f426af0ebf61c4fde7710df7ab3603df82fd7d7431a0d5901"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/b7d9ad45326affb0d6221134bf8b687f32799129c6c644452832efb7f6e8966d.png",
+   "bytes": 794568,
+   "sha256": "b7d9ad45326affb0d6221134bf8b687f32799129c6c644452832efb7f6e8966d"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/6e36214df2aeffb77055816adb765cb141c38ce02aad7a5c402207e1922beff6.bin",
+   "bytes": 262144,
+   "sha256": "6e36214df2aeffb77055816adb765cb141c38ce02aad7a5c402207e1922beff6"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/e53bc2fdcab874fbee76006950eeae1ead8f4006a5c55e815a76084bd830bc7b.jpg",
+   "bytes": 305010,
+   "sha256": "e53bc2fdcab874fbee76006950eeae1ead8f4006a5c55e815a76084bd830bc7b"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/b28512fe77a19d153f95ef3629557ed6c73d7f5dbe286aa10d02ad30d8cd34e6.bin",
+   "bytes": 262144,
+   "sha256": "b28512fe77a19d153f95ef3629557ed6c73d7f5dbe286aa10d02ad30d8cd34e6"
+  },
+  "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/2a36dd0d5192f82f426af0ebf61c4fde7710df7ab3603df82fd7d7431a0d5901.jpg",
+   "bytes": 283667,
+   "sha256": "2a36dd0d5192f82f426af0ebf61c4fde7710df7ab3603df82fd7d7431a0d5901"
+  },
+  "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/147b20dfd78c4a4e968adae5d49be87041fd007a018c68ac34c963a337382796.png",
+   "bytes": 743894,
+   "sha256": "147b20dfd78c4a4e968adae5d49be87041fd007a018c68ac34c963a337382796"
+  },
+  "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/4bc6c1aa983a480ddd6193717c3e2e5e1242f4980744616818948e92b68c55d4.bin",
+   "bytes": 262144,
+   "sha256": "4bc6c1aa983a480ddd6193717c3e2e5e1242f4980744616818948e92b68c55d4"
+  },
+  "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/c792755658e2b21eade5c3994f30daf93f9853a225df270bc211766ac0d8ac30.jpg",
+   "bytes": 337859,
+   "sha256": "c792755658e2b21eade5c3994f30daf93f9853a225df270bc211766ac0d8ac30"
+  },
+  "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/ae50de1e1e48e05fafe0d43791074a1a0a4f4d4b9696cdead8a1381f5bdd9042.bin",
+   "bytes": 262144,
+   "sha256": "ae50de1e1e48e05fafe0d43791074a1a0a4f4d4b9696cdead8a1381f5bdd9042"
+  },
+  "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/0744fada428907dd685311e73799c682c8fed1ae3ea6a85de67f6dc59b332af9.jpg",
+   "bytes": 304828,
+   "sha256": "0744fada428907dd685311e73799c682c8fed1ae3ea6a85de67f6dc59b332af9"
+  },
+  "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/147b20dfd78c4a4e968adae5d49be87041fd007a018c68ac34c963a337382796.png",
+   "bytes": 743894,
+   "sha256": "147b20dfd78c4a4e968adae5d49be87041fd007a018c68ac34c963a337382796"
+  },
+  "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/4bc6c1aa983a480ddd6193717c3e2e5e1242f4980744616818948e92b68c55d4.bin",
+   "bytes": 262144,
+   "sha256": "4bc6c1aa983a480ddd6193717c3e2e5e1242f4980744616818948e92b68c55d4"
+  },
+  "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/c792755658e2b21eade5c3994f30daf93f9853a225df270bc211766ac0d8ac30.jpg",
+   "bytes": 337859,
+   "sha256": "c792755658e2b21eade5c3994f30daf93f9853a225df270bc211766ac0d8ac30"
+  },
+  "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/ae50de1e1e48e05fafe0d43791074a1a0a4f4d4b9696cdead8a1381f5bdd9042.bin",
+   "bytes": 262144,
+   "sha256": "ae50de1e1e48e05fafe0d43791074a1a0a4f4d4b9696cdead8a1381f5bdd9042"
+  },
+  "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/0744fada428907dd685311e73799c682c8fed1ae3ea6a85de67f6dc59b332af9.jpg",
+   "bytes": 304828,
+   "sha256": "0744fada428907dd685311e73799c682c8fed1ae3ea6a85de67f6dc59b332af9"
+  },
+  "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/c1239d9540ad60e326f59e4c1584b9d8cf26f132f097e7634266e12fc987b626.png",
+   "bytes": 827415,
+   "sha256": "c1239d9540ad60e326f59e4c1584b9d8cf26f132f097e7634266e12fc987b626"
+  },
+  "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/e32cc32009b2faf74f7e8ddaa92403a533e1694307497ef261f7bbea87010440.bin",
+   "bytes": 262144,
+   "sha256": "e32cc32009b2faf74f7e8ddaa92403a533e1694307497ef261f7bbea87010440"
+  },
+  "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/1c8a4de0c24305066ab861c5a88f8231ee9abd4dea737ee1e89a0a46f993d883.jpg",
+   "bytes": 215763,
+   "sha256": "1c8a4de0c24305066ab861c5a88f8231ee9abd4dea737ee1e89a0a46f993d883"
+  },
+  "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/829d7962dc380fd828ea5117c37a0f769cbee3e622215d619193ac3cfd987a84.bin",
+   "bytes": 262144,
+   "sha256": "829d7962dc380fd828ea5117c37a0f769cbee3e622215d619193ac3cfd987a84"
+  },
+  "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/252050bb43a599aae1270803f64f4f96363fc3ffe584a29e83d1ca98aa47f0f9.jpg",
+   "bytes": 316338,
+   "sha256": "252050bb43a599aae1270803f64f4f96363fc3ffe584a29e83d1ca98aa47f0f9"
+  },
+  "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/c1239d9540ad60e326f59e4c1584b9d8cf26f132f097e7634266e12fc987b626.png",
+   "bytes": 827415,
+   "sha256": "c1239d9540ad60e326f59e4c1584b9d8cf26f132f097e7634266e12fc987b626"
+  },
+  "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/e32cc32009b2faf74f7e8ddaa92403a533e1694307497ef261f7bbea87010440.bin",
+   "bytes": 262144,
+   "sha256": "e32cc32009b2faf74f7e8ddaa92403a533e1694307497ef261f7bbea87010440"
+  },
+  "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/1c8a4de0c24305066ab861c5a88f8231ee9abd4dea737ee1e89a0a46f993d883.jpg",
+   "bytes": 215763,
+   "sha256": "1c8a4de0c24305066ab861c5a88f8231ee9abd4dea737ee1e89a0a46f993d883"
+  },
+  "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/829d7962dc380fd828ea5117c37a0f769cbee3e622215d619193ac3cfd987a84.bin",
+   "bytes": 262144,
+   "sha256": "829d7962dc380fd828ea5117c37a0f769cbee3e622215d619193ac3cfd987a84"
+  },
+  "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/252050bb43a599aae1270803f64f4f96363fc3ffe584a29e83d1ca98aa47f0f9.jpg",
+   "bytes": 316338,
+   "sha256": "252050bb43a599aae1270803f64f4f96363fc3ffe584a29e83d1ca98aa47f0f9"
+  },
+  "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/7de3980807493f979bac1b5e33142ed00f928d80aeb385992cb8e15846c4e1d1.png",
+   "bytes": 772254,
+   "sha256": "7de3980807493f979bac1b5e33142ed00f928d80aeb385992cb8e15846c4e1d1"
+  },
+  "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/f08667e1581febdfa4fdaa2bac657ad6f6912faf9591927d9af58b7a527d237a.bin",
+   "bytes": 262144,
+   "sha256": "f08667e1581febdfa4fdaa2bac657ad6f6912faf9591927d9af58b7a527d237a"
+  },
+  "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/ed44a6e6b5cd8c8655ec627309e5f8127665799ad143932e497cba4b22faef7f.jpg",
+   "bytes": 260979,
+   "sha256": "ed44a6e6b5cd8c8655ec627309e5f8127665799ad143932e497cba4b22faef7f"
+  },
+  "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/0c62e7559afa240f430d1ba18c96d4ea2f6f7099a01057a21a9d2319e79f91d5.bin",
+   "bytes": 262144,
+   "sha256": "0c62e7559afa240f430d1ba18c96d4ea2f6f7099a01057a21a9d2319e79f91d5"
+  },
+  "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/808700f8ddd1fe001c84875dce17cce7e5546dae7ff4dc54fb62e96c8593d3aa.jpg",
+   "bytes": 181163,
+   "sha256": "808700f8ddd1fe001c84875dce17cce7e5546dae7ff4dc54fb62e96c8593d3aa"
+  },
+  "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "status": 200,
+   "content_type": "image/png",
+   "file": "files/7de3980807493f979bac1b5e33142ed00f928d80aeb385992cb8e15846c4e1d1.png",
+   "bytes": 772254,
+   "sha256": "7de3980807493f979bac1b5e33142ed00f928d80aeb385992cb8e15846c4e1d1"
+  },
+  "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/f08667e1581febdfa4fdaa2bac657ad6f6912faf9591927d9af58b7a527d237a.bin",
+   "bytes": 262144,
+   "sha256": "f08667e1581febdfa4fdaa2bac657ad6f6912faf9591927d9af58b7a527d237a"
+  },
+  "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/ed44a6e6b5cd8c8655ec627309e5f8127665799ad143932e497cba4b22faef7f.jpg",
+   "bytes": 260979,
+   "sha256": "ed44a6e6b5cd8c8655ec627309e5f8127665799ad143932e497cba4b22faef7f"
+  },
+  "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "status": 200,
+   "content_type": "application/octet-stream",
+   "file": "files/0c62e7559afa240f430d1ba18c96d4ea2f6f7099a01057a21a9d2319e79f91d5.bin",
+   "bytes": 262144,
+   "sha256": "0c62e7559afa240f430d1ba18c96d4ea2f6f7099a01057a21a9d2319e79f91d5"
+  },
+  "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "status": 200,
+   "content_type": "image/jpeg",
+   "file": "files/808700f8ddd1fe001c84875dce17cce7e5546dae7ff4dc54fb62e96c8593d3aa.jpg",
+   "bytes": 181163,
+   "sha256": "808700f8ddd1fe001c84875dce17cce7e5546dae7ff4dc54fb62e96c8593d3aa"
   },
   "POST /api/env/next_look/play {\"ceiling\":true,\"player\":\"oracle\",\"region_id\":\"evros_greece\",\"start\":\"2023-08-20\"}": {
    "status": 200,
@@ -16191,296 +17194,296 @@
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"evros_greece\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2023-08-20\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/1f4c1e18ace67a196f1833f52a5d3cb2bcb506ecf1fae155e1c8df61ea874f37.json",
-   "bytes": 375951,
-   "sha256": "1f4c1e18ace67a196f1833f52a5d3cb2bcb506ecf1fae155e1c8df61ea874f37"
+   "file": "files/3329526e42ad368c2590b19dd9e9c421855e421e823778fada51fc4232b77834.json",
+   "bytes": 375952,
+   "sha256": "3329526e42ad368c2590b19dd9e9c421855e421e823778fada51fc4232b77834"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"evros_greece\",\"source\":\"firms\",\"start\":\"2023-08-20\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/3d0f265344e7d06a11697241b469253959d267af099a02df782271c8ebe710b5.json",
-   "bytes": 129562,
-   "sha256": "3d0f265344e7d06a11697241b469253959d267af099a02df782271c8ebe710b5"
+   "file": "files/257c13b9da47e4b76ae0e50b473dfd41b21a3301cb7f81dafdffcddc019872cd.json",
+   "bytes": 129563,
+   "sha256": "257c13b9da47e4b76ae0e50b473dfd41b21a3301cb7f81dafdffcddc019872cd"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"fort_mcmurray_ab\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2016-05-17\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/228422a98e29b3cbac0ac658b4f07fbf0b027e2fda69c88f964fcbe082e5ae68.json",
+   "file": "files/ed8bb01f2dea399bb73fd84b939fc8c541732c13e4b3e42ff4d34a47c7bc87ba.json",
    "bytes": 260260,
-   "sha256": "228422a98e29b3cbac0ac658b4f07fbf0b027e2fda69c88f964fcbe082e5ae68"
+   "sha256": "ed8bb01f2dea399bb73fd84b939fc8c541732c13e4b3e42ff4d34a47c7bc87ba"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"fort_mcmurray_ab\",\"source\":\"firms\",\"start\":\"2016-05-17\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/98c02c5ac57440701d4e2f01606ac29fa43fe90c6368bd2713bdb9f7a44ba6c5.json",
+   "file": "files/ea9333c4eb7c4bccad62d8ad60efb9040e4d6ca1b777538a35f3a3c9c0784868.json",
    "bytes": 115004,
-   "sha256": "98c02c5ac57440701d4e2f01606ac29fa43fe90c6368bd2713bdb9f7a44ba6c5"
+   "sha256": "ea9333c4eb7c4bccad62d8ad60efb9040e4d6ca1b777538a35f3a3c9c0784868"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"jur_river_ss\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2016-12-11\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/21a0a03e9a180c543f820866c7def70d3d627e18f7a665eae1ef4a2786380777.json",
+   "file": "files/598aac02a5f89fc664b33e7ad25ca9b56237086cc5ad5adc2610060f77b2910f.json",
    "bytes": 209978,
-   "sha256": "21a0a03e9a180c543f820866c7def70d3d627e18f7a665eae1ef4a2786380777"
+   "sha256": "598aac02a5f89fc664b33e7ad25ca9b56237086cc5ad5adc2610060f77b2910f"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"jur_river_ss\",\"source\":\"firms\",\"start\":\"2016-12-11\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/5595b80945ecf83e3e5d7c3cae9e7f86988e89546dfdebe1e4df1f432c4e13dc.json",
+   "file": "files/7f94b5785a2234fd037b8ad5f5c9f22883bd4d59083d5272a83f730f5258fbad.json",
    "bytes": 119324,
-   "sha256": "5595b80945ecf83e3e5d7c3cae9e7f86988e89546dfdebe1e4df1f432c4e13dc"
+   "sha256": "7f94b5785a2234fd037b8ad5f5c9f22883bd4d59083d5272a83f730f5258fbad"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"kakisa_nt\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2023-08-24\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/cde84a11eaace28efcb5538e41b3c62a73a48898b70995ee13414209fc0cbf46.json",
-   "bytes": 274849,
-   "sha256": "cde84a11eaace28efcb5538e41b3c62a73a48898b70995ee13414209fc0cbf46"
+   "file": "files/de97ef782d433ea2eaa506cbdb1befc5deb3033642b01fc384aa7eaac1d16e84.json",
+   "bytes": 274848,
+   "sha256": "de97ef782d433ea2eaa506cbdb1befc5deb3033642b01fc384aa7eaac1d16e84"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"kakisa_nt\",\"source\":\"firms\",\"start\":\"2023-08-24\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/f2c3c9477fae90010e07fc392fe361f28b52fff96d8cb416a4846dc0e3e680fd.json",
-   "bytes": 96371,
-   "sha256": "f2c3c9477fae90010e07fc392fe361f28b52fff96d8cb416a4846dc0e3e680fd"
+   "file": "files/afbdb5d239c427226485eee892cfd14b7144a3668adaa142ea08e3a99553af4c.json",
+   "bytes": 96370,
+   "sha256": "afbdb5d239c427226485eee892cfd14b7144a3668adaa142ea08e3a99553af4c"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"lytton_bc\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2023-08-18\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/4b9792a35e39727fe5adcce43b47b739077f81f7964e997fafe6b0cb62f98976.json",
+   "file": "files/7ddc8a6470b2802050b808ba30a9da755f9de7b749f7df90684652f0cd732359.json",
    "bytes": 229073,
-   "sha256": "4b9792a35e39727fe5adcce43b47b739077f81f7964e997fafe6b0cb62f98976"
+   "sha256": "7ddc8a6470b2802050b808ba30a9da755f9de7b749f7df90684652f0cd732359"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"lytton_bc\",\"source\":\"firms\",\"start\":\"2023-08-18\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/42546346bbae8525aa684da40b0aac0ba589e7105c72451d4b6e2dc058c5c93d.json",
+   "file": "files/e04c8f1924a0312a39278a776d0118342527a582cbb8cfd0a81e41590b6d906f.json",
    "bytes": 90845,
-   "sha256": "42546346bbae8525aa684da40b0aac0ba589e7105c72451d4b6e2dc058c5c93d"
+   "sha256": "e04c8f1924a0312a39278a776d0118342527a582cbb8cfd0a81e41590b6d906f"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"manavgat_tr\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2021-07-28\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/d951faa9d0ee2152eed4c7f40ac0d78f03c785e703a7012d0b41c64b095956c9.json",
-   "bytes": 373253,
-   "sha256": "d951faa9d0ee2152eed4c7f40ac0d78f03c785e703a7012d0b41c64b095956c9"
+   "file": "files/1ec40e38d06a346448c17dded1588f91f2c66f35493e5f6a37a39484cdb632af.json",
+   "bytes": 373254,
+   "sha256": "1ec40e38d06a346448c17dded1588f91f2c66f35493e5f6a37a39484cdb632af"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"manavgat_tr\",\"source\":\"firms\",\"start\":\"2021-07-28\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/7ce22196d4c5bfad24cde1e85f71ef0c4d2342624ccb07ff1c81b636da21d33c.json",
-   "bytes": 153810,
-   "sha256": "7ce22196d4c5bfad24cde1e85f71ef0c4d2342624ccb07ff1c81b636da21d33c"
+   "file": "files/d4daa010b28fadc9fb28b3946fa94dcfc47f0f2f2905b517e492d78eab3f7890.json",
+   "bytes": 153811,
+   "sha256": "d4daa010b28fadc9fb28b3946fa94dcfc47f0f2f2905b517e492d78eab3f7890"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"maule_cl\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2017-01-22\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/279a15e1fb8b29790b76a0db25620f53a2fe0e08b13579370db4329d091a7b1f.json",
+   "file": "files/63b3b462301ea7f7ef32285e83a662f2afc6b990efef35b01b29cfa96233f2f2.json",
    "bytes": 372046,
-   "sha256": "279a15e1fb8b29790b76a0db25620f53a2fe0e08b13579370db4329d091a7b1f"
+   "sha256": "63b3b462301ea7f7ef32285e83a662f2afc6b990efef35b01b29cfa96233f2f2"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"maule_cl\",\"source\":\"firms\",\"start\":\"2017-01-22\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/0ae7043953534dc45a0ebcdf9716568e5f4fad4369fcb470a2d83ede531b893e.json",
+   "file": "files/e59983e205cdb232be7499a7c9f2cac74fb44735268b73bb3015cfc0f0b920a0.json",
    "bytes": 176033,
-   "sha256": "0ae7043953534dc45a0ebcdf9716568e5f4fad4369fcb470a2d83ede531b893e"
+   "sha256": "e59983e205cdb232be7499a7c9f2cac74fb44735268b73bb3015cfc0f0b920a0"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"okefenokee_ga\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2012-04-04\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/3474651060cbb8025fea3eaaf1144aec83401dc0fe48750b9e452f2ddb584e8d.json",
+   "file": "files/7c02b8b8fe0f23984072b996309a4dae23e9473a43bf8b4d99fdfa45e9bf7390.json",
    "bytes": 180766,
-   "sha256": "3474651060cbb8025fea3eaaf1144aec83401dc0fe48750b9e452f2ddb584e8d"
+   "sha256": "7c02b8b8fe0f23984072b996309a4dae23e9473a43bf8b4d99fdfa45e9bf7390"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"okefenokee_ga\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2017-05-02\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/548a4d1c4e28268df4547dab02fd5f2418e2b07ac0297fd8d574e3850b607d48.json",
-   "bytes": 171570,
-   "sha256": "548a4d1c4e28268df4547dab02fd5f2418e2b07ac0297fd8d574e3850b607d48"
+   "file": "files/49d8206966a79ae741350bae68660ac9e4873af8c047c7e7df3cdd062071b286.json",
+   "bytes": 171569,
+   "sha256": "49d8206966a79ae741350bae68660ac9e4873af8c047c7e7df3cdd062071b286"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"okefenokee_ga\",\"source\":\"firms\",\"start\":\"2012-04-04\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/0508ffe17efe2f0e81fc4a8618f0f65af0bceef02cb4a1095edf179a4166246e.json",
+   "file": "files/af6fdab6d4c922be41b9175ff4022144adb3b29277839b0f68e5dc5ee0e93ba3.json",
    "bytes": 108711,
-   "sha256": "0508ffe17efe2f0e81fc4a8618f0f65af0bceef02cb4a1095edf179a4166246e"
+   "sha256": "af6fdab6d4c922be41b9175ff4022144adb3b29277839b0f68e5dc5ee0e93ba3"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"okefenokee_ga\",\"source\":\"firms\",\"start\":\"2017-05-02\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/2c008dca604278961d47d2299de739f74f5556b3f3ac3ee6adae71df985032b3.json",
-   "bytes": 100093,
-   "sha256": "2c008dca604278961d47d2299de739f74f5556b3f3ac3ee6adae71df985032b3"
+   "file": "files/54a4cf0307a41ca811a9f359e8043b54421991c38e62151d4faeb3caaa665f34.json",
+   "bytes": 100092,
+   "sha256": "54a4cf0307a41ca811a9f359e8043b54421991c38e62151d4faeb3caaa665f34"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"plumas_ca\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2012-08-10\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/0e0409d271d73ac702dbae2e93ee2387e43daec8d94a22a5764103a32a352e4c.json",
+   "file": "files/c220528c80ade843b3b53b6918f8214b9109671d9fea90b2bb16178f7e849af3.json",
    "bytes": 232902,
-   "sha256": "0e0409d271d73ac702dbae2e93ee2387e43daec8d94a22a5764103a32a352e4c"
+   "sha256": "c220528c80ade843b3b53b6918f8214b9109671d9fea90b2bb16178f7e849af3"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"plumas_ca\",\"source\":\"firms\",\"start\":\"2012-08-10\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/82e748b09293f30833bbb66fd57b3a8802f1a7bebf342f515ea0f815828a3de3.json",
+   "file": "files/5f72120a8c490934421116a5a10ade2eacc817c6ddef76173442495249d295d6.json",
    "bytes": 123147,
-   "sha256": "82e748b09293f30833bbb66fd57b3a8802f1a7bebf342f515ea0f815828a3de3"
+   "sha256": "5f72120a8c490934421116a5a10ade2eacc817c6ddef76173442495249d295d6"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"serra_acor_pt\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2025-08-15\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/214c7bd5a07f7ee1a2069cf0db35a8983b9cdf3985005de2fb9769db315b7e3a.json",
-   "bytes": 289937,
-   "sha256": "214c7bd5a07f7ee1a2069cf0db35a8983b9cdf3985005de2fb9769db315b7e3a"
+   "file": "files/373dfc67a87ceb8199ad61bcc92f0c0ed11724462f124d7437848050df2fa26b.json",
+   "bytes": 289936,
+   "sha256": "373dfc67a87ceb8199ad61bcc92f0c0ed11724462f124d7437848050df2fa26b"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"serra_acor_pt\",\"source\":\"firms\",\"start\":\"2025-08-15\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/4580101f8274b79c2ef63590d51ef2d721f222b93f92602dfaaf1143ffc0f372.json",
-   "bytes": 120786,
-   "sha256": "4580101f8274b79c2ef63590d51ef2d721f222b93f92602dfaaf1143ffc0f372"
+   "file": "files/db4e78078bfe64004acdd0ec3625718c0cdcb95a9bee8675f16b7a8a0eb8f15d.json",
+   "bytes": 120785,
+   "sha256": "db4e78078bfe64004acdd0ec3625718c0cdcb95a9bee8675f16b7a8a0eb8f15d"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"ventura_ca\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2017-12-05\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/c7d8afd99bd1a30bcc7e4df59647bfcf3fabd54b7bdc4cc5233e18e958975d89.json",
-   "bytes": 470802,
-   "sha256": "c7d8afd99bd1a30bcc7e4df59647bfcf3fabd54b7bdc4cc5233e18e958975d89"
+   "file": "files/e1f72d910702008f0f335223460fbfaf834125c5703519c35756a7ff7bb8ba85.json",
+   "bytes": 470801,
+   "sha256": "e1f72d910702008f0f335223460fbfaf834125c5703519c35756a7ff7bb8ba85"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"ventura_ca\",\"source\":\"firms\",\"start\":\"2017-12-05\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/eab240a0c0366d62986ca40f2b248b4ca51cc58000fed2a9d0b736c5f0114286.json",
-   "bytes": 185348,
-   "sha256": "eab240a0c0366d62986ca40f2b248b4ca51cc58000fed2a9d0b736c5f0114286"
+   "file": "files/a95092533890ffe1774b98caf430ac804608c7dcd7a74947b19e24a353bdacb2.json",
+   "bytes": 185347,
+   "sha256": "a95092533890ffe1774b98caf430ac804608c7dcd7a74947b19e24a353bdacb2"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"wollemi_au\",\"reveal\":true,\"source\":\"firms\",\"start\":\"2019-12-05\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/96ea6f3447f39e384686080640a83faf1c05e96396a72fe72a307c87ffbd9d22.json",
+   "file": "files/2018a6f193b435aec62048bf9aefbde042df2058c7f4a3f2de1db62fda96a28e.json",
    "bytes": 656185,
-   "sha256": "96ea6f3447f39e384686080640a83faf1c05e96396a72fe72a307c87ffbd9d22"
+   "sha256": "2018a6f193b435aec62048bf9aefbde042df2058c7f4a3f2de1db62fda96a28e"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout\":\"viirs\",\"holdout_viirs\":true,\"region_id\":\"wollemi_au\",\"source\":\"firms\",\"start\":\"2019-12-05\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/a28e244b682ec8dba5c495c79361f42febee7218ac7d3497becabd8d22a30910.json",
+   "file": "files/fb2200370ac3b74aa24487ff947146840b72f70c6e5d7975f41031127f898102.json",
    "bytes": 203757,
-   "sha256": "a28e244b682ec8dba5c495c79361f42febee7218ac7d3497becabd8d22a30910"
+   "sha256": "fb2200370ac3b74aa24487ff947146840b72f70c6e5d7975f41031127f898102"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"evia_greece\",\"source\":\"firms\",\"start\":\"2021-08-05T20:53:00Z\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/910aaeb84cc218f3923cbf21eea6a193cc8f646a2f34e23409db99f619fafb8a.json",
+   "file": "files/0a64a8b2a560e2ddd3efb2362b463b0a6a8a87ea816abb3af3fc804bb6507c43.json",
    "bytes": 407602,
-   "sha256": "910aaeb84cc218f3923cbf21eea6a193cc8f646a2f34e23409db99f619fafb8a"
+   "sha256": "0a64a8b2a560e2ddd3efb2362b463b0a6a8a87ea816abb3af3fc804bb6507c43"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"evros_greece\",\"source\":\"firms\",\"start\":\"2023-08-20\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/5b5a468848fda12739553ef4dc87122149b173cc8494c793fc8e1bb5b82d9c66.json",
+   "file": "files/0b833ff443e08ee306472bdf2fdad1179d96069a573c864189b4f8edbde7b248.json",
    "bytes": 317236,
-   "sha256": "5b5a468848fda12739553ef4dc87122149b173cc8494c793fc8e1bb5b82d9c66"
+   "sha256": "0b833ff443e08ee306472bdf2fdad1179d96069a573c864189b4f8edbde7b248"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"fort_mcmurray_ab\",\"source\":\"firms\",\"start\":\"2016-05-17\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/66905ed601473657f48e70864c57fd5504f5e592e954610e278a8e9afbcf9313.json",
+   "file": "files/63c76a2f4e76cd0f1238cee4464b8e3f63fe3a7bd56fb0a3dad966f010e8e8c6.json",
    "bytes": 231771,
-   "sha256": "66905ed601473657f48e70864c57fd5504f5e592e954610e278a8e9afbcf9313"
+   "sha256": "63c76a2f4e76cd0f1238cee4464b8e3f63fe3a7bd56fb0a3dad966f010e8e8c6"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"jur_river_ss\",\"source\":\"firms\",\"start\":\"2016-12-11\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/9646f8cd3b58425d5971720e2f8e0f5e4753a480ba629feb4abc8429eb9a3b3d.json",
+   "file": "files/46b3d09b1f4540789662cbaa4f680781287f7d31732c3e3ae89c43af556ebd39.json",
    "bytes": 186574,
-   "sha256": "9646f8cd3b58425d5971720e2f8e0f5e4753a480ba629feb4abc8429eb9a3b3d"
+   "sha256": "46b3d09b1f4540789662cbaa4f680781287f7d31732c3e3ae89c43af556ebd39"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"kakisa_nt\",\"source\":\"firms\",\"start\":\"2023-08-24\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/67a1caa6e99f14347d648061f8b27159b15d471ca6e170b3b001738c97bf6542.json",
+   "file": "files/93c6f85d8cf98b7241d500aa648738f6308c62008e352c266c3a6ff3e2d3cde8.json",
    "bytes": 242816,
-   "sha256": "67a1caa6e99f14347d648061f8b27159b15d471ca6e170b3b001738c97bf6542"
+   "sha256": "93c6f85d8cf98b7241d500aa648738f6308c62008e352c266c3a6ff3e2d3cde8"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"lytton_bc\",\"source\":\"firms\",\"start\":\"2021-06-30T21:52:00Z\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/7f4c8ceb162911d83e4cb2485866c61103e81e7f3cc9a0030a483ae8016aa2c0.json",
+   "file": "files/0c228f8e003ae63226fc12527ca4c7ce6928054a5566844f21b3848f157a7405.json",
    "bytes": 132527,
-   "sha256": "7f4c8ceb162911d83e4cb2485866c61103e81e7f3cc9a0030a483ae8016aa2c0"
+   "sha256": "0c228f8e003ae63226fc12527ca4c7ce6928054a5566844f21b3848f157a7405"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"lytton_bc\",\"source\":\"firms\",\"start\":\"2023-08-18\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/9a6e0457ffc71a92ade23a635faa362efb5ac7db7a8e558a8f759dbab18c3c00.json",
+   "file": "files/58d96ba8b78ab3e6fab76ed00b56dc2d1d8e527ece01b820583f9711f7b661b8.json",
    "bytes": 194897,
-   "sha256": "9a6e0457ffc71a92ade23a635faa362efb5ac7db7a8e558a8f759dbab18c3c00"
+   "sha256": "58d96ba8b78ab3e6fab76ed00b56dc2d1d8e527ece01b820583f9711f7b661b8"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"manavgat_tr\",\"source\":\"firms\",\"start\":\"2021-07-28\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/48cc3bc946e6a2f1e7aed3754734c52d3e7f1b8200059cb58a4ce730ea1b77ff.json",
-   "bytes": 305608,
-   "sha256": "48cc3bc946e6a2f1e7aed3754734c52d3e7f1b8200059cb58a4ce730ea1b77ff"
+   "file": "files/0f3c2c891436f5ba5dc9596870b454f76e878e9b6105f3da19e63f8f2e4baac2.json",
+   "bytes": 305606,
+   "sha256": "0f3c2c891436f5ba5dc9596870b454f76e878e9b6105f3da19e63f8f2e4baac2"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"maule_cl\",\"source\":\"firms\",\"start\":\"2017-01-22\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/509c3dd9a2610d9f8e50cf5f7968c2b196c5339067e84d9ff85758ef71b43102.json",
-   "bytes": 312607,
-   "sha256": "509c3dd9a2610d9f8e50cf5f7968c2b196c5339067e84d9ff85758ef71b43102"
+   "file": "files/56dc01de54ab9935faad5890365ac7140cc9a6e665a3b3cf640f778af04c0ab8.json",
+   "bytes": 312608,
+   "sha256": "56dc01de54ab9935faad5890365ac7140cc9a6e665a3b3cf640f778af04c0ab8"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"okefenokee_ga\",\"source\":\"firms\",\"start\":\"2012-04-04\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/ddce56094f5abdf379bd46445d85f012f9b2773993c0d5afd364f515e37ffa2c.json",
+   "file": "files/96b03e08127822e0c9589ea9eaa3bebc69303dc66a95b83c101111a4ef1c6d56.json",
    "bytes": 157354,
-   "sha256": "ddce56094f5abdf379bd46445d85f012f9b2773993c0d5afd364f515e37ffa2c"
+   "sha256": "96b03e08127822e0c9589ea9eaa3bebc69303dc66a95b83c101111a4ef1c6d56"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"okefenokee_ga\",\"source\":\"firms\",\"start\":\"2017-05-02\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/f4ad09b81e12130948bd406b8e147b7f2977f626965bd0a6244ac8c1120c17ab.json",
+   "file": "files/5408ccfaa246397dc724073afebe31ace46fbbb53bce5c5c01decb924df68235.json",
    "bytes": 149276,
-   "sha256": "f4ad09b81e12130948bd406b8e147b7f2977f626965bd0a6244ac8c1120c17ab"
+   "sha256": "5408ccfaa246397dc724073afebe31ace46fbbb53bce5c5c01decb924df68235"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"plumas_ca\",\"source\":\"firms\",\"start\":\"2012-08-10\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/183e75bf771ab6ee862b85cf43735fcf323b8efa531c25beb2252768da9c46bd.json",
-   "bytes": 199424,
-   "sha256": "183e75bf771ab6ee862b85cf43735fcf323b8efa531c25beb2252768da9c46bd"
+   "file": "files/58b0e67468682257ab964e82307cee3623d40941b89dd3f9b20aa6b8fef001d8.json",
+   "bytes": 199423,
+   "sha256": "58b0e67468682257ab964e82307cee3623d40941b89dd3f9b20aa6b8fef001d8"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"plumas_ca\",\"source\":\"firms\",\"start\":\"2021-07-22T21:13:00Z\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/016079ae767c4fa881cfe9e759da8b22e023112176806ad0267d2fd78341966f.json",
+   "file": "files/c1f0da8f1b91874686ecc1f65135d441718ad1cfcf59b5aa0ffd5b28f529b317.json",
    "bytes": 528574,
-   "sha256": "016079ae767c4fa881cfe9e759da8b22e023112176806ad0267d2fd78341966f"
+   "sha256": "c1f0da8f1b91874686ecc1f65135d441718ad1cfcf59b5aa0ffd5b28f529b317"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"serra_acor_pt\",\"source\":\"firms\",\"start\":\"2025-08-15\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/57d966e74754a0fe0d398e79c4528017bae436315bf53b55f1c94091282847a4.json",
+   "file": "files/b87970ff5741d093d4b57291c86c7c8644891b7804c4b3f85e62f0385284d25a.json",
    "bytes": 244698,
-   "sha256": "57d966e74754a0fe0d398e79c4528017bae436315bf53b55f1c94091282847a4"
+   "sha256": "b87970ff5741d093d4b57291c86c7c8644891b7804c4b3f85e62f0385284d25a"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"ventura_ca\",\"source\":\"firms\",\"start\":\"2017-12-05\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/d447c2b788f298c0ae71ac0828b81654a03b3ae07bcfae42fedfb212259e58a5.json",
+   "file": "files/71d2b35cb4abd8fe20bcdc962bfa058693c10f02a388c3d98f40a15a8eb4ce7e.json",
    "bytes": 397253,
-   "sha256": "d447c2b788f298c0ae71ac0828b81654a03b3ae07bcfae42fedfb212259e58a5"
+   "sha256": "71d2b35cb4abd8fe20bcdc962bfa058693c10f02a388c3d98f40a15a8eb4ce7e"
   },
   "POST /api/reconstruct {\"cloud_override\":null,\"holdout_viirs\":false,\"region_id\":\"wollemi_au\",\"source\":\"firms\",\"start\":\"2019-12-05\"}": {
    "status": 200,
    "content_type": "application/json; charset=utf-8",
-   "file": "files/6b118571163157e43cb33d60e99e5ffb38e020b477d3d4d9b9b857252a44f100.json",
+   "file": "files/560716edede434030961f4447c38d482b7cb4d81747a5d515d3209aaf42e64df.json",
    "bytes": 532086,
-   "sha256": "6b118571163157e43cb33d60e99e5ffb38e020b477d3d4d9b9b857252a44f100"
+   "sha256": "560716edede434030961f4447c38d482b7cb4d81747a5d515d3209aaf42e64df"
   }
  },
  "rounds": [
@@ -40906,10 +41909,709 @@
    "one_look": true
   }
  ],
+ "lite": {
+  "/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/evia_greece_firms_20210805T2053_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/evros_greece_firms_20230820T0057_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/fort_mcmurray_ab_firms_20160517T0446_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/jur_river_ss_firms_20161211T0835_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/kakisa_nt_firms_20230824T0331_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20210630T2152_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/lytton_bc_firms_20230818T0554_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/manavgat_tr_firms_20210728T0900_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/maule_cl_firms_20170122T0318_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_aux_2048.png": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_allsensors/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20120404T1642_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_aux_2048.png": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_allsensors/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/okefenokee_ga_firms_20170502T1655_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_aux_2048.png": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_allsensors/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20120810T0619_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_aux_2048.png": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/plumas_ca_firms_20210722T2113_allsensors/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/serra_acor_pt_firms_20250815T0411_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_aux_2048.png": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_allsensors/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/ventura_ca_firms_20171205T0624_holdoutviirs_challenger_blend/terrain/usgs_naip_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_allsensors/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_aux_2048.png",
+   "size": 512
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_context_ortho_4096.jpg",
+   "size": 1024
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_dem_1024_f32.bin",
+   "size": 256
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_4096.jpg": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  },
+  "/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg": {
+   "key": "GET /lite/api/runs/wollemi_au_firms_20191205T0353_holdoutviirs_challenger_blend/terrain/eox_s2cloudless_2016_ortho_8192.jpg",
+   "size": 1024
+  }
+ },
+ "lite_what": "small copies of each recorded terrain pack's files, for a public page's first screen: the elevation at 256 on the same grid, the picture at 1024 (JPEG), the aux picture at 512 (PNG); the page takes the full files after",
  "computed_in_the_browser": {
   "why": "computed in the visitor's browser from the page's browser pack (run/), so not kept in the recording",
   "places": {},
-  "entries": 29,
+  "entries": 32,
   "runs": [],
   "rounds": [],
   "ortho_8192": false
