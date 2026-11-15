@@ -6,11 +6,11 @@
  *   ?use=places   the featured fires of the places registry
  *   ?use=players  one block per player of a round (region, start, answer=1)
  *   ?use=agent    the players, side by side, over the still of the stage (region, start, round=1|underway, looks,
- *                 revealed=1)
+ *                 revealed=1, speaks=1). speaks=1 tells a screen the guide speaks there.
  *   ?use=fires    the featured fires as the place screen mounts them, in a box the size of its slot (h, pick)
  *   ?use=reveal   one fire three ways as World model mounts it, inside a stand-in for the workspace (region, start, pass)
  *   ?use=record   The Record over a still of the stage, with stand-ins for the trail and the guide's strip
- *                 (region, box=w,s,e,n, marked, pick, counted=1, now=1, still=0, guide=0, events=1)
+ *                 (region, box=w,s,e,n, marked, pick, counted=1, now=1, speaks=1, still=0, guide=0, events=1)
  *   ?use=place    Choose a Place over the same still, with the same stand-ins (current, still=0, guide=0, events=1)
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -226,7 +226,7 @@ function AgentHarness() {
     >
       {store && (
         <WorkspaceProvider value={store}>
-          <AgentBeat />
+          <AgentBeat guideSpeaks={Q.get('speaks') === '1'} />
         </WorkspaceProvider>
       )}
     </StandIn>
@@ -361,7 +361,16 @@ function RecordHarness() {
       }
       event={event}
     >
-      {place && <TheRecord place={place} markedMonth={marked} canOpen={canOpen} onOpenMonth={(ym) => setEvent(`show ${ym}`)} onClose={() => setEvent('close')} />}
+      {place && (
+        <TheRecord
+          place={place}
+          markedMonth={marked}
+          canOpen={canOpen}
+          onOpenMonth={(ym) => setEvent(`show ${ym}`)}
+          onClose={() => setEvent('close')}
+          guideSpeaks={Q.get('speaks') === '1'}
+        />
+      )}
     </StandIn>
   );
 }

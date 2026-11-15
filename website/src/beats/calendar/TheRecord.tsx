@@ -70,6 +70,12 @@ export interface TheRecordProps {
   onOpenMonth: (ym: string, rec: FireRecord) => void;
   /** Back to the stage as it is; null when there is nothing to go back to. */
   onClose: (() => void) | null;
+  /**
+   * The guide speaks on this screen. The Record then leaves to the guide what the guide says and offers: the sentence
+   * while the record loads or fails, the sentence on how well the correction holds, and the action that closes the
+   * Record. Its labels on things, its prompts beside them and its legend stay. Escape still closes it.
+   */
+  guideSpeaks?: boolean;
 }
 
 /**
@@ -80,7 +86,7 @@ export interface TheRecordProps {
  * correction, and how well the correction holds. What the step is, is the guide's to say: this component speaks only
  * as labels on its own things, and tells the guide what it holds through `recordView`.
  */
-export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }: TheRecordProps) {
+export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, guideSpeaks = false }: TheRecordProps) {
   const [rec, setRec] = useState<FireRecord | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed' | 'not recorded'>('loading');
   const [failure, setFailure] = useState<string | null>(null);
@@ -314,7 +320,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
   return (
     <section className="rec" aria-label={W.name} ref={rootRef} data-as-counted={asCounted ? 'true' : 'false'}>
       <div className="rec__plot" ref={plotRef}>
-        {state !== 'ready' && (
+        {state !== 'ready' && !guideSpeaks && (
           <p className="rec__status sys-body" role="status">
             {state === 'loading' && W.loading(place.name)}
             {state === 'not recorded' && NOT_RECORDED_LINE}
@@ -536,7 +542,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
                   </>
                 )}
               </span>
-              {onClose && (
+              {onClose && !guideSpeaks && (
                 <button type="button" className="rec__act rec__close" onClick={onClose}>
                   <span className="rec__key">Esc</span>
                   {W.close}
@@ -552,7 +558,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose }:
               {asCounted && rec.spans.sharp && (
                 <p className="sys-label rec__holds rec__wide">
                   {W.asCounted(rec.sharpRatio, Number(rec.spans.sharp[0].slice(0, 4)))}
-                  {rec.heldOut && ` ${W.holds(rec.heldOut.harmonized, rec.heldOut.raw)}`}
+                  {rec.heldOut && !guideSpeaks && ` ${W.holds(rec.heldOut.harmonized, rec.heldOut.raw)}`}
                 </p>
               )}
             </div>

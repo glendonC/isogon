@@ -95,6 +95,11 @@ function PlayerLabel({ play, gain, range, scale, notes }: LabelProps) {
 export interface AgentPictureProps {
   /** Back to where the picture was opened from; null when there is nowhere to go back to. */
   onClose?: (() => void) | null;
+  /**
+   * The guide speaks on this screen. The picture then draws neither its caption nor its row of actions: the guide
+   * says what the marks are and offers to reveal, to watch and to close, through `playersView`.
+   */
+  guideSpeaks?: boolean;
 }
 
 /**
@@ -113,7 +118,7 @@ export interface AgentPictureProps {
  * Chance stands for several rounds of random looks: its gain is their mean, its bar carries their range, and the
  * looks drawn are one of them, said so.
  */
-export function AgentPicture({ onClose = null }: AgentPictureProps) {
+export function AgentPicture({ onClose = null, guideSpeaks = false }: AgentPictureProps) {
   const ws = useWorkspace();
   const run = ws.run.active;
   const real = ws.run.isReal && !!ws.run.realStart;
@@ -248,27 +253,29 @@ export function AgentPicture({ onClose = null }: AgentPictureProps) {
           }}
         />
       )}
-      <div className="agent-picture__foot">
-        {!line && <span className="sys-fine agent-picture__legend">{PLAYERS_WORDS.legend(foundShown)}</span>}
-        <span className="agent-picture__acts">
-          {canReveal && (
-            <button type="button" className="agent-act" onClick={() => setAsked(true)}>
-              {PLAYERS_WORDS.reveal}
-            </button>
-          )}
-          {!line && (
-            <button type="button" className="agent-act" onClick={watch} disabled={!whole}>
-              {PLAYERS_WORDS.watch}
-            </button>
-          )}
-          {onClose && (
-            <button type="button" className="agent-act" onClick={onClose}>
-              <span className="agent-key">Esc</span>
-              {PLAYERS_WORDS.close}
-            </button>
-          )}
-        </span>
-      </div>
+      {!guideSpeaks && (
+        <div className="agent-picture__foot">
+          {!line && <span className="sys-fine agent-picture__legend">{PLAYERS_WORDS.legend(foundShown)}</span>}
+          <span className="agent-picture__acts">
+            {canReveal && (
+              <button type="button" className="agent-act" onClick={() => setAsked(true)}>
+                {PLAYERS_WORDS.reveal}
+              </button>
+            )}
+            {!line && (
+              <button type="button" className="agent-act" onClick={watch} disabled={!whole}>
+                {PLAYERS_WORDS.watch}
+              </button>
+            )}
+            {onClose && (
+              <button type="button" className="agent-act" onClick={onClose}>
+                <span className="agent-key">Esc</span>
+                {PLAYERS_WORDS.close}
+              </button>
+            )}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
