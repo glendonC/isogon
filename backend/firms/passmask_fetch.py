@@ -90,7 +90,7 @@ PASS_GAP_S: float = 120.0
 EDGE_STEPS: int = 24
 BOX_SAMPLES: int = 11
 DEFAULT_WORKERS: int = 2
-MAX_WORKERS: int = 3
+MAX_WORKERS: int = 4
 PAUSE_S: float = 0.25
 BACKOFF_BASE_S: float = 2.0
 RETRIES: int = 5
@@ -494,40 +494,65 @@ class KeepAliveRangeFile(io.RawIOBase):
             self._conn = None
 
     def _resolve_target(self) -> None:
-        """Follow NASA Earthdata 303 redirect once to obtain the direct object-storage target."""
-        self._close_conn()
-        cur = self.nasa_url
-        for _hop in range(6):
-            p = urllib.parse.urlsplit(cur)
-            host = p.netloc
-            pq = p.path + (f"?{p.query}" if p.query else "")
-            headers = {"User-Agent": USER_AGENT, "Range": "bytes=0-0"}
-            if _is_nasa_host(p.hostname):
-                headers["Authorization"] = f"Bearer {self._token}"
-            conn = http.client.HTTPSConnection(host, timeout=60, context=self._ctx)
-            conn.request("GET", pq, headers=headers)
-            resp = conn.getresponse()
-            status = resp.status
-            loc = resp.getheader("Location", "")
-            body = resp.read(512)
-            if status in (301, 302, 303, 307, 308) and loc:
-                conn.close()
-                cur = urllib.parse.urljoin(cur, loc)
-                continue
-            if status in (200, 206):
-                self._conn = conn
-                self._host = host
-                self._path_q = pq
-                self._send_auth = _is_nasa_host(p.hostname)
-                return
-            conn.close()
-            preview = body.decode("utf-8", errors="replace")
-            _check_approval_needed(status, loc, preview, self._token)
-            raise RuntimeError(
-                f"Range resolve failed ({status}) on {sanitize_url(self.nasa_url, self._token)}: "
-                f"{redact_token(preview[:180], self._token)}"
-            )
-        raise RuntimeError(f"too many redirects resolving {sanitize_url(self.nasa_url, self._token)}")
+        """Follow NASA Earthdata 303 redirect to obtain the direct object-storage target, with retry."""
+        last_err = ""
+        for attempt in range(RETRIES):
+            wait = min(30.0, BACKOFF_BASE_S * (2**attempt))
+            self._close_conn()
+            cur = self.nasa_url
+            retryable = False
+            try:
+                for _hop in range(6):
+                    p = urllib.parse.urlsplit(cur)
+                    host = p.netloc
+                    pq = p.path + (f"?{p.query}" if p.query else "")
+                    headers = {"User-Agent": USER_AGENT, "Range": "bytes=0-0"}
+                    if _is_nasa_host(p.hostname):
+                        headers["Authorization"] = f"Bearer {self._token}"
+                    conn = http.client.HTTPSConnection(host, timeout=60, context=self._ctx)
+                    conn.request("GET", pq, headers=headers)
+                    resp = conn.getresponse()
+                    status = resp.status
+                    loc = resp.getheader("Location", "")
+                    body = resp.read(512)
+                    if status in (301, 302, 303, 307, 308) and loc:
+                        conn.close()
+                        cur = urllib.parse.urljoin(cur, loc)
+                        continue
+                    if status in (200, 206):
+                        self._conn = conn
+                        self._host = host
+                        self._path_q = pq
+                        self._send_auth = _is_nasa_host(p.hostname)
+                        return
+                    conn.close()
+                    preview = body.decode("utf-8", errors="replace")
+                    _check_approval_needed(status, loc, preview, self._token)
+                    last_err = (
+                        f"Range resolve failed ({status}) on {sanitize_url(self.nasa_url, self._token)}: "
+                        f"{redact_token(preview[:180], self._token)}"
+                    )
+                    if status in (408, 429, 500, 502, 503, 504):
+                        ra = _retry_after(resp.headers)
+                        if ra is not None:
+                            wait = ra
+                        retryable = True
+                    break
+                else:
+                    raise RuntimeError(f"too many redirects resolving {sanitize_url(self.nasa_url, self._token)}")
+            except AuthApprovalRequired:
+                raise
+            except (OSError, http.client.HTTPException) as exc:
+                last_err = redact_token(
+                    f"Range resolve transport error on {sanitize_url(self.nasa_url, self._token)}: {type(exc).__name__}: {exc}",
+                    self._token,
+                )
+                retryable = True
+            if not retryable:
+                break
+            if attempt + 1 < RETRIES:
+                time.sleep(wait)
+        raise RuntimeError(last_err or f"Range resolve failed on {sanitize_url(self.nasa_url, self._token)}")
 
     def _open_conn(self) -> http.client.HTTPSConnection:
         if self._conn is None:
