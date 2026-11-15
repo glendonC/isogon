@@ -162,9 +162,6 @@ interface LiveObserverTelemetry {
 const YEARS_COUNTED = { view: 'counted', from: 2010, until: 2012, play: true } as const;
 const YEARS_ONE_SCALE = { view: 'onescale', from: 2010, until: 2012, play: true } as const;
 
-/** The word on every bar that returns to the first screen, the page's own until the product lane gives it. */
-const START = 'Start';
-
 const KNOWN_PLACES = new Set<string>(THEATER_CATALOG.map((t) => t.id));
 function isKnownTheaterId(value: string | undefined): value is TheaterId {
   return value !== undefined && KNOWN_PLACES.has(value);
@@ -1649,7 +1646,6 @@ export function App() {
   const barLon = runMatchesRegion && activeRun ? activeRun.region.center_lon : registryBox.length === 4 ? (registryBox[0] + registryBox[2]) / 2 : null;
   const barLinks = useMemo(
     () => [
-      { label: START, onClick: () => toStartRef.current() },
       { label: WORDS.links.search, onClick: () => setAskOpen(true) },
       { label: WORDS.links.method, onClick: () => setReading('method') },
       { label: WORDS.links.sources, onClick: () => setReading('sources') },
@@ -1909,6 +1905,7 @@ export function App() {
               path={['World', regionTitle, fireTitle].filter((s): s is string => Boolean(s))}
               lat={barLat}
               lon={barLon}
+              onHome={() => toStartRef.current()}
               onTrail={(i) => (i === 0 ? openWorldScreen('years') : goStep('record'))}
               links={barLinks}
             />
