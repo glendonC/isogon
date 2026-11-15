@@ -2218,8 +2218,7 @@ export function App() {
           .filter((id) => id !== 'fire' || (inWorkspace && activeRun))
           .map((id) => ({ id, label: WORDS.docs[id] }))}
         onPick={(id) => {
-          // A document stands over the page, not over a picture of the world: the picture closes first, as before.
-          if (worldScreenOnShow()) closeWorldScreen();
+          // A document stands over the screen it is opened from (a picture of the world too), which stays behind it.
           setMenuOpen(false);
           setReading(id as ReadingSection);
         }}
@@ -2230,6 +2229,7 @@ export function App() {
           <ReadingSheet
             section={reading}
             onSection={setReading}
+            withFire={inWorkspace && !worldScreen}
             onClose={() => setReading(null)}
             imageryCredit={credit}
             verticalExaggeration={stageTelemetry?.verticalExaggeration ?? null}

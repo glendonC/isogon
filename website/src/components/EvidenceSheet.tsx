@@ -1666,6 +1666,8 @@ export interface UnifiedDocumentViewerProps {
   sensorModel?: SensorModelPayload | null;
   overlap?: OverlapEvidence | null;
   overlapPlace?: string | null;
+  /** The screen it is opened from shows a fire: This fire is listed. False lists only what that screen has. */
+  withFire?: boolean;
 }
 
 /**
@@ -1673,6 +1675,7 @@ export interface UnifiedDocumentViewerProps {
  */
 export function UnifiedDocumentViewer({
   open,
+  withFire = true,
   initialDoc,
   onClose,
   onDocChange,
@@ -1841,7 +1844,7 @@ export function UnifiedDocumentViewer({
 
   const navItems = useMemo<ViewerNavItem[]>(() => {
     const items: ViewerNavItem[] = [];
-    if (store?.run.active) {
+    if (store?.run.active && withFire) {
       items.push({ id: 'fire', label: 'This fire' });
     }
     if (effectiveScore) {
@@ -1853,7 +1856,7 @@ export function UnifiedDocumentViewer({
     items.push({ id: 'sensors', label: 'Sensor geometry' });
     items.push({ id: 'sources', label: 'Sources' });
     return items;
-  }, [store?.run.active, effectiveScore]);
+  }, [store?.run.active, effectiveScore, withFire]);
 
   const handleSelect = (next: ViewerDocId) => {
     setActiveDoc(next);

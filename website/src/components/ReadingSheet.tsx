@@ -19,6 +19,8 @@ interface ReadingSheetProps {
   sensorModel: SensorModelPayload | null;
   overlap: OverlapEvidence | null;
   overlapPlace: string | null;
+  /** The screen under the reading view shows a fire (This fire is listed only then). */
+  withFire?: boolean;
 }
 
 function docOfSection(section: ReadingSection): ViewerDocId {
@@ -36,6 +38,7 @@ export function ReadingSheet(props: ReadingSheetProps) {
   return (
     <UnifiedDocumentViewer
       open
+      withFire={props.withFire ?? true}
       initialDoc={docOfSection(section)}
       scrollCredits={section === 'credits'}
       onClose={onClose}

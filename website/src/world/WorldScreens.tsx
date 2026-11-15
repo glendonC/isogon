@@ -55,6 +55,8 @@ function Host({ screen, onWord }: { screen: WorldScreen; onWord?: (word: TrailWo
   // stays with the picture, so nothing under it acts.
   useWorldKeys(
     (e) => {
+      // A document or the menu open over the picture takes the keys (its Escape closes it, its keys scroll it).
+      if (document.querySelector('.iso-viewer-layer, .id-menu')) return false;
       if (e.key === 'Escape') {
         backWorldScreen();
         return true;
