@@ -1664,7 +1664,8 @@ export function App() {
                 <div className="guide-scrim" aria-hidden="true" />
                 <GuideStrip
                   lines={filmMode ? [] : said && said.key === guideKey ? said.lines : guide.lines}
-                  actions={guide.actions}
+                  // In the film only the step's strong action stands, so nothing else competes with the caption.
+                  actions={filmMode ? guide.actions.slice(0, 1) : guide.actions}
                   onAction={runCommand}
                   results={guide.results}
                 />
