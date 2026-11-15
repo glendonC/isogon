@@ -2,7 +2,7 @@
 
 .rec {
   /* Room kept for the trail above and for the guide's strip below. The page may set either. */
-  --rec-top: 96px;
+  --rec-top: 112px;
   --rec-guide: 150px;
   position: absolute;
   inset: 0;
@@ -295,6 +295,14 @@
 .rec__holds {
   margin: 0;
   color: var(--sys-ink);
+}
+
+/* On a phone the trail takes two lines and the guide three: the grid keeps clear of both. */
+@media (max-width: 700px) {
+  .rec {
+    --rec-top: 150px;
+    --rec-guide: 230px;
+  }
 }
 
 /* The workspace dock steps aside while The Record is open. */

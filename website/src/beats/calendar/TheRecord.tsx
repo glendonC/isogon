@@ -301,7 +301,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
   const fx = nowLabel && nowAt ? nowAt.x + cell / 2 : fm ? xOf(fm.year) + cell / 2 : 0;
   const fy = nowLabel && nowAt ? nowAt.y : fm ? yOf(fm.month) : 0;
   // Where the way to this month stands: after the last year, on the years' line
-  const afterYears = rec ? xOf(rec.lastYear + 1) + 8 : 0;
+  // The way to this month so far stands at the right end of the years, above the older satellites' line, where no
+  // year label is written
+  const afterYears = rec ? xOf(rec.lastYear + 1) + cell : 0;
   // The label hangs on the side of its leader with room for it, and is never wider than that room.
   const labelRight = fx + 12 + LABEL_W <= size.w || size.w - fx >= fx;
   const labelRoom = Math.max(120, Math.min(LABEL_W, (labelRight ? size.w - fx : fx) - 12));
@@ -349,7 +351,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                 if (nowAt && Math.abs(e.clientX - r.left - nowAt.x - cell / 2) <= cell / 2 && Math.abs(e.clientY - r.top - nowAt.y - cell / 2) <= cell / 2) return setNowOn(true);
                 const ym = monthAt(e);
                 if (!ym) return;
-                if (openable.has(ym)) show(ym);
+                // A click picks a month, so its label, its prompt and the guide's actions for it (its detections as a
+                // file among them) can be read; a click on the month already picked shows its fire
+                if (ym === shown && openable.has(ym) && (picked !== null || ym === marked)) show(ym);
                 else pick(ym);
               }}
             >
@@ -495,8 +499,8 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
             )}
 
             {/* The way to this month so far stands after the last year: the month is the record's next square. */}
-            {rec.currentRoute && !thisMonth && afterYears + 130 <= size.w + 24 && (
-              <div className="rec__after" style={{ left: afterYears, top: y0 + gridH + 2 }}>
+            {rec.currentRoute && !thisMonth && afterYears <= size.w + 24 && (
+              <div className="rec__after" style={{ right: size.w - afterYears, top: spansY + 2 }}>
                 {now.state === 'loading' ? (
                   <span className="sys-fine">{W.counting}</span>
                 ) : (
@@ -554,7 +558,7 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                 </button>
               )}
               {sharpX !== null && !atJunction && <div className="rec__wide">{correctionPrompt}</div>}
-              {rec.currentRoute && !thisMonth && afterYears + 130 > size.w + 24 && now.state !== 'loading' && (
+              {rec.currentRoute && !thisMonth && afterYears > size.w + 24 && now.state !== 'loading' && (
                 <button type="button" className="rec__act rec__wide" onClick={askNow}>
                   {W.thisMonth}
                 </button>
