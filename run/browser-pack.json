@@ -1,7 +1,7 @@
 {
  "version": 1,
  "what": "the archives a browser unpacks into one folder to run a fire: the core first, then the place's",
- "commit": "73a1cc52b991d7a897eaac857b9b28c1d65f9855",
+ "commit": "fda09df816547a097574ea4f7dbcfefa12b374b3",
  "unpack": {
   "format": "zip",
   "paths": "relative to the repository root",
@@ -12,11 +12,11 @@
  },
  "core": {
   "file": "core.zip",
-  "bytes": 1385025,
-  "sha256": "0f2ec26cc14fd52f698744e8f2e819a0ddcffd2498dd378cbcf59972435ae0c5",
-  "files": 145,
-  "content_bytes": 5737093,
-  "modules": 134
+  "bytes": 1399724,
+  "sha256": "4631c431d2ce981883bebf539390351a21a2c3d487ec9dc6fcd0b7d20f09bb66",
+  "files": 148,
+  "content_bytes": 5780843,
+  "modules": 137
  },
  "places": {
   "evros_greece": {
@@ -157,8 +157,8 @@
  },
  "lists": [
   {
-   "file": "pack-list-D59.json",
-   "sha256": "d2f68b15f9fcfbc09541e41f0eccbeb7a972ba141372a77e7d9b32e18ac97d66"
+   "file": "pack-list-D63.json",
+   "sha256": "ea03c203df41c55939c69bc589a9e6abfb68965b10df867d53f75dd69531d898"
   }
  ],
  "refused": "a path outside the tree, the key's file (.env and any name beginning .env), the world store and .git are never packed, nor a missing file, nor a FIRMS row inside a closed window; one in a list stops the pack before any archive is written"
