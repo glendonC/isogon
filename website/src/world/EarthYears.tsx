@@ -18,6 +18,8 @@ import { EARTH_WORDS, millions, YEAR_WORDS as Y } from './words';
 import { boxMiddle, setAscent, useAscent } from './descent';
 import type { Destination } from './destinations';
 import { formatCoord } from '../identity/where';
+import { Waiting } from '../identity/Waiting';
+import { WORDS } from '../identity/words';
 import {
   familyOf,
   layerOf,
@@ -555,7 +557,9 @@ export function EarthYears({
   }, [idx]);
 
   if (read.state === 'failed') return <div className="world-years"><p className="world-years__state">{Y.failed}</p></div>;
-  if (!idx || shown === null) return <div className="world-years"><p className="world-years__state">{Y.loading}</p></div>;
+  // Until the years' index is in (a slow network), the screen says what is loading, as the page did while its code
+  // came (identity/Waiting.tsx); the frame (the path, the bottom edge) stands round it.
+  if (!idx || shown === null) return <div className="world-years"><Waiting path={[]} line={WORDS.waitEarth} over={false} /></div>;
 
   const info = idx.years.find((y) => y.year === shown)!;
   // The strip is the whole Earth's, or the chosen country's.

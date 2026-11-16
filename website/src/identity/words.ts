@@ -23,6 +23,9 @@ export const WORDS = {
     sensors: 'Sensor geometry',
     sources: 'Sources',
   },
+  /** While a picture of the world (its code or its data) is still on its way over the network. */
+  waitEarth: 'Loading every year of fire on Earth',
+  waitWorld: 'Loading',
   /** The level above a place on the path, the Earth's years; the first screen's "Explore the Earth" goes there. */
   earth: 'The Earth',
   /** The bottom edge while the visitor goes by themselves: the way back one level, and the places one level on. */

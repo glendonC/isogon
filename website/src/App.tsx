@@ -29,6 +29,7 @@ import { LocatorBar } from './identity/LocatorBar';
 import { StoryLine } from './identity/StoryLine';
 import { Moves, type Move } from './identity/Moves';
 import { SideMenu } from './identity/SideMenu';
+import { Waiting } from './identity/Waiting';
 import { SoundControl } from './audio';
 import { SCREEN_WORDS } from './world/words';
 import { RevealSweep } from './identity/RevealSweep';
@@ -1930,6 +1931,13 @@ export function App() {
       window.clearTimeout(timer);
     };
   }, [stageIn]);
+  // Once the first screen is drawn, the pictures of the world's code is fetched in the background, so Explore the
+  // Earth does not wait for it on a slow network.
+  useEffect(() => {
+    if (!stageIn) return;
+    const id = window.setTimeout(() => void import('./world/WorldScreens').catch(() => {}), 1500);
+    return () => window.clearTimeout(id);
+  }, [stageIn]);
   const [recordedLine, setRecordedLine] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -2296,7 +2304,20 @@ export function App() {
       )}
 
       {worldScreen && (
-        <Suspense fallback={null}>
+        // While the pictures' code is still on its way (a slow network), the screen's path and what is loading stand
+        // at once, never the bare ground.
+        <Suspense
+          fallback={
+            <Waiting
+              path={[WORDS.earth, worldScreen.name === 'years' ? SCREEN_WORDS.years.where : worldScreen.name === 'test' ? SCREEN_WORDS.test.where(null) : SCREEN_WORDS.sealed.where]}
+              line={worldScreen.name === 'years' ? WORDS.waitEarth : WORDS.waitWorld}
+              onHome={() => {
+                closeWorldScreen();
+                toStartRef.current();
+              }}
+            />
+          }
+        >
           <WorldScreens onWord={onTrailWord} />
         </Suspense>
       )}

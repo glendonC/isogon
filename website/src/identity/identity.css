@@ -701,6 +701,36 @@ button.id-story__part:focus-visible {
   animation: id-arrival-way 1.4s var(--id-move) infinite;
 }
 
+/* a screen on its way: its path, and one line of what is loading over a running line */
+.id-wait {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--id-font);
+}
+
+.id-wait--over {
+  position: fixed;
+  z-index: 72;
+  background: var(--id-ground);
+  pointer-events: auto;
+}
+
+.id-wait__say {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  top: 42%;
+}
+
+.id-wait__line {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1.25;
+  color: var(--id-ink);
+}
+
 @keyframes id-arrival-way {
   from {
     transform: translateX(-100%);
