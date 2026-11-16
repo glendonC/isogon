@@ -91,7 +91,7 @@ export const SEAL_WORDS = {
     `Written down and sealed ${Math.round(minutes)} minutes before VIIRS passed over ${where}, then scored.`,
   close: (k: number, n: number, where: string) => `${k} of the ${n} fires scored lie close together in ${where}, so they are not ${n} separate tests.`,
   /** Said before any row: what a row is, and how the predictions have done, from the answer's own counts. */
-  lede: 'Each row is a prediction of where VIIRS will see fire on a coming pass, made from MODIS alone and sealed before the pass.',
+  lede: "Each row is a fire. Its latest prediction says where VIIRS will see fire on a coming pass, made from MODIS's detections and written down before the pass.",
   howTheyDid: (scored: number, fires: number, judged: number, ahead: number, tied: number, behind: number) =>
     `So far ${scored} predictions on ${fires} fires are scored. Against both simple methods, over ${judged} measures: ahead on ${ahead}, level on ${tied}, behind on ${behind}.`,
   /** A scored row's result in the table: the overlap with VIIRS fire pixels, the model's, then MODIS alone's. */
