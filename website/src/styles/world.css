@@ -792,9 +792,9 @@
    where the chart sets its pointer's readout beside the bars and not in a band above them: the panel's last note then
    stands above the guide. */
 .world-tests {
-  top: 148px;
+  top: 104px;
   bottom: auto;
-  width: min(640px, max(624px, 38vw), calc(100% - 32px));
+  width: min(720px, max(680px, 46vw), calc(100% - 32px));
   gap: var(--sys-s2);
 }
 
