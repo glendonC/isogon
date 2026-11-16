@@ -332,12 +332,23 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
           <>
             {/* The dataviz lane's live table (its MOUNT.md): one row a fire with a sealed prediction, newest first. A row
                 opens its result under the table (words version 16). */}
-            <div className="world-ledger" onClick={(e) => {
-              const tr = (e.target as HTMLElement).closest('tbody tr');
-              const at = tr ? Array.from(tr.parentElement?.children ?? []).indexOf(tr) : -1;
-              const id = at >= 0 ? tableRows[at]?.fireId : undefined;
-              if (id) setOpenFire((o) => (o === id ? null : id));
-            }}>
+            <div
+              className="world-ledger"
+              onClick={(e) => {
+                const tr = (e.target as HTMLElement).closest('tbody tr');
+                const at = tr ? Array.from(tr.parentElement?.children ?? []).indexOf(tr) : -1;
+                const id = at >= 0 ? tableRows[at]?.fireId : undefined;
+                if (id) setOpenFire((o) => (o === id ? null : id));
+              }}
+              // A row under the pointer lights its mark and number on the map, so a row and its fire are read together
+              // where marks crowd.
+              onPointerOver={(e) => {
+                const tr = (e.target as HTMLElement).closest('tbody tr');
+                const at = tr ? Array.from(tr.parentElement?.children ?? []).indexOf(tr) : -1;
+                setOver(at >= 0 ? tableRows[at]?.fireId ?? null : null);
+              }}
+              onPointerLeave={() => setOver(null)}
+            >
               <LiveTable table={{ ...table, rows: tableRows }} width={860} nums={numOf} results={resultOf} fingerprint={false} heads={SEAL_WORDS.heads} />
             </div>
             {openSeal && (

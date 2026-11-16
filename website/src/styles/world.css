@@ -1372,6 +1372,22 @@
   .world-screen[data-film='false'] .world-sealed .world-ledger table {
     width: 100% !important;
   }
+
+  /* A row under the pointer and its fire's mark on the map light together. */
+  .world-screen[data-film='false'] .world-sealed .world-ledger tbody tr:hover td {
+    background: rgba(159, 227, 255, 0.07);
+  }
+
+  .world-screen[data-film='false'] .world-sealed .world-seal-mark[data-over='true'] {
+    z-index: 2;
+    outline: 2px solid var(--id-signal, #9fe3ff);
+    outline-offset: 4px;
+  }
+
+  .world-screen[data-film='false'] .world-sealed .world-label--num[data-over='true'] {
+    z-index: 2;
+    color: var(--id-signal, #9fe3ff);
+  }
 }
 
 /* On the page the year stands under the trail, which holds the objective; the controls keep the top right. */
