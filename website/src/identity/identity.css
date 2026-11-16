@@ -555,7 +555,7 @@ button.id-story__part:focus-visible {
 .id-arrival__veil {
   position: absolute;
   inset: 0;
-  background: rgba(5, 7, 12, 0.94);
+  background: rgba(5, 7, 12, 0.985);
   transition: opacity 700ms var(--id-ease);
 }
 
@@ -587,6 +587,44 @@ button.id-story__part:focus-visible {
   font-size: 16px;
   letter-spacing: 0.08em;
   color: var(--id-signal);
+}
+
+.id-arrival__way {
+  position: relative;
+  display: block;
+  width: min(360px, 60vw);
+  height: 1px;
+  margin-top: 22px;
+  overflow: hidden;
+  background: var(--id-line);
+}
+
+.id-arrival__way::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 30%;
+  background: var(--id-signal);
+  animation: id-arrival-way 1.4s var(--id-move) infinite;
+}
+
+@keyframes id-arrival-way {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .id-arrival__way::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
 }
 
 @keyframes id-arrival-out {

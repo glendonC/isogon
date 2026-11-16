@@ -21,6 +21,9 @@ export function Arrival({ name, coord, landed }: ArrivalProps) {
       <div className="id-arrival__say">
         <p className="id-arrival__name">{name}</p>
         {coord && <p className="id-arrival__coord">{coord}</p>}
+        {/* While the place's ground comes: a thin line in the signal colour runs under the name, so the wait reads as
+            the journey going on, not as a stop. */}
+        {!landed && <span className="id-arrival__way" aria-hidden="true" />}
       </div>
     </div>
   );
