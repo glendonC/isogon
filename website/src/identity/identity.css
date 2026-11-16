@@ -201,6 +201,12 @@ body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label
   content: '\2192';
 }
 
+/* the way back one level points back, and steps back on hover */
+.id-moves__back .id-moves__move::after {
+  content: '\2190';
+  text-indent: 3px;
+}
+
 .id-control:hover .id-control__go,
 .id-control:focus-visible .id-control__go,
 .id-moves__move:hover:not(:disabled)::after,
