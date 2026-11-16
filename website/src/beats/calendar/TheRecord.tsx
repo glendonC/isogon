@@ -470,7 +470,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                 record={dvRecord}
                 selected={shown}
                 onPick={(ym) => (openable.has(ym) ? show(ym) : pick(ym))}
-                actionFor={(c) => (openable.has(c.ym) ? W.openFire(c.ym) : null)}
+                // Where the guide speaks, opening the month's fire is its control at the bottom right: the frame on the
+                // grid shows the month and its figures only, so the action stands in one place.
+                actionFor={(c) => (!guideSpeaks && openable.has(c.ym) ? W.openFire(c.ym) : null)}
                 words={{ noFire: W.noFireLegend, fewer: W.less, more: W.more, modis: W.coarse, viirs: W.sharp }}
               />
             </div>
@@ -487,10 +489,13 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                   {gridLine(boxWords(rec.grid.box), rec.grid.step, rec.grid.cells, rec.grid.loaded, rec.grid.complete)}
                 </p>
               )}
-              <button type="button" className="rec__act rec__download" onClick={download}>
-                <span className="rec__key">G</span>
-                {W.download}
-              </button>
+              {/* Where the guide speaks, the download is its control at the bottom right (one place; G still works) */}
+              {!guideSpeaks && (
+                <button type="button" className="rec__act rec__download" onClick={download}>
+                  <span className="rec__key">G</span>
+                  {W.download}
+                </button>
+              )}
               {onClose && !guideSpeaks && (
                 <button type="button" className="rec__act rec__close" onClick={onClose}>
                   <span className="rec__key">Esc</span>
@@ -703,9 +708,9 @@ export function TheRecord({ place, markedMonth, canOpen, onOpenMonth, onClose, g
                 )}
               </span>
               )}
-              {/* The record as a file: quiet, the Record's own, where the guide speaks too. A phone's narrow foot under
-                  the guide has no row for it (the guide's sentence stands over it there); key G still takes it. */}
-              {!(narrowFoot && guideSpeaks) && (
+              {/* The record as a file, the Record's own where the guide does not speak; where it does, the download is the
+                  guide's control at the bottom right (one place); key G still takes it. */}
+              {!guideSpeaks && (
                 <button type="button" className="rec__act rec__download" onClick={download}>
                   <span className="rec__key">G</span>
                   {W.download}

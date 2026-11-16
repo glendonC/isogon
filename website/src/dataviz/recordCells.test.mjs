@@ -70,6 +70,8 @@ test('the prompt names the month; the readout gives each instrument as counted, 
   const [counted, one] = cellLines(aug);
   assert.equal(counted, 'AUGUST 2012   MODIS 0.25   VIIRS 1.00');
   assert.match(one, /^ON ONE SCALE \d+\.\d+, LIKELY \d+\.\d+ TO \d+\.\d+$/);
+  // The readout names its unit: the rates are detections a day over 1,000 square kilometres.
+  assert.equal(cellLines(aug)[2], 'DETECTIONS A DAY PER 1,000 KM²');
   const nov2000 = r.cells[0];
   assert.equal(cellLines(nov2000)[0], 'NOVEMBER 2000   MODIS 0.25');
 });
