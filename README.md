@@ -30,7 +30,14 @@ burning did not.
 The public page opens on a landing page. Its headline reads "Turn real-world observations into testable worlds." A
 second line under it says that scientific world models reconstruct physical systems from imperfect measurements,
 predict what other instruments will see, and learn what to investigate next. Three ways in stand side by side, of equal
-weight: Play, Explore the Earth and Search a place.
+weight: Play watches the story by itself, Explore the Earth goes from the globe, and Search a place goes straight to a
+place and its fire.
+
+From the globe, every year of fire is drawn on the Earth, with places as pins you can point at and fly down into. A
+place gives its fire record on one scale ("Read the fire record of this place"). A fire opens with VIIRS hidden, so the
+model's estimate stands alone, and then with VIIRS shown. The round, "Pick squares yourself", opens with a briefing,
+gives four looks, and ends with your score beside the model's own choice and random squares. "How the model did on 57
+new fires" shows the tests, and "Fires burning now" shows the predictions sealed before a pass.
 
 ## The three parts
 
@@ -44,8 +51,9 @@ weight: Play, Explore the Earth and Search a place.
    player may spend one of a few looks on one square of the fire. The hidden detections of that look are revealed, the
    model takes them in, and the look is scored by how much it improves the overlap with VIIRS's detections.
 3. **A learning agent, the research direction.** Players choose where to look: some read nothing, some read what the
-   model is unsure of, and one is fitted by regression. The learned player in the repository is small. In the
-   tables below it does not beat the simple rule that looks where the model is least sure.
+   model is unsure of, and two are learned, one by regression and one with boosted trees. Neither beats the simple
+   rule that looks where the model is least sure. The second learner was measured once on 199 untouched fires of 2023
+   to 2025 and was level with the rule: +0.0007, with a 90 percent interval of -0.0001 to +0.0015.
 
 ## Results
 
@@ -56,7 +64,7 @@ the method used before, leaves 18 percent.
 **The model.** Rebuilding single fires from MODIS alone, with VIIRS hidden, the estimate overlaps VIIRS's detections
 about 40 percent better than MODIS alone: 36.9 against 26.4 percent within one square, on 57 fires it had never seen,
 chosen by a rule before any was read and looked at once (test B). The result is the blend's, the learned layer reading
-the filter. The filter alone did worse than MODIS alone on exact overlap, 13.1 against 15.8 percent, and was level
+the filter; the page calls the blend the new model and the filter the first model. The filter alone did worse than MODIS alone on exact overlap, 13.1 against 15.8 percent, and was level
 within one square, 26.6 against 26.4.
 
 Overlap is the squares both mark as detections, out of the squares either marks. The truth these results are scored
@@ -73,6 +81,7 @@ model is experimental: it is shown and tested, and nothing switches it on as a p
 | Overlap on the 73 fires of test A, chosen by the same rule, the filter alone against MODIS alone | Exact: 16.8 against 19.7 percent, worse. Within one square: 35.6 against 32.6. | `backend/model/fitted_values/fresh_world_test_a.json` |
 | Overlap on the three first test fires, 2021, the filter alone against MODIS alone | Exact at Dixie 31.9 against 25.9, at Lytton Creek 19.2 against 12.8, at northern Evia 27.7 against 28.7, worse. Those fires are closed and are not scored again. | `backend/model/fitted_values/test_fire_looks.json` |
 | Where should the next look go? 13 rounds of fires of 2024 and 2025 | Looking where the model is least sure raises overlap by 4.8 points from four looks, against 0.6 for random looks and 1.7 for the best fixed square in hindsight, and beats random looks in 13 of 13. The learned player adds 0.25 points to it, most likely between -0.72 and +1.25, so no difference beyond the noise. | `backend/env/fitted/next_look.json`, [`docs/method.md`](docs/method.md) |
+| The second learner, measured once on 199 untouched fires of 2023 to 2025, against the same rule | A gain of +0.0007 (0.07 points) over the rule, with a 90 percent interval of -0.0001 to +0.0015: level. The rule gains 0.0411 on these fires and the second learner 0.0418. | `backend/env/fitted/tree_player_test_c.json`, [`docs/method.md`](docs/method.md) |
 
 The figures of the tests are served by the backend at `GET /api/evidence`, which reads the tracked files named above.
 The figures of the record come from the fire cube, measured by `python3 -m backend.model.harmonize_eval`. Both are
@@ -208,7 +217,7 @@ and set `FIRMS_MAP_KEY` ([`docs/data.md`](docs/data.md)). The site reads the bac
 - **The tests across the world cover 2018 to 2022**, because the country files hold no NOAA-21 rows.
 - **The model is small and experimental.** The blend was chosen on validation fires before the look at the 57 fires and
   scored beside the filter in the same look. The filter alone is behind MODIS alone on exact overlap on both test A and
-  test B. The learned player of the agent does not beat a simple rule.
+  test B. Neither learned player of the agent beats a simple rule.
 - **Lava is listed as fire.** Where lava flows every ratio fails, and the record says so.
 - **The sealed predictions are scored on near real time detections**, NASA's first detections, not the checked archive.
 - **Imagery terms.** Esri World Imagery is published for viewing and not for export; `usgs_naip` is free to share;
