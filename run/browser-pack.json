@@ -1,7 +1,7 @@
 {
  "version": 1,
  "what": "the archives a browser unpacks into one folder to run a fire: the core first, then the place's",
- "commit": "fda09df816547a097574ea4f7dbcfefa12b374b3",
+ "commit": "607fa8deed7e80555e75c310de874605de613b49",
  "unpack": {
   "format": "zip",
   "paths": "relative to the repository root",
@@ -157,7 +157,7 @@
  },
  "lists": [
   {
-   "file": "pack-list-D63.json",
+   "file": "pack-list-D64.json",
    "sha256": "ea03c203df41c55939c69bc589a9e6abfb68965b10df867d53f75dd69531d898"
   }
  ],
