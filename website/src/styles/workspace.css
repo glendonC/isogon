@@ -529,6 +529,12 @@
   background: rgba(8, 11, 17, 0.9);
 }
 
+/* Escape is drawn once a screen, on the control it does: on the players' picture Escape goes back to your turn, the
+   bottom edge's way back, so the picture's own Close keeps its words without the key. */
+.iso-ws .agent-act .agent-key {
+  display: none;
+}
+
 /* The identity's story line and the bottom edge's moves take their clicks inside the workspace's pass-through layer. */
 .iso-ws .id-story,
 .iso-ws .id-moves {

@@ -1752,6 +1752,11 @@ export function App() {
           ? // The round stands on the fire itself (its prompt): it is offered there only.
             [toTested]
           : [{ label: WORDS.moves.turnOn, onClick: () => onTrailWord('Play'), disabled: Boolean(stepBlocked.look), reason: stepBlocked.look ?? null }, toTested];
+  // Where the guide shows a control on Escape, Escape does it (the guide answers keys first): the bottom edge's way back
+  // then keeps its words without the key, so Escape is drawn once. Where the guide's Escape action is not shown (the
+  // round's "Leave the round"), it goes where the way back goes and the way back carries the key.
+  const guideShown = guide.besideFire || guide.besideSquare ? [] : guide.actions.filter((a, n) => n === 0 || !a.quiet).slice(0, 2);
+  const guideEscape = Boolean(guide.step) && guideShown.some((a) => a.key === 'Esc' || a.key === 'Escape');
   // What lies under a picture of the world, so its way back names it.
   const underName = !inWorkspace ? WORDS.moves.start : step === 'record' ? regionTitle || WORDS.moves.earth : inRound ? WORDS.moves.turn : WORDS.moves.fire;
   useEffect(() => setPageUnder(underName), [underName]);
@@ -2044,7 +2049,7 @@ export function App() {
                 testedFires={storyNumber(guide.fields.test_b_fires_n)}
               />
             ) : (
-              <Moves back={moveBack} onward={movesOn} />
+              <Moves back={moveBack} onward={movesOn} escape={!guideEscape} />
             )}
 
             {/* Wide screens: no box (display: contents). Under 960 px: the scrolling bottom half. */}
