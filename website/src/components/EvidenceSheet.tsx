@@ -982,8 +982,8 @@ export function SealedDocument({
   const nBehind = overClasses?.behind ?? 0;
   const liveResult =
     nAhead === 0 && nBehind === 0
-      ? `level with both simple methods on all ${formatSheetCount(nLevel) ?? '0'} scores judged`
-      : `ahead of both simple methods on ${liveAhead}, level on ${liveLevel}, behind on ${liveBehind}`;
+      ? `level with both simple methods on all ${formatSheetCount(nLevel) ?? '0'} measures judged`
+      : `judged together on ${formatSheetCount(nAhead + nLevel + nBehind) ?? '0'} measures, better than both simple methods on ${liveAhead}, level on ${liveLevel} and worse on ${liveBehind}`;
 
   const distinctPartsCount = new Set(fires.map((f) => f.part).filter(Boolean)).size;
   const partsWord = formatCountWord(distinctPartsCount) ?? String(distinctPartsCount);
@@ -1012,12 +1012,13 @@ export function SealedDocument({
           )}
         </div>
         <p className="iso-doc-lead__p iso-doc-lead__p--strong">
-          Each prediction here was written down, with a fingerprint of its contents and the time, before NASA published
-          what the sharp satellite saw on that pass.
+          Each prediction says where VIIRS, the sharper satellite, will see fire on a coming pass, made from MODIS, the
+          coarser one, alone. It was written down before NASA published that pass and fixed with a fingerprint of its
+          contents and the time, so it cannot be changed afterwards.
         </p>
         <p className="iso-doc-lead__p">
-          It is scored against NASA&apos;s first detections of the pass, published within hours of the overpass, which
-          are not the checked archive that replaces them later.
+          It is scored against NASA&apos;s first, quick release of that pass&apos;s detections, published within hours,
+          not the checked version that replaces it later.
         </p>
       </section>
 
@@ -1028,8 +1029,10 @@ export function SealedDocument({
         {twoFiresScored ? (
           <p className="iso-doc-section__p">
             So far {formatSheetCount(scoredCount) ?? '0'} predictions on {formatSheetCount(firesScored) ?? '0'} fires
-            are scored: counting a score only when the gap is too large to be luck, ahead of both simple methods on{' '}
-            {liveAhead}, level on {liveLevel} and behind on {liveBehind}.
+            are scored. They are judged on {formatSheetCount(nAhead + nLevel + nBehind) ?? '0'} measures, each counted
+            only when the gap is too large to be chance and level where it is not: better than both simple methods on{' '}
+            {liveAhead}, level on {liveLevel} and worse on {liveBehind}. The two simple methods take what MODIS saw as it is, one as counted
+            and one scaled up to what VIIRS would count.
           </p>
         ) : (
           <p className="iso-doc-section__p">

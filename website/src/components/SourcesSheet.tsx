@@ -302,11 +302,11 @@ function SourcesMediaPane({
         <span className="iso-doc-legend">
           <span className="iso-doc-legend__item">
             <span className="iso-doc-swatch iso-doc-swatch--modis" />
-            Coarse satellites (Terra, Aqua)
+            MODIS, the coarser instrument (on Terra and Aqua)
           </span>
           <span className="iso-doc-legend__item">
             <span className="iso-doc-swatch iso-doc-swatch--detection" />
-            Sharp satellites (Suomi NPP, NOAA-20, NOAA-21)
+            VIIRS, the sharper instrument (on Suomi NPP, NOAA-20 and NOAA-21)
           </span>
         </span>
         <span>
@@ -653,7 +653,7 @@ export function SourcesSheet({
           <div className="iso-doc-lead__hero">
             <span className="iso-doc-lead__figure">{formatCount(readyHealth.downloadedRows)}</span>
             <span className="iso-doc-lead__unit">
-              stored NASA FIRMS detections
+              fire detections from NASA's public record (FIRMS) stored here
               {readyHealth.downloadedFiles !== null
                 ? ` across ${formatCount(readyHealth.downloadedFiles)} ${
                     readyHealth.downloadedFiles === 1 ? 'file' : 'files'
@@ -663,8 +663,8 @@ export function SourcesSheet({
           </div>
         )}
         <p className="iso-doc-lead__p iso-doc-lead__p--strong">
-          Every count on this sheet is read live from the NASA FIRMS files stored here and from the open place&apos;s
-          fire record.
+          A detection is one spot a satellite flagged as burning. Every count on this sheet is read live from NASA&apos;s
+          files stored here and from the open place&apos;s fire record.
         </p>
       </section>
 

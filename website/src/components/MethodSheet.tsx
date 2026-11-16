@@ -269,13 +269,13 @@ export function MethodDocument({
           Everything on this page is real: NASA&apos;s fire detections, the satellites&apos; real passes, real ground.
         </p>
         <p className="iso-doc-lead__p">
-          The model that estimates a fire is experimental, and every test of it is under{' '}
+          The model that estimates where VIIRS would see fire is experimental, and every test of it is under{' '}
           {triggerTests ? (
             <button type="button" className="iso-inline-trigger" onClick={triggerTests}>
-              Every Test on Record
+              Every test
             </button>
           ) : (
-            'Every Test on Record'
+            'Every test'
           )}
           .
         </p>
@@ -290,12 +290,12 @@ export function MethodDocument({
                   <span key={idx} />
                 ))}
               </div>
-              <span className="iso-method-sq-label">MODIS pixel, about 1 km across</span>
+              <span className="iso-method-sq-label">MODIS pixel, about 1 km across straight down</span>
             </div>
             <div className="iso-method-sq-item">
               <div className="iso-method-sq-sharp" aria-hidden="true" />
               <span className="iso-method-sq-label">
-                VIIRS pixel{sharpSquareM ? `, ${sharpSquareM} m across` : ''}
+                VIIRS pixel{sharpSquareM ? `, ${sharpSquareM} m across straight down` : ''}
               </span>
             </div>
           </div>
@@ -304,7 +304,7 @@ export function MethodDocument({
             <div className="iso-method-bars">
               <div className="iso-method-bar-row">
                 <div className="iso-method-bar-head">
-                  <span>A year left out and rebuilt on one scale is off by</span>
+                  <span>A hidden year, rebuilt on one scale, misses by</span>
                   <span className="iso-method-bar-val">{recordErrorPct}%</span>
                 </div>
                 <div className="iso-method-bar-track">
@@ -316,7 +316,7 @@ export function MethodDocument({
               </div>
               <div className="iso-method-bar-row">
                 <div className="iso-method-bar-head">
-                  <span>The same without scaling is off by</span>
+                  <span>Rebuilt without scaling, it misses by</span>
                   <span className="iso-method-bar-val">{recordErrorRawPct}%</span>
                 </div>
                 <div className="iso-method-bar-track">
@@ -525,13 +525,13 @@ export function ThisFireDocument({
   const sharpPasses = epochs.length - coarsePasses;
 
   const statusLine = store.model.closed
-    ? 'This window belongs to a closed test fire, so every satellite pass is shown and the window is not scored again.'
+    ? 'This is one of the original test fires, so every satellite pass is shown and it is not scored again.'
     : store.run.beforeSharp
-      ? 'This fire burned before 2012, when only the coarse satellite was in orbit.'
+      ? 'This fire burned before 2012, when only MODIS, the coarser satellite, was in orbit.'
       : blindActive
-        ? 'The sharp satellite is currently withheld from the model and hidden on the terrain until you reveal it.'
+        ? "VIIRS, the sharper satellite, is hidden from the model's estimate and from the picture of the fire, so the estimate can be checked against it. It comes back when you press Show what VIIRS saw."
         : store.test.revealed
-          ? 'The sharp satellite passes have been revealed over the estimate and scored.'
+          ? 'What VIIRS saw is shown over the estimate, and the estimate is scored against it.'
           : 'Every stored pass over this fire is shown on the terrain.';
 
   return (
@@ -580,7 +580,7 @@ export function ThisFireDocument({
             <span className="iso-doc-legend">
               <span className="iso-doc-legend__item">
                 <span className="iso-doc-swatch iso-doc-swatch--modis" />
-                Coarse pass ({coarsePasses})
+                MODIS passes ({coarsePasses})
               </span>
               <span className="iso-doc-legend__item">
                 <span
@@ -588,10 +588,10 @@ export function ThisFireDocument({
                     blindActive ? 'iso-doc-swatch--withheld' : 'iso-doc-swatch--detection'
                   }`}
                 />
-                {blindActive ? `Sharp pass withheld (${sharpPasses})` : `Sharp pass (${sharpPasses})`}
+                {blindActive ? `VIIRS passes, hidden (${sharpPasses})` : `VIIRS passes (${sharpPasses})`}
               </span>
             </span>
-            <span>Pass {store.time.pass + 1} of {epochs.length} on stage</span>
+            <span>Pass {store.time.pass + 1} of {epochs.length} on show</span>
           </figcaption>
         </figure>
       )}
@@ -609,7 +609,7 @@ export function ThisFireDocument({
           <tbody>
             <tr>
               <th scope="row">
-                <span className="iso-doc-table__row-name">Ground box</span>
+                <span className="iso-doc-table__row-name">Area shown</span>
                 <span className="iso-doc-table__row-desc">{run.region.subtitle}</span>
               </th>
               <td className="is-num">
@@ -619,7 +619,7 @@ export function ThisFireDocument({
             <tr>
               <th scope="row">
                 <span className="iso-doc-table__row-name">Elevation span</span>
-                <span className="iso-doc-table__row-desc">Lowest to highest ground in the box</span>
+                <span className="iso-doc-table__row-desc">Lowest to highest ground in the area</span>
               </th>
               <td className="is-num">
                 {Math.round(run.region.min_elev_m).toLocaleString('en-US')} to{' '}
@@ -629,8 +629,8 @@ export function ThisFireDocument({
             {sharpSquareM && (
               <tr>
                 <th scope="row">
-                  <span className="iso-doc-table__row-name">Estimate grid square</span>
-                  <span className="iso-doc-table__row-desc">Each square tracked forward and backward across passes</span>
+                  <span className="iso-doc-table__row-name">The estimate's square</span>
+                  <span className="iso-doc-table__row-desc">The estimate follows each square of this size through the passes</span>
                 </th>
                 <td className="is-num">
                   <AlignedNumber intPart={sharpSquareM} unit="m" flush />
@@ -641,7 +641,7 @@ export function ThisFireDocument({
               <tr>
                 <th scope="row">
                   <span className="iso-doc-table__row-name">Estimated heat at pass {store.time.pass + 1}</span>
-                  <span className="iso-doc-table__row-desc">Total fire power stated by the estimate at this moment</span>
+                  <span className="iso-doc-table__row-desc">How much heat the estimate says the fire gives off at this pass</span>
                 </th>
                 <td className="is-num">
                   <AlignedNumber intPart={Math.round(store.time.powerMw).toLocaleString('en-US')} unit="MW" flush />
@@ -662,7 +662,7 @@ export function ThisFireDocument({
             )}
             {onSelectTests && (
               <button type="button" className="iso-plain-action" onClick={onSelectTests}>
-                <span>Every Test on Record</span>
+                <span>Every test</span>
               </button>
             )}
             <a

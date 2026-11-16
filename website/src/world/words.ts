@@ -248,9 +248,9 @@ export const SCREEN_WORDS = {
       `These are the years as counted. From 2012 the counts come from VIIRS, a sharper satellite that makes ${ratio} times as many detections as MODIS.`,
     oneScale: 'On one scale the MODIS years are raised to what VIIRS would count, so 2012 shows no jump.',
     play: 'Play the years',
-    stop: 'Stop',
-    toOneScale: 'Show one scale',
-    toCounted: 'Show the years as counted',
+    stop: 'Stop the years',
+    toOneScale: "Put every year on VIIRS's scale",
+    toCounted: 'Show the counts before scaling',
     back: 'Back',
     filmCounted: (ratio: string) => `2012: VIIRS begins, seeing smaller fires too: ${ratio} times the detections.`,
     filmOneScale: (_first: number) => 'On one scale, no jump.',
@@ -302,7 +302,7 @@ export const SCREEN_WORDS = {
         ? `The table shows one measure. Over all ${ahead + tied + behind} measures it was clearly better on ${ahead}, clearly worse on ${behind}, and too close to call on ${tied}.`
         : null,
     /** What the table's match is, said on demand. */
-    match: 'Match counts the pixels where an estimate and VIIRS both show fire, out of all pixels where either does. MODIS alone takes what MODIS saw as it is, scaled up or not. Each measure compares an estimate with VIIRS on where the fire is, how much of it there is, or how much heat it gives off.',
+    match: 'Match counts the pixels where an estimate and VIIRS both show fire, out of all pixels where either does. The two simple methods take what MODIS saw as it is, one as counted and one scaled up to what VIIRS would count; MODIS alone in the table is the first. Each measure compares an estimate with VIIRS on where the fire is, how much of it there is, or how much heat it gives off.',
     film: 'Live: estimates written down before NASA publishes the pass.',
   },
 };

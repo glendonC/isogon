@@ -419,10 +419,10 @@ export function SensorDiagnosticModal({
   const ratio = sample.modisAreaKm2 / Math.max(1e-3, sample.viirsAreaKm2);
   const sourceLine =
     diagnostics.source === 'api'
-      ? 'Live sensor model from the backend'
+      ? "Computed from each satellite's height and scan angles"
       : diagnostics.source === 'static_artifact'
-        ? 'Generated diagnostics file in this build'
-        : 'Analytical sensor model, computed in the browser';
+        ? "Computed from each satellite's height and scan angles, saved with this page"
+        : "Computed in your browser from each satellite's height and scan angles";
   const showAngle = page < 2;
 
   const content = (

@@ -96,6 +96,9 @@ export const SEAL_WORDS = {
     `So far ${scored} predictions on ${fires} fires are scored. Against both simple methods, over ${judged} measures: ahead on ${ahead}, level on ${tied}, behind on ${behind}.`,
   /** A scored row's result in the table: the overlap with VIIRS fire pixels, the model's, then MODIS alone's. */
   rowResult: (model: string, modis: string) => `Model ${model}%, MODIS alone ${modis}%`,
+  /** A scored row with no match figure: VIIRS saw no fire in the box, or the figure could not be made. */
+  scoredNoFire: 'Scored; VIIRS saw no fire here, so there is nothing to match',
+  scoredNoFigure: 'Scored; no match figure for this pass',
   /** The table's heads: its number on the map is the first column, unnamed. */
   heads: { fire: 'Fire', locked: 'Written down', data: 'Match with VIIRS', fingerprint: 'Fingerprint' },
   /** Sealed fires past what the board has room for, said in one line under the rows. */
@@ -238,6 +241,8 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
   for (const f of fires) {
     const s = telling(byFire.get(f.id) ?? []);
     if (s && s.state === 'scored' && s.overlap) resultOf.set(f.id, SEAL_WORDS.rowResult(percent1(s.overlap.model.exact), percent1(s.overlap.modis.exact)));
+    // Scored with no figure: say why, from the answer (a match needs fire in the box from VIIRS or an estimate).
+    else if (s && s.state === 'scored') resultOf.set(f.id, s.hiddenPixels === 0 ? SEAL_WORDS.scoredNoFire : SEAL_WORDS.scoredNoFigure);
   }
   const tableMore = table ? table.rows.slice(fit.rows).map((r) => r.place) : [];
   const openSeal = openFire ? telling(byFire.get(openFire) ?? []) : null;
