@@ -22,7 +22,10 @@
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: rgba(5, 7, 12, 0.45);
+  /* The screen it was opened from stays in view, dimmed and softened so it reads as behind, not as half a page. */
+  background: rgba(5, 7, 12, 0.72);
+  -webkit-backdrop-filter: blur(6px) saturate(0.7);
+  backdrop-filter: blur(6px) saturate(0.7);
   cursor: default;
   animation: id-sheet-in 360ms var(--id-move) both;
 }
@@ -166,6 +169,13 @@
 /* no key letter is printed in the sheets either; Esc still closes */
 .iso-viewer .iso-plain-action__key,
 .iso-viewer kbd {
+  display: none;
+}
+
+/* With their keys hidden, a document's key hints would stand as stray words ("Page", "Angle") and numbers in brackets
+   ("[1]"): they go too; the pages and the angle are still chosen by their own controls. */
+.iso-viewer .iso-brief__legend .iso-finder__legend-lead,
+.iso-viewer .iso-brief__page-num {
   display: none;
 }
 

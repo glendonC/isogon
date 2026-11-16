@@ -18,9 +18,9 @@ import {
 
 export type { SensorDiagnosticModalProps } from './types';
 
-/** Shared with the continuity record: MODIS grey-blue, VIIRS fire orange, harmonized white. */
-const INK_MODIS = '#b4c3d6';
-const INK_VIIRS = '#f08a45';
+/** The page's sensor colours (identity/identity.css): MODIS orange, VIIRS pale blue, harmonized white. */
+const INK_MODIS = '#ff7a45';
+const INK_VIIRS = '#8fd6f5';
 const INK_HARM = '#f3f4f6';
 const INK_GRID = 'rgba(243, 244, 246, 0.1)';
 const INK_AXIS = 'rgba(243, 244, 246, 0.62)';
