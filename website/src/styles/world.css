@@ -1342,6 +1342,38 @@
   inset: var(--film-room-top, 96px) 0 0 0;
 }
 
+/* On a wide page the map and the table stand side by side, so the map has the height and the table its rows; each row
+   carries its number on the map. */
+@media (min-width: 1100px) {
+  .world-screen[data-film='false'] .world-sealed {
+    grid-template-columns: minmax(0, 1fr) minmax(520px, 0.95fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .world-screen[data-film='false'] .world-sealed__earth {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .world-screen[data-film='false'] .world-sealed .world-board {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    min-width: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    padding-top: 0;
+  }
+
+  .world-screen[data-film='false'] .world-sealed .world-ledger {
+    min-width: 0;
+  }
+
+  .world-screen[data-film='false'] .world-sealed .world-ledger table {
+    width: 100% !important;
+  }
+}
+
 /* On the page the year stands under the trail, which holds the objective; the controls keep the top right. */
 .world-screen[data-name='years'][data-film='false'] {
   --years-caption-top: 104px;

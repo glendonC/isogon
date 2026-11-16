@@ -90,6 +90,10 @@ export const SEAL_WORDS = {
   proofLine: (minutes: number, where: string) =>
     `Written down and sealed ${Math.round(minutes)} minutes before VIIRS passed over ${where}, then scored.`,
   close: (k: number, n: number, where: string) => `${k} of the ${n} fires scored lie close together in ${where}, so they are not ${n} separate tests.`,
+  /** A scored row's result in the table: the overlap with VIIRS fire pixels, the model's, then MODIS alone's. */
+  rowResult: (model: string, modis: string) => `Model ${model}%, MODIS alone ${modis}%`,
+  /** The table's heads: its number on the map is the first column, unnamed. */
+  heads: { fire: 'Fire', locked: 'Locked', data: 'Overlap with VIIRS', fingerprint: 'Fingerprint' },
   /** Sealed fires past what the board has room for, said in one line under the rows. */
   more: (items: string[]) => `Also sealed: ${items.join(', ')}`,
   rest: (items: string[], any: boolean) => `${any ? 'Also followed' : 'Followed tonight'}, no pass sealed yet: ${items.join(', ')}`,
@@ -221,7 +225,16 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
   // Fires with no seal yet share one line, so the board is the height of what has happened.
   // The page's table (the dataviz lane's rows from the live answer), cut to the rows the room has, and the open row.
   const table = !film && read.state === 'ready' ? rowsFromLive(read.value, (f) => (f.centre ? countryAt(f.centre[0], f.centre[1]) : null) ?? partWords(f)) : null;
+  // Each row carries its number on the map, in that order, and its result where it is scored (the overlap with VIIRS
+  // fire pixels, the model's and MODIS alone's), so the map, the rows and the outcome read as one.
+  const numOf = new Map(fires.map((f, i) => [f.id, i + 1]));
+  if (table) table.rows.sort((a, b) => (numOf.get(a.fireId) ?? 99) - (numOf.get(b.fireId) ?? 99));
   const tableRows = table ? table.rows.slice(0, fit.rows) : [];
+  const resultOf = new Map<string, string>();
+  for (const f of fires) {
+    const s = telling(byFire.get(f.id) ?? []);
+    if (s && s.state === 'scored' && s.overlap) resultOf.set(f.id, SEAL_WORDS.rowResult(percent1(s.overlap.model.exact), percent1(s.overlap.modis.exact)));
+  }
   const tableMore = table ? table.rows.slice(fit.rows).map((r) => r.place) : [];
   const openSeal = openFire ? telling(byFire.get(openFire) ?? []) : null;
   const sealedAll = numbered.filter(({ f }) => byFire.has(f.id));
@@ -325,7 +338,7 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
               const id = at >= 0 ? tableRows[at]?.fireId : undefined;
               if (id) setOpenFire((o) => (o === id ? null : id));
             }}>
-              <LiveTable table={{ ...table, rows: tableRows }} width={860} />
+              <LiveTable table={{ ...table, rows: tableRows }} width={860} nums={numOf} results={resultOf} fingerprint={false} heads={SEAL_WORDS.heads} />
             </div>
             {openSeal && (
               <div className="world-board__opened">
@@ -467,7 +480,8 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
         </ol>
           </>
         )}
-        {scoredFires.length > 0 && note('listed') && (
+        {/* Said only where the counts differ: a fire followed with no seal, or a sealed one not yet scored. */}
+        {scoredFires.length > 0 && note('listed') && (sealedAll.length < fires.length || scoredFires.length < sealedAll.length || group) && (
           <div className="world-board__rule">
             {SEAL_WORDS.listed(fires.length, sealedAll.length, scoredFires.length)}
             {group && groupWhere ? ` ${SEAL_WORDS.close(group.length, scoredFires.length, groupWhere)}` : ''}
