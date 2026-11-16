@@ -46,3 +46,30 @@ export function boxRings(box: readonly [number, number, number, number]): number
 export function boxMiddle(box: readonly [number, number, number, number]): { lat: number; lon: number } {
   return { lat: (box[1] + box[3]) / 2, lon: (box[0] + box[2]) / 2 };
 }
+
+/**
+ * The ascent: the place the visitor goes back up to the Earth from. The Earth's years open drawn near on it and draw
+ * out to the whole globe, its pin marked by name, so the visitor sees which mark they came from. Cleared once the
+ * visitor points at something on the globe, or opens a place.
+ */
+let ascent: Descent | null = null;
+const ascentListeners = new Set<() => void>();
+
+export function setAscent(next: Descent | null): void {
+  if (next === ascent) return;
+  ascent = next;
+  ascentListeners.forEach((fn) => fn());
+}
+
+export function useAscent(): Descent | null {
+  return useSyncExternalStore(
+    (fn) => {
+      ascentListeners.add(fn);
+      return () => {
+        ascentListeners.delete(fn);
+      };
+    },
+    () => ascent,
+    () => null,
+  );
+}

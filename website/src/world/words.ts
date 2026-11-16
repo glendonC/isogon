@@ -189,6 +189,8 @@ export const YEAR_WORDS = {
   noFile: 'no file of its own',
   /** The pointed country's frame in the scene: its action, and its readout's count for the year on show. */
   countryAction: 'Show its years',
+  /** Under the name of the place the visitor came back up from, ringed on the globe. */
+  cameFrom: 'You came from here',
   /** A place's square on the globe, pointed at: what a click does. */
   placeAction: 'Go to this place',
   readoutYear: (n: string, year: number, oneScale: boolean) => `${n} detections${oneScale ? ' on one scale' : ''} in ${year}`,

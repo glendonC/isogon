@@ -47,6 +47,11 @@ export interface GlobeProps {
   pins?: GlobePin[];
   onPin?: (hit: { id: string; box: { left: number; top: number; right: number; bottom: number } } | null) => void;
   onPinPick?: (id: string) => void;
+  /** Open drawn near on this point (the place the visitor came back up from) and draw out to the whole globe. */
+  startAt?: { lon: number; lat: number; zoom: number } | null;
+  /** One pin marked (ringed) as where the visitor came from, its screen box told to `onMarked`. */
+  markedPin?: string | null;
+  onMarked?: (box: { left: number; top: number; right: number; bottom: number } | null) => void;
   className?: string;
 }
 
@@ -254,12 +259,16 @@ const AUTO_DEG_S = 4;
 const FILM_FROM = -82;
 const FILM_TO = 52;
 
-export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, film = null, fly = null, outlines = [], onBox, onPoint, onPick, onSlow, pins = [], onPin, onPinPick, className }: GlobeProps) {
+export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, film = null, fly = null, outlines = [], onBox, onPoint, onPick, onSlow, pins = [], onPin, onPinPick, startAt = null, markedPin = null, onMarked, className }: GlobeProps) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const over = useRef<HTMLCanvasElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const turn = useRef<Turn>({ lon: film ? FILM_FROM : 10, lat: film ? 12 : 16, zoom: 1, vLon: 0, vLat: 0, dragAt: 0 });
+  const turn = useRef<Turn>(
+    startAt && !film
+      ? { lon: startAt.lon, lat: Math.max(-75, Math.min(75, startAt.lat)), zoom: startAt.zoom, vLon: 0, vLat: 0, dragAt: 0 }
+      : { lon: film ? FILM_FROM : 10, lat: film ? 12 : 16, zoom: 1, vLon: 0, vLat: 0, dragAt: 0 },
+  );
   const flight = useRef<Flight | null>(null);
   const gl = useRef<{
     gl: WebGL2RenderingContext;
@@ -270,8 +279,9 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     lut: WebGLTexture;
     has: boolean;
   } | null>(null);
-  const props = useRef({ ix, lut, padTop, padBottom, padLeft, film, fly, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick });
-  props.current = { ix, lut, padTop, padBottom, padLeft, film, fly, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick };
+  const props = useRef({ ix, lut, padTop, padBottom, padLeft, film, fly, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick, markedPin, onMarked });
+  props.current = { ix, lut, padTop, padBottom, padLeft, film, fly, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick, markedPin, onMarked };
+  const lastMarked = useRef<string>('none');
   // The pins as last drawn (the overlay's own px) and the one last told as pointed.
   const pinsAt = useRef<Array<{ id: string; x: number; y: number }>>([]);
   const lastPin = useRef<string>('none');
@@ -674,13 +684,32 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     pinsAt.current = placed;
     const p = pointer.current;
     const hit = p && !props.current.film ? pinUnder(p.x, p.y) : null;
+    const markedId = props.current.markedPin;
+    let marked: { x: number; y: number } | null = null;
     for (const q of placed) {
       const on = hit?.id === q.id;
-      g.fillStyle = on ? 'rgba(159, 227, 255, 0.35)' : 'rgba(5, 7, 12, 0.55)';
+      const was = markedId === q.id;
+      g.fillStyle = on || was ? 'rgba(159, 227, 255, 0.35)' : 'rgba(5, 7, 12, 0.55)';
       g.fillRect(Math.round(q.x - PIN / 2), Math.round(q.y - PIN / 2), PIN, PIN);
       g.strokeStyle = 'rgba(159, 227, 255, 0.95)';
-      g.lineWidth = on ? 2 : 1.5;
+      g.lineWidth = on || was ? 2 : 1.5;
       g.strokeRect(Math.round(q.x - PIN / 2) + 0.5, Math.round(q.y - PIN / 2) + 0.5, PIN - 1, PIN - 1);
+      if (was) {
+        // The place the visitor came back from: a ring round its pin.
+        marked = q;
+        g.lineWidth = 1;
+        g.strokeRect(Math.round(q.x - PIN) + 0.5, Math.round(q.y - PIN) + 0.5, PIN * 2 - 1, PIN * 2 - 1);
+      }
+    }
+    const tellMarked = props.current.onMarked;
+    if (tellMarked) {
+      const wr = wrap.current?.getBoundingClientRect();
+      const mb = marked && wr ? { left: Math.round(wr.left + marked.x - PIN), top: Math.round(wr.top + marked.y - PIN), right: Math.round(wr.left + marked.x + PIN), bottom: Math.round(wr.top + marked.y + PIN) } : null;
+      const key = mb ? `${mb.left},${mb.top}` : 'none';
+      if (key !== lastMarked.current) {
+        lastMarked.current = key;
+        tellMarked(mb);
+      }
     }
     const tellPin = props.current.onPin;
     if (tellPin) {

@@ -15,7 +15,7 @@ import { Ticks } from './Ticks';
 import { WorldCanvas, type GridLayer } from './WorldCanvas';
 import type { Box, Projector } from './projection';
 import { EARTH_WORDS, millions, YEAR_WORDS as Y } from './words';
-import { boxMiddle } from './descent';
+import { boxMiddle, setAscent, useAscent } from './descent';
 import type { Destination } from './destinations';
 import { formatCoord } from '../identity/where';
 import {
@@ -233,6 +233,20 @@ export function EarthYears({
   const [pinned, setPinned] = useState<{ id: string; box: ScreenBox } | null>(null);
   const pointedPlace = pinned ? places.find((p) => p.id === pinned.id) ?? null : null;
   const pins = useMemo(() => (pick && !descent ? places.map((p) => ({ id: p.id, ...boxMiddle(p.box) })) : []), [pick, descent, places]);
+  // Back up from a place: the globe opens drawn near on it and draws out, its pin ringed and named, until the visitor
+  // points at something on the globe (or after a while).
+  const ascent = useAscent();
+  const [startAt] = useState(() => (ascent && pick ? { ...boxMiddle(ascent.box), zoom: 5 } : null));
+  const [markedBox, setMarkedBox] = useState<ScreenBox | null>(null);
+  useEffect(() => {
+    if (!ascent) return;
+    if (pinned || pointed || descent) {
+      setAscent(null);
+      return;
+    }
+    const id = window.setTimeout(() => setAscent(null), 9000);
+    return () => window.clearTimeout(id);
+  }, [ascent, pinned, pointed, descent]);
   // The pointed country's (or place's) outline is the one whose screen box the globe tells, for its frame and readout;
   // every place with a fire stands as a small square, the Earth's destinations.
   const globeOutlines = useMemo(
@@ -578,6 +592,9 @@ export function EarthYears({
           pins={pins}
           onPin={setPinned}
           onPinPick={onPlace}
+          startAt={startAt}
+          markedPin={ascent?.id ?? null}
+          onMarked={setMarkedBox}
           className="world-years__earth"
         />
       )}
@@ -586,6 +603,10 @@ export function EarthYears({
           and the frame's Enter do the same. */}
       {/* A place being descended into: its box framed with its name and where it is; no action, the page lands there. */}
       {!flat && descent && countryBox && boxInView(countryBox) && <ScenePrompt box={countryBox} label={descent.name} readout={descent.readout} invite />}
+      {/* The place the visitor came back up from: its pin ringed and named (no action), once it stands in view. */}
+      {!flat && !descent && pick && ascent && !pinned && markedBox && boxInView(markedBox) && (
+        <ScenePrompt box={markedBox} label={ascent.name} readout={Y.cameFrom} invite />
+      )}
       {/* A place's square under the pointer: framed, with its name and where it is; a click opens the place. */}
       {!flat && !descent && pick && pointedPlace && pinned && (
         <ScenePrompt

@@ -34,7 +34,7 @@ import { SCREEN_WORDS } from './world/words';
 import { RevealSweep } from './identity/RevealSweep';
 import { Arrival } from './identity/Arrival';
 import { formatCoord } from './identity/where';
-import { boxMiddle, setDescent } from './world/descent';
+import { boxMiddle, setAscent, setDescent } from './world/descent';
 import { setDestinations } from './world/destinations';
 import { stageReady } from './stage/stageReady';
 import type { StageThing, StageThingBox } from './stage/earthCutawayTypes';
@@ -438,9 +438,13 @@ export function App() {
   }, []);
   /** One level back from a place on the path (Isogon / The Earth / the place): the workspace is left for the Earth's years. */
   const toEarth = useCallback(() => {
+    // The place left, so the Earth opens drawn near on it and marks its pin (the ascent).
+    const left = placesRef.current.places.places.find((p) => p.id === activeTheaterId);
+    setAscent(left ? { id: left.id, name: left.name, box: left.box } : null);
+    setDescent(null);
     exitToOverview();
     openWorldScreen('years');
-  }, [exitToOverview]);
+  }, [exitToOverview, activeTheaterId]);
 
   const executeWorldModel = useCallback(
     async (asked: ReconstructRequestParams): Promise<boolean> => {
