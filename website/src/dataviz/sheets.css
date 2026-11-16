@@ -16,29 +16,10 @@
   margin: 8px 0 20px;
 }
 
-/* One step further in: a word, not a button in a box. */
+/* One step further in: the page's control (identity/identity.css, the shared rules); here only where it stands. */
 .dv-further {
-  display: block;
-  text-align: left;
   justify-self: start;
   margin: 4px 0 24px;
-  padding: 10px 0;
-  min-height: 40px;
-  background: none;
-  border: 0;
-  color: var(--dv-ink);
-  font: 400 16px / 1.4 var(--dv-font);
-  cursor: pointer;
-  border-radius: 0;
-}
-
-.dv-further:hover {
-  color: var(--dv-ui);
-}
-
-.dv-further:focus-visible {
-  outline: 1.5px solid var(--dv-ui);
-  outline-offset: 4px;
 }
 
 /* A number's column keeps a gap before the words beside it (the skin sets numbers flush right, with no padding). */

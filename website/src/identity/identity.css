@@ -42,6 +42,7 @@
 .id-control,
 .id-moves__move,
 .agent-act,
+.dv-further,
 .iso-way,
 .iso-plain-action:not(.iso-viewer__close),
 .id-scene[data-act='true'] .id-scene__label {
@@ -117,6 +118,8 @@ body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label
 .id-moves__move:focus-visible,
 .agent-act:hover:not(:disabled),
 .agent-act:focus-visible,
+.dv-further:hover,
+.dv-further:focus-visible,
 .iso-way:hover,
 .iso-way:focus-visible,
 .iso-plain-action:not(.iso-viewer__close):hover,
@@ -131,6 +134,7 @@ body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label
 .id-control:focus-visible,
 .id-moves__move:focus-visible,
 .agent-act:focus-visible,
+.dv-further:focus-visible,
 .iso-way:focus-visible,
 .iso-plain-action:not(.iso-viewer__close):focus-visible {
   outline: 2px solid var(--id-signal);
@@ -140,6 +144,7 @@ body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label
 .id-control:active,
 .id-moves__move:active:not(:disabled),
 .agent-act:active:not(:disabled),
+.dv-further:active,
 .iso-way:active,
 .iso-plain-action:not(.iso-viewer__close):active {
   transform: translateY(1px) scale(0.985);
@@ -170,15 +175,18 @@ body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label
   opacity: 0.62;
 }
 
-/* the arrow's square at the right inset: an outline at rest, filled on hover and focus, the arrow stepping on */
+/* the arrow's square at the right inset: an outline at rest, filled on hover and focus, the arrow stepping on. In a
+   control wider than its words (one set to a column's width) it keeps to the right edge, so the insets stay even. */
 .id-control__go,
 .id-moves__move::after,
 .agent-act::after,
+.dv-further::after,
 .iso-way::after,
 .iso-plain-action:not(.iso-viewer__close)::after,
 .id-scene[data-act='true'] .id-scene__label::after {
   flex: none;
   box-sizing: border-box;
+  margin-left: auto;
   width: var(--c-b);
   height: var(--c-b);
   display: inline-flex;
@@ -203,6 +211,7 @@ body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label
 
 .id-moves__move::after,
 .agent-act::after,
+.dv-further::after,
 .iso-way::after,
 .iso-plain-action:not(.iso-viewer__close)::after,
 .id-scene[data-act='true'] .id-scene__label::after {
@@ -221,6 +230,8 @@ body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label
 .id-moves__move:focus-visible::after,
 .agent-act:hover:not(:disabled)::after,
 .agent-act:focus-visible::after,
+.dv-further:hover::after,
+.dv-further:focus-visible::after,
 .iso-way:hover::after,
 .iso-way:focus-visible::after,
 .iso-plain-action:not(.iso-viewer__close):hover::after,
