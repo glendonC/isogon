@@ -25,9 +25,9 @@
     "square": "square",
     "look": "look",
     "pass": "pass",
-    "player_chance": "Chance",
+    "player_chance": "Random Squares",
     "player_coarse_rule": "Follow MODIS",
-    "player_unsure_rule": "Least Sure",
+    "player_unsure_rule": "The Model's Own Choice",
     "player_learned": "Learned Player",
     "player_answer": "Sees the Answer",
     "score": "overlap"
@@ -2478,12 +2478,12 @@
                 "strong": true
               },
               {
-                "name": "The model's own choice",
+                "name": "The Model's Own Choice",
                 "field": "end_rule",
                 "note": "It has as many looks and uncovers the square where its estimate is least sure."
               },
               {
-                "name": "Random squares",
+                "name": "Random Squares",
                 "field": "end_chance",
                 "note": "The average of {chance_tries} rounds of looks at random."
               },
@@ -2534,7 +2534,7 @@
             {
               "place": "guide",
               "if": "learned_same_looks_as_rule",
-              "line": "On this round the Learned Player made the same looks as Least Sure."
+              "line": "On this round the Learned Player made the same looks as the model's own choice."
             }
           ],
           "labels": [
@@ -2600,7 +2600,7 @@
             {
               "place": "guide",
               "if": "learned_same_looks_as_rule",
-              "line": "On this round the Learned Player made the same looks as Least Sure."
+              "line": "On this round the Learned Player made the same looks as the model's own choice."
             }
           ],
           "labels": [
@@ -3463,11 +3463,11 @@
       "answer": [
         {
           "place": "guide",
-          "line": "Chance looks at random, Follow MODIS looks where they last saw fire, and Least Sure where the model is least sure."
+          "line": "Random Squares uncovers squares at random, Follow MODIS the square where MODIS last saw fire, and The Model's Own Choice the square where the estimate is least sure."
         },
         {
           "place": "guide",
-          "line": "The Learned Player learned its choices from past fires, and Sees the Answer is not a fair player: it reads the hidden detections."
+          "line": "The Learned Player learned its choices from past fires, and Sees the Answer is not a fair player: it reads what VIIRS detected."
         }
       ],
       "command": "play:players",
@@ -4024,7 +4024,7 @@
       "route": "POST /api/env/next_look/step, the last",
       "key": "end.reference.random.gains",
       "format": "length",
-      "is": "how many rounds of random looks the row for Chance is the mean of"
+      "is": "how many rounds of random looks the row for random squares is the mean of"
     },
     "fire_times_usual": {
       "route": "GET /api/calendar?source=firms&region_id=",

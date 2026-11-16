@@ -174,32 +174,32 @@ const PLAYER_ROWS: ReadonlyArray<{
 }> = [
   {
     id: 'random',
-    name: 'Chance',
-    means: 'Looks at random squares.',
+    name: 'Random Squares',
+    means: 'Uncovers squares at random.',
     role: 'other',
   },
   {
     id: 'latest_modis',
-    name: 'Follow the Coarse Satellite',
-    means: 'Looks where the coarse satellite last saw the most fire.',
+    name: 'Follow MODIS',
+    means: 'Uncovers the square where MODIS, the coarser satellite, last saw the most fire.',
     role: 'other',
   },
   {
     id: 'least_sure',
-    name: 'Look Where Unsure',
-    means: 'Looks where the model is least sure.',
+    name: "The Model's Own Choice",
+    means: 'Uncovers the square where the estimate is least sure.',
     role: 'rule',
   },
   {
     id: 'learned',
     name: 'Learned Player',
-    means: 'Learned from past fires where to look and at which pass.',
+    means: 'Learned from past fires which square to uncover and on which pass.',
     role: 'learned',
   },
   {
     id: 'oracle',
     name: 'Sees the Answer',
-    means: 'Is allowed to see the answer and takes the best square at evenly spaced passes. A player that also chooses its pass can gain more.',
+    means: 'Not a fair player: it sees what VIIRS detected and takes the best square at evenly spaced passes. A player that also chose its pass could gain more.',
     role: 'other',
   },
 ];
@@ -926,8 +926,8 @@ function FreshWorldTestSection({
 
       {freshPlayers && typeof freshPlayers.episodes === 'number' && unsureGain !== null && chanceGain !== null && (
         <p className="iso-doc-section__p">
-          On {formatSheetCount(freshPlayers.episodes)} rounds of the second test&apos;s fires, Look Where Unsure gained{' '}
-          {unsureGain} points on average and Chance {chanceGain}.
+          On {formatSheetCount(freshPlayers.episodes)} rounds of the second test&apos;s fires, the model&apos;s own choice
+          raised the score by {unsureGain} points on average and random squares by {chanceGain}.
         </p>
       )}
     </section>
