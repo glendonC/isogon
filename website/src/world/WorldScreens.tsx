@@ -282,15 +282,16 @@ function Test({ film, toWord }: Part) {
   // The overlap with VIIRS fire pixels, exact, as plain percentages (words version 16): test B's first, then test A's.
   const ob = testB?.overlap;
   const oa = testA?.overlap;
-  const lineB = testB && ob?.second && ob.modis && ob.first ? S.test.overlapB(testB.fires.length, percent1(ob.second.exact), percent1(ob.modis.exact), percent1(ob.first.exact)) : null;
-  const lineA = testA && oa?.first && oa.modis ? S.test.overlapA(testA.fires.length, percent1(oa.first.exact), percent1(oa.modis.exact)) : null;
+  const pair = (o: { exact: number; within: number }) => ({ w: percent1(o.within), e: percent1(o.exact) });
+  const lineB = testB && ob?.second && ob.modis && ob.first ? S.test.overlapB(testB.fires.length, pair(ob.second), pair(ob.modis), pair(ob.first)) : null;
+  const lineA = testA && oa?.first && oa.modis ? S.test.overlapA(testA.fires.length, pair(oa.first), pair(oa.modis)) : null;
   const lines = [lineB, lineA].filter((l): l is string => l !== null);
   const onward = useOnward('test', testB?.fires.length ?? testA?.fires.length ?? null);
   const caption =
     ob?.second && ob.modis && ob.first
-      ? S.test.filmOverlapB(percent1(ob.second.exact), percent1(ob.modis.exact), percent1(ob.first.exact))
+      ? S.test.filmOverlapB(percent1(ob.second.within), percent1(ob.modis.within), percent1(ob.first.within))
       : oa?.first && oa.modis
-        ? S.test.filmOverlapA(percent1(oa.first.exact), percent1(oa.modis.exact))
+        ? S.test.filmOverlapA(percent1(oa.first.within), percent1(oa.modis.within))
         : null;
   return (
     <>

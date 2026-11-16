@@ -215,6 +215,15 @@ export const YEAR_WORDS = {
   clipped: (n: number) => `${n} ${n === 1 ? 'square lies' : 'squares lie'} above the scale and ${n === 1 ? 'is' : 'are'} drawn at its top`,
 };
 
+/** A method's match with VIIRS as written: within one pixel and exact to the pixel. */
+export interface Pair {
+  w: string;
+  e: string;
+}
+
+/** Better than, worse than or as well as, from two shares as written. */
+const cmp = (a: string, b: string) => (Number(a) > Number(b) ? 'better than' : Number(a) < Number(b) ? 'worse than' : 'as well as');
+
 /** How a first share compares with a second: "29 percent better than"; null when the second is not above zero. */
 const rel = (a: string, b: string) => {
   const x = Number(a);
@@ -267,11 +276,14 @@ export const SCREEN_WORDS = {
         : `Untouched fires: won ${ahead} of ${of}, lost ${behind}.${others ? ` Other models: won ${others}.` : ''}`,
     // WORDS-wider.json version 16, world_pictures, test_across_world: the overlap with VIIRS fire pixels, exact, as plain
     // percentages (one decimal), test B's first and then test A's.
-    overlapB: (fires: number, second: string, modis: string, first: string) =>
-      `On the latest test's ${fires} fires, none of which it had seen, the new model, a later version chosen on other fires, matched VIIRS ${rel(second, modis) ?? 'beside'} MODIS's own detections did, ${second} against ${modis} percent. The first model, the earlier version, matched ${first}.`,
-    overlapA: (fires: number, first: string, modis: string) => `On the earlier test's ${fires} fires, none of which it had seen, the first model matched VIIRS ${rel(first, modis) ?? 'beside'} MODIS's own detections did, ${first} against ${modis} percent.`,
-    filmOverlapB: (second: string, modis: string, first: string) => `New fires, overlap with VIIRS: new model ${second}%, MODIS ${modis}%, first model ${first}%.`,
-    filmOverlapA: (first: string, modis: string) => `Unseen fires, overlap with VIIRS: model ${first}%, MODIS ${modis}%.`,
+    // Each method's match with VIIRS as written, within one pixel (w) and exact to the pixel (e). The line leads with
+    // within one pixel and its relative difference; the exact figures follow, smaller, and a loss is said as one.
+    overlapB: (fires: number, second: Pair, modis: Pair, first: Pair) =>
+      `On the latest test's ${fires} fires, none of which it had seen, the new model, a later version chosen on other fires, matched VIIRS within one pixel ${rel(second.w, modis.w) ?? 'beside'} MODIS alone, ${second.w} against ${modis.w} percent, and exact to the pixel ${second.e} against ${modis.e}. The first model, the earlier version, did ${cmp(first.w, modis.w)} MODIS alone within one pixel, ${first.w} against ${modis.w}, and ${cmp(first.e, modis.e)} it exact, ${first.e} against ${modis.e}.`,
+    overlapA: (fires: number, first: Pair, modis: Pair) =>
+      `On the earlier test's ${fires} fires, none of which it had seen, the first model matched VIIRS within one pixel ${rel(first.w, modis.w) ?? 'beside'} MODIS alone, ${first.w} against ${modis.w} percent, and exact to the pixel it did ${cmp(first.e, modis.e)} it, ${first.e} against ${modis.e}.`,
+    filmOverlapB: (second: string, modis: string, first: string) => `New fires, within one pixel: new model ${second}%, MODIS ${modis}%, first model ${first}%.`,
+    filmOverlapA: (first: string, modis: string) => `Unseen fires, within one pixel: model ${first}%, MODIS ${modis}%.`,
   },
   sealed: {
     objective: 'See estimates made before VIIRS passed',
