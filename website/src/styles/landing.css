@@ -542,8 +542,15 @@
 .iso-way {
   --c-h: 56px;
   --c-pad: 14px;
-  gap: 18px;
+  gap: 12px;
   font-size: clamp(17px, 1.3vw, 20px);
+}
+
+/* The three ways in stand at one width, each as wide as its column with its arrow at the right edge, so three of equal
+   weight read as equal; a way whose words need more keeps its words. */
+.iso-land__ways .iso-way {
+  align-self: stretch;
+  min-width: max-content;
 }
 
 /* Where the drawn fire covers the bottom right, the legend and its caption stand at the bottom left, over the credit. */
