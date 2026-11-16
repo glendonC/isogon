@@ -189,6 +189,8 @@ export const YEAR_WORDS = {
   noFile: 'no file of its own',
   /** The pointed country's frame in the scene: its action, and its readout's count for the year on show. */
   countryAction: 'Show its years',
+  /** Under a pointed country's figures: the places it holds, each a square on the globe to go to. */
+  placesIn: (names: string[]) => (names.length === 1 ? `Its place to go: ${names[0]}` : `Its places to go: ${names.join(', ')}`),
   /** Under the name of the place the visitor came back up from, ringed on the globe. */
   cameFrom: 'You came from here',
   /** A place's square on the globe, pointed at: what a click does. */

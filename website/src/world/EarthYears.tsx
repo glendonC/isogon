@@ -238,6 +238,17 @@ export function EarthYears({
   const ascent = useAscent();
   const [startAt] = useState(() => (ascent && pick ? { ...boxMiddle(ascent.box), zoom: 5 } : null));
   const [markedBox, setMarkedBox] = useState<ScreenBox | null>(null);
+  // The places each country holds, by the country under each place's middle: a country's frame names them, so pointing
+  // at a country says where choosing on the globe can lead.
+  const placesByCountry = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const p of places) {
+      const mid = boxMiddle(p.box);
+      const c = countryShapeAt(mid.lon, mid.lat);
+      if (c) m.set(c.key, [...(m.get(c.key) ?? []), p.name]);
+    }
+    return m;
+  }, [places]);
   useEffect(() => {
     if (!ascent) return;
     if (pinned || pointed || descent) {
@@ -620,7 +631,7 @@ export function EarthYears({
         <ScenePrompt
           box={sceneBox}
           label={chosen?.key === pointed.shape.key ? Y.wholeEarth : Y.countryAction}
-          readout={countryReadout(pointed.shape, under, shown, mode, countries)}
+          readout={[countryReadout(pointed.shape, under, shown, mode, countries), placesByCountry.has(pointed.shape.key) ? Y.placesIn(placesByCountry.get(pointed.shape.key)!) : null].filter(Boolean).join('\n')}
           onSelect={() => (chosen?.key === pointed.shape.key ? setChosen(null) : countries && setChosen(pointed.shape))}
         />
       )}
