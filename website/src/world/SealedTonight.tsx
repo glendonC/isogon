@@ -90,6 +90,10 @@ export const SEAL_WORDS = {
   proofLine: (minutes: number, where: string) =>
     `Written down and sealed ${Math.round(minutes)} minutes before VIIRS passed over ${where}, then scored.`,
   close: (k: number, n: number, where: string) => `${k} of the ${n} fires scored lie close together in ${where}, so they are not ${n} separate tests.`,
+  /** Said before any row: what a row is, and how the predictions have done, from the answer's own counts. */
+  lede: 'Each row is a prediction of where VIIRS will see fire on a coming pass, made from MODIS alone and sealed before the pass.',
+  howTheyDid: (scored: number, fires: number, judged: number, ahead: number, tied: number, behind: number) =>
+    `So far ${scored} predictions on ${fires} fires are scored. Against both simple methods, over ${judged} measures: ahead on ${ahead}, level on ${tied}, behind on ${behind}.`,
   /** A scored row's result in the table: the overlap with VIIRS fire pixels, the model's, then MODIS alone's. */
   rowResult: (model: string, modis: string) => `Model ${model}%, MODIS alone ${modis}%`,
   /** The table's heads: its number on the map is the first column, unnamed. */
@@ -326,6 +330,13 @@ export function SealedTonight({ source, now = null, before = 6, after, caption =
         </div>
       ) : (
       <div className="world-board" ref={boardRef}>
+        {/* What a row is and how the predictions did, before any row (on the page; the film has its own caption). */}
+        {!film && <p className="world-board__lede">{SEAL_WORDS.lede}</p>}
+        {!film && o && o.ahead !== null && o.tied !== null && o.behind !== null && scored > 0 && (
+          <p className="world-board__lede world-board__lede--result">
+            {SEAL_WORDS.howTheyDid(scored, o.fires ?? scoredFires.length, o.ahead + o.tied + o.behind, o.ahead, o.tied, o.behind)}
+          </p>
+        )}
         {live.protocol?.sha256 && note('protocol') && <div className="world-board__rule">{SEAL_WORDS.protocol(live.protocol.sha256, null)}</div>}
         {live.example && <div className="world-board__rule world-legend__caution">{live.example}</div>}
         {!film && table ? (

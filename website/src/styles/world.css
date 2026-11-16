@@ -392,6 +392,19 @@
   color: var(--sys-ink-3);
 }
 
+/* Live predictions' lede: what a row is, then how the predictions did, before any row. */
+.world-board__lede {
+  max-width: 680px;
+  margin: 0;
+  font: 400 17px / 1.45 var(--id-font, var(--sys-font));
+  color: var(--sys-ink-2, #c3c8d1);
+}
+
+.world-board__lede--result {
+  margin-bottom: 6px;
+  color: var(--id-ink, #f3f4f6);
+}
+
 .world-board__rule--strong {
   font-size: var(--sys-size-label);
   line-height: var(--sys-lh-label);
@@ -1371,6 +1384,12 @@
 
   .world-screen[data-film='false'] .world-sealed .world-ledger table {
     width: 100% !important;
+  }
+
+  /* The rows a step tighter, so the lede and all twelve fit above the guide. */
+  .world-screen[data-film='false'] .world-sealed .world-ledger td {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
   }
 
   /* A row under the pointer and its fire's mark on the map light together. */
