@@ -296,7 +296,7 @@ export const SCREEN_WORDS = {
     marks: 'For fires burning now, the model wrote down where VIIRS would see fire before VIIRS flew over. Each estimate is scored once NASA publishes that pass.',
     soFar: (fires: number, ahead?: number | null, tied?: number | null, behind?: number | null) =>
       ahead != null && tied != null && behind != null
-        ? `For fires burning now, the model wrote down where VIIRS would see fire before VIIRS flew over. Over the ${fires} fires scored so far, it is ${ahead > behind ? 'ahead of' : ahead < behind ? 'behind' : 'no better than'} MODIS alone.`
+        ? `Over the ${fires} fires scored so far, the model is ${ahead > behind ? 'ahead of' : ahead < behind ? 'behind' : 'no better than'} MODIS alone.`
         : `So far ${fires} fires are scored. Each row shows how well the model and MODIS alone matched VIIRS there.`,
     back: 'Back to the fire',
     /** How the estimates did on every measure, said on demand. */
