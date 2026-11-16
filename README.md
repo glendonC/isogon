@@ -33,21 +33,10 @@ The world model's first result is a record of the Earth's fire on one scale. VII
 the burning did not. With each overlap year held out, over 5,227 places, the gap between the two satellites' monthly
 counts is cut from 78 percent to 14.
 
-## What the page opens on
+Open the page: https://glendonc.github.io/isogon/. It runs in your browser from recorded answers and the project's
+own model.
 
-The public page opens on a landing page. Its headline reads "Turn real-world observations into testable worlds." A
-second line under it says that scientific world models reconstruct physical systems from imperfect measurements,
-predict what other instruments will see, and learn what to investigate next. Three ways in stand side by side, of equal
-weight: Play watches the story by itself, Explore the Earth goes from the globe, and Search a place goes straight to a
-place and its fire.
-
-From the globe, every year of fire is drawn on the Earth, with places as pins you can point at and fly down into. A
-place gives its fire record on one scale ("Read the fire record of this place"). A fire opens with VIIRS hidden, so the
-model's estimate stands alone, and then with VIIRS shown. The round, "Pick squares yourself", opens with a briefing,
-gives four looks, and ends with your score beside the model's own choice and random squares. "How the model did on 57
-new fires" shows the tests, and "Fires burning now" shows the predictions sealed before a pass.
-
-## The three parts
+## Features
 
 1. **A scientific world model.** It rebuilds what was observed from imperfect measurements and predicts what another
    instrument will detect. Here the observations are fire detections. The model has two layers. The first is an
@@ -121,7 +110,7 @@ When NASA publishes the pass's detections, the sealed prediction is scored, agai
 not the checked archive. The scores are served at `GET /api/live`, and [`docs/live.md`](docs/live.md) says how they are
 judged.
 
-## What it uses
+## Sources
 
 - **NASA FIRMS** active fire detections (MODIS Collection 6.1; VIIRS 375 m for Suomi NPP, NOAA-20 and NOAA-21): the
   country yearly files of all 238 countries (10,095 files, 43.5 GB, no key), read into a monthly cube on a
@@ -191,7 +180,7 @@ cd website && npm run build
 
 Some backend tests need the data and skip themselves without it.
 
-## The data
+## Data
 
 Everything downloaded goes under `data/cache/`, which git ignores; the fire cube and its country files go under
 `data/cache/world/`, or under the folder `ISOGON_WORLD_DIR` names. The cube, the detections and the passes need no key.
