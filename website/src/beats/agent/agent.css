@@ -84,77 +84,23 @@
   margin-left: auto;
 }
 
-/* An action is text; its key is a small quiet mark before it. */
+/* An action is the page's control (identity.css, the shared rules), at the bottom edge's compact size; its key, where it
+   has one, drawn inside it. */
+.agent-picture__acts {
+  align-items: center;
+}
+
 .agent-act {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--sys-s2);
-  padding: 2px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
-  color: var(--sys-ink-2);
-  cursor: pointer;
-  transition: color var(--sys-fast) var(--sys-ease);
+  --c-h: 36px;
+  --c-pad: 8px;
+  gap: 12px;
+  font-size: 15px;
 }
 
-.agent-act:hover {
-  color: var(--sys-ink);
-}
-
-.agent-act:disabled {
-  color: var(--sys-ink-off);
-  cursor: default;
-}
-
-/* Marked as a lone action is, never a box round it and no line under it: on hover the corner brackets close round the
-   words in the signal colour, on keyboard focus in white. */
-.agent-act {
-  position: relative;
-}
-
-.agent-act::after {
-  content: '';
-  position: absolute;
-  inset: -2px -8px;
-  pointer-events: none;
-  opacity: 0;
-  transform: scale(1.18);
-  transition:
-    opacity 260ms var(--id-move, ease),
-    transform 450ms var(--id-move, ease);
-  --t: var(--id-signal, #9fe3ff);
-  filter: drop-shadow(0 0 4px rgba(159, 227, 255, 0.5));
-  background:
-    linear-gradient(var(--t), var(--t)) top left / 8px 1.5px no-repeat,
-    linear-gradient(var(--t), var(--t)) top left / 1.5px 8px no-repeat,
-    linear-gradient(var(--t), var(--t)) top right / 8px 1.5px no-repeat,
-    linear-gradient(var(--t), var(--t)) top right / 1.5px 8px no-repeat,
-    linear-gradient(var(--t), var(--t)) bottom left / 8px 1.5px no-repeat,
-    linear-gradient(var(--t), var(--t)) bottom left / 1.5px 8px no-repeat,
-    linear-gradient(var(--t), var(--t)) bottom right / 8px 1.5px no-repeat,
-    linear-gradient(var(--t), var(--t)) bottom right / 1.5px 8px no-repeat;
-}
-
-.agent-act:hover:not(:disabled)::after,
-.agent-act:focus-visible::after {
-  opacity: 1;
-  transform: none;
-}
-
-.agent-act:focus-visible {
-  outline: none;
-  color: var(--sys-ink);
-}
-
-.agent-act:focus-visible::after {
-  --t: var(--id-ink, #f3f4f6);
-}
-
-.agent-key {
-  font: var(--sys-weight) var(--sys-size-fine) / 1 var(--sys-mono);
-  color: var(--sys-ink-3);
+/* The controls stand taller than the words they replaced (18 px and 4 px of padding): the foot takes the difference
+   from the room below it, not from the blocks, which need their whole height to be drawn. */
+.agent-picture__foot {
+  margin-bottom: calc(var(--sys-lh-label) + 4px - 36px);
 }
 
 /* Under a block: the player, its gain in points on a bar of the picture's one scale, and what is said of it. One
