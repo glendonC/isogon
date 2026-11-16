@@ -35,7 +35,7 @@ export const WORDS = {
     turn: 'your turn',
     choosePlace: 'Choose a place',
     otherPlace: 'Choose another place',
-    turnOn: 'Your turn',
+    turnOn: 'Pick squares yourself',
     key: 'Esc',
   },
   story: {

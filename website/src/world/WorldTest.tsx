@@ -28,19 +28,19 @@ export const TEST_WORDS = {
   noLook: 'No look of the test across the world has been taken yet. Its plan of fires is written before any score.',
   // The product lane's words (WORDS-wider.json version 14, world_pictures): the objective, the film's captions and the
   // names of the two looks, shown in place of the served ones.
-  objective: 'See the fires it had never seen',
+  objective: 'See how the estimate did on new fires',
   // Words version 16: the overlap with VIIRS fire pixels, exact, as plain percentages.
   filmA: (first: string, modis: string) => `Unseen fires, overlap with VIIRS: model ${first}%, MODIS ${modis}%.`,
   filmB: (second: string, modis: string, first: string) => `New fires, overlap with VIIRS: new model ${second}%, MODIS ${modis}%, first model ${first}%.`,
   /** The overlap's three rows (words version 16, the panel's rows). */
   overlapRows: { modis: 'MODIS alone', in_use: 'First model', new: 'New model' },
-  lookNames: { test_a: 'Test A: fires it had never seen', test_b: 'Test B: fires that nothing had touched' } as Record<string, string>,
+  lookNames: { test_a: 'Earlier test', test_b: 'Latest test, picked by a fixed rule before any result was seen' } as Record<string, string>,
   // The panel in the product lane's words (WORDS-wider.json version 6, world_pictures, test_across_world.panel; WORDS-2).
   title: (fires: number, groups: number) =>
-    `${count(fires)} fires on ${count(groups)} continents, chosen by a rule before any was looked at. Each square is one fire.`,
+    `${count(fires)} fires on ${count(groups)} continents, picked by a fixed rule before any result was seen. Each square on the map is one fire.`,
   held: (stated: number, held: number, passes: number) =>
-    `The range it states for each hidden pass's total heat held on ${Math.round(held * 100)} percent of the ${count(passes)} passes, ${
-      Math.round(held * 100) < Math.round(stated * 100) ? `short of the ${Math.round(stated * 100)} percent it claims` : 'as it claims'
+    `The model also estimates how much heat the fire gives off each time VIIRS flies over, with a range. VIIRS's measure fell inside that range on ${Math.round(held * 100)} percent of ${count(passes)} passes, ${
+      Math.round(held * 100) < Math.round(stated * 100) ? `short of the ${Math.round(stated * 100)} percent it aims for` : 'as it aims for'
     }.`,
   byContinent: 'By continent',
   byZone: 'By band of latitude',
@@ -56,8 +56,8 @@ export const TEST_WORDS = {
   classesKey: (judged: number) =>
     `A square is filled by how many of the ${judged} scores the estimate won on that fire: full is all, empty is none. Beside each group, its ${judged} scores: won or lost only where the gap is too large to be luck, tied where it is not.`,
   notScored: (n: number) => (n === 1 ? 'One fire of the plan could not be scored; the reason is in the record.' : `${n} fires of the plan could not be scored; the reasons are in the record.`),
-  kept: (xs: string[]) => `The three fires kept as the first test stand as recorded and are never scored again: ${listAnd(xs)}.`,
-  keptFire: (name: string, a: number, of: number) => `${name} ${a} of ${of}`,
+  kept: (xs: string[]) => `The three fires of the original test stay as recorded and are never scored again: ${listAnd(xs)}.`,
+  keptFire: (name: string, a: number, of: number) => `${a} of ${of} scores won on ${name}`,
   ahead: (a: number, of: number) => `Won ${a} of ${of} scores against both simple guesses`,
   fireLine: (year: string | null, continent: string | null, _won: number, _of: number, passes: number | null) =>
     `A fire of ${year ?? 'the test'}${continent ? ` in ${continent}` : ''}${passes !== null ? `, over ${passes} hidden passes` : ''}.`,

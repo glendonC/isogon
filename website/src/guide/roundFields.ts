@@ -97,6 +97,7 @@ export function roundFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   };
   const conds: Conditions = {
     first_pass_of_round: st ? st.decision === 0 && st.picks.length === 0 : null,
+    no_looks_left: ep && spent !== null ? ep.budget - spent <= 0 : null,
     look_found_nothing: taken ? taken.pixels === 0 : null,
     look_raised: moved === null ? (taken ? false : null) : moved > 0,
     look_level: moved === null ? (taken ? false : null) : moved === 0,

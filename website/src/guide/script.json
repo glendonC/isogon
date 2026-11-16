@@ -48,7 +48,7 @@
     "guide": "place 2, bottom centre: the one or two sentences of a state that stand together and stay. A question's answer and a state's more lines are said here on demand, and the standing sentences return. The results rows of a round's end stand above it as part of what it says.",
     "label": "place 3, joined to one thing on the stage by a thin leader: one or two short sentences about that thing.",
     "prompt": "place 4, beside the thing it acts on, with its key, only while the pointer or the keyboard's focus is on or near that thing. A start card is a prompt opened out.",
-    "sheet": "place 5, on demand only: the document viewer from the side, whose words are in SHEETS-copy.json, and the key of marks, whose rows are under marks. UTC is written only in the document viewer."
+    "sheet": "place 5, on demand only: the document viewer from the side, and the key of marks, whose rows are under marks. UTC is written only in the document viewer."
   },
   "reading": {
     "place": "Every sentence carries place: objective, guide, label, prompt or sheet, as places_for_words says them. A sentence about one thing is at that thing; a sentence about the whole step is in the guide.",
@@ -68,11 +68,11 @@
     "also": "A step's also lists actions that work in every state of the step, by their key and by asking, and are not in the guide strip unless a state lists them.",
     "marks": "The key of marks, on demand. Each row has a name and a line for one mark, when it is on show, the served field it is drawn from, what of it is drawing, and where that was stated. action is the one action that shows the squares sized by chance.",
     "exclusive": "Groups of conditions of which at most one is true at a time, read from the same answer; the check of what stands counts no case where two of a group hold.",
-    "photo": "On Estimate and Test, a step's photo holds the sentences said while the day's photograph is on, each replacing the first standing sentence; the action photo:next is the one fourth action of the guide's row, quiet, at its end (the lead's decision of 00:05), and reads label, then label_when_true_color, then label_when_false_color.",
+    "photo": "On Estimate and Test, a step's photo holds the sentences said while the day's photograph is on, each replacing the first standing sentence; the action photo:next is the one fourth action of the guide's row, quiet, at its end, and reads label, then label_when_true_color, then label_when_false_color.",
     "keys_shared": "One key runs one command, but for keys_shared: a key that does the same thing for the visitor on different screens (Space plays what the screen plays). An action's also_key is a second key for the same command.",
     "film": "In the film presentation (any film= in the address) a state's film caption stands where the objective stands, one at a time, and the guide's sentences are off; thirteen words at most, every figure a field. A state with no film caption shows its objective, as now.",
     "film_labels": "In the film presentation a label with `film` shows that form instead of its line, and a label whose `film` is null is not shown; a label with no `film` shows its line. Eight words at most.",
-    "readout": "A label at a thing may carry a readout: the live line under the prompt, in capitals, that says exactly what the frame is on, from the data the screen reads (INSCENE-SPEC.md, the grammar)."
+    "readout": "A label at a thing may carry a readout: the live line under the prompt, in capitals, that says exactly what the frame is on, from the data the screen reads."
   },
   "things": {
     "fire": "the fire on the land, in a round as well",
@@ -188,7 +188,7 @@
       "route": "GET /api/regions"
     },
     "method_replaced": {
-      "true_when": "harmonization_method.id is not overlap_ratio_v1: the Record serves the method the harmonize lane's rule chose",
+      "true_when": "harmonization_method.id is not overlap_ratio_v1: the Record serves the method its rule chose",
       "route": "GET /api/calendar?source=firms&region_id="
     },
     "test_a_not_taken": {
@@ -545,7 +545,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "Here a hidden year is off by {record_error} percent, against {record_error_raw} with no correction."
+              "line": "Each month is counted on one scale, with MODIS counts raised to what VIIRS would count. Each year was left out in turn and rebuilt from the others, and typically came out {record_error} percent off its measured count, against {record_error_raw} percent without scaling."
             }
           ],
           "more": [
@@ -601,7 +601,7 @@
               ]
             },
             {
-              "label": "Show as counted",
+              "label": "Show the counts before scaling",
               "command": "record:as_counted",
               "key": "Y",
               "places": [
@@ -651,7 +651,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "These are the years as counted, before scaling."
+              "line": "These are the counts before scaling. From 2012 VIIRS joins and makes more detections, so the count jumps with no more fire on the ground."
             }
           ],
           "actions": [
@@ -726,7 +726,7 @@
               ]
             },
             {
-              "label": "Show as counted",
+              "label": "Show the counts before scaling",
               "command": "record:as_counted",
               "key": "Y",
               "places": [
@@ -1172,17 +1172,17 @@
         },
         {
           "id": "hidden",
-          "objective": "Where is the fire?",
+          "objective": "See the model's estimate, made without VIIRS",
           "says": [
             {
               "place": "guide",
-              "line": "The white outlines are the model's guess, made without VIIRS.",
-              "unless": "answered_by_challenger"
+              "unless": "answered_by_challenger",
+              "line": "The white outlines are the model's estimate of where VIIRS, the sharper satellite, saw fire. VIIRS is hidden, so the model has only MODIS, the coarser one, whose last detections glow red."
             },
             {
               "place": "guide",
-              "line": "The white outlines are a new model's guess, made without VIIRS.",
-              "if": "answered_by_challenger"
+              "if": "answered_by_challenger",
+              "line": "The white outlines are a new model's estimate of where VIIRS, the sharper satellite, saw fire. VIIRS is hidden, so the model has only MODIS, the coarser one, whose last detections glow red."
             }
           ],
           "more": [
@@ -1193,7 +1193,7 @@
             },
             {
               "place": "guide",
-              "line": "The VIIRS view stays hidden until you show it."
+              "line": "What VIIRS saw stays hidden until you show it."
             },
             {
               "place": "guide",
@@ -1206,7 +1206,7 @@
           ],
           "actions": [
             {
-              "label": "Show VIIRS",
+              "label": "Show what VIIRS saw",
               "command": "go:test",
               "key": "Enter",
               "places": [
@@ -1216,16 +1216,16 @@
               "beside": "fire"
             },
             {
-              "label": "Play passes",
+              "label": "Play the passes",
               "command": "passes:play",
               "key": "Space",
               "places": [
                 "guide"
               ],
-              "label_while_on": "Pause passes"
+              "label_while_on": "Pause the passes"
             },
             {
-              "label": "Explain marks",
+              "label": "What the marks mean",
               "command": "marks:key",
               "key": "K",
               "places": [
@@ -1246,7 +1246,7 @@
               "line": "Pass {pass_number} of {passes_total}, VIIRS, {pass_when}: hidden.",
               "short": "Pass {pass_number} of {passes_total}. VIIRS: hidden.",
               "film": null,
-              "readout": "VIIRS PASS {pass_number} OF {passes_total}   {pass_clock}   HIDDEN"
+              "readout": "VIIRS PASS {pass_number} OF {passes_total}   {pass_clock} LOCAL   HIDDEN"
             },
             {
               "place": "label",
@@ -1255,7 +1255,7 @@
               "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections, given to the model.",
               "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections.",
               "film": "MODIS: {pass_detections} detections.",
-              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock}   {pass_detections} DETECTIONS"
+              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock} LOCAL   {pass_detections} DETECTIONS"
             },
             {
               "place": "label",
@@ -1287,17 +1287,17 @@
         },
         {
           "id": "on_a_coarse_pass",
-          "objective": "Where is the fire?",
+          "objective": "See the model's estimate, made without VIIRS",
           "says": [
             {
               "place": "guide",
-              "line": "The passes play in time order, and VIIRS stays hidden."
+              "line": "On this pass MODIS flew over, and its detections, the warm lights, go to the model. VIIRS stays hidden."
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "The VIIRS view stays hidden until you show it."
+              "line": "What VIIRS saw stays hidden until you show it."
             },
             {
               "place": "guide",
@@ -1310,7 +1310,7 @@
           ],
           "actions": [
             {
-              "label": "Show VIIRS",
+              "label": "Show what VIIRS saw",
               "command": "go:test",
               "key": "Enter",
               "places": [
@@ -1320,13 +1320,13 @@
               "beside": "fire"
             },
             {
-              "label": "Play passes",
+              "label": "Play the passes",
               "command": "passes:play",
               "key": "Space",
               "places": [
                 "guide"
               ],
-              "label_while_on": "Pause passes"
+              "label_while_on": "Pause the passes"
             },
             {
               "label": "Show a hidden pass",
@@ -1344,7 +1344,7 @@
               "if": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}, VIIRS, {pass_when}: hidden.",
               "short": "Pass {pass_number} of {passes_total}. VIIRS: hidden.",
-              "readout": "VIIRS PASS {pass_number} OF {passes_total}   {pass_clock}   HIDDEN"
+              "readout": "VIIRS PASS {pass_number} OF {passes_total}   {pass_clock} LOCAL   HIDDEN"
             },
             {
               "place": "label",
@@ -1352,7 +1352,7 @@
               "unless": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections, given to the model.",
               "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections.",
-              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock}   {pass_detections} DETECTIONS"
+              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock} LOCAL   {pass_detections} DETECTIONS"
             },
             {
               "place": "label",
@@ -1370,17 +1370,17 @@
         },
         {
           "id": "on_a_hidden_pass",
-          "objective": "Where is the fire?",
+          "objective": "See the model's estimate, made without VIIRS",
           "says": [
             {
               "place": "guide",
-              "line": "The white outlines are the model's guess, made without VIIRS.",
-              "unless": "answered_by_challenger"
+              "unless": "answered_by_challenger",
+              "line": "The white outlines are the model's estimate of where VIIRS, the sharper satellite, saw fire. VIIRS is hidden, so the model has only MODIS, the coarser one, whose last detections glow red."
             },
             {
               "place": "guide",
-              "line": "The white outlines are a new model's guess, made without VIIRS.",
-              "if": "answered_by_challenger"
+              "if": "answered_by_challenger",
+              "line": "The white outlines are a new model's estimate of where VIIRS, the sharper satellite, saw fire. VIIRS is hidden, so the model has only MODIS, the coarser one, whose last detections glow red."
             }
           ],
           "more": [
@@ -1391,7 +1391,7 @@
             },
             {
               "place": "guide",
-              "line": "The VIIRS view stays hidden until you show it."
+              "line": "What VIIRS saw stays hidden until you show it."
             },
             {
               "place": "guide",
@@ -1404,7 +1404,7 @@
           ],
           "actions": [
             {
-              "label": "Show VIIRS",
+              "label": "Show what VIIRS saw",
               "command": "go:test",
               "key": "Enter",
               "places": [
@@ -1414,16 +1414,16 @@
               "beside": "fire"
             },
             {
-              "label": "Play passes",
+              "label": "Play the passes",
               "command": "passes:play",
               "key": "Space",
               "places": [
                 "guide"
               ],
-              "label_while_on": "Pause passes"
+              "label_while_on": "Pause the passes"
             },
             {
-              "label": "Explain marks",
+              "label": "What the marks mean",
               "command": "marks:key",
               "key": "K",
               "places": [
@@ -1438,7 +1438,7 @@
               "if": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}, VIIRS, {pass_when}: hidden.",
               "short": "Pass {pass_number} of {passes_total}. VIIRS: hidden.",
-              "readout": "VIIRS PASS {pass_number} OF {passes_total}   {pass_clock}   HIDDEN"
+              "readout": "VIIRS PASS {pass_number} OF {passes_total}   {pass_clock} LOCAL   HIDDEN"
             },
             {
               "place": "label",
@@ -1446,7 +1446,7 @@
               "unless": "pass_is_sharp",
               "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections, given to the model.",
               "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections.",
-              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock}   {pass_detections} DETECTIONS"
+              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock} LOCAL   {pass_detections} DETECTIONS"
             },
             {
               "place": "label",
@@ -1604,7 +1604,7 @@
           ]
         }
       ],
-      "objective": "Where is the fire?",
+      "objective": "See the model's estimate, made without VIIRS",
       "start_card": {
         "place": "prompt",
         "at": "fire",
@@ -1700,27 +1700,31 @@
       "states": [
         {
           "id": "revealed",
-          "objective": "Check the guess against VIIRS",
+          "objective": "Compare the estimate with what VIIRS saw",
           "says": [
             {
               "place": "guide",
-              "line": "The white outlines are the model's guess, made without VIIRS. Blue is what VIIRS saw: blue inside white, the guess was right."
+              "line": "Blue is what VIIRS detected: inside a white outline the estimate placed it right, outside one it missed it. On this fire the estimate matched VIIRS on {one_square_estimate} percent within one pixel, against {one_square_coarse} for MODIS alone."
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "On {test_b_fires_n} new fires the new model overlaps VIIRS fire pixels by {tb_new_exact} percent, or {tb_new_within} within one pixel.",
+              "line": "Match counts the pixels where the estimate and VIIRS both show fire, out of all the pixels where either one does."
+            },
+            {
+              "place": "guide",
+              "line": "An outline with no blue is fire the estimate expected that VIIRS did not detect."
+            },
+            {
+              "place": "guide",
+              "line": "On {test_b_fires_n} new fires the new model's match with VIIRS is {tb_new_exact} percent, or {tb_new_within} within one pixel.",
               "if": "test_b_taken"
             },
             {
               "place": "guide",
-              "line": "MODIS alone overlaps by {tb_modis_exact} and {tb_modis_within} percent, and the first model by {tb_first_exact} and {tb_first_within}.",
+              "line": "MODIS alone matches {tb_modis_exact} and {tb_modis_within} percent, and the first model {tb_first_exact} and {tb_first_within}.",
               "if": "test_b_taken"
-            },
-            {
-              "place": "guide",
-              "line": "On this fire, within one pixel, the guess overlaps {one_square_estimate} percent and MODIS alone {one_square_coarse}."
             },
             {
               "place": "guide",
@@ -1733,7 +1737,7 @@
             },
             {
               "place": "guide",
-              "line": "On {test_a_fires_n} earlier test fires the first model overlapped by {ta_first_exact} and {ta_first_within} percent, MODIS alone by {ta_modis_exact} and {ta_modis_within}.",
+              "line": "On {test_a_fires_n} earlier test fires the first model matched {ta_first_exact} and {ta_first_within} percent, MODIS alone {ta_modis_exact} and {ta_modis_within}.",
               "if": "test_a_taken"
             },
             {
@@ -1758,7 +1762,7 @@
           ],
           "actions": [
             {
-              "label": "Take your turn",
+              "label": "Pick squares yourself",
               "command": "go:play",
               "key": "Enter",
               "places": [
@@ -1768,7 +1772,7 @@
               "beside": "fire"
             },
             {
-              "label": "Side by side",
+              "label": "See the three views side by side",
               "command": "test:side_by_side",
               "key": "T",
               "places": [
@@ -1798,7 +1802,7 @@
               "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections, given to the model.",
               "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections.",
               "film": "MODIS: {pass_detections} detections.",
-              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock}   {pass_detections} DETECTIONS"
+              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock} LOCAL   {pass_detections} DETECTIONS"
             }
           ],
           "film": [
@@ -1811,27 +1815,31 @@
         },
         {
           "id": "on_another_pass",
-          "objective": "Check the guess against VIIRS",
+          "objective": "Compare the estimate with what VIIRS saw",
           "says": [
             {
               "place": "guide",
-              "line": "The white outlines are the model's guess, made without VIIRS. Blue is what VIIRS saw: blue inside white, the guess was right."
+              "line": "Blue is what VIIRS detected: inside a white outline the estimate placed it right, outside one it missed it. On this fire the estimate matched VIIRS on {one_square_estimate} percent within one pixel, against {one_square_coarse} for MODIS alone."
             }
           ],
           "more": [
             {
               "place": "guide",
-              "line": "On {test_b_fires_n} new fires the new model overlaps VIIRS fire pixels by {tb_new_exact} percent, or {tb_new_within} within one pixel.",
+              "line": "Match counts the pixels where the estimate and VIIRS both show fire, out of all the pixels where either one does."
+            },
+            {
+              "place": "guide",
+              "line": "An outline with no blue is fire the estimate expected that VIIRS did not detect."
+            },
+            {
+              "place": "guide",
+              "line": "On {test_b_fires_n} new fires the new model's match with VIIRS is {tb_new_exact} percent, or {tb_new_within} within one pixel.",
               "if": "test_b_taken"
             },
             {
               "place": "guide",
-              "line": "MODIS alone overlaps by {tb_modis_exact} and {tb_modis_within} percent, and the first model by {tb_first_exact} and {tb_first_within}.",
+              "line": "MODIS alone matches {tb_modis_exact} and {tb_modis_within} percent, and the first model {tb_first_exact} and {tb_first_within}.",
               "if": "test_b_taken"
-            },
-            {
-              "place": "guide",
-              "line": "On this fire, within one pixel, the guess overlaps {one_square_estimate} percent and MODIS alone {one_square_coarse}."
             },
             {
               "place": "guide",
@@ -1844,7 +1852,7 @@
             },
             {
               "place": "guide",
-              "line": "On {test_a_fires_n} earlier test fires the first model overlapped by {ta_first_exact} and {ta_first_within} percent, MODIS alone by {ta_modis_exact} and {ta_modis_within}.",
+              "line": "On {test_a_fires_n} earlier test fires the first model matched {ta_first_exact} and {ta_first_within} percent, MODIS alone {ta_modis_exact} and {ta_modis_within}.",
               "if": "test_a_taken"
             },
             {
@@ -1869,7 +1877,7 @@
           ],
           "actions": [
             {
-              "label": "Take your turn",
+              "label": "Pick squares yourself",
               "command": "go:play",
               "key": "Enter",
               "places": [
@@ -1879,7 +1887,7 @@
               "beside": "fire"
             },
             {
-              "label": "Side by side",
+              "label": "See the three views side by side",
               "command": "test:side_by_side",
               "key": "T",
               "places": [
@@ -1904,7 +1912,7 @@
               "line": "Pass {pass_number} of {passes_total}, MODIS, {pass_when}: {pass_detections} detections, given to the model.",
               "short": "Pass {pass_number} of {passes_total}. MODIS: {pass_detections} detections.",
               "film": "MODIS: {pass_detections} detections.",
-              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock}   {pass_detections} DETECTIONS"
+              "readout": "MODIS PASS {pass_number} OF {passes_total}   {pass_clock} LOCAL   {pass_detections} DETECTIONS"
             }
           ],
           "keys_too": []
@@ -1915,7 +1923,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "The same ground three times: the MODIS view, the estimate made from it, and the VIIRS view."
+              "line": "The same ground three times: what MODIS saw, the estimate the model made from it, and what VIIRS saw."
             }
           ],
           "actions": [
@@ -1964,11 +1972,11 @@
         },
         {
           "id": "scores_open",
-          "objective": "Read the estimate's scores on this fire",
+          "objective": "Read how the estimate scored on this fire",
           "says": [
             {
               "place": "guide",
-              "line": "Each row sets the guess beside MODIS alone, against what VIIRS saw."
+              "line": "Each row sets the estimate beside MODIS alone, both scored against what VIIRS saw."
             }
           ],
           "actions": [
@@ -2006,11 +2014,11 @@
         },
         {
           "id": "failed",
-          "objective": "Load the VIIRS view again",
+          "objective": "Load what VIIRS saw again",
           "says": [
             {
               "place": "guide",
-              "line": "The VIIRS view did not load."
+              "line": "What VIIRS saw did not load."
             }
           ],
           "actions": [
@@ -2031,7 +2039,7 @@
           ]
         }
       ],
-      "objective": "What VIIRS saw",
+      "objective": "Compare the estimate with what VIIRS saw",
       "context": "{place}, {run_days}",
       "also": [
         {
@@ -2293,6 +2301,12 @@
               "key": "Enter",
               "places": [
                 "guide"
+              ],
+              "label_when": [
+                {
+                  "if": "no_looks_left",
+                  "label": "Go on to the end of the round"
+                }
               ]
             },
             {
@@ -2504,12 +2518,12 @@
             {
               "place": "guide",
               "if": "players_from_round",
-              "line": "Each small terrain is one player on your round, with your looks first."
+              "line": "Each small map is one player on your round, yours first."
             },
             {
               "place": "guide",
               "unless": "players_from_round",
-              "line": "Each small terrain is one player on a round of this fire you have not played."
+              "line": "Each small map is one player on a round of this fire you have not played."
             }
           ],
           "more": [
@@ -2570,12 +2584,12 @@
             {
               "place": "guide",
               "if": "players_from_round",
-              "line": "Each small terrain is one player on your round, with your looks first."
+              "line": "Each small map is one player on your round, yours first."
             },
             {
               "place": "guide",
               "unless": "players_from_round",
-              "line": "Each small terrain is one player on a round of this fire you have not played."
+              "line": "Each small map is one player on a round of this fire you have not played."
             }
           ],
           "more": [
@@ -2655,7 +2669,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "The other players are playing your round, and each terrain appears when its play arrives."
+              "line": "The other players are playing your round, and each map appears when its play arrives."
             }
           ],
           "actions": []
@@ -2684,7 +2698,8 @@
               "key": "Esc",
               "places": [
                 "guide"
-              ]
+              ],
+              "quiet": true
             }
           ]
         },
@@ -2737,6 +2752,35 @@
           ]
         },
         {
+          "id": "look_failed",
+          "objective": "Start a new round",
+          "says": [
+            {
+              "place": "guide",
+              "line": "That look did not load, so it was not scored. Trying again starts a new round."
+            }
+          ],
+          "actions": [
+            {
+              "label": "Try again",
+              "command": "retry",
+              "key": "Enter",
+              "places": [
+                "guide"
+              ]
+            },
+            {
+              "label": "Back to the fire",
+              "command": "close",
+              "key": "Esc",
+              "places": [
+                "guide"
+              ],
+              "quiet": true
+            }
+          ]
+        },
+        {
           "id": "failed",
           "objective": "Start the round again",
           "says": [
@@ -2760,7 +2804,8 @@
               "key": "Esc",
               "places": [
                 "guide"
-              ]
+              ],
+              "quiet": true
             }
           ],
           "more": [
@@ -2790,7 +2835,7 @@
           "says": [
             {
               "place": "guide",
-              "line": "You saw one fire record on one scale, an estimate tested with VIIRS hidden, and a game."
+              "line": "You saw a place's fire record on one scale, the model's estimate tested with VIIRS hidden, and a round of your own."
             }
           ],
           "actions": [
@@ -4398,8 +4443,7 @@
         "line": "A pixel, {sharp_square_m} metres across, that the estimate puts on fire at this pass.",
         "on_show": "a pass of the sharp satellite, before and after the reveal",
         "from": "declared_cells.looks[frame == pass].cells, POST /api/reconstruct; a run without that list: belief_frames cells at a chance of one half or more",
-        "drawing": "the frame's shape; a smaller filled square where a cell is too small on screen for a frame",
-        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+        "drawing": "the frame's shape; a smaller filled square where a cell is too small on screen for a frame"
       },
       {
         "id": "dotted_line",
@@ -4408,7 +4452,7 @@
         "on_show": "every pass",
         "from": "belief_frames.p_burning where it crosses 0.02, POST /api/reconstruct",
         "drawing": "the smoothing over neighbouring squares, the dots; by day the ground inside is drawn 30 percent darker so the line can be found",
-        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25. The level, 0.02, is a constant of the stage and not served, so no line says it"
+        "standing": "The level, 0.02, is a constant of the stage and not served, so no line says it."
       },
       {
         "id": "darker_inside",
@@ -4416,8 +4460,7 @@
         "line": "Shaded so the dotted line shows by day. It is a drawing, not a measurement.",
         "on_show": "a pass by day",
         "from": "belief_frames.p_burning, POST /api/reconstruct",
-        "drawing": "how much darker",
-        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+        "drawing": "how much darker"
       },
       {
         "id": "chance_squares",
@@ -4425,8 +4468,7 @@
         "line": "A pixel with some chance of fire. Larger means a higher chance, and brighter means more expected heat.",
         "on_show": "only when asked for",
         "from": "belief_frames.p_burning (its area) and expected_frp_density (its strength), at the step after the pass, POST /api/reconstruct",
-        "drawing": "the square's shape; one tone where squares are under three pixels wide",
-        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+        "drawing": "the square's shape; one tone where squares are under three pixels wide"
       },
       {
         "id": "sharp_detections",
@@ -4434,8 +4476,7 @@
         "line": "A detection by VIIRS at this pass, once shown or found by a look. It is drawn small so the white outline under it shows.",
         "on_show": "a pass of the sharp satellite, after the reveal; a looked square, after a look",
         "from": "blind_test.reveal.overpasses[frame == pass].footprints, POST /api/reconstruct with reveal; the rows a look returned, POST /api/env/next_look/step",
-        "drawing": "its size, six tenths of the pixel, and its blue",
-        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+        "drawing": "its size, six tenths of the pixel, and its blue"
       },
       {
         "id": "lights",
@@ -4443,8 +4484,7 @@
         "line": "A detection at this pass by a satellite the model sees. Brighter means more heat measured.",
         "on_show": "a pass of the coarse satellite; on a fire kept as the test, every pass",
         "from": "observer_passes.frames[pass].footprints (lon, lat, scan_km, track_km, frp_mw), POST /api/reconstruct",
-        "drawing": "the falloff inside its pixel, its warm colour, the fade between passes; by day the ground under it is darkened so it shows",
-        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+        "drawing": "the falloff inside its pixel, its warm colour, the fade between passes; by day the ground under it is darkened so it shows"
       },
       {
         "id": "glow_around",
@@ -4452,8 +4492,7 @@
         "line": "A detection's light spread on the ground. How far it reaches is a drawing, not a measurement.",
         "on_show": "with every warm light",
         "from": "the same rows as the light",
-        "drawing": "its reach past the pixel, about half a kilometre and two kilometres",
-        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25. G33 asks whether it should stay inside the pixel; the product lane's view is in GUIDE-script.md, section 2"
+        "drawing": "its reach past the pixel, about half a kilometre and two kilometres"
       },
       {
         "id": "afterglow",
@@ -4461,8 +4500,7 @@
         "line": "Where MODIS last saw fire before this hidden pass, fading with the hours. The red is a drawing.",
         "on_show": "a hidden pass, on a run that says how long a burning square stays lit",
         "from": "the rows of the last pass given to the model before it, faded by the hours since over model.parameters.tau_res_h, POST /api/reconstruct",
-        "drawing": "its red colour",
-        "standing": "G33's table (isogon-notes/graphics-engine/G33.md), on main from p2b25"
+        "drawing": "its red colour"
       }
     ],
     "action": {

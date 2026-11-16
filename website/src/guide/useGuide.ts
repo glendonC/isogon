@@ -18,6 +18,7 @@ import { ONE_LOOK_WORDS, oneLookRows } from './oneLook';
 import {
   contextOf,
   fill,
+  holds,
   labelOn,
   objectiveOf,
   promptBeside,
@@ -333,7 +334,9 @@ export function useGuide(
       film: filmOf(state, f, c),
       fields: f,
       conds: c,
-      actions: actionsOf(state?.actions, f, on).filter((a) => a.command !== 'play:players_reveal' || players.canReveal),
+      actions: actionsOf(state?.actions, f, on)
+        .filter((a) => a.command !== 'play:players_reveal' || players.canReveal)
+        .map((a) => ({ ...a, label: a.label_when?.find((w) => holds(w, c))?.label ?? a.label })),
       also: actionsOf(stepOf(step)?.also, f, on, 9),
       fireLabel: labelOn(state, 'fire', f, c, live.playing, Boolean(live.film)),
       squareLabel: labelOn(state, 'looked_square', f, c),

@@ -29,10 +29,10 @@ const str = (x: unknown): string | null => (typeof x === 'string' ? x : null);
 export const LIVE_WORDS = {
   lockedBefore: 'Before the pass',
   lockedMinutes: (m: number) => `${m} minutes before the pass`,
-  beforePass: 'Before the pass',
-  waiting: 'Waiting',
-  checked: 'Arrived, checked',
-  notChecked: (reason: string) => (reason ? `Arrived, not checked: ${reason}` : 'Arrived, not checked'),
+  beforePass: 'Pass still to come',
+  waiting: 'Waiting for VIIRS data',
+  checked: 'Scored',
+  notChecked: (reason: string) => (reason ? `Not scored: ${reason}` : 'Not scored'),
 };
 
 export interface LiveFire {

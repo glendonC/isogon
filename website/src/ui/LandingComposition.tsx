@@ -315,7 +315,7 @@ export function LandingComposition({
             <div className="iso-land__keys" aria-label="What the picture shows">
               {/* What the pass on show draws: lights on a pass the model was given, white frames on a hidden one. */}
               {passHidden ? (
-                <span className="iso-land__legend-item iso-land__legend-item--frame">Model estimate, VIIRS hidden</span>
+                <span className="iso-land__legend-item iso-land__legend-item--frame">The model's estimate of where fire is detected</span>
               ) : (
                 <span className="iso-land__legend-item iso-land__legend-item--detection">Satellite detection</span>
               )}

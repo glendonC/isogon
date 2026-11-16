@@ -11,6 +11,8 @@ export function playStateId(ws: WorkspaceBase): string {
   const r = ws.round;
   // A page of recorded answers that holds no scored look on this fire says so.
   if (r.noLook) return 'no_look_here';
+  // A look that fails once the round has started is said as such, not as a round that did not start.
+  if (r.error && r.start && r.state) return 'look_failed';
   if (r.error || r.runError) return 'failed';
   const st = r.state;
   // The players' picture with no round of the visitor's own: their plays of this fire (after a recorded page's look).

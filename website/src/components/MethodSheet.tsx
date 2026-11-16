@@ -290,12 +290,12 @@ export function MethodDocument({
                   <span key={idx} />
                 ))}
               </div>
-              <span className="iso-method-sq-label">Coarse square, 1 km at nadir</span>
+              <span className="iso-method-sq-label">MODIS pixel, about 1 km across</span>
             </div>
             <div className="iso-method-sq-item">
               <div className="iso-method-sq-sharp" aria-hidden="true" />
               <span className="iso-method-sq-label">
-                Sharp square{sharpSquareM ? `, ${sharpSquareM} m` : ''}
+                VIIRS pixel{sharpSquareM ? `, ${sharpSquareM} m across` : ''}
               </span>
             </div>
           </div>
@@ -304,7 +304,7 @@ export function MethodDocument({
             <div className="iso-method-bars">
               <div className="iso-method-bar-row">
                 <div className="iso-method-bar-head">
-                  <span>Held-out year miss, one scale</span>
+                  <span>A year left out and rebuilt on one scale is off by</span>
                   <span className="iso-method-bar-val">{recordErrorPct}%</span>
                 </div>
                 <div className="iso-method-bar-track">
@@ -316,7 +316,7 @@ export function MethodDocument({
               </div>
               <div className="iso-method-bar-row">
                 <div className="iso-method-bar-head">
-                  <span>Without scaling earlier years</span>
+                  <span>The same without scaling is off by</span>
                   <span className="iso-method-bar-val">{recordErrorRawPct}%</span>
                 </div>
                 <div className="iso-method-bar-track">
@@ -332,10 +332,10 @@ export function MethodDocument({
         <figcaption className="iso-doc-media__caption">
           <span>
             {sharpToCoarse && placeName
-              ? `In ${placeName}, the sharp satellite flags about ${sharpToCoarse} times as many detections in overlap years`
+              ? `In ${placeName}, VIIRS makes about ${sharpToCoarse} times as many detections as MODIS in the years both flew`
               : 'Coarse 1 km footprint beside the sharp grid cell'}
           </span>
-          {verticalExaggeration ? <span>Relief shown at {verticalExaggeration.toFixed(1)}x</span> : null}
+          {verticalExaggeration ? <span>Hills drawn {verticalExaggeration.toFixed(1)} times their height</span> : null}
         </figcaption>
       </figure>
 

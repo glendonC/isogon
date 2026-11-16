@@ -171,8 +171,8 @@ export const YEAR_WORDS = {
   aquaJoins: 'Aqua joins in July',
   stepDetected: (ratio: number | null) =>
     ratio
-      ? `2012: VIIRS begins and makes ${oneDecimal(ratio)} times as many detections, so the Earth brightens with no more fire.`
-      : '2012: VIIRS begins and makes more detections, so the Earth brightens with no more fire.',
+      ? `2012: VIIRS begins and makes ${oneDecimal(ratio)} times as many detections, so the Earth looks brighter though there is no more fire.`
+      : '2012: VIIRS begins and makes more detections, so the Earth looks brighter though there is no more fire.',
   stepHarmonized: '2012: VIIRS begins, and on one scale there is no step.',
   legend: 'Fire detected in a square of a quarter degree, about 28 km, in the year',
   closed: 'Test fires of 2021, not tested again',
@@ -215,6 +215,15 @@ export const YEAR_WORDS = {
   clipped: (n: number) => `${n} ${n === 1 ? 'square lies' : 'squares lie'} above the scale and ${n === 1 ? 'is' : 'are'} drawn at its top`,
 };
 
+/** How a first share compares with a second: "29 percent better than"; null when the second is not above zero. */
+const rel = (a: string, b: string) => {
+  const x = Number(a);
+  const y = Number(b);
+  if (!(y > 0)) return null;
+  const p = Math.round((x / y - 1) * 100);
+  return p > 0 ? `${p} percent better than` : p < 0 ? `${-p} percent worse than` : 'as well as';
+};
+
 /**
  * The guide's words on the pictures of the world, as the product lane writes them: the Earth's years from the
  * script's state `earth_years` (GUIDE-script.json version 27, EARTH-YEARS.md), the test across the world and the
@@ -227,8 +236,8 @@ export const SCREEN_WORDS = {
     where: 'Fire detections per year',
     context: (first: number, last: number) => `${first} to ${last}`,
     counted: (ratio: string) =>
-      `These are the years as counted, and from 2012 VIIRS makes ${ratio} times as many detections.`,
-    oneScale: 'On one scale the MODIS years are scaled up to match, so 2012 shows no jump.',
+      `These are the years as counted. From 2012 the counts come from VIIRS, a sharper satellite that makes ${ratio} times as many detections as MODIS.`,
+    oneScale: 'On one scale the MODIS years are raised to what VIIRS would count, so 2012 shows no jump.',
     play: 'Play the years',
     stop: 'Stop',
     toOneScale: 'Show one scale',
@@ -238,9 +247,9 @@ export const SCREEN_WORDS = {
     filmOneScale: (_first: number) => 'On one scale, no jump.',
   },
   test: {
-    objective: 'See the fires it had never seen',
+    objective: 'See how the estimate did on new fires',
     /** The name in view in the top bar. */
-    where: (fires: number | null) => (fires ? `${fires} tested fires` : 'The test across the world'),
+    where: (fires: number | null) => (fires ? `How the model did on ${fires} new fires` : 'The test across the world'),
     strictBehind: (fires: number, _continents: number, ahead: number, _of: number, behind: number) =>
       `On ${fires} fires it never saw, it won ${ahead} scores and lost ${behind}, and pixel for pixel MODIS alone does better.`,
     notStrictBehind: (fires: number, _continents: number, ahead: number, of: number, level: number, behind: number) =>
@@ -259,20 +268,30 @@ export const SCREEN_WORDS = {
     // WORDS-wider.json version 16, world_pictures, test_across_world: the overlap with VIIRS fire pixels, exact, as plain
     // percentages (one decimal), test B's first and then test A's.
     overlapB: (fires: number, second: string, modis: string, first: string) =>
-      `Overlap with VIIRS fire pixels on ${fires} new fires: new model ${second} percent, MODIS alone ${modis}, first model ${first}.`,
-    overlapA: (fires: number, first: string, modis: string) => `Overlap with VIIRS fire pixels on ${fires} unseen fires: the model ${first} percent, MODIS alone ${modis}.`,
+      `On the latest test's ${fires} fires, none of which it had seen, the new model, a later version chosen on other fires, matched VIIRS ${rel(second, modis) ?? 'beside'} MODIS's own detections did, ${second} against ${modis} percent. The first model, the earlier version, matched ${first}.`,
+    overlapA: (fires: number, first: string, modis: string) => `On the earlier test's ${fires} fires, none of which it had seen, the first model matched VIIRS ${rel(first, modis) ?? 'beside'} MODIS's own detections did, ${first} against ${modis} percent.`,
     filmOverlapB: (second: string, modis: string, first: string) => `New fires, overlap with VIIRS: new model ${second}%, MODIS ${modis}%, first model ${first}%.`,
     filmOverlapA: (first: string, modis: string) => `Unseen fires, overlap with VIIRS: model ${first}%, MODIS ${modis}%.`,
   },
   sealed: {
-    objective: 'See predictions written before the pass',
+    objective: 'See estimates made before VIIRS passed',
     /** The name in view in the top bar. */
-    where: 'Live predictions',
+    where: 'Fires burning now',
     // WORDS-wider.json version 16, world_pictures, sealed_open.
-    marks: 'Predictions locked before NASA publishes the data, each with its fingerprint.',
-    soFar: (fires: number) => `So far ${fires} fires are scored, and each row opens its result.`,
+    marks: 'For fires burning now, the model wrote down where VIIRS would see fire before VIIRS flew over. Each estimate is scored once NASA publishes that pass.',
+    soFar: (fires: number, ahead?: number | null, tied?: number | null, behind?: number | null) =>
+      ahead != null && tied != null && behind != null
+        ? `For fires burning now, the model wrote down where VIIRS would see fire before VIIRS flew over. Over the ${fires} fires scored so far, it is ${ahead > behind ? 'ahead of' : ahead < behind ? 'behind' : 'no better than'} MODIS alone.`
+        : `So far ${fires} fires are scored. Each row shows how well the model and MODIS alone matched VIIRS there.`,
     back: 'Back to the fire',
-    film: 'Live: predictions locked before NASA publishes the data.',
+    /** How the estimates did on every measure, said on demand. */
+    measures: (ahead: number | null, tied: number | null, behind: number | null) =>
+      ahead != null && tied != null && behind != null
+        ? `The table shows one measure. Over all ${ahead + tied + behind} measures it was clearly better on ${ahead}, clearly worse on ${behind}, and too close to call on ${tied}.`
+        : null,
+    /** What the table's match is, said on demand. */
+    match: 'Match counts the pixels where an estimate and VIIRS both show fire, out of all pixels where either does. MODIS alone takes what MODIS saw as it is, scaled up or not. Each measure compares an estimate with VIIRS on where the fire is, how much of it there is, or how much heat it gives off.',
+    film: 'Live: estimates written down before NASA publishes the pass.',
   },
 };
 

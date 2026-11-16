@@ -55,13 +55,13 @@ const DROP = ['nrt', 'protocol', 'missed', 'listed'] as const;
 
 export const SEAL_WORDS = {
   // The product lane's words (WORDS-wider.json version 4, world_pictures, sealed_open; version 14 for the film's caption).
-  objective: 'See predictions written before the pass',
-  film: 'Live: predictions locked before NASA publishes the data.',
+  objective: 'See estimates made before VIIRS passed',
+  film: 'Live: estimates written down before NASA publishes the pass.',
   label: 'The Earth, with the fires whose predictions are sealed tonight',
   loading: "Loading tonight's sealed predictions.",
   failed: "Tonight's sealed predictions did not load.",
   none: 'No fire is followed yet tonight.',
-  protocol: (sha: string, at: string | null) => `Every prediction here is sealed under the rules with digest ${sha.slice(0, 10)}${at ? `, written ${at}` : ''}, before the first seal.`,
+  protocol: (sha: string, at: string | null) => `Every estimate here follows rules fixed before the first one, under the fingerprint ${sha.slice(0, 10)}${at ? `, written ${at}` : ''}.`,
   keySeal: 'Written down and sealed',
   keyPass: 'VIIRS passes',
   keyRows: 'Its detections published',
@@ -76,14 +76,14 @@ export const SEAL_WORDS = {
   waitingRows: (pass: string | null, by: string | null) => `Passed${pass ? ` at ${pass}` : ''}; detections ${by ? `expected by ${by}` : 'not all published yet'}`,
   // Words version 16: no count of scores; each row opens its result, the overlap with VIIRS fire pixels.
   scored: (_a: number | null, _of: number | null, none: boolean) => (none ? 'Scored; VIIRS saw no fire in the box' : 'Scored'),
-  result: (model: string, modis: string) => `Overlap with VIIRS fire pixels: the model ${model} percent, MODIS alone ${modis}.`,
+  result: (model: string, modis: string) => `Match with VIIRS, exact: the model ${model} percent, MODIS alone ${modis}.`,
   notYet: "Not scored yet: its result opens here once VIIRS's data has come and been checked.",
-  resultWithin: (model: string, modis: string) => `Within one pixel: the model ${model} percent, MODIS alone ${modis}.`,
+  resultWithin: (model: string, modis: string) => `Match within one pixel: the model ${model} percent, MODIS alone ${modis}.`,
   notScored: (why: string | null) => `Not scored${why ? `: ${why}` : ''}`,
   title: (platform: string | null, day: string | null, point: string) => [platform ? `Predicted pass of ${platform}` : null, day, point].filter(Boolean).join(', '),
   // The judge's two readings of the board, from the answer's own figures (the first in the product lane's words).
   listed: (followed: number, sealed: number, scored: number) =>
-    `Of the ${followed} fires followed, the ${sealed} with a sealed pass are listed here, and ${scored} of them are scored.`,
+    `${followed} fires are followed. ${sealed} have an estimate written down before a pass, and ${scored} of those are scored.`,
   // The film's one proof (the fresh judge, JUDGE-1 item 4): one scored prediction's fingerprint and how long before the
   // pass it was sealed.
   proofLabel: 'The fingerprint of one sealed prediction',
@@ -97,9 +97,9 @@ export const SEAL_WORDS = {
   /** A scored row's result in the table: the overlap with VIIRS fire pixels, the model's, then MODIS alone's. */
   rowResult: (model: string, modis: string) => `Model ${model}%, MODIS alone ${modis}%`,
   /** The table's heads: its number on the map is the first column, unnamed. */
-  heads: { fire: 'Fire', locked: 'Locked', data: 'Overlap with VIIRS', fingerprint: 'Fingerprint' },
+  heads: { fire: 'Fire', locked: 'Written down', data: 'Match with VIIRS', fingerprint: 'Fingerprint' },
   /** Sealed fires past what the board has room for, said in one line under the rows. */
-  more: (items: string[]) => `Also sealed: ${items.join(', ')}`,
+  more: (items: string[]) => `Also written down: ${items.join(', ')}`,
   rest: (items: string[], any: boolean) => `${any ? 'Also followed' : 'Followed tonight'}, no pass sealed yet: ${items.join(', ')}`,
   restAbout: 'Each was chosen from MODIS alone, by its detections in the last 48 hours.',
   digest: 'Digest',
@@ -108,7 +108,7 @@ export const SEAL_WORDS = {
   copied: 'Copied',
   nrt: (note: string) => `Scored on ${note}.`,
   missed: (n: number, why: string | null) =>
-    `${n === 1 ? 'One pass was' : `${n} passes were`} not sealed in time and will not be scored${why ? `: ${why}` : ''}.`,
+    `${n === 1 ? 'One pass was' : `${n} passes were`} not written down in time and will not be scored${why ? `: ${why}` : ''}.`,
 };
 
 function latest(seals: LiveSeal[]): LiveSeal | null {

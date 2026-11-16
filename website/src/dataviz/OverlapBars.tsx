@@ -13,8 +13,8 @@ export interface OverlapBarsProps {
 }
 
 const DEFAULT_WORDS = {
-  title: 'Overlap with VIIRS fire pixels',
-  line: 'Pixels both mark as fire, out of pixels either marks as fire. Higher is better.',
+  title: 'Match with VIIRS',
+  line: "Pixels where an estimate and VIIRS both show fire, out of all pixels where either does. Higher is better. MODIS alone takes MODIS's own detections as the estimate.",
   exact: 'Exact',
   within: 'Within one pixel',
 };

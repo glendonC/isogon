@@ -28,6 +28,8 @@ export interface ScriptAction {
   places?: string[];
   /** The thing on the stage the action also stands beside, as a prompt, while the pointer or focus is near it. */
   beside?: string;
+  /** What the action reads instead while a condition holds (after the last look: the way on to the round's end). */
+  label_when?: Array<{ if?: string; unless?: string; label: string }>;
   /** What the action reads while what it started is running ("Pause the passes"). */
   label_while_on?: string;
   /** Shown quietly at the end of the guide's row (the day's photograph; the script's `quiet_fourth`). */

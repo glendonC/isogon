@@ -8,29 +8,29 @@ import type { ResultRow } from './Results';
  * fire on which the recording holds no scored look.
  */
 export const ONE_LOOK_WORDS = {
-  choose: 'This page replays recorded answers and scores one look, at this pass.',
+  choose: 'This copy of the page plays back recorded answers, so you get one look: point at a square and uncover what VIIRS, the sharper satellite, detected there on this pass.',
   endObjective: "Compare your look with the best square and the other players'",
   head: (taken: NonNullable<OneLook['taken']>) =>
     taken.tile === null
       ? 'you let this pass go'
       : taken.reward !== null && taken.reward > 0
-        ? `yours gained ${points(taken.reward)} points`
-        : 'yours found nothing',
+        ? `your look raised the score by ${points(taken.reward)} points`
+        : 'your look found nothing new',
   best: (o: OneLook) => {
     const b = o.best;
     if (!b) return '';
-    if (b.tile === null || b.reward <= 0) return '; no square gained anything at this pass';
+    if (b.tile === null || b.reward <= 0) return '; no square would have raised it at this pass';
     if (o.taken && o.taken.tile === b.tile) return ': the best square at this pass';
-    return `; the best square at this pass gained ${points(b.reward)} points`;
+    return `; the best square at this pass would have raised it by ${points(b.reward)}`;
   },
-  end: (o: OneLook) => `This page replays recorded answers, so it scores one look: ${ONE_LOOK_WORDS.head(o.taken!)}${ONE_LOOK_WORDS.best(o)}.`,
+  end: (o: OneLook) => `This copy plays back recorded answers, so it scores one look: ${ONE_LOOK_WORDS.head(o.taken!)}${ONE_LOOK_WORDS.best(o)}.`,
   whole: 'A whole round, with all its looks, runs with the project on your own machine.',
   resultsLine: 'At this pass',
   you: 'You',
   bestSquare: 'The best square',
   letGo: 'Let this pass go.',
   noneObjective: 'Choose a fire you can play',
-  none: 'This page replays recorded answers, and none of them scores a look on this fire.',
+  none: 'This copy of the page plays back recorded answers, and none of them scores a look on this fire.',
   noneWhole: 'A round runs with the project on your own machine.',
 };
 
