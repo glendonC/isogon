@@ -238,6 +238,8 @@ export function EarthYears({
   const ascent = useAscent();
   const [startAt] = useState(() => (ascent && pick ? { ...boxMiddle(ascent.box), zoom: 5 } : null));
   const [markedBox, setMarkedBox] = useState<ScreenBox | null>(null);
+  // The pins' boxes on the screen, as the globe last drew them: a country's prompt keeps off them.
+  const pinBoxes = useRef<ScreenBox[]>([]);
   // The places each country holds, by the country under each place's middle: a country's frame names them, so pointing
   // at a country says where choosing on the globe can lead.
   const placesByCountry = useMemo(() => {
@@ -606,6 +608,7 @@ export function EarthYears({
           startAt={startAt}
           markedPin={ascent?.id ?? null}
           onMarked={setMarkedBox}
+          pinBoxes={pinBoxes}
           className="world-years__earth"
         />
       )}
@@ -632,6 +635,7 @@ export function EarthYears({
           box={sceneBox}
           label={chosen?.key === pointed.shape.key ? Y.wholeEarth : Y.countryAction}
           readout={[countryReadout(pointed.shape, under, shown, mode, countries), placesByCountry.has(pointed.shape.key) ? Y.placesIn(placesByCountry.get(pointed.shape.key)!) : null].filter(Boolean).join('\n')}
+          avoid={() => pinBoxes.current}
           onSelect={() => (chosen?.key === pointed.shape.key ? setChosen(null) : countries && setChosen(pointed.shape))}
         />
       )}

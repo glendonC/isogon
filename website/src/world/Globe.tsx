@@ -49,6 +49,8 @@ export interface GlobeProps {
   onPinPick?: (id: string) => void;
   /** Open drawn near on this point (the place the visitor came back up from) and draw out to the whole globe. */
   startAt?: { lon: number; lat: number; zoom: number } | null;
+  /** Filled each frame with the pins' boxes on the screen (viewport px, a few px of margin), for prompts to keep off. */
+  pinBoxes?: { current: Array<{ left: number; top: number; right: number; bottom: number }> };
   /** One pin marked (ringed) as where the visitor came from, its screen box told to `onMarked`. */
   markedPin?: string | null;
   onMarked?: (box: { left: number; top: number; right: number; bottom: number } | null) => void;
@@ -259,7 +261,7 @@ const AUTO_DEG_S = 4;
 const FILM_FROM = -82;
 const FILM_TO = 52;
 
-export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, film = null, fly = null, outlines = [], onBox, onPoint, onPick, onSlow, pins = [], onPin, onPinPick, startAt = null, markedPin = null, onMarked, className }: GlobeProps) {
+export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, film = null, fly = null, outlines = [], onBox, onPoint, onPick, onSlow, pins = [], onPin, onPinPick, startAt = null, markedPin = null, onMarked, pinBoxes, className }: GlobeProps) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const over = useRef<HTMLCanvasElement | null>(null);
@@ -279,8 +281,8 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     lut: WebGLTexture;
     has: boolean;
   } | null>(null);
-  const props = useRef({ ix, lut, padTop, padBottom, padLeft, film, fly, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick, markedPin, onMarked });
-  props.current = { ix, lut, padTop, padBottom, padLeft, film, fly, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick, markedPin, onMarked };
+  const props = useRef({ ix, lut, padTop, padBottom, padLeft, film, fly, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick, markedPin, onMarked, pinBoxes });
+  props.current = { ix, lut, padTop, padBottom, padLeft, film, fly, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick, markedPin, onMarked, pinBoxes };
   const lastMarked = useRef<string>('none');
   // The pins as last drawn (the overlay's own px) and the one last told as pointed.
   const pinsAt = useRef<Array<{ id: string; x: number; y: number }>>([]);
@@ -682,6 +684,12 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
       placed.push({ id: pin.id, x, y });
     }
     pinsAt.current = placed;
+    const boxesOut = props.current.pinBoxes;
+    if (boxesOut) {
+      const wr = wrap.current?.getBoundingClientRect();
+      const m4 = PIN / 2 + 4;
+      boxesOut.current = wr ? placed.map((q) => ({ left: wr.left + q.x - m4, top: wr.top + q.y - m4, right: wr.left + q.x + m4, bottom: wr.top + q.y + m4 })) : [];
+    }
     const p = pointer.current;
     const hit = p && !props.current.film ? pinUnder(p.x, p.y) : null;
     const markedId = props.current.markedPin;

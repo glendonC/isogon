@@ -63,3 +63,16 @@ test('a wide prompt (a long readout) is moved left to stay on the screen', () =>
   const view = { width: 1440, height: 900 };
   assert.equal(promptSpot({ left: 1000, top: 400, right: 1100, bottom: 500 }, view, 92, 700).x, 1440 - 16 - 700);
 });
+
+test('a prompt that would cover a thing to avoid hangs on the other side, or not at all', async () => {
+  const { promptAvoiding } = await import('./scene.ts');
+  const view = { width: 1440, height: 900 };
+  const frame = { left: 760, top: 270, right: 920, bottom: 450 };
+  const size = { w: 300, h: 110 };
+  // Nothing to avoid: above, as before.
+  assert.equal(promptAvoiding(frame, view, size, []).hang, 'above');
+  // A pin above the frame, under where the prompt would stand: below instead.
+  assert.equal(promptAvoiding(frame, view, size, [{ left: 800, top: 200, right: 816, bottom: 216 }]).hang, 'below');
+  // Pins on both sides: no prompt.
+  assert.equal(promptAvoiding(frame, view, size, [{ left: 800, top: 200, right: 816, bottom: 216 }, { left: 800, top: 500, right: 816, bottom: 516 }]), null);
+});

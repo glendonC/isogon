@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { controlSound } from './controlState.ts';
-import { isNear, promptSpot, reticleBox, type ScreenBox } from './scene.ts';
+import { isNear, promptAvoiding, promptSpot, reticleBox, type ScreenBox } from './scene.ts';
 import './identity.css';
 
 export interface ScenePromptProps {
@@ -16,6 +16,11 @@ export interface ScenePromptProps {
   shortcut?: string;
   /** Show the reticle closed even without the pointer near, for the next step a visitor should see first. */
   invite?: boolean;
+  /**
+   * Things on screen the prompt's words must not cover (a place's pin beside a country): the prompt hangs on the other
+   * side of its frame, or, where both sides would cover one, does not show (the frame stands; a click still acts).
+   */
+  avoid?: () => ScreenBox[];
 }
 
 /**
@@ -41,7 +46,7 @@ function barClear(frame: { left: number }, view: { width: number }, width = 340)
  * or the prompt has focus; one prompt and its readout stand at the frame's corner, joined by a short line. The whole
  * frame is the target: click it, or Tab to it and press Enter.
  */
-export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = false }: ScenePromptProps) {
+export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = false, avoid }: ScenePromptProps) {
   const [view, setView] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [near, setNear] = useState(false);
   const [focus, setFocus] = useState(false);
@@ -50,12 +55,19 @@ export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = 
   // stay on the screen instead of running off it.
   const promptRef = useRef<HTMLDivElement | null>(null);
   const [promptW, setPromptW] = useState(340);
+  const [promptH, setPromptH] = useState(92);
   useLayoutEffect(() => {
     const w = promptRef.current?.offsetWidth ?? 0;
+    const h = promptRef.current?.offsetHeight ?? 0;
     if (w > 0 && Math.abs(w - promptW) > 2) setPromptW(w);
+    if (h > 0 && Math.abs(h - promptH) > 2) setPromptH(h);
   });
   const width = Math.min(Math.max(promptW, 120), view.width - 32);
-  const spot = promptSpot(frame, view, 92, width, barClear(frame, view, width));
+  const clear = barClear(frame, view, width);
+  const placed = avoid ? promptAvoiding(frame, view, { w: width, h: promptH }, avoid(), clear) : null;
+  const spot = placed ?? promptSpot(frame, view, 92, width, clear);
+  // Both sides of the frame would cover a thing to avoid: the words stay out of sight (still measured).
+  const withheld = Boolean(avoid) && placed === null;
 
   useEffect(() => {
     const onResize = () => setView({ width: window.innerWidth, height: window.innerHeight });
@@ -123,6 +135,7 @@ export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = 
         className="id-scene__prompt"
         aria-hidden="true"
         ref={promptRef}
+        style={withheld ? { visibility: 'hidden' } : undefined}
         onClick={
           onSelect
             ? () => {

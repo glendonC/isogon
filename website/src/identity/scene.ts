@@ -35,6 +35,32 @@ export function promptSpot(frame: ScreenBox, view: Viewport, need = 92, width = 
   return { x, y: frame.bottom, hang: 'below' };
 }
 
+/** True where two boxes share any ground (touching edges do not count). */
+export function boxesMeet(a: ScreenBox, b: ScreenBox): boolean {
+  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+/**
+ * Where the prompt stands when there are things it must not cover (a place's pin beside a country): its usual side if
+ * that is clear, else the other side of the frame, else nowhere (null; the frame alone stands). `size` is the
+ * prompt's measured width and height, its leader included.
+ */
+export function promptAvoiding(
+  frame: ScreenBox,
+  view: Viewport,
+  size: { w: number; h: number },
+  avoid: ScreenBox[],
+  clear = 16,
+): { x: number; y: number; hang: 'above' | 'below' } | null {
+  const first = promptSpot(frame, view, size.h, size.w, clear);
+  const rectOf = (s: { x: number; y: number; hang: 'above' | 'below' }): ScreenBox =>
+    s.hang === 'above' ? { left: s.x, top: s.y - size.h, right: s.x + size.w, bottom: s.y } : { left: s.x, top: s.y, right: s.x + size.w, bottom: s.y + size.h };
+  const free = (s: { x: number; y: number; hang: 'above' | 'below' }) => !avoid.some((b) => boxesMeet(rectOf(s), b));
+  if (free(first)) return first;
+  const other = first.hang === 'above' ? { x: first.x, y: frame.bottom, hang: 'below' as const } : { x: first.x, y: frame.top, hang: 'above' as const };
+  return free(other) ? other : null;
+}
+
 /** True while the pointer is within `near` px of the box. */
 export function isNear(box: ScreenBox, x: number, y: number, near = 48): boolean {
   return x >= box.left - near && x <= box.right + near && y >= box.top - near && y <= box.bottom + near;
