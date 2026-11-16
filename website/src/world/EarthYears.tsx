@@ -15,8 +15,8 @@ import { Ticks } from './Ticks';
 import { WorldCanvas, type GridLayer } from './WorldCanvas';
 import type { Box, Projector } from './projection';
 import { EARTH_WORDS, millions, YEAR_WORDS as Y } from './words';
-import { boxRings, boxMiddle } from './descent';
-import { markBox, placeAt, type Destination } from './destinations';
+import { boxMiddle } from './descent';
+import type { Destination } from './destinations';
 import { formatCoord } from '../identity/where';
 import {
   familyOf,
@@ -219,9 +219,11 @@ export function EarthYears({
     },
     [countries],
   );
-  // The place under the pointer, if any: its square takes the frame in place of the country around it.
-  const [pointedPlace, setPointedPlace] = useState<Destination | null>(null);
-  const placeRings = useMemo(() => new Map(places.map((p) => [p.id, boxRings(markBox(p.box))])), [places]);
+  // The place whose pin is under the pointer, if any, and its pin's box on the screen: it takes the frame in place of
+  // the country around it.
+  const [pinned, setPinned] = useState<{ id: string; box: ScreenBox } | null>(null);
+  const pointedPlace = pinned ? places.find((p) => p.id === pinned.id) ?? null : null;
+  const pins = useMemo(() => (pick && !descent ? places.map((p) => ({ id: p.id, ...boxMiddle(p.box) })) : []), [pick, descent, places]);
   // The pointed country's (or place's) outline is the one whose screen box the globe tells, for its frame and readout;
   // every place with a fire stands as a small square, the Earth's destinations.
   const globeOutlines = useMemo(
@@ -229,11 +231,10 @@ export function EarthYears({
       descent
         ? [{ rings: descent.rings, strong: true, report: true }]
         : [
-            ...(pick ? places.map((p) => ({ rings: placeRings.get(p.id)!, strong: true, report: pointedPlace?.id === p.id })) : []),
             ...(chosen ? [{ rings: chosen.rings, strong: true, report: !pointedPlace && pointed?.shape.key === chosen.key }] : []),
             ...(!pointedPlace && pointed && pointed.shape.key !== chosen?.key ? [{ rings: pointed.shape.rings, strong: false, report: true }] : []),
           ],
-    [chosen, pointed, descent, pick, places, placeRings, pointedPlace],
+    [chosen, pointed, descent, pointedPlace],
   );
   const [countryBox, setCountryBox] = useState<ScreenBox | null>(null);
   // The globe flies to the chosen country and back out when none is chosen (one object a choice, so it flies once).
@@ -242,22 +243,12 @@ export function EarthYears({
   const [under, setUnder] = useState<{ lon: number; lat: number; x: number; y: number } | null>(null);
   const onGlobePoint = useCallback(
     (p: { lon: number; lat: number; x: number; y: number } | null) => {
-      setPointedPlace(p && places.length ? placeAt(places, p.lon, p.lat) : null);
       setUnder(p);
       onHover(p);
     },
-    [onHover, places],
+    [onHover],
   );
-  // A click on a place's square opens the place (the descent); anywhere else, as before, a country or the sea.
-  const onGlobePick = useCallback(
-    (p: { lon: number; lat: number } | null) => {
-      const place = p && onPlace ? placeAt(places, p.lon, p.lat) : null;
-      if (place && onPlace) onPlace(place.id);
-      else if (p) onClickMap(p);
-      else setChosen(null);
-    },
-    [onClickMap, onPlace, places],
-  );
+  const onGlobePick = useCallback((p: { lon: number; lat: number } | null) => (p ? onClickMap(p) : setChosen(null)), [onClickMap]);
   // The outlines are kept per country and view, so the pointer's moves do not trace them again.
   const outlines = useRef(new Map<string, string>());
   const outline = (shape: CountryShape, p: Projector) => {
@@ -575,6 +566,9 @@ export function EarthYears({
           onPoint={pick ? onGlobePoint : undefined}
           onPick={pick ? onGlobePick : undefined}
           onSlow={() => setFlat(true)}
+          pins={pins}
+          onPin={setPinned}
+          onPinPick={onPlace}
           className="world-years__earth"
         />
       )}
@@ -584,9 +578,9 @@ export function EarthYears({
       {/* A place being descended into: its box framed with its name and where it is; no action, the page lands there. */}
       {!flat && descent && countryBox && <ScenePrompt box={countryBox} label={descent.name} readout={descent.readout} invite />}
       {/* A place's square under the pointer: framed, with its name and where it is; a click opens the place. */}
-      {!flat && !descent && pick && pointedPlace && countryBox && (
+      {!flat && !descent && pick && pointedPlace && pinned && (
         <ScenePrompt
-          box={countryBox}
+          box={pinned.box}
           label={Y.placeAction}
           readout={`${pointedPlace.name}  ${formatCoord(boxMiddle(pointedPlace.box).lat, boxMiddle(pointedPlace.box).lon) ?? ''}`}
           onSelect={onPlace ? () => onPlace(pointedPlace.id) : undefined}

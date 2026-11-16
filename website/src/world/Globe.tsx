@@ -40,8 +40,25 @@ export interface GlobeProps {
   onPick?: (at: { lon: number; lat: number } | null) => void;
   /** The page cannot hold its frames (or lost its WebGL context): the flat map stands in. */
   onSlow?: () => void;
+  /**
+   * Places marked on the globe as squares of one size on the screen, whatever the zoom; two that would touch are set
+   * apart. Pointing at one tells `onPin` its screen box; a click on one goes to `onPinPick` instead of `onPick`.
+   */
+  pins?: GlobePin[];
+  onPin?: (hit: { id: string; box: { left: number; top: number; right: number; bottom: number } } | null) => void;
+  onPinPick?: (id: string) => void;
   className?: string;
 }
+
+export interface GlobePin {
+  id: string;
+  lon: number;
+  lat: number;
+}
+
+/** A pin's square on the screen, in CSS px, and the reach a pointer has round its middle. */
+const PIN = 12;
+const PIN_REACH = 13;
 
 /**
  * The switch: whether the Earth's years show the globe without being asked. Off until the lead has seen the globe
@@ -237,7 +254,7 @@ const AUTO_DEG_S = 4;
 const FILM_FROM = -82;
 const FILM_TO = 52;
 
-export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, film = null, fly = null, outlines = [], onBox, onPoint, onPick, onSlow, className }: GlobeProps) {
+export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, film = null, fly = null, outlines = [], onBox, onPoint, onPick, onSlow, pins = [], onPin, onPinPick, className }: GlobeProps) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const over = useRef<HTMLCanvasElement | null>(null);
@@ -253,8 +270,23 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     lut: WebGLTexture;
     has: boolean;
   } | null>(null);
-  const props = useRef({ ix, lut, padTop, padBottom, padLeft, film, outlines, onBox, onPoint, onPick, onSlow });
-  props.current = { ix, lut, padTop, padBottom, padLeft, film, outlines, onBox, onPoint, onPick, onSlow };
+  const props = useRef({ ix, lut, padTop, padBottom, padLeft, film, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick });
+  props.current = { ix, lut, padTop, padBottom, padLeft, film, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick };
+  // The pins as last drawn (the overlay's own px) and the one last told as pointed.
+  const pinsAt = useRef<Array<{ id: string; x: number; y: number }>>([]);
+  const lastPin = useRef<string>('none');
+  const pinUnder = (x: number, y: number) => {
+    let best: { id: string; x: number; y: number } | null = null;
+    let bestD = PIN_REACH;
+    for (const q of pinsAt.current) {
+      const d = Math.max(Math.abs(q.x - x), Math.abs(q.y - y));
+      if (d <= bestD) {
+        bestD = d;
+        best = q;
+      }
+    }
+    return best;
+  };
   const lastBox = useRef<string>('none');
   const lastBoxAt = useRef(0);
   const pointer = useRef<{ x: number; y: number } | null>(null);
@@ -412,7 +444,7 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
   }, [ix, size]);
   useEffect(() => {
     dirty.current = true;
-  }, [outlines, padTop, padBottom, padLeft]);
+  }, [outlines, padTop, padBottom, padLeft, pins]);
 
   // A flight to a place, or back out: from the view as it is, eased, with a short rise on a long turn so it reads as
   // travel; a drag ends it where it is.
@@ -616,9 +648,47 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
         report(b);
       }
     }
-    // The pointed square: the one the readout's count is for, in the interface's pale cyan.
+    // The places, as squares of one size on the screen on the near side, set apart where two would touch.
+    const placed: Array<{ id: string; x: number; y: number }> = [];
+    for (const pin of props.current.pins) {
+      const cl = Math.cos(pin.lat * D);
+      const wx = cl * Math.sin(pin.lon * D);
+      const wy = Math.sin(pin.lat * D);
+      const wz = cl * Math.cos(pin.lon * D);
+      const vx = m[0] * wx + m[1] * wy + m[2] * wz;
+      const vy = m[3] * wx + m[4] * wy + m[5] * wz;
+      const vz = m[6] * wx + m[7] * wy + m[8] * wz;
+      if (vz < 0.12) continue;
+      let x = cx + vx * r;
+      const y = cy - vy * r;
+      for (const q of placed) {
+        if (Math.abs(q.x - x) < PIN + 6 && Math.abs(q.y - y) < PIN + 6) x = q.x + (x >= q.x ? 1 : -1) * (PIN + 6);
+      }
+      placed.push({ id: pin.id, x, y });
+    }
+    pinsAt.current = placed;
     const p = pointer.current;
-    if (p && !props.current.film && (p.x - cx) ** 2 + (p.y - cy) ** 2 < r * r) {
+    const hit = p && !props.current.film ? pinUnder(p.x, p.y) : null;
+    for (const q of placed) {
+      const on = hit?.id === q.id;
+      g.fillStyle = on ? 'rgba(159, 227, 255, 0.35)' : 'rgba(5, 7, 12, 0.55)';
+      g.fillRect(Math.round(q.x - PIN / 2), Math.round(q.y - PIN / 2), PIN, PIN);
+      g.strokeStyle = 'rgba(159, 227, 255, 0.95)';
+      g.lineWidth = on ? 2 : 1.5;
+      g.strokeRect(Math.round(q.x - PIN / 2) + 0.5, Math.round(q.y - PIN / 2) + 0.5, PIN - 1, PIN - 1);
+    }
+    const tellPin = props.current.onPin;
+    if (tellPin) {
+      const wr = wrap.current?.getBoundingClientRect();
+      const pb = hit && wr ? { left: Math.round(wr.left + hit.x - PIN), top: Math.round(wr.top + hit.y - PIN), right: Math.round(wr.left + hit.x + PIN), bottom: Math.round(wr.top + hit.y + PIN) } : null;
+      const key = pb && hit ? `${hit.id},${pb.left},${pb.top}` : 'none';
+      if (key !== lastPin.current) {
+        lastPin.current = key;
+        tellPin(pb && hit ? { id: hit.id, box: pb } : null);
+      }
+    }
+    // The pointed square: the one the readout's count is for, in the interface's pale cyan (not over a place's pin).
+    if (p && !hit && !props.current.film && (p.x - cx) ** 2 + (p.y - cy) ** 2 < r * r) {
       g.strokeStyle = 'rgba(159, 227, 255, 0.95)';
       g.lineWidth = 1;
       g.strokeRect(Math.round(p.x) - 6.5, Math.round(p.y) - 6.5, 13, 13);
@@ -679,7 +749,9 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
       return;
     }
     const p = local(e);
-    props.current.onPick?.(geoAt(p.x, p.y));
+    const pin = props.current.onPinPick ? pinUnder(p.x, p.y) : null;
+    if (pin) props.current.onPinPick!(pin.id);
+    else props.current.onPick?.(geoAt(p.x, p.y));
   };
 
   return (

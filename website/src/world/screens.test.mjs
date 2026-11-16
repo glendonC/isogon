@@ -50,15 +50,3 @@ test('a place box is one closed ring and its middle is the box centre', async ()
   const m = d.boxMiddle([-121.6, 39.8, -120.8, 40.3]);
   assert.ok(Math.abs(m.lat - 40.05) < 1e-9 && Math.abs(m.lon + 121.2) < 1e-9);
 });
-
-test('the place under a point is found inside its box grown by a margin, the nearest first', async () => {
-  const d = await import('./destinations.ts');
-  const places = [
-    { id: 'a', name: 'A', box: [-121.6, 39.8, -120.8, 40.3] },
-    { id: 'b', name: 'B', box: [-120.0, 39.8, -119.4, 40.3] },
-  ];
-  assert.equal(d.placeAt(places, -121.2, 40.0)?.id, 'a');
-  assert.equal(d.placeAt(places, -122.8, 40.0)?.id, 'a');
-  assert.equal(d.placeAt(places, -119.0, 40.0)?.id, 'b');
-  assert.equal(d.placeAt(places, -100, 40.0), null);
-});
