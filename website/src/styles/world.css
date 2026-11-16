@@ -1412,6 +1412,9 @@
 /* On the page the year stands under the trail, which holds the objective; the controls keep the top right. */
 .world-screen[data-name='years'][data-film='false'] {
   --years-caption-top: 104px;
+  /* The strip of totals and its legend keep clear of the guide however many rows its line takes (the host measures
+     the guide's room). */
+  --years-bottom: var(--world-guide-room, 150px);
 }
 
 /* In the film the guide's sentence is left out, so the strip of totals goes down into its room and the test and the
