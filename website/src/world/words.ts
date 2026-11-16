@@ -222,15 +222,18 @@ export interface Pair {
 }
 
 /** Better than, worse than or as well as, from two shares as written. */
-const cmp = (a: string, b: string) => (Number(a) > Number(b) ? 'better than' : Number(a) < Number(b) ? 'worse than' : 'as well as');
+/** Two shares, as written in percent, closer than one percentage point: level, never better or worse. */
+const level = (a: string, b: string) => Math.abs(Number(a) - Number(b)) < 1;
+const cmp = (a: string, b: string) => (level(a, b) ? 'level with' : Number(a) > Number(b) ? 'better than' : 'worse than');
 
 /** How a first share compares with a second: "29 percent better than"; null when the second is not above zero. */
 const rel = (a: string, b: string) => {
   const x = Number(a);
   const y = Number(b);
   if (!(y > 0)) return null;
+  if (level(a, b)) return 'level with';
   const p = Math.round((x / y - 1) * 100);
-  return p > 0 ? `${p} percent better than` : p < 0 ? `${-p} percent worse than` : 'as well as';
+  return p > 0 ? `${p} percent better than` : p < 0 ? `${-p} percent worse than` : 'level with';
 };
 
 /**
@@ -279,9 +282,9 @@ export const SCREEN_WORDS = {
     // Each method's match with VIIRS as written, within one pixel (w) and exact to the pixel (e). The line leads with
     // within one pixel and its relative difference; the exact figures follow, smaller, and a loss is said as one.
     overlapB: (fires: number, second: Pair, modis: Pair, first: Pair) =>
-      `On the latest test's ${fires} fires, none of which it had seen, the new model, a later version chosen on other fires, matched VIIRS within one pixel ${rel(second.w, modis.w) ?? 'beside'} MODIS alone, ${second.w} against ${modis.w} percent, and exact to the pixel ${second.e} against ${modis.e}. The first model, the earlier version, did ${cmp(first.w, modis.w)} MODIS alone within one pixel, ${first.w} against ${modis.w}, and ${cmp(first.e, modis.e)} it exact, ${first.e} against ${modis.e}.`,
+      `On the latest test's ${fires} fires, none of which it had seen, the new model, a later version chosen on other fires, was ${rel(second.w, modis.w) ?? 'beside'} MODIS alone at matching VIIRS within one pixel, ${second.w} against ${modis.w} percent, and exact to the pixel ${second.e} against ${modis.e}. The first model, the earlier version, was ${cmp(first.w, modis.w)} MODIS alone within one pixel, ${first.w} against ${modis.w}, and ${cmp(first.e, modis.e)} it exact, ${first.e} against ${modis.e}.`,
     overlapA: (fires: number, first: Pair, modis: Pair) =>
-      `On the earlier test's ${fires} fires, none of which it had seen, the first model matched VIIRS within one pixel ${rel(first.w, modis.w) ?? 'beside'} MODIS alone, ${first.w} against ${modis.w} percent, and exact to the pixel it did ${cmp(first.e, modis.e)} it, ${first.e} against ${modis.e}.`,
+      `On the earlier test's ${fires} fires, none of which it had seen, the first model was ${rel(first.w, modis.w) ?? 'beside'} MODIS alone at matching VIIRS within one pixel, ${first.w} against ${modis.w} percent, and ${cmp(first.e, modis.e)} it exact to the pixel, ${first.e} against ${modis.e}.`,
     filmOverlapB: (second: string, modis: string, first: string) => `New fires, within one pixel: new model ${second}%, MODIS ${modis}%, first model ${first}%.`,
     filmOverlapA: (first: string, modis: string) => `Unseen fires, within one pixel: model ${first}%, MODIS ${modis}%.`,
   },

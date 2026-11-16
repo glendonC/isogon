@@ -97,10 +97,10 @@ export const SEAL_WORDS = {
   /** A scored row's result in the table: the overlap with VIIRS fire pixels, the model's, then MODIS alone's. */
   rowResult: (model: string, modis: string) => `Model ${model}%, MODIS alone ${modis}%`,
   /** A scored row with no match figure: VIIRS saw no fire in the box, or the figure could not be made. */
-  scoredNoFire: 'Scored; VIIRS saw no fire here, so there is nothing to match',
-  scoredNoFigure: 'Scored; no match figure for this pass',
+  scoredNoFire: 'VIIRS saw no fire',
+  scoredNoFigure: 'Scored, no figure',
   /** The table's heads: its number on the map is the first column, unnamed. */
-  heads: { fire: 'Fire', locked: 'Written down', data: 'Match with VIIRS', fingerprint: 'Fingerprint' },
+  heads: { fire: 'Fire', locked: 'Made before the pass', data: 'Match with VIIRS', fingerprint: 'Fingerprint' },
   /** Sealed fires past what the board has room for, said in one line under the rows. */
   more: (items: string[]) => `Also written down: ${items.join(', ')}`,
   rest: (items: string[], any: boolean) => `${any ? 'Also followed' : 'Followed tonight'}, no pass sealed yet: ${items.join(', ')}`,

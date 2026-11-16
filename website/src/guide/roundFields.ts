@@ -41,7 +41,9 @@ export function roundFields(ws: WorkspaceBase): { fields: Fields; conds: Conditi
   const youEnd = percent1(end?.player.final ?? null);
   const ruleEnd = percent1(final('least_sure'));
   const chanceEnd = percent1(meanOf(randomFinals));
-  const cmp = (a: string | null, b: string | null) => (a === null || b === null ? null : Math.sign(Number(a) - Number(b)));
+  // Under one percentage point apart is level, never better or worse.
+  const cmp = (a: string | null, b: string | null) =>
+    a === null || b === null ? null : Math.abs(Number(a) - Number(b)) < 1 ? 0 : Math.sign(Number(a) - Number(b));
   const vsRule = cmp(youEnd, ruleEnd);
   const vsChance = cmp(youEnd, chanceEnd);
   const known = vsRule !== null && vsChance !== null;

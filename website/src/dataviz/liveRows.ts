@@ -27,10 +27,10 @@ const str = (x: unknown): string | null => (typeof x === 'string' ? x : null);
 
 /** The product lane's words: the time a prediction was locked, and the state of VIIRS's data for it. */
 export const LIVE_WORDS = {
-  lockedBefore: 'Before the pass',
-  lockedMinutes: (m: number) => `${m} minutes before the pass`,
-  beforePass: 'Pass still to come',
-  waiting: 'Waiting for VIIRS data',
+  lockedBefore: 'In time',
+  lockedMinutes: (m: number) => `${m} minutes`,
+  beforePass: 'Pass to come',
+  waiting: 'VIIRS data to come',
   checked: 'Scored',
   notChecked: (reason: string) => (reason ? `Not scored: ${reason}` : 'Not scored'),
 };
