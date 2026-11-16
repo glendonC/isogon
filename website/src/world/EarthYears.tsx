@@ -155,6 +155,15 @@ const ramp = (stops: Array<[number, [number, number, number]]>) =>
   `linear-gradient(to right, ${stops.map(([t, c]) => `rgb(${c.join(',')}) ${t * 100}%`).join(', ')})`;
 
 /**
+ * True once a box stands well inside the screen, clear of the top bar and the bottom edge: the descent's frame and its
+ * words show only then, never clipped at an edge while the globe still turns the place in.
+ */
+function boxInView(b: ScreenBox): boolean {
+  if (typeof window === 'undefined') return false;
+  return b.left >= 40 && b.right <= window.innerWidth - 40 && b.top >= 150 && b.bottom <= window.innerHeight - 120;
+}
+
+/**
  * The Earth plays the years 2000 to 2025, one frame a year from the fire cube's yearly layers. As detected, the
  * coarse instrument to 2011 and the sharper one from 2012 on one scale, so the Earth brightens in 2012 with no more
  * fire; the harmonized record holds one scale through every year. Under it, the world's total of each year: as
@@ -238,7 +247,7 @@ export function EarthYears({
   );
   const [countryBox, setCountryBox] = useState<ScreenBox | null>(null);
   // The globe flies to the chosen country and back out when none is chosen (one object a choice, so it flies once).
-  const flyTo = useMemo(() => (descent ? { rings: descent.rings } : chosen ? { rings: chosen.rings } : null), [chosen, descent]);
+  const flyTo = useMemo(() => (descent ? { rings: descent.rings, drift: true } : chosen ? { rings: chosen.rings } : null), [chosen, descent]);
   // On the globe the pointer says where it is and what the square holds, sea included.
   const [under, setUnder] = useState<{ lon: number; lat: number; x: number; y: number } | null>(null);
   const onGlobePoint = useCallback(
@@ -576,7 +585,7 @@ export function EarthYears({
           box, the action beside the frame and one live readout under it, what the frame is on. A click on the globe
           and the frame's Enter do the same. */}
       {/* A place being descended into: its box framed with its name and where it is; no action, the page lands there. */}
-      {!flat && descent && countryBox && <ScenePrompt box={countryBox} label={descent.name} readout={descent.readout} invite />}
+      {!flat && descent && countryBox && boxInView(countryBox) && <ScenePrompt box={countryBox} label={descent.name} readout={descent.readout} invite />}
       {/* A place's square under the pointer: framed, with its name and where it is; a click opens the place. */}
       {!flat && !descent && pick && pointedPlace && pinned && (
         <ScenePrompt

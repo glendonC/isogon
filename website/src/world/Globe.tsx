@@ -29,7 +29,7 @@ export interface GlobeProps {
    * A place to fly to, as its outline's rings: the globe turns to it and draws near until it fills the view, with no
    * cut; null flies back out to the whole globe.
    */
-  fly?: { rings: number[][][] } | null;
+  fly?: { rings: number[][][]; drift?: boolean } | null;
   /** Outlines drawn on the globe (the country under the pointer, the one chosen), as rings of [lon, lat]. */
   outlines?: Array<{ rings: number[][][]; strong: boolean; report?: boolean }>;
   /** The screen box (viewport CSS px) of the near side of the outline marked `report`, as the globe turns; null with none. */
@@ -270,8 +270,8 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
     lut: WebGLTexture;
     has: boolean;
   } | null>(null);
-  const props = useRef({ ix, lut, padTop, padBottom, padLeft, film, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick });
-  props.current = { ix, lut, padTop, padBottom, padLeft, film, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick };
+  const props = useRef({ ix, lut, padTop, padBottom, padLeft, film, fly, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick });
+  props.current = { ix, lut, padTop, padBottom, padLeft, film, fly, outlines, onBox, onPoint, onPick, onSlow, pins, onPin, onPinPick };
   // The pins as last drawn (the overlay's own px) and the one last told as pointed.
   const pinsAt = useRef<Array<{ id: string; x: number; y: number }>>([]);
   const lastPin = useRef<string>('none');
@@ -505,6 +505,11 @@ export function Globe({ label, ix, lut, padTop = 0, padBottom = 0, padLeft = 0, 
           t.zoom = fl.to.zoom;
           t.dragAt = now;
         }
+        moved = true;
+      } else if (props.current.fly?.drift && t.zoom > 1.01) {
+        // A flight that lands where the page goes next keeps drawing nearer, so the camera never holds still on
+        // the coarse squares while the place's ground comes.
+        t.zoom = Math.min(t.zoom * (1 + 0.35 * dt), 48);
         moved = true;
       } else if (f) {
         if (f.playing && filmT0.current === null) filmT0.current = now;

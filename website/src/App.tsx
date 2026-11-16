@@ -3,8 +3,8 @@ import type { ReconstructRequestParams } from './components/CommandAskPalette';
 import type { ReadingSection } from './components/ReadingSheet';
 import type { EvidenceDoc, EvidenceState } from './content/evidence';
 import { PassTrack } from './components/PassTrack';
-/** How long the Earth's globe flies into a chosen place before the page lands there (the globe's flight takes less). */
-const DESCENT_MS = 2600;
+/** How long the Earth's globe flies into a chosen place before the page lands there; it keeps drawing nearer to the end. */
+const DESCENT_MS = 2200;
 
 const CommandAskPalette = lazy(() =>
   import('./components/CommandAskPalette').then((m) => ({ default: m.CommandAskPalette })),
