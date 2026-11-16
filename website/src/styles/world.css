@@ -1355,6 +1355,16 @@
   inset: var(--film-room-top, 96px) 0 0 0;
 }
 
+/* The test's panel scrolls where its notes run under the guide: its foot fades, so the last line reads as more below,
+   not as cut, and it scrolls clear of the fade. */
+.world-screen[data-film='false'] .world-legend.world-tests {
+  padding-bottom: 36px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243, 244, 246, 0.3) transparent;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+}
+
 /* On a wide page the map and the table stand side by side, so the map has the height and the table its rows; each row
    carries its number on the map. */
 @media (min-width: 1100px) {
