@@ -218,6 +218,16 @@ body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label
   content: '\2192';
 }
 
+/* a document's "show the rest" opens below it: its arrow points down, and up once open */
+.iso-viewer .dv-further::after {
+  content: '\2193';
+  text-indent: 0;
+}
+
+.iso-viewer .dv-further[aria-expanded='true']::after {
+  content: '\2191';
+}
+
 /* the way back one level points back, and steps back on hover */
 .id-moves__back .id-moves__move::after {
   content: '\2190';
