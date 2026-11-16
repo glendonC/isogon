@@ -1,5 +1,20 @@
 # Isogon
 
+<table>
+<tr>
+<td width="50%" valign="top"><a href="docs/clips/01-landing.mp4"><img src="docs/clips/01-landing.gif" width="100%" alt="The first screen. Satellite detections of the Chips Fire, Feather River &amp; Plumas, CA, in August 2012, on its terrain, then the model's estimate of where fire is detected."></a><br>The first screen. Satellite detections of the Chips Fire, Feather River &amp; Plumas, CA, in August 2012, on its terrain, then the model's estimate of where fire is detected. <a href="docs/clips/01-landing.mp4">MP4</a></td>
+<td width="50%" valign="top"><a href="docs/clips/02-earth-years.mp4"><img src="docs/clips/02-earth-years.gif" width="100%" alt="The Earth's fire detections each year since 2000. From 2012 VIIRS, a sharper satellite, makes 4.4 times as many detections as MODIS. On one scale the MODIS years are raised to what VIIRS would count, and 2012 shows no jump."></a><br>The Earth's fire detections each year since 2000. From 2012 VIIRS, a sharper satellite, makes 4.4 times as many detections as MODIS. On one scale the MODIS years are raised to what VIIRS would count, and 2012 shows no jump. <a href="docs/clips/02-earth-years.mp4">MP4</a></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><a href="docs/clips/03-descent.mp4"><img src="docs/clips/03-descent.gif" width="100%" alt="From the Earth into a place. Pointing at a pin names the place, and a click flies down into Feather River &amp; Plumas, CA."></a><br>From the Earth into a place. Pointing at a pin names the place, and a click flies down into Feather River &amp; Plumas, CA. <a href="docs/clips/03-descent.mp4">MP4</a></td>
+<td width="50%" valign="top"><a href="docs/clips/04-fire-reveal.mp4"><img src="docs/clips/04-fire-reveal.gif" width="100%" alt="The Chips Fire with VIIRS hidden: the white outlines are the model's estimate, made without VIIRS. Then what VIIRS detected is shown in blue. On this fire the estimate matched VIIRS on 77 percent within one pixel, against 58 for MODIS alone."></a><br>The Chips Fire with VIIRS hidden: the white outlines are the model's estimate, made without VIIRS. Then what VIIRS detected is shown in blue. On this fire the estimate matched VIIRS on 77 percent within one pixel, against 58 for MODIS alone. <a href="docs/clips/04-fire-reveal.mp4">MP4</a></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><a href="docs/clips/05-your-turn.mp4"><img src="docs/clips/05-your-turn.gif" width="100%" alt="Pick squares yourself. Each look uncovers what VIIRS detected in one square, and it goes into the estimate. Here the score rose with each look."></a><br>Pick squares yourself. Each look uncovers what VIIRS detected in one square, and it goes into the estimate. Here the score rose with each look. <a href="docs/clips/05-your-turn.mp4">MP4</a></td>
+<td width="50%" valign="top"><a href="docs/clips/06-tested-fires.mp4"><img src="docs/clips/06-tested-fires.gif" width="100%" alt="How the model did on 57 new fires, picked by a fixed rule before any result was seen. Within one pixel the new model matched VIIRS 40 percent better than MODIS alone, 36.9 against 26.4 percent."></a><br>How the model did on 57 new fires, picked by a fixed rule before any result was seen. Within one pixel the new model matched VIIRS 40 percent better than MODIS alone, 36.9 against 26.4 percent. <a href="docs/clips/06-tested-fires.mp4">MP4</a></td>
+</tr>
+</table>
+
 Isogon is built on real NASA FIRMS fire detections. It has three parts: a scientific world model, an experimental
 environment, and a learning agent, which is the research direction. Putting the detections of two NASA satellites on
 one scale, the challenge "Harmonization of MODIS and VIIRS Hot Spots" of the NASA Space Apps Challenge, is its first
