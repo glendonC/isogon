@@ -88,7 +88,7 @@ export function ScenePrompt({ box, label, readout, onSelect, shortcut, invite = 
   } as CSSProperties;
 
   return (
-    <div className="id-scene" data-near={closed ? 'true' : 'false'} data-act={onSelect ? 'true' : 'false'} data-hang={spot.hang} style={style}>
+    <div className="id-scene" data-near={closed ? 'true' : 'false'} data-hot={near || focus ? 'true' : 'false'} data-act={onSelect ? 'true' : 'false'} data-hang={spot.hang} style={style}>
       {onSelect ? (
         <button
           type="button"

@@ -124,7 +124,7 @@ body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label
 .iso-way:focus-visible,
 .iso-plain-action:not(.iso-viewer__close):hover,
 .iso-plain-action:not(.iso-viewer__close):focus-visible,
-.id-scene[data-act='true'][data-near='true'] .id-scene__label {
+.id-scene[data-act='true'][data-hot='true'] .id-scene__label {
   --c-glow: 0 0 26px rgba(159, 227, 255, 0.28);
   background: var(--c-fill-on);
   border-color: var(--c-edge-on);
@@ -246,12 +246,82 @@ body:not(:has(.id-control--primary)) .id-scene[data-act='true'] .id-scene__label
 .iso-way:focus-visible::after,
 .iso-plain-action:not(.iso-viewer__close):hover::after,
 .iso-plain-action:not(.iso-viewer__close):focus-visible::after,
-.id-scene[data-act='true'][data-near='true'] .id-scene__label::after {
+.id-scene[data-act='true'][data-hot='true'] .id-scene__label::after {
   border-color: var(--c-go);
   background: var(--c-go);
   color: var(--c-go-ink);
   opacity: 1;
   text-indent: 0;
+}
+
+/* The menu's and the sheets' Close and the menu's Sound: the page's control at its compact size, with no arrow, as they
+   close or switch rather than go somewhere, and no key drawn, as the documents print none (Esc still closes). A block
+   of their own, so the shared lists above stay as they are. Where each stands is its own rule's. */
+.id-menu__close,
+.iso-viewer__close,
+.id-menu__foot .iso-sound-ctl {
+  --c-h: 36px;
+  --c-pad: 8px;
+  --c-fill: rgba(12, 16, 24, 0.66);
+  --c-fill-on: rgba(243, 244, 246, 0.14);
+  --c-edge: rgba(243, 244, 246, 0.3);
+  --c-edge-on: rgba(243, 244, 246, 0.78);
+  --c-glow: 0 0 0 rgba(0, 0, 0, 0);
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--c-h);
+  padding: 0 var(--c-pad);
+  border: 1px solid var(--c-edge);
+  border-radius: 0;
+  background: var(--c-fill);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  backdrop-filter: blur(12px) saturate(1.15);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.32),
+    var(--c-glow);
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--id-font);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--id-ink);
+  text-shadow: none;
+  white-space: nowrap;
+  transition:
+    background-color 380ms var(--id-move),
+    border-color 380ms var(--id-move),
+    box-shadow 380ms var(--id-move),
+    transform 160ms var(--id-move);
+}
+
+.id-menu__close:hover,
+.id-menu__close:focus-visible,
+.iso-viewer__close:hover,
+.iso-viewer__close:focus-visible,
+.id-menu__foot .iso-sound-ctl:hover,
+.id-menu__foot .iso-sound-ctl:focus-visible {
+  --c-glow: 0 0 26px rgba(159, 227, 255, 0.28);
+  background: var(--c-fill-on);
+  border-color: var(--c-edge-on);
+  outline: none;
+}
+
+.id-menu__close:focus-visible,
+.iso-viewer__close:focus-visible,
+.id-menu__foot .iso-sound-ctl:focus-visible {
+  outline: 2px solid var(--id-signal);
+  outline-offset: 3px;
+}
+
+.id-menu__close:active,
+.iso-viewer__close:active,
+.id-menu__foot .iso-sound-ctl:active {
+  transform: translateY(1px) scale(0.985);
 }
 
 .id-control--selected {
@@ -688,18 +758,11 @@ button.id-story__part:focus-visible {
   animation: id-menu-in 380ms var(--id-move) both;
 }
 
+/* Where the menu's Close stands; it is drawn as the page's control (the shared rules at the top of this file). */
 .id-menu__close {
   position: absolute;
   top: 36px;
   right: 40px;
-  padding: 6px 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 19px;
-  font-weight: 300;
-  color: var(--id-ink-2);
-  cursor: pointer;
 }
 
 .id-menu__list {
@@ -735,9 +798,7 @@ button.id-story__part:focus-visible {
 }
 
 .id-menu__item:hover,
-.id-menu__item:focus-visible,
-.id-menu__close:hover,
-.id-menu__close:focus-visible {
+.id-menu__item:focus-visible {
   color: var(--id-ink);
   outline: none;
 }

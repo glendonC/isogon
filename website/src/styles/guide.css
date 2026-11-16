@@ -106,6 +106,8 @@
 }
 
 .guide-say {
+  flex: 1 1 auto;
+  min-width: 0;
   max-width: 720px;
   text-shadow: 0 1px 12px rgba(8, 11, 17, 0.9);
 }
@@ -138,15 +140,26 @@
 
 /* "Read more" is a control in the screen's group of actions (GuideStrip.tsx), drawn as every control is (identity.css). */
 
+/* The group keeps its width while the caption has room beside it, and past that wraps onto a second row, right-aligned,
+   so no control ever leaves the screen; the caption gives way first, down to 360 px. */
 .guide-acts {
   display: flex;
-  flex: none;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-end;
   gap: 12px;
+  max-width: calc(100% - 360px - 32px);
 }
 
 /* With the bottom edge's moves under it (a row of controls), the guide stands clear above them. */
 body:has(.id-moves) .guide-strip {
   bottom: 72px;
+}
+
+/* The controls stand clear of the moves' rule under them by more than the words do. */
+body:has(.id-moves) .guide-acts {
+  margin-bottom: 9px;
 }
 
 /* A label on a thing of the stage, joined by the scene's leader. */
@@ -213,7 +226,8 @@ body:has(.id-moves) .guide-strip {
   column-gap: var(--sys-s4);
   row-gap: 6px;
   align-items: baseline;
-  justify-content: center;
+  /* centred while the rows fit, from the left edge when they do not, so a long name never leaves the screen */
+  justify-content: safe center;
   margin-bottom: var(--sys-s3);
   padding: 12px 20px 14px;
   background: rgba(8, 11, 17, 0.86);
@@ -281,6 +295,8 @@ body:has(.id-moves) .guide-strip {
 
 .guide-results__note {
   grid-column: 2 / -1;
+  /* a note wraps inside the bar's and the value's columns rather than widening them past the panel */
+  contain: inline-size;
   margin-top: -4px;
   font: var(--sys-weight) var(--sys-size-label) / var(--sys-lh-label) var(--sys-font);
   color: var(--sys-ink-3);
