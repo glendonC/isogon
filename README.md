@@ -15,15 +15,23 @@
 </tr>
 </table>
 
-Isogon is built on real NASA FIRMS fire detections. It has three parts: a scientific world model, an experimental
-environment, and a learning agent, which is the research direction. Putting the detections of two NASA satellites on
-one scale, the challenge "Harmonization of MODIS and VIIRS Hot Spots" of the NASA Space Apps Challenge, is its first
-result.
+**Turn real-world observations into testable worlds.**
 
-Two kinds of NASA satellite watch the Earth's fires. MODIS has flown since 2000 and sees squares about 1 km across.
-VIIRS has flown since 2012, sees squares 375 m across, detects smaller and cooler fires that MODIS misses, and so makes
-about 4.4 times as many detections over the same Earth. Counted as they come, the detections jump in 2012 though the
-burning did not.
+Isogon rebuilds a wildfire from the detections of one NASA satellite, MODIS, and is graded against those of another,
+VIIRS, which it never saw for that fire. On 57 fires picked by a rule before any result was read, its estimate matched
+VIIRS 40 percent better than MODIS alone: 36.9 against 26.4 percent within one square. The estimate is made by a simple
+filter and a learned layer that reads it.
+
+For fires burning now it writes a prediction down with a fingerprint and a time, before the satellite flies over, so it
+cannot be changed afterwards without showing. The prediction it seals is the filter's alone.
+
+It has three parts: a world model, an environment that you or an agent can play by choosing where to look, and a
+learning agent as the research direction.
+
+The world model's first result is a record of the Earth's fire on one scale. VIIRS has flown since 2012, sees squares
+375 m across against MODIS's 1 km, and makes about 4.4 times as many detections, so a raw record jumps in 2012 though
+the burning did not. With each overlap year held out, over 5,227 places, the gap between the two satellites' monthly
+counts is cut from 78 percent to 14.
 
 ## What the page opens on
 
@@ -215,8 +223,9 @@ and set `FIRMS_MAP_KEY` ([`docs/data.md`](docs/data.md)). The site reads the bac
 - **Cloud is not known.** FIRMS lists detections and no cloud mask, so a pass that detected nothing may have looked
   at cloud.
 - **The tests across the world cover 2018 to 2022**, because the country files hold no NOAA-21 rows.
-- **The model is small and experimental.** The blend was chosen on validation fires before the look at the 57 fires and
-  scored beside the filter in the same look. The filter alone is behind MODIS alone on exact overlap on both test A and
+- **The model is small and experimental.** The learned layer was fitted on VIIRS detections of 300 other fires, none of
+  them among the 57. The blend was chosen on validation fires before the look at the 57 fires and scored beside the
+  filter in the same look. The filter alone is behind MODIS alone on exact overlap on both test A and
   test B. Neither learned player of the agent beats a simple rule.
 - **Lava is listed as fire.** Where lava flows every ratio fails, and the record says so.
 - **The sealed predictions are scored on near real time detections**, NASA's first detections, not the checked archive.
